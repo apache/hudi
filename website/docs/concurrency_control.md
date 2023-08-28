@@ -6,9 +6,9 @@ toc_min_heading_level: 2
 toc_max_heading_level: 4
 last_modified_at: 2021-03-19T15:59:57-04:00
 ---
-Concurrency control defines how different writers/readers coordinate access to the table. Hudi ensures atomic writes, by way of publishing commits atomically to the timeline, stamped with an instant time that denotes the time at which the action is deemed to have occurred. Unlike general purpose file version control, Hudi draws clear distinction between writer processes (that issue user’s upserts/deletes), table services (that write data/metadata to optimize/perform bookkeeping) and readers (that execute queries and read data). Hudi provides snapshot isolation between all three types of processes, meaning they all operate on a consistent snapshot of the table. Hudi provides optimistic concurrency control (OCC) between writers, while providing lock-free, non-blocking MVCC based concurrency control between writers and table-services and between different table services.
+Concurrency control defines how different writers/readers coordinate access to the table. Hudi ensures atomic writes, by way of publishing commits atomically to the timeline, stamped with an instant time that denotes the time at which the action is deemed to have occurred. Unlike general purpose file version control, Hudi draws clear distinction between writer processes (that issue user’s upserts/deletes), table services (that write data/metadata to optimize/perform bookkeeping) and readers (that execute queries and read data). Hudi provides snapshot isolation between all three types of processes, meaning they all operate on a consistent snapshot of the table. Hudi provides optimistic concurrency control (OCC) between writers, while providing lock-free, non-blocking Multiversion Concurrency Control (MVCC) based concurrency control between writers and table-services and between different table services.
 
-In this section, we will discuss the different concurrency controls supported by Hudi and how they are leveraged to provide flexible deployment models; we will cover multi-writing, a  popular deployment model; finally, we’ll describe ways to ingest data into a Hudi Table from multiple writers using different writers, like  DeltaStreamer, Hudi datasource, Spark Structured Streaming and Spark SQL.
+In this section, we will discuss the different concurrency controls supported by Hudi and how they are leveraged to provide flexible deployment models; we will cover multi-writing, a  popular deployment model; finally, we’ll describe ways to ingest data into a Hudi Table from multiple writers using different writers, like  Hudi Streamer, Hudi datasource, Spark Structured Streaming and Spark SQL.
 
 
 ## Deployment models with supported concurrency controls
@@ -17,17 +17,17 @@ In this section, we will discuss the different concurrency controls supported by
 
 This is the simplest form of concurrency, meaning there is no concurrency at all in the write processes. In this model, Hudi eliminates the need for concurrency control and maximizes throughput by supporting these table services out-of-box and running inline after every write to the table. Execution plans are idempotent, persisted to the timeline and auto-recover from failures. For most simple use-cases, this means just writing is sufficient to get a well-managed table that needs no concurrency control.
 
-Although there is no actual concurrent writing in this model, there is a need to provide snapshot isolation between readers and writers. **MVCC** is leveraged to provide such isolation between ingestion writer and multiple readers and also between multiple table service writers and readers. Writes to the table either from ingestion or from table services produce versioned data that are available to readers only after the writes are committed. Until then, readers can access only the previous version of the data.
+There is no actual concurrent writing in this model. **MVCC** is leveraged to provide snapshot isolation guarantees between ingestion writer and multiple readers and also between multiple table service writers and readers. Writes to the table either from ingestion or from table services produce versioned data that are available to readers only after the writes are committed. Until then, readers can access only the previous version of the data.
 
-A single writer with all table services such as cleaning, clustering, compaction, etc can be configured to be inline (such as DeltaStreamer sync-once mode and Spark Datasource with default configs) without any additional configs.
+A single writer with all table services such as cleaning, clustering, compaction, etc can be configured to be inline (such as Hudi Streamer sync-once mode and Spark Datasource with default configs) without any additional configs.
 
 #### Single Writer Guarantees
 
 In this model, the following are the guarantees on [write operations](https://hudi.apache.org/docs/write_operations/) to expect:
 
 - *UPSERT Guarantee*: The target table will NEVER show duplicates.
-- *INSERT Guarantee*: The target table wilL NEVER have duplicates if [dedup](https://hudi.apache.org/docs/configurations#hoodiedatasourcewriteinsertdropduplicates) is enabled.
-- *BULK_INSERT Guarantee*: The target table will NEVER have duplicates if [dedup](https://hudi.apache.org/docs/configurations#hoodiedatasourcewriteinsertdropduplicates) is enabled.
+- *INSERT Guarantee*: The target table wilL NEVER have duplicates if dedup: [`hoodie.datasource.write.insert.drop.duplicates`](https://hudi.apache.org/docs/configurations#hoodiedatasourcewriteinsertdropduplicates) & [`hoodie.combine.before.insert`](https://hudi.apache.org/docs/configurations/#hoodiecombinebeforeinsert), is enabled.
+- *BULK_INSERT Guarantee*: The target table will NEVER have duplicates if dedup: [`hoodie.datasource.write.insert.drop.duplicates`](https://hudi.apache.org/docs/configurations#hoodiedatasourcewriteinsertdropduplicates) & [`hoodie.combine.before.insert`](https://hudi.apache.org/docs/configurations/#hoodiecombinebeforeinsert), is enabled.
 - *INCREMENTAL PULL Guarantee*: Data consumption and checkpoints are NEVER out of order.
 
 
@@ -35,16 +35,17 @@ In this model, the following are the guarantees on [write operations](https://hu
 
 Hudi provides the option of running the table services in an async fashion, where most of the heavy lifting (e.g actually rewriting the columnar data by compaction service) is done asynchronously. In this model, the async deployment eliminates any repeated wasteful retries and optimizes the table using clustering techniques while a single writer consumes the writes to the table without having to be blocked by such table services. This model avoids the need for taking an [external lock](#external-locking-and-lock-providers) to control concurrency and avoids the need to separately orchestrate and monitor offline table services jobs..
 
-A single writer along with async table services runs in the same process. For example, you can have a  DeltaStreamer in continuous mode write to a MOR table using async compaction; you can use Spark Streaming (where [compaction](https://hudi.apache.org/docs/compaction) is async by default), and you can use Flink streaming or your own job setup and enable async table services inside the same writer.
+A single writer along with async table services runs in the same process. For example, you can have a  Hudi Streamer in continuous mode write to a MOR table using async compaction; you can use Spark Streaming (where [compaction](https://hudi.apache.org/docs/compaction) is async by default), and you can use Flink streaming or your own job setup and enable async table services inside the same writer.
 
 Hudi leverages **MVCC** in this model to support running any number of table service jobs concurrently, without any concurrency conflict.  This is made possible by ensuring Hudi 's ingestion writer and async table services coordinate among themselves to ensure no conflicts and avoid race conditions. The same single write guarantees described in Model A above can be achieved in this model as well.
+With this model users don't need to spin up different spark jobs and manage the orchestration among it. For larger deployments, this model can ease the operational burden significantly while getting the table services running without blocking the writers.
 
 ### Model C: Multi-writer
 
 It is not always possible to serialize all write operations to a table (such as UPSERT, INSERT or DELETE) into the same write process and therefore, multi-writing capability may be required. In multi-writing, disparate distributed processes run in parallel or overlapping time windows to write to the same table. In such cases, an external locking mechanism becomes necessary to coordinate concurrent accesses. Here are few different scenarios that would all fall under multi-writing:
 
 - Multiple ingestion writers to the same table:For instance, two Spark Datasource writers working on different sets of partitions form a source kafka topic.
-- Multiple ingestion writers to the same table, including one writer with async table services: For example, a DeltaStreamer with async compaction for regular ingestion & a Spark Datasource writer for backfilling.
+- Multiple ingestion writers to the same table, including one writer with async table services: For example, a Hudi Streamer with async compaction for regular ingestion & a Spark Datasource writer for backfilling.
 - A single ingestion writer and a separate compaction (HoodieCompactor) or clustering (HoodieClusteringJob) job apart from the ingestion writer: This is considered as multi-writing as they are not running in the same process.
 
 Hudi's concurrency model intelligently differentiates actual writing to the table from table services that manage or optimize the table. Hudi offers similar **optimistic concurrency control across multiple writers**, but **table services can still execute completely lock-free and async** as long as they run in the same process as one of the writers.
@@ -57,7 +58,8 @@ With multiple writers using OCC, these are the write guarantees to expect:
 - *UPSERT Guarantee*: The target table will NEVER show duplicates.
 - *INSERT Guarantee*: The target table MIGHT have duplicates even if dedup is enabled.
 - *BULK_INSERT Guarantee*: The target table MIGHT have duplicates even if dedup is enabled.
-- *INCREMENTAL PULL Guarantee*: Data consumption and checkpoints MIGHT be out of order due to multiple writer jobs finishing at different times.
+- *INCREMENTAL PULL Guarantee*: Data consumption and checkpoints are NEVER out of order. If there are inflight commits 
+  (due to multi-writing), incremental queries will not expose the completed commits following the inflight commits. 
 
 
 ## Enabling Multi Writing
@@ -67,12 +69,15 @@ The following properties are needed to be set appropriately to turn on optimisti
 ```
 hoodie.write.concurrency.mode=optimistic_concurrency_control
 hoodie.write.lock.provider=<lock-provider-classname>
+hoodie.cleaner.policy.failed.writes=LAZY
 ```
 
-| Config Name| Default| Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| --------------------------------------------------------------------------------- | ------------------------ |----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| hoodie.write.concurrency.mode | SINGLE_WRITER (Optional) | <u>[Concurrency modes](https://github.com/apache/hudi/blob/c387f2a6dd3dc9db2cd22ec550a289d3a122e487/hudi-common/src/main/java/org/apache/hudi/common/model/WriteConcurrencyMode.java)</u> for write operations.<br />Possible values:<br /><ul><li>`SINGLE_WRITER`: Only one active writer to the table. Maximizes throughput.</li><li>`OPTIMISTIC_CONCURRENCY_CONTROL`: Multiple writers can operate on the table with lazy conflict resolution using locks. This means that only one writer succeeds if multiple writers write to the same file group.</li></ul><br />`Config Param: WRITE_CONCURRENCY_MODE` |
-| hoodie.write.lock.provider    | org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider (Optional)                      | Lock provider class name, user can provide their own implementation of LockProvider which should be subclass of org.apache.hudi.common.lock.LockProvider<br /><br />`Config Param: LOCK_PROVIDER_CLASS_NAME`<br />`Since Version: 0.8.0`                                                                                                                                                                                                                                                                                                                                                                       |
+| Config Name                         | Default                                                                       | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+|-------------------------------------|-------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| hoodie.write.concurrency.mode       | SINGLE_WRITER (Optional)                                                      | <u>[Concurrency modes](https://github.com/apache/hudi/blob/c387f2a6dd3dc9db2cd22ec550a289d3a122e487/hudi-common/src/main/java/org/apache/hudi/common/model/WriteConcurrencyMode.java)</u> for write operations.<br />Possible values:<br /><ul><li>`SINGLE_WRITER`: Only one active writer to the table. Maximizes throughput.</li><li>`OPTIMISTIC_CONCURRENCY_CONTROL`: Multiple writers can operate on the table with lazy conflict resolution using locks. This means that only one writer succeeds if multiple writers write to the same file group.</li></ul><br />`Config Param: WRITE_CONCURRENCY_MODE` |
+| hoodie.write.lock.provider          | org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider (Optional) | Lock provider class name, user can provide their own implementation of LockProvider which should be subclass of org.apache.hudi.common.lock.LockProvider<br /><br />`Config Param: LOCK_PROVIDER_CLASS_NAME`<br />`Since Version: 0.8.0`                                                                                                                                                                                                                                                                                                                                                                       |
+| hoodie.cleaner.policy.failed.writes | EAGER (Optional)                                                              | org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy: Policy that controls how to clean up failed writes. Hudi will delete any files written by failed writes to re-claim space.     EAGER(default): Clean failed writes inline after every write operation.     LAZY: Clean failed writes lazily after heartbeat timeout when the cleaning service runs. This policy is required when multi-writers are enabled.     NEVER: Never clean failed writes.<br /><br />`Config Param: FAILED_WRITES_CLEANER_POLICY`                                                                                       |
+
 
 ### External Locking and lock providers
 
@@ -221,15 +226,15 @@ A Hudi Streamer job can then be triggered as follows:
   --source-class org.apache.hudi.utilities.sources.AvroKafkaSource \
   --source-ordering-field impresssiontime \
   --target-base-path file:\/\/\/tmp/hudi-streamer-op \ 
-  --target-table taableName \
+  --target-table tableName \
   --op BULK_INSERT
 ```
 
 ## Early conflict Detection
 
-Multi writing using OCC allows multiple writers to concurrently write and atomically commit to the Hudi table if there is no overlapping data file to be written, to guarantee data consistency, integrity and correctness. Prior to the 0.13.0 release, such conflict detection of overlapping data files is performed before commit metadata and after the data writing is completed. If any conflict is detected in the final stage, it could have wasted compute resources because the data writing is finished already.
+Multi writing using OCC allows multiple writers to concurrently write and atomically commit to the Hudi table if there is no overlapping data file to be written, to guarantee data consistency, integrity and correctness. Prior to 0.13.0 release, as the OCC (optimistic concurrency control) name suggests, each writer will optimistically proceed with ingestion and towards the end, just before committing will go about conflict resolution flow to deduce overlapping writes and abort one if need be. But this could result in lot of compute waste, since the aborted commit will have to retry from beginning. With 0.13.0, Hudi introduced early conflict deduction leveraging markers in hudi to deduce the conflicts eagerly and abort early in the write lifecyle instead of doing it in the end. For large scale deployments, this might avoid wasting lot o compute resources if there could be overlapping concurrent writers.
 
-To improve the concurrency control, the 0.13.0 release introduced a new feature, early conflict detection in OCC, to detect the conflict during the data writing phase and abort the writing early on once a conflict is detected, using Hudi's marker mechanism. Hudi can now stop a conflicting writer much earlier because of the early conflict detection and release computing resources necessary to cluster, improving resource utilization.
+To improve the concurrency control, the [0.13.0 release](https://hudi.apache.org/releases/release-0.13.0#early-conflict-detection-for-multi-writer) introduced a new feature, early conflict detection in OCC, to detect the conflict during the data writing phase and abort the writing early on once a conflict is detected, using Hudi's marker mechanism. Hudi can now stop a conflicting writer much earlier because of the early conflict detection and release computing resources necessary to cluster, improving resource utilization.
 
 By default, this feature is turned off. To try this out, a user needs to set `hoodie.write.concurrency.early.conflict.detection.enable` to true, when using OCC for concurrency control (Refer [configs](https://hudi.apache.org/docs/next/configurations#Write-Configurations-advanced-configs) page for all relevant configs).
 :::note
