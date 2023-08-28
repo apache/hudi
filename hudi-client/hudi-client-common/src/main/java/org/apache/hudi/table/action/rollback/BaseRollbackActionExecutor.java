@@ -120,6 +120,8 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
     // Finally, remove the markers post rollback.
     WriteMarkersFactory.get(config.getMarkersType(), table, instantToRollback.getTimestamp())
         .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+    WriteMarkersFactory.get(config.getMarkersType(), table, rollbackInstant.getTimestamp())
+        .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
 
     return rollbackMetadata;
   }
