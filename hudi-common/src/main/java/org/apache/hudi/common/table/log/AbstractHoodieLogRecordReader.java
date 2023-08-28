@@ -224,7 +224,7 @@ public abstract class AbstractHoodieLogRecordReader {
   private void scanInternalV1(Option<KeySpec> keySpecOpt) {
     currentInstantLogBlocks = new ArrayDeque<>();
     List<HoodieLogBlock> validLogBlockInstants = new ArrayList<>();
-    Map<String, List<List<Pair<Integer,HoodieLogBlock>>>> blockSequenceMapPerCommit = new HashMap<>();
+    Map<String, Map<Long, List<Pair<Integer, HoodieLogBlock>>>> blockSequenceMapPerCommit = new HashMap<>();
 
     progress = 0.0f;
     totalLogFiles = new AtomicLong(0);
@@ -252,7 +252,13 @@ public abstract class AbstractHoodieLogRecordReader {
         HoodieLogBlock logBlock = logFormatReaderWrapper.next();
         final String instantTime = logBlock.getLogBlockHeader().get(INSTANT_TIME);
         final String blockSequenceNumberStr = logBlock.getLogBlockHeader().getOrDefault(BLOCK_SEQUENCE_NUMBER, "");
-        int blockSeqNo = StringUtils.isNullOrEmpty(blockSequenceNumberStr) ? -1 : Integer.parseInt(blockSequenceNumberStr);
+        int blockSeqNo = -1;
+        long attemptNo = -1L;
+        if (!StringUtils.isNullOrEmpty(blockSequenceNumberStr)) {
+          String[] parts = blockSequenceNumberStr.split(",");
+          attemptNo = Long.parseLong(parts[0]);
+          blockSeqNo = Integer.parseInt(parts[1]);
+        }
         totalLogBlocks.incrementAndGet();
         if (logBlock.getBlockType() != CORRUPT_BLOCK
             && !HoodieTimeline.compareTimestamps(logBlock.getLogBlockHeader().get(INSTANT_TIME), HoodieTimeline.LESSER_THAN_OR_EQUALS, this.latestInstantTime
@@ -279,14 +285,14 @@ public abstract class AbstractHoodieLogRecordReader {
             // store the current block
             currentInstantLogBlocks.push(logBlock);
             validLogBlockInstants.add(logBlock);
-            updateBlockSequenceTracker(logBlock, instantTime, blockSeqNo, blockSequenceMapPerCommit);
+            updateBlockSequenceTracker(logBlock, instantTime, blockSeqNo, attemptNo, blockSequenceMapPerCommit);
             break;
           case DELETE_BLOCK:
             LOG.info("Reading a delete block from file " + logFile.getPath());
             // store deletes so can be rolled back
             currentInstantLogBlocks.push(logBlock);
             validLogBlockInstants.add(logBlock);
-            updateBlockSequenceTracker(logBlock, instantTime, blockSeqNo, blockSequenceMapPerCommit);
+            updateBlockSequenceTracker(logBlock, instantTime, blockSeqNo, attemptNo, blockSequenceMapPerCommit);
             break;
           case COMMAND_BLOCK:
             // Consider the following scenario
@@ -419,27 +425,33 @@ public abstract class AbstractHoodieLogRecordReader {
    * @return a Pair of boolean and list of deduped valid block blocks, where boolean of true means, there have been dups detected.
    */
   private Pair<Boolean, List<HoodieLogBlock>> reconcileSpuriousBlocksAndGetValidOnes(List<HoodieLogBlock> allValidLogBlocks,
-                                                                      Map<String, List<List<Pair<Integer,HoodieLogBlock>>>> blockSequenceMapPerCommit) {
+                                                                      Map<String, Map<Long, List<Pair<Integer, HoodieLogBlock>>>> blockSequenceMapPerCommit) {
+
     boolean dupsFound = blockSequenceMapPerCommit.values().stream().anyMatch(perCommitBlockList -> perCommitBlockList.size() > 1);
     if (dupsFound) {
       // duplicates are found. we need to remove duplicate log blocks.
-      for (Map.Entry<String, List<List<Pair<Integer,HoodieLogBlock>>>> entry: blockSequenceMapPerCommit.entrySet()) {
-        List<List<Pair<Integer,HoodieLogBlock>>> perCommitBlockSequences = entry.getValue();
+      for (Map.Entry<String, Map<Long, List<Pair<Integer, HoodieLogBlock>>>> entry: blockSequenceMapPerCommit.entrySet()) {
+        Map<Long, List<Pair<Integer, HoodieLogBlock>>> perCommitBlockSequences = entry.getValue();
         if (perCommitBlockSequences.size() > 1) {
           // only those that have more than 1 sequence needs deduping.
-          int maxSequenceIndex = 0;
           int maxSequenceCount = -1;
+          int maxAttemptNo = -1;
           int totalSequences = perCommitBlockSequences.size();
-          for (int i = 0; i < totalSequences; i++) {
-            if (maxSequenceCount < perCommitBlockSequences.get(i).size()) {
-              maxSequenceCount = perCommitBlockSequences.get(i).size();
-              maxSequenceIndex = i;
+          int counter = 0;
+          for (Map.Entry<Long, List<Pair<Integer, HoodieLogBlock>>> perAttemptEntries : perCommitBlockSequences.entrySet()) {
+            Long attemptNo = perAttemptEntries.getKey();
+            int size = perAttemptEntries.getValue().size();
+            if (maxSequenceCount < size) {
+              maxSequenceCount = size;
+              maxAttemptNo = Math.toIntExact(attemptNo);
             }
+            counter++;
           }
           // for other sequence (!= maxSequenceIndex), we need to remove the corresponding logBlocks from allValidLogBlocks
-          for (int i = 0;i < perCommitBlockSequences.size(); i++) {
-            if (i != maxSequenceIndex) {
-              List<HoodieLogBlock> logBlocksToRemove = perCommitBlockSequences.get(i).stream().map(pair -> pair.getValue()).collect(Collectors.toList());
+          for (Map.Entry<Long, List<Pair<Integer, HoodieLogBlock>>> perAttemptEntries : perCommitBlockSequences.entrySet()) {
+            Long attemptNo = perAttemptEntries.getKey();
+            if (maxAttemptNo != attemptNo) {
+              List<HoodieLogBlock> logBlocksToRemove = perCommitBlockSequences.get(attemptNo).stream().map(pair -> pair.getValue()).collect(Collectors.toList());
               logBlocksToRemove.forEach(logBlockToRemove -> allValidLogBlocks.remove(logBlocksToRemove));
             }
           }
@@ -454,16 +466,16 @@ public abstract class AbstractHoodieLogRecordReader {
   /**
    * Updates map tracking block seq no.
    * Here is the map structure.
-   * Map<String, List<List<Pair<Integer,HoodieLogBlock>>>> blockSequenceMapPerCommit
+   * Map<String, Map<Long, List<Pair<Integer, HoodieLogBlock>>>> blockSequenceMapPerCommit
    * Key: Commit time.
-   * Value: List<List<Pair<Integer,HoodieLogBlock>>>
-   *   Value refers to a List of different block sequences tracked.
+   * Value: Map<Long, List<Pair<Integer, HoodieLogBlock>>>>
+   *   Value refers to a Map of different attempts for the commit of interest. List contains the block seq number and the resp HoodieLogBlock.
    *
    *  For eg, if there were two attempts for a file slice while writing(due to spark task retries), here is how the map might look like
    *  key: commit1
    *  value : {
-   *    entry1: List = { {0, lb1}, {1, lb2} },
-   *    entry2: List = { {0, lb3}, {1, lb4}, {2, lb5}}
+   *    0L = List = { {0, lb1}, {1, lb2} },
+   *    1L = List = { {0, lb3}, {1, lb4}, {2, lb5}}
    *  }
    *  Meaning: for commit1, there was two attempts with Append Handle while writing. In first attempt, lb1 and lb2 was added. And in 2nd attempt lb3, lb4 and lb5 was added.
    *  We keep populating this entire map and finally detect spurious log blocks and ignore them.
@@ -474,36 +486,29 @@ public abstract class AbstractHoodieLogRecordReader {
    * @param blockSeqNo block sequence number.
    * @param blockSequenceMapPerCommit map tracking per commit block sequences.
    */
-  private void updateBlockSequenceTracker(HoodieLogBlock logBlock, String instantTime, int blockSeqNo,
-                                          Map<String, List<List<Pair<Integer,HoodieLogBlock>>>> blockSequenceMapPerCommit) {
-    if (blockSeqNo != -1) { // update the block sequence tracker for log blocks containing the same.
-      if (!blockSequenceMapPerCommit.containsKey(instantTime)) {
-        blockSequenceMapPerCommit.put(instantTime, new ArrayList<>());
-      }
-      List<List<Pair<Integer,HoodieLogBlock>>> curCommitBlockList = blockSequenceMapPerCommit.get(instantTime);
-      if (blockSeqNo == 0) {
-        // start a new list
-        List<Pair<Integer,HoodieLogBlock>> blocksList = new ArrayList<>();
-        blocksList.add(Pair.of(blockSeqNo, logBlock));
-        curCommitBlockList.add(blocksList);
+  private void updateBlockSequenceTracker(HoodieLogBlock logBlock, String instantTime, int blockSeqNo, long attemptNo,
+                                          Map<String, Map<Long, List<Pair<Integer, HoodieLogBlock>>>> blockSequenceMapPerCommit) {
+    if (blockSeqNo != -1 && attemptNo != -1) { // update the block sequence tracker for log blocks containing the same.
+      blockSequenceMapPerCommit.computeIfAbsent(instantTime, entry -> new HashMap<>());
+      Map<Long, List<Pair<Integer, HoodieLogBlock>>> curCommitBlockMap = blockSequenceMapPerCommit.get(instantTime);
+      if (curCommitBlockMap.containsKey(attemptNo)) {
+        // append to existing map entry
+        curCommitBlockMap.get(attemptNo).add(Pair.of(blockSeqNo, logBlock));
       } else {
-        // append to existing list
-        curCommitBlockList.get(curCommitBlockList.size() - 1).add(Pair.of(blockSeqNo, logBlock));
+        // create a new map entry
+        curCommitBlockMap.put(attemptNo, new ArrayList<>());
+        curCommitBlockMap.get(attemptNo).add(Pair.of(blockSeqNo, logBlock));
       }
       // update the latest to block sequence tracker
-      blockSequenceMapPerCommit.put(instantTime, curCommitBlockList);
+      blockSequenceMapPerCommit.put(instantTime, curCommitBlockMap);
     } else {
       // all of older blocks are considered valid. there should be only one list for older commits where block sequence number is not present.
-      if (!blockSequenceMapPerCommit.containsKey(instantTime)) {
-        blockSequenceMapPerCommit.put(instantTime, new ArrayList<>());
-      }
-      List<List<Pair<Integer,HoodieLogBlock>>> curCommitBlockList = blockSequenceMapPerCommit.get(instantTime);
-      if (curCommitBlockList.isEmpty()) {
-        curCommitBlockList.add(new ArrayList<>());
-      }
-      curCommitBlockList.get(0).add(Pair.of(blockSeqNo, logBlock));
+      blockSequenceMapPerCommit.computeIfAbsent(instantTime, entry -> new HashMap<>());
+      Map<Long, List<Pair<Integer, HoodieLogBlock>>> curCommitBlockMap = blockSequenceMapPerCommit.get(instantTime);
+      curCommitBlockMap.put(0L, new ArrayList<>());
+      curCommitBlockMap.get(0L).add(Pair.of(blockSeqNo, logBlock));
       // update the latest to block sequence tracker
-      blockSequenceMapPerCommit.put(instantTime, curCommitBlockList);
+      blockSequenceMapPerCommit.put(instantTime, curCommitBlockMap);
     }
   }
 

@@ -461,11 +461,11 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             ? HoodieRecord.RECORD_KEY_METADATA_FIELD
             : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
 
-        blocks.add(getBlock(config, pickLogDataBlockFormat(), recordList, getUpdatedHeader(header, blockSequenceNumber++), keyField));
+        blocks.add(getBlock(config, pickLogDataBlockFormat(), recordList, getUpdatedHeader(header, blockSequenceNumber++, taskContextSupplier.getAttemptIdSupplier().get()), keyField));
       }
 
       if (appendDeleteBlocks && recordsToDelete.size() > 0) {
-        blocks.add(new HoodieDeleteBlock(recordsToDelete.toArray(new DeleteRecord[0]), getUpdatedHeader(header, blockSequenceNumber++)));
+        blocks.add(new HoodieDeleteBlock(recordsToDelete.toArray(new DeleteRecord[0]), getUpdatedHeader(header, blockSequenceNumber++, taskContextSupplier.getAttemptIdSupplier().get())));
       }
 
       if (blocks.size() > 0) {
@@ -635,10 +635,10 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     }
   }
 
-  private static Map<HeaderMetadataType, String> getUpdatedHeader(Map<HeaderMetadataType, String> header, int blockSequenceNumber) {
+  private static Map<HeaderMetadataType, String> getUpdatedHeader(Map<HeaderMetadataType, String> header, int blockSequenceNumber, long attemptNumber) {
     Map<HeaderMetadataType, String> updatedHeader = new HashMap<>();
     updatedHeader.putAll(header);
-    updatedHeader.put(HeaderMetadataType.BLOCK_SEQUENCE_NUMBER, String.valueOf(blockSequenceNumber));
+    updatedHeader.put(HeaderMetadataType.BLOCK_SEQUENCE_NUMBER, String.valueOf(attemptNumber) + "," + String.valueOf(blockSequenceNumber));
     return updatedHeader;
   }
 
