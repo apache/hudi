@@ -217,29 +217,24 @@ public class HoodieLockConfig extends HoodieConfig {
       .withDocumentation("Lock provider class name, this should be subclass of "
           + "org.apache.hudi.client.transaction.ConflictResolutionStrategy");
 
-  public static final ConfigProperty<Boolean> RETRY_ON_CONFLICT_FAILURES = ConfigProperty
-      .key(LOCK_PREFIX + "retry.on.conflict.failures")
-      .defaultValue(false)
-      .sinceVersion("0.13.0")
-      .withDocumentation("Whenever there is a conflict, one of the commits will get aborted. By enabling this conflict, hudi will retry the batch again.");
-
-  public static final ConfigProperty<Integer> NUM_RETRIES_ON_CONFLICT_FAILURES = ConfigProperty
-      .key(LOCK_PREFIX + "num.retries.on.conflict.failures")
-      .defaultValue(3)
-      .sinceVersion("0.13.0")
-      .withDocumentation("Maximum number of times to retry a batch on conflict failure. This will be effective only when " + RETRY_ON_CONFLICT_FAILURES.key()
-       + " is enabled ");
-
-  /** @deprecated Use {@link #WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME} and its methods instead */
+  /**
+   * @deprecated Use {@link #WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME} and its methods instead
+   */
   @Deprecated
   public static final String WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_PROP = WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key();
-  /** @deprecated Use {@link #WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME} and its methods instead */
+  /**
+   * @deprecated Use {@link #WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME} and its methods instead
+   */
   @Deprecated
   public static final String DEFAULT_WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS = WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.defaultValue();
-  /** @deprecated Use {@link #LOCK_PROVIDER_CLASS_NAME} and its methods instead */
+  /**
+   * @deprecated Use {@link #LOCK_PROVIDER_CLASS_NAME} and its methods instead
+   */
   @Deprecated
   public static final String LOCK_PROVIDER_CLASS_PROP = LOCK_PROVIDER_CLASS_NAME.key();
-  /** @deprecated Use {@link #LOCK_PROVIDER_CLASS_NAME} and its methods instead */
+  /**
+   * @deprecated Use {@link #LOCK_PROVIDER_CLASS_NAME} and its methods instead
+   */
   @Deprecated
   public static final String DEFAULT_LOCK_PROVIDER_CLASS = LOCK_PROVIDER_CLASS_NAME.defaultValue();
 
