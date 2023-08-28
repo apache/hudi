@@ -93,6 +93,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
   // NOTE: Reader is ONLY THREAD-SAFE for {@code Scanner} operating in Positional Read ("pread")
   //       mode (ie created w/ "pread = true")
   // Common reader is not used for the iterators since they can be closed independently.
+  // Use {@link getSharedReader()} instead of accessing directly.
   private Option<HFile.Reader> sharedReader;
   // NOTE: Scanner caches read blocks, therefore it's important to re-use scanner
   //       wherever possible
@@ -196,7 +197,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
       if (!sharedScanner.isPresent()) {
         // For shared scanner, which is primarily used for point-lookups, we're caching blocks
         // by default, to minimize amount of traffic to the underlying storage
-        sharedScanner = Option.of(getHFileScanner(sharedReader.get(), true));
+        sharedScanner = Option.of(getHFileScanner(getSharedHFileReader(), true));
       }
       return candidateRowKeys.stream().filter(k -> {
         try {
