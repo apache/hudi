@@ -84,34 +84,34 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
       return context.map(markerPaths, markerFilePath -> {
         String typeStr = markerFilePath.substring(markerFilePath.lastIndexOf(".") + 1);
         IOType type = IOType.valueOf(typeStr);
-        String partitionFilePath = WriteMarkers.stripMarkerSuffix(markerFilePath);
-        Path fullFilePath = new Path(basePath, partitionFilePath);
-        String partitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), fullFilePath.getParent());
+        String fileNameWithPartitionToRollback = WriteMarkers.stripMarkerSuffix(markerFilePath);
+        Path fullFilePathToRollback = new Path(basePath, fileNameWithPartitionToRollback);
+        String partitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), fullFilePathToRollback.getParent());
         switch (type) {
           case MERGE:
           case CREATE:
             String fileId = null;
             String baseInstantTime = null;
-            if (FSUtils.isBaseFile(fullFilePath)) {
-              HoodieBaseFile baseFileToDelete = new HoodieBaseFile(fullFilePath.toString());
+            if (FSUtils.isBaseFile(fullFilePathToRollback)) {
+              HoodieBaseFile baseFileToDelete = new HoodieBaseFile(fullFilePathToRollback.toString());
               fileId = baseFileToDelete.getFileId();
               baseInstantTime = baseFileToDelete.getCommitTime();
-            } else if (FSUtils.isLogFile(fullFilePath)) {
+            } else if (FSUtils.isLogFile(fullFilePathToRollback)) {
               // TODO: HUDI-1517 may distinguish log file created from log file being appended in the future @guanziyue
               // Now it should not have create type
               checkArgument(type != IOType.CREATE, "Log file should not support create io type now");
               checkArgument(type != IOType.MERGE, "Log file should not support merge io type");
-              HoodieLogFile logFileToDelete = new HoodieLogFile(fullFilePath.toString());
+              HoodieLogFile logFileToDelete = new HoodieLogFile(fullFilePathToRollback.toString());
               fileId = logFileToDelete.getFileId();
               baseInstantTime = logFileToDelete.getBaseCommitTime();
             }
-            Objects.requireNonNull(fileId, "Cannot find valid fileId from path: " + fullFilePath);
-            Objects.requireNonNull(baseInstantTime, "Cannot find valid base instant from path: " + fullFilePath);
+            Objects.requireNonNull(fileId, "Cannot find valid fileId from path: " + fullFilePathToRollback);
+            Objects.requireNonNull(baseInstantTime, "Cannot find valid base instant from path: " + fullFilePathToRollback);
             return new HoodieRollbackRequest(partitionPath, fileId, baseInstantTime,
-                Collections.singletonList(fullFilePath.toString()),
+                Collections.singletonList(fullFilePathToRollback.toString()),
                 Collections.emptyMap());
           case APPEND:
-            HoodieRollbackRequest rollbackRequestForAppend = getRollbackRequestForAppend(partitionFilePath);
+            HoodieRollbackRequest rollbackRequestForAppend = getRollbackRequestForAppend(fileNameWithPartitionToRollback);
             return rollbackRequestForAppend;
           default:
             throw new HoodieRollbackException("Unknown marker type, during rollback of " + instantToRollback);
@@ -122,8 +122,8 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
     }
   }
 
-  protected HoodieRollbackRequest getRollbackRequestForAppend(String markerFilePath) throws IOException {
-    Path filePath = new Path(basePath, markerFilePath);
+  protected HoodieRollbackRequest getRollbackRequestForAppend(String fileNameWithPartitionToRollback) throws IOException {
+    Path filePath = new Path(basePath, fileNameWithPartitionToRollback);
     String fileId;
     String baseCommitTime;
     String relativePartitionPath;
@@ -132,7 +132,7 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
     // Old marker files may be generated from base file name before HUDI-1517. keep compatible with them.
     // TODO: deprecated in HUDI-1517, may be removed in the future. @guanziyue.gzy
     if (FSUtils.isBaseFile(filePath)) {
-      LOG.warn("Find old marker type for log file: " + markerFilePath);
+      LOG.warn("Find old marker type for log file: " + fileNameWithPartitionToRollback);
       fileId = FSUtils.getFileIdFromFilePath(filePath);
       baseCommitTime = FSUtils.getCommitTime(filePath.getName());
       relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), filePath.getParent());
@@ -149,11 +149,11 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
             ioException);
       }
     } else {
-      HoodieLogFile latestLogFile = new HoodieLogFile(filePath);
-      fileId = latestLogFile.getFileId();
-      baseCommitTime = latestLogFile.getBaseCommitTime();
+      HoodieLogFile logFileToRollback = new HoodieLogFile(filePath);
+      fileId = logFileToRollback.getFileId();
+      baseCommitTime = logFileToRollback.getBaseCommitTime();
       relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), filePath.getParent());
-      latestLogFileOption = Option.of(latestLogFile);
+      latestLogFileOption = Option.of(logFileToRollback);
     }
 
     Map<String, Long> logFilesWithBlocksToRollback = new HashMap<>();
