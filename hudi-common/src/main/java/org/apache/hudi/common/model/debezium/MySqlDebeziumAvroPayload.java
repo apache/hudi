@@ -91,6 +91,6 @@ public class MySqlDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
     Long currentPos = Long.valueOf(currentFilePos[1]);
     Long insertPos = Long.valueOf(insertFilePos[1]);
 
-    return insertPos.compareTo(currentPos) <= 0;
+    return insertPos <= currentPos;
   }
 }
