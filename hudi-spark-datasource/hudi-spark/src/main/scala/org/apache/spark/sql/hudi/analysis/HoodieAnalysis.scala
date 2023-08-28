@@ -518,11 +518,14 @@ case class HoodiePostAnalysisRule(sparkSession: SparkSession) extends Rule[Logic
         if sparkSession.sessionState.catalog.tableExists(tableName)
           && sparkAdapter.isHoodieTable(tableName, sparkSession) =>
         DropHoodieTableCommand(tableName, ifExists, false, purge)
+      // Rewrite the AlterTableAddPartitionCommand to AlterHoodieTableAddPartitionCommand
+      case AlterTableAddPartitionCommand(tableName, partitionSpecsAndLocs, ifNotExists)
+        if sparkAdapter.isHoodieTable(tableName, sparkSession) =>
+        AlterHoodieTableAddPartitionCommand(tableName, partitionSpecsAndLocs, ifNotExists)
       // Rewrite the AlterTableDropPartitionCommand to AlterHoodieTableDropPartitionCommand
       case AlterTableDropPartitionCommand(tableName, specs, ifExists, purge, retainData)
         if sparkAdapter.isHoodieTable(tableName, sparkSession) =>
           AlterHoodieTableDropPartitionCommand(tableName, specs, ifExists, purge, retainData)
-      // Rewrite the AlterTableRenameCommand to AlterHoodieTableRenameCommand
       // Rewrite the AlterTableAddColumnsCommand to AlterHoodieTableAddColumnsCommand
       case AlterTableAddColumnsCommand(tableId, colsToAdd)
         if sparkAdapter.isHoodieTable(tableId, sparkSession) =>
