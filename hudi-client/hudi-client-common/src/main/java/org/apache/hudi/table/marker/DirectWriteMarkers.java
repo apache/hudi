@@ -166,7 +166,7 @@ public class DirectWriteMarkers extends WriteMarkers {
               candidatesDirs.add(status.getPath());
             } else {
               String pathStr = status.getPath().toString();
-              if (pathStr.contains(HoodieTableMetaClient.MARKER_EXTN) && !pathStr.endsWith(IOType.APPEND.name())) {
+              if (pathStr.contains(HoodieTableMetaClient.MARKER_EXTN) && pathStr.endsWith(IOType.APPEND.name())) {
                 result.add(translateMarkerToDataPath(pathStr));
               }
             }

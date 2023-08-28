@@ -319,7 +319,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     }
   }
 
-  protected HoodieCommitMetadata appendMetadataForMissingFiles(HoodieCommitMetadata commitMetadata) {
+  protected HoodieCommitMetadata appendMetadataForMissingFiles(HoodieCommitMetadata commitMetadata) throws IOException {
     return commitMetadata;
   }
 

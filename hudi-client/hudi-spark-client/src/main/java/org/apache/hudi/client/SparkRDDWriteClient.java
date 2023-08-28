@@ -58,6 +58,7 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.deltacommit.BaseSparkDeltaCommitActionExecutor;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.upgrade.SparkUpgradeDowngradeHelper;
@@ -133,7 +134,10 @@ public class SparkRDDWriteClient<T> extends
                         List<HoodieWriteStat> stats, HoodieData<WriteStatus> writeStatuses) throws IOException {
     LOG.info("Committing " + instantTime + " action " + commitActionType);
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-    HoodieCommitMetadata fixedCommitMetadata = addMissingLogFileIfNeeded(table, commitActionType, instantTime, metadata);
+    HoodieCommitMetadata fixedCommitMetadata = BaseSparkDeltaCommitActionExecutor.appendMetadataForMissingFiles(table, commitActionType,
+        instantTime, metadata, config, context, hadoopConf, this.getClass().getSimpleName());
+
+    addMissingLogFileIfNeeded(table, commitActionType, instantTime, metadata);
     // Finalize write
     finalizeWrite(table, instantTime, stats);
     // do save internal schema to support Implicitly add columns in write process
