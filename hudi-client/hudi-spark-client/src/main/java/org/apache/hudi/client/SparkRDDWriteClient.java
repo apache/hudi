@@ -207,7 +207,6 @@ public class SparkRDDWriteClient<T> extends
               partitionToFileIdAndMissingLogFiles.get(partitionPath).get(fileID).add(logFilePathStr);
             });
 
-
         context.setJobStatus(this.getClass().getSimpleName(), "generate writeStat for missing log files");
 
         // populate partition -> map (fileId -> List <missing log file>)

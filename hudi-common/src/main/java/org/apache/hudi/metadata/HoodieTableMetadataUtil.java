@@ -700,6 +700,7 @@ public class HoodieTableMetadataUtil {
           String fileName = new Path(path).getName();
           partitionToAppendedFiles.get(partitionId).merge(fileName, size, fileMergeFn);
         });
+        // Extract original log files from failed commit
         pm.getLogFilesFromFailedCommit().forEach((path, size) -> {
           String fileName = new Path(path).getName();
           partitionToAppendedFiles.get(partitionId).merge(fileName, size, fileMergeFn);
