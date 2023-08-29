@@ -1665,6 +1665,9 @@ alter table hudi_cow_nonpcf_tbl2 set tblproperties (hoodie.keep.max.commits = '1
 **Syntax**
 
 ```sql
+-- Add Partition
+ALTER TABLE tableIdentifier ADD PARTITION ( partition_col_name = partition_col_val [ , ... ] )
+
 -- Drop Partition
 ALTER TABLE tableIdentifier DROP PARTITION ( partition_col_name = partition_col_val [ , ... ] )
 
