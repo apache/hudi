@@ -20,6 +20,7 @@ package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -27,11 +28,13 @@ import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -52,6 +55,7 @@ import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -59,7 +63,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
 
 /**
  * Base implementation of the Hive's {@link FileInputFormat} allowing for reading of Hudi's
@@ -195,7 +199,8 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
     return HoodieInputFormatUtils.filterIncrementalFileStatus(jobContext, tableMetaClient, timeline.get(), fileStatuses, commitsToCheck.get());
   }
 
-  protected FileStatus createFileStatusUnchecked(FileSlice fileSlice, HiveHoodieTableFileIndex fileIndex, HoodieTableMetaClient metaClient) {
+  protected FileStatus createFileStatusUnchecked(FileSlice fileSlice, Option<HoodieInstant> latestCompletedInstantOpt,
+                                                 String tableBasePath, HoodieTableMetaClient metaClient) {
     Option<HoodieBaseFile> baseFileOpt = fileSlice.getBaseFile();
 
     if (baseFileOpt.isPresent()) {
@@ -241,29 +246,81 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
       boolean shouldIncludePendingCommits =
           HoodieHiveUtils.shouldIncludePendingCommits(job, tableMetaClient.getTableConfig().getTableName());
 
-      HiveHoodieTableFileIndex fileIndex =
-          new HiveHoodieTableFileIndex(
-              engineContext,
-              tableMetaClient,
-              props,
-              HoodieTableQueryType.SNAPSHOT,
-              partitionPaths,
-              queryCommitInstant,
-              shouldIncludePendingCommits);
+      if (conf.getBoolean(ENABLE.key(), ENABLE.defaultValue()) && HoodieTableMetadataUtil.isFilesPartitionAvailable(tableMetaClient)) {
+        HiveHoodieTableFileIndex fileIndex =
+            new HiveHoodieTableFileIndex(
+                engineContext,
+                tableMetaClient,
+                props,
+                HoodieTableQueryType.SNAPSHOT,
+                partitionPaths,
+                queryCommitInstant,
+                shouldIncludePendingCommits);
 
-      Map<String, List<FileSlice>> partitionedFileSlices = fileIndex.listFileSlices();
+        Map<String, List<FileSlice>> partitionedFileSlices = fileIndex.listFileSlices();
 
-      targetFiles.addAll(
-          partitionedFileSlices.values()
-              .stream()
-              .flatMap(Collection::stream)
-              .filter(fileSlice -> checkIfValidFileSlice(fileSlice))
-              .map(fileSlice -> createFileStatusUnchecked(fileSlice, fileIndex, tableMetaClient))
-              .collect(Collectors.toList())
-      );
+        targetFiles.addAll(
+            partitionedFileSlices.values()
+                .stream()
+                .flatMap(Collection::stream)
+                .filter(fileSlice -> checkIfValidFileSlice(fileSlice))
+                .map(fileSlice -> createFileStatusUnchecked(fileSlice, fileIndex.getLatestCompletedInstant(),
+                        fileIndex.getBasePath().toString(), tableMetaClient))
+                .collect(Collectors.toList())
+        );
+      } else {
+        String basePath = tableMetaClient.getBasePathV2().toString();
+        Map<HoodieTableMetaClient, HoodieTableFileSystemView> fsViewCache = new HashMap<>();
+        HoodieTimeline timeline = getActiveTimeline(tableMetaClient, shouldIncludePendingCommits);
+        Option<String> queryInstant = queryCommitInstant.or(() -> timeline.lastInstant().map(HoodieInstant::getTimestamp));
+        validateInstant(timeline, queryInstant);
+
+        try {
+          HoodieTableFileSystemView fsView = fsViewCache.computeIfAbsent(tableMetaClient, hoodieTableMetaClient ->
+              FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext, hoodieTableMetaClient,
+                      HoodieInputFormatUtils.buildMetadataConfig(job), timeline));
+
+          List<FileSlice> filteredFileSlices = new ArrayList<>();
+
+          for (Path p : entry.getValue()) {
+            String relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), p);
+
+            List<FileSlice> fileSlices = queryInstant.map(
+                instant -> fsView.getLatestMergedFileSlicesBeforeOrOn(relativePartitionPath, instant))
+                .orElse(fsView.getLatestFileSlices(relativePartitionPath))
+                .collect(Collectors.toList());
+
+            filteredFileSlices.addAll(fileSlices);
+          }
+
+          targetFiles.addAll(
+              filteredFileSlices.stream()
+                  .filter(fileSlice -> checkIfValidFileSlice(fileSlice))
+                  .map(fileSlice -> createFileStatusUnchecked(fileSlice, timeline.filterCompletedInstants().lastInstant(),
+                          basePath, tableMetaClient))
+                  .collect(Collectors.toList()));
+        } finally {
+          fsViewCache.forEach(((metaClient, fsView) -> fsView.close()));
+        }
+      }
     }
 
     return targetFiles;
+  }
+
+  private static HoodieTimeline getActiveTimeline(HoodieTableMetaClient metaClient, boolean shouldIncludePendingCommits) {
+    HoodieTimeline timeline = metaClient.getCommitsAndCompactionTimeline();
+    if (shouldIncludePendingCommits) {
+      return timeline;
+    } else {
+      return timeline.filterCompletedAndCompactionInstants();
+    }
+  }
+
+  private static void validateInstant(HoodieTimeline activeTimeline, Option<String> queryInstant) {
+    if (queryInstant.isPresent() && !activeTimeline.containsInstant(queryInstant.get())) {
+      throw new HoodieIOException(String.format("Query instant (%s) not found in the timeline", queryInstant.get()));
+    }
   }
 
   protected boolean checkIfValidFileSlice(FileSlice fileSlice) {
@@ -278,11 +335,6 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
     } else {
       throw new IllegalStateException("Invalid state: base-file has to be present for " + fileSlice.getFileId());
     }
-  }
-
-  private void validate(List<FileStatus> targetFiles, List<FileStatus> legacyFileStatuses) {
-    List<FileStatus> diff = CollectionUtils.diff(targetFiles, legacyFileStatuses);
-    checkState(diff.isEmpty(), "Should be empty");
   }
 
   @Nonnull
