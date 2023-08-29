@@ -46,6 +46,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 /**
@@ -59,8 +60,8 @@ import java.util.function.Function;
  * <p>This class can be serialized and de-serialized and on de-serialization the FileSystem is re-initialized.
  */
 public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
-  private static final String INSTANT_TIME_ARCHIVED_META_FIELD = "instantTime";
-  private static final String COMPLETION_TIME_ARCHIVED_META_FIELD = "completionTime";
+  public static final String INSTANT_TIME_ARCHIVED_META_FIELD = "instantTime";
+  public static final String COMPLETION_TIME_ARCHIVED_META_FIELD = "completionTime";
   private static final String ACTION_ARCHIVED_META_FIELD = "action";
   private static final String METADATA_ARCHIVED_META_FIELD = "metadata";
   private static final String PLAN_ARCHIVED_META_FIELD = "plan";
@@ -149,8 +150,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
     return new HoodieArchivedTimeline(metaClient);
   }
 
-  private HoodieInstant readCommit(GenericRecord record, LoadMode loadMode) {
-    final String instantTime = record.get(INSTANT_TIME_ARCHIVED_META_FIELD).toString();
+  private HoodieInstant readCommit(String instantTime, GenericRecord record, LoadMode loadMode) {
     final String action = record.get(ACTION_ARCHIVED_META_FIELD).toString();
     final String completionTime = record.get(COMPLETION_TIME_ARCHIVED_META_FIELD).toString();
     loadInstantDetails(record, instantTime, loadMode);
@@ -200,38 +200,53 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
       @Nullable TimeRangeFilter filter,
       LoadMode loadMode,
       Function<GenericRecord, Boolean> commitsFilter) {
+    Map<String, HoodieInstant> instantsInRange = new ConcurrentHashMap<>();
+    loadInstants(metaClient, filter, loadMode, commitsFilter, (instantTime, avroRecord) -> instantsInRange.putIfAbsent(instantTime, readCommit(instantTime, avroRecord, loadMode)));
+    ArrayList<HoodieInstant> result = new ArrayList<>(instantsInRange.values());
+    Collections.sort(result);
+    return result;
+  }
+
+  /**
+   * Loads the instants from the timeline.
+   *
+   * @param metaClient     The meta client.
+   * @param filter         The time range filter where the target instant belongs to.
+   * @param loadMode       The load mode.
+   * @param commitsFilter  Filter of the instant type.
+   * @param recordConsumer Consumer of the instant record payload.
+   */
+  public static void loadInstants(
+      HoodieTableMetaClient metaClient,
+      @Nullable TimeRangeFilter filter,
+      LoadMode loadMode,
+      Function<GenericRecord, Boolean> commitsFilter,
+      BiConsumer<String, GenericRecord> recordConsumer) {
     try {
       // List all files
       List<String> fileNames = LSMTimeline.latestSnapshotManifest(metaClient).getFileNames();
 
-      Map<String, HoodieInstant> instantsInRange = new ConcurrentHashMap<>();
       Schema readSchema = LSMTimeline.getReadSchema(loadMode);
       fileNames.stream()
-              .filter(fileName -> filter == null || LSMTimeline.isFileInRange(filter, fileName))
-              .parallel().forEach(fileName -> {
-                // Read the archived file
-                try (HoodieAvroParquetReader reader = (HoodieAvroParquetReader) HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
-                        .getFileReader(metaClient.getHadoopConf(), new Path(metaClient.getArchivePath(), fileName))) {
-                  try (ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(HoodieLSMTimelineInstant.getClassSchema(), readSchema)) {
-                    while (iterator.hasNext()) {
-                      GenericRecord record = (GenericRecord) iterator.next();
-                      String instantTime = record.get(INSTANT_TIME_ARCHIVED_META_FIELD).toString();
-                      if (!instantsInRange.containsKey(instantTime)
-                              && (filter == null || filter.isInRange(instantTime))
-                              && commitsFilter.apply(record)) {
-                        HoodieInstant instant = readCommit(record, loadMode);
-                        instantsInRange.put(instantTime, instant);
-                      }
-                    }
+          .filter(fileName -> filter == null || LSMTimeline.isFileInRange(filter, fileName))
+          .parallel().forEach(fileName -> {
+            // Read the archived file
+            try (HoodieAvroParquetReader reader = (HoodieAvroParquetReader) HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
+                .getFileReader(metaClient.getHadoopConf(), new Path(metaClient.getArchivePath(), fileName))) {
+              try (ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(HoodieLSMTimelineInstant.getClassSchema(), readSchema)) {
+                while (iterator.hasNext()) {
+                  GenericRecord record = (GenericRecord) iterator.next();
+                  String instantTime = record.get(INSTANT_TIME_ARCHIVED_META_FIELD).toString();
+                  if ((filter == null || filter.isInRange(instantTime))
+                      && commitsFilter.apply(record)) {
+                    recordConsumer.accept(instantTime, record);
                   }
-                } catch (IOException ioException) {
-                  throw new HoodieIOException("Error open file reader for path: " + new Path(metaClient.getArchivePath(), fileName));
                 }
-              });
-
-      ArrayList<HoodieInstant> result = new ArrayList<>(instantsInRange.values());
-      Collections.sort(result);
-      return result;
+              }
+            } catch (IOException ioException) {
+              throw new HoodieIOException("Error open file reader for path: " + new Path(metaClient.getArchivePath(), fileName));
+            }
+          });
     } catch (IOException e) {
       throw new HoodieIOException(
           "Could not load archived commit timeline from path " + metaClient.getArchivePath(), e);
@@ -289,7 +304,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   /**
    * A time based filter with range [startTs, +&#8734).
    */
-  private static class StartTsFilter extends TimeRangeFilter {
+  public static class StartTsFilter extends TimeRangeFilter {
     private final String startTs;
 
     public StartTsFilter(String startTs) {
