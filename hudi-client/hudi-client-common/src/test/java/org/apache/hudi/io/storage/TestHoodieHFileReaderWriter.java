@@ -214,8 +214,9 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     byte[] content = FileIOUtils.readAsByteArray(
         fs.open(getFilePath()), (int) fs.getFileStatus(getFilePath()).getLen());
     // Reading byte array in HFile format, without actual file path
+    Configuration hadoopConf = fs.getConf();
     HoodieAvroHFileReader hfileReader =
-        new HoodieAvroHFileReader(fs, new Path(DUMMY_BASE_PATH), content, Option.empty());
+        new HoodieAvroHFileReader(hadoopConf, new Path(DUMMY_BASE_PATH), new CacheConfig(hadoopConf), fs, content, Option.empty());
     Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
     assertEquals(NUM_RECORDS, hfileReader.getTotalRecords());
     verifySimpleRecords(hfileReader.getRecordIterator(avroSchema));
@@ -420,8 +421,10 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     verifyHFileReader(
         HoodieHFileUtils.createHFileReader(fs, new Path(DUMMY_BASE_PATH), content),
         hfilePrefix, true, HFILE_COMPARATOR.getClass(), NUM_RECORDS_FIXTURE);
+
+    Configuration hadoopConf = fs.getConf();
     HoodieAvroHFileReader hfileReader =
-        new HoodieAvroHFileReader(fs, new Path(DUMMY_BASE_PATH), content, Option.empty());
+        new HoodieAvroHFileReader(hadoopConf, new Path(DUMMY_BASE_PATH), new CacheConfig(hadoopConf), fs, content, Option.empty());
     Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
     assertEquals(NUM_RECORDS_FIXTURE, hfileReader.getTotalRecords());
     verifySimpleRecords(hfileReader.getRecordIterator(avroSchema));
@@ -429,7 +432,8 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     content = readHFileFromResources(complexHFile);
     verifyHFileReader(HoodieHFileUtils.createHFileReader(fs, new Path(DUMMY_BASE_PATH), content),
         hfilePrefix, true, HFILE_COMPARATOR.getClass(), NUM_RECORDS_FIXTURE);
-    hfileReader = new HoodieAvroHFileReader(fs, new Path(DUMMY_BASE_PATH), content, Option.empty());
+    hfileReader =
+        new HoodieAvroHFileReader(hadoopConf, new Path(DUMMY_BASE_PATH), new CacheConfig(hadoopConf), fs, content, Option.empty());
     avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchemaWithUDT.avsc");
     assertEquals(NUM_RECORDS_FIXTURE, hfileReader.getTotalRecords());
     verifySimpleRecords(hfileReader.getRecordIterator(avroSchema));
