@@ -46,6 +46,15 @@ public class TestHoodieSparkCopyOnWriteTableRollback extends TestHoodieSparkRoll
   }
 
   /**
+   * Scenario: data table is updated, deltacommit is completed in MDT then during rollback,
+   * data table is updated, no changes to MDT
+   */
+  @Test
+  public void testRollbackWithFailurePostMDTRollbackFailsPreMDT() throws IOException {
+    testRollbackWithFailurePostMDT(COPY_ON_WRITE, true);
+  }
+
+  /**
    * Scenario: data table is updated, deltacommit of interest is inflight in MDT
    */
   @Test

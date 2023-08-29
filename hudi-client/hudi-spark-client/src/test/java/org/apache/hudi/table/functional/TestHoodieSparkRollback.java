@@ -190,6 +190,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     //now we are at a state that we would be at if a write failed after writing to MDT but before commit is finished
 
     //New update will trigger rollback and we will commit this time
+    client = getHoodieWriteClient(getConfigToTestMDTRollbacks(true, true));
     updateRecords(client, dataGen, "004", records);
     //validate that metadata table file listing matches reality
     metaClient = HoodieTableMetaClient.reload(metaClient);
