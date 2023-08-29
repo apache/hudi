@@ -20,8 +20,8 @@ package org.apache.hudi
 
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.testutils.DataSourceTestUtils
-import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.types.{ArrayType, StructField, StructType}
+import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -133,9 +133,9 @@ class TestHoodieSparkUtils {
       .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
       .getOrCreate
 
-    val innerStruct1 = new StructType().add("innerKey","string",false).add("innerValue", "long", true)
+    val innerStruct1 = new StructType().add("innerKey", "string", false).add("innerValue", "long", true)
     val structType1 = new StructType().add("key", "string", false)
-      .add("nonNullableInnerStruct",innerStruct1,false).add("nullableInnerStruct",innerStruct1,true)
+      .add("nonNullableInnerStruct", innerStruct1, false).add("nullableInnerStruct", innerStruct1, true)
     val schema1 = AvroConversionUtils.convertStructTypeToAvroSchema(structType1, "test_struct_name", "test_namespace")
     val records1 = Seq(Row("key1", Row("innerKey1_1", 1L), Row("innerKey1_2", 2L)))
 
@@ -146,8 +146,8 @@ class TestHoodieSparkUtils {
 
     // create schema2 which has one addition column at the root level compared to schema1
     val structType2 = new StructType().add("key", "string", false)
-      .add("nonNullableInnerStruct",innerStruct1,false).add("nullableInnerStruct",innerStruct1,true)
-      .add("nullableInnerStruct2",innerStruct1,true)
+      .add("nonNullableInnerStruct", innerStruct1, false).add("nullableInnerStruct", innerStruct1, true)
+      .add("nullableInnerStruct2", innerStruct1, true)
     val schema2 = AvroConversionUtils.convertStructTypeToAvroSchema(structType2, "test_struct_name", "test_namespace")
     val records2 = Seq(Row("key2", Row("innerKey2_1", 2L), Row("innerKey2_2", 2L), Row("innerKey2_3", 2L)))
     val df2 = spark.createDataFrame(spark.sparkContext.parallelize(records2), structType2)
@@ -161,12 +161,12 @@ class TestHoodieSparkUtils {
     assert(genRecRDD3.collect()(0).getSchema.equals(schema2))
     genRecRDD3.foreach(entry => assertNull(entry.get("nullableInnerStruct2")))
 
-    val innerStruct3 = new StructType().add("innerKey","string",false).add("innerValue", "long", true)
-      .add("new_nested_col","string",true)
+    val innerStruct3 = new StructType().add("innerKey", "string", false).add("innerValue", "long", true)
+      .add("new_nested_col", "string", true)
 
     // create a schema which has one additional nested column compared to schema1, which is nullable
     val structType4 = new StructType().add("key", "string", false)
-      .add("nonNullableInnerStruct",innerStruct1,false).add("nullableInnerStruct",innerStruct3,true)
+      .add("nonNullableInnerStruct", innerStruct1, false).add("nullableInnerStruct", innerStruct3, true)
 
     val schema4 = AvroConversionUtils.convertStructTypeToAvroSchema(structType4, "test_struct_name", "test_namespace")
     val records4 = Seq(Row("key2", Row("innerKey2_1", 2L), Row("innerKey2_2", 2L, "new_nested_col_val1")))
@@ -180,16 +180,16 @@ class TestHoodieSparkUtils {
       org.apache.hudi.common.util.Option.of(schema4))
     assert(schema4.equals(genRecRDD4.collect()(0).getSchema))
     val genRec = genRecRDD5.collect()(0)
-    val nestedRec : GenericRecord = genRec.get("nullableInnerStruct").asInstanceOf[GenericRecord]
+    val nestedRec: GenericRecord = genRec.get("nullableInnerStruct").asInstanceOf[GenericRecord]
     assertNull(nestedRec.get("new_nested_col"))
     assertNotNull(nestedRec.get("innerKey"))
     assertNotNull(nestedRec.get("innerValue"))
 
-    val innerStruct4 = new StructType().add("innerKey","string",false).add("innerValue", "long", true)
-      .add("new_nested_col","string",false)
+    val innerStruct4 = new StructType().add("innerKey", "string", false).add("innerValue", "long", true)
+      .add("new_nested_col", "string", false)
     // create a schema which has one additional nested column compared to schema1, which is non nullable
     val structType6 = new StructType().add("key", "string", false)
-      .add("nonNullableInnerStruct",innerStruct1,false).add("nullableInnerStruct",innerStruct4,true)
+      .add("nonNullableInnerStruct", innerStruct1, false).add("nullableInnerStruct", innerStruct4, true)
 
     val schema6 = AvroConversionUtils.convertStructTypeToAvroSchema(structType6, "test_struct_name", "test_namespace")
     // convert batch 1 with schema5. should fail since the missed out column is not nullable.
@@ -211,4 +211,29 @@ class TestHoodieSparkUtils {
 
   def convertRowListToSeq(inputList: java.util.List[Row]): Seq[Row] =
     JavaConverters.asScalaIteratorConverter(inputList.iterator).asScala.toSeq
+}
+
+object TestHoodieSparkUtils {
+
+
+  def setNullableRec(structType: StructType, columnName: Array[String], index: Int): StructType = {
+    StructType(structType.map {
+      case StructField(name, StructType(fields), nullable, metadata) if name.equals(columnName(index)) =>
+        StructField(name, setNullableRec(StructType(fields), columnName, index + 1), nullable, metadata)
+      case StructField(name, ArrayType(StructType(fields), _), nullable, metadata) if name.equals(columnName(index)) =>
+        StructField(name, ArrayType(setNullableRec(StructType(fields), columnName, index + 1)), nullable, metadata)
+      case StructField(name, dataType, _, metadata) if name.equals(columnName(index)) =>
+        StructField(name, dataType, nullable = false, metadata)
+      case y: StructField => y
+    })
+  }
+
+  def setColumnNotNullable(df: DataFrame, columnName: String): DataFrame = {
+    // get schema
+    val schema = df.schema
+    // modify [[StructField] with name `cn`
+    val newSchema = setNullableRec(schema, columnName.split('.'), 0)
+    // apply new schema
+    df.sqlContext.createDataFrame(df.rdd, newSchema)
+  }
 }

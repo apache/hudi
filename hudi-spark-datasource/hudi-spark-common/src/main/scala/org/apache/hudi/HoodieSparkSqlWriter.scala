@@ -28,7 +28,7 @@ import org.apache.hudi.DataSourceUtils.tryOverrideParquetWriteLegacyFormatProper
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieWriterUtils._
-import org.apache.hudi.avro.AvroSchemaUtils.{canProject, isCompatibleProjectionOf, isSchemaCompatible, resolveNullableSchema}
+import org.apache.hudi.avro.AvroSchemaUtils.{canProject, isCompatibleProjectionOf, isSchemaCompatible, isStrictProjectionOf, resolveNullableSchema}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.removeMetadataFields
 import org.apache.hudi.client.common.HoodieSparkEngineContext
@@ -283,7 +283,7 @@ object HoodieSparkSqlWriter {
         .getOrElse(getAvroRecordNameAndNamespace(tblName))
 
       val sourceSchema = convertStructTypeToAvroSchema(df.schema, avroRecordName, avroRecordNamespace)
-      val internalSchemaOpt = getLatestTableInternalSchema(hoodieConfig, tableMetaClient).orElse {
+      val internalSchemaOpt = HoodieSchemaUtils.getLatestTableInternalSchema(hoodieConfig, tableMetaClient).orElse {
         // In case we need to reconcile the schema and schema evolution is enabled,
         // we will force-apply schema evolution to the writer's schema
         if (shouldReconcileSchema && hoodieConfig.getBooleanOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED)) {
@@ -317,7 +317,7 @@ object HoodieSparkSqlWriter {
             }
 
             // Create a HoodieWriteClient & issue the delete.
-            val internalSchemaOpt = getLatestTableInternalSchema(hoodieConfig, tableMetaClient)
+            val internalSchemaOpt = HoodieSchemaUtils.getLatestTableInternalSchema(hoodieConfig, tableMetaClient)
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
               null, path, tblName,
               mapAsJavaMap(addSchemaEvolutionParameters(parameters, internalSchemaOpt) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)))
@@ -499,6 +499,7 @@ object HoodieSparkSqlWriter {
                          latestTableSchemaOpt: Option[Schema],
                          internalSchemaOpt: Option[InternalSchema],
                          opts: Map[String, String]): Schema = {
+    val addNullForDeletedColumns = opts(DataSourceWriteOptions.ADD_NULL_FOR_DELETED_COLUMNS.key()).toBoolean
     val shouldReconcileSchema = opts(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
     val shouldValidateSchemasCompatibility = opts.getOrDefault(HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key,
       HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.defaultValue).toBoolean
@@ -579,7 +580,10 @@ object HoodieSparkSqlWriter {
             if (!shouldValidateSchemasCompatibility) {
               // if no validation is enabled, check for col drop
               // if col drop is allowed, go ahead. if not, check for projection, so that we do not allow dropping cols
-              if (allowAutoEvolutionColumnDrop || canProject(latestTableSchema, canonicalizedSourceSchema)) {
+              if (addNullForDeletedColumns && isStrictProjectionOf(latestTableSchema, canonicalizedSourceSchema)
+                && isSchemaCompatible(canonicalizedSourceSchema, latestTableSchema, true)) {
+                latestTableSchema
+              } else if (allowAutoEvolutionColumnDrop || canProject(latestTableSchema, canonicalizedSourceSchema)) {
                 canonicalizedSourceSchema
               } else {
                 log.error(
@@ -715,29 +719,6 @@ object HoodieSparkSqlWriter {
    */
   private def canonicalizeSchema(sourceSchema: Schema, latestTableSchema: Schema, opts : Map[String, String]): Schema = {
     reconcileNullability(sourceSchema, latestTableSchema, opts)
-  }
-
-
-  /**
-   * get latest internalSchema from table
-   *
-   * @param config instance of {@link HoodieConfig}
-   * @param tableMetaClient instance of HoodieTableMetaClient
-   * @return Pair of(boolean, table schema), where first entry will be true only if schema conversion is required.
-   */
-  def getLatestTableInternalSchema(config: HoodieConfig,
-                                   tableMetaClient: HoodieTableMetaClient): Option[InternalSchema] = {
-    if (!config.getBooleanOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED)) {
-      Option.empty[InternalSchema]
-    } else {
-      try {
-        val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
-        val internalSchemaOpt = tableSchemaResolver.getTableInternalSchemaFromCommitMetadata
-        if (internalSchemaOpt.isPresent) Some(internalSchemaOpt.get()) else None
-      } catch {
-        case _: Exception => None
-      }
-    }
   }
 
   private def registerAvroSchemasWithKryo(sparkContext: SparkContext, targetAvroSchemas: Schema*): Unit = {
