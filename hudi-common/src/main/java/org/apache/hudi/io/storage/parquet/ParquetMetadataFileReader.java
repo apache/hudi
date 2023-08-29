@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.metadata.parquet;
+package org.apache.hudi.io.storage.parquet;
 
 import org.apache.parquet.ParquetReadOptions;
 import org.apache.parquet.column.values.bloomfilter.BlockSplitBloomFilter;
@@ -44,6 +44,10 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+/**
+ * A wrapper for a Parquet file reader, which is created specifically for
+ * reading Hoodie metadata table files of Parquet format.
+ */
 public final class ParquetMetadataFileReader extends ParquetFileReader {
   private static final Logger LOG = LoggerFactory.getLogger(ParquetMetadataFileReader.class);
   private final InputFile inputFile;
@@ -225,11 +229,6 @@ public final class ParquetMetadataFileReader extends ParquetFileReader {
           bloomFilterHeader.getAlgorithm(), bloomFilterHeader.getHash(), bloomFilterHeader.getCompression());
       return null;
     }
-
-    LOG.debug("Reading bloom filter from cache with startOffset: " + startOffset
-        + " pos: " + inputStream.getPos()
-        + " endOffset: " + endOffset
-        + " numBytes: " + numBytes);
 
     byte[] bitset;
     if (null == bloomFilterDecryptor) {

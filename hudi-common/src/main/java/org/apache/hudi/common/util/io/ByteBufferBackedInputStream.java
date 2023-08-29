@@ -18,8 +18,12 @@
 
 package org.apache.hudi.common.util.io;
 
+import org.apache.hadoop.fs.PositionedReadable;
+import org.apache.hadoop.fs.Seekable;
+
 import javax.annotation.Nonnull;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 
@@ -34,7 +38,7 @@ import java.nio.ByteBuffer;
  *
  * NOTE: Generally methods of this class are NOT thread-safe, unless specified otherwise
  */
-public class ByteBufferBackedInputStream extends InputStream {
+public class ByteBufferBackedInputStream extends InputStream implements Seekable, PositionedReadable {
 
   private final ByteBuffer buffer;
   private final int bufferOffset;
@@ -75,6 +79,7 @@ public class ByteBufferBackedInputStream extends InputStream {
     return available;
   }
 
+  // TODO: replace this function with getPos in its calling sites.
   /**
    * Returns current position of the stream
    */
@@ -108,6 +113,25 @@ public class ByteBufferBackedInputStream extends InputStream {
   }
 
   /**
+   * Return the current offset from the start of the file
+   */
+  @Override
+  public long getPos() throws IOException {
+    return buffer.position() - bufferOffset;
+  }
+
+  /**
+   * Seeks a different copy of the data.  Returns true if
+   * found a new source, false otherwise.
+   *
+   * @param targetPos
+   */
+  @Override
+  public boolean seekToNewSource(long targetPos) throws IOException {
+    return false;
+  }
+
+  /**
    * Copies at most {@code length} bytes starting from position {@code pos} into the target
    * buffer with provided {@code offset}. Returns number of bytes copied from the backing buffer
    *
@@ -135,5 +159,62 @@ public class ByteBufferBackedInputStream extends InputStream {
     // Get current buffer position in the backing array
     System.arraycopy(buffer.array(), bufferPos, targetBuffer, offset, available);
     return available;
+  }
+
+  /**
+   * Read up to the specified number of bytes, from a given
+   * position within a file, and return the number of bytes read. This does not
+   * change the current offset of a file, and is thread-safe.
+   *
+   * <i>Warning: Not all filesystems satisfy the thread-safety requirement.</i>
+   *
+   * @param position position within file
+   * @param buffer   destination buffer
+   * @param offset   offset in the buffer
+   * @param length   number of bytes to read
+   * @return actual number of bytes read; -1 means "none"
+   * @throws IOException IO problems.
+   */
+  @Override
+  public int read(long position, byte[] buffer, int offset, int length) throws IOException {
+    return copyFrom(position, buffer, offset, length);
+  }
+
+  /**
+   * Read the specified number of bytes, from a given
+   * position within a file. This does not
+   * change the current offset of a file, and is thread-safe.
+   *
+   * <i>Warning: Not all filesystems satisfy the thread-safety requirement.</i>
+   *
+   * @param position position within file
+   * @param buffer   destination buffer
+   * @param offset   offset in the buffer
+   * @param length   number of bytes to read
+   * @throws IOException  IO problems.
+   * @throws EOFException the end of the data was reached before
+   *                      the read operation completed
+   */
+  @Override
+  public void readFully(long position, byte[] buffer, int offset, int length) throws IOException {
+    read(position, buffer, offset, length);
+  }
+
+  /**
+   * Read number of bytes equal to the length of the buffer, from a given
+   * position within a file. This does not
+   * change the current offset of a file, and is thread-safe.
+   *
+   * <i>Warning: Not all filesystems satisfy the thread-safety requirement.</i>
+   *
+   * @param position position within file
+   * @param buffer   destination buffer
+   * @throws IOException  IO problems.
+   * @throws EOFException the end of the data was reached before
+   *                      the read operation completed
+   */
+  @Override
+  public void readFully(long position, byte[] buffer) throws IOException {
+    read(position, buffer, 0, buffer.length);
   }
 }

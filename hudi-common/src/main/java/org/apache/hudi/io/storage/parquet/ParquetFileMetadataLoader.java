@@ -17,7 +17,9 @@
  * under the License.
  */
 
-package org.apache.hudi.metadata.parquet;
+package org.apache.hudi.io.storage.parquet;
+
+import org.apache.hudi.common.util.io.HeapSeekableInputStream;
 
 import org.apache.parquet.ParquetReadOptions;
 import org.apache.parquet.column.values.bloomfilter.BloomFilter;
@@ -30,8 +32,6 @@ import org.apache.parquet.internal.hadoop.metadata.IndexReference;
 import org.apache.parquet.io.InputFile;
 import org.apache.parquet.io.ParquetDecodingException;
 import org.apache.parquet.io.SeekableInputStream;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -49,7 +49,6 @@ import java.util.List;
  * (5) Optionally the bloom filters for all row groups and column chunks.
  */
 public class ParquetFileMetadataLoader {
-  private static final Logger LOG = LoggerFactory.getLogger(ParquetFileMetadataLoader.class);
   private static final long BLOOM_FILTER_HEADER_SIZE_GUESS = 1024; // 1KB
   private static final long BLOOM_FILTER_SIZE_GUESS = 1024 * 1024; // 1 MB
 
@@ -80,24 +79,23 @@ public class ParquetFileMetadataLoader {
     return rowGroups.iterator();
   }
 
+  /**
+   * Read four different metadata into memory for a Parquet file.
+   * 1. metadata for the file, e.g., schema, version.
+   * 2. metadata for row groups, e.g., block metadata, column index.
+   * 3. index metadata grouped by continuous disk range for efficient disk access.
+   */
   public void load() {
     if (fileMetaData == null) {
       loadFileMetaData();
-      LOG.debug("Loaded file level metadata from footer");
     }
 
     if (rowGroups.isEmpty()) {
       loadRowGroupMetaData();
-      LOG.debug("Loaded file level metadata from footer");
     }
 
-    // TODO: see if we can tolerate missing indexing metadata.
     try {
       loadIndexMetadata();
-      LOG.debug(
-          "Successfully loaded the metadata "
-          + "(bloom filters, page index and column index)"
-          + "for all column chunks");
     } catch (IOException e) {
       throw new ParquetDecodingException("Unable to read the index metadata", e);
     }
@@ -116,7 +114,6 @@ public class ParquetFileMetadataLoader {
     for (RowGroup rowGroup : rowGroups) {
       ranges = generateRangesForRowGroup(rowGroup, ranges);
     }
-
     for (ContinuousRange range : ranges) {
       addIndexMetadataToRowGroups(range);
     }
@@ -176,7 +173,8 @@ public class ParquetFileMetadataLoader {
     // Overflow can happen due to overestimated bloom filter size.
     range.endOffset = Math.min(range.endOffset, metadataFileReader.getInputFile().getLength());
     if (range.endOffset < range.startOffset) {
-      throw new IllegalStateException("Metadata range has higher startOffset " + range.startOffset + " than endOffset " + range.endOffset);
+      throw new IllegalStateException(
+          "Metadata range has higher startOffset " + range.startOffset + " than endOffset " + range.endOffset);
     }
 
     ByteBuffer metadataCache;
@@ -193,33 +191,61 @@ public class ParquetFileMetadataLoader {
   }
 
   private void addIndexMetadata(ColumnId columnId, SeekableInputStream indexBytesStream, ContinuousRange range) throws IOException {
-    ColumnChunkMetaData columnChunkMetaData = rowGroups.get(columnId.rowGroupId).getBlockMetaData().getColumns().get(columnId.columnChunkId);
+    ColumnChunkMetaData columnChunkMetaData = rowGroups
+        .get(columnId.rowGroupId)
+        .getBlockMetaData()
+        .getColumns()
+        .get(columnId.columnChunkId);
     RowGroup rowGroup = rowGroups.get(columnId.rowGroupId);
     int columnChunkId = columnId.columnChunkId;
     switch (columnId.chunkType) {
       case COLUMN_INDEX:
-        ColumnIndex columnIndex = metadataFileReader.readColumnIndex(
-            metadataFileReader, indexBytesStream, range.startOffset, range.endOffset, columnChunkMetaData);
-        if (columnIndex != null) {
-          rowGroup.getColumnIndices().add(columnChunkId, columnIndex);
-        }
+        appendColumnIndex(rowGroup, indexBytesStream, range, columnChunkMetaData, columnChunkId);
         break;
       case PAGE_INDEX:
-        OffsetIndex offsetIndex = metadataFileReader.readOffsetIndex(
-            metadataFileReader, indexBytesStream, range.startOffset, range.endOffset, columnChunkMetaData);
-        if (offsetIndex != null) {
-          rowGroup.getPageLocations().add(columnChunkId, offsetIndex);
-        }
+        appendPageLocation(rowGroup, indexBytesStream, range, columnChunkMetaData, columnChunkId);
         break;
       case BLOOM_FILTER:
-        BloomFilter filter = metadataFileReader.readBloomFilter(
-            metadataFileReader, indexBytesStream, range.startOffset, range.endOffset, columnChunkMetaData);
-        if (filter != null) {
-          rowGroup.addBloomFilter(columnChunkId, filter);
-        }
+        appendBloomFilter(rowGroup, indexBytesStream, range, columnChunkMetaData, columnChunkId);
         break;
       default:
         throw new ParquetDecodingException("Not a valid chunk type " + columnId.chunkType);
+    }
+  }
+
+  private void appendColumnIndex(RowGroup rowGroup,
+                                SeekableInputStream indexBytesStream,
+                                ContinuousRange range,
+                                ColumnChunkMetaData columnChunkMetaData,
+                                int columnChunkId) throws IOException {
+    ColumnIndex columnIndex = metadataFileReader.readColumnIndex(
+        metadataFileReader, indexBytesStream, range.startOffset, range.endOffset, columnChunkMetaData);
+    if (columnIndex != null) {
+      rowGroup.getColumnIndices().add(columnChunkId, columnIndex);
+    }
+  }
+
+  private void appendPageLocation(RowGroup rowGroup,
+                                 SeekableInputStream indexBytesStream,
+                                 ContinuousRange range,
+                                 ColumnChunkMetaData columnChunkMetaData,
+                                 int columnChunkId) throws IOException {
+    OffsetIndex offsetIndex = metadataFileReader.readOffsetIndex(
+        metadataFileReader, indexBytesStream, range.startOffset, range.endOffset, columnChunkMetaData);
+    if (offsetIndex != null) {
+      rowGroup.getPageLocations().add(columnChunkId, offsetIndex);
+    }
+  }
+
+  private void appendBloomFilter(RowGroup rowGroup,
+                                SeekableInputStream indexBytesStream,
+                                ContinuousRange range,
+                                ColumnChunkMetaData columnChunkMetaData,
+                                int columnChunkId) throws IOException {
+    BloomFilter bloomFilter = metadataFileReader.readBloomFilter(
+        metadataFileReader, indexBytesStream, range.startOffset, range.endOffset, columnChunkMetaData);
+    if (bloomFilter != null) {
+      rowGroup.addBloomFilter(columnChunkId, bloomFilter);
     }
   }
 

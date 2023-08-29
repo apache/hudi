@@ -17,12 +17,15 @@
  * under the License.
  */
 
-package org.apache.hudi.metadata.parquet;
+package org.apache.hudi.common.util.io;
 
 import org.apache.parquet.io.DelegatingSeekableInputStream;
 
 import java.io.IOException;
 
+/**
+ * A wrapper class for ByteBufferBackedInputStream.
+ */
 public class HeapSeekableInputStream extends DelegatingSeekableInputStream {
 
   private final ByteBufferBackedInputStream stream;

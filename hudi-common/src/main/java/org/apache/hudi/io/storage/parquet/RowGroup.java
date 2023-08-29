@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.metadata.parquet;
+package org.apache.hudi.io.storage.parquet;
 
 import org.apache.parquet.column.values.bloomfilter.BloomFilter;
 import org.apache.parquet.internal.column.columnindex.ColumnIndex;
@@ -28,6 +28,16 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * A POJO class that contains four kinds of metadata for a
+ * row group in a Parquet file.
+ * <ul>
+ *     <li>BlockMetaData, e.g., row count, block size.</li>
+ *     <li>ColumnIndex, e.g., min, max of a column.</li>
+ *     <li>OffsetIndex, e.g., offset for a data page in a column.</li>
+ *     <li>BloomFilter, e.g., bloom filters for a colum.</li>
+ * </ul>
+ */
 public class RowGroup {
   private final BlockMetaData blockMetaData;
   private final List<ColumnIndex> columnIndices;
@@ -41,6 +51,12 @@ public class RowGroup {
     this.bloomFilters = Collections.<BloomFilter>emptyList();
   }
 
+  /**
+   * Add a {@link BloomFilter} object for a column.
+   *
+   * @param chunkId The id of the column.
+   * @param bloomFilter The {@link BloomFilter} object.
+   */
   public void addBloomFilter(int chunkId, BloomFilter bloomFilter) {
     if (bloomFilters.isEmpty()) {
       bloomFilters = new ArrayList<BloomFilter>(Collections.nCopies(blockMetaData.getColumns().size(), null));
@@ -49,28 +65,28 @@ public class RowGroup {
   }
 
   /**
-   * @returns the metadata for the row group {@link BlockMetaData} that is fetched from the Parquet Footer.
+   * @return the metadata for the row group {@link BlockMetaData} that is fetched from the Parquet Footer.
    */
   public BlockMetaData getBlockMetaData() {
     return blockMetaData;
   }
 
   /**
-   * @returns the page level stats for a column {@link ColumnIndex} that is fetched from the offsets present in the Parquet Footer.
+   * @return the page level stats for a column {@link ColumnIndex} that is fetched from the offsets present in the Parquet Footer.
    */
   public List<ColumnIndex> getColumnIndices() {
     return columnIndices;
   }
 
   /**
-   * @returns the page location (row index) for a column {@link OffsetIndex} that is fetched from the offsets present in the Parquet Footer.
+   * @return the page location (row index) for a column {@link OffsetIndex} that is fetched from the offsets present in the Parquet Footer.
    */
   public List<OffsetIndex> getPageLocations() {
     return pageLocations;
   }
 
   /**
-   * @returns the Bloom filters for a column {@link BloomFilter} that is fetched from the offsets present in the Parquet Footer.
+   * @return the Bloom filters for a column {@link BloomFilter} that is fetched from the offsets present in the Parquet Footer.
    */
   public List<BloomFilter> getBloomFilters() {
     return bloomFilters;
