@@ -27,7 +27,7 @@ import org.apache.hudi.config.{HoodieClusteringConfig, HoodieIndexConfig, Hoodie
 import org.apache.hudi.exception.{HoodieDuplicateKeyException, HoodieException}
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.index.HoodieIndex.IndexType
-import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils, HoodieSparkUtils}
+import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils, HoodieSparkRecordMerger, HoodieSparkUtils}
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.getLastCommitMetadata
 import org.apache.spark.sql.hudi.command.HoodieSparkValidateDuplicateKeyRecordMerger
@@ -2007,6 +2007,112 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     spark.sessionState.conf.unsetConf("hoodie.sql.insert.mode")
     spark.sessionState.conf.unsetConf("hoodie.datasource.insert.dup.policy")
     spark.sessionState.conf.unsetConf("hoodie.datasource.write.operation")
+  }
+
+  test("Test Multiple Insert Into into partitioned table with upsert with DefaultHoodieRecordPayload") {
+    withRecordType()(withTempDir { tmp =>
+      val tableName = generateTableName
+      // Create a partitioned table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  dt string,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | tblproperties (primaryKey = 'id', preCombineField = 'ts', hoodie.spark.sql.insert.into.operation = 'upsert',
+           |  hoodie.datasource.write.payload.class = 'org.apache.hudi.common.model.DefaultHoodieRecordPayload' )
+           | partitioned by (dt)
+           | location '${tmp.getCanonicalPath}'
+       """.stripMargin)
+
+      // Note: Do not write the field alias, the partition field must be placed last.
+      spark.sql(
+        s"""
+           | insert into $tableName values
+           | (1, 'a1', 10, 1000, "2021-01-05"),
+           | (2, 'a2', 20, 2000, "2021-01-06"),
+           | (3, 'a3', 30, 3000, "2021-01-07")
+              """.stripMargin)
+
+      checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+        Seq(1, "a1", 10.0, 1000, "2021-01-05"),
+        Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+        Seq(3, "a3", 30.0, 3000, "2021-01-07")
+      )
+
+      spark.sql(
+        s"""
+           | insert into $tableName values
+           | (1, 'a1', 100, 500, "2021-01-05"),
+           | (2, 'a2', 200, 1000, "2021-01-06"),
+           | (3, 'a3', 300, 4000, "2021-01-07")
+              """.stripMargin)
+
+      checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+        Seq(1, "a1", 10.0, 1000, "2021-01-05"),
+        Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+        Seq(3, "a3", 300.0, 4000, "2021-01-07")
+      )
+    })
+  }
+
+  test("Test Multiple Insert Into into partitioned table with upsert with OverwriteWithLatestAvroPayload") {
+    withRecordType()(withTempDir { tmp =>
+      val tableName = generateTableName
+      // Create a partitioned table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  dt string,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | tblproperties (primaryKey = 'id', preCombineField = 'ts', hoodie.spark.sql.insert.into.operation = 'upsert')
+           | partitioned by (dt)
+           | location '${tmp.getCanonicalPath}'
+       """.stripMargin)
+
+      // Note: Do not write the field alias, the partition field must be placed last.
+      spark.sql(
+        s"""
+           | insert into $tableName values
+           | (1, 'a1', 10, 1000, "2021-01-05"),
+           | (2, 'a2', 20, 2000, "2021-01-06"),
+           | (3, 'a3', 30, 3000, "2021-01-07")
+              """.stripMargin)
+
+      checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+        Seq(1, "a1", 10.0, 1000, "2021-01-05"),
+        Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+        Seq(3, "a3", 30.0, 3000, "2021-01-07")
+      )
+
+      spark.sql(
+        s"""
+           | insert into $tableName values
+           | (1, 'a1', 100, 500, "2021-01-05"),
+           | (2, 'a2', 200, 1000, "2021-01-06"),
+           | (3, 'a3', 300, 4000, "2021-01-07")
+              """.stripMargin)
+      if(spark.conf.get(HoodieWriteConfig.RECORD_MERGER_IMPLS.key).equals(classOf[HoodieSparkRecordMerger].getName)){
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(1, "a1", 10.0, 1000, "2021-01-05"),
+          Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+          Seq(3, "a3", 300.0, 4000, "2021-01-07")
+        )
+      }else{
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(1, "a1", 100.0, 500, "2021-01-05"),
+          Seq(2, "a2", 200.0, 1000, "2021-01-06"),
+          Seq(3, "a3", 300.0, 4000, "2021-01-07")
+        )
+      }
+    })
   }
 
   def ingestAndValidateDropDupPolicyBulkInsert(tableType: String, tableName: String, tmp: File,
