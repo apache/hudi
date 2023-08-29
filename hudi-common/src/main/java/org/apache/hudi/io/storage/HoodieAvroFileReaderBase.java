@@ -18,12 +18,13 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 
@@ -44,5 +45,5 @@ abstract class HoodieAvroFileReaderBase implements HoodieAvroFileReader {
     return getIndexedRecordIterator(readerSchema, readerSchema);
   }
 
-  protected abstract ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException;
+  public abstract ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException;
 }

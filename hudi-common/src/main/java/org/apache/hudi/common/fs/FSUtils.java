@@ -837,6 +837,35 @@ public class FSUtils {
     return result;
   }
 
+  public static Map<String, Boolean> deleteFilesParallelize(
+      HoodieTableMetaClient metaClient,
+      List<String> paths,
+      HoodieEngineContext context,
+      int parallelism,
+      boolean ignoreFailed) {
+    return FSUtils.parallelizeFilesProcess(context,
+        metaClient.getFs(),
+        parallelism,
+        pairOfSubPathAndConf -> {
+          Path file = new Path(pairOfSubPathAndConf.getKey());
+          try {
+            FileSystem fs = metaClient.getFs();
+            if (fs.exists(file)) {
+              return fs.delete(file, false);
+            }
+            return true;
+          } catch (IOException e) {
+            if (!ignoreFailed) {
+              throw new HoodieIOException("Failed to delete : " + file, e);
+            } else {
+              LOG.warn("Ignore failed deleting : " + file);
+              return true;
+            }
+          }
+        },
+        paths);
+  }
+
   /**
    * Serializable function interface.
    *

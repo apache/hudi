@@ -222,7 +222,7 @@ public class TestConflictResolutionStrategyUtil {
     compactionPlan.setOperations(Arrays.asList(operation));
     HoodieTestTable.of(metaClient)
         .addRequestedCompaction(instantTime, compactionPlan);
-    FileCreateUtils.createPendingInflightCompaction(metaClient.getBasePath(), instantTime);
+    FileCreateUtils.createInflightCompaction(metaClient.getBasePath(), instantTime);
   }
 
   public static void createCompleteCompaction(String instantTime, HoodieTableMetaClient metaClient) throws Exception {

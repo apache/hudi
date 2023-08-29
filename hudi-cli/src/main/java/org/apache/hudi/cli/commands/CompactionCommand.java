@@ -174,8 +174,8 @@ public class CompactionCommand {
         HoodieTimeline.COMPACTION_ACTION, compactionInstantTime);
     try {
       archivedTimeline.loadCompactionDetailsInMemory(compactionInstantTime);
-      HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeAvroRecordMetadata(
-          archivedTimeline.getInstantDetails(instant).get(), HoodieCompactionPlan.getClassSchema());
+      HoodieCompactionPlan compactionPlan =
+              TimelineMetadataUtils.deserializeCompactionPlan(archivedTimeline.getInstantDetails(instant).get());
       return printCompaction(compactionPlan, sortByField, descending, limit, headerOnly, partition);
     } finally {
       archivedTimeline.clearInstantDetailsFromMemory(compactionInstantTime);
@@ -365,17 +365,10 @@ public class CompactionCommand {
 
   private HoodieCompactionPlan readCompactionPlanForArchivedTimeline(HoodieArchivedTimeline archivedTimeline,
                                                                      HoodieInstant instant) {
-    // filter inflight compaction
-    if (HoodieTimeline.COMPACTION_ACTION.equals(instant.getAction())
-        && HoodieInstant.State.INFLIGHT.equals(instant.getState())) {
-      try {
-        return TimelineMetadataUtils.deserializeAvroRecordMetadata(archivedTimeline.getInstantDetails(instant).get(),
-            HoodieCompactionPlan.getClassSchema());
-      } catch (Exception e) {
-        throw new HoodieException(e.getMessage(), e);
-      }
-    } else {
-      return null;
+    try {
+      return TimelineMetadataUtils.deserializeCompactionPlan(archivedTimeline.getInstantDetails(instant).get());
+    } catch (Exception e) {
+      throw new HoodieException(e.getMessage(), e);
     }
   }
 

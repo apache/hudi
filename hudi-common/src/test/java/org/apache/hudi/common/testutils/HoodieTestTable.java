@@ -111,7 +111,6 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createMarkerFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createReplaceCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCleanFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCommit;
-import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCompaction;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedDeltaCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedReplaceCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedRollbackFile;
@@ -230,6 +229,15 @@ public class HoodieTestTable {
     createInflightSavepoint(basePath, instantTime);
     createSavepointCommit(basePath, instantTime, savepointMetadata);
     return this;
+  }
+
+  public HoodieCommitMetadata createCommitMetadata(String commitTime, WriteOperationType operationType,
+                                                   List<String> partitions, int filesPerPartition, boolean bootstrap) {
+    Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap = getPartitionFiles(partitions,
+        filesPerPartition);
+    HoodieTestTableState testTableState = getTestTableStateWithPartitionFileInfo(operationType,
+        metaClient.getTableType(), commitTime, partitionToFilesNameLengthMap);
+    return createCommitMetadata(operationType, commitTime, testTableState, bootstrap);
   }
 
   public HoodieCommitMetadata createCommitMetadata(WriteOperationType operationType, String commitTime,
@@ -461,7 +469,15 @@ public class HoodieTestTable {
   }
 
   public HoodieTestTable addRequestedCompaction(String instantTime) throws IOException {
-    createRequestedCompaction(basePath, instantTime);
+    List<FileSlice> fileSlices = new ArrayList<>();
+    fileSlices.add(new FileSlice("par1", instantTime, "fg-1"));
+    fileSlices.add(new FileSlice("par2", instantTime, "fg-2"));
+    HoodieCompactionPlan compactionPlan = CompactionUtils
+        .buildFromFileSlices(fileSlices.stream().map(fs -> Pair.of(fs.getPartitionPath(), fs))
+            .collect(Collectors.toList()), Option.empty(), Option.empty());
+    HoodieInstant compactionInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);
+    metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant,
+        TimelineMetadataUtils.serializeCompactionPlan(compactionPlan));
     currentInstantTime = instantTime;
     return this;
   }
@@ -470,7 +486,8 @@ public class HoodieTestTable {
     HoodieInstant compactionInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);
     metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant,
         TimelineMetadataUtils.serializeCompactionPlan(compactionPlan));
-    return addRequestedCompaction(instantTime);
+    currentInstantTime = instantTime;
+    return this;
   }
 
   public HoodieTestTable addRequestedCompaction(String instantTime, FileSlice... fileSlices) throws IOException {
@@ -495,9 +512,10 @@ public class HoodieTestTable {
   }
 
   public HoodieTestTable addCompaction(String instantTime, HoodieCommitMetadata commitMetadata) throws Exception {
-    createRequestedCompaction(basePath, instantTime);
-    createInflightCompaction(basePath, instantTime);
-    return addCommit(instantTime, Option.of(commitMetadata));
+    addInflightCompaction(instantTime, commitMetadata);
+    this.inflightCommits.remove(instantTime);
+    createCommit(basePath, instantTime, Option.of(commitMetadata));
+    return this;
   }
 
   public HoodieTestTable addDeletePartitionCommit(String instantTime, String partition, List<String> fileIds) throws Exception {

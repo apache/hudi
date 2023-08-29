@@ -95,7 +95,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
   }
 
   @Override
-  protected ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
+  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
     return getIndexedRecordIteratorInternal(readerSchema, Option.of(requestedSchema));
   }
 
