@@ -171,14 +171,14 @@ public interface TableFileSystemView {
   /**
    * Return Pending Compaction Operations.
    *
-   * @return Pair<Pair<InstantTime,CompactionOperation>>
+   * @return Stream<Pair<InstantTime,CompactionOperation>>
    */
   Stream<Pair<String, CompactionOperation>> getPendingCompactionOperations();
 
   /**
    * Return Pending Compaction Operations.
    *
-   * @return Pair<Pair<InstantTime,CompactionOperation>>
+   * @return Stream<Pair<InstantTime,CompactionOperation>>
    */
   Stream<Pair<String, CompactionOperation>> getPendingLogCompactionOperations();
 
