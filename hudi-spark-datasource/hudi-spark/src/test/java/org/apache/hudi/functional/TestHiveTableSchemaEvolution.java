@@ -120,34 +120,34 @@ public class TestHiveTableSchemaEvolution {
       InputSplit[] splits = inputFormat.getSplits(jobConf, 1);
       assertEquals(1, splits.length);
 
-      try (RecordReader<NullWritable, ArrayWritable> recordReader = inputFormat.getRecordReader(splits[0], jobConf, null)) {
-        List<List<Writable>> records = getWritableList(recordReader);
-        assertEquals(1, records.size());
-        List<Writable> record1 = records.get(0);
-        if ("cow".equals(tableType)) {
-          // col1, col2_new
-          assertEquals(2, record1.size());
+      RecordReader<NullWritable, ArrayWritable> recordReader = inputFormat.getRecordReader(splits[0], jobConf, null);
+      List<List<Writable>> records = getWritableList(recordReader);
+      assertEquals(1, records.size());
+      List<Writable> record1 = records.get(0);
+      if ("cow".equals(tableType)) {
+        // col1, col2_new
+        assertEquals(2, record1.size());
 
-          Writable c1 = record1.get(0);
-          assertTrue(c1 instanceof DoubleWritable);
-          assertEquals("1.1", c1.toString().substring(0, 3));
+        Writable c1 = record1.get(0);
+        assertTrue(c1 instanceof DoubleWritable);
+        assertEquals("1.1", c1.toString().substring(0, 3));
 
-          Writable c2 = record1.get(1);
-          assertTrue(c2 instanceof Text);
-          assertEquals("text2", c2.toString());
-        } else {
-          // _hoodie_record_key,_hoodie_commit_time,_hoodie_partition_path, col1, col2_new
-          assertEquals(5, record1.size());
+        Writable c2 = record1.get(1);
+        assertTrue(c2 instanceof Text);
+        assertEquals("text2", c2.toString());
+      } else {
+        // _hoodie_record_key,_hoodie_commit_time,_hoodie_partition_path, col1, col2_new
+        assertEquals(5, record1.size());
 
-          Writable c1 = record1.get(3);
-          assertTrue(c1 instanceof DoubleWritable);
-          assertEquals("1.1", c1.toString().substring(0, 3));
+        Writable c1 = record1.get(3);
+        assertTrue(c1 instanceof DoubleWritable);
+        assertEquals("1.1", c1.toString().substring(0, 3));
 
-          Writable c2 = record1.get(4);
-          assertTrue(c2 instanceof Text);
-          assertEquals("text2", c2.toString());
-        }
+        Writable c2 = record1.get(4);
+        assertTrue(c2 instanceof Text);
+        assertEquals("text2", c2.toString());
       }
+      recordReader.close();
     }
   }
 
