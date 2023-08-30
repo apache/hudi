@@ -302,7 +302,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
 
     private boolean createAppendMarker(HoodieLogFile logFileToAppend) {
       WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
-      return writeMarkers.create(partitionPath, logFileToAppend.getFileName(), IOType.APPEND,
+      return writeMarkers.createIfNotExists(partitionPath, logFileToAppend.getFileName(), IOType.APPEND,
           config, fileId, hoodieTable.getMetaClient().getActiveTimeline()).isPresent();
     }
   }
