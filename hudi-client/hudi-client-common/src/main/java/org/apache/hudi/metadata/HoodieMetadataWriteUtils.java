@@ -68,7 +68,6 @@ public class HoodieMetadataWriteUtils {
   // eventually depend on the number of file groups selected for each partition (See estimateFileGroupCount function)
   private static final long MDT_MAX_HFILE_SIZE_BYTES = 10 * 1024 * 1024 * 1024L; // 10GB
 
-
   /**
    * Create a {@code HoodieWriteConfig} to use for the Metadata Table.  This is used by async
    * indexer only.
