@@ -125,6 +125,16 @@ public class HoodieCatalog extends AbstractCatalog {
     } catch (IOException e) {
       throw new CatalogException(String.format("Checking catalog path %s exists exception.", catalogPathStr), e);
     }
+
+    if (!databaseExists(getDefaultDatabase())) {
+      LOG.info("Creating database {} automatically because it does not exist.", getDefaultDatabase());
+      Path dbPath = new Path(catalogPath, getDefaultDatabase());
+      try {
+        fs.mkdirs(dbPath);
+      } catch (IOException e) {
+        throw new CatalogException(String.format("Creating database %s exception.", getDefaultDatabase()), e);
+      }
+    }
   }
 
   @Override
