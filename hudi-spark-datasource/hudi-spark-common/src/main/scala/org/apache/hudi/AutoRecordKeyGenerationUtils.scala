@@ -48,10 +48,9 @@ object AutoRecordKeyGenerationUtils {
       if (!parameters.getOrElse(HoodieTableConfig.POPULATE_META_FIELDS.key(), HoodieTableConfig.POPULATE_META_FIELDS.defaultValue().toString).toBoolean) {
         throw new HoodieKeyGeneratorException("Disabling " + HoodieTableConfig.POPULATE_META_FIELDS.key() + " is not supported with auto generation of record keys")
       }
-    }
-
-    if (hoodieConfig.contains(PRECOMBINE_FIELD.key())) {
-      log.warn("Precombine field " + hoodieConfig.getString(PRECOMBINE_FIELD.key()) + " will be ignored with auto record key generation enabled")
+      if (hoodieConfig.contains(PRECOMBINE_FIELD.key())) {
+        log.warn("Precombine field " + hoodieConfig.getString(PRECOMBINE_FIELD.key()) + " will be ignored with auto record key generation enabled")
+      }
     }
   }
 
