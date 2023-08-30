@@ -20,7 +20,7 @@ package org.apache.hudi.client.utils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
-import org.apache.hudi.client.timeline.ActiveAction;
+import org.apache.hudi.common.table.timeline.ActiveAction;
 import org.apache.hudi.client.timeline.ActiveActionWithDetails;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;

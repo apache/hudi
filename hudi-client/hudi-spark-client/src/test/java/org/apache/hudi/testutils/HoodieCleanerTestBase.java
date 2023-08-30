@@ -50,8 +50,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.bootstrap.TestBootstrapIndex.generateBootstrapIndex;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -210,7 +210,7 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
     metadataWriter.update(commitMeta, context.emptyHoodieData(), instantTime);
     metaClient.getActiveTimeline().saveAsComplete(
         new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime),
-        Option.of(getUTF8Bytes(commitMeta.toJsonString())));
+        serializeCommitMetadata(commitMeta));
     metaClient = HoodieTableMetaClient.reload(metaClient);
   }
 

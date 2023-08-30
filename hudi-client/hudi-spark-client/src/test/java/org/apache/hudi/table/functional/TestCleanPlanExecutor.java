@@ -62,7 +62,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -241,7 +241,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
         new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "00000000000011"));
     metaClient.getActiveTimeline().transitionRequestedToInflight(
         new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "00000000000011"),
-        Option.of(getUTF8Bytes(commitMetadata.toJsonString())));
+        serializeCommitMetadata(commitMetadata));
     List<HoodieCleanStat> hoodieCleanStatsFive2 =
         runCleaner(config, simulateFailureRetry, simulateMetadataFailure, 12, true);
     HoodieCleanStat cleanStat = getCleanStat(hoodieCleanStatsFive2, p0);

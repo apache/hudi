@@ -45,7 +45,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.apache.hudi.common.table.log.HoodieLogFormat.DEFAULT_WRITE_TOKEN;
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 
 public class HoodieTestCommitGenerator {
   public static final String BASE_FILE_WRITE_TOKEN = "1-0-1";
@@ -117,8 +117,7 @@ public class HoodieTestCommitGenerator {
     String commitFilename = HoodieTimeline.makeCommitFileName(instantTime);
     HoodieCommitMetadata commitMetadata =
         generateCommitMetadata(partitionPathToFileIdAndNameMap, Collections.emptyMap());
-    String content = commitMetadata.toJsonString();
-    createCommitFileWithMetadata(basePath, new Configuration(), commitFilename, content);
+    createCommitFileWithMetadata(basePath, new Configuration(), commitFilename, serializeCommitMetadata(commitMetadata).get());
     for (String partitionPath : partitionPathToFileIdAndNameMap.keySet()) {
       partitionPathToFileIdAndNameMap.get(partitionPath)
           .forEach(fileInfo -> {
@@ -160,10 +159,10 @@ public class HoodieTestCommitGenerator {
 
   public static void createCommitFileWithMetadata(
       String basePath, Configuration configuration,
-      String filename, String content) throws IOException {
+      String filename, byte[] content) throws IOException {
     Path commitFilePath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + filename);
     try (FSDataOutputStream os = FSUtils.getFs(basePath, configuration).create(commitFilePath, true)) {
-      os.writeBytes(new String(getUTF8Bytes(content)));
+      os.write(content);
     }
   }
 

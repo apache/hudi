@@ -55,7 +55,7 @@ import java.text.ParseException;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 
 public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClient<List<HoodieRecord<T>>, List<WriteStatus>, List<WriteStatus>> {
 
@@ -138,7 +138,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       LOG.info("Committing Clustering {} finished with result {}.", clusteringCommitTime, metadata);
       table.getActiveTimeline().transitionReplaceInflightToComplete(
           HoodieTimeline.getReplaceCommitInflightInstant(clusteringCommitTime),
-          Option.of(getUTF8Bytes(metadata.toJsonString())));
+          serializeCommitMetadata(metadata));
     } catch (IOException e) {
       throw new HoodieClusteringException(
           "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + clusteringCommitTime, e);
