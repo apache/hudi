@@ -172,7 +172,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     this.dataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(dataWriteConfig.getBasePath()).build();
 
-    if (dataMetaClient.getTableConfig().isMetadataTableAvailable() || writeConfig.isMetadataTableEnabled()) {
+    if (writeConfig.isMetadataTableEnabled()) {
       this.metadataWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(writeConfig, failedWritesCleaningPolicy);
 
       try {
