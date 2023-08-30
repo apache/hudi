@@ -31,6 +31,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadataToJsonBytes;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeReplaceCommitMetadata;
+
 /**
  * All the metadata that gets stored along with a commit.
  */
@@ -39,7 +42,7 @@ public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieReplaceCommitMetadata.class);
   protected Map<String, List<String>> partitionToReplaceFileIds;
 
-  // for ser/deser
+  // for serde
   public HoodieReplaceCommitMetadata() {
     this(false);
   }
@@ -58,10 +61,6 @@ public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
       partitionToReplaceFileIds.put(partitionPath, new ArrayList<>());
     }
     partitionToReplaceFileIds.get(partitionPath).add(fileId);
-  }
-
-  public List<String> getReplaceFileIds(String partitionPath) {
-    return partitionToReplaceFileIds.get(partitionPath);
   }
 
   public Map<String, List<String>> getPartitionToReplaceFileIds() {
@@ -83,7 +82,7 @@ public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
 
   public static <T> T fromJsonString(String jsonStr, Class<T> clazz) throws Exception {
     if (jsonStr == null || jsonStr.isEmpty()) {
-      // For empty commit file (no data or somethings bad happen).
+      // For empty commit file
       return clazz.newInstance();
     }
     return JsonUtils.getObjectMapper().readValue(jsonStr, clazz);
@@ -99,12 +98,10 @@ public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
     }
 
     HoodieReplaceCommitMetadata that = (HoodieReplaceCommitMetadata) o;
-
     if (!partitionToWriteStats.equals(that.partitionToWriteStats)) {
       return false;
     }
     return compacted.equals(that.compacted);
-
   }
 
   @Override
@@ -116,9 +113,16 @@ public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
 
   public static <T> T fromBytes(byte[] bytes, Class<T> clazz) throws IOException {
     try {
-      return fromJsonString(new String(bytes, StandardCharsets.UTF_8), clazz);
+      if (bytes.length == 0) {
+        return clazz.newInstance();
+      }
+      return fromJsonString(
+          new String(
+              convertCommitMetadataToJsonBytes(deserializeReplaceCommitMetadata(bytes), org.apache.hudi.avro.model.HoodieReplaceCommitMetadata.class),
+              StandardCharsets.UTF_8),
+          clazz);
     } catch (Exception e) {
-      throw new IOException("unable to read commit metadata", e);
+      throw new IOException("unable to read commit metadata for bytes length: " + bytes.length, e);
     }
   }
 

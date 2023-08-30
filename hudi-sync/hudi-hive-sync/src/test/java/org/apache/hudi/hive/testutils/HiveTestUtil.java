@@ -93,6 +93,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRollbackMetadata;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
@@ -553,14 +554,14 @@ public class HiveTestUtil {
     createMetaFile(
         basePath,
         HoodieTimeline.makeCommitFileName(instantTime),
-        getUTF8Bytes(commitMetadata.toJsonString()));
+        serializeCommitMetadata(commitMetadata).get());
   }
 
   public static void createReplaceCommitFile(HoodieReplaceCommitMetadata commitMetadata, String instantTime) throws IOException {
     createMetaFile(
         basePath,
         HoodieTimeline.makeReplaceFileName(instantTime),
-        getUTF8Bytes(commitMetadata.toJsonString()));
+        serializeCommitMetadata(commitMetadata).get());
   }
 
   public static void createCommitFileWithSchema(HoodieCommitMetadata commitMetadata, String instantTime, boolean isSimpleSchema) throws IOException {
@@ -573,7 +574,7 @@ public class HiveTestUtil {
     createMetaFile(
         basePath,
         HoodieTimeline.makeCommitFileName(instantTime),
-        getUTF8Bytes(commitMetadata.toJsonString()));
+        serializeCommitMetadata(commitMetadata).get());
   }
 
   private static void createDeltaCommitFile(HoodieCommitMetadata deltaCommitMetadata, String deltaCommitTime)
@@ -581,7 +582,7 @@ public class HiveTestUtil {
     createMetaFile(
         basePath,
         HoodieTimeline.makeDeltaFileName(deltaCommitTime),
-        getUTF8Bytes(deltaCommitMetadata.toJsonString()));
+        serializeCommitMetadata(deltaCommitMetadata).get());
   }
 
   private static void createMetaFile(String basePath, String fileName, byte[] bytes)

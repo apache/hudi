@@ -39,6 +39,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -88,7 +89,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX;
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -180,8 +181,11 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     saveAsComplete(commitTimeline, instant1, Option.empty());
     saveAsComplete(commitTimeline, instant2, Option.empty());
-    saveAsComplete(commitTimeline, clusteringInstant3, Option.empty());
-    saveAsComplete(commitTimeline, clusteringInstant4, Option.of(getUTF8Bytes(commitMetadata.toJsonString())));
+    saveAsComplete(commitTimeline, clusteringInstant3, serializeCommitMetadata((HoodieReplaceCommitMetadata) commitMetadata));
+    saveAsComplete(
+        commitTimeline,
+        clusteringInstant4,
+        serializeCommitMetadata((HoodieReplaceCommitMetadata) commitMetadata));
 
     refreshFsView();
 
@@ -1460,7 +1464,10 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
         CommitUtils.buildMetadata(Collections.emptyList(), partitionToReplaceFileIds, Option.empty(), WriteOperationType.INSERT_OVERWRITE, "", HoodieTimeline.REPLACE_COMMIT_ACTION);
     commitTimeline = metaClient.getActiveTimeline();
     HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, commitTime2);
-    saveAsComplete(commitTimeline, instant2, Option.of(getUTF8Bytes(commitMetadata.toJsonString())));
+    saveAsComplete(
+        commitTimeline,
+        instant2,
+        serializeCommitMetadata(commitMetadata));
 
     //make sure view doesn't include fileId1
     refreshFsView();
@@ -1547,7 +1554,10 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
     HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, commitTime1);
-    saveAsComplete(commitTimeline, instant1, Option.of(getUTF8Bytes(commitMetadata.toJsonString())));
+    saveAsComplete(
+        commitTimeline,
+        instant1,
+        serializeCommitMetadata(commitMetadata));
     refreshFsView();
     assertEquals(0, roView.getLatestBaseFiles(partitionPath1)
         .filter(dfile -> dfile.getFileId().equals(fileId1)).count());
@@ -1716,7 +1726,10 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     HoodieCommitMetadata commitMetadata1 =
         CommitUtils.buildMetadata(writeStats1, new HashMap<>(), Option.empty(), WriteOperationType.INSERT, "", HoodieTimeline.COMMIT_ACTION);
-    saveAsComplete(commitTimeline, instant1, Option.of(getUTF8Bytes(commitMetadata1.toJsonString())));
+    saveAsComplete(
+        commitTimeline,
+        instant1,
+        serializeCommitMetadata(commitMetadata1));
     commitTimeline.reload();
 
     // replace commit
@@ -1739,7 +1752,10 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     HoodieCommitMetadata commitMetadata2 =
         CommitUtils.buildMetadata(writeStats2, partitionToReplaceFileIds, Option.empty(), WriteOperationType.INSERT_OVERWRITE, "", HoodieTimeline.REPLACE_COMMIT_ACTION);
-    saveAsComplete(commitTimeline, instant2, Option.of(getUTF8Bytes(commitMetadata2.toJsonString())));
+    saveAsComplete(
+        commitTimeline,
+        instant2,
+        serializeCommitMetadata(commitMetadata2));
 
     // another insert commit
     String commitTime3 = "3";
@@ -1755,7 +1771,10 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     List<HoodieWriteStat> writeStats3 = buildWriteStats(partitionToFile3, commitTime3);
     HoodieCommitMetadata commitMetadata3 =
         CommitUtils.buildMetadata(writeStats3, new HashMap<>(), Option.empty(), WriteOperationType.INSERT, "", HoodieTimeline.COMMIT_ACTION);
-    saveAsComplete(commitTimeline, instant3, Option.of(getUTF8Bytes(commitMetadata3.toJsonString())));
+    saveAsComplete(
+        commitTimeline,
+        instant3,
+        serializeCommitMetadata(commitMetadata3));
 
     metaClient.reloadActiveTimeline();
     refreshFsView();
@@ -1881,7 +1900,10 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     commitMetadata.addWriteStat(partitionPath, getHoodieWriteStat(partitionPath, fileId1, logFileName1));
     commitMetadata.addWriteStat(partitionPath, getHoodieWriteStat(partitionPath, fileId2, logFileName2));
     HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, commitTime1);
-    saveAsComplete(commitTimeline, instant1, Option.of(getUTF8Bytes(commitMetadata.toJsonString())));
+    saveAsComplete(
+        commitTimeline,
+        instant1,
+        serializeCommitMetadata(commitMetadata));
 
     SyncableFileSystemView fileSystemView = getFileSystemView(metaClient.reloadActiveTimeline(), true);
 
@@ -1900,7 +1922,10 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     commitMetadata.addWriteStat(partitionPath, getHoodieWriteStat(partitionPath, fileId1, logFileName3));
     HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, commitTime2);
 
-    saveAsComplete(commitTimeline, instant2, Option.of(getUTF8Bytes(commitMetadata.toJsonString())));
+    saveAsComplete(
+        commitTimeline,
+        instant2,
+        serializeCommitMetadata(commitMetadata));
 
     // Verify file system view after 2nd commit.
     verifyFileSystemView(partitionPath, expectedState, fileSystemView);

@@ -94,7 +94,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.hadoop.realtime.HoodieRealtimeRecordReader.REALTIME_SKIP_MERGE_PROP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -778,7 +778,7 @@ public class TestHoodieRealtimeRecordReader {
     File file = basePath.resolve(".hoodie").resolve(commitNumber + ".replacecommit").toFile();
     file.createNewFile();
     FileOutputStream fileOutputStream = new FileOutputStream(file);
-    fileOutputStream.write(getUTF8Bytes(replaceMetadata.toJsonString()));
+    fileOutputStream.write(serializeCommitMetadata(replaceMetadata).get());
     fileOutputStream.flush();
     fileOutputStream.close();
   }
@@ -820,7 +820,7 @@ public class TestHoodieRealtimeRecordReader {
     File file = basePath.resolve(".hoodie").resolve(commitNumber + ".deltacommit").toFile();
     file.createNewFile();
     FileOutputStream fileOutputStream = new FileOutputStream(file);
-    fileOutputStream.write(getUTF8Bytes(commitMetadata.toJsonString()));
+    fileOutputStream.write(serializeCommitMetadata(commitMetadata).get());
     fileOutputStream.flush();
     fileOutputStream.close();
   }

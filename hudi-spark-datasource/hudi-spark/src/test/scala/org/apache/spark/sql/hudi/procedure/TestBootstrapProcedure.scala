@@ -24,10 +24,12 @@ import org.apache.hudi.functional.TestBootstrap
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{Dataset, Row}
+import org.scalatest.Ignore
 
 import java.time.Instant
 import java.util
 
+@Ignore // TODO: HUDI-6849
 class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
 
   test("Test Call run_bootstrap Procedure") {

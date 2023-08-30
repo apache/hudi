@@ -23,7 +23,6 @@ import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.timeline.LSMTimelineWriter;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
-import org.apache.hudi.client.utils.MetadataConversionUtils;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -103,6 +102,8 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.HoodieTestCommitGenerator.getBaseFilename;
+import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadata;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createCompactionCommitInMetadataTable;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.config.HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT;
@@ -416,7 +417,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
       metadataWriter.update(commitMeta, context.emptyHoodieData(), instantTime);
       metaClient.getActiveTimeline().saveAsComplete(
           new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime),
-          Option.of(getUTF8Bytes(commitMeta.toJsonString())));
+          serializeCommitMetadata(commitMeta));
     } else {
       commitMeta = generateCommitMetadata(instantTime, new HashMap<>());
     }
@@ -969,8 +970,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
-    org.apache.hudi.avro.model.HoodieCommitMetadata expectedCommitMetadata = MetadataConversionUtils
-        .convertCommitMetadata(hoodieCommitMetadata);
+    org.apache.hudi.avro.model.HoodieCommitMetadata expectedCommitMetadata = convertCommitMetadata(hoodieCommitMetadata);
     assertEquals(expectedCommitMetadata.getOperationType(), WriteOperationType.INSERT.toString());
   }
 
