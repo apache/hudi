@@ -120,7 +120,8 @@ public class HoodieCatalog extends AbstractCatalog {
     catalogPath = new Path(catalogPathStr);
     try {
       if (!fs.exists(catalogPath)) {
-        throw new CatalogException(String.format("Catalog %s path %s does not exist.", getName(), catalogPathStr));
+        LOG.warn("Catalog {} path {} does not exist.", getName(), catalogPathStr);
+        fs.mkdirs(catalogPath);
       }
     } catch (IOException e) {
       throw new CatalogException(String.format("Checking catalog path %s exists exception.", catalogPathStr), e);
