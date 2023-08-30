@@ -558,6 +558,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue(WriteConcurrencyMode.SINGLE_WRITER.name())
       .withDocumentation(WriteConcurrencyMode.class);
 
+  public static final ConfigProperty<Integer> NUM_RETRIES_ON_CONFLICT_FAILURES = ConfigProperty
+      .key("hoodie.write.num.retries.on.conflict.failures")
+      .defaultValue(0)
+      .sinceVersion("0.13.0")
+      .withDocumentation("Maximum number of times to retry a batch on conflict failure.");
+
   public static final ConfigProperty<String> WRITE_SCHEMA_OVERRIDE = ConfigProperty
       .key("hoodie.write.schema")
       .noDefaultValue()
@@ -1475,8 +1481,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP);
   }
 
-  public int getArchiveMergeFilesBatchSize() {
-    return getInt(HoodieArchivalConfig.ARCHIVE_MERGE_FILES_BATCH_SIZE);
+  public int getTimelineCompactionBatchSize() {
+    return getInt(HoodieArchivalConfig.TIMELINE_COMPACTION_BATCH_SIZE);
   }
 
   public int getParquetSmallFileLimit() {
@@ -1519,16 +1525,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieCleanConfig.AUTO_CLEAN);
   }
 
-  public boolean getArchiveMergeEnable() {
-    return getBooleanOrDefault(HoodieArchivalConfig.ARCHIVE_MERGE_ENABLE);
-  }
-
   public boolean shouldArchiveBeyondSavepoint() {
     return getBooleanOrDefault(HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT);
-  }
-
-  public long getArchiveMergeSmallFileLimitBytes() {
-    return getLong(HoodieArchivalConfig.ARCHIVE_MERGE_SMALL_FILE_LIMIT_BYTES);
   }
 
   public boolean isAutoArchive() {

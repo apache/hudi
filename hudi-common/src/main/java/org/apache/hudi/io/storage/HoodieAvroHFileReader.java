@@ -84,54 +84,68 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
   private static final Logger LOG = LoggerFactory.getLogger(HoodieAvroHFileReader.class);
 
   private final Path path;
-
+  private final FileSystem fs;
+  private final Configuration hadoopConf;
+  private final CacheConfig config;
+  private final Option<byte[]> content;
   private final Lazy<Schema> schema;
 
   // NOTE: Reader is ONLY THREAD-SAFE for {@code Scanner} operating in Positional Read ("pread")
   //       mode (ie created w/ "pread = true")
-  private final HFile.Reader reader;
+  // Common reader is not used for the iterators since they can be closed independently.
+  // Use {@link getSharedReader()} instead of accessing directly.
+  private Option<HFile.Reader> sharedReader;
   // NOTE: Scanner caches read blocks, therefore it's important to re-use scanner
   //       wherever possible
-  private final HFileScanner sharedScanner;
+  private Option<HFileScanner> sharedScanner;
 
-  private final Object sharedScannerLock = new Object();
+  private final Object sharedLock = new Object();
 
   public HoodieAvroHFileReader(Configuration hadoopConf, Path path, CacheConfig cacheConfig) throws IOException {
-    this(path,
-        HoodieHFileUtils.createHFileReader(FSUtils.getFs(path.toString(), hadoopConf), path, cacheConfig, hadoopConf),
-        Option.empty());
+    this(path, FSUtils.getFs(path.toString(), hadoopConf), hadoopConf, cacheConfig, Option.empty());
   }
 
   public HoodieAvroHFileReader(Configuration hadoopConf, Path path, CacheConfig cacheConfig, FileSystem fs, Option<Schema> schemaOpt) throws IOException {
-    this(path, HoodieHFileUtils.createHFileReader(fs, path, cacheConfig, hadoopConf), schemaOpt);
+    this(path, fs, hadoopConf, cacheConfig, schemaOpt);
   }
 
-  public HoodieAvroHFileReader(FileSystem fs, Path dummyPath, byte[] content, Option<Schema> schemaOpt) throws IOException {
-    this(null, HoodieHFileUtils.createHFileReader(fs, dummyPath, content), schemaOpt);
+  public HoodieAvroHFileReader(Configuration hadoopConf, Path path, CacheConfig cacheConfig, FileSystem fs, byte[] content, Option<Schema> schemaOpt) throws IOException {
+    this(path, fs, hadoopConf, cacheConfig, schemaOpt, Option.of(content));
   }
 
-  public HoodieAvroHFileReader(Path path, HFile.Reader reader, Option<Schema> schemaOpt) throws IOException {
+  public HoodieAvroHFileReader(Path path, FileSystem fs, Configuration hadoopConf, CacheConfig config, Option<Schema> schemaOpt) throws IOException {
+    this(path, fs, hadoopConf, config, schemaOpt, Option.empty());
+  }
+
+  public HoodieAvroHFileReader(Path path, FileSystem fs, Configuration hadoopConf, CacheConfig config, Option<Schema> schemaOpt, Option<byte[]> content) throws IOException {
     this.path = path;
-    this.reader = reader;
-    // For shared scanner, which is primarily used for point-lookups, we're caching blocks
-    // by default, to minimize amount of traffic to the underlying storage
-    this.sharedScanner = getHFileScanner(reader, true);
+    this.fs = fs;
+    this.hadoopConf = hadoopConf;
+    this.config = config;
+    this.content = content;
+
+    // Shared reader is instantiated lazily.
+    this.sharedReader = Option.empty();
+    this.sharedScanner = Option.empty();
     this.schema = schemaOpt.map(Lazy::eagerly)
-        .orElseGet(() -> Lazy.lazily(() -> fetchSchema(reader)));
+        .orElseGet(() -> Lazy.lazily(() -> fetchSchema(getSharedHFileReader())));
   }
 
   @Override
   public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordsByKeysIterator(List<String> sortedKeys, Schema schema) throws IOException {
+    // Iterators do not use the shared reader or scanner
     // We're caching blocks for this scanner to minimize amount of traffic
     // to the underlying storage as we fetched (potentially) sparsely distributed
     // keys
+    HFile.Reader reader = getHFileReader();
     HFileScanner scanner = getHFileScanner(reader, true);
-    ClosableIterator<IndexedRecord> iterator = new RecordByKeyIterator(scanner, sortedKeys, getSchema(), schema);
+    ClosableIterator<IndexedRecord> iterator = new RecordByKeyIterator(reader, scanner, sortedKeys, getSchema(), schema);
     return new CloseableMappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
   }
 
   @Override
   public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordsByKeyPrefixIterator(List<String> sortedKeyPrefixes, Schema schema) throws IOException {
+    // Iterators do not use the shared reader or scanner
     ClosableIterator<IndexedRecord> iterator = getIndexedRecordsByKeyPrefixIterator(sortedKeyPrefixes, schema);
     return new CloseableMappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
   }
@@ -139,7 +153,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
   @Override
   public String[] readMinMaxRecordKeys() {
     // NOTE: This access to reader is thread-safe
-    HFileInfo fileInfo = reader.getHFileInfo();
+    HFileInfo fileInfo = getSharedHFileReader().getHFileInfo();
     return new String[]{new String(fileInfo.get(KEY_MIN_RECORD.getBytes())),
         new String(fileInfo.get(KEY_MAX_RECORD.getBytes()))};
   }
@@ -148,8 +162,8 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
   public BloomFilter readBloomFilter() {
     try {
       // NOTE: This access to reader is thread-safe
-      HFileInfo fileInfo = reader.getHFileInfo();
-      ByteBuff buf = reader.getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK, false).getBufferWithoutHeader();
+      HFileInfo fileInfo = getSharedHFileReader().getHFileInfo();
+      ByteBuff buf = getSharedHFileReader().getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK, false).getBufferWithoutHeader();
       // We have to copy bytes here, since we can't reuse buffer's underlying
       // array as is, since it contains additional metadata (header)
       byte[] bytes = new byte[buf.remaining()];
@@ -179,10 +193,15 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     checkState(candidateRowKeys instanceof TreeSet,
         String.format("HFile reader expects a TreeSet as iterating over ordered keys is more performant, got (%s)", candidateRowKeys.getClass().getSimpleName()));
 
-    synchronized (sharedScannerLock) {
+    synchronized (sharedLock) {
+      if (!sharedScanner.isPresent()) {
+        // For shared scanner, which is primarily used for point-lookups, we're caching blocks
+        // by default, to minimize amount of traffic to the underlying storage
+        sharedScanner = Option.of(getHFileScanner(getSharedHFileReader(), true));
+      }
       return candidateRowKeys.stream().filter(k -> {
         try {
-          return isKeyAvailable(k, sharedScanner);
+          return isKeyAvailable(k, sharedScanner.get());
         } catch (IOException e) {
           LOG.error("Failed to check key availability: " + k);
           return false;
@@ -192,19 +211,15 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
   }
 
   @Override
-  protected ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) {
+  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) {
     if (!Objects.equals(readerSchema, requestedSchema)) {
       throw new UnsupportedOperationException("Schema projections are not supported in HFile reader");
     }
 
+    HFile.Reader reader = getHFileReader();
     // TODO eval whether seeking scanner would be faster than pread
-    HFileScanner scanner = null;
-    try {
-      scanner = getHFileScanner(reader, false, false);
-    } catch (IOException e) {
-      throw new HoodieIOException("Instantiation HfileScanner failed for " + reader.getHFileInfo().toString());
-    }
-    return new RecordIterator(scanner, getSchema(), readerSchema);
+    HFileScanner scanner = getHFileScanner(reader, false, false);
+    return new RecordIterator(reader, scanner, getSchema(), readerSchema);
   }
 
   @VisibleForTesting
@@ -212,8 +227,9 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     // We're caching blocks for this scanner to minimize amount of traffic
     // to the underlying storage as we fetched (potentially) sparsely distributed
     // keys
+    HFile.Reader reader = getHFileReader();
     HFileScanner scanner = getHFileScanner(reader, true);
-    return new RecordByKeyIterator(scanner, keys, getSchema(), readerSchema);
+    return new RecordByKeyIterator(reader, scanner, keys, getSchema(), readerSchema);
   }
 
   @VisibleForTesting
@@ -221,25 +237,57 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     // We're caching blocks for this scanner to minimize amount of traffic
     // to the underlying storage as we fetched (potentially) sparsely distributed
     // keys
+    HFile.Reader reader = getHFileReader();
     HFileScanner scanner = getHFileScanner(reader, true);
-    return new RecordByKeyPrefixIterator(scanner, sortedKeyPrefixes, getSchema(), readerSchema);
+    return new RecordByKeyPrefixIterator(reader, scanner, sortedKeyPrefixes, getSchema(), readerSchema);
   }
 
   @Override
   public long getTotalRecords() {
     // NOTE: This access to reader is thread-safe
-    return reader.getEntries();
+    return getSharedHFileReader().getEntries();
   }
 
   @Override
   public void close() {
     try {
       synchronized (this) {
-        reader.close();
+        if (sharedScanner.isPresent()) {
+          sharedScanner.get().close();
+        }
+        if (sharedReader.isPresent()) {
+          sharedReader.get().close();
+        }
       }
     } catch (IOException e) {
       throw new HoodieIOException("Error closing the hfile reader", e);
     }
+  }
+
+  /**
+   * Instantiates the shared HFile reader if not instantiated
+   * @return the shared HFile reader
+   */
+  private HFile.Reader getSharedHFileReader() {
+    if (!sharedReader.isPresent()) {
+      synchronized (sharedLock) {
+        if (!sharedReader.isPresent()) {
+          sharedReader = Option.of(getHFileReader());
+        }
+      }
+    }
+    return sharedReader.get();
+  }
+
+  /**
+   * Instantiate a new reader for HFile files.
+   * @return an instance of {@link HFile.Reader}
+   */
+  private HFile.Reader getHFileReader() {
+    if (content.isPresent()) {
+      return HoodieHFileUtils.createHFileReader(fs, path, content.get());
+    }
+    return HoodieHFileUtils.createHFileReader(fs, path, config, hadoopConf);
   }
 
   private boolean isKeyAvailable(String key, HFileScanner keyScanner) throws IOException {
@@ -437,18 +485,22 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
         .collect(Collectors.toList());
   }
 
-  private static HFileScanner getHFileScanner(HFile.Reader reader, boolean cacheBlocks) throws IOException {
+  private static HFileScanner getHFileScanner(HFile.Reader reader, boolean cacheBlocks) {
     return getHFileScanner(reader, cacheBlocks, true);
   }
 
-  private static HFileScanner getHFileScanner(HFile.Reader reader, boolean cacheBlocks, boolean doSeek) throws IOException {
+  private static HFileScanner getHFileScanner(HFile.Reader reader, boolean cacheBlocks, boolean doSeek) {
     // NOTE: Only scanners created in Positional Read ("pread") mode could share the same reader,
     //       since scanners in default mode will be seeking w/in the underlying stream
-    HFileScanner scanner = reader.getScanner(cacheBlocks, true);
-    if (doSeek) {
-      scanner.seekTo(); // places the cursor at the beginning of the first data block.
+    try {
+      HFileScanner scanner = reader.getScanner(cacheBlocks, true);
+      if (doSeek) {
+        scanner.seekTo(); // places the cursor at the beginning of the first data block.
+      }
+      return scanner;
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to initialize HFile scanner for  " + reader.getPath(), e);
     }
-    return scanner;
   }
 
   private static Option<Schema.Field> getKeySchema(Schema schema) {
@@ -459,6 +511,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     private final Iterator<String> sortedKeyPrefixesIterator;
     private Iterator<IndexedRecord> recordsIterator;
 
+    private final HFile.Reader reader;
     private final HFileScanner scanner;
 
     private final Schema writerSchema;
@@ -466,9 +519,9 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
 
     private IndexedRecord next = null;
 
-    RecordByKeyPrefixIterator(HFileScanner scanner, List<String> sortedKeyPrefixes, Schema writerSchema, Schema readerSchema) throws IOException {
+    RecordByKeyPrefixIterator(HFile.Reader reader, HFileScanner scanner, List<String> sortedKeyPrefixes, Schema writerSchema, Schema readerSchema) throws IOException {
       this.sortedKeyPrefixesIterator = sortedKeyPrefixes.iterator();
-
+      this.reader = reader;
       this.scanner = scanner;
       this.scanner.seekTo(); // position at the beginning of the file
 
@@ -508,13 +561,19 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
 
     @Override
     public void close() {
-      scanner.close();
+      try {
+        scanner.close();
+        reader.close();
+      } catch (IOException e) {
+        throw new HoodieIOException("Error closing the hfile reader and scanner", e);
+      }
     }
   }
 
   private static class RecordByKeyIterator implements ClosableIterator<IndexedRecord> {
     private final Iterator<String> sortedKeyIterator;
 
+    private final HFile.Reader reader;
     private final HFileScanner scanner;
 
     private final Schema readerSchema;
@@ -522,9 +581,9 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
 
     private IndexedRecord next = null;
 
-    RecordByKeyIterator(HFileScanner scanner, List<String> sortedKeys, Schema writerSchema, Schema readerSchema) throws IOException {
+    RecordByKeyIterator(HFile.Reader reader, HFileScanner scanner, List<String> sortedKeys, Schema writerSchema, Schema readerSchema) throws IOException {
       this.sortedKeyIterator = sortedKeys.iterator();
-
+      this.reader = reader;
       this.scanner = scanner;
       this.scanner.seekTo(); // position at the beginning of the file
 
@@ -562,12 +621,18 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
 
     @Override
     public void close() {
-      scanner.close();
+      try {
+        scanner.close();
+        reader.close();
+      } catch (IOException e) {
+        throw new HoodieIOException("Error closing the hfile reader and scanner", e);
+      }
     }
   }
 
   @Override
   public ClosableIterator<String> getRecordKeyIterator() {
+    HFile.Reader reader = getHFileReader();
     final HFileScanner scanner = reader.getScanner(false, false);
     return new ClosableIterator<String>() {
       @Override
@@ -588,12 +653,18 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
 
       @Override
       public void close() {
-        scanner.close();
+        try {
+          scanner.close();
+          reader.close();
+        } catch (IOException e) {
+          throw new HoodieIOException("Error closing the hfile reader and scanner", e);
+        }
       }
     };
   }
 
   private static class RecordIterator implements ClosableIterator<IndexedRecord> {
+    private final HFile.Reader reader;
     private final HFileScanner scanner;
 
     private final Schema writerSchema;
@@ -601,7 +672,8 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
 
     private IndexedRecord next = null;
 
-    RecordIterator(HFileScanner scanner, Schema writerSchema, Schema readerSchema) {
+    RecordIterator(HFile.Reader reader, HFileScanner scanner, Schema writerSchema, Schema readerSchema) {
+      this.reader = reader;
       this.scanner = scanner;
       this.writerSchema = writerSchema;
       this.readerSchema = readerSchema;
@@ -642,7 +714,12 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
 
     @Override
     public void close() {
-      scanner.close();
+      try {
+        scanner.close();
+        reader.close();
+      } catch (IOException e) {
+        throw new HoodieIOException("Error closing the hfile reader and scanner", e);
+      }
     }
   }
 

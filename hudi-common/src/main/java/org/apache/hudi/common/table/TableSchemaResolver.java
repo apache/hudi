@@ -327,8 +327,9 @@ public class TableSchemaResolver {
 
     FileSystem fs = metaClient.getRawFs();
     CacheConfig cacheConfig = new CacheConfig(fs.getConf());
-    HoodieAvroHFileReader hFileReader = new HoodieAvroHFileReader(fs.getConf(), hFilePath, cacheConfig);
-    return convertAvroSchemaToParquet(hFileReader.getSchema());
+    try (HoodieAvroHFileReader hFileReader = new HoodieAvroHFileReader(fs.getConf(), hFilePath, cacheConfig)) {
+      return convertAvroSchemaToParquet(hFileReader.getSchema());
+    }
   }
 
   private MessageType readSchemaFromORCBaseFile(Path orcFilePath) throws IOException {

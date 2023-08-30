@@ -607,6 +607,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
       UpdateTableRequest request =  UpdateTableRequest.builder().databaseName(databaseName)
           .tableInput(updatedTableInput)
+          .skipArchive(skipTableArchive)
           .build();
       awsGlue.updateTable(request);
       return true;
