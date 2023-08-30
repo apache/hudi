@@ -103,7 +103,7 @@ First of all, let us discuss the goals and non-goals which will help in understa
 Our primary challenge is to support operations that span multiple tables within a single database, and maintain the ACID
 properties across these tables.
 
-1. Need for a catalog: Do we need a catalog API that tracks databases and its tables?
+1. Need for a catalog: We probably need a catalog API that tracks databases and its tables.
 2. Need for a transaction coordinator: A centralized coordinator that will manage transaction logs, track ongoing
    transactions, handle timeouts, and manage transaction rollbacks.
 3. Need for a transaction log: At the table level, the timeline incorporating state of an action with start and modified
@@ -112,7 +112,8 @@ properties across these tables.
 4. Locking/Conflict resolution mechanism: Lock the affected files during the multi-table transaction to prevent
    conflicting writes. Decide on conflict resolution strategies (e.g., last write wins, version vectors).
 5. Need for buffer management: Writes by a transaction are not immediately visible to other transactions. They are
-   buffered until the transaction decides to commit. In-memory vs durable buffer (reuse `.temp` dir)?
+   buffered until the transaction decides to commit. This can be guaranteed by reading the transaction logs (table
+   timeline together with the database timeline).
 
 #### Concurrency Control and Conflict Resolution
 
@@ -120,10 +121,8 @@ Today we have an event log at the table level in the form of Hudi timeline. To s
 going to need a unified view of all tables within the database to ensure atomicity and consistency. Hence, we propose a
 database-level timeline as transaction log, which mainly contains the following:
 
-* Transaction ID
+* Transaction ID (instant time when the transaction started)
 * Tables involved
-* Type of operation (e.g., write, delete)
-* Start Timestamp
 * End/Modified Timestamp
 * State of transaction: REQUESTED, INFLIGHT, COMPLETED, ROLLED\_BACK
 * Any other relevant metadata
@@ -139,7 +138,7 @@ With MVCC and snapshot isolation:
    start time.
 2. **Reads**: The transaction can read from its snapshot without seeing any intermediate changes made by other
    transactions.
-3. **Writes**: The writes are made to a new "version" of the data. This doesn't affect other ongoing transactions as
+3. **Writes**: The writes create a new version of the data. This doesn't affect other ongoing transactions as
    they continue to work with their respective snapshots.
 4. **Commit**: During commit, the system checks for write-write conflicts, i.e., if another transaction has committed
    changes to the same data after the current transaction's start time. If there's a conflict, the current transaction
@@ -155,37 +154,12 @@ reading from its snapshot, it won't see uncommitted changes made by other transa
 #### 2\. Phantom Reads:
 
 **Definition**: In the course of a transaction, new records get added or old records get removed, which fit the criteria
-of a previous read in the transaction.
+of a previous read in the transaction. See Appendix for an example.
 
 **Analysis with MVCC**: Since transactions operate on snapshots, they won't see new records added after the snapshot was
 taken. However, if a transaction's intent is to ensure that new records of a certain kind don't get added, additional
 mechanisms, like predicate locks, might be needed. If we don't allow snapshot to be refreshed within the same
-transaction, then phantom reads seem improbable (including self-join).
-
-* Textbook phantom read example
-
-  Suppose you have a table named `Employees` with columns `employee_id` and `manager_id`, where the `manager_id` for
-  some employees refers to the `employee_id` of other employees in the same table. One might execute a self-join to
-  retrieve a list of employees and their managers:
-
-  ```plain
-  SELECT e1.employee_id, e2.employee_id AS manager_id
-  FROM Employees e1
-  JOIN Employees e2 ON e1.manager_id = e2.employee_id;
-  ```
-
-  This query essentially matches each employee with their manager, using a self-join on the `Employees` table.
-
-    1. **Transaction A** starts and runs the self-join query to get a list of employees and their respective managers.
-    2. While **Transaction A** is still in progress, **Transaction B** starts and adds a new row to the `Employees`
-       table, inserting a new employee with a manager whose `employee_id` is already in the table.
-    3. **Transaction B** commits its changes.
-    4. If **Transaction A** re-runs the same self-join query, it might see the newly added row, resulting in an
-       additional result in the join output that wasn't there during the initial query. This is a phantom read.
-
-With MVCC and snapshot isolation level, a transaction would continue to see the state of the database as it was when the
-transaction started, even if it re-runs the self-join. This level will prevent the phantom read in this case. However,
-it cannot be guaranteed with read committed.
+transaction, then phantom reads are not possible (including self-join).
 
 #### 3\. Read-Write Conflict:
 
@@ -238,6 +212,77 @@ involved in T1 and T2. To handle conflict before committing, we have the followi
    snapshot to compensate for the effects of the conflicting transaction.
     1. Pros: Avoids the need to abort and retry. Could be useful for long-running transactions.
     2. Cons: Complexity in designing and ensuring the correctness of compensating transactions.
+
+#### Multi-table Transaction Protocol
+
+Let's break down the multi-table transaction protocol using the scenarios presented below (assuming we have a logical
+notion of a database and each database will have its own timeline, called the database timeline, that will track
+transactions across tables within that database).
+
+**Scenario 1: Basic Transaction with Updates to Three Tables**
+
+1. **Begin Transaction**
+    * Writer `W1` initiates a transaction.
+    * The `database timeline` logs the start of a new transaction with a unique transaction ID (`TxID1`).
+
+2. **Updates to Tables**
+    * `W1` writes updates to `t1`. The updates are staged and tracked under `TxID1` in `t1`'s timeline in a 'pending'
+      state.
+    * Similarly, `W1` writes updates to `t2` and `t3`. The updates are staged and tracked in respective table's
+      timelines under `TxID1`.
+
+3. **Commit Transaction**
+    * `W1` signals the end of its transaction.
+    * The `database timeline` marks the transaction `TxID1` as committed.
+    * The timelines for `t1`, `t2`, and `t3` finalize the 'pending' updates under `TxID1`.
+
+---
+
+**Scenario 2: Transaction with a Conflict in One Table**
+
+1. **Begin Transactions**
+    * Writer `W1` initiates a transaction (`TxID1`).
+    * Another writer `W2` starts a new transaction (`TxID2`).
+
+2. **Conflicting Updates**
+    * `W1` and `W2` both try to write to a shared file in `t1`.
+    * The MVCC system detects the conflict when `W2` tries to commit its changes, as `W1` has already staged its
+      updates.
+    * `W2`'s changes to `t1` are aborted, and it receives a conflict notification.
+
+---
+
+**Scenario 3: Transaction with Concurrent Reads During Pending Updates**
+
+1. **Begin Transaction**
+    * Writer `W1` initiates a transaction (`TxID1`) and stages updates for `t1` and `t2`. `t3`'s update is still in
+      progress.
+
+2. **Concurrent Read by Reader `R1`**
+    * `R1` wishes to read from `t1`, `t2`, and `t3`.
+    * Since `W1`'s updates to `t1` and `t2` are only staged and the transaction is not yet committed, `R1` sees the
+      data's previous state for these tables.
+    * For `t3`, `R1` reads the current state, as no updates have been staged or committed yet by `W1`.
+
+---
+
+**Scenario 4: Transaction with Failed Update Requiring Rollback**
+
+1. **Begin Transaction**
+    * Writer `W1` initiates a transaction (`TxID1`) and successfully stages updates for `t1` and `t2`.
+
+2. **Failed Update**
+    * An update to `t3` fails due to an internal error, such as an I/O error.
+
+3. **Rollback Transaction**
+    * `W1` initiates a rollback for `TxID1`.
+    * The `database timeline` marks the transaction `TxID1` as rolled back.
+    * The staged updates in the timelines for `t1` and `t2` under `TxID1` are discarded.
+
+---
+
+Note: This protocol ensures snapshot isolation by ensuring that readers always see a consistent state of the data,
+either before or after a transaction's updates but never a mix of the two.
 
 ## Implementation
 
@@ -414,3 +459,30 @@ TODO
 - Unit tests for the new timeline format.
 - Unit tests for conflict resolution.
 - Integration tests for multi-table transactions with and without failures.
+
+## Appendix
+
+### Textbook phantom read example
+
+  Suppose you have a table named `Employees` with columns `employee_id` and `manager_id`, where the `manager_id` for
+  some employees refers to the `employee_id` of other employees in the same table. One might execute a self-join to
+  retrieve a list of employees and their managers:
+
+  ```plain
+  SELECT e1.employee_id, e2.employee_id AS manager_id
+  FROM Employees e1
+  JOIN Employees e2 ON e1.manager_id = e2.employee_id;
+  ```
+
+  This query essentially matches each employee with their manager, using a self-join on the `Employees` table.
+
+    1. **Transaction A** starts and runs the self-join query to get a list of employees and their respective managers.
+    2. While **Transaction A** is still in progress, **Transaction B** starts and adds a new row to the `Employees`
+       table, inserting a new employee with a manager whose `employee_id` is already in the table.
+    3. **Transaction B** commits its changes.
+    4. If **Transaction A** re-runs the same self-join query, it might see the newly added row, resulting in an
+       additional result in the join output that wasn't there during the initial query. This is a phantom read.
+
+With MVCC and snapshot isolation level, a transaction would continue to see the state of the database as it was when the
+transaction started, even if it re-runs the self-join. This level will prevent the phantom read in this case. However,
+it cannot be guaranteed with read committed.
