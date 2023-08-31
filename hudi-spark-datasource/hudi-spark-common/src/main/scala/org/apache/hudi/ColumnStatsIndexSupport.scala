@@ -325,7 +325,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     val columnStatsRecords: HoodieData[HoodieMetadataColumnStats] =
       // NOTE: Explicit conversion is required for Scala 2.11
       metadataRecords.map(JFunction.toJavaSerializableFunction(record => {
-        toScalaOption(record.getData.getInsertValue(null, null))
+        toScalaOption(record.getData.toHoodieMetadataRecord)
           .map(metadataRecord => metadataRecord.asInstanceOf[HoodieMetadataRecord].getColumnStatsMetadata)
           .orNull
       }))

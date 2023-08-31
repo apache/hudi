@@ -456,6 +456,16 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     return getInsertValue(schema, new Properties());
   }
 
+  public Option<IndexedRecord> toHoodieMetadataRecord() {
+    if (key == null || this.isDeletedRecord) {
+      return Option.empty();
+    }
+
+    HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata,
+        columnStatMetadata, recordIndexMetadata);
+    return Option.of(record);
+  }
+
   /**
    * Returns the list of filenames added as part of this record.
    */

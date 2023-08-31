@@ -27,7 +27,6 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Tuple3;
 import org.apache.hudi.common.util.hash.ColumnIndexID;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -43,7 +42,6 @@ import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -300,12 +298,7 @@ public class ColumnStatsIndices {
     return records.collectAsList().stream().parallel().map(record -> {
           // schema and props are ignored for generating metadata record from the payload
           // instead, the underlying file system, or bloom filter, or columns stats metadata (part of payload) are directly used
-          GenericRecord genericRecord;
-          try {
-            genericRecord = (GenericRecord) record.getData().getInsertValue(null, null).orElse(null);
-          } catch (IOException e) {
-            throw new HoodieException("Exception while getting insert value from metadata payload");
-          }
+          GenericRecord genericRecord = (GenericRecord) record.getData().toHoodieMetadataRecord().orElse(null);
           return (RowData) converter.convert(genericRecord);
         }
     ).collect(Collectors.toList());
