@@ -26,7 +26,8 @@ import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplement
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
-import org.apache.spark.sql.SaveMode
+import org.apache.spark.sql.{Row, SaveMode}
+import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
@@ -633,5 +634,58 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val updatedCnt2 = 50 - insertedCnt2
     val cdcDataOnly2 = cdcDataFrame((commitTime2.toLong - 1).toString)
     assertCDCOpCnt(cdcDataOnly2, insertedCnt2, updatedCnt2, 0)
+  }
+
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieCDCSupplementalLoggingMode])
+  def testCDCWithAWSDMSPayload(loggingMode: HoodieCDCSupplementalLoggingMode): Unit = {
+    val options = Map(
+      "hoodie.table.name" -> "test",
+      "hoodie.datasource.write.recordkey.field" -> "id",
+      "hoodie.datasource.write.precombine.field" -> "replicadmstimestamp",
+      "hoodie.datasource.write.keygenerator.class" -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
+      "hoodie.datasource.write.partitionpath.field" -> "",
+      "hoodie.datasource.write.payload.class" -> "org.apache.hudi.common.model.AWSDmsAvroPayload",
+      "hoodie.table.cdc.enabled" -> "true",
+      "hoodie.table.cdc.supplemental.logging.mode" -> "data_before_after"
+    )
+
+    val data: Seq[(String, String, String, String)] = Seq(
+      ("1", "I", "2023-06-14 15:46:06.953746", "A"),
+      ("2", "I", "2023-06-14 15:46:07.953746", "B"),
+      ("3", "I", "2023-06-14 15:46:08.953746", "C")
+    )
+
+    val schema: StructType = StructType(Seq(
+      StructField("id", StringType),
+      StructField("Op", StringType),
+      StructField("replicadmstimestamp", StringType),
+      StructField("code", StringType)
+    ))
+
+    val df = spark.createDataFrame(data.map(Row.fromTuple), schema)
+    df.write
+      .format("org.apache.hudi")
+      .option("hoodie.datasource.write.operation", "upsert")
+      .options(options)
+      .mode("append")
+      .save(basePath)
+
+    assertEquals(spark.read.format("org.apache.hudi").load(basePath).count(), 3)
+
+    val newData: Seq[(String, String, String, String)] = Seq(
+      ("3", "D", "2023-06-14 15:47:09.953746", "B")
+    )
+
+    val newDf = spark.createDataFrame(newData.map(Row.fromTuple), schema)
+
+    newDf.write
+      .format("org.apache.hudi")
+      .option("hoodie.datasource.write.operation", "upsert")
+      .options(options)
+      .mode("append")
+      .save(basePath)
+
+    assertEquals(spark.read.format("org.apache.hudi").load(basePath).count(), 2)
   }
 }
