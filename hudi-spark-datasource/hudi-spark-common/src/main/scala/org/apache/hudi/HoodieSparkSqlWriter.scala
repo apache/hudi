@@ -146,12 +146,12 @@ object HoodieSparkSqlWriter {
     toReturn
   }
 
-  def writeInternal(sqlContext: SQLContext,
-                    mode: SaveMode,
-                    optParams: Map[String, String],
-                    sourceDf: DataFrame,
-                    streamingWritesParamsOpt: Option[StreamingWriteParams] = Option.empty,
-                    hoodieWriteClient: Option[SparkRDDWriteClient[_]] = Option.empty):
+  private def writeInternal(sqlContext: SQLContext,
+                            mode: SaveMode,
+                            optParams: Map[String, String],
+                            sourceDf: DataFrame,
+                            streamingWritesParamsOpt: Option[StreamingWriteParams] = Option.empty,
+                            hoodieWriteClient: Option[SparkRDDWriteClient[_]] = Option.empty):
   (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig) = {
 
     assert(optParams.get("path").exists(!StringUtils.isNullOrEmpty(_)), "'path' must be set")
@@ -260,7 +260,7 @@ object HoodieSparkSqlWriter {
 
       val shouldReconcileSchema = parameters(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
       val latestTableSchemaOpt = getLatestTableSchema(spark, tableIdentifier, tableMetaClient)
-      val df = if (preppedWriteOperation || preppedSparkSqlWrites || preppedSparkSqlMergeInto) {
+      val df = if (preppedWriteOperation || preppedSparkSqlWrites || preppedSparkSqlMergeInto || sourceDf.isStreaming) {
         sourceDf
       } else {
         sourceDf.drop(HoodieRecord.HOODIE_META_COLUMNS: _*)
