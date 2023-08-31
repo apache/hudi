@@ -68,6 +68,10 @@ import java.util.concurrent.ExecutionException;
 
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 
+/**
+ * Tests for HoodieMultiTableServicesMain
+ * @see HoodieMultiTableServicesMain
+ */
 class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implements SparkProvider {
 
   private static final Logger LOG = LoggerFactory.getLogger(ArchiveTask.class);
@@ -147,7 +151,7 @@ class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implement
         LOG.info("Shutdown the table services");
         main.cancel();
       } catch (InterruptedException e) {
-        //
+        LOG.warn("InterruptedException: ", e);
       }
     }).start();
     main.startServices();
@@ -248,7 +252,7 @@ class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implement
 
   private HoodieMultiTableServicesMain.Config getHoodieMultiServiceConfig() {
     HoodieMultiTableServicesMain.Config cfg = new HoodieMultiTableServicesMain.Config();
-    cfg.autoDiscovering = true;
+    cfg.autoDiscovery = true;
     cfg.enableCompaction = true;
     cfg.enableClustering = true;
     cfg.enableClean = true;

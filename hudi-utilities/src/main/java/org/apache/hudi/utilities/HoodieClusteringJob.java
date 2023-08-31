@@ -76,6 +76,13 @@ public class HoodieClusteringJob {
     this.jsc = jsc;
     this.props = props;
     this.metaClient = UtilHelpers.createMetaClient(jsc, cfg.basePath, true);
+    // Disable async cleaning, will trigger synchronous cleaning manually.
+    this.props.put(HoodieCleanConfig.ASYNC_CLEAN.key(), false);
+    this.metaClient = UtilHelpers.createMetaClient(jsc, cfg.basePath, true);
+    if (this.metaClient.getTableConfig().isMetadataTableAvailable()) {
+      // add default lock config options if MDT is enabled.
+      UtilHelpers.addLockOptions(cfg.basePath, this.props);
+    }
   }
 
   private TypedProperties readConfigFromFileSystem(JavaSparkContext jsc, Config cfg) {

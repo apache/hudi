@@ -1,20 +1,20 @@
 /*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- *  * Licensed to the Apache Software Foundation (ASF) under one or more
- *  * contributor license agreements.  See the NOTICE file distributed with
- *  * this work for additional information regarding copyright ownership.
- *  * The ASF licenses this file to You under the Apache License, Version 2.0
- *  * (the "License"); you may not use this file except in compliance with
- *  * the License.  You may obtain a copy of the License at
- *  *
- *  *    http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  * Unless required by applicable law or agreed to in writing, software
- *  * distributed under the License is distributed on an "AS IS" BASIS,
- *  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  * See the License for the specific language governing permissions and
- *  * limitations under the License.
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 package org.apache.hudi.utilities.multitable;
@@ -38,9 +38,8 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.StringJoiner;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -49,8 +48,9 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.utilities.multitable.MultiTableServiceUtils.Constants.LOCAL_SPARK_MASTER;
-
+/**
+ * Main function for executing multi-table services
+ */
 public class HoodieMultiTableServicesMain {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieStreamer.class);
   final Config cfg;
@@ -109,14 +109,14 @@ public class HoodieMultiTableServicesMain {
   public void startServices() throws ExecutionException, InterruptedException {
     LOG.info("StartServices Config: " + cfg);
     List<String> tablePaths;
-    if (cfg.autoDiscovering) {
+    if (cfg.autoDiscovery) {
       // We support defining multi base paths
       tablePaths = cfg.basePath.stream()
           .filter(this::pathExists)
           .flatMap(p -> MultiTableServiceUtils.findHoodieTablesUnderPath(jsc, p).stream())
           .collect(Collectors.toList());
     } else {
-      tablePaths = MultiTableServiceUtils.getTablesToBeIngestedFromProps(props);
+      tablePaths = MultiTableServiceUtils.getTablesToBeServedFromProps(props);
     }
     LOG.info("All table paths: " + String.join(",", tablePaths));
     if (cfg.batch) {
@@ -148,8 +148,8 @@ public class HoodieMultiTableServicesMain {
         required = true, splitter = IdentitySplitter.class)
     public List<String> basePath = Collections.emptyList();
 
-    @Parameter(names = {"--auto", "-a"}, description = "Whether to discover hudi tables in the base path")
-    public boolean autoDiscovering = false;
+    @Parameter(names = {"--auto-discovery", "-a"}, description = "Whether to discover hudi tables in the base path")
+    public boolean autoDiscovery = false;
 
     @Parameter(names = {"--parallelism"}, description = "Parallelism for hoodie table service")
     public int parallelism = 200;
@@ -194,6 +194,12 @@ public class HoodieMultiTableServicesMain {
         + "Set \"scheduleAndExecute\" means make a clustering plan first and execute that plan immediately")
     public String clusteringRunningMode = HoodieCompactor.SCHEDULE_AND_EXECUTE;
 
+    @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master")
+    public String sparkMaster;
+
+    @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use")
+    public String sparkMemory = null;
+
     @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
         + "hoodie client for table service")
     public String propsFilePath = null;
@@ -205,27 +211,28 @@ public class HoodieMultiTableServicesMain {
 
     @Override
     public String toString() {
-      return "Config{"
-          + "basePath=" + basePath
-          + ", autoDiscovering=" + autoDiscovering
-          + ", parallelism=" + parallelism
-          + ", batch=" + batch
-          + ", scheduleDelay=" + scheduleDelay
-          + ", retry=" + retry
-          + ", poolSize=" + poolSize
-          + ", appName='" + appName + '\''
-          + ", help=" + help
-          + ", enableCompaction=" + enableCompaction
-          + ", enableClustering=" + enableClustering
-          + ", enableClean=" + enableClean
-          + ", enableArchive=" + enableArchive
-          + ", compactionRunningMode='" + compactionRunningMode + '\''
-          + ", clusteringRunningMode='" + clusteringRunningMode + '\''
-          + ", propsFilePath='" + propsFilePath + '\''
-          + ", configs=" + configs
-          + '}';
+      return new StringJoiner(", ", Config.class.getSimpleName() + "[", "]")
+          .add("basePath=" + basePath)
+          .add("autoDiscovery=" + autoDiscovery)
+          .add("parallelism=" + parallelism)
+          .add("batch=" + batch)
+          .add("scheduleDelay=" + scheduleDelay)
+          .add("retry=" + retry)
+          .add("poolSize=" + poolSize)
+          .add("appName='" + appName + "'")
+          .add("help=" + help)
+          .add("enableCompaction=" + enableCompaction)
+          .add("enableClustering=" + enableClustering)
+          .add("enableClean=" + enableClean)
+          .add("enableArchive=" + enableArchive)
+          .add("compactionRunningMode='" + compactionRunningMode + "'")
+          .add("clusteringRunningMode='" + clusteringRunningMode + "'")
+          .add("sparkMaster='" + sparkMaster + "'")
+          .add("sparkMemory='" + sparkMemory + "'")
+          .add("propsFilePath='" + propsFilePath + "'")
+          .add("configs=" + configs)
+          .toString();
     }
-
   }
 
   public static void main(String[] args) {
@@ -235,8 +242,7 @@ public class HoodieMultiTableServicesMain {
       cmd.usage();
       System.exit(1);
     }
-    Map<String, String> config = new HashMap<>();
-    JavaSparkContext jsc = UtilHelpers.buildSparkContext(cfg.appName, LOCAL_SPARK_MASTER, config);
+    JavaSparkContext jsc = UtilHelpers.buildSparkContext(cfg.appName, cfg.sparkMaster, cfg.sparkMemory);
     try {
       new HoodieMultiTableServicesMain(jsc, cfg).startServices();
     } catch (Throwable throwable) {
