@@ -55,9 +55,9 @@ public class KeyGenUtils {
   /**
    * Infers the key generator type based on the record key and partition fields.
    * <p>
-   * (1) partition field is empty: {@link KeyGeneratorType#NON_PARTITION};
-   * (2) Only one partition field and one record key field: {@link KeyGeneratorType#SIMPLE};
-   * (3) More than one partition and/or record key fields: {@link KeyGeneratorType#COMPLEX}.
+   * (1) partition field is empty: {@link KeyGeneratorType#NON_PARTITION_KEYGEN};
+   * (2) Only one partition field and one record key field: {@link KeyGeneratorType#SIMPLE_KEYGEN};
+   * (3) More than one partition and/or record key fields: {@link KeyGeneratorType#COMPLEX_KEYGEN}.
    *
    * @param recordsKeyFields Record key field list.
    * @param partitionFields  Partition field list.
@@ -73,11 +73,11 @@ public class KeyGenUtils {
         int numPartFields = partitionFields.split(",").length;
         int numRecordKeyFields = recordsKeyFields.get().split(",").length;
         if (numPartFields == 1 && numRecordKeyFields == 1) {
-          return KeyGeneratorType.SIMPLE;
+          return KeyGeneratorType.SIMPLE_KEYGEN;
         }
-        return KeyGeneratorType.COMPLEX;
+        return KeyGeneratorType.COMPLEX_KEYGEN;
       }
-      return KeyGeneratorType.NON_PARTITION;
+      return KeyGeneratorType.NON_PARTITION_KEYGEN;
     }
   }
 
@@ -86,11 +86,11 @@ public class KeyGenUtils {
     if (!StringUtils.isNullOrEmpty(partitionFields)) {
       int numPartFields = partitionFields.split(",").length;
       if (numPartFields == 1) {
-        return KeyGeneratorType.SIMPLE;
+        return KeyGeneratorType.SIMPLE_KEYGEN;
       }
-      return KeyGeneratorType.COMPLEX;
+      return KeyGeneratorType.COMPLEX_KEYGEN;
     }
-    return KeyGeneratorType.NON_PARTITION;
+    return KeyGeneratorType.NON_PARTITION_KEYGEN;
   }
 
   /**

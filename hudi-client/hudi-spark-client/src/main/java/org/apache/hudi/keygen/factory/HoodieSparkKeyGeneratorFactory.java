@@ -102,17 +102,17 @@ public class HoodieSparkKeyGeneratorFactory {
    */
   public static String getKeyGeneratorClassNameFromType(KeyGeneratorType type) {
     switch (type) {
-      case SIMPLE:
+      case SIMPLE_KEYGEN:
         return SimpleKeyGenerator.class.getName();
-      case COMPLEX:
+      case COMPLEX_KEYGEN:
         return ComplexKeyGenerator.class.getName();
-      case TIMESTAMP:
+      case TIMESTAMP_KEYGEN:
         return TimestampBasedKeyGenerator.class.getName();
-      case CUSTOM:
+      case CUSTOM_KEYGEN:
         return CustomKeyGenerator.class.getName();
-      case NON_PARTITION:
+      case NON_PARTITION_KEYGEN:
         return NonpartitionedKeyGenerator.class.getName();
-      case GLOBAL_DELETE:
+      case GLOBAL_DELETE_KEYGEN:
         return GlobalDeleteKeyGenerator.class.getName();
       default:
         throw new HoodieKeyGeneratorException("Unsupported keyGenerator Type " + type);

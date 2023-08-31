@@ -48,8 +48,8 @@ public class TestCreateKeyGeneratorByTypeWithFactory {
   private TypedProperties props;
 
   private static Stream<Arguments> configParams() {
-    String[] types = {KeyGeneratorType.SIMPLE.name(), KeyGeneratorType.TIMESTAMP.name(), KeyGeneratorType.COMPLEX.name(),
-        KeyGeneratorType.CUSTOM.name(), KeyGeneratorType.NON_PARTITION.name(), KeyGeneratorType.GLOBAL_DELETE.name()};
+    String[] types = {KeyGeneratorType.SIMPLE_KEYGEN.name(), KeyGeneratorType.TIMESTAMP_KEYGEN.name(), KeyGeneratorType.COMPLEX_KEYGEN.name(),
+        KeyGeneratorType.CUSTOM_KEYGEN.name(), KeyGeneratorType.NON_PARTITION_KEYGEN.name(), KeyGeneratorType.GLOBAL_DELETE_KEYGEN.name()};
     return Stream.of(types).map(Arguments::of);
   }
 
@@ -79,22 +79,22 @@ public class TestCreateKeyGeneratorByTypeWithFactory {
 
     KeyGenerator keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
     switch (keyType) {
-      case SIMPLE:
+      case SIMPLE_KEYGEN:
         Assertions.assertEquals(SimpleKeyGenerator.class.getName(), keyGenerator.getClass().getName());
         return;
-      case COMPLEX:
+      case COMPLEX_KEYGEN:
         Assertions.assertEquals(ComplexKeyGenerator.class.getName(), keyGenerator.getClass().getName());
         return;
-      case TIMESTAMP:
+      case TIMESTAMP_KEYGEN:
         Assertions.assertEquals(TimestampBasedKeyGenerator.class.getName(), keyGenerator.getClass().getName());
         return;
-      case CUSTOM:
+      case CUSTOM_KEYGEN:
         Assertions.assertEquals(CustomKeyGenerator.class.getName(), keyGenerator.getClass().getName());
         return;
-      case NON_PARTITION:
+      case NON_PARTITION_KEYGEN:
         Assertions.assertEquals(NonpartitionedKeyGenerator.class.getName(), keyGenerator.getClass().getName());
         return;
-      case GLOBAL_DELETE:
+      case GLOBAL_DELETE_KEYGEN:
         Assertions.assertEquals(GlobalDeleteKeyGenerator.class.getName(), keyGenerator.getClass().getName());
         return;
       default:

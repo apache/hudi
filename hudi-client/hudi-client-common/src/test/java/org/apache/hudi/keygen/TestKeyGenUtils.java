@@ -34,22 +34,22 @@ public class TestKeyGenUtils {
   @Test
   public void testInferKeyGeneratorType() {
     assertEquals(
-        KeyGeneratorType.SIMPLE,
+        KeyGeneratorType.SIMPLE_KEYGEN,
         KeyGenUtils.inferKeyGeneratorType(Option.of("col1"), "partition1"));
     assertEquals(
-        KeyGeneratorType.COMPLEX,
+        KeyGeneratorType.COMPLEX_KEYGEN,
         KeyGenUtils.inferKeyGeneratorType(Option.of("col1"), "partition1,partition2"));
     assertEquals(
-        KeyGeneratorType.COMPLEX,
+        KeyGeneratorType.COMPLEX_KEYGEN,
         KeyGenUtils.inferKeyGeneratorType(Option.of("col1,col2"), "partition1"));
     assertEquals(
-        KeyGeneratorType.COMPLEX,
+        KeyGeneratorType.COMPLEX_KEYGEN,
         KeyGenUtils.inferKeyGeneratorType(Option.of("col1,col2"), "partition1,partition2"));
     assertEquals(
-        KeyGeneratorType.NON_PARTITION,
+        KeyGeneratorType.NON_PARTITION_KEYGEN,
         KeyGenUtils.inferKeyGeneratorType(Option.of("col1,col2"), ""));
     assertEquals(
-        KeyGeneratorType.NON_PARTITION,
+        KeyGeneratorType.NON_PARTITION_KEYGEN,
         KeyGenUtils.inferKeyGeneratorType(Option.of("col1,col2"), null));
   }
 

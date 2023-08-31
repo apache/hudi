@@ -20,10 +20,14 @@ package org.apache.hudi.keygen.constant;
 
 import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
+import org.apache.hudi.common.config.HoodieConfig;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+
+import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_CLASS_NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_TYPE;
 
 /**
  * Types of {@link org.apache.hudi.keygen.KeyGenerator}.
@@ -33,31 +37,92 @@ import java.util.List;
 public enum KeyGeneratorType {
 
   @EnumFieldDescription("Simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.")
-  SIMPLE,
+  SIMPLE_KEYGEN("org.apache.hudi.keygen.SimpleKeyGenerator"),
+  @EnumFieldDescription("Simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.")
+  SIMPLE_AVRO_KEYGEN("org.apache.hudi.keygen.SimpleAvroKeyGenerator"),
 
   @EnumFieldDescription("Complex key generator, which takes names of fields to be used for recordKey and partitionPath as configs.")
-  COMPLEX,
+  COMPLEX_KEYGEN("org.apache.hudi.keygen.ComplexKeyGenerator"),
+  @EnumFieldDescription("Complex key generator, which takes names of fields to be used for recordKey and partitionPath as configs.")
+  COMPLEX_AVRO_KEYGEN("org.apache.hudi.keygen.ComplexAvroKeyGenerator"),
 
   @EnumFieldDescription("Timestamp-based key generator, that relies on timestamps for partitioning field. Still picks record key by name.")
-  TIMESTAMP,
+  TIMESTAMP_KEYGEN("org.apache.hudi.keygen.TimestampBasedKeyGenerator"),
+  @EnumFieldDescription("Timestamp-based key generator, that relies on timestamps for partitioning field. Still picks record key by name.")
+  TIMESTAMP_AVRO_KEYGEN("org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator"),
 
   @EnumFieldDescription("This is a generic implementation type of KeyGenerator where users can configure record key as a single field or "
       + " a combination of fields. Similarly partition path can be configured to have multiple fields or only one field. "
       + " This KeyGenerator expects value for prop \"hoodie.datasource.write.partitionpath.field\" in a specific format. "
       + " For example: "
       + " properties.put(\"hoodie.datasource.write.partitionpath.field\", \"field1:PartitionKeyType1,field2:PartitionKeyType2\").")
-  CUSTOM,
+  CUSTOM_KEYGEN("org.apache.hudi.keygen.CustomKeyGenerator"),
+  @EnumFieldDescription("This is a generic implementation type of KeyGenerator where users can configure record key as a single field or "
+      + " a combination of fields. Similarly partition path can be configured to have multiple fields or only one field. "
+      + " This KeyGenerator expects value for prop \"hoodie.datasource.write.partitionpath.field\" in a specific format. "
+      + " For example: "
+      + " properties.put(\"hoodie.datasource.write.partitionpath.field\", \"field1:PartitionKeyType1,field2:PartitionKeyType2\").")
+  CUSTOM_AVRO_KEYGEN("org.apache.hudi.keygen.CustomAvroKeyGenerator"),
 
   @EnumFieldDescription("Simple Key generator for non-partitioned tables.")
-  NON_PARTITION,
+  NON_PARTITION_KEYGEN("org.apache.hudi.keygen.NonpartitionedKeyGenerator"),
+  @EnumFieldDescription("Simple Key generator for non-partitioned tables.")
+  NON_PARTITION_AVRO_KEYGEN("org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator"),
 
   @EnumFieldDescription("Key generator for deletes using global indices.")
-  GLOBAL_DELETE;
+  GLOBAL_DELETE_KEYGEN("org.apache.hudi.keygen.GlobalDeleteKeyGenerator"),
+  @EnumFieldDescription("Key generator for deletes using global indices.")
+  GLOBAL_DELETE_AVRO_KEYGEN("org.apache.hudi.keygen.GlobalAvroDeleteKeyGenerator"),
+
+  @EnumFieldDescription("Automatic record key generation.")
+  AUTO_RECORD_KEYGEN("org.apache.hudi.keygen.AutoRecordGenWrapperKeyGenerator"),
+  @EnumFieldDescription("Automatic record key generation.")
+  AUTO_RECORD_AVRO_KEYGEN("org.apache.hudi.keygen.AutoRecordGenWrapperAvroKeyGenerator"),
+
+  @EnumFieldDescription("A KeyGenerator which use the uuid as the record key.")
+  UUID_KEYGEN("org.apache.spark.sql.hudi.command.UuidKeyGenerator"),
+
+  @EnumFieldDescription("Custom key generator for the Hudi table metadata.")
+  HOODIE_METADATA_KEYGEN("org.apache.hudi.metadata.HoodieTableMetadataKeyGenerator"),
+
+  @EnumFieldDescription("Meant to be used internally for the spark sql MERGE INTO command.")
+  MERGE_INTO_KEYGEN("org.apache.spark.sql.hudi.command.MergeIntoKeyGenerator"),
+
+  @EnumFieldDescription("Custom spark-sql specific KeyGenerator overriding behavior handling TimestampType partition values.")
+  SQL_KEYGEN("org.apache.spark.sql.hudi.command.SqlKeyGenerator");
+
+  private final String className;
+
+  KeyGeneratorType(String className) {
+    this.className = className;
+  }
+
+  public String getClassName() {
+    return className;
+  }
+
+  public static KeyGeneratorType fromClassName(String className) {
+    for (KeyGeneratorType type : KeyGeneratorType.values()) {
+      if (type.getClassName().equals(className)) {
+        return type;
+      }
+    }
+    throw new IllegalArgumentException("No KeyGeneratorType found for class name: " + className);
+  }
 
   public static List<String> getNames() {
     List<String> names = new ArrayList<>(KeyGeneratorType.values().length);
     Arrays.stream(KeyGeneratorType.values())
         .forEach(x -> names.add(x.name()));
     return names;
+  }
+
+  public static String getKeyGeneratorClassName(HoodieConfig config) {
+    if (config.contains(KEY_GENERATOR_CLASS_NAME)) {
+      return config.getString(KEY_GENERATOR_CLASS_NAME);
+    } else if (config.contains(KEY_GENERATOR_TYPE)) {
+      return KeyGeneratorType.valueOf(config.getString(KEY_GENERATOR_TYPE)).getClassName();
+    }
+    return null;
   }
 }

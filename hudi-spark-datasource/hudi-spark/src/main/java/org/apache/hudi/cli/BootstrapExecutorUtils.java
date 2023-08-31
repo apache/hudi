@@ -251,8 +251,8 @@ public class BootstrapExecutorUtils implements Serializable {
             URL_ENCODE_PARTITIONING.key(),
             Boolean.parseBoolean(URL_ENCODE_PARTITIONING.defaultValue())))
         .setCommitTimezone(HoodieTimelineTimeZone.valueOf(props.getString(
-                TIMELINE_TIMEZONE.key(),
-                String.valueOf(TIMELINE_TIMEZONE.defaultValue()))))
+            TIMELINE_TIMEZONE.key(),
+            String.valueOf(TIMELINE_TIMEZONE.defaultValue()))))
         .setPartitionMetafileUseBaseFormat(props.getBoolean(
             PARTITION_METAFILE_USE_BASE_FORMAT.key(),
             PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()))
@@ -268,6 +268,8 @@ public class BootstrapExecutorUtils implements Serializable {
     if (StringUtils.nonEmpty(props.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), null))) {
       keyGenClass = props.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key());
     } else if (StringUtils.nonEmpty(props.getString(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), null))) {
+      keyGenClass = HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName(props);
+    } else if (StringUtils.nonEmpty(props.getString(HoodieTableConfig.KEY_GENERATOR_TYPE.key(), null))) {
       keyGenClass = HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName(props);
     } else {
       keyGenClass = props.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), SimpleKeyGenerator.class.getName());

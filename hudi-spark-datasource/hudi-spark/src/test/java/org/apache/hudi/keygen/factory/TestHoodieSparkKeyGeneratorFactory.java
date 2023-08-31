@@ -47,22 +47,22 @@ public class TestHoodieSparkKeyGeneratorFactory {
   @Test
   public void testInferKeyGeneratorTypeFromWriteConfig() {
     assertEquals(
-        KeyGeneratorType.NON_PARTITION,
+        KeyGeneratorType.NON_PARTITION_KEYGEN,
         HoodieSparkKeyGeneratorFactory.inferKeyGeneratorTypeFromWriteConfig(new TypedProperties()));
 
     TypedProperties props = getCommonProps();
     assertEquals(
-        KeyGeneratorType.SIMPLE,
+        KeyGeneratorType.SIMPLE_KEYGEN,
         HoodieSparkKeyGeneratorFactory.inferKeyGeneratorTypeFromWriteConfig(props));
 
     props.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key,ts");
     assertEquals(
-        KeyGeneratorType.COMPLEX,
+        KeyGeneratorType.COMPLEX_KEYGEN,
         HoodieSparkKeyGeneratorFactory.inferKeyGeneratorTypeFromWriteConfig(props));
 
     props.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "");
     assertEquals(
-        KeyGeneratorType.NON_PARTITION,
+        KeyGeneratorType.NON_PARTITION_KEYGEN,
         HoodieSparkKeyGeneratorFactory.inferKeyGeneratorTypeFromWriteConfig(props));
   }
 
@@ -71,7 +71,7 @@ public class TestHoodieSparkKeyGeneratorFactory {
     TypedProperties props = getCommonProps();
 
     // set KeyGenerator type only
-    props.put(KEYGENERATOR_TYPE.key(), KeyGeneratorType.CUSTOM.name());
+    props.put(KEYGENERATOR_TYPE.key(), KeyGeneratorType.CUSTOM_KEYGEN.name());
     KeyGenerator keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
     assertEquals(CustomKeyGenerator.class.getName(), keyGenerator.getClass().getName());
 
@@ -82,7 +82,7 @@ public class TestHoodieSparkKeyGeneratorFactory {
     assertEquals(SimpleKeyGenerator.class.getName(), keyGenerator2.getClass().getName());
 
     // set both class name and keyGenerator type
-    props.put(KEYGENERATOR_TYPE.key(), KeyGeneratorType.CUSTOM.name());
+    props.put(KEYGENERATOR_TYPE.key(), KeyGeneratorType.CUSTOM_KEYGEN.name());
     KeyGenerator keyGenerator3 = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
     // KEYGENERATOR_TYPE_PROP was overwritten by KEYGENERATOR_CLASS_PROP
     assertEquals(SimpleKeyGenerator.class.getName(), keyGenerator3.getClass().getName());

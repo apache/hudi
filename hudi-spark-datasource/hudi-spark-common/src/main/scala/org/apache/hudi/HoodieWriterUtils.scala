@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig.SPARK_SQL_MERGE_INTO_PREPPED_KEY
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
+import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.SparkKeyGenUtils
@@ -192,7 +193,7 @@ object HoodieWriterUtils {
         }
 
         val datasourceKeyGen = getOriginKeyGenerator(params)
-        val tableConfigKeyGen = tableConfig.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME)
+        val tableConfigKeyGen = KeyGeneratorType.getKeyGeneratorClassName(tableConfig)
         if (null != datasourceKeyGen && null != tableConfigKeyGen
           && datasourceKeyGen != tableConfigKeyGen) {
           diffConfigs.append(s"KeyGenerator:\t$datasourceKeyGen\t$tableConfigKeyGen\n")
@@ -228,7 +229,7 @@ object HoodieWriterUtils {
     val diffConfigs = StringBuilder.newBuilder
 
     if (null != tableConfig) {
-      val tableConfigKeyGen = tableConfig.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME)
+      val tableConfigKeyGen = KeyGeneratorType.getKeyGeneratorClassName(tableConfig)
       if (null != tableConfigKeyGen && null != datasourceKeyGen) {
         val nonPartitionedTableConfig = tableConfigKeyGen.equals(classOf[NonpartitionedKeyGenerator].getCanonicalName)
         val simpleKeyDataSourceConfig = datasourceKeyGen.equals(classOf[SimpleKeyGenerator].getCanonicalName)
@@ -256,13 +257,14 @@ object HoodieWriterUtils {
     }
   }
 
-  val sparkDatasourceConfigsToTableConfigsMap = Map(
+  private val sparkDatasourceConfigsToTableConfigsMap = Map(
     TABLE_NAME -> HoodieTableConfig.NAME,
     TABLE_TYPE -> HoodieTableConfig.TYPE,
     PRECOMBINE_FIELD -> HoodieTableConfig.PRECOMBINE_FIELD,
     PARTITIONPATH_FIELD -> HoodieTableConfig.PARTITION_FIELDS,
     RECORDKEY_FIELD -> HoodieTableConfig.RECORDKEY_FIELDS,
     PAYLOAD_CLASS_NAME -> HoodieTableConfig.PAYLOAD_CLASS_NAME,
+    PAYLOAD_TYPE -> HoodieTableConfig.PAYLOAD_TYPE,
     RECORD_MERGER_STRATEGY -> HoodieTableConfig.RECORD_MERGER_STRATEGY
   )
 

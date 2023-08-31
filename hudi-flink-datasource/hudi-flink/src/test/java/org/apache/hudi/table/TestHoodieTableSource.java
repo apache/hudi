@@ -187,7 +187,7 @@ public class TestHoodieTableSource {
     String tablePath2 = new Path(tempFile.getAbsolutePath(), "tbl2").toString();
     conf2.setString(FlinkOptions.PATH, tablePath2);
     conf2.setString(FlinkOptions.RECORD_KEY_FIELD, "uuid,name");
-    conf2.setString(FlinkOptions.KEYGEN_TYPE, "COMPLEX");
+    conf2.setString(FlinkOptions.KEYGEN_TYPE, "COMPLEX_KEYGEN");
     TestData.writeDataAsBatch(TestData.DATA_SET_INSERT, conf2);
     HoodieTableSource tableSource2 = createHoodieTableSource(conf2);
     tableSource2.applyFilters(Arrays.asList(
@@ -210,7 +210,7 @@ public class TestHoodieTableSource {
     String tablePath3 = new Path(tempFile.getAbsolutePath(), "tbl3").toString();
     conf3.setString(FlinkOptions.PATH, tablePath3);
     conf3.setString(FlinkOptions.RECORD_KEY_FIELD, "uuid,name");
-    conf3.setString(FlinkOptions.KEYGEN_TYPE, "COMPLEX");
+    conf3.setString(FlinkOptions.KEYGEN_TYPE, "COMPLEX_KEYGEN");
     TestData.writeDataAsBatch(TestData.DATA_SET_INSERT, conf3);
     HoodieTableSource tableSource3 = createHoodieTableSource(conf3);
     tableSource3.applyFilters(Collections.singletonList(createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1")));

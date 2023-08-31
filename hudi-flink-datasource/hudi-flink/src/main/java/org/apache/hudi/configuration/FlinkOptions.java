@@ -473,7 +473,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> KEYGEN_TYPE = ConfigOptions
       .key(HoodieWriteConfig.KEYGENERATOR_TYPE.key())
       .stringType()
-      .defaultValue(KeyGeneratorType.SIMPLE.name())
+      .defaultValue(KeyGeneratorType.SIMPLE_KEYGEN.name())
       .withDescription("Key generator type, that implements will extract the key out of incoming record. "
           + "**Note** This is being actively worked on. Please use "
           + "`hoodie.datasource.write.keygenerator.class` instead.");
