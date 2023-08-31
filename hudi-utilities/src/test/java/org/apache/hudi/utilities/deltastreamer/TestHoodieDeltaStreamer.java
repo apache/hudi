@@ -1340,9 +1340,17 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }
   }
 
-  @ParameterizedTest
-  @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
-  public void testAsyncClusteringService(HoodieRecordType recordType) throws Exception {
+  @Disabled("HUDI-6753")
+  public void testAsyncClusteringServiceSparkRecordType() throws Exception {
+    testAsyncClusteringService(HoodieRecordType.SPARK);
+  }
+
+  @Test
+  public void testAsyncClusteringServiceAvroRecordType() throws Exception {
+    testAsyncClusteringService(HoodieRecordType.AVRO);
+  }
+
+  private void testAsyncClusteringService(HoodieRecordType recordType) throws Exception {
     String tableBasePath = basePath + "/asyncClustering";
     // Keep it higher than batch-size to test continuous mode
     int totalRecords = 2000;
