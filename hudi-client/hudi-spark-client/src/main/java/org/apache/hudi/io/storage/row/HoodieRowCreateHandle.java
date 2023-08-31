@@ -243,7 +243,7 @@ public class HoodieRowCreateHandle implements Serializable {
     stat.setFileSizeInBytes(fileSizeInBytes);
     stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());
     for (Pair<HoodieRecordDelegate, Throwable> pair : writeStatus.getFailedRecords()) {
-      LOG.info("Failed to write {}", pair.getLeft(), pair.getRight());
+      LOG.error("Failed to write {}", pair.getLeft(), pair.getRight());
     }
     HoodieWriteStat.RuntimeStats runtimeStats = new HoodieWriteStat.RuntimeStats();
     runtimeStats.setTotalCreateTime(currTimer.endTimer());
