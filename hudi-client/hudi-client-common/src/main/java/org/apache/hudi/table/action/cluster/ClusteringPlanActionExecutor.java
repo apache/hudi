@@ -77,6 +77,13 @@ public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseActionExecutor
       return Option.empty();
     }
 
+    if (config.scheduleInlineClustering() && config.getAsyncClusterMaxCommits() > commitsSinceLastClustering) {
+      LOG.warn("Not scheduling async clustering as only " + commitsSinceLastClustering
+          + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
+          + config.getAsyncClusterMaxCommits());
+      return Option.empty();
+    }
+
     LOG.info("Generating clustering plan for table " + config.getBasePath());
     ClusteringPlanStrategy strategy = (ClusteringPlanStrategy) ReflectionUtils.loadClass(
         ClusteringPlanStrategy.checkAndGetClusteringPlanStrategy(config),
