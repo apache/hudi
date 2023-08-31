@@ -175,8 +175,8 @@ public class ITTestHoodieFlinkCompactor {
             new CompactOperator(conf))
         .setParallelism(FlinkMiniCluster.DEFAULT_PARALLELISM)
         .addSink(new CompactionCommitSink(conf))
-        .name("clean_commits")
-        .uid("uid_clean_commits")
+        .name("compaction_commit")
+        .uid("uid_compaction_commit")
         .setParallelism(1);
 
     env.execute("flink_hudi_compaction");
@@ -256,8 +256,8 @@ public class ITTestHoodieFlinkCompactor {
             new CompactOperator(conf))
         .setParallelism(FlinkMiniCluster.DEFAULT_PARALLELISM)
         .addSink(new CompactionCommitSink(conf))
-        .name("clean_commits")
-        .uid("uid_clean_commits")
+        .name("compaction_commit")
+        .uid("uid_compaction_commit")
         .setParallelism(1);
 
     env.execute("flink_hudi_compaction");

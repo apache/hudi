@@ -410,8 +410,8 @@ public class ITTestHoodieFlinkClustering {
     // keep pending clustering, not committing clustering
     dataStream
         .addSink(new DiscardingSink<>())
-        .name("clustering_commit")
-        .uid("uid_clustering_commit")
+        .name("discarding-sink")
+        .uid("uid_discarding-sink")
         .setParallelism(1);
 
     env.execute("flink_hudi_clustering");
