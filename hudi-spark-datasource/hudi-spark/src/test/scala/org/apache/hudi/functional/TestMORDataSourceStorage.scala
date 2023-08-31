@@ -138,6 +138,8 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       "hoodie.upsert.shuffle.parallelism" -> "4",
       "hoodie.bulkinsert.shuffle.parallelism" -> "2",
       "hoodie.delete.shuffle.parallelism" -> "1",
+      "hoodie.merge.small.file.group.candidates.limit" -> "0",
+      "hoodie.logfile.write.record.positions" -> "true",
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition_path",
       DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",

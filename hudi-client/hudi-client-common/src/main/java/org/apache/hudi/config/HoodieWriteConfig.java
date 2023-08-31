@@ -2052,6 +2052,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getLong(HoodieStorageConfig.LOGFILE_DATA_BLOCK_MAX_SIZE);
   }
 
+  public boolean shouldLogFileWriteRecordPositions() {
+    return getBoolean(HoodieStorageConfig.LOGFILE_WRITE_RECORD_POSITIONS);
+  }
+
   public double getParquetCompressionRatio() {
     return getDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION);
   }

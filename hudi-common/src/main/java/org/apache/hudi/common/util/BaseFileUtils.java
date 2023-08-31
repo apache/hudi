@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 
@@ -39,6 +40,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Utils for Hudi base file.
@@ -69,12 +71,14 @@ public abstract class BaseFileUtils {
 
   /**
    * Read the rowKey list from the given data file.
+   *
    * @param filePath      The data file path
    * @param configuration configuration to build fs object
    * @return Set Set of row keys
    */
   public Set<String> readRowKeys(Configuration configuration, Path filePath) {
-    return filterRowKeys(configuration, filePath, new HashSet<>());
+    return filterRowKeys(configuration, filePath, new HashSet<>())
+        .stream().map(Pair::getKey).collect(Collectors.toSet());
   }
 
   /**
@@ -162,21 +166,23 @@ public abstract class BaseFileUtils {
 
   /**
    * Read the rowKey list matching the given filter, from the given data file.
-   * If the filter is empty, then this will return all the row keys.
+   * If the filter is empty, then this will return all the row keys and corresponding positions.
+   *
    * @param filePath      The data file path
    * @param configuration configuration to build fs object
    * @param filter        record keys filter
-   * @return Set Set of row keys matching candidateRecordKeys
+   * @return Set Set of pairs of row key and position matching candidateRecordKeys
    */
-  public abstract Set<String> filterRowKeys(Configuration configuration, Path filePath, Set<String> filter);
+  public abstract Set<Pair<String, Long>> filterRowKeys(Configuration configuration, Path filePath, Set<String> filter);
 
   /**
-   * Fetch {@link HoodieKey}s from the given data file.
+   * Fetch {@link HoodieKey}s with positions from the given data file.
+   *
    * @param configuration configuration to build fs object
    * @param filePath      The data file path
-   * @return {@link List} of {@link HoodieKey}s fetched from the data file
+   * @return {@link List} of pairs of {@link HoodieKey} and position fetched from the data file
    */
-  public abstract List<HoodieKey> fetchHoodieKeys(Configuration configuration, Path filePath);
+  public abstract List<Pair<HoodieKey, Long>> fetchHoodieKeysAndPositions(Configuration configuration, Path filePath);
 
   /**
    * Provides a closable iterator for reading the given data file.
@@ -196,13 +202,14 @@ public abstract class BaseFileUtils {
   public abstract ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, Path filePath);
 
   /**
-   * Fetch {@link HoodieKey}s from the given data file.
-   * @param configuration configuration to build fs object
-   * @param filePath      The data file path
+   * Fetch {@link HoodieKey}s with positions from the given data file.
+   *
+   * @param configuration   configuration to build fs object
+   * @param filePath        The data file path
    * @param keyGeneratorOpt instance of KeyGenerator.
-   * @return {@link List} of {@link HoodieKey}s fetched from the data file
+   * @return {@link List} of pairs of {@link HoodieKey} and position fetched from the data file
    */
-  public abstract List<HoodieKey> fetchHoodieKeys(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt);
+  public abstract List<Pair<HoodieKey, Long>> fetchHoodieKeysAndPositions(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt);
 
   /**
    * Read the Avro schema of the data file.

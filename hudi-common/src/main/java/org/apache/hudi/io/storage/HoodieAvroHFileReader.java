@@ -24,10 +24,12 @@ import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -190,7 +192,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
    * @return Subset of candidate keys that are available
    */
   @Override
-  public Set<String> filterRowKeys(Set<String> candidateRowKeys) {
+  public Set<Pair<String, Long>> filterRowKeys(Set<String> candidateRowKeys) {
     checkState(candidateRowKeys instanceof TreeSet,
         String.format("HFile reader expects a TreeSet as iterating over ordered keys is more performant, got (%s)", candidateRowKeys.getClass().getSimpleName()));
 
@@ -200,14 +202,18 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
         // by default, to minimize amount of traffic to the underlying storage
         sharedScanner = Option.of(getHFileScanner(getSharedHFileReader(), true));
       }
-      return candidateRowKeys.stream().filter(k -> {
-        try {
-          return isKeyAvailable(k, sharedScanner.get());
-        } catch (IOException e) {
-          LOG.error("Failed to check key availability: " + k);
-          return false;
-        }
-      }).collect(Collectors.toSet());
+      return candidateRowKeys.stream()
+          .filter(k -> {
+            try {
+              return isKeyAvailable(k, sharedScanner.get());
+            } catch (IOException e) {
+              LOG.error("Failed to check key availability: " + k);
+              return false;
+            }
+          })
+          // Record position is not supported for HFile
+          .map(key -> Pair.of(key, HoodieRecordLocation.INVALID_POSITION))
+          .collect(Collectors.toSet());
     }
   }
 
