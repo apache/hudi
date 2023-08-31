@@ -93,7 +93,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
                               Map<HeaderMetadataType, String> header,
                               Compression.Algorithm compressionAlgorithm,
                               Path pathForReader) {
-    super(records, header, new HashMap<>(), HoodieAvroHFileReader.KEY_FIELD_NAME);
+    super(records, false, header, new HashMap<>(), HoodieAvroHFileReader.KEY_FIELD_NAME);
     this.compressionAlgorithm = Option.of(compressionAlgorithm);
     this.pathForReader = pathForReader;
   }

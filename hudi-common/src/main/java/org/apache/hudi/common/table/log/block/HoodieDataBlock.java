@@ -27,6 +27,8 @@ import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FSDataInputStream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -51,6 +53,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  *   3. Actual serialized content of the records
  */
 public abstract class HoodieDataBlock extends HoodieLogBlock {
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieDataBlock.class);
 
   // TODO rebase records/content to leverage Either to warrant
   //      that they are mutex (used by read/write flows respectively)
@@ -64,6 +67,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   private final boolean enablePointLookups;
 
   protected Schema readerSchema;
+  protected final boolean writeRecordPositions;
 
   //  Map of string schema to parsed schema.
   private static ConcurrentHashMap<String, Schema> schemaMap = new ConcurrentHashMap<>();
@@ -72,14 +76,31 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
    * NOTE: This ctor is used on the write-path (ie when records ought to be written into the log)
    */
   public HoodieDataBlock(List<HoodieRecord> records,
+                         boolean writeRecordPositions,
                          Map<HeaderMetadataType, String> header,
                          Map<HeaderMetadataType, String> footer,
                          String keyFieldName) {
     super(header, footer, Option.empty(), Option.empty(), null, false);
+    if (writeRecordPositions) {
+      records.sort((o1, o2) -> {
+        long v1 = o1.getCurrentPosition();
+        long v2 = o2.getCurrentPosition();
+        return Long.compare(v1, v2);
+      });
+      if (records.get(0).getCurrentPosition() > -1L) {
+        addRecordPositionsToHeader(
+            records.stream().map(HoodieRecord::getCurrentPosition).collect(Collectors.toSet()),
+            records.size());
+      } else {
+        LOG.warn("There are records without valid positions. "
+            + "Skip writing record positions to the data block header.");
+      }
+    }
     this.records = Option.of(records);
     this.keyFieldName = keyFieldName;
     // If no reader-schema has been provided assume writer-schema as one
     this.readerSchema = getWriterSchema(super.getLogBlockHeader());
+    this.writeRecordPositions = writeRecordPositions;
     this.enablePointLookups = false;
   }
 
@@ -96,6 +117,8 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
                             String keyFieldName,
                             boolean enablePointLookups) {
     super(headers, footer, blockContentLocation, content, inputStream, readBlockLazily);
+    // Setting `writeRecordPositions` to false as this constructor is only used by the reader
+    this.writeRecordPositions = false;
     this.records = Option.empty();
     this.keyFieldName = keyFieldName;
     // If no reader-schema has been provided assume writer-schema as one

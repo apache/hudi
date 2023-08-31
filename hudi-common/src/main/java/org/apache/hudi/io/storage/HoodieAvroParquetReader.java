@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
+import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -85,7 +86,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
   }
 
   @Override
-  public Set<String> filterRowKeys(Set<String> candidateRowKeys) {
+  public Set<Pair<String, Long>> filterRowKeys(Set<String> candidateRowKeys) {
     return parquetUtils.filterRowKeys(conf, path, candidateRowKeys);
   }
 

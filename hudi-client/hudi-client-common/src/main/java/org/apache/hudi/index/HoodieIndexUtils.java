@@ -173,18 +173,18 @@ public class HoodieIndexUtils {
    *
    * @param filePath            - File to filter keys from
    * @param candidateRecordKeys - Candidate keys to filter
-   * @return List of candidate keys that are available in the file
+   * @return List of pairs of candidate keys and positions that are available in the file
    */
-  public static List<String> filterKeysFromFile(Path filePath, List<String> candidateRecordKeys,
-                                                Configuration configuration) throws HoodieIndexException {
+  public static List<Pair<String, Long>> filterKeysFromFile(Path filePath, List<String> candidateRecordKeys,
+                                                            Configuration configuration) throws HoodieIndexException {
     ValidationUtils.checkArgument(FSUtils.isBaseFile(filePath));
-    List<String> foundRecordKeys = new ArrayList<>();
+    List<Pair<String, Long>> foundRecordKeys = new ArrayList<>();
     try (HoodieFileReader fileReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
         .getFileReader(configuration, filePath)) {
       // Load all rowKeys from the file, to double-confirm
       if (!candidateRecordKeys.isEmpty()) {
         HoodieTimer timer = HoodieTimer.start();
-        Set<String> fileRowKeys = fileReader.filterRowKeys(new TreeSet<>(candidateRecordKeys));
+        Set<Pair<String, Long>> fileRowKeys = fileReader.filterRowKeys(new TreeSet<>(candidateRecordKeys));
         foundRecordKeys.addAll(fileRowKeys);
         LOG.info(String.format("Checked keys against file %s, in %d ms. #candidates (%d) #found (%d)", filePath,
             timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size()));

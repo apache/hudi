@@ -60,6 +60,7 @@ import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.CorruptedLogFileException;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -1395,7 +1396,11 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
             .collect(Collectors.toList());
 
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "102");
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deletedRecords.toArray(new DeleteRecord[50]), header);
+    List<Pair<DeleteRecord, Long>> deleteRecordList = new ArrayList<>();
+    for (DeleteRecord dr : deletedRecords) {
+      deleteRecordList.add(Pair.of(dr, -1L));
+    }
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, false, header);
     writer.appendBlock(deleteBlock);
 
     List<String> allLogFiles =
@@ -1533,9 +1538,12 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .collect(Collectors.toList()).subList(0, 50);
 
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "102");
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deletedKeys.stream().map(deletedKey ->
-            DeleteRecord.create(deletedKey.getRecordKey(), deletedKey.getPartitionPath()))
-        .collect(Collectors.toList()).toArray(new DeleteRecord[0]), header);
+    List<Pair<DeleteRecord, Long>> deleteRecordList = new ArrayList<>();
+    for (HoodieKey deletedKey : deletedKeys) {
+      deleteRecordList.add(Pair.of(
+          DeleteRecord.create(deletedKey.getRecordKey(), deletedKey.getPartitionPath()), -1L));
+    }
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, false, header);
     writer.appendBlock(deleteBlock);
 
     List<String> allLogFiles =
@@ -1553,10 +1561,12 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     // Recreate the delete block which should have been removed from consideration because of rollback block next to it.
     Map<HoodieLogBlock.HeaderMetadataType, String> deleteBlockHeader = new HashMap<>();
     deleteBlockHeader.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "102");
-    deleteBlock = new HoodieDeleteBlock(
-        deletedKeys.stream().map(deletedKey ->
-                DeleteRecord.create(deletedKey.getRecordKey(), deletedKey.getPartitionPath()))
-            .collect(Collectors.toList()).toArray(new DeleteRecord[0]), deleteBlockHeader);
+    deleteRecordList = new ArrayList<>();
+    for (HoodieKey deletedKey : deletedKeys) {
+      deleteRecordList.add(Pair.of(
+          DeleteRecord.create(deletedKey.getRecordKey(), deletedKey.getPartitionPath()), -1L));
+    }
+    deleteBlock = new HoodieDeleteBlock(deleteRecordList, false, deleteBlockHeader);
     writer.appendBlock(deleteBlock);
 
     FileCreateUtils.createDeltaCommit(basePath, "102", fs);
@@ -1644,16 +1654,24 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .collect(Collectors.toList());
 
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "102");
-    HoodieDeleteBlock deleteBlock1 = new HoodieDeleteBlock(deleteRecords1.toArray(new DeleteRecord[0]), header);
+
+    List<Pair<DeleteRecord, Long>> deleteRecordList = new ArrayList<>();
+    for (DeleteRecord dr : deleteRecords1) {
+      deleteRecordList.add(Pair.of(dr, -1L));
+    }
+    HoodieDeleteBlock deleteBlock1 = new HoodieDeleteBlock(deleteRecordList, false, header);
     writer.appendBlock(deleteBlock1);
 
     // Delete another 10 keys with -1 as orderingVal.
     // The deletion should not work
 
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "103");
-    HoodieDeleteBlock deleteBlock2 = new HoodieDeleteBlock(copyOfRecords1.subList(10, 20).stream()
-        .map(s -> (DeleteRecord.create(((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString(),
-            ((GenericRecord) s).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString(), -1))).toArray(DeleteRecord[]::new), header);
+    deleteRecordList = copyOfRecords1.subList(10, 20).stream()
+        .map(s -> Pair.of(DeleteRecord.create(((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString(),
+            ((GenericRecord) s).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString(), -1), -1L))
+        .collect(Collectors.toList());
+
+    HoodieDeleteBlock deleteBlock2 = new HoodieDeleteBlock(deleteRecordList, false, header);
     writer.appendBlock(deleteBlock2);
 
     // Delete another 10 keys with +1 as orderingVal.
@@ -1664,7 +1682,11 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .collect(Collectors.toList());
 
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "104");
-    HoodieDeleteBlock deleteBlock3 = new HoodieDeleteBlock(deletedRecords3.toArray(new DeleteRecord[0]), header);
+    deleteRecordList.clear();
+    for (DeleteRecord dr : deletedRecords3) {
+      deleteRecordList.add(Pair.of(dr, -1L));
+    }
+    HoodieDeleteBlock deleteBlock3 = new HoodieDeleteBlock(deleteRecordList, false, header);
     writer.appendBlock(deleteBlock3);
 
     List<String> allLogFiles =
@@ -1760,7 +1782,11 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
             ((GenericRecord) s).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString())))
         .collect(Collectors.toList()).subList(0, 50);
 
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecords.toArray(new DeleteRecord[50]), header);
+    List<Pair<DeleteRecord, Long>> deleteRecordList = new ArrayList<>();
+    for (DeleteRecord dr : deleteRecords) {
+      deleteRecordList.add(Pair.of(dr, -1L));
+    }
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, false, header);
     writer.appendBlock(deleteBlock);
 
     FileCreateUtils.createDeltaCommit(basePath, "100", fs);
@@ -1817,7 +1843,12 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .map(s -> (DeleteRecord.create(((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString(),
             ((GenericRecord) s).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString())))
         .collect(Collectors.toList()).subList(0, 50);
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecords.toArray(new DeleteRecord[50]), header);
+
+    List<Pair<DeleteRecord, Long>> deleteRecordList = new ArrayList<>();
+    for (DeleteRecord dr : deleteRecords) {
+      deleteRecordList.add(Pair.of(dr, -1L));
+    }
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, false, header);
     writer.appendBlock(deleteBlock);
 
     FileCreateUtils.createDeltaCommit(basePath, "100", fs);
@@ -1906,7 +1937,11 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .map(s -> (DeleteRecord.create(((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString(),
             ((GenericRecord) s).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString())))
         .collect(Collectors.toList()).subList(0, 50);
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecords.toArray(new DeleteRecord[50]), header);
+    List<Pair<DeleteRecord, Long>> deleteRecordList = new ArrayList<>();
+    for (DeleteRecord dr : deleteRecords) {
+      deleteRecordList.add(Pair.of(dr, -1L));
+    }
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, false, header);
     writer.appendBlock(deleteBlock);
 
     FileCreateUtils.createDeltaCommit(basePath, "100", fs);
@@ -1986,7 +2021,11 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .map(s -> (DeleteRecord.create(((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString(),
             ((GenericRecord) s).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString())))
         .collect(Collectors.toList()).subList(0, 60);
-    writer.appendBlock(new HoodieDeleteBlock(deletedRecords.toArray(new DeleteRecord[0]), header));
+    List<Pair<DeleteRecord, Long>> deleteRecordList = new ArrayList<>();
+    for (DeleteRecord dr : deletedRecords) {
+      deleteRecordList.add(Pair.of(dr, -1L));
+    }
+    writer.appendBlock(new HoodieDeleteBlock(deleteRecordList, false, header));
 
     copyOfRecords2.addAll(copyOfRecords1);
     List<String> originalKeys =
@@ -2794,13 +2833,13 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   @ValueSource(booleans = {false, true})
   public void testGetRecordPositions(boolean addRecordPositionsHeader) throws IOException {
     Map<HeaderMetadataType, String> header = new HashMap<>();
-    List<Long> positions = new ArrayList<>();
+    Set<Long> positions = new HashSet<>();
     if (addRecordPositionsHeader) {
       positions = TestLogReaderUtils.generatePositions();
       String content = LogReaderUtils.encodePositions(positions);
       header.put(HeaderMetadataType.RECORD_POSITIONS, content);
     }
-    HoodieLogBlock logBlock = new HoodieDeleteBlock(new DeleteRecord[0], header);
+    HoodieLogBlock logBlock = new HoodieDeleteBlock(Collections.emptyList(), false, header);
     if (addRecordPositionsHeader) {
       TestLogReaderUtils.assertPositionEquals(positions, logBlock.getRecordPositions());
     }
@@ -2817,11 +2856,11 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       case CDC_DATA_BLOCK:
         return new HoodieCDCDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
       case AVRO_DATA_BLOCK:
-        return new HoodieAvroDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+        return new HoodieAvroDataBlock(records, false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
       case HFILE_DATA_BLOCK:
         return new HoodieHFileDataBlock(records, header, Compression.Algorithm.GZ, pathForReader);
       case PARQUET_DATA_BLOCK:
-        return new HoodieParquetDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD, CompressionCodecName.GZIP, 0.1, true);
+        return new HoodieParquetDataBlock(records, false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD, CompressionCodecName.GZIP, 0.1, true);
       default:
         throw new RuntimeException("Unknown data block type " + dataBlockType);
     }
