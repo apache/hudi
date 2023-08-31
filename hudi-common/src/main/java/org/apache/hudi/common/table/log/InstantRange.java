@@ -26,8 +26,6 @@ import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;
 
-import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
-
 /**
  * A instant commits range used for incremental reader filtering.
  */
