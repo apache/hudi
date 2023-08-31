@@ -160,7 +160,9 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
   }
 
   /**
-   * Updates the schema for the given table if the schema has changed.
+   * Updates the schema for the given table if the schema has changed. The schema passed in will not have the partition columns defined,
+   * so we add them back to the schema with the values read from the existing BigQuery table. This allows us to keep the partition
+   * field type in sync with how it is registered in BigQuery.
    * @param tableName name of the table in BigQuery
    * @param schema latest schema for the table
    */
