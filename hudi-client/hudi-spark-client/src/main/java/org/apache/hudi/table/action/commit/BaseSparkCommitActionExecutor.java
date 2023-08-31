@@ -286,7 +286,9 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
   @Override
   protected void setCommitMetadata(HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
-    result.setCommitMetadata(Option.of(CommitUtils.buildMetadata(result.getWriteStatuses().map(WriteStatus::getStat).collectAsList(),
+    List<HoodieWriteStat> writeStats = result.getWriteStatuses().map(WriteStatus::getStat).collectAsList();
+    result.setWriteStats(writeStats);
+    result.setCommitMetadata(Option.of(CommitUtils.buildMetadata(writeStats,
         result.getPartitionToReplaceFileIds(),
         extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType())));
   }
@@ -294,16 +296,14 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   @Override
   protected void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
     context.setJobStatus(this.getClass().getSimpleName(), "Commit write status collect: " + config.getTableName());
-    commit(extraMetadata, result, result.getWriteStatuses().map(WriteStatus::getStat).collectAsList());
-  }
-
-  protected void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<HoodieData<WriteStatus>> result, List<HoodieWriteStat> writeStats) {
     String actionType = getCommitActionType();
     LOG.info("Committing " + instantTime + ", action Type " + actionType + ", operation Type " + operationType);
     result.setCommitted(true);
-    result.setWriteStats(writeStats);
+    if (!result.getWriteStats().isPresent()) {
+      result.setWriteStats(result.getWriteStatuses().map(WriteStatus::getStat).collectAsList());
+    }
     // Finalize write
-    finalizeWrite(instantTime, writeStats, result);
+    finalizeWrite(instantTime, result.getWriteStats().get(), result);
     try {
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       HoodieCommitMetadata metadata = result.getCommitMetadata().get();
