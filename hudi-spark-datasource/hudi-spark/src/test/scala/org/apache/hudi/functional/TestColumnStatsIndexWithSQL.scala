@@ -22,7 +22,7 @@ import org.apache.hudi.DataSourceWriteOptions.{DELETE_OPERATION_OPT_VAL, PRECOMB
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.MetadataConversionUtils
-import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
@@ -40,7 +40,6 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
-import java.util.Properties
 import scala.collection.JavaConverters
 import scala.jdk.CollectionConverters.{asScalaIteratorConverter, collectionAsScalaIterableConverter}
 
@@ -299,8 +298,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
   }
 
   protected def getWriteConfig(hudiOpts: Map[String, String]): HoodieWriteConfig = {
-    val props = new Properties()
-    props.putAll(JavaConverters.mapAsJavaMapConverter(hudiOpts).asJava)
+    val props = TypedProperties.fromMap(JavaConverters.mapAsJavaMapConverter(hudiOpts).asJava)
     HoodieWriteConfig.newBuilder()
       .withProps(props)
       .withPath(basePath)
