@@ -43,8 +43,24 @@ public interface HoodieRecordMerger extends Serializable {
    * This method converges combineAndGetUpdateValue and precombine from HoodiePayload.
    * It'd be associative operation: f(a, f(b, c)) = f(f(a, b), c) (which we can translate as having 3 versions A, B, C
    * of the single record, both orders of operations applications have to yield the same result)
+   * <p>
+   * @Param older a {@link HoodieRecord} record that has lower timestamp.
+   * @Param oldSchema the schema for the {@code older}.
+   * @Param newer a {@link HoodieRecord} record that has higher timestamp.
+   * @Param newSchema the schema for the {@code newer}.
+   * @Return the merged record and its schema if any.
    */
-  Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException;
+  Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older,
+                                           Schema oldSchema,
+                                           HoodieRecord newer,
+                                           Schema newSchema,
+                                           TypedProperties props) throws IOException;
+
+  default Option<Pair<HoodieRecord, Schema>> insert(HoodieRecord record,
+                                                    Schema schema,
+                                                    TypedProperties props) throws IOException {
+    return Option.of(Pair.of(record, schema));
+  }
 
   /**
    * The record type handled by the current merger.

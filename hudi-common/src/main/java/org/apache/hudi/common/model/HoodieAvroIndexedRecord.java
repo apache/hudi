@@ -132,7 +132,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   public boolean isDelete(Schema recordSchema, Properties props) {
-    return false;
+    return data == null || data.equals(SENTINEL);
   }
 
   @Override

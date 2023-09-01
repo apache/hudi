@@ -247,7 +247,7 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
         nextRecord = requiredSchemaProjection(curRow)
         true
       } else {
-       val mergedRecordOpt = merge(curRow, updatedRecordOpt.get)
+        val mergedRecordOpt = merge(curRow, updatedRecordOpt.get)
         if (mergedRecordOpt.isEmpty) {
           // Record has been deleted, skipping
           this.hasNextInternal
@@ -270,7 +270,8 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
     recordMerger.getRecordType match {
       case HoodieRecordType.SPARK =>
         val curRecord = new HoodieSparkRecord(curRow, readerSchema)
-        val result = recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps)
+        val result = recordMerger.merge(
+          curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps)
         toScalaOption(result)
           .map { r =>
             val schema = HoodieInternalRowUtils.getCachedSchema(r.getRight)
@@ -279,7 +280,8 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
           }
       case _ =>
         val curRecord = new HoodieAvroIndexedRecord(serialize(curRow))
-        val result = recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps)
+        val result = recordMerger.merge(
+          curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps)
         toScalaOption(result)
           .map { r =>
             val avroRecord = r.getLeft.toIndexedRecord(r.getRight, payloadProps).get.getData.asInstanceOf[GenericRecord]

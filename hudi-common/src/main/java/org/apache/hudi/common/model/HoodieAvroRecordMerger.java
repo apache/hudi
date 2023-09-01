@@ -43,9 +43,13 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
   }
 
   @Override
-  public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
+  public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older,
+                                                  Schema oldSchema,
+                                                  HoodieRecord newer,
+                                                  Schema newSchema,
+                                                  TypedProperties props) throws IOException {
     return combineAndGetUpdateValue(older, newer, newSchema, props)
-        .map(r -> Pair.of(new HoodieAvroIndexedRecord(r), r.getSchema()));
+        .map(r -> Pair.of(new HoodieAvroIndexedRecord(newer.getKey(), r), r.getSchema()));
   }
 
   @Override
@@ -56,7 +60,8 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
   private Option<IndexedRecord> combineAndGetUpdateValue(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException {
     Option<IndexedRecord> previousAvroData = older.toIndexedRecord(schema, props).map(HoodieAvroIndexedRecord::getData);
     if (!previousAvroData.isPresent()) {
-      return Option.empty();
+      Option<IndexedRecord> newData = newer.toIndexedRecord(schema, props).map(HoodieAvroIndexedRecord::getData);
+      return newData;
     }
 
     return ((HoodieAvroRecord) newer).getData().combineAndGetUpdateValue(previousAvroData.get(), schema, props);

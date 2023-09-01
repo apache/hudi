@@ -19,13 +19,14 @@
 package org.apache.hudi;
 
 import org.apache.avro.Schema;
+
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
 import java.io.IOException;
@@ -38,44 +39,53 @@ public class HoodieSparkRecordMerger implements HoodieRecordMerger {
   }
 
   @Override
-  public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-    ValidationUtils.checkArgument(older.getRecordType() == HoodieRecordType.SPARK);
-    ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecordType.SPARK);
+  public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older,
+                                                  Schema oldSchema,
+                                                  HoodieRecord newer,
+                                                  Schema newSchema,
+                                                  TypedProperties props) throws IOException {
+    boolean isOldValid = isValid(older);
+    boolean isNewValid = isValid(newer);
+    boolean isOldDelete = isDelete(older, oldSchema, props);
+    boolean isNewDelete = isDelete(newer, newSchema, props);
 
-    if (newer instanceof HoodieSparkRecord) {
-      HoodieSparkRecord newSparkRecord = (HoodieSparkRecord) newer;
-      if (newSparkRecord.isDeleted()) {
-        // Delete record
-        return Option.empty();
-      }
-    } else {
-      if (newer.getData() == null) {
-        // Delete record
-        return Option.empty();
-      }
-    }
-
-    if (older instanceof HoodieSparkRecord) {
-      HoodieSparkRecord oldSparkRecord = (HoodieSparkRecord) older;
-      if (oldSparkRecord.isDeleted()) {
-        // use natural order for delete record
-        return Option.of(Pair.of(newer, newSchema));
-      }
-    } else {
-      if (older.getData() == null) {
-        // use natural order for delete record
-        return Option.of(Pair.of(newer, newSchema));
-      }
-    }
-    if (older.getOrderingValue(oldSchema, props).compareTo(newer.getOrderingValue(newSchema, props)) > 0) {
+    if (!isNewValid) { // Old record will be kept for data safety.
       return Option.of(Pair.of(older, oldSchema));
-    } else {
+    } else if (isNewDelete || !isOldValid || isOldDelete) { // New record will be returned.
       return Option.of(Pair.of(newer, newSchema));
+    } else { // Do update, merge, comparison, etc.
+      return handleUpdateCase(older, oldSchema, newer, newSchema, props);
     }
   }
 
   @Override
   public HoodieRecordType getRecordType() {
     return HoodieRecordType.SPARK;
+  }
+
+  private boolean isValid(HoodieRecord record) {
+    return record.getRecordType() == HoodieRecordType.SPARK;
+  }
+
+  private boolean isDelete(HoodieRecord record, Schema schema, TypedProperties props) throws IOException {
+    return HoodieOperation.isDelete(record.getOperation())
+        || record instanceof HoodieEmptyRecord
+        || record.isDelete(schema, props);
+  }
+
+  /**
+   * Handle update case.
+   */
+  Option<Pair<HoodieRecord, Schema>> handleUpdateCase(HoodieRecord older,
+                                                      Schema oldSchema,
+                                                      HoodieRecord newer,
+                                                      Schema newSchema,
+                                                      TypedProperties props) {
+    if (older.getOrderingValue(oldSchema, props).compareTo(
+        newer.getOrderingValue(newSchema, props)) > 0) {
+      return Option.of(Pair.of(older, oldSchema));
+    } else {
+      return Option.of(Pair.of(newer, newSchema));
+    }
   }
 }

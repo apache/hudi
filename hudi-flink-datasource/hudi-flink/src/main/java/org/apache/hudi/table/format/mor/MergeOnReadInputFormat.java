@@ -30,7 +30,6 @@ import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
@@ -837,7 +836,8 @@ public class MergeOnReadInputFormat
       GenericRecord historyAvroRecord = (GenericRecord) rowDataToAvroConverter.convert(tableSchema, curRow);
       HoodieAvroIndexedRecord hoodieAvroIndexedRecord = new HoodieAvroIndexedRecord(historyAvroRecord);
       try {
-        return recordMerger.merge(hoodieAvroIndexedRecord, tableSchema, record, tableSchema, payloadProps).map(Pair::getLeft);
+        return recordMerger.merge(
+            hoodieAvroIndexedRecord, tableSchema, record, tableSchema, payloadProps).map(r -> r.getLeft());
       } catch (IOException e) {
         throw new HoodieIOException("Merge base and delta payloads exception", e);
       }

@@ -26,6 +26,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -148,7 +149,13 @@ public class HoodieIndexUtils {
       // separate filenames that the record is found in. This will result in setting
       // currentLocation 2 times and it will fail the second time. So creating a new in memory
       // copy of the hoodie record.
-      HoodieRecord<R> newRecord = record.newInstance();
+      HoodieRecord<R> newRecord = null;
+      if (record instanceof HoodieEmptyRecord) {
+        newRecord = record.newInstance(record.getKey(), record.getOperation());
+      } else {
+        newRecord = record.newInstance();
+      }
+
       newRecord.unseal();
       newRecord.setCurrentLocation(location.get());
       newRecord.seal();

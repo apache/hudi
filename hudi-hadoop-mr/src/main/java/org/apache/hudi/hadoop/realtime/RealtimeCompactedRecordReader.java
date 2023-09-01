@@ -197,8 +197,8 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     // once presto on hudi have its own mor reader, we can remove the rewrite logical.
     GenericRecord genericRecord = HiveAvroSerializer.rewriteRecordIgnoreResultCheck(oldRecord, getLogScannerReaderSchema());
     HoodieRecord record = new HoodieAvroIndexedRecord(genericRecord);
-    Option<Pair<HoodieRecord, Schema>> mergeResult = HoodieAvroRecordMerger.INSTANCE.merge(record,
-        genericRecord.getSchema(), newRecord, getLogScannerReaderSchema(), new TypedProperties(payloadProps));
+    Option<Pair<HoodieRecord, Schema>> mergeResult = HoodieAvroRecordMerger.INSTANCE.merge(
+        record, genericRecord.getSchema(), newRecord, getLogScannerReaderSchema(), new TypedProperties(payloadProps));
     return mergeResult.map(p -> (HoodieAvroIndexedRecord) p.getLeft());
   }
 

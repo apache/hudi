@@ -72,7 +72,7 @@ public class JavaWriteHelper<T,R> extends BaseWriteHelper<T, List<HoodieRecord<T
     return keyedRecords.values().stream().map(x -> x.stream().map(Pair::getRight).reduce((rec1, rec2) -> {
       HoodieRecord<T> reducedRecord;
       try {
-        reducedRecord =  merger.merge(rec1, schema, rec2, schema, props).get().getLeft();
+        reducedRecord = merger.merge(rec1, schema, rec2, schema, props).get().getLeft();
       } catch (IOException e) {
         throw new HoodieException(String.format("Error to merge two records, %s, %s", rec1, rec2), e);
       }

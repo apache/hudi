@@ -22,7 +22,9 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
@@ -267,17 +269,64 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
 
   protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, Option<HoodieRecord> combineRecordOpt, Schema writerSchema) throws IOException {
     boolean isDelete = false;
+    // Precondition: combined record exists.
     if (combineRecordOpt.isPresent()) {
-      if (oldRecord.getData() != combineRecordOpt.get().getData()) {
-        // the incoming record is chosen
-        isDelete = HoodieOperation.isDelete(newRecord.getOperation());
-      } else {
-        // the incoming record is dropped
+      // Save old data.
+      if (oldRecord.getData() == combineRecordOpt.get().getData()) {
         return false;
       }
-      updatedRecordsWritten++;
+
+      // If the new record is a delete record, we do delete no matter what
+      // the combined record is.
+      if (isDeleteRecord(newRecord, writerSchema, config.getProps())) {
+        doDelete(newRecord);
+        return true;
+      }
+
+      // Until now we know this is not a delete case, we inject custom logic to decide
+      // if the combined record should be written. Three cases here:
+      // 1. If the output is empty, the old data is written for safety since empty means unknown.
+      // 2. If the output is a delete record, the delete count is increased.
+      // 3. Otherwise, the resulting record is passed to the downstream.
+      Option<Pair<HoodieRecord, Schema>> processedRecord = recordMerger.insert(
+          combineRecordOpt.get(), writerSchema, config.getProps());
+      if (!processedRecord.isPresent()) {
+        // Save old data.
+        return false;
+      } else if (isDeleteRecord(processedRecord.get().getLeft(), processedRecord.get().getRight(), config.getProps())) {
+        doDelete(newRecord);
+        return true;
+      } else {
+        updatedRecordsWritten++;
+        combineRecordOpt = Option.of(processedRecord.get().getLeft());
+        writerSchema = processedRecord.get().getRight();
+      }
     }
+
+    // TODO: clean logic in `writeRecord` function.
+    // Write the record finally.
     return writeRecord(newRecord, combineRecordOpt, writerSchema, config.getPayloadConfig().getProps(), isDelete);
+  }
+
+  protected void doDelete(HoodieRecord record) {
+    recordsDeleted++;
+    updatedRecordsWritten++;
+    record.unseal();
+    record.clearNewLocation();
+    record.seal();
+    record.deflate();
+    writeStatus.markSuccess(record, record.getMetadata());
+  }
+
+  protected boolean isDeleteRecord(HoodieRecord record, Schema schema, TypedProperties props) throws IOException {
+    return record.isDelete(schema, props)
+        || record instanceof HoodieEmptyRecord
+        || (record.getData() != null && record.getData() instanceof EmptyHoodieRecordPayload)
+        || HoodieOperation.isDelete(record.getOperation());
+  }
+
+  protected boolean isValidRecord(HoodieRecord record, Schema schema, TypedProperties props) throws IOException {
+    return !isDeleteRecord(record, schema, props) && !record.shouldIgnore(schema, props);
   }
 
   protected void writeInsertRecord(HoodieRecord<T> newRecord) throws IOException {
@@ -286,7 +335,16 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     if (newRecord.shouldIgnore(schema, config.getProps())) {
       return;
     }
-    writeInsertRecord(newRecord, schema, config.getProps());
+
+    // Insert possible insert logic.
+    Option<Pair<HoodieRecord, Schema>> processedRecord = recordMerger.insert(
+        newRecord, schema, config.getProps());
+    if (!processedRecord.isPresent()
+        || !isValidRecord(processedRecord.get().getLeft(), schema, config.getProps())) {
+      return;
+    }
+
+    writeInsertRecord(processedRecord.get().getLeft(), schema, config.getProps());
   }
 
   protected void writeInsertRecord(HoodieRecord<T> newRecord, Schema schema, Properties prop)
@@ -309,6 +367,10 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       return false;
     }
     try {
+      // Cases for DELETE:
+      // (1) The merged record is empty.
+      // (2) The merged record is a delete record.
+      // (3) The new record is a delete record.
       if (combineRecord.isPresent() && !combineRecord.get().isDelete(schema, config.getProps()) && !isDelete) {
         writeToFile(newRecord.getKey(), combineRecord.get(), schema, prop, preserveMetadata && useWriterSchemaForCompaction);
         recordsWritten++;
@@ -321,8 +383,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       }
       writeStatus.markSuccess(newRecord, recordMetadata);
       // deflate record payload after recording success. This will help users access payload as a
-      // part of marking
-      // record successful.
+      // part of marking record successful.
       newRecord.deflate();
       return true;
     } catch (Exception e) {
@@ -346,9 +407,12 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       // writing the first record. So make a copy of the record to be merged
       HoodieRecord<T> newRecord = keyToNewRecords.get(key).newInstance();
       try {
-        Option<Pair<HoodieRecord, Schema>> mergeResult = recordMerger.merge(oldRecord, oldSchema, newRecord, newSchema, props);
+        // Inject default/custom merging logic for update.
+        Option<Pair<HoodieRecord, Schema>> mergeResult = recordMerger.merge(
+            oldRecord, oldSchema, newRecord, newSchema, props);
         Schema combineRecordSchema = mergeResult.map(Pair::getRight).orElse(null);
         Option<HoodieRecord> combinedRecord = mergeResult.map(Pair::getLeft);
+
         if (combinedRecord.isPresent() && combinedRecord.get().shouldIgnore(combineRecordSchema, props)) {
           // If it is an IGNORE_RECORD, just copy the old record, and do not update the new record.
           copyOldRecord = true;
@@ -398,12 +462,17 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
 
   protected void writeIncomingRecords() throws IOException {
     // write out any pending records (this can happen when inserts are turned into updates)
+    Schema oldSchema = config.populateMetaFields() ? writeSchemaWithMetaFields : writeSchema;
+    Schema newSchema = useWriterSchemaForCompaction ? writeSchemaWithMetaFields : writeSchema;
+    TypedProperties props = config.getPayloadConfig().getProps();
+
     Iterator<HoodieRecord<T>> newRecordsItr = (keyToNewRecords instanceof ExternalSpillableMap)
         ? ((ExternalSpillableMap)keyToNewRecords).iterator() : keyToNewRecords.values().iterator();
+
     while (newRecordsItr.hasNext()) {
-      HoodieRecord<T> hoodieRecord = newRecordsItr.next();
-      if (!writtenRecordKeys.contains(hoodieRecord.getRecordKey())) {
-        writeInsertRecord(hoodieRecord);
+      HoodieRecord<T> record = newRecordsItr.next();
+      if (!writtenRecordKeys.contains(record.getRecordKey())) {
+        writeInsertRecord(record);
       }
     }
   }

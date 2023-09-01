@@ -241,8 +241,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     HoodieRecord<T> prevRecord = records.get(key);
     if (prevRecord != null) {
       // Merge and store the combined record
-      HoodieRecord<T> combinedRecord = (HoodieRecord<T>) recordMerger.merge(prevRecord, readerSchema,
-          newRecord, readerSchema, this.getPayloadProps()).get().getLeft();
+      HoodieRecord<T> combinedRecord = (HoodieRecord<T>) recordMerger.merge(
+          prevRecord, readerSchema, newRecord, readerSchema, this.getPayloadProps()).get().getLeft();
       // If pre-combine returns existing record, no need to update it
       if (combinedRecord.getData() != prevRecord.getData()) {
         HoodieRecord latestHoodieRecord =

@@ -154,6 +154,7 @@ public final class HoodieSparkQuickstart {
                                HoodieExampleDataGenerator<HoodieAvroPayload> dataGen) {
     Dataset<Row> roViewDF = spark
         .read()
+        .option("hoodie.datasource.write.record.merger.impls", "org.apache.hudi.HoodieSparkRecordMerger")
         .format("hudi")
         .load(tablePath + "/*/*/*/*");
 
@@ -214,6 +215,7 @@ public final class HoodieSparkQuickstart {
         .option(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partitionpath")
         .option(TBL_NAME.key(), tableName)
         .option("hoodie.datasource.write.operation", WriteOperationType.DELETE.value())
+        .option("hoodie.datasource.write.record.merger.impls", "org.apache.hudi.HoodieSparkRecordMerger")
         .mode(Append)
         .save(tablePath);
     return toBeDeletedDf;

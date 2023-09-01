@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.io.storage.HoodieFileWriter;
@@ -139,23 +140,34 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
           return;
         }
 
-        MetadataValues metadataValues = new MetadataValues().setFileName(path.getName());
-        HoodieRecord populatedRecord =
-            record.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, config.getProps());
+        // Inject custom logic for the record.
+        Option<Pair<HoodieRecord, Schema>> processedRecord = config.getRecordMerger().insert(record, schema, config.getProps());
+        if (!processedRecord.isPresent()
+            || HoodieOperation.isDelete(processedRecord.get().getLeft().getOperation())
+            || processedRecord.get().getLeft().isDelete(schema, config.getProps())) { // Decide to delete the record.
+          recordsDeleted++;
+        } else { // Decide to write the record.
+          record = processedRecord.get().getLeft();
+          schema = processedRecord.get().getRight();
 
-        if (preserveMetadata) {
-          fileWriter.write(record.getRecordKey(), populatedRecord, writeSchemaWithMetaFields);
-        } else {
-          fileWriter.writeWithMetadata(record.getKey(), populatedRecord, writeSchemaWithMetaFields);
+          MetadataValues metadataValues = new MetadataValues().setFileName(path.getName());
+          HoodieRecord populatedRecord =
+              record.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, config.getProps());
+
+          if (preserveMetadata) {
+            fileWriter.write(record.getRecordKey(), populatedRecord, writeSchemaWithMetaFields);
+          } else {
+            fileWriter.writeWithMetadata(record.getKey(), populatedRecord, writeSchemaWithMetaFields);
+          }
+
+          // Update the new location of record, so we know where to find it next
+          record.unseal();
+          record.setNewLocation(newRecordLocation);
+          record.seal();
+
+          recordsWritten++;
+          insertRecordsWritten++;
         }
-
-        // Update the new location of record, so we know where to find it next
-        record.unseal();
-        record.setNewLocation(newRecordLocation);
-        record.seal();
-
-        recordsWritten++;
-        insertRecordsWritten++;
       } else {
         recordsDeleted++;
       }
@@ -183,10 +195,12 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     } else {
       keyIterator = recordMap.keySet().stream().iterator();
     }
+
+    Schema schema = useWriterSchema ? writeSchemaWithMetaFields : writeSchema;
     while (keyIterator.hasNext()) {
       final String key = keyIterator.next();
       HoodieRecord<T> record = recordMap.get(key);
-      write(record, useWriterSchema ? writeSchemaWithMetaFields : writeSchema, config.getProps());
+      write(record, schema, config.getProps());
     }
   }
 
