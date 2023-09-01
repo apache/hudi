@@ -181,6 +181,7 @@ public class ITTestSchemaEvolution {
         + "  `partition` string"
         + ") partitioned by (`partition`) with (" + tableOptions + ")"
     );
+    // An explicit cast is performed for map-values to prevent implicit map.key strings from being truncated/extended based the last row's inferred schema
     //language=SQL
     tEnv.executeSql(""
         + "insert into t1 select "
@@ -195,14 +196,14 @@ public class ITTestSchemaEvolution {
         + "  cast(`partition` as string) "
         + "from (values "
         + "  ('id0', 'Indica', 'F', 12, '2000-01-01 00:00:00', cast(null as row<f0 int, f1 string, drop_add string, change_type int>), map['Indica', 1212], array[12], 'par0'),"
-        + "  ('id1', 'Danny', 'M', 23, '2000-01-01 00:00:01', row(1, 's1', '', 1), map['Danny', 2323], array[23, 23], 'par1'),"
-        + "  ('id2', 'Stephen', 'M', 33, '2000-01-01 00:00:02', row(2, 's2', '', 2), map['Stephen', 3333], array[33], 'par1'),"
-        + "  ('id3', 'Julian', 'M', 53, '2000-01-01 00:00:03', row(3, 's3', '', 3), map['Julian', 5353], array[53, 53], 'par2'),"
-        + "  ('id4', 'Fabian', 'M', 31, '2000-01-01 00:00:04', row(4, 's4', '', 4), map['Fabian', 3131], array[31], 'par2'),"
-        + "  ('id5', 'Sophia', 'F', 18, '2000-01-01 00:00:05', row(5, 's5', '', 5), map['Sophia', 1818], array[18, 18], 'par3'),"
-        + "  ('id6', 'Emma', 'F', 20, '2000-01-01 00:00:06', row(6, 's6', '', 6), map['Emma', 2020], array[20], 'par3'),"
-        + "  ('id7', 'Bob', 'M', 44, '2000-01-01 00:00:07', row(7, 's7', '', 7), map['Bob', 4444], array[44, 44], 'par4'),"
-        + "  ('id8', 'Han', 'M', 56, '2000-01-01 00:00:08', row(8, 's8', '', 8), map['Han', 5656], array[56, 56, 56], 'par4')"
+        + "  ('id1', 'Danny', 'M', 23, '2000-01-01 00:00:01', row(1, 's1', '', 1), cast(map['Danny', 2323] as map<string, int>), array[23, 23], 'par1'),"
+        + "  ('id2', 'Stephen', 'M', 33, '2000-01-01 00:00:02', row(2, 's2', '', 2), cast(map['Stephen', 3333] as map<string, int>), array[33], 'par1'),"
+        + "  ('id3', 'Julian', 'M', 53, '2000-01-01 00:00:03', row(3, 's3', '', 3), cast(map['Julian', 5353] as map<string, int>), array[53, 53], 'par2'),"
+        + "  ('id4', 'Fabian', 'M', 31, '2000-01-01 00:00:04', row(4, 's4', '', 4), cast(map['Fabian', 3131] as map<string, int>), array[31], 'par2'),"
+        + "  ('id5', 'Sophia', 'F', 18, '2000-01-01 00:00:05', row(5, 's5', '', 5), cast(map['Sophia', 1818] as map<string, int>), array[18, 18], 'par3'),"
+        + "  ('id6', 'Emma', 'F', 20, '2000-01-01 00:00:06', row(6, 's6', '', 6), cast(map['Emma', 2020] as map<string, int>), array[20], 'par3'),"
+        + "  ('id7', 'Bob', 'M', 44, '2000-01-01 00:00:07', row(7, 's7', '', 7), cast(map['Bob', 4444] as map<string, int>), array[44, 44], 'par4'),"
+        + "  ('id8', 'Han', 'M', 56, '2000-01-01 00:00:08', row(8, 's8', '', 8), cast(map['Han', 5656] as map<string, int>), array[56, 56, 56], 'par4')"
         + ") as A(uuid, name, gender, age, ts, f_struct, f_map, f_array, `partition`)"
     ).await();
   }
@@ -294,11 +295,11 @@ public class ITTestSchemaEvolution {
         + "  cast(new_map_col as map<string, string>),"
         + "  cast(`partition` as string) "
         + "from (values "
-        + "  ('id1', '23', 'Danny', '', 10000.1, '2000-01-01 00:00:01', row(1, 1, 's1', 11, 't1', 'drop_add1'), map['Danny', 2323.23], array[23, 23, 23], "
+        + "  ('id1', '23', 'Danny', '', 10000.1, '2000-01-01 00:00:01', row(1, 1, 's1', 11, 't1', 'drop_add1'), cast(map['Danny', 2323.23] as map<string, double>), array[23, 23, 23], "
         + "  row(1, '1'), array['1'], Map['k1','v1'], 'par1'),"
-        + "  ('id9', 'unknown', 'Alice', '', 90000.9, '2000-01-01 00:00:09', row(9, 9, 's9', 99, 't9', 'drop_add9'), map['Alice', 9999.99], array[9999, 9999], "
+        + "  ('id9', 'unknown', 'Alice', '', 90000.9, '2000-01-01 00:00:09', row(9, 9, 's9', 99, 't9', 'drop_add9'), cast(map['Alice', 9999.99] as map<string, double>), array[9999, 9999], "
         + "  row(9, '9'), array['9'], Map['k9','v9'], 'par1'),"
-        + "  ('id3', '53', 'Julian', '', 30000.3, '2000-01-01 00:00:03', row(3, 3, 's3', 33, 't3', 'drop_add3'), map['Julian', 5353.53], array[53], "
+        + "  ('id3', '53', 'Julian', '', 30000.3, '2000-01-01 00:00:03', row(3, 3, 's3', 33, 't3', 'drop_add3'), cast(map['Julian', 5353.53] as map<string, double>), array[53], "
         + "  row(3, '3'), array['3'], Map['k3','v3'], 'par2')"
         + ") as A(uuid, age, first_name, last_name, salary, ts, f_struct, f_map, f_array, new_row_col, new_array_col, new_map_col, `partition`)"
     ).await();
