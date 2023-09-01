@@ -200,21 +200,21 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
   private void copyOut(HoodieTableType tableType, String commitTime) throws IOException {
     File tmpDir = new File(basePath, ".tmpdir");
     assertTrue(tmpDir.mkdir());
-    String commitFileName = commitTime + (tableType.equals(COPY_ON_WRITE) ? ".commit" : ".deltacommit");
+    String commitAction = (tableType.equals(COPY_ON_WRITE) ? ".commit" : ".deltacommit");
     String metaDir = basePath + ".hoodie/";
-    String inflight = commitFileName + ".inflight";
+    String inflight = commitTime + (tableType.equals(COPY_ON_WRITE) ? "" : commitAction) + ".inflight";
     Files.copy(new File(metaDir + inflight).toPath(), tmpDir.toPath().resolve(inflight), StandardCopyOption.REPLACE_EXISTING);
-    String requested = commitFileName + ".requested";
+    String requested = commitTime + commitAction + ".requested";
     Files.copy(new File(metaDir + requested).toPath(), tmpDir.toPath().resolve(requested), StandardCopyOption.REPLACE_EXISTING);
   }
 
   private void copyIn(HoodieTableType tableType, String commitTime) throws IOException {
     Path tmpDir = new File(basePath, ".tmpdir").toPath();
-    String commitFileName = commitTime + (tableType.equals(COPY_ON_WRITE) ? ".commit" : ".deltacommit");
+    String commitAction = (tableType.equals(COPY_ON_WRITE) ? ".commit" : ".deltacommit");
     String metaDir = basePath + ".hoodie/";
-    String inflight = commitFileName + ".inflight";
+    String inflight = commitTime + (tableType.equals(COPY_ON_WRITE) ? "" : commitAction) + ".inflight";
     Files.copy(tmpDir.resolve(inflight), new File(metaDir + inflight).toPath(), StandardCopyOption.REPLACE_EXISTING);
-    String requested = commitFileName + ".requested";
+    String requested = commitTime + commitAction + ".requested";
     Files.copy(tmpDir.resolve(requested), new File(metaDir + requested).toPath(), StandardCopyOption.REPLACE_EXISTING);
   }
 

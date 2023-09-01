@@ -34,9 +34,6 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.log.AppendResult;
-import org.apache.hudi.common.table.log.HoodieLogFileWriteCallback;
-import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
@@ -62,6 +59,7 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.spark.api.java.JavaRDD;
@@ -369,38 +367,26 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       String correctWriteToken = FSUtils.getWriteTokenFromLogPath(correctLogFile.getPath());
 
       final String newToken = generateNewDifferentWriteToken(correctWriteToken);
+      String originalLogfileName = correctLogFile.getPath().getName();
+      String logFileWithoutWriteToken = originalLogfileName.substring(0, originalLogfileName.lastIndexOf("_") + 1);
+      String newLogFileName = logFileWithoutWriteToken + newToken;
+      Path parentPath = correctLogFile.getPath().getParent();
+      FileSystem fs = parentPath.getFileSystem(jsc().hadoopConfiguration());
+      // copy to create another log file w/ diff write token.
+      fs.copyToLocalFile(new Path(config.getBasePath(), correctLogFile.getPath().toString()), new Path(config.getBasePath().toString() + "/" + parentPath, newLogFileName));
 
+      // generate marker for the same
       final WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(),
           HoodieSparkTable.create(config, context()), newCommitTime);
-      HoodieLogFormat.Writer additionalLogWriter = HoodieLogFormat.newWriterBuilder()
-          .onParentPath(FSUtils.getPartitionPath(config.getBasePath(), correctWriteStat.getPartitionPath()))
-          .withFileId(correctWriteStat.getFileId()).overBaseCommit(newCommitTime)
-          .withLogVersion(correctLogFile.getLogVersion())
-          .withFileSize(0L)
-          .withSizeThreshold(config.getLogFileMaxSize()).withFs(fs())
-          .withRolloverLogWriteToken(newToken)
-          .withLogWriteToken(newToken)
-          .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-          .withLogWriteCallback(new HoodieLogFileWriteCallback() {
-            @Override
-            public boolean preLogFileOpen(HoodieLogFile logFileToAppend) {
-              return writeMarkers.create(correctWriteStat.getPartitionPath(), logFileToAppend.getFileName(), IOType.APPEND).isPresent();
-            }
+      writeMarkers.create(correctWriteStat.getPartitionPath(), newLogFileName, IOType.APPEND);
 
-            @Override
-            public boolean preLogFileCreate(HoodieLogFile logFileToCreate) {
-              return writeMarkers.create(correctWriteStat.getPartitionPath(), logFileToCreate.getFileName(), IOType.APPEND).isPresent();
-            }
-          }).build();
-      AppendResult additionalAppendResult = additionalLogWriter.appendBlock(getLogBlock(records, config.getSchema()));
-      additionalLogWriter.close();
       // check marker for additional log generated
       assertTrue(writeMarkers.allMarkerFilePaths().stream().anyMatch(marker -> marker.contains(newToken)));
       SyncableFileSystemView unCommittedFsView = getFileSystemViewWithUnCommittedSlices(metaClient);
       // check additional log generated
       assertTrue(unCommittedFsView.getAllFileSlices(correctWriteStat.getPartitionPath())
           .flatMap(FileSlice::getLogFiles).map(HoodieLogFile::getPath)
-          .anyMatch(path -> path.getName().equals(additionalAppendResult.logFile().getPath().getName())));
+          .anyMatch(path -> path.getName().equals(newLogFileName)));
       writeClient.commit(newCommitTime, statuses);
 
       HoodieTable table = HoodieSparkTable.create(config, context(), metaClient);
@@ -431,8 +417,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(instantTime);
       String extension = table.getBaseFileExtension();
       Collection<List<HoodieWriteStat>> stats = compactionMetadata.getCommitMetadata().get().getPartitionToWriteStats().values();
-      assertEquals(numLogFiles, stats.stream().flatMap(Collection::stream).filter(state -> state.getPath().contains(extension)).count());
-      assertEquals(numLogFiles, stats.stream().mapToLong(Collection::size).sum());
+      assertEquals(3, stats.stream().flatMap(Collection::stream).filter(state -> state.getPath().contains(extension)).count());
       writeClient.commitCompaction(instantTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
     }
   }
