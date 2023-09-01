@@ -85,7 +85,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
   private transient HoodieFlinkTable<?> table;
 
   /**
-   * Compaction metrics
+   * Compaction metrics.
    */
   private transient FlinkCompactionMetrics compactionMetrics;
 

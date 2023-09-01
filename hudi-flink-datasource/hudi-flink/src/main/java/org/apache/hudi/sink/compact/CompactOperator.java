@@ -88,7 +88,7 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
   private transient StreamRecordCollector<CompactionCommitEvent> collector;
 
   /**
-   * Compaction metrics
+   * Compaction metrics.
    */
   private transient FlinkCompactionMetrics compactionMetrics;
 

@@ -34,31 +34,34 @@ import java.time.Duration;
 import java.time.Instant;
 
 /**
- * Metrics for flink compaction
+ * Metrics for flink compaction.
  */
 public class FlinkCompactionMetrics extends FlinkWriteMetrics {
 
   private static final Logger LOG = LoggerFactory.getLogger(FlinkCompactionMetrics.class);
 
   /**
-   * Key for compaction timer
+   * Key for compaction timer.
    */
   private static final String COMPACTION_KEY = "compaction";
 
   /**
-   * Number of pending compaction instants
+   * Number of pending compaction instants.
+   *
    * @see CompactionPlanOperator
    */
   private int pendingCompactionCount;
 
   /**
-   * Duration between the earliest pending compaction instant time and now in seconds
+   * Duration between the earliest pending compaction instant time and now in seconds.
+   *
    *  @see CompactionPlanOperator
    */
   private long compactionDelay;
 
   /**
-   * Cost for consuming a compaction operation in milliseconds
+   * Cost for consuming a compaction operation in milliseconds.
+   *
    * @see CompactOperator
    */
   private long compactionCost;

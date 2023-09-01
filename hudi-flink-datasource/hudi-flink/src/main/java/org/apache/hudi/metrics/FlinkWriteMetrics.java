@@ -20,8 +20,6 @@ package org.apache.hudi.metrics;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.flink.metrics.MetricGroup;
 import org.slf4j.Logger;
@@ -30,7 +28,7 @@ import org.slf4j.LoggerFactory;
 import java.text.ParseException;
 
 /**
- * Common flink write commit metadata metrics
+ * Common flink write commit metadata metrics.
  */
 public class FlinkWriteMetrics extends HoodieFlinkMetrics {
 
@@ -46,13 +44,9 @@ public class FlinkWriteMetrics extends HoodieFlinkMetrics {
   private long totalInsertRecordsWritten;
   private long totalBytesWritten;
   private long totalScanTime;
-  private long totalCreateTime;
-  private long totalUpsertTime;
   private long totalCompactedRecordsUpdated;
   private long totalLogFilesCompacted;
   private long totalLogFilesSize;
-  private long commitLatencyInMs;
-  private long commitFreshnessInMs;
   private long commitEpochTimeInMs;
   private long durationInMs;
 
@@ -72,13 +66,9 @@ public class FlinkWriteMetrics extends HoodieFlinkMetrics {
     metricGroup.gauge(getMetricsName(actionType, "totalInsertRecordsWritten"), () -> totalInsertRecordsWritten);
     metricGroup.gauge(getMetricsName(actionType, "totalBytesWritten"), () -> totalBytesWritten);
     metricGroup.gauge(getMetricsName(actionType, "totalScanTime"), () -> totalScanTime);
-    metricGroup.gauge(getMetricsName(actionType, "totalCreateTime"), () -> totalCreateTime);
-    metricGroup.gauge(getMetricsName(actionType, "totalUpsertTime"), () -> totalUpsertTime);
     metricGroup.gauge(getMetricsName(actionType, "totalCompactedRecordsUpdated"), () -> totalCompactedRecordsUpdated);
     metricGroup.gauge(getMetricsName(actionType, "totalLogFilesCompacted"), () -> totalLogFilesCompacted);
     metricGroup.gauge(getMetricsName(actionType, "totalLogFilesSize"), () -> totalLogFilesSize);
-    metricGroup.gauge(getMetricsName(actionType, "commitLatencyInMs"), () -> commitLatencyInMs);
-    metricGroup.gauge(getMetricsName(actionType, "commitFreshnessInMs"), () -> commitFreshnessInMs);
     metricGroup.gauge(getMetricsName(actionType, "commitTime"), () -> commitEpochTimeInMs);
     metricGroup.gauge(getMetricsName(actionType, "duration"), () -> durationInMs);
   }
@@ -95,7 +85,7 @@ public class FlinkWriteMetrics extends HoodieFlinkMetrics {
   }
 
   public void updateCommitMetrics(long commitEpochTimeInMs, long durationInMs, HoodieCommitMetadata metadata) {
-    updateCommitTimingMetrics(commitEpochTimeInMs, durationInMs, metadata);
+    updateCommitTimingMetrics(commitEpochTimeInMs, durationInMs);
     totalPartitionsWritten = metadata.fetchTotalPartitionsWritten();
     totalFilesInsert = metadata.fetchTotalFilesInsert();
     totalFilesUpdate = metadata.fetchTotalFilesUpdated();
@@ -104,21 +94,12 @@ public class FlinkWriteMetrics extends HoodieFlinkMetrics {
     totalInsertRecordsWritten = metadata.fetchTotalInsertRecordsWritten();
     totalBytesWritten = metadata.fetchTotalBytesWritten();
     totalScanTime = metadata.getTotalScanTime();
-    totalCreateTime = metadata.getTotalCreateTime();
-    totalUpsertTime = metadata.getTotalUpsertTime();
     totalCompactedRecordsUpdated = metadata.getTotalCompactedRecordsUpdated();
     totalLogFilesCompacted = metadata.getTotalLogFilesCompacted();
     totalLogFilesSize = metadata.getTotalLogFilesSize();
   }
 
-  private void updateCommitTimingMetrics(long commitEpochTimeInMs, long durationInMs, HoodieCommitMetadata metadata) {
-    Pair<Option<Long>, Option<Long>> eventTimePairMinMax = metadata.getMinAndMaxEventTime();
-    if (eventTimePairMinMax.getLeft().isPresent()) {
-      this.commitLatencyInMs = commitEpochTimeInMs + durationInMs - eventTimePairMinMax.getLeft().get();
-    }
-    if (eventTimePairMinMax.getRight().isPresent()) {
-      this.commitFreshnessInMs = commitEpochTimeInMs + durationInMs - eventTimePairMinMax.getRight().get();
-    }
+  private void updateCommitTimingMetrics(long commitEpochTimeInMs, long durationInMs) {
     this.commitEpochTimeInMs = commitEpochTimeInMs;
     this.durationInMs = durationInMs;
   }
