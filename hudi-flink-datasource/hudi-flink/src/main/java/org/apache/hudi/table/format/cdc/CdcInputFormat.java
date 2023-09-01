@@ -38,6 +38,7 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
@@ -88,9 +89,10 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
       MergeOnReadTableState tableState,
       List<DataType> fieldTypes,
       String defaultPartName,
+      List<Predicate> predicates,
       long limit,
       boolean emitDelete) {
-    super(conf, tableState, fieldTypes, defaultPartName, limit, emitDelete, InternalSchemaManager.DISABLED);
+    super(conf, tableState, fieldTypes, defaultPartName, predicates, limit, emitDelete, InternalSchemaManager.DISABLED);
   }
 
   @Override
@@ -701,6 +703,11 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
       return this;
     }
 
+    public Builder predicates(List<Predicate> predicates) {
+      this.predicates = predicates;
+      return this;
+    }
+
     public Builder limit(long limit) {
       this.limit = limit;
       return this;
@@ -713,7 +720,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
 
     public CdcInputFormat build() {
       return new CdcInputFormat(conf, tableState, fieldTypes,
-          defaultPartName, limit, emitDelete);
+          defaultPartName, predicates, limit, emitDelete);
     }
   }
 
