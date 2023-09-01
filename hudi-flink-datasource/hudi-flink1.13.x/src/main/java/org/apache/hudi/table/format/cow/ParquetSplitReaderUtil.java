@@ -72,6 +72,8 @@ import org.apache.parquet.ParquetRuntimeException;
 import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.column.page.PageReadStore;
 import org.apache.parquet.column.page.PageReader;
+import org.apache.parquet.filter.UnboundRecordFilter;
+import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.InvalidSchemaException;
 import org.apache.parquet.schema.OriginalType;
@@ -115,7 +117,9 @@ public class ParquetSplitReaderUtil {
       int batchSize,
       Path path,
       long splitStart,
-      long splitLength) throws IOException {
+      long splitLength,
+      FilterPredicate filterPredicate,
+      UnboundRecordFilter recordFilter) throws IOException {
     List<String> selNonPartNames = Arrays.stream(selectedFields)
         .mapToObj(i -> fullFieldNames[i])
         .filter(n -> !partitionSpec.containsKey(n))
@@ -148,7 +152,9 @@ public class ParquetSplitReaderUtil {
         batchSize,
         new org.apache.hadoop.fs.Path(path.toUri()),
         splitStart,
-        splitLength);
+        splitLength,
+        filterPredicate,
+        recordFilter);
   }
 
   private static ColumnVector createVector(

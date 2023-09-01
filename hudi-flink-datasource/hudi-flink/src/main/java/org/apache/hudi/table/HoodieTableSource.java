@@ -40,6 +40,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.source.ExpressionEvaluators;
+import org.apache.hudi.source.ExpressionPredicates;
+import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.source.FileIndex;
 import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
@@ -134,6 +136,7 @@ public class HoodieTableSource implements
 
   private int[] requiredPos;
   private long limit;
+  private List<Predicate> predicates;
   private DataPruner dataPruner;
   private PartitionPruners.PartitionPruner partitionPruner;
   private int dataBucket;
@@ -145,7 +148,7 @@ public class HoodieTableSource implements
       List<String> partitionKeys,
       String defaultPartName,
       Configuration conf) {
-    this(schema, path, partitionKeys, defaultPartName, conf, null, null, PrimaryKeyPruners.BUCKET_ID_NO_PRUNING, null, null, null, null);
+    this(schema, path, partitionKeys, defaultPartName, conf, null, null, null, PrimaryKeyPruners.BUCKET_ID_NO_PRUNING, null, null, null, null);
   }
 
   public HoodieTableSource(
@@ -154,6 +157,7 @@ public class HoodieTableSource implements
       List<String> partitionKeys,
       String defaultPartName,
       Configuration conf,
+      @Nullable List<Predicate> predicates,
       @Nullable DataPruner dataPruner,
       @Nullable PartitionPruners.PartitionPruner partitionPruner,
       int dataBucket,
@@ -167,6 +171,7 @@ public class HoodieTableSource implements
     this.partitionKeys = partitionKeys;
     this.defaultPartName = defaultPartName;
     this.conf = conf;
+    this.predicates = predicates == null ? Collections.emptyList() : predicates;
     this.dataPruner = dataPruner;
     this.partitionPruner = partitionPruner;
     this.dataBucket = dataBucket;
@@ -230,7 +235,7 @@ public class HoodieTableSource implements
   @Override
   public DynamicTableSource copy() {
     return new HoodieTableSource(schema, path, partitionKeys, defaultPartName,
-        conf, dataPruner, partitionPruner, dataBucket, requiredPos, limit, metaClient, internalSchemaManager);
+        conf, predicates, dataPruner, partitionPruner, dataBucket, requiredPos, limit, metaClient, internalSchemaManager);
   }
 
   @Override
@@ -242,6 +247,7 @@ public class HoodieTableSource implements
   public Result applyFilters(List<ResolvedExpression> filters) {
     List<ResolvedExpression> simpleFilters = filterSimpleCallExpression(filters);
     Tuple2<List<ResolvedExpression>, List<ResolvedExpression>> splitFilters = splitExprByPartitionCall(simpleFilters, this.partitionKeys, this.tableRowType);
+    this.predicates = ExpressionPredicates.fromExpression(splitFilters.f0);
     this.dataPruner = DataPruner.newInstance(splitFilters.f0);
     this.partitionPruner = cratePartitionPruner(splitFilters.f1);
     this.dataBucket = getDataBucket(splitFilters.f0);
@@ -474,6 +480,7 @@ public class HoodieTableSource implements
         // is not very stable.
         .fieldTypes(rowDataType.getChildren())
         .defaultPartName(conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME))
+        .predicates(this.predicates)
         .limit(this.limit)
         .emitDelete(false) // the change logs iterator can handle the DELETE records
         .build();
@@ -500,6 +507,7 @@ public class HoodieTableSource implements
         // is not very stable.
         .fieldTypes(rowDataType.getChildren())
         .defaultPartName(conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME))
+        .predicates(this.predicates)
         .limit(this.limit)
         .emitDelete(emitDelete)
         .internalSchemaManager(internalSchemaManager)
@@ -530,6 +538,7 @@ public class HoodieTableSource implements
         this.conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME),
         this.conf.getString(FlinkOptions.PARTITION_PATH_FIELD),
         this.conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING),
+        this.predicates,
         this.limit == NO_LIMIT_CONSTANT ? Long.MAX_VALUE : this.limit, // ParquetInputFormat always uses the limit value
         getParquetConf(this.conf, this.hadoopConf),
         this.conf.getBoolean(FlinkOptions.UTC_TIMEZONE),
@@ -598,6 +607,11 @@ public class HoodieTableSource implements
       return new FileStatus[0];
     }
     return fileIndex.getFilesInPartitions();
+  }
+
+  @VisibleForTesting
+  public List<Predicate> getPredicates() {
+    return predicates;
   }
 
   @VisibleForTesting
