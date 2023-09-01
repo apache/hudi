@@ -24,7 +24,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.HoodieCompactor;
 import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.utilities.UtilHelpers;
-import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
