@@ -19,17 +19,17 @@ package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions._
-import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION, RECORDKEY_FIELD, SPARK_SQL_WRITES_PREPPED_KEY, STREAMING_CHECKPOINT_IDENTIFIER}
+import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION, STREAMING_CHECKPOINT_IDENTIFIER}
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
-import org.apache.hudi.common.model.{HoodieRecord, WriteConcurrencyMode}
+import org.apache.hudi.common.model.WriteConcurrencyMode
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
-import org.apache.hudi.config.HoodieWriteConfig.{SPARK_SQL_MERGE_INTO_PREPPED_KEY, WRITE_CONCURRENCY_MODE}
+import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.util.PathUtils
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
@@ -124,21 +124,21 @@ class DefaultSource extends RelationProvider
   }
 
   /**
-    * This DataSource API is used for writing the DataFrame at the destination. For now, we are returning a dummy
-    * relation here because Spark does not really make use of the relation returned, and just returns an empty
-    * dataset at [[org.apache.spark.sql.execution.datasources.SaveIntoDataSourceCommand.run()]]. This saves us the cost
-    * of creating and returning a parquet relation here.
-    *
-    * TODO: Revisit to return a concrete relation here when we support CREATE TABLE AS for Hudi with DataSource API.
-    *       That is the only case where Spark seems to actually need a relation to be returned here
-    *       [[org.apache.spark.sql.execution.datasources.DataSource.writeAndRead()]]
-    *
-    * @param sqlContext Spark SQL Context
-    * @param mode Mode for saving the DataFrame at the destination
-    * @param optParams Parameters passed as part of the DataFrame write operation
-    * @param rawDf Spark DataFrame to be written
-    * @return Spark Relation
-    */
+   * This DataSource API is used for writing the DataFrame at the destination. For now, we are returning a dummy
+   * relation here because Spark does not really make use of the relation returned, and just returns an empty
+   * dataset at [[org.apache.spark.sql.execution.datasources.SaveIntoDataSourceCommand.run()]]. This saves us the cost
+   * of creating and returning a parquet relation here.
+   *
+   * TODO: Revisit to return a concrete relation here when we support CREATE TABLE AS for Hudi with DataSource API.
+   * That is the only case where Spark seems to actually need a relation to be returned here
+   * [[org.apache.spark.sql.execution.datasources.DataSource.writeAndRead()]]
+   *
+   * @param sqlContext Spark SQL Context
+   * @param mode       Mode for saving the DataFrame at the destination
+   * @param optParams  Parameters passed as part of the DataFrame write operation
+   * @param df         Spark DataFrame to be written
+   * @return Spark Relation
+   */
   override def createRelation(sqlContext: SQLContext,
                               mode: SaveMode,
                               optParams: Map[String, String],
