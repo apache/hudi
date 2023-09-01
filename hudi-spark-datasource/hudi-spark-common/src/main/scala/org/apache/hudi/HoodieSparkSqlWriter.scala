@@ -606,7 +606,8 @@ object HoodieSparkSqlWriter {
    */
   private def resolvePartitionWildcards(partitions: List[String], jsc: JavaSparkContext, cfg: HoodieConfig, basePath: String): List[String] = {
     //find out if any of the input partitions have wildcards
-    var (wildcardPartitions, fullPartitions) = partitions.partition(partition => partition.contains("*"))
+    //note:spark-sql may url-encode special characters (* -> %2A)
+    var (wildcardPartitions, fullPartitions) = partitions.partition(partition => partition.matches(".*(\\*|%2A).*"))
 
     if (wildcardPartitions.nonEmpty) {
       //get list of all partitions
@@ -621,7 +622,8 @@ object HoodieSparkSqlWriter {
         //prevent that from happening. Any text inbetween \\Q and \\E is considered literal
         //So we start the string with \\Q and end with \\E and then whenever we find a * we add \\E before
         //and \\Q after so all other characters besides .* will be enclosed between a set of \\Q \\E
-        val regexPartition = "^\\Q" + partition.replace("*", "\\E.*\\Q") + "\\E$"
+        val wildcardToken: String = if (partition.contains("*")) "*" else "%2A"
+        val regexPartition = "^\\Q" + partition.replace(wildcardToken, "\\E.*\\Q") + "\\E$"
 
         //filter all partitions with the regex and append the result to the list of full partitions
         fullPartitions = List.concat(fullPartitions,allPartitions.filter(_.matches(regexPartition)))
