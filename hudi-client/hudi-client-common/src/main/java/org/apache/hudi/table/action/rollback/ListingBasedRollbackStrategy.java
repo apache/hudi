@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
@@ -169,7 +170,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
               // (B.4) Rollback triggered for recurring commits - Same as (B.2) plus we need to delete the log files
               // as well if the base file gets deleted.
               HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-                  table.getMetaClient().getCommitTimeline().getInstantDetails(instantToRollback).get(),
+                  table.getMetaClient().getCommitsTimeline().getInstantDetails(instantToRollback).get(),
                   HoodieCommitMetadata.class);
 
               // In case all data was inserts and the commit failed, delete the file belonging to that commit
@@ -350,15 +351,14 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
         })
         .collect(Collectors.toList());
 
-    for (HoodieWriteStat writeStat : hoodieWriteStats) {
+    for (HoodieWriteStat writeStat : hoodieWriteStats.stream().filter(hoodieWriteStat -> !StringUtils.isNullOrEmpty(hoodieWriteStat.getFileId())).collect(Collectors.toList())) {
       FileSlice latestFileSlice = latestFileSlices.get(writeStat.getFileId());
       String fileId = writeStat.getFileId();
       String latestBaseInstant = latestFileSlice.getBaseInstantTime();
 
       Path fullLogFilePath = FSUtils.getPartitionPath(table.getConfig().getBasePath(), writeStat.getPath());
 
-      Map<String, Long> logFilesWithBlocksToRollback =
-          Collections.singletonMap(fullLogFilePath.toString(), writeStat.getTotalWriteBytes());
+      Map<String, Long> logFilesWithBlocksToRollback = Collections.singletonMap(fullLogFilePath.toString(), writeStat.getTotalWriteBytes());
 
       hoodieRollbackRequests.add(new HoodieRollbackRequest(partitionPath, fileId, latestBaseInstant,
           Collections.emptyList(), logFilesWithBlocksToRollback));

@@ -35,6 +35,7 @@ import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
@@ -197,12 +198,22 @@ public class BaseRollbackHelper implements Serializable {
             1L
         );
 
+        String partitionFullPath = metaClient.getBasePathV2().toString();
+        Map<String, Long> validLogBlocksToDelete = new HashMap<>();
+        rollbackRequest.getLogBlocksToBeDeleted().entrySet().stream().forEach((kv) -> {
+          String logFileFullPath = kv.getKey();
+          String logFileName = logFileFullPath.replace(partitionFullPath, "");
+          if (!StringUtils.isNullOrEmpty(logFileName)) {
+            validLogBlocksToDelete.put(kv.getKey(), kv.getValue());
+          }
+        });
+
         return Collections.singletonList(
                 Pair.of(rollbackRequest.getPartitionPath(),
                     HoodieRollbackStat.newBuilder()
                         .withPartitionPath(rollbackRequest.getPartitionPath())
                         .withRollbackBlockAppendResults(filesToNumBlocksRollback)
-                        .withLogFilesFromFailedCommit(rollbackRequest.getLogBlocksToBeDeleted())
+                        .withLogFilesFromFailedCommit(validLogBlocksToDelete)
                         .build()))
             .stream();
       } else {

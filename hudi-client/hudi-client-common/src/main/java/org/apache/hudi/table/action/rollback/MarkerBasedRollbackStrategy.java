@@ -118,6 +118,10 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
             throw new HoodieRollbackException("Unknown marker type, during rollback of " + instantToRollback);
         }
       }, parallelism);
+
+      if (rollbackRequests.isEmpty()) {
+        return rollbackRequests;
+      }
       // we need to ensure we return one rollback request per partition path, fileId, baseInstant triplet.
       List<HoodieRollbackRequest> processedRollbackRequests = context.parallelize(rollbackRequests)
           .mapToPair(rollbackRequest -> Pair.of(Pair.of(rollbackRequest.getPartitionPath(), rollbackRequest.getFileId()), rollbackRequest))
