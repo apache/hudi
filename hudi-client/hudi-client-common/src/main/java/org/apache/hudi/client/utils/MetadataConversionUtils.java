@@ -199,7 +199,7 @@ public class MetadataConversionUtils {
 
   public static Option<HoodieCommitMetadata> getHoodieCommitMetadata(HoodieTableMetaClient metaClient, HoodieInstant hoodieInstant) throws IOException {
     HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-    return timeline.containsInstant(hoodieInstant.getTimestamp()) ? Option.of(TimelineUtils.getCommitMetadata(hoodieInstant, timeline)) : Option.empty();
+    return Option.of(TimelineUtils.getCommitMetadata(hoodieInstant, timeline));
   }
 
   public static org.apache.hudi.avro.model.HoodieCommitMetadata convertCommitMetadata(

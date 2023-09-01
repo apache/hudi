@@ -318,7 +318,7 @@ public class FSUtils {
                                                                        List<String> filesNamesUnderThisPartition,
                                                                        boolean ignoreMissingFiles) {
     String fileSystemType = fileSystem.getScheme();
-    boolean useListStatus = !StorageSchemes.isListStatusUnfriendly(fileSystemType);
+    boolean useListStatus = StorageSchemes.isListStatusFriendly(fileSystemType);
     List<Option<FileStatus>> result = new ArrayList<>(filesNamesUnderThisPartition.size());
     try {
       if (useListStatus) {

@@ -227,15 +227,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         extraMetadata, operationType, config.getWriteSchema(), commitActionType);
     HoodieInstant inflightInstant = new HoodieInstant(State.INFLIGHT, commitActionType, instantTime);
     HeartbeatUtils.abortIfHeartbeatExpired(instantTime, table, heartbeatClient, config);
-    HoodieCommitMetadata metadata = null;
-    try {
-      metadata = CommitMetadataUtils.appendMetadataForMissingFiles(table, commitActionType,
-          instantTime, originalMetadata, config, context, hadoopConf, this.getClass().getSimpleName());
-    } catch (IOException e) {
-      throw new HoodieCommitException("Failed to fix commit metadata for spurious log files "
-          + config.getBasePath() + " at time " + instantTime, e);
-    }
-
+    HoodieCommitMetadata metadata = reconcileCommitMetadata(table, commitActionType, instantTime, originalMetadata);
     this.txnManager.beginTransaction(Option.of(inflightInstant),
         lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
     try {
@@ -278,6 +270,17 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       commitCallback.call(new HoodieWriteCommitCallbackMessage(instantTime, config.getTableName(), config.getBasePath(), stats));
     }
     return true;
+  }
+
+  private HoodieCommitMetadata reconcileCommitMetadata(HoodieTable table, String commitActionType, String instantTime,
+                                                       HoodieCommitMetadata originalMetadata) {
+    try {
+      return CommitMetadataUtils.reconcileMetadataForMissingFiles(table, commitActionType,
+          instantTime, originalMetadata, config, context, hadoopConf, this.getClass().getSimpleName());
+    } catch (IOException e) {
+      throw new HoodieCommitException("Failed to fix commit metadata for spurious log files "
+          + config.getBasePath() + " at time " + instantTime, e);
+    }
   }
 
   protected void commit(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata metadata,

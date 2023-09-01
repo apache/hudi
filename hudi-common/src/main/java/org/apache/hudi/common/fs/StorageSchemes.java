@@ -25,9 +25,9 @@ import java.util.Arrays;
  */
 public enum StorageSchemes {
   // Local filesystem
-  FILE("file", false, false, true, false),
+  FILE("file", false, false, true, true),
   // Hadoop File System
-  HDFS("hdfs", true, false, true, true),
+  HDFS("hdfs", true, false, true, false),
   // Baidu Advanced File System
   AFS("afs", true, null, null, null),
   // Mapr File System
@@ -35,9 +35,10 @@ public enum StorageSchemes {
   // Apache Ignite FS
   IGNITE("igfs", true, null, null, null),
   // AWS S3
-  S3A("s3a", false, true, null, false), S3("s3", false, true, null, false),
+  S3A("s3a", false, true, null, true),
+  S3("s3", false, true, null, true),
   // Google Cloud Storage
-  GCS("gs", false, true, null, null),
+  GCS("gs", false, true, null, true),
   // Azure WASB
   WASB("wasb", false, null, null, null), WASBS("wasbs", false, null, null, null),
   // Azure ADLS
@@ -85,14 +86,14 @@ public enum StorageSchemes {
   // list files may bring pressure to storage with centralized meta service like HDFS.
   // when we want to get only part of files under a directory rather than all files, use getStatus may be more friendly than listStatus.
   // here is a trade-off between rpc times and throughput of storage meta service
-  private Boolean listStatusUnfriendly;
+  private Boolean listStatusFriendly;
 
-  StorageSchemes(String scheme, boolean supportsAppend, Boolean isWriteTransactional, Boolean supportAtomicCreation, Boolean listStatusUnfriendly) {
+  StorageSchemes(String scheme, boolean supportsAppend, Boolean isWriteTransactional, Boolean supportAtomicCreation, Boolean listStatusFriendly) {
     this.scheme = scheme;
     this.supportsAppend = supportsAppend;
     this.isWriteTransactional = isWriteTransactional;
     this.supportAtomicCreation = supportAtomicCreation;
-    this.listStatusUnfriendly = listStatusUnfriendly;
+    this.listStatusFriendly = listStatusFriendly;
   }
 
   public String getScheme() {
@@ -111,8 +112,8 @@ public enum StorageSchemes {
     return supportAtomicCreation != null && supportAtomicCreation;
   }
 
-  public boolean isListStatusUnfriendly() {
-    return listStatusUnfriendly != null && listStatusUnfriendly;
+  public boolean getListStatusFriendly() {
+    return listStatusFriendly != null && listStatusFriendly;
   }
 
   public static boolean isSchemeSupported(String scheme) {
@@ -141,10 +142,10 @@ public enum StorageSchemes {
     return Arrays.stream(StorageSchemes.values()).anyMatch(s -> s.isAtomicCreationSupported() && s.scheme.equals(scheme));
   }
 
-  public static boolean isListStatusUnfriendly(String scheme) {
+  public static boolean isListStatusFriendly(String scheme) {
     if (!isSchemeSupported(scheme)) {
       throw new IllegalArgumentException("Unsupported scheme :" + scheme);
     }
-    return Arrays.stream(StorageSchemes.values()).anyMatch(s -> s.isListStatusUnfriendly() && s.scheme.equals(scheme));
+    return Arrays.stream(StorageSchemes.values()).anyMatch(s -> s.getListStatusFriendly() && s.scheme.equals(scheme));
   }
 }

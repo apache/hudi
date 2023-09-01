@@ -116,7 +116,7 @@ public class SparkRDDWriteClient<T> extends
                         List<HoodieWriteStat> stats, HoodieData<WriteStatus> writeStatuses) throws IOException {
     LOG.info("Committing " + instantTime + " action " + commitActionType);
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-    HoodieCommitMetadata fixedCommitMetadata = CommitMetadataUtils.appendMetadataForMissingFiles(table, commitActionType,
+    HoodieCommitMetadata fixedCommitMetadata = CommitMetadataUtils.reconcileMetadataForMissingFiles(table, commitActionType,
         instantTime, metadata, config, context, hadoopConf, this.getClass().getSimpleName());
 
     // Finalize write

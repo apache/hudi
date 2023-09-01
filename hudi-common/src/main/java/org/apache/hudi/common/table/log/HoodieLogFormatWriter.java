@@ -98,8 +98,8 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       if (fs.exists(path)) {
         boolean isAppendSupported = StorageSchemes.isAppendSupported(fs.getScheme());
         // here we use marker file to fence concurrent append to the same file. So it is safe to use speculation in spark now.
-        boolean callbackSuccess = isAppendSupported ? logFileWriteCallback.preLogFileOpen(logFile) : false;
-        if (isAppendSupported && callbackSuccess) {
+        boolean canAppend = isAppendSupported ? logFileWriteCallback.preLogFileOpen(logFile) : false;
+        if (canAppend) {
           LOG.info(logFile + " exists. Appending to existing file");
           try {
             // open the path for append and record the offset
@@ -121,7 +121,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
             }
           }
         }
-        if (!isAppendSupported || !callbackSuccess) {
+        if (!isAppendSupported || !canAppend) {
           rollOver();
           createNewFile();
           String rolloverReason = isAppendSupported ? "Append not supported" : "Callback failed";
