@@ -22,7 +22,9 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.stream.Collectors;
 
 /**
  * Avro simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
@@ -41,7 +43,10 @@ public class SimpleAvroKeyGenerator extends BaseKeyGenerator {
   SimpleAvroKeyGenerator(TypedProperties props, Option<String> recordKeyField, String partitionPathField) {
     super(props);
     this.recordKeyFields = recordKeyField.map(keyField -> Collections.singletonList(keyField)).orElse(Collections.emptyList());
-    this.partitionPathFields = Collections.singletonList(partitionPathField);
+    this.partitionPathFields = Arrays.stream(partitionPathField.split(","))
+            .map(String::trim)
+            .filter(s -> !s.isEmpty())
+            .collect(Collectors.toList());
   }
 
   @Override
@@ -51,6 +56,6 @@ public class SimpleAvroKeyGenerator extends BaseKeyGenerator {
 
   @Override
   public String getPartitionPath(GenericRecord record) {
-    return KeyGenUtils.getPartitionPath(record, getPartitionPathFields().get(0), hiveStylePartitioning, encodePartitionPath, isConsistentLogicalTimestampEnabled());
+    return KeyGenUtils.getRecordPartitionPath(record, getPartitionPathFields(), hiveStylePartitioning, encodePartitionPath, isConsistentLogicalTimestampEnabled());
   }
 }
