@@ -1289,16 +1289,9 @@ public class HoodieTableMetadataUtil {
         .filter(instant -> instant.getAction().equals(HoodieTimeline.RESTORE_ACTION) || instant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION))
         .getInstants().forEach(instant -> validInstantTimestamps.add(instant.getTimestamp()));
 
-    // add log compactions instants(005) from metadata table timeline which are complete.
     metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants()
-        .filter(instant ->  instant.getTimestamp().length() == 20 && instant.getTimestamp().endsWith(OperationSuffix.LOG_COMPACTION.getSuffix()))
+        .filter(instant ->  instant.getTimestamp().startsWith(SOLO_COMMIT_TIMESTAMP))
         .getInstants().forEach(instant -> validInstantTimestamps.add(instant.getTimestamp()));
-
-    // add any valid delta commit that initialized new partition. suffix could be dynamic.
-    metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants()
-        .filter(instant ->  instant.getTimestamp().length() == 20 &&  VALID_PARTITION_INITIALIZATION_TIME_SUFFIXES.contains(instant.getTimestamp().substring(17, 20)))
-        .getInstants().forEach(instant -> validInstantTimestamps.add(instant.getTimestamp()));
-
     return validInstantTimestamps;
   }
 
