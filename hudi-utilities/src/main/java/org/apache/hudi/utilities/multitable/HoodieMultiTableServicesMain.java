@@ -52,7 +52,7 @@ import java.util.stream.Collectors;
  * Main function for executing multi-table services
  */
 public class HoodieMultiTableServicesMain {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieStreamer.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieMultiTableServicesMain.class);
   final Config cfg;
   final TypedProperties props;
 

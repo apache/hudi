@@ -74,7 +74,7 @@ import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
  */
 class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implements SparkProvider {
 
-  private static final Logger LOG = LoggerFactory.getLogger(ArchiveTask.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieMultiTableServicesMain.class);
 
   protected boolean initialized = false;
 

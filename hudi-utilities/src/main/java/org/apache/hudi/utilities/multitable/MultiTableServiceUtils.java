@@ -62,6 +62,15 @@ public class MultiTableServiceUtils {
     return Arrays.asList(tablesArray);
   }
 
+  /**
+   * Type of directories when searching hoodie tables under path
+   */
+  enum DirType {
+    HOODIE_TABLE,
+    META_FOLDER,
+    NORMAL_DIR
+  }
+
   public static List<String> findHoodieTablesUnderPath(JavaSparkContext jsc, String pathStr) {
     Path rootPath = new Path(pathStr);
     SerializableConfiguration conf = new SerializableConfiguration(jsc.hadoopConfiguration());
@@ -89,20 +98,21 @@ public class MultiTableServiceUtils {
           .collect(Collectors.toList());
 
       if (!dirs.isEmpty()) {
-        List<Pair<FileStatus, Integer>> dirResults = engineContext.map(dirs, fileStatus -> {
+        List<Pair<FileStatus, DirType>> dirResults = engineContext.map(dirs, fileStatus -> {
           if (isHoodieTable(fileStatus.getPath(), conf.get())) {
-            return Pair.of(fileStatus, 0);
-          } else if (!fileStatus.getPath().getName().equals(METAFOLDER_NAME)) {
-            return Pair.of(fileStatus, 1);
+            return Pair.of(fileStatus, DirType.HOODIE_TABLE);
+          } else if (fileStatus.getPath().getName().equals(METAFOLDER_NAME)) {
+            return Pair.of(fileStatus, DirType.META_FOLDER);
+          } else {
+            return Pair.of(fileStatus, DirType.NORMAL_DIR);
           }
-          return Pair.of(fileStatus, 2);
         }, Math.min(Constants.DEFAULT_LISTING_PARALLELISM, dirs.size()));
 
         dirResults.stream().parallel().forEach(dirResult -> {
           FileStatus fileStatus = dirResult.getLeft();
-          if (dirResult.getRight() == 0) {
+          if (dirResult.getRight() == DirType.HOODIE_TABLE) {
             hoodieTablePaths.add(fileStatus.getPath().toString());
-          } else if (dirResult.getRight() == 1) {
+          } else if (dirResult.getRight() == DirType.NORMAL_DIR) {
             pathsToList.add(fileStatus.getPath());
           }
         });
