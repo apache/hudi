@@ -12,23 +12,19 @@ Meetings will be recorded and made available, on a best-effort basis.
 
 See more informations about Chinese community sync call by changing the website language into Chinese.
 
-### Schedules
-
-Refer to the [Apache Hudi events calendar](https://calendar.google.com/calendar/embed?src=rgpb1ta2mgp5au38fr2834poa8%40group.calendar.google.com&ctz=America%2FLos_Angeles).
-
 ## Monthly Community Call
 
 **[ZOOM LINK TO JOIN](https://zoom.us/j/96743829685?pwd=S3pxRVVKTDljWVFVWW1IU1UvY0JEUT09)**
 
-Every month on the Last Wed, 09:00 AM Pacific Time (US and Canada)([translate to other time zones](https://www.worldtimebuddy.com/?qm=1&lid=5368361,2643743,1264527,1796236&h=2643743&date=2022-5-25&sln=17-18&hf=1))
+Every month on the **Fourth Wednesday**, at 09:00 AM Pacific Time (US and Canada)([translate to other time zones](https://www.worldtimebuddy.com/?qm=1&lid=5368361,2643743,1264527,1796236&h=2643743&date=2022-5-25&sln=17-18&hf=1))
 
-**Recordings of the community calls**
+### Recordings of the community calls
 
 Uploaded to [Apache Hudi youtube channel](https://www.youtube.com/channel/UCs7AhE0BWaEPZSChrBR-Muw) after every call.
 
 [LINK TO SLIDE DECKS](https://drive.google.com/drive/folders/1hsq-kerUsHDlJ3WDeysMQGnVTmttzHgB?usp=sharing)
 
-**Typical agenda**
+### Typical agenda
 
 *   \[15 mins\] Progress updates & Plans (PMC member)
 *   \[30 mins\] User presentations, Upcoming feature show cases, Demos
@@ -36,6 +32,7 @@ Uploaded to [Apache Hudi youtube channel](https://www.youtube.com/channel/UCs7Ah
 
 If you would like to present in one of the community calls, please fill out a [form here](https://forms.gle/aMkb93ViHhzRRXqV9) and someone from PMC will engage with you.
 
-Here are some upcoming calls for convenience. 
-
+### Schedules
+Refer to the [Apache Hudi events calendar](https://calendar.google.com/calendar/embed?src=rgpb1ta2mgp5au38fr2834poa8%40group.calendar.google.com&ctz=America%2FLos_Angeles).
+Here are some upcoming calls for convenience.
 ![Upcoming calls](/assets/images/upcoming-community-calls.png)
