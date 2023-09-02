@@ -20,7 +20,7 @@ package org.apache.hudi.functional
 
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
@@ -35,7 +35,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.Properties
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
@@ -158,8 +157,7 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
   }
 
   private def getWriteConfig(hudiOpts: Map[String, String]): HoodieWriteConfig = {
-    val props = new Properties()
-    props.putAll(hudiOpts.asJava)
+    val props = TypedProperties.fromMap(hudiOpts.asJava)
     HoodieWriteConfig.newBuilder()
       .withProps(props)
       .withPath(basePath)
