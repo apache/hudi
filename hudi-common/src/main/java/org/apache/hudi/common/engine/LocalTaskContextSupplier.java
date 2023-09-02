@@ -45,4 +45,10 @@ public final class LocalTaskContextSupplier extends TaskContextSupplier {
   public Option<String> getProperty(EngineProperty prop) {
     return Option.empty();
   }
+
+  @Override
+  public Supplier<Integer> getAttemptNoSupplier() {
+    return () -> 0;
+  }
+
 }

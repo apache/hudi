@@ -429,6 +429,21 @@ public abstract class AbstractHoodieLogRecordReader {
 
     boolean dupsFound = blockSequenceMapPerCommit.values().stream().anyMatch(perCommitBlockList -> perCommitBlockList.size() > 1);
     if (dupsFound) {
+      if (LOG.isDebugEnabled()) {
+        LOG.warn("Duplicate log blocks found ");
+        for (Map.Entry<String, Map<Long, List<Pair<Integer, HoodieLogBlock>>>> entry : blockSequenceMapPerCommit.entrySet()) {
+          if (entry.getValue().size() > 1) {
+            LOG.warn("\tCommit time " + entry.getKey());
+            Map<Long, List<Pair<Integer, HoodieLogBlock>>> value = entry.getValue();
+            for (Map.Entry<Long, List<Pair<Integer, HoodieLogBlock>>> attemptsSeq : value.entrySet()) {
+              LOG.warn("\t\tAttempt number " + attemptsSeq.getKey());
+              attemptsSeq.getValue().forEach(entryValue -> LOG.warn("\t\t\tLog block sequence no : " + entryValue.getKey() + ", log file "
+                  + entryValue.getValue().getBlockContentLocation().get().getLogFile().getPath().toString()));
+            }
+          }
+        }
+      }
+
       // duplicates are found. we need to remove duplicate log blocks.
       for (Map.Entry<String, Map<Long, List<Pair<Integer, HoodieLogBlock>>>> entry: blockSequenceMapPerCommit.entrySet()) {
         Map<Long, List<Pair<Integer, HoodieLogBlock>>> perCommitBlockSequences = entry.getValue();
@@ -436,23 +451,22 @@ public abstract class AbstractHoodieLogRecordReader {
           // only those that have more than 1 sequence needs deduping.
           int maxSequenceCount = -1;
           int maxAttemptNo = -1;
-          int totalSequences = perCommitBlockSequences.size();
-          int counter = 0;
           for (Map.Entry<Long, List<Pair<Integer, HoodieLogBlock>>> perAttemptEntries : perCommitBlockSequences.entrySet()) {
             Long attemptNo = perAttemptEntries.getKey();
             int size = perAttemptEntries.getValue().size();
-            if (maxSequenceCount < size) {
+            if (maxSequenceCount <= size) {
               maxSequenceCount = size;
               maxAttemptNo = Math.toIntExact(attemptNo);
             }
-            counter++;
           }
-          // for other sequence (!= maxSequenceIndex), we need to remove the corresponding logBlocks from allValidLogBlocks
+          // for other sequences (!= maxSequenceIndex), we need to remove the corresponding logBlocks from allValidLogBlocks
           for (Map.Entry<Long, List<Pair<Integer, HoodieLogBlock>>> perAttemptEntries : perCommitBlockSequences.entrySet()) {
             Long attemptNo = perAttemptEntries.getKey();
             if (maxAttemptNo != attemptNo) {
               List<HoodieLogBlock> logBlocksToRemove = perCommitBlockSequences.get(attemptNo).stream().map(pair -> pair.getValue()).collect(Collectors.toList());
-              logBlocksToRemove.forEach(logBlockToRemove -> allValidLogBlocks.remove(logBlocksToRemove));
+              logBlocksToRemove.forEach(logBlockToRemove -> {
+                allValidLogBlocks.remove(logBlockToRemove);
+              });
             }
           }
         }
