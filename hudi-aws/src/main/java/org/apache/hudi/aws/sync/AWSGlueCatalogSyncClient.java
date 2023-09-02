@@ -67,6 +67,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.aws.utils.S3Utils.s3aToS3;
@@ -456,9 +457,13 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
         .build();
     try {
       return Objects.nonNull(awsGlue.getTable(request).get().table());
-    } catch (EntityNotFoundException e) {
-      LOG.info("Table not found: " + tableId(databaseName, tableName), e);
-      return false;
+    } catch (ExecutionException e) {
+      if (e.getCause() instanceof EntityNotFoundException) {
+        LOG.info("Table not found: " + tableId(databaseName, tableName), e);
+        return false;
+      } else {
+        throw new HoodieGlueSyncException("Fail to get table: " + tableId(databaseName, tableName), e);
+      }
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to get table: " + tableId(databaseName, tableName), e);
     }
@@ -469,9 +474,13 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     GetDatabaseRequest request = GetDatabaseRequest.builder().name(databaseName).build();
     try {
       return Objects.nonNull(awsGlue.getDatabase(request).get().database());
-    } catch (EntityNotFoundException e) {
-      LOG.info("Database not found: " + databaseName, e);
-      return false;
+    } catch (ExecutionException e) {
+      if (e.getCause() instanceof EntityNotFoundException) {
+        LOG.info("Database not found: " + databaseName, e);
+        return false;
+      } else {
+        throw new HoodieGlueSyncException("Fail to check if database exists " + databaseName, e);
+      }
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to check if database exists " + databaseName, e);
     }
