@@ -73,6 +73,7 @@ import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.URL_ENCODE_PAR
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 
 /**
  * Performs bootstrap from a non-hudi source.
@@ -194,6 +195,7 @@ public class BootstrapExecutorUtils implements Serializable {
       TypedProperties metaProps = new TypedProperties();
       metaProps.putAll(props);
       metaProps.put(META_SYNC_DATABASE_NAME.key(), cfg.database);
+      metaProps.put(META_SYNC_TABLE_NAME.key(), cfg.tableName);
       metaProps.put(META_SYNC_BASE_PATH.key(), cfg.basePath);
       metaProps.put(META_SYNC_BASE_FILE_FORMAT.key(), cfg.baseFileFormat);
       if (props.getBoolean(HIVE_SYNC_BUCKET_SYNC.key(), HIVE_SYNC_BUCKET_SYNC.defaultValue())) {
