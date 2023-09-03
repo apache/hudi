@@ -107,6 +107,7 @@
                                     <include>com.lmax:disruptor</include>
                                     <include>com.github.davidmoten:guava-mini</include>
                                     <include>com.github.davidmoten:hilbert-curve</include>
+                                    <include>com.github.ben-manes.caffeine:caffeine</include>
                                     <include>com.yammer.metrics:metrics-core</include>
                                     <include>com.beust:jcommander</include>
                                     <include>io.javalin:javalin</include>

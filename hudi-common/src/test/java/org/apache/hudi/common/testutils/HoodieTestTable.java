@@ -706,9 +706,10 @@ public class HoodieTestTable {
 
   public boolean commitExists(String instantTime) {
     try {
-      return fs.exists(getCommitFilePath(instantTime));
-    } catch (IOException e) {
-      throw new HoodieTestTableException(e);
+      getCommitFilePath(instantTime);
+      return true;
+    } catch (HoodieIOException e) {
+      return false;
     }
   }
 
@@ -745,7 +746,7 @@ public class HoodieTestTable {
   }
 
   public Path getCommitFilePath(String instantTime) {
-    return new Path(Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME, instantTime + HoodieTimeline.COMMIT_EXTENSION).toUri());
+    return HoodieTestUtils.getCompleteInstantPath(fs, new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME), instantTime, HoodieTimeline.COMMIT_ACTION);
   }
 
   public Path getRequestedCompactionFilePath(String instantTime) {

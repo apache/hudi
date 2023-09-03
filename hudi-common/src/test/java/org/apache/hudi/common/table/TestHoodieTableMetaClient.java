@@ -74,11 +74,11 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     HoodieActiveTimeline commitTimeline = deserializedMetaClient.getActiveTimeline();
     HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
     commitTimeline.createNewInstant(instant);
-    commitTimeline.saveAsComplete(instant, Option.of(getUTF8Bytes("test-detail")));
+    commitTimeline.saveAsComplete(false, instant, Option.of(getUTF8Bytes("test-detail")));
     commitTimeline = commitTimeline.reload();
-    HoodieInstant completedInstant = HoodieTimeline.getCompletedInstant(instant);
-    assertEquals(completedInstant, commitTimeline.getInstantsAsStream().findFirst().get(),
-        "Commit should be 1 and completed");
+    HoodieInstant completedInstant = commitTimeline.getInstantsAsStream().findFirst().get();
+    assertTrue(completedInstant.isCompleted());
+    assertEquals(completedInstant.getTimestamp(), instant.getTimestamp());
     assertArrayEquals(getUTF8Bytes("test-detail"), commitTimeline.getInstantDetails(completedInstant).get(),
         "Commit value should be \"test-detail\"");
   }
@@ -91,19 +91,19 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
 
     HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
     activeTimeline.createNewInstant(instant);
-    activeTimeline.saveAsComplete(instant, Option.of(getUTF8Bytes("test-detail")));
+    activeTimeline.saveAsComplete(false, instant, Option.of(getUTF8Bytes("test-detail")));
 
     // Commit timeline should not auto-reload every time getActiveCommitTimeline(), it should be cached
     activeTimeline = metaClient.getActiveTimeline();
     activeCommitTimeline = activeTimeline.getCommitTimeline();
     assertTrue(activeCommitTimeline.empty(), "Should be empty commit timeline");
 
-    HoodieInstant completedInstant = HoodieTimeline.getCompletedInstant(instant);
     activeTimeline = activeTimeline.reload();
+    HoodieInstant completedInstant = activeTimeline.getCommitsTimeline().getInstantsAsStream().findFirst().get();
     activeCommitTimeline = activeTimeline.getCommitTimeline();
     assertFalse(activeCommitTimeline.empty(), "Should be the 1 commit we made");
-    assertEquals(completedInstant, activeCommitTimeline.getInstantsAsStream().findFirst().get(),
-        "Commit should be 1");
+    assertTrue(completedInstant.isCompleted());
+    assertTrue(completedInstant.getTimestamp().equals(instant.getTimestamp()));
     assertArrayEquals(getUTF8Bytes("test-detail"), activeCommitTimeline.getInstantDetails(completedInstant).get(),
         "Commit value should be \"test-detail\"");
   }

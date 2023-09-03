@@ -93,19 +93,20 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     timeline = new HoodieActiveTimeline(metaClient);
     timeline.createNewInstant(instant1);
     timeline.transitionRequestedToInflight(instant1, Option.empty());
-    timeline.saveAsComplete(new HoodieInstant(true, instant1.getAction(), instant1.getTimestamp()),
+    // Won't lock here since InProcessLockProvider is not in hudi-common
+    timeline.saveAsComplete(false, new HoodieInstant(true, instant1.getAction(), instant1.getTimestamp()),
         Option.empty());
     timeline.createNewInstant(instant2);
     timeline.transitionRequestedToInflight(instant2, Option.empty());
-    timeline.saveAsComplete(new HoodieInstant(true, instant2.getAction(), instant2.getTimestamp()),
+    timeline.saveAsComplete(false, new HoodieInstant(true, instant2.getAction(), instant2.getTimestamp()),
         Option.empty());
     timeline.createNewInstant(instant3);
     timeline.transitionRequestedToInflight(instant3, Option.empty());
-    timeline.saveAsComplete(new HoodieInstant(true, instant3.getAction(), instant3.getTimestamp()),
+    timeline.saveAsComplete(false, new HoodieInstant(true, instant3.getAction(), instant3.getTimestamp()),
         Option.empty());
     timeline.createNewInstant(instant4);
     timeline.transitionRequestedToInflight(instant4, Option.empty());
-    timeline.saveAsComplete(new HoodieInstant(true, instant4.getAction(), instant4.getTimestamp()),
+    timeline.saveAsComplete(false, new HoodieInstant(true, instant4.getAction(), instant4.getTimestamp()),
         Option.empty());
     timeline.createNewInstant(instant5);
     timeline = timeline.reload();
@@ -216,7 +217,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
       timeline.createNewInstant(instant1);
 
       byte[] data = getUTF8Bytes("commit");
-      timeline.saveAsComplete(new HoodieInstant(true, instant1.getAction(),
+      timeline.saveAsComplete(false, new HoodieInstant(true, instant1.getAction(),
           instant1.getTimestamp()), Option.of(data));
 
       timeline = timeline.reload();
@@ -245,21 +246,21 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     HoodieInstant instant8 = new HoodieInstant(true, HoodieTimeline.RESTORE_ACTION, "8");
 
     timeline = new HoodieActiveTimeline(metaClient);
-    timeline.createNewInstant(instant1);
-    timeline.createNewInstant(instant2);
-    timeline.createNewInstant(instant3);
-    timeline.createNewInstant(instant4);
+    timeline.createCompleteInstant(false, instant1);
+    timeline.createCompleteInstant(false, instant2);
+    timeline.createCompleteInstant(false, instant3);
+    timeline.createCompleteInstant(false, instant4);
     timeline.createNewInstant(instant5);
-    timeline.createNewInstant(instant6);
-    timeline.createNewInstant(instant7);
+    timeline.createCompleteInstant(false, instant6);
+    timeline.createCompleteInstant(false, instant7);
     timeline.createNewInstant(instant8);
     timeline.setInstants(Stream.of(instant1, instant2, instant3, instant4, instant5, instant6, instant7, instant8).collect(Collectors.toList()));
 
     assertTrue(timeline.getContiguousCompletedWriteTimeline().lastInstant().isPresent());
     assertEquals(instant4.getTimestamp(), timeline.getContiguousCompletedWriteTimeline().lastInstant().get().getTimestamp());
     // transition both inflight instants to complete
-    timeline.saveAsComplete(new HoodieInstant(true, instant5.getAction(), instant5.getTimestamp()), Option.empty());
-    timeline.saveAsComplete(new HoodieInstant(true, instant8.getAction(), instant8.getTimestamp()), Option.empty());
+    timeline.saveAsComplete(false, new HoodieInstant(true, instant5.getAction(), instant5.getTimestamp()), Option.empty());
+    timeline.saveAsComplete(false, new HoodieInstant(true, instant8.getAction(), instant8.getTimestamp()), Option.empty());
     timeline = timeline.reload();
     // instant8 in not considered in write timeline, so last completed instant in timeline should be instant7
     assertTrue(timeline.getContiguousCompletedWriteTimeline().lastInstant().isPresent());
@@ -361,12 +362,12 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   public void testTimelineInstantOperations() {
     timeline = new HoodieActiveTimeline(metaClient, true);
     assertEquals(0, timeline.countInstants(), "No instant present");
-
     // revertToInflight
     HoodieInstant commit = new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "1");
-    timeline.createNewInstant(commit);
+    timeline.createCompleteInstant(false, commit);
     timeline = timeline.reload();
     assertEquals(1, timeline.countInstants());
+    commit = timeline.getInstantsAsStream().findFirst().get();
     assertTrue(timeline.containsInstant(commit));
     HoodieInstant inflight = timeline.revertToInflight(commit);
     // revert creates the .requested file
@@ -383,7 +384,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     assertFalse(timeline.containsInstant(commit));
 
     // deletePending
-    timeline.createNewInstant(commit);
+    timeline.createCompleteInstant(false, commit);
     timeline.createNewInstant(inflight);
     timeline = timeline.reload();
     assertEquals(1, timeline.countInstants());
@@ -419,7 +420,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     assertTrue(timeline.containsInstant(compaction));
     assertFalse(timeline.containsInstant(inflight));
     inflight = timeline.transitionCompactionRequestedToInflight(compaction);
-    compaction = timeline.transitionCompactionInflightToComplete(inflight, Option.empty());
+    compaction = timeline.transitionCompactionInflightToComplete(false, inflight, Option.empty());
     timeline = timeline.reload();
     assertTrue(timeline.containsInstant(compaction));
     assertFalse(timeline.containsInstant(inflight));
@@ -433,7 +434,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     timeline = timeline.reload();
     assertFalse(timeline.containsInstant(clean));
     assertTrue(timeline.containsInstant(inflight));
-    clean = timeline.transitionCleanInflightToComplete(inflight, Option.empty());
+    clean = timeline.transitionCleanInflightToComplete(false, inflight, Option.empty());
     timeline = timeline.reload();
     assertTrue(timeline.containsInstant(clean));
     assertFalse(timeline.containsInstant(inflight));
@@ -468,7 +469,11 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   public void testCreateInstants() {
     List<HoodieInstant> allInstants = getAllInstants();
     for (HoodieInstant instant : allInstants) {
-      timeline.createNewInstant(instant);
+      if (instant.isCompleted()) {
+        timeline.createCompleteInstant(false, instant);
+      } else {
+        timeline.createNewInstant(instant);
+      }
     }
 
     timeline = timeline.reload();
@@ -481,16 +486,14 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   public void testInstantFilenameOperations() {
     HoodieInstant instantRequested = new HoodieInstant(State.REQUESTED, HoodieTimeline.RESTORE_ACTION, "5");
     HoodieInstant instantInflight = new HoodieInstant(State.INFLIGHT, HoodieTimeline.RESTORE_ACTION, "5");
-    HoodieInstant instantComplete = new HoodieInstant(State.COMPLETED, HoodieTimeline.RESTORE_ACTION, "5");
+    HoodieInstant instantComplete = new HoodieInstant(State.COMPLETED, HoodieTimeline.RESTORE_ACTION, "5", "6");
     assertEquals(HoodieTimeline.getCommitFromCommitFile(instantRequested.getFileName()), "5");
     assertEquals(HoodieTimeline.getCommitFromCommitFile(instantInflight.getFileName()), "5");
-    assertEquals(HoodieTimeline.getCommitFromCommitFile(instantComplete.getFileName()), "5");
+    assertEquals(HoodieTimeline.getCommitFromCommitFile(instantComplete.getFileName()), "5_6");
 
-    assertEquals(HoodieTimeline.makeFileNameAsComplete(instantInflight.getFileName()),
-            instantComplete.getFileName());
-
-    assertEquals(HoodieTimeline.makeFileNameAsInflight(instantComplete.getFileName()),
-            instantInflight.getFileName());
+    assertEquals(HoodieTimeline.makeInflightRestoreFileName(
+        HoodieInstant.extractTimestamp(instantComplete.getFileName())),
+        instantInflight.getFileName());
   }
 
   @Test
@@ -564,9 +567,9 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
 
   @Test
   public void testCreateNewInstantTime() throws Exception {
-    String lastInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    String lastInstantTime = metaClient.createNewInstantTime(false);
     for (int i = 0; i < 3; ++i) {
-      String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
+      String newInstantTime = metaClient.createNewInstantTime(false);
       assertTrue(HoodieTimeline.compareTimestamps(lastInstantTime, HoodieTimeline.LESSER_THAN, newInstantTime));
       lastInstantTime = newInstantTime;
     }
@@ -717,5 +720,4 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     }
     fun.accept(metaClient);
   }
-
 }

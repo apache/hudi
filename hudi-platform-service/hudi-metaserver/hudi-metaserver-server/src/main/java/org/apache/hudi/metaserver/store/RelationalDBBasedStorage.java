@@ -32,6 +32,7 @@ import org.apache.hudi.metaserver.thrift.Table;
 
 import java.io.Serializable;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -126,7 +127,7 @@ public class RelationalDBBasedStorage implements MetaserverStorage, Serializable
     do {
       oldTimestamp = getLatestTimestamp(tableId);
       do {
-        newTimestamp = HoodieInstantTimeGenerator.createNewInstantTime(0L);
+        newTimestamp = HoodieInstantTimeGenerator.formatDate(new Date(System.currentTimeMillis()));
       } while (oldTimestamp != null && HoodieTimeline.compareTimestamps(newTimestamp,
           HoodieActiveTimeline.LESSER_THAN_OR_EQUALS, oldTimestamp));
       Map<String, Object> params = new HashMap<>();

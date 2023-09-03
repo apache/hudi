@@ -96,15 +96,15 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
 
   @Test
   public void testConcurrentWritesWithInterleavingSuccessfulCommit() throws Exception {
-    createCommit(HoodieActiveTimeline.createNewInstantTime(), metaClient);
+    createCommit(metaClient.createNewInstantTime(), metaClient);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
     Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
     // writer 1 starts
-    String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
+    String currentWriterInstant = metaClient.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
     // writer 2 starts and finishes
-    String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    String newInstantTime = metaClient.createNewInstantTime();
     createCommit(newInstantTime, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
@@ -128,17 +128,17 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
 
   @Test
   public void testConcurrentWritesWithReplaceInflightCommit() throws Exception {
-    createReplaceInflight(HoodieActiveTimeline.createNewInstantTime(), metaClient);
+    createReplaceInflight(metaClient.createNewInstantTime(), metaClient);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     Option<HoodieInstant> lastSuccessfulInstant = Option.empty();
 
     // writer 1 starts
-    String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
+    String currentWriterInstant = metaClient.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
 
     // writer 2 starts and finishes
-    String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    String newInstantTime = metaClient.createNewInstantTime();
     createReplaceInflight(newInstantTime, metaClient);
 
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
@@ -163,15 +163,15 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
 
   @Test
   public void testConcurrentWritesWithInterleavingScheduledCompaction() throws Exception {
-    createCommit(HoodieActiveTimeline.createNewInstantTime(), metaClient);
+    createCommit(metaClient.createNewInstantTime(), metaClient);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
     Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
     // writer 1 starts
-    String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
+    String currentWriterInstant = metaClient.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
     // compaction 1 gets scheduled
-    String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    String newInstantTime = metaClient.createNewInstantTime();
     createCompactionRequested(newInstantTime, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
@@ -195,15 +195,15 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
 
   @Test
   public void testConcurrentWritesWithInterleavingSuccessfulCompaction() throws Exception {
-    createCommit(HoodieActiveTimeline.createNewInstantTime(), metaClient);
+    createCommit(metaClient.createNewInstantTime(), metaClient);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
     Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
     // writer 1 starts
-    String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
+    String currentWriterInstant = metaClient.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
     // compaction 1 gets scheduled and finishes
-    String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    String newInstantTime = metaClient.createNewInstantTime();
     createCompaction(newInstantTime, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
@@ -230,15 +230,15 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
    */
   @Test
   public void testConcurrentWriteAndCompactionScheduledEarlier() throws Exception {
-    createCommit(HoodieActiveTimeline.createNewInstantTime(), metaClient);
+    createCommit(metaClient.createNewInstantTime(), metaClient);
     // compaction 1 gets scheduled
-    String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    String newInstantTime = metaClient.createNewInstantTime();
     createCompaction(newInstantTime, metaClient);
     // consider commits before this are all successful
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
     // writer 1 starts
-    String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
+    String currentWriterInstant = metaClient.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
@@ -253,15 +253,15 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
 
   @Test
   public void testConcurrentWritesWithInterleavingScheduledCluster() throws Exception {
-    createCommit(HoodieActiveTimeline.createNewInstantTime(), metaClient);
+    createCommit(metaClient.createNewInstantTime(), metaClient);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
     Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
     // writer 1 starts
-    String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
+    String currentWriterInstant = metaClient.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
     // clustering 1 gets scheduled
-    String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    String newInstantTime = metaClient.createNewInstantTime();
     createReplaceRequested(newInstantTime, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
@@ -285,15 +285,15 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
 
   @Test
   public void testConcurrentWritesWithInterleavingSuccessfulCluster() throws Exception {
-    createCommit(HoodieActiveTimeline.createNewInstantTime(), metaClient);
+    createCommit(metaClient.createNewInstantTime(), metaClient);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
     Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
     // writer 1 starts
-    String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
+    String currentWriterInstant = metaClient.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
     // cluster 1 gets scheduled and finishes
-    String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    String newInstantTime = metaClient.createNewInstantTime();
     createReplace(newInstantTime, WriteOperationType.CLUSTER, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
@@ -317,15 +317,15 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
 
   @Test
   public void testConcurrentWritesWithInterleavingSuccessfulReplace() throws Exception {
-    createCommit(HoodieActiveTimeline.createNewInstantTime(), metaClient);
+    createCommit(metaClient.createNewInstantTime(), metaClient);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
     Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
     // writer 1 starts
-    String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
+    String currentWriterInstant = metaClient.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
     // replace 1 gets scheduled and finished
-    String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    String newInstantTime = metaClient.createNewInstantTime();
     createReplace(newInstantTime, WriteOperationType.INSERT_OVERWRITE, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
@@ -351,24 +351,24 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
   @Test
   public void testConcurrentWritesWithPendingInstants() throws Exception {
     // step1: create a pending replace/commit/compact instant: C1,C11,C12
-    String newInstantTimeC1 = HoodieActiveTimeline.createNewInstantTime();
+    String newInstantTimeC1 = metaClient.createNewInstantTime();
     createPendingReplace(newInstantTimeC1, WriteOperationType.CLUSTER, metaClient);
 
-    String newCompactionInstantTimeC11 = HoodieActiveTimeline.createNewInstantTime();
+    String newCompactionInstantTimeC11 = metaClient.createNewInstantTime();
     createPendingCompaction(newCompactionInstantTimeC11, metaClient);
 
-    String newCommitInstantTimeC12 = HoodieActiveTimeline.createNewInstantTime();
+    String newCommitInstantTimeC12 = metaClient.createNewInstantTime();
     createInflightCommit(newCommitInstantTimeC12, metaClient);
     // step2: create a complete commit which has no conflict with C1,C11,C12, named it as C2
-    createCommit(HoodieActiveTimeline.createNewInstantTime(), metaClient);
+    createCommit(metaClient.createNewInstantTime(), metaClient);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
     Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
     // step3: write 1 starts, which has conflict with C1,C11,C12, named it as C3
-    String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
+    String currentWriterInstant = metaClient.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
     // step4: create a requested commit, which has conflict with C3, named it as C4
-    String commitC4 = HoodieActiveTimeline.createNewInstantTime();
+    String commitC4 = metaClient.createNewInstantTime();
     createRequestedCommit(commitC4, metaClient);
     // get PendingCommit during write 1 operation
     metaClient.reloadActiveTimeline();

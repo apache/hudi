@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
@@ -85,7 +86,9 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
 
   public static void createCommitFileWithMetadata(String basePath, String commitTime, Configuration configuration,
       String fileId1, String fileId2, Option<Integer> writes, Option<Integer> updates, Map<String, String> extraMetadata) throws Exception {
-    List<String> commitFileNames = Arrays.asList(HoodieTimeline.makeCommitFileName(commitTime), HoodieTimeline.makeInflightCommitFileName(commitTime),
+    List<String> commitFileNames = Arrays.asList(
+        HoodieTimeline.makeCommitFileName(commitTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
+        HoodieTimeline.makeInflightCommitFileName(commitTime),
         HoodieTimeline.makeRequestedCommitFileName(commitTime));
     for (String name : commitFileNames) {
       HoodieCommitMetadata commitMetadata =
@@ -99,7 +102,7 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
                                                   Option<Integer> updates, Map<String, String> extraMetadata,
                                                   boolean setDefaultFileId) throws Exception {
     List<String> commitFileNames = Arrays.asList(
-        HoodieTimeline.makeCommitFileName(commitTime),
+        HoodieTimeline.makeCommitFileName(commitTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
         HoodieTimeline.makeInflightCommitFileName(commitTime),
         HoodieTimeline.makeRequestedCommitFileName(commitTime));
     for (String name : commitFileNames) {

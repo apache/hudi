@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
@@ -120,7 +121,7 @@ public class HoodieTestCommitGenerator {
   public static void createCommitAndDataFiles(
       String basePath, String instantTime,
       Map<String, List<Pair<String, String>>> partitionPathToFileIdAndNameMap) throws IOException {
-    String commitFilename = HoodieTimeline.makeCommitFileName(instantTime);
+    String commitFilename = HoodieTimeline.makeCommitFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime());
     HoodieCommitMetadata commitMetadata =
         generateCommitMetadata(partitionPathToFileIdAndNameMap, Collections.emptyMap());
     createCommitFileWithMetadata(basePath, new Configuration(), commitFilename, serializeCommitMetadata(commitMetadata).get());

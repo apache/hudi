@@ -20,7 +20,6 @@
 package org.apache.hudi.async;
 
 import org.apache.hudi.client.BaseHoodieWriteClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -49,7 +48,7 @@ public class AsyncCleanerService extends HoodieAsyncTableService {
 
   @Override
   protected Pair<CompletableFuture, ExecutorService> startService() {
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    String instantTime = writeClient.createNewInstantTime();
     LOG.info(String.format("Starting async clean service with instant time %s...", instantTime));
     return Pair.of(CompletableFuture.supplyAsync(() -> {
       writeClient.clean(instantTime);

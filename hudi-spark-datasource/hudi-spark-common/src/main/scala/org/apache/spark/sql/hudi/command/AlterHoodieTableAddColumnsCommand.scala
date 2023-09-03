@@ -113,7 +113,7 @@ object AlterHoodieTableAddColumnsCommand extends SparkAdapterSupport {
     )
 
     val commitActionType = CommitUtils.getCommitActionType(WriteOperationType.ALTER_SCHEMA, hoodieCatalogTable.tableType)
-    val instantTime = HoodieActiveTimeline.createNewInstantTime
+    val instantTime = client.createNewInstantTime()
 
     client.startCommitWithTime(instantTime, commitActionType)
     client.preWrite(instantTime, WriteOperationType.ALTER_SCHEMA, hoodieCatalogTable.metaClient)

@@ -116,11 +116,11 @@ class HoodieStreamSource(
     filteredTimeline match {
       case activeInstants if !activeInstants.empty() =>
         val timestamp = if (hollowCommitHandling == USE_TRANSITION_TIME) {
-          activeInstants.getInstantsOrderedByStateTransitionTime
+          activeInstants.getInstantsOrderedByCompletionTime
             .skip(activeInstants.countInstants() - 1)
             .findFirst()
             .get()
-            .getStateTransitionTime
+            .getCompletionTime
         } else {
           activeInstants.lastInstant().get().getTimestamp
         }

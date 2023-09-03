@@ -34,7 +34,6 @@ import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -314,7 +313,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     Future future1 = executors.submit(() -> {
       try {
-        final String nextCommitTime = HoodieActiveTimeline.createNewInstantTime();
+        final String nextCommitTime = client1.createNewInstantTime();
         final JavaRDD<WriteStatus> writeStatusList = startCommitForUpdate(writeConfig, client1, nextCommitTime, 100);
 
         // Wait for the 2nd writer to start the commit
@@ -335,7 +334,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     Future future2 = executors.submit(() -> {
       try {
-        final String nextCommitTime = HoodieActiveTimeline.createNewInstantTime();
+        final String nextCommitTime = client2.createNewInstantTime();
 
         // Wait for the 1st writer to make progress with the commit
         cyclicBarrier.await(60, TimeUnit.SECONDS);
@@ -479,14 +478,14 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     // Create the first commit with inserts
     HoodieWriteConfig cfg = writeConfigBuilder.build();
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
-    String firstCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    String firstCommitTime = client.createNewInstantTime();
     createCommitWithInserts(cfg, client, "000", firstCommitTime, 200, true);
     validInstants.add(firstCommitTime);
 
     // Create 2 commits with upserts
-    String secondCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    String secondCommitTime = client.createNewInstantTime();
     createCommitWithUpserts(cfg, client, firstCommitTime, "000", secondCommitTime, 100);
-    String thirdCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    String thirdCommitTime = client.createNewInstantTime();
     createCommitWithUpserts(cfg, client, secondCommitTime, "000", thirdCommitTime, 100);
     validInstants.add(secondCommitTime);
     validInstants.add(thirdCommitTime);
@@ -509,7 +508,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     // Create upserts, schedule cleaning, schedule compaction in parallel
     Future future1 = executors.submit(() -> {
-      final String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      final String newCommitTime = client1.createNewInstantTime();
       final int numRecords = 100;
       final String commitTimeBetweenPrevAndNew = secondCommitTime;
 
@@ -538,7 +537,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     Future future2 = executors.submit(() -> {
       if (tableType == HoodieTableType.MERGE_ON_READ) {
         assertDoesNotThrow(() -> {
-          String compactionTimeStamp = HoodieActiveTimeline.createNewInstantTime();
+          String compactionTimeStamp = client2.createNewInstantTime();
           client2.scheduleTableService(compactionTimeStamp, Option.empty(), TableServiceType.COMPACT);
         });
       }
@@ -548,7 +547,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     Future future3 = executors.submit(() -> {
       assertDoesNotThrow(() -> {
         latchCountDownAndWait(scheduleCountDownLatch, 30000);
-        String cleanCommitTime = HoodieActiveTimeline.createNewInstantTime();
+        String cleanCommitTime = client3.createNewInstantTime();
         client3.scheduleTableService(cleanCommitTime, Option.empty(), TableServiceType.CLEAN);
       });
     });
@@ -564,12 +563,12 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         .firstInstant();
     String pendingCleanTime = pendingCleanInstantOp.isPresent()
         ? pendingCleanInstantOp.get().getTimestamp()
-        : HoodieActiveTimeline.createNewInstantTime();
+        : client.createNewInstantTime();
 
     CountDownLatch runCountDownLatch = new CountDownLatch(threadCount);
     // Create inserts, run cleaning, run compaction in parallel
     future1 = executors.submit(() -> {
-      final String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      final String newCommitTime = client1.createNewInstantTime();
       final int numRecords = 100;
       latchCountDownAndWait(runCountDownLatch, 30000);
       assertDoesNotThrow(() -> {

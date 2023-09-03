@@ -33,11 +33,13 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
+
 import java.io.File
 import java.util
 import java.util.Collections
 import java.util.function.Supplier
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+
 import scala.collection.JavaConverters._
 import scala.util.control.Breaks.break
 

@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -198,7 +197,7 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
   }
 
   private boolean writeOnMainTable(TestTableContents mainTable, int curr) throws IOException {
-    String commitTime = HoodieActiveTimeline.createNewInstantTime();
+    String commitTime = mainTable.client.createNewInstantTime();
     mainTable.client.startCommitWithTime(commitTime);
 
     int actionType = pickAWriteAction();

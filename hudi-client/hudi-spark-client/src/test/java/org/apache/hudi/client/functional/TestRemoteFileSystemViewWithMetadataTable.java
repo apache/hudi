@@ -254,7 +254,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
   }
 
   private void writeToTable(int round, SparkRDDWriteClient writeClient) throws IOException {
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    String instantTime = writeClient.createNewInstantTime();
     writeClient.startCommitWithTime(instantTime);
     List<HoodieRecord> records = round == 0
         ? dataGen.generateInserts(instantTime, 100)

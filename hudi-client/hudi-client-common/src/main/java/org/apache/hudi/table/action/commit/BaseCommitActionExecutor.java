@@ -223,7 +223,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
       writeTableMetadata(metadata, writeStatuses, actionType);
       // cannot serialize maps with null values
       metadata.getExtraMetadata().entrySet().removeIf(entry -> entry.getValue() == null);
-      activeTimeline.saveAsComplete(
+      activeTimeline.saveAsComplete(false,
           new HoodieInstant(true, actionType, instantTime),
           serializeCommitMetadata(metadata));
       LOG.info("Committed " + instantTime);

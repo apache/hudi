@@ -44,6 +44,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
@@ -246,7 +247,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
     metaClient.getActiveTimeline().createNewInstant(
         new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, firstEmptyInstantTs));
-    metaClient.getActiveTimeline().saveAsComplete(
+    metaClient.getActiveTimeline().saveAsComplete(false,
         new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, firstEmptyInstantTs),
         serializeCommitMetadata(metadata));
 
@@ -289,7 +290,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
     metaClient.getActiveTimeline().createNewInstant(
         new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, firstEmptyInstantTs));
-    metaClient.getActiveTimeline().saveAsComplete(
+    metaClient.getActiveTimeline().saveAsComplete(false,
         new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, firstEmptyInstantTs),
         serializeCommitMetadata(metadata));
 
@@ -631,7 +632,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     HoodieInstant cleanInflightInstant = new HoodieInstant(true, HoodieTimeline.CLEAN_ACTION, cleanInstant);
     metaClient.getActiveTimeline().createNewInstant(cleanInflightInstant);
     HoodieCleanMetadata cleanMetadata = CleanerUtils.convertCleanMetadata(cleanInstant, Option.empty(), cleanStats);
-    metaClient.getActiveTimeline().saveAsComplete(cleanInflightInstant,
+    metaClient.getActiveTimeline().saveAsComplete(false, cleanInflightInstant,
         TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata));
   }
 
@@ -662,15 +663,18 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
       HoodieInstant restoreInstant = new HoodieInstant(true, HoodieTimeline.RESTORE_ACTION, rollbackInstant);
       metaClient.getActiveTimeline().createNewInstant(restoreInstant);
-      metaClient.getActiveTimeline().saveAsComplete(restoreInstant, TimelineMetadataUtils.serializeRestoreMetadata(metadata));
+      metaClient.getActiveTimeline().saveAsComplete(false,
+          restoreInstant, TimelineMetadataUtils.serializeRestoreMetadata(metadata));
     } else {
       metaClient.getActiveTimeline().createNewInstant(
           new HoodieInstant(true, HoodieTimeline.ROLLBACK_ACTION, rollbackInstant));
-      metaClient.getActiveTimeline().saveAsComplete(
+      metaClient.getActiveTimeline().saveAsComplete(false,
           new HoodieInstant(true, HoodieTimeline.ROLLBACK_ACTION, rollbackInstant),
           TimelineMetadataUtils.serializeRollbackMetadata(rollbackMetadata));
     }
-    boolean deleted = metaClient.getFs().delete(new Path(metaClient.getMetaPath(), instant.getFileName()), false);
+    Path instantPath = HoodieTestUtils
+        .getCompleteInstantPath(metaClient.getFs(), new Path(metaClient.getMetaPath()), instant.getTimestamp(), instant.getAction());
+    boolean deleted = metaClient.getFs().delete(instantPath, false);
     assertTrue(deleted);
   }
 
@@ -983,7 +987,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     HoodieInstant inflightInstant = new HoodieInstant(true,
         deltaCommit ? HoodieTimeline.DELTA_COMMIT_ACTION : HoodieTimeline.COMMIT_ACTION, instant);
     metaClient.getActiveTimeline().createNewInstant(inflightInstant);
-    metaClient.getActiveTimeline().saveAsComplete(inflightInstant, serializeCommitMetadata(metadata));
+    metaClient.getActiveTimeline().saveAsComplete(false, inflightInstant, serializeCommitMetadata(metadata));
     return writeStats.stream().map(e -> e.getValue().getPath()).collect(Collectors.toList());
   }
 
@@ -1004,7 +1008,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     HoodieReplaceCommitMetadata replaceCommitMetadata = new HoodieReplaceCommitMetadata();
     writeStats.forEach(e -> replaceCommitMetadata.addWriteStat(e.getKey(), e.getValue()));
     replaceCommitMetadata.setPartitionToReplaceFileIds(partitionToReplaceFileIds);
-    metaClient.getActiveTimeline().saveAsComplete(
+    metaClient.getActiveTimeline().saveAsComplete(false,
         inflightInstant,
         serializeCommitMetadata(replaceCommitMetadata));
     return writeStats.stream().map(e -> e.getValue().getPath()).collect(Collectors.toList());
@@ -1014,5 +1018,4 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
   protected HoodieTableType getTableType() {
     return HoodieTableType.MERGE_ON_READ;
   }
-
 }

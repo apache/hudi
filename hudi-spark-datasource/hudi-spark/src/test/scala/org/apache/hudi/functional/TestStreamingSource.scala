@@ -201,7 +201,7 @@ class TestStreamingSource extends StreamTest {
 
       val timestamp = if (handlingMode == USE_TRANSITION_TIME) {
         metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
-          .firstInstant().get().getStateTransitionTime
+          .firstInstant().get().getCompletionTime
       } else {
         metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
           .firstInstant().get().getTimestamp

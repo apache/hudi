@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.testutils;
 
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
@@ -51,6 +52,7 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -58,6 +60,7 @@ import java.nio.file.attribute.FileTime;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -118,9 +121,15 @@ public class FileCreateUtils {
     if (!fs.exists(parentPath)) {
       fs.create(parentPath).close();
     }
-    org.apache.hadoop.fs.Path metaFilePath = new org.apache.hadoop.fs.Path(parentPath, instantTime + suffix);
-    if (!fs.exists(metaFilePath)) {
-      fs.create(metaFilePath).close();
+
+    if (suffix.contains(HoodieTimeline.INFLIGHT_EXTENSION) || suffix.contains(HoodieTimeline.REQUESTED_EXTENSION)) {
+      org.apache.hadoop.fs.Path metaFilePath = new org.apache.hadoop.fs.Path(parentPath, instantTime + suffix);
+      if (!fs.exists(metaFilePath)) {
+        fs.create(metaFilePath).close();
+      }
+    } else {
+      String instantTimeWithCompletionTime = instantTime + "_" + InProcessTimeGenerator.createNewInstantTime();
+      fs.create(new org.apache.hadoop.fs.Path(parentPath, instantTimeWithCompletionTime + suffix)).close();
     }
   }
 
@@ -131,29 +140,46 @@ public class FileCreateUtils {
   private static void createMetaFile(String basePath, String instantTime, String suffix, byte[] content) throws IOException {
     Path parentPath = Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
     Files.createDirectories(parentPath);
-    Path metaFilePath = parentPath.resolve(instantTime + suffix);
-    if (Files.notExists(metaFilePath)) {
-      if (content.length == 0) {
-        Files.createFile(metaFilePath);
-      } else {
-        Files.write(metaFilePath, content);
+    if (suffix.contains(HoodieTimeline.INFLIGHT_EXTENSION) || suffix.contains(HoodieTimeline.REQUESTED_EXTENSION)) {
+      Path metaFilePath = parentPath.resolve(instantTime + suffix);
+      if (Files.notExists(metaFilePath)) {
+        if (content.length == 0) {
+          Files.createFile(metaFilePath);
+        } else {
+          Files.write(metaFilePath, content);
+        }
+      }
+    } else {
+      try (DirectoryStream<Path> dirStream = Files.newDirectoryStream(parentPath, instantTime + "*" + suffix)) {
+        // The instant file is not exist
+        if (!dirStream.iterator().hasNext()) {
+          // doesn't contains completion time
+          String instantTimeAndCompletionTime = instantTime + "_" + InProcessTimeGenerator.createNewInstantTime();
+          Path metaFilePath = parentPath.resolve(instantTimeAndCompletionTime + suffix);
+          if (content.length == 0) {
+            Files.createFile(metaFilePath);
+          } else {
+            Files.write(metaFilePath, content);
+          }
+        }
       }
     }
   }
 
   private static void deleteMetaFile(String basePath, String instantTime, String suffix, FileSystem fs) throws IOException {
     org.apache.hadoop.fs.Path parentPath = new org.apache.hadoop.fs.Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
-    org.apache.hadoop.fs.Path metaFilePath = new org.apache.hadoop.fs.Path(parentPath, instantTime + suffix);
-    if (fs.exists(metaFilePath)) {
-      fs.delete(metaFilePath, true);
-    }
-  }
 
-  private static void deleteMetaFile(String basePath, String instantTime, String suffix) throws IOException {
-    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
-    Path metaFilePath = parentPath.resolve(instantTime + suffix);
-    if (Files.exists(metaFilePath)) {
-      Files.delete(metaFilePath);
+    if (suffix.contains(HoodieTimeline.INFLIGHT_EXTENSION) || suffix.contains(HoodieTimeline.REQUESTED_EXTENSION)) {
+      org.apache.hadoop.fs.Path metaFilePath = new org.apache.hadoop.fs.Path(parentPath, instantTime + suffix);
+      if (fs.exists(metaFilePath)) {
+        fs.delete(metaFilePath, true);
+      }
+    } else {
+      org.apache.hadoop.fs.Path metaFilePath = new org.apache.hadoop.fs.Path(parentPath, instantTime + "*" + suffix);
+      FileStatus[] fileStatuses = fs.globStatus(metaFilePath);
+      if (fileStatuses.length != 0) {
+        fs.delete(fileStatuses[0].getPath(), true);
+      }
     }
   }
 
@@ -386,9 +412,22 @@ public class FileCreateUtils {
 
   private static void removeMetaFile(String basePath, String instantTime, String suffix) throws IOException {
     Path parentPath = Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
-    Path metaFilePath = parentPath.resolve(instantTime + suffix);
-    if (Files.exists(metaFilePath)) {
-      Files.delete(metaFilePath);
+    if (suffix.contains(HoodieTimeline.INFLIGHT_EXTENSION) || suffix.contains(HoodieTimeline.REQUESTED_EXTENSION)) {
+      Path metaFilePath = parentPath.resolve(instantTime + suffix);
+      if (Files.exists(metaFilePath)) {
+        Files.delete(metaFilePath);
+      }
+    } else {
+      if (Files.exists(parentPath)) {
+        try (DirectoryStream<Path> dirStream = Files.newDirectoryStream(parentPath, instantTime + "*" + suffix)) {
+          Iterator<Path> iterator = dirStream.iterator();
+          // The instant file exists
+          if (iterator.hasNext()) {
+            // doesn't contains completion time
+            Files.delete(iterator.next());
+          }
+        }
+      }
     }
   }
 

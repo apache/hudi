@@ -70,12 +70,12 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
         val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
         // Generate the first clustering plan
-        val firstScheduleInstant = HoodieActiveTimeline.createNewInstantTime
+        val firstScheduleInstant = client.createNewInstantTime()
         client.scheduleClusteringAtInstant(firstScheduleInstant, HOption.empty())
 
         // Generate the second clustering plan
         spark.sql(s"insert into $tableName values(4, 'a4', 10, 1003)")
-        val secondScheduleInstant = HoodieActiveTimeline.createNewInstantTime
+        val secondScheduleInstant = client.createNewInstantTime()
         client.scheduleClusteringAtInstant(secondScheduleInstant, HOption.empty())
         checkAnswer(s"call show_clustering('$tableName')")(
           Seq(secondScheduleInstant, 1, HoodieInstant.State.REQUESTED.name(), "*"),
@@ -171,7 +171,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
         val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
         // Generate the first clustering plan
-        val firstScheduleInstant = HoodieActiveTimeline.createNewInstantTime
+        val firstScheduleInstant = client.createNewInstantTime()
         client.scheduleClusteringAtInstant(firstScheduleInstant, HOption.empty())
         checkAnswer(s"call show_clustering(path => '$basePath', show_involved_partition => true)")(
           Seq(firstScheduleInstant, 3, HoodieInstant.State.REQUESTED.name(), "ts=1000,ts=1001,ts=1002")

@@ -23,7 +23,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -219,7 +218,7 @@ public class TestStreamReadMonitoringFunction {
     // re-create the metadata file for c2 and c3 so that they have greater completion time than c4.
     // the completion time sequence become: c1, c4, c2, c3,
     // we will test with the same consumption sequence.
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tempFile.getAbsolutePath(), HadoopConfigurations.getHadoopConf(conf));
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
     List<HoodieInstant> oriInstants = metaClient.getCommitsTimeline().filterCompletedInstants().getInstants();
     assertThat(oriInstants.size(), is(4));
     List<HoodieCommitMetadata> metadataList = new ArrayList<>();

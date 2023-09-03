@@ -32,7 +32,6 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
@@ -186,7 +185,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
       writeClient.commit(newCommitTime, writeStatues);
 
       // Create new commit time.
-      String secondCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      String secondCommitTime = writeClient.createNewInstantTime();
       // Now tagLocation for these records, index should tag them correctly
       metaClient = HoodieTableMetaClient.reload(metaClient);
       hoodieTable = HoodieSparkTable.create(config, context, metaClient);

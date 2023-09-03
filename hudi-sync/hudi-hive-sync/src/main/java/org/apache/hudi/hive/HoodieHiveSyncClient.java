@@ -356,10 +356,10 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     HoodieTimeline activeTimeline = getActiveTimeline();
     Option<String> lastCommitSynced = activeTimeline.lastInstant().map(HoodieInstant::getTimestamp);
     Option<String> lastCommitCompletionSynced = activeTimeline
-        .getInstantsOrderedByStateTransitionTime()
+        .getInstantsOrderedByCompletionTime()
         .skip(activeTimeline.countInstants() - 1)
         .findFirst()
-        .map(i -> Option.of(i.getStateTransitionTime()))
+        .map(i -> Option.of(i.getCompletionTime()))
         .orElse(Option.empty());
     if (lastCommitSynced.isPresent()) {
       try {

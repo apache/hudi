@@ -24,7 +24,6 @@ import org.apache.hudi.exception.HoodieException;
 import java.text.ParseException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.DateTimeParseException;
@@ -61,20 +60,23 @@ public class HoodieInstantTimeGenerator {
   private static HoodieTimelineTimeZone commitTimeZone = HoodieTimelineTimeZone.LOCAL;
 
   /**
-   * Returns next instant time that adds N milliseconds to the current time.
-   * Ensures each instant time is atleast 1 second apart since we create instant times at second granularity
+   * Returns next instant time in the correct format.
+   * Ensures each instant time is at least 1 millisecond apart since we create instant times at millisecond granularity.
    *
-   * @param milliseconds Milliseconds to add to current time while generating the new instant time
+   * @param shouldLock    Whether the lock should be enabled to get the instant time.
+   * @param timeGenerator TimeGenerator used to generate the instant time.
+   * @param milliseconds  Milliseconds to add to current time while generating the new instant time
    */
-  public static String createNewInstantTime(long milliseconds) {
+  public static String createNewInstantTime(boolean shouldLock, TimeGenerator timeGenerator, long milliseconds) {
     return lastInstantTime.updateAndGet((oldVal) -> {
       String newCommitTime;
       do {
+        Date d = new Date(timeGenerator.currentTimeMillis(!shouldLock) + milliseconds);
+
         if (commitTimeZone.equals(HoodieTimelineTimeZone.UTC)) {
-          LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
-          newCommitTime = now.format(MILLIS_INSTANT_TIME_FORMATTER);
+          newCommitTime = d.toInstant().atZone(HoodieTimelineTimeZone.UTC.getZoneId())
+              .toLocalDateTime().format(MILLIS_INSTANT_TIME_FORMATTER);
         } else {
-          Date d = new Date(System.currentTimeMillis() + milliseconds);
           newCommitTime = MILLIS_INSTANT_TIME_FORMATTER.format(convertDateToTemporalAccessor(d));
         }
       } while (HoodieTimeline.compareTimestamps(newCommitTime, HoodieActiveTimeline.LESSER_THAN_OR_EQUALS, oldVal));
