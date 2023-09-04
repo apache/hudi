@@ -108,7 +108,9 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
   @Override
   public void snapshotState(StateSnapshotContext context) throws Exception {
     lastInstantTime = this.ckpMetadata.lastPendingInstant();
-    instantState.update(Collections.singletonList(lastInstantTime));
+    if (null != lastInstantTime) {
+      instantState.update(Collections.singletonList(lastInstantTime));
+    }
   }
 
   @Override
