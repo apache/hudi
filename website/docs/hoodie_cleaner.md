@@ -13,7 +13,8 @@ retaining long history of data and the associated storage costs.
 
 Hudi enables [Automatic Hudi cleaning](/docs/configurations/#hoodiecleanautomatic) by default. Cleaning is invoked 
 immediately after each commit, to delete older file slices. It's recommended to leave this enabled to ensure metadata 
-and data storage growth is bounded. 
+and data storage growth is bounded. Cleaner can also be scheduled after every few commits instead of after every commit by 
+configuring [hoodie.clean.max.commits](https://hudi.apache.org/docs/configurations#hoodiecleanmaxcommits).
 
 ### Cleaning Retention Policies 
 When cleaning old files, you should be careful not to remove files that are being actively used by long running queries.
