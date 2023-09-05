@@ -7,22 +7,23 @@ last_modified_at:
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-The following are SparkSQL table management actions available:
+The following are SparkSQL DDL actions available:
 
 ## Spark Create Table
 :::note
-Only SparkSQL needs an explicit Create Table command. No Create Table command is required in Spark when using Scala or Python. The first batch of a [Write](/docs/writing_data) to a table will create the table if it does not exist.
+Only SparkSQL needs an explicit Create Table command. No Create Table command is required in Spark when using Scala or 
+Python. The first batch of a [Write](/docs/writing_data) to a table will create the table if it does not exist.
 :::
 
 ### Options
 
 Users can set table options while creating a hudi table.
 
-| Parameter Name | Description | (Optional/Required) : Default Value |
-|------------|--------|--------|
-| primaryKey | The primary key names of the table, multiple fields separated by commas. | (Optional) : `id`|
-| type       | The type of table to create ([read more](/docs/table_types)). <br></br> `cow` = COPY-ON-WRITE, `mor` = MERGE-ON-READ.| (Optional) : `cow` |
-| preCombineField | The Pre-Combine field of the table. | (Optional) : `ts`|
+| Parameter Name | Description                                                                                                                                                                                                        | (Optional/Required) : Default Value |
+|------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------|
+| primaryKey | The primary key names of the table, multiple fields separated by commas. When set, hudi will ensure uniqueness during updates and deletes. When this config is skipped, hudi treats the table as a key less table. | (Optional) : `id`|
+| type       | The type of table to create ([read more](/docs/table_types)). <br></br> `cow` = COPY-ON-WRITE, `mor` = MERGE-ON-READ.                                                                                              | (Optional) : `cow` |
+| preCombineField | The Pre-Combine field of the table. This field will be used in resolving the final version of the record when two versions are combined with merges or updates.                                                    | (Optional) : `ts`|
 
 To set any custom hudi config(like index type, max parquet size, etc), see the  "Set hudi config section" .
 
@@ -30,19 +31,22 @@ To set any custom hudi config(like index type, max parquet size, etc), see the  
 Here is an example of creating a COW table.
 
 ```sql
--- create a non-primary key table
+-- create a non-primary key (or key less) table
 create table if not exists hudi_table2(
   id int, 
   name string, 
   price double
 ) using hudi
-options (
+tblproperties (
   type = 'cow'
 );
 ```
 
+There could be datasets where primary key may not be feasible. For such use-cases, user don't need to elect any primary key for 
+the table and hudi will treat them as key less table. Users can still perform Merge Into, updates and deletes based on any random data column. 
+
 ### Primary Key
-Here is an example of creating COW table with a primary key 'id'.
+Here is an example of creating COW table with a primary key 'id'. For mutable datasets, it is recommended to set appropriate primary key. 
 
 ```sql
 -- create a managed cow table
@@ -51,7 +55,7 @@ create table if not exists hudi_table0 (
   name string, 
   price double
 ) using hudi
-options (
+tblproperties (
   type = 'cow',
   primaryKey = 'id'
 );
@@ -59,7 +63,8 @@ options (
 
 ### PreCombineField
 Here is an example of creating an MOR external table. The **preCombineField** option
-is used to specify the preCombine field for merge.
+is used to specify the preCombine field for merge. Generally 'event time' or some other similar column will be used for 
+ordering purpose. Hudi will be able to handle out of order data using the precombine field value.
 
 ```sql
 -- create an external mor table
@@ -69,7 +74,7 @@ create table if not exists hudi_table1 (
   price double,
   ts bigint
 ) using hudi
-options (
+tblproperties (
   type = 'mor',
   primaryKey = 'id,name',
   preCombineField = 'ts' 
@@ -77,7 +82,7 @@ options (
 ```
 
 ### Partitioned Table
-Here is an example of creating a COW partitioned table.
+Here is an example of creating a COW partitioned key less table.
 ```sql
 create table if not exists hudi_table_p0 (
 id bigint,
@@ -85,15 +90,64 @@ name string,
 dt string,
 hh string  
 ) using hudi
-options (
+tblproperties (
   type = 'cow',
   primaryKey = 'id'
  ) 
-partitioned by (dt, hh);
+partitioned by dt;
+```
+
+Here is an example of creating a MOR partitioned table with preCombine field.
+```sql
+create table if not exists hudi_table_p0 (
+id bigint,
+name string,
+dt string,
+hh string  
+) using hudi
+tblproperties (
+  type = 'mor',
+  primaryKey = 'id',
+  preCombineField = 'ts'
+ ) 
+partitioned by dt;
+```
+
+### Un-Partitioned Table
+Here is an example of creating a COW un-partitioned table.
+
+```sql
+-- create a cow table, with primaryKey 'uuid' and unpartitioned. 
+create table hudi_cow_nonpcf_tbl (
+  uuid int,
+  name string,
+  price double
+) using hudi
+tblproperties (
+  primaryKey = 'uuid'
+);
+```
+
+Here is an example of creating a MOR un-partitioned table.
+
+```sql
+-- create a mor non-partitioned table with preCombineField provided
+create table hudi_mor_tbl (
+    id int,
+    name string,
+    price double,
+    ts bigint
+) using hudi
+tblproperties (
+    type = 'mor',
+    primaryKey = 'id',
+    preCombineField = 'ts'
+);
 ```
 
 ### Create Table for an External Hudi Table
-You can create an External table using the `location` statement. If an external location is not specified it is considered a managed table. You can read more about external vs managed tables [here](https://sparkbyexamples.com/apache-hive/difference-between-hive-internal-tables-and-external-tables/).
+You can create an External table using the `location` statement. If an external location is not specified it is considered a managed table. 
+You can read more about external vs managed tables [here](https://sparkbyexamples.com/apache-hive/difference-between-hive-internal-tables-and-external-tables/).
 An external table is useful if you need to read/write to/from a pre-existing hudi table.
 
 ```sql
@@ -101,24 +155,29 @@ An external table is useful if you need to read/write to/from a pre-existing hud
  location '/path/to/hudi';
 ```
 
+:::tip
+You don't need to specify schema and any properties except the partitioned columns if existed. Hudi can automatically recognize the schema and configurations.
+:::
+
 ### Create Table AS SELECT
 
 Hudi supports CTAS(Create table as select) on spark sql. <br/>
 **Note:** For better performance to load data to hudi table, CTAS uses **bulk insert** as the write operation.
 
-**Example CTAS command to create a non-partitioned COW table.**
+**Example CTAS command to create a non-partitioned COW key less table.**
 
 ```sql 
 create table h3 using hudi
+tblproperties (type = 'cow')
 as
 select 1 as id, 'a1' as name, 10 as price;
 ```
 
-**Example CTAS command to create a partitioned, primary key COW table.**
+**Example CTAS command to create a partitioned, primary keyed COW table.**
 
 ```sql
 create table h2 using hudi
-options (type = 'cow', primaryKey = 'id')
+tblproperties (type = 'cow', primaryKey = 'id')
 partitioned by (dt)
 as
 select 1 as id, 'a1' as name, 10 as price, 1000 as dt;
@@ -131,7 +190,7 @@ select 1 as id, 'a1' as name, 10 as price, 1000 as dt;
 create table parquet_mngd using parquet location 'file:///tmp/parquet_dataset/*.parquet';
 
 # CTAS by loading data into hudi table
-create table hudi_tbl using hudi location 'file:/tmp/hudi/hudi_tbl/' options ( 
+create table hudi_tbl using hudi location 'file:/tmp/hudi/hudi_tbl/' tblproperties ( 
   type = 'cow', 
   primaryKey = 'id', 
   preCombineField = 'ts' 
@@ -148,7 +207,7 @@ create table if not exists h3(
   name string, 
   price double
 ) using hudi
-options (
+tblproperties (
   primaryKey = 'id',
   type = 'mor',
   ${hoodie.config.key1} = '${hoodie.config.value2}',
@@ -162,7 +221,7 @@ create table if not exists h3(
   name string, 
   price double
 ) using hudi
-options (
+tblproperties (
   primaryKey = 'id',
   type = 'mor',
   hoodie.cleaner.fileversions.retained = '20',
