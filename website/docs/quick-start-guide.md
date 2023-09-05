@@ -20,7 +20,8 @@ Hudi works with Spark-2.4.3+ & Spark 3.x versions. You can follow instructions [
 
 | Hudi            | Supported Spark 3 version                       |
 |:----------------|:------------------------------------------------|
-| 0.12.0 - 0.13.x | 3.3.x (default build), 3.2.x, 3.1.x             |
+| 0.13.x          | 3.3.x (default build), 3.2.x, 3.1.x             |
+| 0.12.x          | 3.3.x (default build), 3.2.x, 3.1.x             |
 | 0.11.x          | 3.2.x (default build, Spark bundle only), 3.1.x |
 | 0.10.x          | 3.1.x (default build), 3.0.x                    |
 | 0.7.0 - 0.9.0   | 3.0.x                                           |
