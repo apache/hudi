@@ -59,7 +59,7 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
         PARQUET_SOURCE_ROOT, false, "partition_path", "");
     String tableBasePath = basePath + "/testMultipleTransformersWithIdentifiers" + testNum;
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
-        TestHoodieDeltaStreamer.TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
+        HoodieDeltaStreamerTestBase.TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
             transformerClassNames, PROPS_FILENAME_TEST_PARQUET, false,
             useSchemaProvider, 100000, false, null, null, "timestamp", null), jsc);
 
@@ -78,7 +78,7 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
     properties.setProperty("transformer.suffix", ".1,.2,.3");
     deltaStreamer.sync();
 
-    TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
+    assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
     assertEquals(0, sqlContext.read().format("org.apache.hudi").load(tableBasePath).where("timestamp != 110").count());
   }
 
