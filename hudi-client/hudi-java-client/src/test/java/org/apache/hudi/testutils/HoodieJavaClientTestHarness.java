@@ -186,7 +186,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     }
 
     @Override
-    public Supplier<Integer> getAttemptNoSupplier() {
+    public Supplier<Integer> getAttemptNumberSupplier() {
       return () -> (int)attemptId;
     }
   }

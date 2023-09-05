@@ -53,6 +53,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
@@ -129,7 +130,8 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   // Block Sequence number will be used to detect duplicate log blocks(by log reader) added due to spark task retries.
   // It should always start with 0 for a given file slice. for roll overs and delete blocks, we increment by 1.
   private int blockSequenceNumber = 0;
-  private int attemmptNo = 0;
+  // On task failures, a given task could be retried. So, this attempt number will track the number of attempts.
+  private int attemmptNumber = 0;
 
   /**
    * This is used by log compaction only.
@@ -141,7 +143,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     this.useWriterSchema = true;
     this.isLogCompaction = true;
     this.header.putAll(header);
-    this.attemmptNo = taskContextSupplier.getAttemptNoSupplier().get();
+    this.attemmptNumber = taskContextSupplier.getAttemptNumberSupplier().get();
   }
 
   public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
@@ -152,7 +154,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     this.sizeEstimator = new DefaultSizeEstimator();
     this.statuses = new ArrayList<>();
     this.recordProperties.putAll(config.getProps());
-    this.attemmptNo = taskContextSupplier.getAttemptNoSupplier().get();
+    this.attemmptNumber = taskContextSupplier.getAttemptNumberSupplier().get();
   }
 
   public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
@@ -457,11 +459,11 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             ? HoodieRecord.RECORD_KEY_METADATA_FIELD
             : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
 
-        blocks.add(getBlock(config, pickLogDataBlockFormat(), recordList, getUpdatedHeader(header, blockSequenceNumber++, attemmptNo), keyField));
+        blocks.add(getBlock(config, pickLogDataBlockFormat(), recordList, getUpdatedHeader(header, blockSequenceNumber++, attemmptNumber, config), keyField));
       }
 
       if (appendDeleteBlocks && recordsToDelete.size() > 0) {
-        blocks.add(new HoodieDeleteBlock(recordsToDelete.toArray(new DeleteRecord[0]), getUpdatedHeader(header, blockSequenceNumber++, attemmptNo)));
+        blocks.add(new HoodieDeleteBlock(recordsToDelete.toArray(new DeleteRecord[0]), getUpdatedHeader(header, blockSequenceNumber++, attemmptNumber, config)));
       }
 
       if (blocks.size() > 0) {
@@ -631,10 +633,13 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     }
   }
 
-  private static Map<HeaderMetadataType, String> getUpdatedHeader(Map<HeaderMetadataType, String> header, int blockSequenceNumber, long attemptNumber) {
+  private static Map<HeaderMetadataType, String> getUpdatedHeader(Map<HeaderMetadataType, String> header, int blockSequenceNumber, long attemptNumber,
+                                                                  HoodieWriteConfig config) {
     Map<HeaderMetadataType, String> updatedHeader = new HashMap<>();
     updatedHeader.putAll(header);
-    updatedHeader.put(HeaderMetadataType.BLOCK_SEQUENCE_NUMBER, String.valueOf(attemptNumber) + "," + String.valueOf(blockSequenceNumber));
+    if (!HoodieTableMetadata.isMetadataTable(config.getBasePath())) { // add block sequence numbers only for data table.
+      updatedHeader.put(HeaderMetadataType.BLOCK_SEQUENCE_NUMBER, String.valueOf(attemptNumber) + "," + String.valueOf(blockSequenceNumber));
+    }
     return updatedHeader;
   }
 

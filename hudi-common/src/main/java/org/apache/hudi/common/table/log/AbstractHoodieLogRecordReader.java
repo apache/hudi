@@ -430,18 +430,7 @@ public abstract class AbstractHoodieLogRecordReader {
     boolean dupsFound = blockSequenceMapPerCommit.values().stream().anyMatch(perCommitBlockList -> perCommitBlockList.size() > 1);
     if (dupsFound) {
       if (LOG.isDebugEnabled()) {
-        LOG.warn("Duplicate log blocks found ");
-        for (Map.Entry<String, Map<Long, List<Pair<Integer, HoodieLogBlock>>>> entry : blockSequenceMapPerCommit.entrySet()) {
-          if (entry.getValue().size() > 1) {
-            LOG.warn("\tCommit time " + entry.getKey());
-            Map<Long, List<Pair<Integer, HoodieLogBlock>>> value = entry.getValue();
-            for (Map.Entry<Long, List<Pair<Integer, HoodieLogBlock>>> attemptsSeq : value.entrySet()) {
-              LOG.warn("\t\tAttempt number " + attemptsSeq.getKey());
-              attemptsSeq.getValue().forEach(entryValue -> LOG.warn("\t\t\tLog block sequence no : " + entryValue.getKey() + ", log file "
-                  + entryValue.getValue().getBlockContentLocation().get().getLogFile().getPath().toString()));
-            }
-          }
-        }
+        logBlockSequenceMapping(blockSequenceMapPerCommit);
       }
 
       // duplicates are found. we need to remove duplicate log blocks.
@@ -474,6 +463,21 @@ public abstract class AbstractHoodieLogRecordReader {
       return Pair.of(true, allValidLogBlocks);
     } else {
       return Pair.of(false, allValidLogBlocks);
+    }
+  }
+
+  private void logBlockSequenceMapping(Map<String, Map<Long, List<Pair<Integer, HoodieLogBlock>>>> blockSequenceMapPerCommit) {
+    LOG.warn("Duplicate log blocks found ");
+    for (Map.Entry<String, Map<Long, List<Pair<Integer, HoodieLogBlock>>>> entry : blockSequenceMapPerCommit.entrySet()) {
+      if (entry.getValue().size() > 1) {
+        LOG.warn("\tCommit time " + entry.getKey());
+        Map<Long, List<Pair<Integer, HoodieLogBlock>>> value = entry.getValue();
+        for (Map.Entry<Long, List<Pair<Integer, HoodieLogBlock>>> attemptsSeq : value.entrySet()) {
+          LOG.warn("\t\tAttempt number " + attemptsSeq.getKey());
+          attemptsSeq.getValue().forEach(entryValue -> LOG.warn("\t\t\tLog block sequence no : " + entryValue.getKey() + ", log file "
+              + entryValue.getValue().getBlockContentLocation().get().getLogFile().getPath().toString()));
+        }
+      }
     }
   }
 
