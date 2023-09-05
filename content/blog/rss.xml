@@ -8,7 +8,7 @@
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
         <item>
-            <title><![CDATA[Hoodie Timeline: Foundational pillar for ACID transactions]]></title>
+            <title><![CDATA[Lakehouse Trifecta — Delta Lake, Apache Iceberg & Apache Hudi]]></title>
             <link>https://hudi.apache.org/blog/2023/08/09/Lakehouse-Trifecta-Delta-Lake-Apache-Iceberg-and-Apache-Hudi</link>
             <guid>/2023/08/09/Lakehouse-Trifecta-Delta-Lake-Apache-Iceberg-and-Apache-Hudi</guid>
             <pubDate>Wed, 09 Aug 2023 00:00:00 GMT</pubDate>
