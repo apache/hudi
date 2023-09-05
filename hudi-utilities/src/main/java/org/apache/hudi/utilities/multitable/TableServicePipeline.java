@@ -23,7 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * TableServicePipeline is a container holding all table services task to execute for a specific hoodie table
+ * TableServicePipeline is a container holding all table services task to execute for a specific hoodie table.
  */
 public class TableServicePipeline {
 
@@ -34,16 +34,16 @@ public class TableServicePipeline {
   }
 
   /**
-   * Add a table service task to the end of table service pipe. The task will be executed in FIFO manner
+   * Add a table service task to the end of table service pipe. The task will be executed in FIFO manner.
    *
-   * @param task table service task to run in pipeline
+   * @param task table service task to run in pipeline.
    */
   public void add(TableServiceTask task) {
     tableServiceTasks.add(task);
   }
 
   /**
-   * Run all table services task sequentially
+   * Run all table services task sequentially.
    */
   public void execute() {
     tableServiceTasks.forEach(TableServiceTask::run);

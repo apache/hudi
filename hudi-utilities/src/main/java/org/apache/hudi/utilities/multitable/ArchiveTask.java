@@ -30,7 +30,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Archive task to run in TableServicePipeline
+ * Archive task to run in TableServicePipeline.
+ *
  * @see HoodieMultiTableServicesMain
  */
 class ArchiveTask extends TableServiceTask {
@@ -48,15 +49,38 @@ class ArchiveTask extends TableServiceTask {
     }
   }
 
+  /**
+   * Utility to create builder for {@link ArchiveTask}.
+   *
+   * @return Builder for {@link ArchiveTask}.
+   */
   public static Builder newBuilder() {
     return new Builder();
   }
 
+  /**
+   * Builder class for {@link ArchiveTask}.
+   */
   public static final class Builder {
+    /**
+     * Properties for running archive task which are already consolidated w/ CLI provided config-overrides.
+     */
     private TypedProperties props;
+
+    /**
+     * Hoodie table path for running archive task.
+     */
     private String basePath;
-    private JavaSparkContext jsc;
+
+    /**
+     * Number of retries.
+     */
     private int retry;
+
+    /**
+     * JavaSparkContext to run spark job.
+     */
+    private JavaSparkContext jsc;
 
     public Builder withProps(TypedProperties props) {
       this.props = props;

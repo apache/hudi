@@ -41,7 +41,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 
 /**
- * Utils for executing multi-table services
+ * Utils for executing multi-table services.
  */
 public class MultiTableServiceUtils {
 
@@ -63,7 +63,7 @@ public class MultiTableServiceUtils {
   }
 
   /**
-   * Type of directories when searching hoodie tables under path
+   * Type of directories when searching hoodie tables under path.
    */
   enum DirType {
     HOODIE_TABLE,
@@ -142,6 +142,7 @@ public class MultiTableServiceUtils {
           .withBasePath(basePath)
           .withParallelism(cfg.parallelism)
           .withCompactionRunningMode(cfg.compactionRunningMode)
+          .withCompactionStrategyName(cfg.compactionStrategyClassName)
           .withProps(props)
           .withRetry(cfg.retry)
           .build());

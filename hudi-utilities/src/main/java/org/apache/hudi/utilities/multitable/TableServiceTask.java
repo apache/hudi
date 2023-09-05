@@ -24,18 +24,31 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.spark.api.java.JavaSparkContext;
 
 /**
- * Abstract class for defining a task running in TableService pipeline
+ * Abstract class for defining a task running in TableService pipeline.
+ *
  * @see TableServicePipeline
  */
 public abstract class TableServiceTask {
 
+  /**
+   * Hoodie table path for running table service
+   */
   protected String basePath;
 
-  protected JavaSparkContext jsc;
-
+  /**
+   * Properties for running clean task which are already consolidated w/ CLI provided config-overrides.
+   */
   protected TypedProperties props;
 
+  /**
+   * Number of retries when running table services
+   */
   protected int retry;
+
+  /**
+   * JavaSparkContext to run spark job.
+   */
+  protected JavaSparkContext jsc;
 
   abstract void run();
 

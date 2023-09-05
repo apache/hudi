@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.multitable;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 import org.apache.hudi.utilities.HoodieCompactor;
 import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.utilities.UtilHelpers;
@@ -48,7 +49,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
- * Main function for executing multi-table services
+ * Main function for executing multi-table services.
  */
 public class HoodieMultiTableServicesMain {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMultiTableServicesMain.class);
@@ -188,6 +189,9 @@ public class HoodieMultiTableServicesMain {
         + "Set \"scheduleAndExecute\" means make a compact plan first and execute that plan immediately")
     public String compactionRunningMode = HoodieCompactor.EXECUTE;
 
+    @Parameter(names = {"--strategy", "-st"}, description = "Strategy Class")
+    public String compactionStrategyClassName = LogFileSizeBasedCompactionStrategy.class.getName();
+
     @Parameter(names = {"--clustering-mode"}, description = "Set job mode: Set \"schedule\" means make a clustering plan; "
         + "Set \"execute\" means execute a clustering plan at given instant which means --instant-time is needed here; "
         + "Set \"scheduleAndExecute\" means make a clustering plan first and execute that plan immediately")
@@ -225,6 +229,7 @@ public class HoodieMultiTableServicesMain {
           .add("enableClean=" + enableClean)
           .add("enableArchive=" + enableArchive)
           .add("compactionRunningMode='" + compactionRunningMode + "'")
+          .add("compactionStrategyClassName='" + compactionStrategyClassName + "'")
           .add("clusteringRunningMode='" + clusteringRunningMode + "'")
           .add("sparkMaster='" + sparkMaster + "'")
           .add("sparkMemory='" + sparkMemory + "'")

@@ -25,12 +25,22 @@ import org.apache.hudi.utilities.HoodieClusteringJob;
 import org.apache.spark.api.java.JavaSparkContext;
 
 /**
- * Clustering task to run in TableServicePipeline
+ * Clustering task to run in TableServicePipeline.
+ *
  * @see HoodieMultiTableServicesMain
  */
 class ClusteringTask extends TableServiceTask {
 
+  /**
+   * Parallelism for hoodie clustering.
+   */
   private int parallelism;
+
+  /**
+   * Mode for running clustering.
+   *
+   * @see HoodieClusteringJob.Config#runningMode
+   */
   private String clusteringMode;
 
   @Override
@@ -42,16 +52,50 @@ class ClusteringTask extends TableServiceTask {
     new HoodieClusteringJob(jsc, clusteringConfig, props).cluster(retry);
   }
 
+  /**
+   * Utility to create builder for {@link ClusteringTask}.
+   *
+   * @return Builder for {@link ClusteringTask}.
+   */
   public static Builder newBuilder() {
     return new Builder();
   }
 
+  /**
+   * Builder class for {@link ClusteringTask}.
+   */
   public static final class Builder {
+
+    /**
+     * Properties for running clustering task which are already consolidated w/ CLI provided config-overrides.
+     */
     private TypedProperties props;
+
+    /**
+     * Parallelism for hoodie clustering.
+     */
     private int parallelism;
+
+    /**
+     * Clustering mode for running clustering.
+     *
+     * @see HoodieClusteringJob.Config#runningMode
+     */
     private String clusteringMode;
+
+    /**
+     * Hoodie table path for running clustering task.
+     */
     private String basePath;
+
+    /**
+     * JavaSparkContext to run spark job.
+     */
     private JavaSparkContext jsc;
+
+    /**
+     * Number of retries.
+     */
     private int retry;
 
     private Builder() {

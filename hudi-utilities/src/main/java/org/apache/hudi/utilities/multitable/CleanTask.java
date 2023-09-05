@@ -26,7 +26,8 @@ import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.spark.api.java.JavaSparkContext;
 
 /**
- * Clean task to run in TableServicePipeline
+ * Clean task to run in TableServicePipeline.
+ *
  * @see HoodieMultiTableServicesMain
  */
 class CleanTask extends TableServiceTask {
@@ -41,15 +42,38 @@ class CleanTask extends TableServiceTask {
     }, "Clean Failed");
   }
 
+  /**
+   * Utility to create builder for {@link CleanTask}.
+   *
+   * @return Builder for {@link CleanTask}.
+   */
   public static Builder newBuilder() {
     return new Builder();
   }
 
+  /**
+   * Builder class for {@link CleanTask}.
+   */
   public static final class Builder {
+    /**
+     * Properties for running clean task which are already consolidated w/ CLI provided config-overrides.
+     */
     private TypedProperties props;
+
+    /**
+     * Hoodie table path for running clean task.
+     */
     private String basePath;
-    private JavaSparkContext jsc;
+
+    /**
+     * Number of retries.
+     */
     private int retry;
+
+    /**
+     * JavaSparkContext to run spark job.
+     */
+    private JavaSparkContext jsc;
 
     public Builder withProps(TypedProperties props) {
       this.props = props;

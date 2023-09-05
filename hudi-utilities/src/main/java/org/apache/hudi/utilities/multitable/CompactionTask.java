@@ -20,21 +20,32 @@
 package org.apache.hudi.utilities.multitable;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 import org.apache.hudi.utilities.HoodieCompactor;
 
 import org.apache.spark.api.java.JavaSparkContext;
 
 /**
- * Compaction task to run in TableServicePipeline
+ * Compaction task to run in TableServicePipeline.
+ *
  * @see HoodieMultiTableServicesMain
  */
 class CompactionTask extends TableServiceTask {
 
-  public String compactionRunningMode = HoodieCompactor.EXECUTE;
+  /**
+   * Mode for running compaction.
+   *
+   * @see HoodieCompactor.Config#runningMode
+   */
+  public String compactionRunningMode;
 
-  public String compactionStrategyName = LogFileSizeBasedCompactionStrategy.class.getName();
+  /**
+   * Strategy Class of compaction.
+   */
+  public String compactionStrategyName;
 
+  /**
+   * Parallelism for hoodie clustering.
+   */
   private int parallelism;
 
   @Override
@@ -48,16 +59,54 @@ class CompactionTask extends TableServiceTask {
     new HoodieCompactor(jsc, compactionCfg, props).compact(retry);
   }
 
+  /**
+   * Utility to create builder for {@link CompactionTask}.
+   *
+   * @return Builder for {@link CompactionTask}.
+   */
   public static Builder newBuilder() {
     return new Builder();
   }
 
+  /**
+   * Builder class for {@link CompactionTask}.
+   */
   public static final class Builder {
+    /**
+     * Properties for running compaction task which are already consolidated w/ CLI provided config-overrides.
+     */
     private TypedProperties props;
+
+    /**
+     * Mode for running compaction.
+     *
+     * @see HoodieCompactor.Config#runningMode
+     */
     private String compactionRunningMode;
+
+    /**
+     * Strategy Class of compaction.
+     */
+    public String compactionStrategyName;
+
+    /**
+     * Parallelism for hoodie compaction.
+     */
     private int parallelism;
+
+    /**
+     * Number of retries.
+     */
     private int retry;
+
+    /**
+     * Hoodie table path for running compaction task.
+     */
     private String basePath;
+
+    /**
+     * JavaSparkContext to run spark job.
+     */
     private JavaSparkContext jsc;
 
     public Builder withProps(TypedProperties props) {
@@ -67,6 +116,11 @@ class CompactionTask extends TableServiceTask {
 
     public Builder withCompactionRunningMode(String compactionRunningMode) {
       this.compactionRunningMode = compactionRunningMode;
+      return this;
+    }
+
+    public Builder withCompactionStrategyName(String compactionStrategyName) {
+      this.compactionStrategyName = compactionStrategyName;
       return this;
     }
 
@@ -96,6 +150,7 @@ class CompactionTask extends TableServiceTask {
       compactionTask.jsc = this.jsc;
       compactionTask.parallelism = this.parallelism;
       compactionTask.compactionRunningMode = this.compactionRunningMode;
+      compactionTask.compactionStrategyName = this.compactionStrategyName;
       compactionTask.retry = this.retry;
       compactionTask.props = this.props;
       return compactionTask;

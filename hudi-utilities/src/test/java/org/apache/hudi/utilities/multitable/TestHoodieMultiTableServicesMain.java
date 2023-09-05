@@ -41,6 +41,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
+import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.hudi.testutils.providers.SparkProvider;
 import org.apache.hudi.utilities.HoodieCompactor;
@@ -264,6 +265,7 @@ class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implement
     configs.add(String.format("%s=%s", HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "0"));
     cfg.configs = configs;
     cfg.compactionRunningMode = HoodieCompactor.SCHEDULE_AND_EXECUTE;
+    cfg.compactionStrategyClassName = LogFileSizeBasedCompactionStrategy.class.getName();
     cfg.clusteringRunningMode = HoodieCompactor.SCHEDULE_AND_EXECUTE;
     cfg.basePath = Collections.singletonList(tempDir.toAbsolutePath().toString());
     cfg.scheduleDelay = 50000;
