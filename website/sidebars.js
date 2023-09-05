@@ -42,7 +42,7 @@ module.exports = {
                     type: 'category',
                     label: 'SQL',
                     items: [
-                        'table_management',
+                        'sql_ddl',
                         'procedures'
                     ],
                 },
