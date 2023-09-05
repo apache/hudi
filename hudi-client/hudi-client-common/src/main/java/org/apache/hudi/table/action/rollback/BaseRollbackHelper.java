@@ -266,7 +266,7 @@ public class BaseRollbackHelper implements Serializable {
       return originalRollbackStats;
     }
 
-    final String basePathStr = config.getBasePath();
+    final String basePathStr = metaClient.getBasePath();
     List<String> logFiles = new ArrayList<>(logPaths);
     // populate partitionPath -> List<log file name>
     HoodiePairData<String, List<String>> partitionPathToLogFilesHoodieData = context.parallelize(logFiles)
@@ -288,7 +288,7 @@ public class BaseRollbackHelper implements Serializable {
         context.parallelize(originalRollbackStats)
             .mapToPair((SerializablePairFunction<HoodieRollbackStat, String, HoodieRollbackStat>) t -> Pair.of(t.getPartitionPath(), t));
 
-    SerializableConfiguration serializableConfiguration = new SerializableConfiguration(table.getHadoopConf());
+    SerializableConfiguration serializableConfiguration = new SerializableConfiguration(context.getHadoopConf());
 
     // lets do left outer join and append missing log files to HoodieRollbackStat for each partition path.
     List<HoodieRollbackStat> finalRollbackStats = partitionPathToRollbackStatsHoodieData
@@ -300,8 +300,8 @@ public class BaseRollbackHelper implements Serializable {
             List<String> missingLogFiles = v1.getValue().getRight().get();
 
             // fetch file sizes.
-            FileSystem fs = partitionPath.getFileSystem(serializableConfiguration.get());
             Path fullPartitionPath = new Path(basePathStr, partitionPath);
+            FileSystem fs = fullPartitionPath.getFileSystem(serializableConfiguration.get());
             List<Option<FileStatus>> fileStatusesOpt = FSUtils.getFileStatusesUnderPartition(fs,
                 fullPartitionPath, missingLogFiles, true);
             List<FileStatus> fileStatuses = fileStatusesOpt.stream().filter(fileStatusOption -> fileStatusOption.isPresent())
