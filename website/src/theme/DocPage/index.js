@@ -128,7 +128,7 @@ function DocPageContent({
   );
 }
 
-const arrayOfPages = (matchPath) => [`${matchPath}/configurations`, `${matchPath}/basic_configurations`, `${matchPath}/timeline`, `${matchPath}/table_types`, `${matchPath}/migration_guide`, `${matchPath}/compaction`, `${matchPath}/clustering`, `${matchPath}/indexing`, `${matchPath}/metadata`, `${matchPath}/metadata_indexing`, `${matchPath}/record_payload`, `${matchPath}/file_sizing`, `${matchPath}/hoodie_cleaner`, `${matchPath}/concurrency_control`];
+const arrayOfPages = (matchPath) => [`${matchPath}/configurations`, `${matchPath}/basic_configurations`, `${matchPath}/timeline`, `${matchPath}/table_types`, `${matchPath}/migration_guide`, `${matchPath}/compaction`, `${matchPath}/clustering`, `${matchPath}/indexing`, `${matchPath}/metadata`, `${matchPath}/metadata_indexing`, `${matchPath}/record_payload`, `${matchPath}/file_sizing`, `${matchPath}/hoodie_cleaner`, `${matchPath}/concurrency_control`, `${matchPath}/write_operations`];
 const showCustomStylesForDocs = (matchPath, pathname) => arrayOfPages(matchPath).includes(pathname);
 function DocPage(props) {
   const {
