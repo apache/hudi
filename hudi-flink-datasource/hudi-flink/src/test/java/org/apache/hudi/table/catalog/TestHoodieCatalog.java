@@ -157,8 +157,9 @@ public class TestHoodieCatalog {
     streamTableEnv = TableEnvironmentImpl.create(settings);
     streamTableEnv.getConfig().getConfiguration()
         .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 2);
-    File testDb = new File(tempFile, TEST_DEFAULT_DATABASE);
-    testDb.mkdir();
+
+    File catalogPath = new File(tempFile.getPath());
+    catalogPath.mkdir();
 
     catalog = new HoodieCatalog("hudi", Configuration.fromMap(getDefaultCatalogOption()));
     catalog.open();
