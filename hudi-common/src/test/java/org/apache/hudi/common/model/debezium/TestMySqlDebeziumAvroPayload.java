@@ -96,6 +96,12 @@ public class TestMySqlDebeziumAvroPayload {
     payload = new MySqlDebeziumAvroPayload(lateRecord, "00000.222");
     mergedRecord = payload.combineAndGetUpdateValue(existingRecord, avroSchema);
     validateRecord(mergedRecord, 1, Operation.INSERT, "00001.111");
+
+    GenericRecord originalRecord = createRecord(1, Operation.INSERT, "00000.23");
+    payload = new MySqlDebeziumAvroPayload(originalRecord, "00000.23");
+    updateRecord = createRecord(1, Operation.UPDATE, "00000.123");
+    mergedRecord = payload.combineAndGetUpdateValue(updateRecord, avroSchema);
+    validateRecord(mergedRecord, 1, Operation.UPDATE, "00000.123");
   }
 
   @Test
