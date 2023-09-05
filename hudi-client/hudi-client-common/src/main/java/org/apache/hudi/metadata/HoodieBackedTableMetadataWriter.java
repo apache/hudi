@@ -1411,8 +1411,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
           .flatMapToPair(Stream::iterator)
           .reduceByKey((recordDelegate1, recordDelegate2) -> {
             if (recordDelegate1.getRecordKey().equals(recordDelegate2.getRecordKey())) {
-              if (recordDelegate1.getNewLocation().isPresent() && recordDelegate2.getNewLocation().isPresent()) {
-                throw new HoodieIOException("Both version of records does not have location set. Record V1 " + recordDelegate1.toString()
+              if (!recordDelegate1.getNewLocation().isPresent() && !recordDelegate2.getNewLocation().isPresent()) {
+                throw new HoodieIOException("Both version of records do not have location set. Record V1 " + recordDelegate1.toString()
                     + ", Record V2 " + recordDelegate2.toString());
               }
               if (recordDelegate1.getNewLocation().isPresent()) {
