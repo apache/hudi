@@ -23,6 +23,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.utilities.deltastreamer.DeltaSync;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.streamer.StreamSync;
@@ -80,7 +82,8 @@ public class HoodieDeltaStreamerWrapper extends HoodieDeltaStreamer {
     StreamSync service = getDeltaSync();
     service.refreshTimeline();
     String instantTime = InProcessTimeGenerator.createNewInstantTime();
-    return service.readFromSource(instantTime);
+    Pair<SchemaProvider, Pair<String, Option<JavaRDD<HoodieRecord>>>> pair = service.readFromSource(instantTime);
+    return Pair.of(pair.getLeft(), Pair.of(pair.getRight().getLeft(), pair.getRight().getRight().orElse(jssc.emptyRDD())));
   }
 
   public StreamSync getDeltaSync() {

@@ -64,7 +64,7 @@ public class SparkSampleWritesUtils {
 
   private static final Logger LOG = LoggerFactory.getLogger(SparkSampleWritesUtils.class);
 
-  public static Option<HoodieWriteConfig> getWriteConfigWithRecordSizeEstimate(JavaSparkContext jsc, JavaRDD<HoodieRecord> records, HoodieWriteConfig writeConfig) {
+  public static Option<HoodieWriteConfig> getWriteConfigWithRecordSizeEstimate(JavaSparkContext jsc, Option<JavaRDD<HoodieRecord>> records, HoodieWriteConfig writeConfig) {
     if (!writeConfig.getBoolean(SAMPLE_WRITES_ENABLED)) {
       LOG.debug("Skip overwriting record size estimate as it's disabled.");
       return Option.empty();
@@ -90,7 +90,7 @@ public class SparkSampleWritesUtils {
     return Option.empty();
   }
 
-  private static Pair<Boolean, String> doSampleWrites(JavaSparkContext jsc, JavaRDD<HoodieRecord> records, HoodieWriteConfig writeConfig, String instantTime)
+  private static Pair<Boolean, String> doSampleWrites(JavaSparkContext jsc, Option<JavaRDD<HoodieRecord>> recordsOpt, HoodieWriteConfig writeConfig, String instantTime)
       throws IOException {
     final String sampleWritesBasePath = getSampleWritesBasePath(jsc, writeConfig, instantTime);
     HoodieTableMetaClient.withPropertyBuilder()
@@ -109,25 +109,32 @@ public class SparkSampleWritesUtils {
         .withAutoCommit(true)
         .withPath(sampleWritesBasePath)
         .build();
+    Pair<Boolean, String> emptyRes = Pair.of(false, null);
+
     try (SparkRDDWriteClient sampleWriteClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), sampleWriteConfig, Option.empty())) {
       int size = writeConfig.getIntOrDefault(SAMPLE_WRITES_SIZE);
-      List<HoodieRecord> samples = records.coalesce(1).take(size);
-      sampleWriteClient.startCommitWithTime(instantTime);
-      JavaRDD<WriteStatus> writeStatusRDD = sampleWriteClient.bulkInsert(jsc.parallelize(samples, 1), instantTime);
-      if (writeStatusRDD.filter(WriteStatus::hasErrors).count() > 0) {
-        LOG.error(String.format("sample writes for table %s failed with errors.", writeConfig.getTableName()));
-        if (LOG.isTraceEnabled()) {
-          LOG.trace("Printing out the top 100 errors");
-          writeStatusRDD.filter(WriteStatus::hasErrors).take(100).forEach(ws -> {
-            LOG.trace("Global error :", ws.getGlobalError());
-            ws.getErrors().forEach((key, throwable) ->
-                LOG.trace(String.format("Error for key: %s", key), throwable));
-          });
+      return recordsOpt.map(records -> {
+        List<HoodieRecord> samples = records.coalesce(1).take(size);
+        if (samples.size() == 0) {
+          return emptyRes;
         }
-        return Pair.of(false, null);
-      } else {
-        return Pair.of(true, sampleWritesBasePath);
-      }
+        sampleWriteClient.startCommitWithTime(instantTime);
+        JavaRDD<WriteStatus> writeStatusRDD = sampleWriteClient.bulkInsert(jsc.parallelize(samples, 1), instantTime);
+        if (writeStatusRDD.filter(WriteStatus::hasErrors).count() > 0) {
+          LOG.error(String.format("sample writes for table %s failed with errors.", writeConfig.getTableName()));
+          if (LOG.isTraceEnabled()) {
+            LOG.trace("Printing out the top 100 errors");
+            writeStatusRDD.filter(WriteStatus::hasErrors).take(100).forEach(ws -> {
+              LOG.trace("Global error :", ws.getGlobalError());
+              ws.getErrors().forEach((key, throwable) ->
+                  LOG.trace(String.format("Error for key: %s", key), throwable));
+            });
+          }
+          return emptyRes;
+        } else {
+          return Pair.of(true, sampleWritesBasePath);
+        }
+      }).orElse(emptyRes);
     }
   }
 
