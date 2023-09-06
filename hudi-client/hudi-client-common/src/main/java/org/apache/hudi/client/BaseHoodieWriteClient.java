@@ -1308,6 +1308,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   private void initTimer(WriteOperationType operationType, HoodieTable table) {
+    if(operationType == null || table == null){
+        return;
+    }
     switch (operationType) {
       case INSERT:
       case INSERT_PREPPED:
