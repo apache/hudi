@@ -406,6 +406,26 @@ public class ITTestHoodieFlinkCompactor {
   }
 
   @Test
+  public void testCompactionInBoundedStreamExecutionMode() throws Exception {
+    EnvironmentSettings settings = EnvironmentSettings.newInstance().build();
+    TableEnvironment tableEnv = TableEnvironmentImpl.create(settings);
+    tableEnv.getConfig().getConfiguration()
+        .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 4);
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.COMPACTION_DELTA_COMMITS.key(), "2");
+    options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+    options.put(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
+    String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
+    tableEnv.executeSql(hoodieTableDDL);
+    tableEnv.executeSql(TestSQL.INSERT_T1).await();
+    tableEnv.executeSql(TestSQL.UPDATE_INSERT_T1).await();
+    // insert third batch to trigger compaction execution as compaction schedule in second batch is triggered in
+    // StreamWriteOperatorCoordinator which happened after CompactionPlanOperator's endInput() method
+    tableEnv.executeSql(TestSQL.UPDATE_INSERT_T1).await();
+    TestData.checkWrittenDataCOW(tempFile, EXPECTED2);
+  }
+
+  @Test
   public void testOfflineCompactFailoverAfterCommit() {
     TableEnvironment tableEnv = prepareEnvAndTable();
 

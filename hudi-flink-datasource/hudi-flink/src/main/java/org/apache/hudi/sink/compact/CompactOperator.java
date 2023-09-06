@@ -34,6 +34,7 @@ import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.graph.StreamConfig;
+import org.apache.flink.streaming.api.operators.BoundedOneInput;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
@@ -52,7 +53,7 @@ import java.util.List;
  * In order to execute scalable, the input should shuffle by the compact event {@link CompactionPlanEvent}.
  */
 public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
-    implements OneInputStreamOperator<CompactionPlanEvent, CompactionCommitEvent> {
+    implements OneInputStreamOperator<CompactionPlanEvent, CompactionCommitEvent>, BoundedOneInput {
   private static final Logger LOG = LoggerFactory.getLogger(CompactOperator.class);
 
   /**
@@ -100,7 +101,7 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
     this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
     if (this.asyncCompaction) {
-      this.executor = NonThrownExecutor.builder(LOG).build();
+      this.executor = NonThrownExecutor.builder(LOG).waitForTasksFinish(true).build();
     }
     this.collector = new StreamRecordCollector<>(output);
   }
@@ -162,6 +163,13 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
     if (null != this.writeClient) {
       this.writeClient.close();
       this.writeClient = null;
+    }
+  }
+
+  @Override
+  public void endInput() throws Exception {
+    if (null != this.executor) {
+      this.executor.close();
     }
   }
 }
