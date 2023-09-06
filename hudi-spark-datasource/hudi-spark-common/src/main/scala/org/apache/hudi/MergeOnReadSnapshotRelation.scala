@@ -49,7 +49,7 @@ case class MergeOnReadSnapshotRelation(override val sqlContext: SQLContext,
 
   override type Relation = MergeOnReadSnapshotRelation
 
-  override def updatePrunedDataSchema(prunedSchema: StructType): MergeOnReadSnapshotRelation =
+  override def updatePrunedDataSchema(prunedSchema: StructType): Relation =
     this.copy(prunedDataSchema = Some(prunedSchema))
 
   override protected def shouldIncludeLogFiles(): Boolean = {
