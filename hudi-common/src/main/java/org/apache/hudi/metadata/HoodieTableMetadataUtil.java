@@ -153,6 +153,8 @@ public class HoodieTableMetadataUtil {
   // This suffix and all after that are used for initialization of the various partitions. The unused suffixes lower than this value
   // are reserved for future operations on the MDT.
   private static final int PARTITION_INITIALIZATION_TIME_SUFFIX = 10; // corresponds to "010";
+  // we have max of 4 partitions (FILES, COL_STATS, BLOOM, RLI)
+  private static final List<String> VALID_PARTITION_INITIALIZATION_TIME_SUFFIXES = Arrays.asList("010","011","012","013");
 
   /**
    * Returns whether the files partition of metadata table is ready for read.
@@ -1282,13 +1284,14 @@ public class HoodieTableMetadataUtil {
           validInstantTimestamps.addAll(getRollbackedCommits(instant, datasetTimeline));
         });
 
-    // add restore instants from MDT.
+    // add restore and rollback instants from MDT.
     metadataMetaClient.getActiveTimeline().getRollbackAndRestoreTimeline().filterCompletedInstants()
-        .filter(instant -> instant.getAction().equals(HoodieTimeline.RESTORE_ACTION))
+        .filter(instant -> instant.getAction().equals(HoodieTimeline.RESTORE_ACTION) || instant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION))
         .getInstants().forEach(instant -> validInstantTimestamps.add(instant.getTimestamp()));
 
-    // SOLO_COMMIT_TIMESTAMP is used during bootstrap so it is a valid timestamp
-    validInstantTimestamps.add(createIndexInitTimestamp(SOLO_COMMIT_TIMESTAMP, PARTITION_INITIALIZATION_TIME_SUFFIX));
+    metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants()
+        .filter(instant ->  instant.getTimestamp().startsWith(SOLO_COMMIT_TIMESTAMP))
+        .getInstants().forEach(instant -> validInstantTimestamps.add(instant.getTimestamp()));
     return validInstantTimestamps;
   }
 
