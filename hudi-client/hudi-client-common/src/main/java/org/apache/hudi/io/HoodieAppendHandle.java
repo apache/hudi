@@ -459,11 +459,13 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             ? HoodieRecord.RECORD_KEY_METADATA_FIELD
             : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
 
-        blocks.add(getBlock(config, pickLogDataBlockFormat(), recordList, getUpdatedHeader(header, blockSequenceNumber++, attemmptNumber, config), keyField));
+        blocks.add(getBlock(config, pickLogDataBlockFormat(), recordList, getUpdatedHeader(header, blockSequenceNumber++, attemmptNumber, config,
+            addBlockIdentifier()), keyField));
       }
 
       if (appendDeleteBlocks && recordsToDelete.size() > 0) {
-        blocks.add(new HoodieDeleteBlock(recordsToDelete.toArray(new DeleteRecord[0]), getUpdatedHeader(header, blockSequenceNumber++, attemmptNumber, config)));
+        blocks.add(new HoodieDeleteBlock(recordsToDelete.toArray(new DeleteRecord[0]), getUpdatedHeader(header, blockSequenceNumber++, attemmptNumber, config,
+            addBlockIdentifier())));
       }
 
       if (blocks.size() > 0) {
@@ -560,6 +562,10 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     return true;
   }
 
+  protected boolean addBlockIdentifier() {
+    return true;
+  }
+
   private void writeToBuffer(HoodieRecord<T> record) {
     if (!partitionPath.equals(record.getPartitionPath())) {
       HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
@@ -634,11 +640,11 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   private static Map<HeaderMetadataType, String> getUpdatedHeader(Map<HeaderMetadataType, String> header, int blockSequenceNumber, long attemptNumber,
-                                                                  HoodieWriteConfig config) {
+                                                                  HoodieWriteConfig config, boolean addBlockIdentifier) {
     Map<HeaderMetadataType, String> updatedHeader = new HashMap<>();
     updatedHeader.putAll(header);
-    if (!HoodieTableMetadata.isMetadataTable(config.getBasePath())) { // add block sequence numbers only for data table.
-      updatedHeader.put(HeaderMetadataType.BLOCK_SEQUENCE_NUMBER, String.valueOf(attemptNumber) + "," + String.valueOf(blockSequenceNumber));
+    if (addBlockIdentifier && !HoodieTableMetadata.isMetadataTable(config.getBasePath())) { // add block sequence numbers only for data table.
+      updatedHeader.put(HeaderMetadataType.BLOCK_IDENTIFIER, String.valueOf(attemptNumber) + "," + String.valueOf(blockSequenceNumber));
     }
     return updatedHeader;
   }
