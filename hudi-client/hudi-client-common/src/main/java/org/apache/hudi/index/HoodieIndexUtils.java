@@ -323,6 +323,7 @@ public class HoodieIndexUtils {
           } else {
             // merged record has a different partition: issue a delete to the old partition and insert the merged record to the new partition
             HoodieRecord<R> deleteRecord = createDeleteRecord(config, existing.getKey());
+            deleteRecord.setIgnoreFlag(true);
             return Arrays.asList(tagRecord(deleteRecord, existing.getCurrentLocation()), merged).iterator();
           }
         });

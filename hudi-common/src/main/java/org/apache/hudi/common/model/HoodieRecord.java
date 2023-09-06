@@ -135,6 +135,11 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   protected HoodieRecordLocation newLocation;
 
   /**
+   * If set, not update index after written.
+   */
+  protected boolean ignored;
+
+  /**
    * Indicates whether the object is sealed.
    */
   private boolean sealed;
@@ -159,6 +164,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     this.currentLocation = null;
     this.newLocation = null;
     this.sealed = false;
+    this.ignored = false;
     this.operation = operation;
     this.metaData = metaData;
   }
@@ -181,6 +187,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     this.currentLocation = record.currentLocation;
     this.newLocation = record.newLocation;
     this.sealed = record.sealed;
+    this.ignored = record.ignored;
   }
 
   public HoodieRecord() {}
@@ -254,6 +261,17 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
       return this.currentLocation.getPosition();
     }
     return HoodieRecordLocation.INVALID_POSITION;
+  }
+
+  /**
+   * Sets the ignore flag.
+   */
+  public void setIgnoreFlag(boolean ignoreFlag) {
+    this.ignored = ignoreFlag;
+  }
+
+  public boolean getIgnoreFlag() {
+    return this.ignored;
   }
 
   @Override
@@ -343,6 +361,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     // NOTE: Writing out actual record payload is relegated to the actual
     //       implementation
     writeRecordPayload(data, kryo, output);
+    kryo.writeObjectOrNull(output, ignored, Boolean.class);
   }
 
   /**
@@ -358,6 +377,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     // NOTE: Reading out actual record payload is relegated to the actual
     //       implementation
     this.data = readRecordPayload(kryo, input);
+    this.ignored = kryo.readObjectOrNull(input, Boolean.class);
 
     // NOTE: We're always seal object after deserialization
     this.sealed = true;

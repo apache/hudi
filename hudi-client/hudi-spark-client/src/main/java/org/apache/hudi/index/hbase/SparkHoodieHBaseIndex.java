@@ -288,6 +288,7 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
                   new EmptyHoodieRecordPayload());
               emptyRecord.unseal();
               emptyRecord.setCurrentLocation(new HoodieRecordLocation(commitTs, fileId));
+              emptyRecord.setIgnoreFlag(true);
               emptyRecord.seal();
               // insert partition new data record
               currentRecord = new HoodieAvroRecord(new HoodieKey(currentRecord.getRecordKey(), currentRecord.getPartitionPath()),
@@ -359,6 +360,9 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
             // Any calls beyond `multiPutBatchSize` within a second will be rate limited
             for (HoodieRecordDelegate recordDelegate : writeStatus.getWrittenRecordDelegates()) {
               if (!writeStatus.isErrored(recordDelegate.getHoodieKey())) {
+                if (recordDelegate.getIgnoreFlag()) {
+                  continue;
+                }
                 Option<HoodieRecordLocation> loc = recordDelegate.getNewLocation();
                 if (loc.isPresent()) {
                   if (recordDelegate.getCurrentLocation().isPresent()) {
