@@ -92,7 +92,8 @@ First of all, let us discuss the goals and non-goals which will help in understa
    like at the file level) might be more practical to start with. But, let's avoid table or partition level locking as
    mentioned in the goals.
 3. **Distributed Transactions:** We are not going to consider transactions in the sense of distributed databases, and
-   thus the need of a protocol such as 2PC or a quorum mechanism to proceed with the commits.
+   thus the need of a protocol such as 2PC or a quorum mechanism to proceed with the commits. Storage is assumed to be
+   durable and resilient to distributed failures.
 4. **Complex Conflict Resolution:** Initially, simple conflict resolution strategies (like aborting a transaction on
    conflict) can be implemented, leaving more sophisticated strategies for future iterations.
 5. **Replication/CDC stream:** We are not going to build a replication or CDC stream out of the database level commit
@@ -108,12 +109,13 @@ properties across these tables.
    transactions, handle timeouts, and manage transaction rollbacks.
 3. Need for a transaction log: At the table level, the timeline incorporating state of an action with start and modified
    time serves the purpose of transaction log. At the database level, we need to track all multi-table transactions.
-   Every start, update, or commit of a multi-table transaction gets recorded (Database timeline?).
-4. Locking/Conflict resolution mechanism: Lock the affected files during the multi-table transaction to prevent
-   conflicting writes. Decide on conflict resolution strategies (e.g., last write wins, version vectors).
-5. Need for buffer management: Writes by a transaction are not immediately visible to other transactions. They are
-   buffered until the transaction decides to commit. This can be guaranteed by reading the transaction logs (table
-   timeline together with the database timeline).
+   Every start, update, or commit of a multi-table transaction gets recorded. Using a "database timeline" together with
+   tables' timeline, we can guarantee that data files won't be visible until the all statements of a transaction are
+   completed.
+4. Locking/Conflict resolution mechanism: In OCC with external lock providers, lock the affected files during the
+   multi-table transaction to prevent conflicting writes. Decide on conflict resolution strategies (e.g., last write
+   wins, version vectors). Note that Hudi, by default, provides snapshot isolation between readers and writers using
+   MVCC, so no lock is required for readers.
 
 #### Concurrency Control and Conflict Resolution
 
@@ -122,7 +124,6 @@ going to need a unified view of all tables within the database to ensure atomici
 database-level timeline as transaction log, which mainly contains the following:
 
 * Transaction ID (instant time when the transaction started)
-* Tables involved
 * End/Modified Timestamp
 * State of transaction: REQUESTED, INFLIGHT, COMPLETED, ROLLED\_BACK
 * Any other relevant metadata
