@@ -315,7 +315,7 @@ public class FSUtils {
 
   public static List<Option<FileStatus>> getFileStatusesUnderPartition(FileSystem fileSystem,
                                                                        Path partitionPathIncludeBasePath,
-                                                                       List<String> filesNamesUnderThisPartition,
+                                                                       Set<String> filesNamesUnderThisPartition,
                                                                        boolean ignoreMissingFiles) {
     String fileSystemType = fileSystem.getScheme();
     boolean useListStatus = StorageSchemes.isListStatusFriendly(fileSystemType);
@@ -324,15 +324,21 @@ public class FSUtils {
       if (useListStatus) {
         FileStatus[] fileStatuses = fileSystem.listStatus(partitionPathIncludeBasePath,
             path -> filesNamesUnderThisPartition.contains(path.getName()));
+        Map<String, FileStatus> filenameToFileStatusMap = Arrays.stream(fileStatuses)
+            .collect(Collectors.toMap(
+                fileStatus -> fileStatus.getPath().getName(),
+                fileStatus -> fileStatus
+            ));
+
         for (String fileName : filesNamesUnderThisPartition) {
-          Option<FileStatus> ele = Option.fromJavaOptional(
-              Arrays.stream(fileStatuses)
-                  .filter(fileStatus -> fileStatus.getPath().getName().equals(fileName))
-                  .findFirst());
-          if (!ignoreMissingFiles && !ele.isPresent()) {
-            throw new FileNotFoundException("File not found: " + new Path(partitionPathIncludeBasePath.toString(), fileName));
+          if (filenameToFileStatusMap.containsKey(fileName)) {
+            result.add(Option.of(filenameToFileStatusMap.get(fileName)));
+          } else {
+            if (!ignoreMissingFiles) {
+              throw new FileNotFoundException("File not found: " + new Path(partitionPathIncludeBasePath.toString(), fileName));
+            }
+            result.add(Option.empty());
           }
-          result.add(ele);
         }
       } else {
         for (String fileName : filesNamesUnderThisPartition) {
@@ -343,6 +349,8 @@ public class FSUtils {
           } catch (FileNotFoundException fileNotFoundException) {
             if (ignoreMissingFiles) {
               result.add(Option.empty());
+            } else {
+              throw new FileNotFoundException("File not found: " + fullPath.toString());
             }
           }
         }

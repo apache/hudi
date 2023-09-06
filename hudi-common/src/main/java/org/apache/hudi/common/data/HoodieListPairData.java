@@ -26,6 +26,8 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.MappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -202,14 +204,15 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
             HashMap::new,
             Collectors.mapping(Pair::getValue, Collectors.toList())));
 
-    Stream<Pair<K, Pair<V, W>>> joinResult = asStream().filter((kv) -> rightStreamMap.containsKey(kv.getKey())).flatMap(pair -> {
+    List<Pair<K, Pair<V, W>>> joinResult = new ArrayList<>();
+    asStream().forEach(pair -> {
       K key = pair.getKey();
       V leftValue = pair.getValue();
-      List<W> rightValues = rightStreamMap.get(key);
+      List<W> rightValues = rightStreamMap.getOrDefault(key, Collections.emptyList());
 
-      // rightValues should be non null since we filter upfront for only matching entries
-      return rightValues.stream().map(rightValue ->
-            Pair.of(key, Pair.of(leftValue, rightValue)));
+      for (W rightValue : rightValues) {
+        joinResult.add(Pair.of(key, Pair.of(leftValue, rightValue)));
+      }
     });
 
     return new HoodieListPairData<>(joinResult, lazy);

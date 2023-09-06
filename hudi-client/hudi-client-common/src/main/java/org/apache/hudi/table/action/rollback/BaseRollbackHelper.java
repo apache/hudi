@@ -269,7 +269,23 @@ public class BaseRollbackHelper implements Serializable {
     final String basePathStr = metaClient.getBasePath();
     List<String> logFiles = new ArrayList<>(logPaths);
     // populate partitionPath -> List<log file name>
-    HoodiePairData<String, List<String>> partitionPathToLogFilesHoodieData = context.parallelize(logFiles)
+    HoodiePairData<String, List<String>> partitionPathToLogFilesHoodieData = populatePartitionToLogFilesHoodieData(context, basePathStr, logFiles);
+
+    // populate partitionPath -> HoodieRollbackStat
+    HoodiePairData<String, HoodieRollbackStat> partitionPathToRollbackStatsHoodieData =
+        context.parallelize(originalRollbackStats)
+            .mapToPair((SerializablePairFunction<HoodieRollbackStat, String, HoodieRollbackStat>) t -> Pair.of(t.getPartitionPath(), t));
+
+    SerializableConfiguration serializableConfiguration = new SerializableConfiguration(context.getHadoopConf());
+
+    // lets do left outer join and append missing log files to HoodieRollbackStat for each partition path.
+    List<HoodieRollbackStat> finalRollbackStats = addMissingLogFilesAndGetRollbackStats(partitionPathToRollbackStatsHoodieData,
+        partitionPathToLogFilesHoodieData, basePathStr, serializableConfiguration);
+    return finalRollbackStats;
+  }
+
+  private HoodiePairData<String, List<String>> populatePartitionToLogFilesHoodieData(HoodieEngineContext context, String basePathStr, List<String> logFiles) {
+    return context.parallelize(logFiles)
         // lets map each log file to partition path and log file name
         .mapToPair((SerializablePairFunction<String, String, String>) t -> {
           Path logFilePath = new Path(basePathStr, t);
@@ -282,16 +298,12 @@ public class BaseRollbackHelper implements Serializable {
           t.getRight().forEach(entry -> allFiles.add(entry));
           return Pair.of(t.getKey(), allFiles);
         });
+  }
 
-    // populate partitionPath -> HoodieRollbackStat
-    HoodiePairData<String, HoodieRollbackStat> partitionPathToRollbackStatsHoodieData =
-        context.parallelize(originalRollbackStats)
-            .mapToPair((SerializablePairFunction<HoodieRollbackStat, String, HoodieRollbackStat>) t -> Pair.of(t.getPartitionPath(), t));
-
-    SerializableConfiguration serializableConfiguration = new SerializableConfiguration(context.getHadoopConf());
-
-    // lets do left outer join and append missing log files to HoodieRollbackStat for each partition path.
-    List<HoodieRollbackStat> finalRollbackStats = partitionPathToRollbackStatsHoodieData
+  private List<HoodieRollbackStat> addMissingLogFilesAndGetRollbackStats(HoodiePairData<String, HoodieRollbackStat> partitionPathToRollbackStatsHoodieData,
+                                                      HoodiePairData<String, List<String>> partitionPathToLogFilesHoodieData,
+                                                      String basePathStr, SerializableConfiguration serializableConfiguration) {
+    return partitionPathToRollbackStatsHoodieData
         .leftOuterJoin(partitionPathToLogFilesHoodieData)
         .map((SerializableFunction<Pair<String, Pair<HoodieRollbackStat, Option<List<String>>>>, HoodieRollbackStat>) v1 -> {
           if (v1.getValue().getValue().isPresent()) {
@@ -300,10 +312,10 @@ public class BaseRollbackHelper implements Serializable {
             List<String> missingLogFiles = v1.getValue().getRight().get();
 
             // fetch file sizes.
-            Path fullPartitionPath = new Path(basePathStr, partitionPath);
+            Path fullPartitionPath = StringUtils.isNullOrEmpty(partitionPath.toString()) ? new Path(basePathStr) : new Path(basePathStr, partitionPath);
             FileSystem fs = fullPartitionPath.getFileSystem(serializableConfiguration.get());
             List<Option<FileStatus>> fileStatusesOpt = FSUtils.getFileStatusesUnderPartition(fs,
-                fullPartitionPath, missingLogFiles, true);
+                fullPartitionPath, new HashSet<>(missingLogFiles), true);
             List<FileStatus> fileStatuses = fileStatusesOpt.stream().filter(fileStatusOption -> fileStatusOption.isPresent())
                 .map(fileStatusOption -> fileStatusOption.get()).collect(Collectors.toList());
 
@@ -316,7 +328,6 @@ public class BaseRollbackHelper implements Serializable {
             return v1.getValue().getKey();
           }
         }).collectAsList();
-    return finalRollbackStats;
   }
 
   /**
