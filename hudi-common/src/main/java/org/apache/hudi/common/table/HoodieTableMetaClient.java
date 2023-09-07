@@ -158,8 +158,7 @@ public class HoodieTableMetaClient implements Serializable {
     }
     this.timelineLayoutVersion = layoutVersion.orElseGet(() -> tableConfig.getTimelineLayoutVersion().get());
     this.loadActiveTimelineOnLoad = loadActiveTimelineOnLoad;
-    LOG.info("Finished Loading Table of type " + tableType + "(version=" + timelineLayoutVersion + ", baseFileFormat="
-        + this.tableConfig.getBaseFileFormat() + ") from " + basePath);
+    LOG.info("Finished Loading Table of type " + tableType + "(version=" + timelineLayoutVersion + ") from " + basePath);
     if (loadActiveTimelineOnLoad) {
       LOG.info("Loading Active commit timeline for " + basePath);
       getActiveTimeline();
@@ -867,6 +866,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String metadataPartitions;
     private String inflightMetadataPartitions;
     private String secondaryIndexesMetadata;
+    private Boolean multipleBaseFileFormatsEnabled;
 
     /**
      * Persist the configs that is written at the first time, and should not be changed.
@@ -1031,6 +1031,15 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    public PropertyBuilder setMultipleBaseFileFormatsEnabled(Boolean multipleBaseFileFormatsEnabled) {
+      this.multipleBaseFileFormatsEnabled = multipleBaseFileFormatsEnabled;
+      return this;
+    }
+
+    public PropertyBuilder setBaseFileFormats(String baseFileFormats) {
+      return this;
+    }
+
     public PropertyBuilder set(Map<String, Object> props) {
       for (ConfigProperty<String> configProperty : HoodieTableConfig.PERSISTED_CONFIG_LIST) {
         if (containsConfigProperty(props, configProperty)) {
@@ -1155,6 +1164,9 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.SECONDARY_INDEXES_METADATA)) {
         setSecondaryIndexesMetadata(hoodieConfig.getString(HoodieTableConfig.SECONDARY_INDEXES_METADATA));
       }
+      if (hoodieConfig.contains(HoodieTableConfig.MULTIPLE_BASE_FILE_FORMATS_ENABLE)) {
+        setMultipleBaseFileFormatsEnabled(hoodieConfig.getBoolean(HoodieTableConfig.MULTIPLE_BASE_FILE_FORMATS_ENABLE));
+      }
       return this;
     }
 
@@ -1262,6 +1274,9 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (null != secondaryIndexesMetadata) {
         tableConfig.setValue(HoodieTableConfig.SECONDARY_INDEXES_METADATA, secondaryIndexesMetadata);
+      }
+      if (null != multipleBaseFileFormatsEnabled) {
+        tableConfig.setValue(HoodieTableConfig.MULTIPLE_BASE_FILE_FORMATS_ENABLE, Boolean.toString(multipleBaseFileFormatsEnabled));
       }
       return tableConfig.getProps();
     }

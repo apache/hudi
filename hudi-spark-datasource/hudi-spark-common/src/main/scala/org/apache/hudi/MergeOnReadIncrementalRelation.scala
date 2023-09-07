@@ -17,7 +17,7 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.fs.{FileStatus, GlobPattern, Path}
+import org.apache.hadoop.fs.{FileStatus, GlobPattern}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieSparkConfUtils.getHollowCommitHandling
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
@@ -181,7 +181,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   protected lazy val commitsMetadata = includedCommits.map(getCommitMetadata(_, super.timeline)).asJava
 
   protected lazy val affectedFilesInCommits: Array[FileStatus] = {
-    listAffectedFilesForCommits(conf, new Path(metaClient.getBasePath), commitsMetadata)
+    listAffectedFilesForCommits(conf, metaClient.getBasePathV2, commitsMetadata)
   }
 
   protected lazy val (includeStartTime, startTs) = if (startInstantArchived) {

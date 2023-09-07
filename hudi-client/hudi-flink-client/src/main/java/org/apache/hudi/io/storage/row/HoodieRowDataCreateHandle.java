@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -195,9 +194,8 @@ public class HoodieRowDataCreateHandle implements Serializable {
     } catch (IOException e) {
       throw new HoodieIOException("Failed to make dir " + path, e);
     }
-    HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
     return new Path(path.toString(), FSUtils.makeBaseFileName(instantTime, getWriteToken(), fileId,
-        tableConfig.getBaseFileFormat().getFileExtension()));
+        table.getBaseFileExtension()));
   }
 
   /**

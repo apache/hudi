@@ -23,7 +23,7 @@ import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPER
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
-import org.apache.hudi.common.model.WriteConcurrencyMode
+import org.apache.hudi.common.model.{HoodieTableType, WriteConcurrencyMode}
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ConfigUtils
@@ -255,6 +255,13 @@ object DefaultSource {
         Option.empty
       }
 
+      if (metaClient.getTableConfig.isMultipleBaseFileFormatsEnabled) {
+        if (isBootstrappedTable) {
+          throw new HoodieException(s"Multiple base file formats are not supported for bootstrapped table")
+        }
+        resolveMultiFileFormatRelation(tableType, queryType, sqlContext, globPaths, userSchema, metaClient, parameters)
+      }
+
       (tableType, queryType, isBootstrappedTable) match {
         case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
              (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
@@ -323,12 +330,36 @@ object DefaultSource {
     // NOTE: We fallback to [[HadoopFsRelation]] in all of the cases except ones requiring usage of
     //       [[BaseFileOnlyRelation]] to function correctly. This is necessary to maintain performance parity w/
     //       vanilla Spark, since some of the Spark optimizations are predicated on the using of [[HadoopFsRelation]].
+    //       Currently, there are two such scenarios when [[BaseFileOnlyRelation]] is required:
+    //       1. When schema-on-read is enabled, since that feature depends on [[InternalSchema]].
+    //       2. When multiple file formats are enabled, since we cannot decide the file format at this stage.
     //
     //       You can check out HUDI-3896 for more details
-    if (baseRelation.hasSchemaOnRead) {
+    // TODO: maybe not needed here. Fix after integrating multi file formats relation
+    if (baseRelation.hasSchemaOnRead || metaClient.getTableConfig.isMultipleBaseFileFormatsEnabled) {
       baseRelation
     } else {
       baseRelation.toHadoopFsRelation
+    }
+  }
+
+  private def resolveMultiFileFormatRelation(tableType: HoodieTableType,
+                                             queryType: String,
+                                             sqlContext:
+                                             SQLContext,
+                                             globPaths: Seq[Path],
+                                             userSchema: Option[StructType],
+                                             metaClient: HoodieTableMetaClient,
+                                             parameters: Map[String, String]): BaseHoodieMultiFileFormatRelation = {
+    (tableType, queryType) match {
+      case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL) |
+           (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL) =>
+        new HoodieMultiFileFormatCOWRelation(sqlContext, metaClient, parameters, userSchema, globPaths)
+      case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL) |
+           (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL) =>
+        new HoodieMultiFileFormatMORRelation(sqlContext, metaClient, parameters, userSchema, globPaths)
+      case (_, _) =>
+        throw new HoodieException(s"Multiple base file formats not supported for query type : $queryType for tableType: $tableType")
     }
   }
 

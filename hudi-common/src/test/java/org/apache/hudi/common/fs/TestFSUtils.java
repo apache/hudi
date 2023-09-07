@@ -545,6 +545,33 @@ public class TestFSUtils extends HoodieCommonTestHarness {
             .collect(Collectors.toSet()));
   }
 
+  @Test
+  public void testGetFileExtension() {
+    String pathWithExtension = "/path/to/some/file/sample.parquet";
+    String pathWithoutExtension = "/path/to/some/file/sample";
+    String justFileNameWithExtension = "sample.orc";
+    String justFileNameWithoutExtension = "sample";
+
+    // file with extension
+    String result1 = FSUtils.getFileExtension(pathWithExtension);
+    assertEquals(".parquet", result1);
+
+    // file without extension
+    String result2 = FSUtils.getFileExtension(pathWithoutExtension);
+    assertEquals("", result2);
+
+    // just a file name with extension
+    String result3 = FSUtils.getFileExtension(justFileNameWithExtension);
+    assertEquals(".orc", result3);
+
+    // just a file name without extension
+    String result4 = FSUtils.getFileExtension(justFileNameWithoutExtension);
+    assertEquals("", result4);
+
+    // null input
+    assertThrows(NullPointerException.class, () -> FSUtils.getFileExtension(null));
+  }
+
   private Path getHoodieTempDir() {
     return new Path(baseUri.toString(), ".hoodie/.temp");
   }

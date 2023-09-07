@@ -244,8 +244,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
 
     // Check whether the record has been updated
     Path updatedFilePath = allFiles[0].getPath();
-    BloomFilter updatedFilter =
-        BaseFileUtils.getInstance(metaClient).readBloomFilterFromMetadata(hadoopConf, updatedFilePath);
+    BloomFilter updatedFilter = getFileUtilsInstance(metaClient).readBloomFilterFromMetadata(hadoopConf, updatedFilePath);
     for (HoodieRecord record : records) {
       // No change to the _row_key
       assertTrue(updatedFilter.mightContain(record.getRecordKey()));
@@ -542,7 +541,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     Option<Path> metafilePath = HoodiePartitionMetadata.getPartitionMetafilePath(fs, partitionPath);
     if (partitionMetafileUseBaseFormat) {
       // Extension should be the same as the data file format of the table
-      assertTrue(metafilePath.get().toString().endsWith(table.getBaseFileFormat().getFileExtension()));
+      assertTrue(metafilePath.get().toString().endsWith(table.getBaseFileExtension()));
     } else {
       // No extension as it is in properties file format
       assertTrue(metafilePath.get().toString().endsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX));
