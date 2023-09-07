@@ -588,7 +588,6 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     assertSame(viewStorageConfig.getStorageType(), FileSystemViewStorageType.REMOTE_FIRST);
 
     // get another write client
-    writeClient.close();
     writeClient = FlinkWriteClients.createWriteClient(conf);
     assertSame(writeClient.getConfig().getViewStorageConfig().getStorageType(), FileSystemViewStorageType.REMOTE_FIRST);
     assertEquals(viewStorageConfig.getRemoteViewServerPort(), writeClient.getConfig().getViewStorageConfig().getRemoteViewServerPort());
