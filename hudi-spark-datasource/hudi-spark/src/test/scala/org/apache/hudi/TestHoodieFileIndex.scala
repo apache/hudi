@@ -194,6 +194,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
 
     val fileIndex = HoodieFileIndex(spark, metaClient, None, queryOpts)
     assertEquals("partition_path", fileIndex.partitionSchema.fields.map(_.name).mkString(","))
+    writeClient.close()
   }
 
   @ParameterizedTest

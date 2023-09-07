@@ -94,10 +94,11 @@ public class SixToFiveDowngradeHandler implements DowngradeHandler {
         compactionConfig.setValue(HoodieCompactionConfig.INLINE_COMPACT_TRIGGER_STRATEGY.key(), CompactionTriggerStrategy.NUM_COMMITS.name());
         compactionConfig.setValue(HoodieCompactionConfig.COMPACTION_STRATEGY.key(), UnBoundedCompactionStrategy.class.getName());
         compactionConfig.setValue(HoodieMetadataConfig.ENABLE.key(), "false");
-        BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(compactionConfig, context);
-        Option<String> compactionInstantOpt = writeClient.scheduleCompaction(Option.empty());
-        if (compactionInstantOpt.isPresent()) {
-          writeClient.compact(compactionInstantOpt.get());
+        try (BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(compactionConfig, context)) {
+          Option<String> compactionInstantOpt = writeClient.scheduleCompaction(Option.empty());
+          if (compactionInstantOpt.isPresent()) {
+            writeClient.compact(compactionInstantOpt.get());
+          }
         }
       }
     } catch (Exception e) {

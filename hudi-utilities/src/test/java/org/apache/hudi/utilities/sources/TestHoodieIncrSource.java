@@ -41,10 +41,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
+import org.apache.hudi.utilities.sources.helpers.TestSnapshotQuerySplitterImpl;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hudi.utilities.sources.helpers.TestSnapshotQuerySplitterImpl;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -104,33 +104,33 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
             .enable(false).build())
         .build();
 
-    SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig);
-    Pair<String, List<HoodieRecord>> inserts = writeRecords(writeClient, INSERT, null, "100");
-    Pair<String, List<HoodieRecord>> inserts2 = writeRecords(writeClient, INSERT, null, "200");
-    Pair<String, List<HoodieRecord>> inserts3 = writeRecords(writeClient, INSERT, null, "300");
-    Pair<String, List<HoodieRecord>> inserts4 = writeRecords(writeClient, INSERT, null, "400");
-    Pair<String, List<HoodieRecord>> inserts5 = writeRecords(writeClient, INSERT, null, "500");
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
+      Pair<String, List<HoodieRecord>> inserts = writeRecords(writeClient, INSERT, null, "100");
+      Pair<String, List<HoodieRecord>> inserts2 = writeRecords(writeClient, INSERT, null, "200");
+      Pair<String, List<HoodieRecord>> inserts3 = writeRecords(writeClient, INSERT, null, "300");
+      Pair<String, List<HoodieRecord>> inserts4 = writeRecords(writeClient, INSERT, null, "400");
+      Pair<String, List<HoodieRecord>> inserts5 = writeRecords(writeClient, INSERT, null, "500");
 
-    // read everything upto latest
-    readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.empty(), 500, inserts5.getKey());
+      // read everything upto latest
+      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.empty(), 500, inserts5.getKey());
 
-    // even if the begin timestamp is archived (100), full table scan should kick in, but should filter for records having commit time > 100
-    readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.of("100"), 400, inserts5.getKey());
+      // even if the begin timestamp is archived (100), full table scan should kick in, but should filter for records having commit time > 100
+      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.of("100"), 400, inserts5.getKey());
 
-    // even if the read upto latest is set, if begin timestamp is in active timeline, only incremental should kick in.
-    readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.of("400"), 100, inserts5.getKey());
+      // even if the read upto latest is set, if begin timestamp is in active timeline, only incremental should kick in.
+      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.of("400"), 100, inserts5.getKey());
 
-    // read just the latest
-    readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.empty(), 100, inserts5.getKey());
+      // read just the latest
+      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.empty(), 100, inserts5.getKey());
 
-    // ensure checkpoint does not move
-    readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.of(inserts5.getKey()), 0, inserts5.getKey());
+      // ensure checkpoint does not move
+      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.of(inserts5.getKey()), 0, inserts5.getKey());
 
-    Pair<String, List<HoodieRecord>> inserts6 = writeRecords(writeClient, INSERT, null, "600");
+      Pair<String, List<HoodieRecord>> inserts6 = writeRecords(writeClient, INSERT, null, "600");
 
-    // insert new batch and ensure the checkpoint moves
-    readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.of(inserts5.getKey()), 100, inserts6.getKey());
-    writeClient.close();
+      // insert new batch and ensure the checkpoint moves
+      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.of(inserts5.getKey()), 100, inserts6.getKey());
+    }
   }
 
   @ParameterizedTest
@@ -149,69 +149,68 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .build();
 
-    SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig);
-    List<Pair<String, List<HoodieRecord>>> inserts = new ArrayList<>();
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
+      List<Pair<String, List<HoodieRecord>>> inserts = new ArrayList<>();
 
-    for (int i = 0; i < 6; i++) {
-      inserts.add(writeRecords(writeClient, INSERT, null, HoodieActiveTimeline.createNewInstantTime()));
+      for (int i = 0; i < 6; i++) {
+        inserts.add(writeRecords(writeClient, INSERT, null, HoodieActiveTimeline.createNewInstantTime()));
+      }
+
+      // Emulates a scenario where an inflight commit is before a completed commit
+      // The checkpoint should not go past this commit
+      HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+      HoodieInstant instant4 = activeTimeline
+          .filter(instant -> instant.getTimestamp().equals(inserts.get(4).getKey())).firstInstant().get();
+      Option<byte[]> instant4CommitData = activeTimeline.getInstantDetails(instant4);
+      activeTimeline.revertToInflight(instant4);
+      metaClient.reloadActiveTimeline();
+
+      // Reads everything up to latest
+      readAndAssert(
+          IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+          Option.empty(),
+          400,
+          inserts.get(3).getKey());
+
+      // Even if the beginning timestamp is archived, full table scan should kick in, but should filter for records having commit time > first instant time
+      readAndAssert(
+          IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+          Option.of(inserts.get(0).getKey()),
+          300,
+          inserts.get(3).getKey());
+
+      // Even if the read upto latest is set, if begin timestamp is in active timeline, only incremental should kick in.
+      readAndAssert(
+          IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+          Option.of(inserts.get(2).getKey()),
+          100,
+          inserts.get(3).getKey());
+
+      // Reads just the latest
+      readAndAssert(
+          IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST,
+          Option.empty(),
+          100,
+          inserts.get(3).getKey());
+
+      // Ensures checkpoint does not move
+      readAndAssert(
+          IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST,
+          Option.of(inserts.get(3).getKey()),
+          0,
+          inserts.get(3).getKey());
+
+      activeTimeline.reload().saveAsComplete(
+          new HoodieInstant(HoodieInstant.State.INFLIGHT, instant4.getAction(), inserts.get(4).getKey()),
+          instant4CommitData);
+
+      // After the inflight commit completes, the checkpoint should move on after incremental pull
+      readAndAssert(
+          IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST,
+          Option.of(inserts.get(3).getKey()),
+          200,
+          inserts.get(5).getKey());
     }
-
-    // Emulates a scenario where an inflight commit is before a completed commit
-    // The checkpoint should not go past this commit
-    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    HoodieInstant instant4 = activeTimeline
-        .filter(instant -> instant.getTimestamp().equals(inserts.get(4).getKey())).firstInstant().get();
-    Option<byte[]> instant4CommitData = activeTimeline.getInstantDetails(instant4);
-    activeTimeline.revertToInflight(instant4);
-    metaClient.reloadActiveTimeline();
-
-    // Reads everything up to latest
-    readAndAssert(
-        IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
-        Option.empty(),
-        400,
-        inserts.get(3).getKey());
-
-    // Even if the beginning timestamp is archived, full table scan should kick in, but should filter for records having commit time > first instant time
-    readAndAssert(
-        IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
-        Option.of(inserts.get(0).getKey()),
-        300,
-        inserts.get(3).getKey());
-
-    // Even if the read upto latest is set, if begin timestamp is in active timeline, only incremental should kick in.
-    readAndAssert(
-        IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
-        Option.of(inserts.get(2).getKey()),
-        100,
-        inserts.get(3).getKey());
-
-    // Reads just the latest
-    readAndAssert(
-        IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST,
-        Option.empty(),
-        100,
-        inserts.get(3).getKey());
-
-    // Ensures checkpoint does not move
-    readAndAssert(
-        IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST,
-        Option.of(inserts.get(3).getKey()),
-        0,
-        inserts.get(3).getKey());
-
-    activeTimeline.reload().saveAsComplete(
-        new HoodieInstant(HoodieInstant.State.INFLIGHT, instant4.getAction(), inserts.get(4).getKey()),
-        instant4CommitData);
-
-    // After the inflight commit completes, the checkpoint should move on after incremental pull
-    readAndAssert(
-        IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST,
-        Option.of(inserts.get(3).getKey()),
-        200,
-        inserts.get(5).getKey());
-
-    writeClient.close();
   }
 
   @ParameterizedTest
@@ -230,101 +229,101 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .build();
 
-    SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig);
-    List<Pair<String, List<HoodieRecord>>> dataBatches = new ArrayList<>();
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
+      List<Pair<String, List<HoodieRecord>>> dataBatches = new ArrayList<>();
 
-    // For COW:
-    //   0: bulk_insert of 100 records
-    //   1: bulk_insert of 100 records
-    //   2: bulk_insert of 100 records
-    //      schedule clustering
-    //   3: bulk_insert of 100 records
-    //   4: upsert of 100 records (updates only based on round 3)
-    //   5: upsert of 100 records (updates only based on round 3)
-    //   6: bulk_insert of 100 records
-    // For MOR:
-    //   0: bulk_insert of 100 records
-    //   1: bulk_insert of 100 records
-    //   2: bulk_insert of 100 records
-    //   3: bulk_insert of 100 records
-    //   4: upsert of 100 records (updates only based on round 3)
-    //      schedule compaction
-    //   5: upsert of 100 records (updates only based on round 3)
-    //      schedule clustering
-    //   6: bulk_insert of 100 records
-    for (int i = 0; i < 6; i++) {
-      WriteOperationType opType = i < 4 ? BULK_INSERT : UPSERT;
-      List<HoodieRecord> recordsForUpdate = i < 4 ? null : dataBatches.get(3).getRight();
-      dataBatches.add(writeRecords(writeClient, opType, recordsForUpdate, HoodieActiveTimeline.createNewInstantTime()));
-      if (tableType == COPY_ON_WRITE) {
-        if (i == 2) {
-          writeClient.scheduleClustering(Option.empty());
-        }
-      } else if (tableType == MERGE_ON_READ) {
-        if (i == 4) {
-          writeClient.scheduleCompaction(Option.empty());
-        }
-        if (i == 5) {
-          writeClient.scheduleClustering(Option.empty());
+      // For COW:
+      //   0: bulk_insert of 100 records
+      //   1: bulk_insert of 100 records
+      //   2: bulk_insert of 100 records
+      //      schedule clustering
+      //   3: bulk_insert of 100 records
+      //   4: upsert of 100 records (updates only based on round 3)
+      //   5: upsert of 100 records (updates only based on round 3)
+      //   6: bulk_insert of 100 records
+      // For MOR:
+      //   0: bulk_insert of 100 records
+      //   1: bulk_insert of 100 records
+      //   2: bulk_insert of 100 records
+      //   3: bulk_insert of 100 records
+      //   4: upsert of 100 records (updates only based on round 3)
+      //      schedule compaction
+      //   5: upsert of 100 records (updates only based on round 3)
+      //      schedule clustering
+      //   6: bulk_insert of 100 records
+      for (int i = 0; i < 6; i++) {
+        WriteOperationType opType = i < 4 ? BULK_INSERT : UPSERT;
+        List<HoodieRecord> recordsForUpdate = i < 4 ? null : dataBatches.get(3).getRight();
+        dataBatches.add(writeRecords(writeClient, opType, recordsForUpdate, HoodieActiveTimeline.createNewInstantTime()));
+        if (tableType == COPY_ON_WRITE) {
+          if (i == 2) {
+            writeClient.scheduleClustering(Option.empty());
+          }
+        } else if (tableType == MERGE_ON_READ) {
+          if (i == 4) {
+            writeClient.scheduleCompaction(Option.empty());
+          }
+          if (i == 5) {
+            writeClient.scheduleClustering(Option.empty());
+          }
         }
       }
+      dataBatches.add(writeRecords(writeClient, BULK_INSERT, null, HoodieActiveTimeline.createNewInstantTime()));
+
+      String latestCommitTimestamp = dataBatches.get(dataBatches.size() - 1).getKey();
+      // Pending clustering exists
+      Option<HoodieInstant> clusteringInstant =
+          metaClient.getActiveTimeline().filterPendingReplaceTimeline()
+              .filter(instant -> ClusteringUtils.getClusteringPlan(metaClient, instant).isPresent())
+              .firstInstant();
+      assertTrue(clusteringInstant.isPresent());
+      assertTrue(clusteringInstant.get().getTimestamp().compareTo(latestCommitTimestamp) < 0);
+
+      if (tableType == MERGE_ON_READ) {
+        // Pending compaction exists
+        Option<HoodieInstant> compactionInstant =
+            metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
+        assertTrue(compactionInstant.isPresent());
+        assertTrue(compactionInstant.get().getTimestamp().compareTo(latestCommitTimestamp) < 0);
+      }
+
+      // test SnapshotLoadQuerySpliiter to split snapshot query .
+      // Reads only first commit
+      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+          Option.empty(),
+          100,
+          dataBatches.get(0).getKey(),
+          Option.of(TestSnapshotQuerySplitterImpl.class.getName()));
+
+      // The pending tables services should not block the incremental pulls
+      // Reads everything up to latest
+      readAndAssert(
+          IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+          Option.empty(),
+          500,
+          dataBatches.get(6).getKey());
+
+      // Even if the read upto latest is set, if begin timestamp is in active timeline, only incremental should kick in.
+      readAndAssert(
+          IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+          Option.of(dataBatches.get(2).getKey()),
+          200,
+          dataBatches.get(6).getKey());
+
+      // Reads just the latest
+      readAndAssert(
+          IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST,
+          Option.empty(),
+          100,
+          dataBatches.get(6).getKey());
+
+      // Ensures checkpoint does not move
+      readAndAssert(
+          IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST,
+          Option.of(dataBatches.get(6).getKey()),
+          0,
+          dataBatches.get(6).getKey());
     }
-    dataBatches.add(writeRecords(writeClient, BULK_INSERT, null, HoodieActiveTimeline.createNewInstantTime()));
-
-    String latestCommitTimestamp = dataBatches.get(dataBatches.size() - 1).getKey();
-    // Pending clustering exists
-    Option<HoodieInstant> clusteringInstant =
-        metaClient.getActiveTimeline().filterPendingReplaceTimeline()
-            .filter(instant -> ClusteringUtils.getClusteringPlan(metaClient, instant).isPresent())
-            .firstInstant();
-    assertTrue(clusteringInstant.isPresent());
-    assertTrue(clusteringInstant.get().getTimestamp().compareTo(latestCommitTimestamp) < 0);
-
-    if (tableType == MERGE_ON_READ) {
-      // Pending compaction exists
-      Option<HoodieInstant> compactionInstant =
-          metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
-      assertTrue(compactionInstant.isPresent());
-      assertTrue(compactionInstant.get().getTimestamp().compareTo(latestCommitTimestamp) < 0);
-    }
-
-    // test SnapshotLoadQuerySpliiter to split snapshot query .
-    // Reads only first commit
-    readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
-        Option.empty(),
-        100,
-        dataBatches.get(0).getKey(),
-        Option.of(TestSnapshotQuerySplitterImpl.class.getName()));
-    writeClient.close();
-
-    // The pending tables services should not block the incremental pulls
-    // Reads everything up to latest
-    readAndAssert(
-        IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
-        Option.empty(),
-        500,
-        dataBatches.get(6).getKey());
-
-    // Even if the read upto latest is set, if begin timestamp is in active timeline, only incremental should kick in.
-    readAndAssert(
-        IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
-        Option.of(dataBatches.get(2).getKey()),
-        200,
-        dataBatches.get(6).getKey());
-
-    // Reads just the latest
-    readAndAssert(
-        IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST,
-        Option.empty(),
-        100,
-        dataBatches.get(6).getKey());
-
-    // Ensures checkpoint does not move
-    readAndAssert(
-        IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST,
-        Option.of(dataBatches.get(6).getKey()),
-        0,
-        dataBatches.get(6).getKey());
   }
 
   private void readAndAssert(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy, Option<String> checkpointToPull, int expectedCount,
