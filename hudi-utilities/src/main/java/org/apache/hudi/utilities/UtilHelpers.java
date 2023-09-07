@@ -256,6 +256,13 @@ public class UtilHelpers {
     return conf;
   }
 
+  public static TypedProperties buildProperties(Configuration hadoopConf, String propsFilePath, List<String> props) {
+    return StringUtils.isNullOrEmpty(propsFilePath)
+        ? UtilHelpers.buildProperties(props)
+        : UtilHelpers.readConfig(hadoopConf, new Path(propsFilePath), props)
+        .getProps(true);
+  }
+
   public static TypedProperties buildProperties(List<String> props) {
     TypedProperties properties = DFSPropertiesConfiguration.getGlobalProps();
     props.forEach(x -> {

@@ -34,7 +34,6 @@ import org.apache.hudi.table.HoodieSparkTable;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.jetbrains.annotations.TestOnly;
 import org.slf4j.Logger;
@@ -58,11 +57,14 @@ public class HoodieClusteringJob {
   private HoodieTableMetaClient metaClient;
 
   public HoodieClusteringJob(JavaSparkContext jsc, Config cfg) {
+    this(jsc, cfg, UtilHelpers.buildProperties(jsc.hadoopConfiguration(), cfg.propsFilePath, cfg.configs));
+  }
+
+  public HoodieClusteringJob(JavaSparkContext jsc, Config cfg, TypedProperties props) {
     this.cfg = cfg;
     this.jsc = jsc;
-    this.props = StringUtils.isNullOrEmpty(cfg.propsFilePath)
-        ? UtilHelpers.buildProperties(cfg.configs)
-        : readConfigFromFileSystem(jsc, cfg);
+    this.props = props;
+    this.metaClient = UtilHelpers.createMetaClient(jsc, cfg.basePath, true);
     // Disable async cleaning, will trigger synchronous cleaning manually.
     this.props.put(HoodieCleanConfig.ASYNC_CLEAN.key(), false);
     this.metaClient = UtilHelpers.createMetaClient(jsc, cfg.basePath, true);
@@ -70,11 +72,6 @@ public class HoodieClusteringJob {
       // add default lock config options if MDT is enabled.
       UtilHelpers.addLockOptions(cfg.basePath, this.props);
     }
-  }
-
-  private TypedProperties readConfigFromFileSystem(JavaSparkContext jsc, Config cfg) {
-    return UtilHelpers.readConfig(jsc.hadoopConfiguration(), new Path(cfg.propsFilePath), cfg.configs)
-        .getProps(true);
   }
 
   public static class Config implements Serializable {
