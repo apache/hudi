@@ -313,6 +313,47 @@ public class FSUtils {
     }
   }
 
+  public static List<Option<FileStatus>> getFileStatusesUnderPartition(FileSystem fileSystem,
+                                                                       Path partitionPathIncludeBasePath,
+                                                                       List<String> filesNamesUnderThisPartition,
+                                                                       boolean ignoreMissingFiles) {
+    String fileSystemType = fileSystem.getScheme();
+    boolean useListStatus = !StorageSchemes.isListStatusUnfriendly(fileSystemType);
+    List<Option<FileStatus>> result = new ArrayList<>(filesNamesUnderThisPartition.size());
+    try {
+      if (useListStatus) {
+        FileStatus[] fileStatuses = fileSystem.listStatus(partitionPathIncludeBasePath,
+            path -> filesNamesUnderThisPartition.contains(path.getName()));
+        for (String fileName : filesNamesUnderThisPartition) {
+          Option<FileStatus> ele = Option.fromJavaOptional(
+              Arrays.stream(fileStatuses)
+                  .filter(fileStatus -> fileStatus.getPath().getName().equals(fileName))
+                  .findFirst());
+          if (!ignoreMissingFiles && !ele.isPresent()) {
+            throw new FileNotFoundException("File not found: " + new Path(partitionPathIncludeBasePath.toString(), fileName));
+          }
+          result.add(ele);
+        }
+      } else {
+        for (String fileName : filesNamesUnderThisPartition) {
+          Path fullPath = new Path(partitionPathIncludeBasePath.toString(), fileName);
+          try {
+            FileStatus fileStatus = fileSystem.getFileStatus(fullPath);
+            result.add(Option.of(fileStatus));
+          } catch (FileNotFoundException fileNotFoundException) {
+            if (ignoreMissingFiles) {
+              result.add(Option.empty());
+            }
+          }
+        }
+        return result;
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("List files under " + partitionPathIncludeBasePath + " failed", e);
+    }
+    return result;
+  }
+
   public static String getFileExtension(String fullName) {
     Objects.requireNonNull(fullName);
     String fileName = new File(fullName).getName();
