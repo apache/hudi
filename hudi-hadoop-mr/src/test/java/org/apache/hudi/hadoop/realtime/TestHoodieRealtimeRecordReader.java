@@ -102,7 +102,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 /**
- * Tests HoodieRealtimeRecordReader.
+ * Tests HoodieRealtimeRecordReader..
  */
 public class TestHoodieRealtimeRecordReader {
 
