@@ -75,11 +75,11 @@ public class TestClusteringUtil {
   }
 
   @AfterEach
-    void afterEach() throws IOException {
-      if (this.writeClient != null) {
-        this.writeClient.close();
-      }
+  void afterEach() {
+    if (this.writeClient != null) {
+      this.writeClient.close();
     }
+  }
 
   void beforeEach(Map<String, String> options) throws IOException {
     this.conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
