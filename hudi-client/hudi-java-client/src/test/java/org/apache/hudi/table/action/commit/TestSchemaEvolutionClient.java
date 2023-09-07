@@ -40,7 +40,7 @@ import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResou
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Tests for schema evolution client api..
+ * Tests for schema evolution client api.
  */
 public class TestSchemaEvolutionClient extends HoodieJavaClientTestHarness {
 
