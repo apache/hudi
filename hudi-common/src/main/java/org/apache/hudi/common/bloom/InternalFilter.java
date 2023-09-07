@@ -18,10 +18,7 @@
 
 package org.apache.hudi.common.bloom;
 
-import org.apache.hadoop.io.Writable;
-import org.apache.hadoop.util.bloom.HashFunction;
-import org.apache.hadoop.util.bloom.Key;
-import org.apache.hadoop.util.hash.Hash;
+import org.apache.hudi.common.util.hash.Hash;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -30,15 +27,28 @@ import java.util.Collection;
 import java.util.List;
 
 /**
- * Copied from {@link org.apache.hadoop.util.bloom.Filter}. {@link InternalDynamicBloomFilter} needs access to some of
- * protected members of {@link org.apache.hadoop.util.bloom.Filter} and hence had to copy it locally.
+ * Ported from {@link org.apache.hadoop.util.bloom.Filter}.
  */
-abstract class InternalFilter implements Writable {
-
+abstract class InternalFilter {
   private static final int VERSION = -1; // negative to accommodate for old format
+  /**
+   * The vector size of <i>this</i> filter.
+   */
   protected int vectorSize;
+
+  /**
+   * The hash function used to map a key to several positions in the vector.
+   */
   protected HashFunction hash;
+
+  /**
+   * The number of hash function to consider.
+   */
   protected int nbHash;
+
+  /**
+   * Type of hashing function to use.
+   */
   protected int hashType;
 
   protected InternalFilter() {
@@ -150,9 +160,6 @@ abstract class InternalFilter implements Writable {
     }
   } //end add()
 
-  // Writable interface
-
-  @Override
   public void write(DataOutput out) throws IOException {
     out.writeInt(VERSION);
     out.writeInt(this.nbHash);
@@ -160,7 +167,6 @@ abstract class InternalFilter implements Writable {
     out.writeInt(this.vectorSize);
   }
 
-  @Override
   public void readFields(DataInput in) throws IOException {
     int ver = in.readInt();
     if (ver > 0) { // old non-versioned format

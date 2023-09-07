@@ -21,8 +21,6 @@ package org.apache.hudi.common.bloom;
 import org.apache.hudi.common.util.Base64CodecUtil;
 import org.apache.hudi.exception.HoodieIndexException;
 
-import org.apache.hadoop.util.bloom.Key;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInput;
@@ -35,19 +33,19 @@ import java.io.ObjectOutputStream;
 import java.nio.charset.StandardCharsets;
 
 /**
- * A Simple Bloom filter implementation built on top of {@link org.apache.hadoop.util.bloom.BloomFilter}.
+ * A Simple Bloom filter implementation built on top of {@link InternalBloomFilter}.
  */
 
 public class SimpleBloomFilter implements BloomFilter {
 
-  private org.apache.hadoop.util.bloom.BloomFilter filter;
+  private InternalBloomFilter filter;
 
   /**
    * Create a new Bloom filter with the given configurations.
    *
    * @param numEntries The total number of entries.
    * @param errorRate  maximum allowable error rate.
-   * @param hashType   type of the hashing function (see {@link org.apache.hadoop.util.hash.Hash}).
+   * @param hashType   type of the hashing function (see {@link org.apache.hudi.common.util.hash.Hash}).
    */
   public SimpleBloomFilter(int numEntries, double errorRate, int hashType) {
     // Bit size
@@ -55,7 +53,7 @@ public class SimpleBloomFilter implements BloomFilter {
     // Number of the hash functions
     int numHashs = BloomFilterUtils.getNumHashes(bitSize, numEntries);
     // The filter
-    this.filter = new org.apache.hadoop.util.bloom.BloomFilter(bitSize, numHashs, hashType);
+    this.filter = new InternalBloomFilter(bitSize, numHashs, hashType);
   }
 
   /**
@@ -64,7 +62,7 @@ public class SimpleBloomFilter implements BloomFilter {
    * @param serString serialized string which represents the {@link SimpleBloomFilter}
    */
   public SimpleBloomFilter(String serString) {
-    this.filter = new org.apache.hadoop.util.bloom.BloomFilter();
+    this.filter = new InternalBloomFilter();
     byte[] bytes = Base64CodecUtil.decode(serString);
     DataInputStream dis = new DataInputStream(new ByteArrayInputStream(bytes));
     try {
@@ -119,7 +117,7 @@ public class SimpleBloomFilter implements BloomFilter {
   }
 
   private void readObject(ObjectInputStream is) throws IOException {
-    filter = new org.apache.hadoop.util.bloom.BloomFilter();
+    filter = new InternalBloomFilter();
     filter.readFields(is);
   }
 
@@ -130,7 +128,7 @@ public class SimpleBloomFilter implements BloomFilter {
 
   //@Override
   public void readFields(DataInput in) throws IOException {
-    filter = new org.apache.hadoop.util.bloom.BloomFilter();
+    filter = new InternalBloomFilter();
     filter.readFields(in);
   }
 
