@@ -78,7 +78,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -105,6 +104,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.HoodieTestCommitGenerator.getBaseFilename;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createCompactionCommitInMetadataTable;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.config.HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -416,7 +416,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
       metadataWriter.update(commitMeta, context.emptyHoodieData(), instantTime);
       metaClient.getActiveTimeline().saveAsComplete(
           new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime),
-          Option.of(commitMeta.toJsonString().getBytes(StandardCharsets.UTF_8)));
+          Option.of(getUTF8Bytes(commitMeta.toJsonString())));
     } else {
       commitMeta = generateCommitMetadata(instantTime, new HashMap<>());
     }
@@ -506,7 +506,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
 
     // create a version pointer file with invalid version number.
     metaClient.getFs().delete(LSMTimeline.getVersionFilePath(metaClient));
-    FileIOUtils.createFileInPath(metaClient.getFs(), LSMTimeline.getVersionFilePath(metaClient), Option.of("invalid_version".getBytes(StandardCharsets.UTF_8)));
+    FileIOUtils.createFileInPath(metaClient.getFs(), LSMTimeline.getVersionFilePath(metaClient), Option.of(getUTF8Bytes("invalid_version")));
 
     // check that invalid manifest file will not block archived timeline loading.
     HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
@@ -528,7 +528,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
 
     // if there are damaged archive files and damaged plan, hoodie can still load correctly.
     Path damagedFile = new Path(metaClient.getArchivePath(), "300_301_1.parquet");
-    FileIOUtils.createFileInPath(metaClient.getFs(), damagedFile, Option.of("dummy".getBytes()));
+    FileIOUtils.createFileInPath(metaClient.getFs(), damagedFile, Option.of(getUTF8Bytes("dummy")));
 
     assertDoesNotThrow(() -> metaClient.getArchivedTimeline().reload(), "Archived timeline can skip the invalid data and manifest files smartly");
   }

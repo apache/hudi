@@ -82,7 +82,6 @@ import org.apache.parquet.schema.Type;
 
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -93,6 +92,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.table.runtime.functions.SqlDateTimeUtils.dateToInternal;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.parquet.Preconditions.checkArgument;
 
 /**
@@ -190,7 +190,7 @@ public class ParquetSplitReaderUtil {
         } else {
           bsv.fill(value instanceof byte[]
               ? (byte[]) value
-              : value.toString().getBytes(StandardCharsets.UTF_8));
+              : getUTF8Bytes(value.toString()));
         }
         return bsv;
       case BOOLEAN:

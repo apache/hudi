@@ -23,6 +23,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
+import org.apache.hudi.common.util.StringUtils.getUTF8Bytes
 import org.apache.hudi.testutils.HoodieClientTestUtils
 import org.apache.parquet.avro.AvroParquetWriter
 import org.apache.parquet.hadoop.ParquetWriter
@@ -49,7 +50,7 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
 
       // create schema file
       val schemaFileOS = fs.create(new Path(schemaFile))
-      try schemaFileOS.write(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA.getBytes)
+      try schemaFileOS.write(getUTF8Bytes(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA))
       finally if (schemaFileOS != null) schemaFileOS.close()
 
       val insertData: util.List[GenericRecord] = createInsertRecords(sourcePath)
@@ -82,7 +83,7 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
 
       // create schema file
       val schemaFileOS = fs.create(new Path(schemaFile))
-      try schemaFileOS.write(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA.getBytes)
+      try schemaFileOS.write(getUTF8Bytes(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA))
       finally if (schemaFileOS != null) schemaFileOS.close()
 
       val insertData: util.List[GenericRecord] = createUpsertRecords(sourcePath)

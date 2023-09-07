@@ -49,7 +49,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -58,6 +57,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * A timeline writer which organizes the files as an LSM tree.
@@ -158,7 +159,7 @@ public class LSMTimelineWriter {
   }
 
   private void createManifestFile(HoodieLSMTimelineManifest manifest, int currentVersion) throws IOException {
-    byte[] content = manifest.toJsonString().getBytes(StandardCharsets.UTF_8);
+    byte[] content = getUTF8Bytes(manifest.toJsonString());
     // version starts from 1 and increases monotonically
     int newVersion = currentVersion < 0 ? 1 : currentVersion + 1;
     // create manifest file
@@ -169,7 +170,7 @@ public class LSMTimelineWriter {
   }
 
   private void updateVersionFile(int newVersion) throws IOException {
-    byte[] content = (String.valueOf(newVersion)).getBytes(StandardCharsets.UTF_8);
+    byte[] content = getUTF8Bytes(String.valueOf(newVersion));
     final Path versionFilePath = LSMTimeline.getVersionFilePath(metaClient);
     metaClient.getFs().delete(versionFilePath, false);
     metaClient.getFs().createImmutableFileInPath(versionFilePath, Option.of(content));
