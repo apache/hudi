@@ -1374,6 +1374,14 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
   }
 
+  public void setWriteTimer(String commitType) {
+    if (commitType.equals(HoodieTimeline.COMMIT_ACTION)) {
+      writeTimer = metrics.getCommitCtx();
+    } else if (commitType.equals(HoodieTimeline.DELTA_COMMIT_ACTION)) {
+      writeTimer = metrics.getDeltaCommitCtx();
+    }
+  }
+
   /**
    * Upgrades the hoodie table if need be when moving to a new Hudi version.
    * This method is called within a lock. Try to avoid double locking from within this method.
