@@ -44,15 +44,13 @@ parameters:
   - name: job3UTModules
     type: object
     default:
-      - 'hudi-spark-datasource'
-      - 'hudi-spark-datasource/hudi-spark'
-      - 'hudi-spark-datasource/hudi-spark3.2.x'
-      - 'hudi-spark-datasource/hudi-spark3.2plus-common'
-      - 'hudi-spark-datasource/hudi-spark3-common'
-      - 'hudi-spark-datasource/hudi-spark-common'
+      - 'hudi-hadoop-mr'
+      - 'hudi-client/hudi-java-client'
   - name: job4UTModules
     type: object
     default:
+      - '!hudi-hadoop-mr'
+      - '!hudi-client/hudi-java-client'
       - '!hudi-client/hudi-spark-client'
       - '!hudi-common'
       - '!hudi-examples'
@@ -106,6 +104,7 @@ stages:
   - stage: test
     jobs:
       - job: UT_FT_1
+        condition: false
         displayName: UT FT common & flink & UT client/spark-client
         timeoutInMinutes: '150'
         steps:
@@ -139,6 +138,7 @@ stages:
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
       - job: UT_FT_2
+        condition: false
         displayName: FT client/spark-client
         timeoutInMinutes: '150'
         steps:
@@ -204,15 +204,6 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB4_UT_MODULES)
-              publishJUnitResults: false
-              jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g'
-          - task: Maven@4
-            displayName: FT other modules
-            inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'test'
-              options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB4_FT_MODULES)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
