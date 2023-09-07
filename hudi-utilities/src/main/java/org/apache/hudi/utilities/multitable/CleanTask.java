@@ -37,7 +37,7 @@ class CleanTask extends TableServiceTask {
     HoodieCleaner.Config cleanConfig = new HoodieCleaner.Config();
     cleanConfig.basePath = basePath;
     UtilHelpers.retry(retry, () -> {
-      new HoodieCleaner(cleanConfig, props, jsc).run();
+      new HoodieCleaner(cleanConfig, jsc, props).run();
       return 0;
     }, "Clean Failed");
   }

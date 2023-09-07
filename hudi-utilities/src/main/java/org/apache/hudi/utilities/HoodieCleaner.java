@@ -54,17 +54,10 @@ public class HoodieCleaner {
   private TypedProperties props;
 
   public HoodieCleaner(Config cfg, JavaSparkContext jssc) {
-    this.cfg = cfg;
-    this.jssc = jssc;
-    /*
-     * Filesystem used.
-     */
-    this.props = cfg.propsFilePath == null ? UtilHelpers.buildProperties(cfg.configs)
-        : UtilHelpers.readConfig(jssc.hadoopConfiguration(), new Path(cfg.propsFilePath), cfg.configs).getProps(true);
-    LOG.info("Creating Cleaner with configs : " + props.toString());
+    this(cfg, jssc, UtilHelpers.buildProperties(jssc.hadoopConfiguration(), cfg.propsFilePath, cfg.configs));
   }
 
-  public HoodieCleaner(Config cfg, TypedProperties props, JavaSparkContext jssc) {
+  public HoodieCleaner(Config cfg, JavaSparkContext jssc, TypedProperties props) {
     this.cfg = cfg;
     this.jssc = jssc;
     this.props = props;
