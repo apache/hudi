@@ -1219,14 +1219,6 @@ public class HoodieTestTable {
     return writeStats;
   }
 
-  public HoodieTestTable addRequestedAndInflightReplaceCommit(String instantTime, HoodieRequestedReplaceMetadata requestedReplaceMetadata, HoodieReplaceCommitMetadata metadata) throws Exception {
-    createRequestedReplaceCommit(basePath, instantTime, Option.of(requestedReplaceMetadata));
-    createInflightReplaceCommit(basePath, instantTime);
-    currentInstantTime = instantTime;
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    return this;
-  }
-
   /**
    * Exception for {@link HoodieTestTable}.
    */
