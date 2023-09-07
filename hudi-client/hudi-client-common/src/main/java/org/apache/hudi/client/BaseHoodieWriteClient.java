@@ -222,6 +222,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     LOG.info("Committing " + instantTime + " action " + commitActionType);
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable table = createTable(config, hadoopConf);
+    // init timer used by emitCommitMetrics in advance
+    initTimer(operationType, table);
+
     HoodieCommitMetadata metadata = CommitUtils.buildMetadata(stats, partitionToReplaceFileIds,
         extraMetadata, operationType, config.getWriteSchema(), commitActionType);
     HoodieInstant inflightInstant = new HoodieInstant(State.INFLIGHT, commitActionType, instantTime);
@@ -1299,6 +1302,15 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     // Validate table properties
     metaClient.validateTableProperties(config.getProps());
 
+    initTimer(operationType, table);
+
+    return table;
+  }
+
+  private void initTimer(WriteOperationType operationType, HoodieTable table) {
+    if (operationType == null || table == null) {
+      return;
+    }
     switch (operationType) {
       case INSERT:
       case INSERT_PREPPED:
@@ -1317,8 +1329,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         break;
       default:
     }
-
-    return table;
   }
 
   /**
