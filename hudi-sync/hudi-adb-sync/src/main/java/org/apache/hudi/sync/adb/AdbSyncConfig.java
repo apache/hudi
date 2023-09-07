@@ -108,7 +108,7 @@ public class AdbSyncConfig extends HiveSyncConfig {
 
   public static final ConfigProperty<Boolean> ADB_SYNC_AUTO_CREATE_DATABASE = ConfigProperty
       .key("hoodie.datasource.adb.sync.auto_create_database")
-      .defaultValue(true)
+      .defaultValue(false)
       .markAdvanced()
       .withDocumentation("Whether auto create adb database");
 

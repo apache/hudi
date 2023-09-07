@@ -72,7 +72,7 @@ public class HiveSyncConfigHolder {
       .withDocumentation("Hive metastore url");
   public static final ConfigProperty<String> HIVE_AUTO_CREATE_DATABASE = ConfigProperty
       .key("hoodie.datasource.hive_sync.auto_create_database")
-      .defaultValue("true")
+      .defaultValue("false")
       .markAdvanced()
       .withDocumentation("Auto create hive database if does not exists");
   public static final ConfigProperty<String> HIVE_IGNORE_EXCEPTIONS = ConfigProperty

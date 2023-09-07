@@ -90,6 +90,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           hiveSyncProps.setProperty(META_SYNC_BASE_PATH.key, basePath)
           hiveSyncProps.setProperty(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key, "false")
           hiveSyncProps.setProperty(META_SYNC_NO_PARTITION_METADATA.key, "true")
+          hiveSyncProps.setProperty(HIVE_AUTO_CREATE_DATABASE.key(), "true")
           HiveTestUtil.setUp(Option.of(hiveSyncProps), false)
           val tool = new HiveSyncTool(hiveSyncProps, HiveTestUtil.getHiveConf)
           tool.syncHoodieTable()
