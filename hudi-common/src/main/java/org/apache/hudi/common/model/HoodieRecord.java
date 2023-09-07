@@ -284,7 +284,8 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     }
     HoodieRecord that = (HoodieRecord) o;
     return Objects.equals(key, that.key) && Objects.equals(data, that.data)
-        && Objects.equals(currentLocation, that.currentLocation) && Objects.equals(newLocation, that.newLocation);
+        && Objects.equals(currentLocation, that.currentLocation) && Objects.equals(newLocation, that.newLocation)
+        && Objects.equals(ignored, that.ignored);
   }
 
   @Override
