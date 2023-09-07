@@ -3322,9 +3322,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   private void validateMetadata(SparkRDDWriteClient testClient, Option<String> ignoreFilesWithCommit) throws IOException {
     HoodieWriteConfig config = testClient.getConfig();
 
-    SparkRDDWriteClient client; // TODO validate all clients properly closed for this block
+    SparkRDDWriteClient client;
     if (config.isEmbeddedTimelineServerEnabled()) {
-pdate      testClient.close();
+      testClient.close();
       client = new SparkRDDWriteClient(testClient.getEngineContext(), testClient.getConfig());
     } else {
       client = testClient;
