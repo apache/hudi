@@ -64,12 +64,15 @@ public class SixToFiveDowngradeHandler implements DowngradeHandler {
 
     // Since version 6 includes a new schema field for metadata table(MDT), the MDT needs to be deleted during downgrade to avoid column drop error.
     HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
+
+    syncCompactionRequestedFileToAuxiliaryFolder(table);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.reload(table.getMetaClient());
+
+    // Rollback the pending commits so that files created using the new format are cleaned up properly
+    rollbackPendingCommits(metaClient, config, context, upgradeDowngradeHelper);
     // The log block version has been upgraded in version six so compaction is required for downgrade.
     runCompaction(table, context, config, upgradeDowngradeHelper);
 
-    syncCompactionRequestedFileToAuxiliaryFolder(table);
-
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.reload(table.getMetaClient());
     Map<ConfigProperty, String> updatedTableProps = new HashMap<>();
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
     Option.ofNullable(tableConfig.getString(TABLE_METADATA_PARTITIONS))
@@ -77,6 +80,17 @@ public class SixToFiveDowngradeHandler implements DowngradeHandler {
     Option.ofNullable(tableConfig.getString(TABLE_METADATA_PARTITIONS_INFLIGHT))
         .ifPresent(v -> updatedTableProps.put(TABLE_METADATA_PARTITIONS_INFLIGHT, v));
     return updatedTableProps;
+  }
+
+  private void rollbackPendingCommits(HoodieTableMetaClient metaClient, HoodieWriteConfig config,
+                                      HoodieEngineContext context, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+    Option<HoodieInstant> lastPendingInstantOpt = metaClient.getActiveTimeline().filterPendingExcludingCompaction().lastInstant();
+    while (lastPendingInstantOpt.isPresent()) {
+      BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(config, context);
+      writeClient.rollback(lastPendingInstantOpt.get().getTimestamp());
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      lastPendingInstantOpt = metaClient.getActiveTimeline().filterPendingExcludingCompaction().lastInstant();
+    }
   }
 
   /**

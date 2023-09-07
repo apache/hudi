@@ -20,12 +20,16 @@ package org.apache.hudi.functional
 
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
+import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieTimeline}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
-import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion}
-import org.apache.hudi.config.HoodieCompactionConfig
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
+import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, RawTripTestPayload}
+import org.apache.hudi.common.util.CommitUtils
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView
 import org.apache.hudi.table.upgrade.{SparkUpgradeDowngradeHelper, UpgradeDowngrade}
 import org.apache.spark.sql.SaveMode
@@ -107,6 +111,36 @@ class TestSixToFiveDowngradeHandler extends RecordLevelIndexTestBase {
       .run(HoodieTableVersion.FIVE, null)
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertFalse(metaClient.getTableConfig.isMetadataTableAvailable)
+    assertEquals(HoodieTableVersion.FIVE, metaClient.getTableConfig.getTableVersion)
+  }
+
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieTableType])
+  def testDowngradeWithPendingCommit(tableType: HoodieTableType): Unit = {
+    val hudiOpts = commonOpts + (
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
+      HoodieTableConfig.TYPE.key() -> tableType.name(),
+      HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key() -> "0",
+      HoodieWriteConfig.AVRO_SCHEMA_STRING.key() -> HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
+      HoodieWriteConfig.AUTO_COMMIT_ENABLE.key() -> "false",
+      HoodieTableConfig.VERSION.key() -> Integer.toString(HoodieTableVersion.SIX.versionCode()))
+
+    HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, getWriteConfig(hudiOpts).getProps)
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    val writeClient: SparkRDDWriteClient[RawTripTestPayload] = SparkUpgradeDowngradeHelper.getInstance.getWriteClient(getWriteConfig(hudiOpts), context)
+      .asInstanceOf[SparkRDDWriteClient[RawTripTestPayload]]
+    val inserts:java.util.List[HoodieRecord[RawTripTestPayload]] = dataGen.generateInserts(getInstantTime(), 1)
+      .asInstanceOf[java.util.List[HoodieRecord[RawTripTestPayload]]]
+    val commitActionType = CommitUtils.getCommitActionType(tableType)
+    val instantTime = HoodieActiveTimeline.createNewInstantTime()
+    writeClient.startCommitWithTime(instantTime, commitActionType);
+    writeClient.insert(jsc.parallelize(inserts), instantTime)
+
+    new UpgradeDowngrade(metaClient, getWriteConfig(hudiOpts), context, SparkUpgradeDowngradeHelper.getInstance)
+      .run(HoodieTableVersion.FIVE, null)
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    assertEquals(HoodieTimeline.ROLLBACK_ACTION, metaClient.getActiveTimeline.lastInstant().get().getAction)
+    assertTrue(metaClient.getActiveTimeline.filterPendingExcludingCompaction().empty())
     assertEquals(HoodieTableVersion.FIVE, metaClient.getTableConfig.getTableVersion)
   }
 
