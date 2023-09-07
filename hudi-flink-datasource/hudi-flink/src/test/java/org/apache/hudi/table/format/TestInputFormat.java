@@ -1064,6 +1064,7 @@ public class TestInputFormat {
     List<RowData> actual4 = readData(inputFormat4);
     // final List<RowData> expected4 = TestData.dataSetInsert(3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14);
     TestData.assertRowDataEquals(actual4, Collections.emptyList());
+    writeClient.close();
   }
 
   @ParameterizedTest

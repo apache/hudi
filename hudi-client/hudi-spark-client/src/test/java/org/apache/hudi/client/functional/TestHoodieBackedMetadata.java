@@ -3324,7 +3324,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     SparkRDDWriteClient client; // TODO validate all clients properly closed for this block
     if (config.isEmbeddedTimelineServerEnabled()) {
-      testClient.close();
+pdate      testClient.close();
       client = new SparkRDDWriteClient(testClient.getEngineContext(), testClient.getConfig());
     } else {
       client = testClient;
