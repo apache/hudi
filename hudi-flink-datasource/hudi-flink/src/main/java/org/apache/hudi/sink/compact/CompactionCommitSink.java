@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.action.compact.CompactHelpers;
@@ -33,6 +34,7 @@ import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkWriteClients;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.MetricGroup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -82,6 +84,11 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
    */
   private transient HoodieFlinkTable<?> table;
 
+  /**
+   * Compaction metrics.
+   */
+  private transient FlinkCompactionMetrics compactionMetrics;
+
   public CompactionCommitSink(Configuration conf) {
     super(conf);
     this.conf = conf;
@@ -96,6 +103,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
     this.commitBuffer = new HashMap<>();
     this.compactionPlanCache = new HashMap<>();
     this.table = this.writeClient.getHoodieTable();
+    registerMetrics();
   }
 
   @Override
@@ -174,6 +182,8 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
     // commit the compaction
     this.writeClient.commitCompaction(instant, metadata, Option.empty());
 
+    this.compactionMetrics.updateCommitMetrics(instant, metadata);
+
     // Whether to clean up the old log file when compaction
     if (!conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED) && !isCleaning) {
       this.writeClient.clean();
@@ -183,5 +193,11 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
   private void reset(String instant) {
     this.commitBuffer.remove(instant);
     this.compactionPlanCache.remove(instant);
+  }
+
+  private void registerMetrics() {
+    MetricGroup metrics = getRuntimeContext().getMetricGroup();
+    compactionMetrics = new FlinkCompactionMetrics(metrics);
+    compactionMetrics.registerMetrics();
   }
 }
