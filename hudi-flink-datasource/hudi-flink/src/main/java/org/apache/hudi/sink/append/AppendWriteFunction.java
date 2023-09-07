@@ -20,6 +20,7 @@ package org.apache.hudi.sink.append;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.bulk.BulkInsertWriterHelper;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
@@ -27,6 +28,7 @@ import org.apache.hudi.sink.event.WriteMetadataEvent;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
@@ -61,6 +63,11 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   private final RowType rowType;
 
   /**
+   * Metrics for flink stream write.
+   */
+  private FlinkStreamWriteMetrics writeMetrics;
+
+  /**
    * Constructs an AppendWriteFunction.
    *
    * @param config The config options
@@ -68,6 +75,11 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   public AppendWriteFunction(Configuration config, RowType rowType) {
     super(config);
     this.rowType = rowType;
+  }
+
+  @Override
+  public void open(Configuration parameters) throws Exception {
+    registerMetrics();
   }
 
   @Override
@@ -129,10 +141,11 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     }
     this.writerHelper = new BulkInsertWriterHelper(this.config, this.writeClient.getHoodieTable(), this.writeClient.getConfig(),
         instant, this.taskID, getRuntimeContext().getNumberOfParallelSubtasks(), getRuntimeContext().getAttemptNumber(),
-        this.rowType);
+        this.rowType, false, writeMetrics);
   }
 
   private void flushData(boolean endInput) {
+    writeMetrics.startFlushing();
     final List<WriteStatus> writeStatus;
     if (this.writerHelper != null) {
       writeStatus = this.writerHelper.getWriteStatuses(this.taskID);
@@ -155,5 +168,15 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     this.writeStatuses.addAll(writeStatus);
     // blocks flushing until the coordinator starts a new instant
     this.confirming = true;
+
+    writeMetrics.endFlushing();
+    LOG.info("Flushing costs: {} ms", writeMetrics.getFlushDataCosts());
+    writeMetrics.resetAfterCommit();
+  }
+
+  private void registerMetrics() {
+    MetricGroup metrics = getRuntimeContext().getMetricGroup();
+    writeMetrics = new FlinkStreamWriteMetrics(metrics);
+    writeMetrics.registerMetrics();
   }
 }
