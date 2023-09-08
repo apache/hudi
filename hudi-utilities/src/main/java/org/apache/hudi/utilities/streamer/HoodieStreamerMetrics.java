@@ -19,9 +19,7 @@
 
 package org.apache.hudi.utilities.streamer;
 
-import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 
@@ -158,11 +156,6 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
   public void shutdown() {
     if (metrics != null) {
       metrics.shutdown();
-    }
-    // if metadata table is enabled, make sure to shut down the metrics for that table as well
-    if (writeConfig.getMetadataConfig().enabled()) {
-      HoodieWriteConfig metadataWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(writeConfig, HoodieFailedWritesCleaningPolicy.LAZY);
-      Metrics.getInstance(metadataWriteConfig).shutdown();
     }
   }
 
