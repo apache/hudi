@@ -120,6 +120,7 @@ import org.apache.spark.sql.types.StructField;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -869,6 +870,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
   }
 
+  @Timeout(600)
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
   public void testUpsertsCOWContinuousMode(HoodieRecordType recordType) throws Exception {
@@ -892,12 +894,14 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
+  @Timeout(600)
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO"})
   public void testUpsertsMORContinuousModeShutdownGracefully(HoodieRecordType recordType) throws Exception {
     testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "continuous_cow", true, recordType);
   }
 
+  @Timeout(600)
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
   public void testUpsertsMORContinuousMode(HoodieRecordType recordType) throws Exception {
@@ -1006,6 +1010,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     deltaStreamerTestRunner(ds, null, condition);
   }
 
+  @Timeout(600)
   @ParameterizedTest
   @CsvSource(value = {"AVRO", "SPARK"})
   public void testInlineClustering(HoodieRecordType recordType) throws Exception {
@@ -1104,6 +1109,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(1, timeline.getInstants().size());
   }
 
+  @Timeout(600)
   @ParameterizedTest
   @CsvSource(value = {"true, AVRO", "true, SPARK", "false, AVRO", "false, SPARK"})
   public void testCleanerDeleteReplacedDataWithArchive(Boolean asyncClean, HoodieRecordType recordType) throws Exception {
@@ -1404,6 +1410,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
+  @Timeout(600)
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
   public void testAsyncClusteringServiceWithCompaction(HoodieRecordType recordType) throws Exception {
@@ -2734,6 +2741,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testNum++;
   }
 
+  @Timeout(600)
   @ParameterizedTest
   @CsvSource(value = {"COPY_ON_WRITE, AVRO",  "MERGE_ON_READ, AVRO",
       "COPY_ON_WRITE, SPARK", "MERGE_ON_READ, SPARK"})
