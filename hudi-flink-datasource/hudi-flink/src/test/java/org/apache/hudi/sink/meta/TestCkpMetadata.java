@@ -97,6 +97,6 @@ public class TestCkpMetadata {
   private CkpMetadata getCkpMetadata(String uniqueId) {
     String basePath = tempFile.getAbsolutePath();
     FileSystem fs = FSUtils.getFs(basePath, HadoopConfigurations.getHadoopConf(new Configuration()));
-    return CkpMetadata.getInstance(fs, basePath, uniqueId);
+    return CkpMetadata.getInstance(fs, basePath, uniqueId, null);
   }
 }

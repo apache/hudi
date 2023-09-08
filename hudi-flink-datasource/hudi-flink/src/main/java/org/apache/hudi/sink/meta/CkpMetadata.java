@@ -20,14 +20,22 @@ package org.apache.hudi.sink.meta;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.dto.CkpMetadataDTO;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.timeline.service.handlers.FlinkCkpMetadataHandler;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.configuration.Configuration;
+import org.apache.http.client.fluent.Request;
+import org.apache.http.client.fluent.Response;
+import org.apache.http.client.utils.URIBuilder;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
@@ -39,8 +47,11 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * The checkpoint metadata for bookkeeping the checkpoint messages.
@@ -73,17 +84,27 @@ public class CkpMetadata implements Serializable, AutoCloseable {
   private final FileSystem fs;
   protected final Path path;
 
+  private HoodieWriteConfig writeConfig;
+  private ObjectMapper mapper;
+  private boolean timelineServerBased = false;
+
   private List<CkpMessage> messages;
   private List<String> instantCache;
 
-  private CkpMetadata(Configuration config) {
+  private CkpMetadata(Configuration config, HoodieWriteConfig writeConfig) {
     this(FSUtils.getFs(config.getString(FlinkOptions.PATH), HadoopConfigurations.getHadoopConf(config)),
-        config.getString(FlinkOptions.PATH), config.getString(FlinkOptions.WRITE_CLIENT_ID));
+        config.getString(FlinkOptions.PATH), config.getString(FlinkOptions.WRITE_CLIENT_ID), writeConfig);
   }
 
-  private CkpMetadata(FileSystem fs, String basePath, String uniqueId) {
+  private CkpMetadata(FileSystem fs, String basePath, String uniqueId, HoodieWriteConfig writeConfig) {
     this.fs = fs;
     this.path = new Path(ckpMetaPath(basePath, uniqueId));
+    this.writeConfig = writeConfig;
+    if (writeConfig != null && writeConfig.isTimelineServerBasedFlinkCkpMetadataEnabled()) {
+      LOG.info("Timeline server based CkpMetadata enabled");
+      this.timelineServerBased = true;
+      mapper = new ObjectMapper();
+    }
   }
 
   public void close() {
@@ -115,6 +136,7 @@ public class CkpMetadata implements Serializable, AutoCloseable {
     cache(instant);
     // cleaning
     clean();
+    sendRefreshRequest();
   }
 
   private void cache(String newInstant) {
@@ -151,6 +173,7 @@ public class CkpMetadata implements Serializable, AutoCloseable {
     Path path = fullPath(CkpMessage.getFileName(instant, CkpMessage.State.COMPLETED));
     try {
       fs.createNewFile(path);
+      sendRefreshRequest();
     } catch (IOException e) {
       throw new HoodieException("Exception while adding checkpoint commit metadata for instant: " + instant, e);
     }
@@ -163,6 +186,7 @@ public class CkpMetadata implements Serializable, AutoCloseable {
     Path path = fullPath(CkpMessage.getFileName(instant, CkpMessage.State.ABORTED));
     try {
       fs.createNewFile(path);
+      sendRefreshRequest();
     } catch (IOException e) {
       throw new HoodieException("Exception while adding checkpoint abort metadata for instant: " + instant);
     }
@@ -211,16 +235,16 @@ public class CkpMetadata implements Serializable, AutoCloseable {
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
-  public static CkpMetadata getInstance(Configuration config) {
-    return new CkpMetadata(config);
+  public static CkpMetadata getInstance(Configuration config, HoodieWriteConfig writeConfig) {
+    return new CkpMetadata(config, writeConfig);
   }
 
-  public static CkpMetadata getInstance(HoodieTableMetaClient metaClient, String uniqueId) {
-    return new CkpMetadata(metaClient.getFs(), metaClient.getBasePath(), uniqueId);
+  public static CkpMetadata getInstance(HoodieTableMetaClient metaClient, String uniqueId, HoodieWriteConfig writeConfig) {
+    return new CkpMetadata(metaClient.getFs(), metaClient.getBasePath(), uniqueId, writeConfig);
   }
 
-  public static CkpMetadata getInstance(FileSystem fs, String basePath, String uniqueId) {
-    return new CkpMetadata(fs, basePath, uniqueId);
+  public static CkpMetadata getInstance(FileSystem fs, String basePath, String uniqueId, HoodieWriteConfig writeConfig) {
+    return new CkpMetadata(fs, basePath, uniqueId, writeConfig);
   }
 
   protected static String ckpMetaPath(String basePath, String uniqueId) {
@@ -238,7 +262,17 @@ public class CkpMetadata implements Serializable, AutoCloseable {
     if (!this.fs.exists(ckpMetaPath)) {
       return new ArrayList<>();
     }
-    return Arrays.stream(this.fs.listStatus(ckpMetaPath)).map(CkpMessage::new)
+    Stream<CkpMessage> ckpMessageStream;
+    if (timelineServerBased) {
+      List<CkpMetadataDTO> ckpMetadataDTOList = executeRequestToTimelineServerWithRetry(
+          FlinkCkpMetadataHandler.ALL_CKP_METADATA_URL, getRequestParams(ckpMetaPath.toString()),
+          new TypeReference<List<CkpMetadataDTO>>() {}, RequestMethod.GET);
+      // Read ckp messages from timeline server
+      ckpMessageStream = ckpMetadataDTOList.stream().map(c -> new CkpMessage(c.getInstant(), c.getState()));
+    } else {
+      ckpMessageStream = Arrays.stream(this.fs.listStatus(ckpMetaPath)).map(CkpMessage::new);
+    }
+    return ckpMessageStream
         .collect(Collectors.groupingBy(CkpMessage::getInstant)).values().stream()
         .map(messages -> messages.stream().reduce((x, y) -> {
           // Pick the one with the highest state
@@ -248,5 +282,73 @@ public class CkpMetadata implements Serializable, AutoCloseable {
           return y;
         }).get())
         .sorted().collect(Collectors.toList());
+  }
+
+  private Map<String, String> getRequestParams(String dirPath) {
+    return Collections.singletonMap(FlinkCkpMetadataHandler.CKP_METADATA_DIR_PATH_PARAM, dirPath);
+  }
+
+  private void sendRefreshRequest() {
+    if (!timelineServerBased) {
+      return;
+    }
+
+    try {
+      boolean success = executeRequestToTimelineServerWithRetry(
+          FlinkCkpMetadataHandler.REFRESH_CKP_METADATA, getRequestParams(path.toString()),
+          new TypeReference<Boolean>() {}, RequestMethod.POST);
+      if (!success) {
+        LOG.warn("Timeline server responses with failed refresh");
+      }
+    } catch (Exception e) {
+      // Do not propagate the exception because the server will also do auto refresh
+      LOG.error("Failed to execute refresh", e);
+    }
+  }
+
+  private <T> T executeRequestToTimelineServerWithRetry(String requestPath, Map<String, String> queryParameters,
+                                                        TypeReference reference, CkpMetadata.RequestMethod method) {
+    int retry = 5;
+    while (--retry >= 0) {
+      long start = System.currentTimeMillis();
+      try {
+        return executeRequestToTimelineServer(requestPath, queryParameters, reference, method);
+      } catch (IOException e) {
+        LOG.warn("Failed to execute ckp request (" + requestPath + ") to timeline server", e);
+      } finally {
+        LOG.info("Execute request : (" + requestPath + "), costs: " + (System.currentTimeMillis() - start) + " ms");
+      }
+    }
+    throw new HoodieException("Failed to execute ckp request (" + requestPath + ")");
+  }
+
+  private <T> T executeRequestToTimelineServer(String requestPath, Map<String, String> queryParameters,
+                                               TypeReference reference, CkpMetadata.RequestMethod method) throws IOException {
+    URIBuilder builder =
+        new URIBuilder().setHost(this.writeConfig.getViewStorageConfig().getRemoteViewServerHost())
+            .setPort(this.writeConfig.getViewStorageConfig().getRemoteViewServerPort())
+            .setPath(requestPath).setScheme("http");
+
+    queryParameters.forEach(builder::addParameter);
+
+    String url = builder.toString();
+    Response response;
+    // msec
+    int timeout = this.writeConfig.getViewStorageConfig().getRemoteTimelineClientTimeoutSecs() * 1000;
+    switch (method) {
+      case GET:
+        response = Request.Get(url).connectTimeout(timeout).socketTimeout(timeout).execute();
+        break;
+      case POST:
+      default:
+        response = Request.Post(url).connectTimeout(timeout).socketTimeout(timeout).execute();
+        break;
+    }
+    String content = response.returnContent().asString();
+    return (T) mapper.readValue(content, reference);
+  }
+
+  private enum RequestMethod {
+    GET, POST
   }
 }

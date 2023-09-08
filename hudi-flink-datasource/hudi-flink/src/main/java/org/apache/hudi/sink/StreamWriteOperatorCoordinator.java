@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
@@ -186,9 +187,9 @@ public class StreamWriteOperatorCoordinator
     this.gateways = new SubtaskGateway[this.parallelism];
     // init table, create if not exists.
     this.metaClient = initTableIfNotExists(this.conf);
-    this.ckpMetadata = initCkpMetadata(this.metaClient, this.conf);
     // the write client must create after the table creation
     this.writeClient = FlinkWriteClients.createWriteClient(conf);
+    this.ckpMetadata = initCkpMetadata(this.metaClient, this.conf, writeClient.getConfig());
     initMetadataTable(this.writeClient);
     this.tableState = TableState.create(conf);
     // start the executor
@@ -349,8 +350,8 @@ public class StreamWriteOperatorCoordinator
     writeClient.initMetadataTable();
   }
 
-  private static CkpMetadata initCkpMetadata(HoodieTableMetaClient metaClient, Configuration conf) throws IOException {
-    CkpMetadata ckpMetadata = CkpMetadata.getInstance(metaClient, conf.getString(FlinkOptions.WRITE_CLIENT_ID));
+  private static CkpMetadata initCkpMetadata(HoodieTableMetaClient metaClient, Configuration conf, HoodieWriteConfig writeConfig) throws IOException {
+    CkpMetadata ckpMetadata = CkpMetadata.getInstance(metaClient, conf.getString(FlinkOptions.WRITE_CLIENT_ID), writeConfig);
     ckpMetadata.bootstrap();
     return ckpMetadata;
   }

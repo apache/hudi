@@ -144,7 +144,7 @@ public class TestWriteBase {
       this.pipeline = TestData.getWritePipeline(this.basePath, conf);
       // open the function and ingest data
       this.pipeline.openFunction();
-      this.ckpMetadata = CkpMetadata.getInstance(conf);
+      this.ckpMetadata = CkpMetadata.getInstance(conf, null);
       return this;
     }
 
