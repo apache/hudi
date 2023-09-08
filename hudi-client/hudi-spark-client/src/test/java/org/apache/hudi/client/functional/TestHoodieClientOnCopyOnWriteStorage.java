@@ -2438,6 +2438,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         100, dataGen::generateInserts, SparkRDDWriteClient::bulkInsert, false, 100, 300,
         0, true);
     client.clean();
+    client.close();
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline().reload();
     if (cleaningPolicy.isLazy()) {
       assertTrue(
@@ -2523,6 +2524,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     cleaningPolicy = EAGER;
     client = new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
     client.startCommit();
+    client.close();
     timeline = metaClient.getActiveTimeline().reload();
     // since OCC is enabled, hudi auto flips the cleaningPolicy to Lazy.
     assertTrue(timeline.getTimelineOfActions(
@@ -2584,6 +2586,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertTrue(timeline.getTimelineOfActions(
         CollectionUtils.createSet(CLEAN_ACTION)).countInstants() == 0);
     assertTrue(timeline.getCommitsTimeline().filterCompletedInstants().countInstants() == 3);
+    client.close();
   }
 
   private Pair<Path, JavaRDD<WriteStatus>> testConsistencyCheck(HoodieTableMetaClient metaClient, String instantTime, boolean enableOptimisticConsistencyGuard)

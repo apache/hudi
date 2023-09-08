@@ -350,21 +350,22 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
 
   private Pair<String, List<HoodieRecord>> writeGcsMetadataRecords(String commitTime) throws IOException {
     HoodieWriteConfig writeConfig = getWriteConfig();
-    SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig);
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
 
-    writeClient.startCommitWithTime(commitTime);
-    List<HoodieRecord> gcsMetadataRecords = Arrays.asList(
-            getGcsMetadataRecord(commitTime, "data-file-1.json", "bucket-1", "1"),
-            getGcsMetadataRecord(commitTime, "data-file-2.json", "bucket-1", "1"),
-            getGcsMetadataRecord(commitTime, "data-file-3.json", "bucket-1", "1"),
-            getGcsMetadataRecord(commitTime, "data-file-4.json", "bucket-1", "1")
-    );
-    JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(gcsMetadataRecords, 1), commitTime);
+      writeClient.startCommitWithTime(commitTime);
+      List<HoodieRecord> gcsMetadataRecords = Arrays.asList(
+          getGcsMetadataRecord(commitTime, "data-file-1.json", "bucket-1", "1"),
+          getGcsMetadataRecord(commitTime, "data-file-2.json", "bucket-1", "1"),
+          getGcsMetadataRecord(commitTime, "data-file-3.json", "bucket-1", "1"),
+          getGcsMetadataRecord(commitTime, "data-file-4.json", "bucket-1", "1")
+      );
+      JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(gcsMetadataRecords, 1), commitTime);
 
-    List<WriteStatus> statuses = result.collect();
-    assertNoWriteErrors(statuses);
+      List<WriteStatus> statuses = result.collect();
+      assertNoWriteErrors(statuses);
 
-    return Pair.of(commitTime, gcsMetadataRecords);
+      return Pair.of(commitTime, gcsMetadataRecords);
+    }
   }
 
   private TypedProperties setProps(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy) {

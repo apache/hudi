@@ -1335,6 +1335,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
         100, dataGen::generateInserts, HoodieJavaWriteClient::bulkInsert, false, 100, 300,
         0, true);
     client.clean();
+    client.close();
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline().reload();
     if (cleaningPolicy.isLazy()) {
       assertTrue(
@@ -1474,6 +1475,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     Future<HoodieCleanMetadata> clean1 = service.submit(() -> new HoodieJavaWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true)).clean());
     commit4.get();
     clean1.get();
+    client.close();
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline().reload();
     assertTrue(timeline.getTimelineOfActions(
         CollectionUtils.createSet(ROLLBACK_ACTION)).countInstants() == 2);
