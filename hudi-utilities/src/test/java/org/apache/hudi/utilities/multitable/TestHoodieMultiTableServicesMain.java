@@ -38,6 +38,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLayoutConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
@@ -68,6 +69,8 @@ import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
+import static org.apache.hudi.utilities.multitable.MultiTableServiceUtils.Constants.TABLES_SKIP_WRONG_PATH;
+import static org.apache.hudi.utilities.multitable.MultiTableServiceUtils.Constants.TABLES_TO_BE_SERVED_PROP;
 
 /**
  * Tests for HoodieMultiTableServicesMain
@@ -164,6 +167,48 @@ class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implement
     // Verify compactions, delta commits and replace commits
     Assertions.assertEquals(4, metaClient1.reloadActiveTimeline().getCommitsTimeline().countInstants());
     Assertions.assertEquals(4, metaClient2.reloadActiveTimeline().getCommitsTimeline().countInstants());
+  }
+
+  @Test
+  public void testRunMultiTableServicesWithOneWrongPath() throws IOException {
+    // batch run table service
+    HoodieMultiTableServicesMain.Config cfg = getHoodieMultiServiceConfig();
+    cfg.autoDiscovery = false;
+    cfg.batch = true;
+    HoodieTableMetaClient metaClient1 = getMetaClient("table1");
+    cfg.configs.add(String.format("%s=%s", TABLES_TO_BE_SERVED_PROP, metaClient1.getBasePathV2() + ",file:///fakepath"));
+    HoodieMultiTableServicesMain main = new HoodieMultiTableServicesMain(jsc, cfg);
+    try {
+      main.startServices();
+    } catch (Exception e) {
+      Assertions.assertFalse(e instanceof TableNotFoundException);
+    }
+
+    // stream run table service
+    cfg.batch = false;
+    new Thread(() -> {
+      try {
+        Thread.sleep(10000);
+        LOG.info("Shutdown the table services");
+        main.cancel();
+      } catch (InterruptedException e) {
+        LOG.warn("InterruptedException: ", e);
+      }
+    }).start();
+    try {
+      main.startServices();
+    } catch (Exception e) {
+      Assertions.assertFalse(e instanceof TableNotFoundException);
+    }
+
+    // When we disable the skip wrong path, throw the exception.
+    cfg.batch = true;
+    cfg.configs.add(String.format("%s=%s", TABLES_SKIP_WRONG_PATH, "false"));
+    try {
+      main.startServices();
+    } catch (Exception e) {
+      Assertions.assertTrue(e instanceof TableNotFoundException);
+    }
   }
 
   private void prepareData() throws IOException {
