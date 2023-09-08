@@ -53,6 +53,8 @@ parameters:
   - name: job4UTModules
     type: object
     default:
+      - '!hudi-hadoop-mr'
+      - '!hudi-client/hudi-java-client'
       - '!hudi-client/hudi-spark-client'
       - '!hudi-common'
       - '!hudi-examples'
@@ -76,6 +78,8 @@ parameters:
   - name: job4FTModules
     type: object
     default:
+      - '!hudi-hadoop-mr'
+      - '!hudi-client/hudi-java-client'
       - '!hudi-client/hudi-spark-client'
       - '!hudi-common'
       - '!hudi-examples'
@@ -90,6 +94,11 @@ parameters:
       - '!hudi-flink-datasource/hudi-flink1.15.x'
       - '!hudi-flink-datasource/hudi-flink1.16.x'
       - '!hudi-flink-datasource/hudi-flink1.17.x'
+  - name: job5Modules
+    type: object
+    default:
+      - 'hudi-hadoop-mr'
+      - 'hudi-client/hudi-java-client'
 
 variables:
   BUILD_PROFILES: '-Dscala-2.12 -Dspark3.2 -Dflink1.17'
@@ -101,6 +110,7 @@ variables:
   JOB3_MODULES: ${{ join(',',parameters.job3UTModules) }}
   JOB4_UT_MODULES: ${{ join(',',parameters.job4UTModules) }}
   JOB4_FT_MODULES: ${{ join(',',parameters.job4FTModules) }}
+  JOB5_MODULES: ${{ join(',',parameters.job5Modules) }}
 
 stages:
   - stage: test
@@ -213,6 +223,39 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB4_FT_MODULES)
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+              mavenOptions: '-Xmx4g'
+          - script: |
+              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
+            displayName: Top 100 long-running testcases
+      - job: UT_FT_5
+        displayName: UT FT hudi-hadoop-mr hudi-client/hudi-java-client
+        timeoutInMinutes: '60'
+        steps:
+          - task: Maven@4
+            displayName: maven install
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'clean install'
+              options: $(MVN_OPTS_INSTALL)
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+          - task: Maven@4
+            displayName: UT other modules
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB5_MODULES)
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+              mavenOptions: '-Xmx4g'
+          - task: Maven@4
+            displayName: FT other modules
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB5_MODULES)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
