@@ -15,12 +15,13 @@
   limitations under the License.
 -->
 
-# RFC-63: Index Function for Optimizing Query Performance
+# RFC-63: Functional Indexes
 
 ## Proposers
 
 - @yihua
 - @alexeykudinkin
+- @codope
 
 ## Approvers
 
@@ -34,13 +35,17 @@ JIRA: [HUDI-512](https://issues.apache.org/jira/browse/HUDI-512)
 
 ## Abstract
 
-In this RFC, we address the problem of accelerating queries containing predicates based on functions defined on a
-column, by introducing **Index Function**, a new indexing capability for efficient file pruning.
+In this RFC, we propose **Functional Indexes**, a new capability to
+Hudi's [multi-modal indexing](https://hudi.apache.org/blog/2022/05/17/Introducing-Multi-Modal-Index-for-the-Lakehouse-in-Apache-Hudi)
+subsystem that offers a compelling vision to support not only accelerating queries but also reshape partitions as
+another layer of the indexing system, abstracting them from the traditional fixed notion, while providing flexibility
+and performance.
 
 ## Background
 
-To make the queries finish faster, one major optimization technique is to scan less data by pruning rows that are not
-needed by the query. This is usually done in two ways:
+Hudi employs multi-modal indexing to optimize query performance. These indexes, ranging from simple files index to
+record-level indexing, cater to a diverse set of use cases, enabling efficient point lookups and reducing the data
+scanned during queries. This is usually done in two ways:
 
 - **Partition pruning**:  The partition pruning relies on a table with physical partitioning, such as Hive partitioning.
   A partitioned table uses a chosen column such as the date of `timestamp` and stores the rows with the same date to the
@@ -51,22 +56,21 @@ needed by the query. This is usually done in two ways:
   The granularity of the pruning is at the partition level.
 
 
-- **File pruning**:  The file pruning carries out the pruning of the data at the file level, with the help of file-level
-  or record-level index. For example, with column stats index containing minimum and maximum values of a column for each
-  file, the files falling out of the range of the values compared to the predicate can be pruned. For a predicate
-  with `age < 20`, the file pruning filters out a file with columns stats of `[30, 40]` as the minimum and maximum
-  values of the column `age`.
+- **Data Skipping**:  Skipping data at the file level, with the help of column stats or record-level index. For example,
+  with column stats index containing minimum and maximum values of a column for each file, the files falling out of the
+  range of the values compared to the predicate can be pruned. For a predicate with `age < 20`, the file pruning filters
+  out a file with columns stats of `[30, 40]` as the minimum and maximum values of the column `age`.
 
-While Apache Hudi already supports partition pruning and file pruning with data skipping for different query engines, we
+While Hudi already supports partition pruning and data skipping for different query engines, we
 recognize that the following use cases need better query performance and usability:
 
-- File pruning based on functions defined on a column
-- Efficient file pruning for files without physical partitioning
-- Effective file pruning after partition evolution, without rewriting data
+- Data skipping based on functions defined on column(s)
+- Support for different storage layouts and view partition as index
+- Support for secondary indexes
 
 Next, we explain these use cases in detail.
 
-### Use Case 1: Pruning files based on functions defined on a column
+### Use Case 1: Data skipping based on functions defined on column(s)
 
 Let's consider a non-partitioned table containing the events with a `timestamp` column. The events with naturally
 increasing time are ingested into the table with bulk inserts every hour. In this case, assume that each file should
@@ -89,28 +93,29 @@ and `DATE_FORMAT(timestamp, '%H') between '12' and '13'`. If the data is in a go
 two files (instead of 24 files) for each day of data, e.g., `base_file_13.parquet` and `base_file_14.parquet` containing
 the data for 2022-10-01 12-2 PM.
 
-Currently, such a fine-grained file pruning based on a function on a column cannot be achieved in Hudi, because
+Currently, such a fine-grained data skipping based on a function on a column cannot be achieved in Hudi, because
 transforming the `timestamp` to the hour of day is not order-preserving, thus the file pruning cannot directly leverage
 the file-level column stats of the original column of `timestamp`. In this case, Hudi has to scan all the files for a
 day and push the predicate down when reading parquet files, increasing the amount of data to be scanned.
 
-### Use Case 2: Efficient file pruning for files without physical partitioning
+### Use Case 2: Support for different storage layouts and view partition as index
 
-Let's consider the same non-partitioned table as in the Use Case 1, containing the events with a `timestamp` column. The
-difference here is that there are late-arriving data in each batch, meaning that some events contain the `timestamp`
-from a few days ago. In realistic scenarios, this happens frequently, where the rows are not strictly grouped or
-clustered for any column.
+Today, partitions are mainly viewed as a query optimization technique and partition pruning certainly helps to improve 
+query performance. However, if we think about it, partitions are really a storage optimization technique. Partitions
+help you organize the data for your convenience, while balancing cloud storage scaling issues (e.g. throttling or having
+too many files/objects under one path). From a query optimization perspective, partitions are really just a coarse index. 
+We can achieve the same goals as partition pruning with indexes.
 
-In the current write operations for a Hudi table, there is no particular data co-location scheme except for sorting mode
-based on record key for bulk insert. Hudi also has a mechanism of small file handling, adding new insert records to
-existing file groups. As the ingestion makes progress, each file may contain records for a wide range between minimum
-and maximum values for a particular column or a function applied on a column, making file pruning based on the
-file-level column stats less effective.
+In this RFC, we propose how data is partitioned (hive-style, hashed/random prefix for cloud throttling) can be decoupled
+from how the data is queried. There can be different layouts:
 
-### Use Case 3: File pruning support after partition evolution
-
-Partition evolution refers to the process of changing the partition columns for writing data to the storage. This
-requirement comes up when a user would like to reduce the number of physical partitions and improve the file sizing.
+1. Files are stored under a base path, partitioned hive-style.
+2. Files are stored under random prefixes attached to a base path, still hive-style partitioned (RFC-60) e.g. `s3://<
+   random-prefix1>path/to/table/partition1=abc`, `s3://<random_prefix2>path/to/table/partition1=xyz`.
+3. Files are stored across different buckets completely scattered on cloud storage e.g. `s3://a/b/c/f1`, `s3://x/y/f2`.
+4. Partitions can evolve. For instance, you have an old Hive table which is horribly partitioned, can we ensure that the
+   new data is not only partitioned well but queries able to efficiently skip data without rewriting the old data with
+   the new partition spec.
 
 Consider a case where event logs are stream from microservices and ingested into a raw event table. Each event log
 contains a `timestamp` and an associated organization ID (`org_id`). Most queries on the table are organization specific
@@ -132,178 +137,237 @@ using `org_id` only without rewriting existing data, resulting in the physical l
 | org_id=2/                    | base_file_11.parquet | `2022-10-10`   | `2022-10-15`   |                         |
 | ...                          | ...                  | ...            | ...            | ...                     |
 
-As queries need to look for data for a particular time range, instead of relying on partition pruning, we can still use
-file pruning with file-level column stats. For the example above, even in the new partitioning scheme, without data
-being physically partitioned by the datestr, the data can still be co-located based the date, because of natural
-ingestion order or Hudi's clustering operation. In this case, we can effectively prune files based on the range of
-datestr for each file, regardless how the files are stored under different physical partition paths in the table. We
-need to add such file pruning support in Hudi.
+For the example above, even with the mix of old and new partitioning scheme, we should be able to effectively skip data
+based on the range of `datestr` for each file, regardless how the files are stored under different physical partition
+paths in the table.
+
+### Use Case 3: Support for different indexes
+
+Functional index framework should be able to work with different index types such as bloom index, column stats, and at
+the same time should be extensible enough to support any other secondary index such
+as [vector](https://www.pinecone.io/learn/vector-database/) [index]((https://weaviate.io/developers/weaviate/concepts/vector-index))
+in the future. If we think about a very simple index on a column, it is kind of a functional index with identity
+function `f(X) = X`. It is important to note that these are secondary indexes in the sense they will be stored
+separately from the data, and not materialized with the data.
 
 ## Goals and Non-Goals
 
-Based on the use cases we plan to support, we set the following goals and non-goals for this RFC:
+Based on the use cases we plan to support, we set the following goals and non-goals for this RFC.
 
 ### Goals
 
-- Support file pruning on functions defined on data column
-- Improve the co-location of data without folder structure for efficient file pruning
-- Improve the query performance based on the new pruning capability compared existing approach in Hudi
+- Modular, easy-to-use indexing subsystem, with full SQL support to manage indexes.
+- Absorb partitioning into indexes and aggregate statistics at the storage partition level. 
+- Support efficient data skipping with different indexing mechanisms.
+- Be engine-agnostic and language-agnostic.
 
 ### Non-Goals
 
 - DO NOT remove physical partitioning, which remains as an option for physically storing data in different folders and
-  partition pruning
-- DO NOT tackle the support of partition evolution in this RFC, but make sure the file pruning on functions defined on
-  data column can be applied on the partition evolution use case
+  partition pruning. Viewing partitions as yet another index goes beyond the traditional view as pointed in use case 2,
+  and we will see how we can support logical partitioning and partition evolution simply with indexes.
+- DO NOT tackle the support of using these indexes on the write path in this RFC. That said, we will present a glimpse
+  of how that can be done for functional indexes in the Appendix below.
+- DO NOT build an expression engine. Building an expression engine in Hudi that unifies query predicate expressions from
+  systems like Spark, Presto, and others into a standardized format is a forward-thinking idea. This would centralize
+  the interpretation of queries for Hudi tables, leading to a simpler compatibility with multiple query engines.
+  However, it is not a pre-requisite for the first cut of functional indexes. Expression engine should be discussed in
+  another RFC.
 
 ## Design and Implementation
 
-To achieve the goals above, in this RFC, we introduce the **Index Function**, a function defined on data column which is
-indexed to facilitate file pruning, which works at high level as follows:
+At a high level, **Functional Index** design principles are as follows:
 
-1. User specifies the Index Function, including the original data column, the expression applying a function on the
-   column, and optionally the new column name, through SQL or Hudi's write config. One or more Index Functions can be
-   added or dropped for both new and existing Hudi tables at any time.
-2. The Index Function is registered to the table in the table properties, to keep track of the relationship between the
-   data column and the Index Function.
-3. Hudi creates the index metadata, such as file-level column stats, of Index Functions in metadata table. Hudi marks
-   whether one Index Function and the index metadata are ready for use in file pruning.
-4. No data is written to the data files for the Index Function, i.e., the data files do not contain a new data column
-   corresponding to the Index Function, to save storage space.
-5. When query engine makes a logical plan for a query, Hudi intercepts the predicate that relates to an Index Function,
-   looks for the corresponding index in metadata table, and prunes files based on the index.
-
-When writing data to a non-partitioned table or data files under one partition path, selective Index Functions can be
-specified as ordering field during write operations. For inserts, Hudi's write client sorts or buckets the data based on
-the Index Function(s) so that each data file has a narrow and mostly non-overlapping range of values for the
-corresponding Index Function(s), to unlock efficient file pruning.
+1. User specifies the Functional Index, including the original data column, the expression applying a function on the
+   column(s), through **SQL** or Hudi's write config. Indexes can be created or dropped for Hudi tables at any time.
+2. While table properties will be the source of truth about what indexes are available, the metadata about each
+   functional index is registered in a separate index metadata file, to keep track of the relationship between the data
+   column and the functional Index. 
+3. Each functional index will be a partition inside the Hudi metadata table (MT).
+4. No data is materialized to the data files for the functional index, i.e., the data files do not contain a new data
+   column corresponding to the Functional Index, to save storage space.
+5. When query engine makes a logical plan for a query, Hudi intercepts the predicate that relates to a functional index,
+   looks for the corresponding index in the MT, and applies data skipping based on one or more indexes.
+6. In order to be engine-agnostic, the design should not make assumptions about any particular engine.
 
 ### Components
 
-We discuss the design and implementation details of each component to realize the Index Function.
+We discuss the design and implementation details of each component to realize the Functional Index.
 
-#### Index Function Interface
+#### SQL
 
-A new interface, `IndexFunction`, is introduced to represent an Index Function and track the relationship between the
-original data column and the transformation
+A new keyword `FUNCTION` is introduced to indicate that a functional index is intended to be created. This keyword is
+ANSI-compliant and also present in [spark-sql](https://spark.apache.org/docs/latest/sql-ref-ansi-compliance.html).
+
+```sql
+-- PROPOSED SYNTAX WITH FUNCTION KEYWORD --
+CREATE
+[FUNCTION] INDEX index_name ON table_name [ USING index_type ] ( { column_name | expression } );
+-- Examples --
+CREATE FUNCTION INDEX last_name_idx ON employees (UPPER(last_name)); -- functional index using column stats for UPPER(last_name)
+CREATE FUNCTION INDEX datestr ON hudi_table (DATE_FORMAT(timestamp, '%Y-%m-%d')); -- functional index using column stats for DATE_FORMAT(timestamp, '%Y-%m-%d')
+CREATE INDEX city_id_idx ON hudi_table (city_id); -- usual column stats within MT column_stats partition
+CREATE FUNCTION INDEX hour_of_day ON hudi_table USING BITMAP (DATE_FORMAT(timestamp, '%H')); -- functional index using bitmap for DATE_FORMAT(timestamp, '%H')
+CREATE FUNCTION INDEX income_idx ON employees (salary + (salary*commission_pct)); --  functional index using column stats for given expression
+-- NO CHANGE IN DROP INDEX --
+DROP INDEX last_name_idx;
+```
+
+`index_name` - Required, should be validated by parser. The name will be used for the partition name in MT.
+
+`index_type` - Optional, column\_stats if none provided and there are no functions and expressions in the command. Valid
+options could be BITMAP, COLUMN\_STATS, LUCENE, etc. If index\_type is not provided, and there are functions or
+expressions in the command then a functional index using column stats will be created.
+
+`expression` - simple scalar expressions or sql functions.
+
+#### Functional Index Metadata
+
+For each functional index, store a separate metadata with index details. This should be efficiently loaded. One option
+is to store the below metadata in `hoodie.properties`. This way all index metadata can be loaded with the table config.
+But, it would be better to not overload the table config. Let `hoodie.properties` still hold the list of indexes (MT
+partitions) available, and we propose to create separate `.hudi_index` directory under `basepath/.hoodie`. This has the
+benefit of separation of concern and can be cheaply loaded with the metaclient (one extra file i/o only if there is a
+functional index in the table config). It can store the following metadata for each index.
+
+* Name of the index
+* Expression (e.g., `MONTH(timestamp)`)
+* Data column(s) it's derived from
+* Any other configuration or properties
+
+#### APIs
+
+A new interface, `HoodieFunctionalIndex`, is introduced to represent a functional index and track the relationship
+between the original data column(s) and the transformation.
 
 ```java
-interface IndexFunction<S, T> {
-  String originalColumnName;
+interface HoodieFunctionalIndex<S, T> {
+  String indexName;
   String expression;
-  String indexFunctionName;
+  List<String> columnsInExpression;
 
   T apply(S sourceValue);
 }
 ```
 
-The list of Index Functions ready for use and related information is stored in the table config:
-
-```
-hoodie.table.index.function.list=datestr,hour_of_day
-hoodie.table.index.function.datestr.original_column=timestamp
-hoodie.table.index.function.datestr.expression=DATE_FORMAT(timestamp, '%Y-%m-%d')
-hoodie.table.index.function.hour_of_day.original_column=timestamp
-hoodie.table.index.function.hour_of_day.expression=DATE_FORMAT(timestamp, '%H')
-```
-
-The `hoodie.table.index.function.list` indicates the Index functions that are ready for use at query planning and
-execution time.
-
-#### Index Function Creation
-
-To create an Index Function, we introduce two ways:
-
-1. New SQL statement:
-
-```
-CREATE INDEX FUNCTION [ index_function_name ] ON table_name [ USING index_type ] ( { column_name | expression } );
-```
-
-`table_name`: The name of the Hudi table for creating an Index Function.
-`index_function_name`: An optional name for the Index Function. If no name is specified, Hudi internally creates a new
-name.
-`column_name`: The column name without transformation for creating an Index Function.
-`expression`: The SQL expression on a data column for creating an Index Function.
-`index_type`: The type of index metadata to generate for the Index Function. By default, file-level column stats is
-used.
-
-Example:
-
-```
-CREATE INDEX datestr ON hudi_table USING col_stats (DATE_FORMAT(timestamp, '%Y-%m-%d'));
-CREATE INDEX ON hudi_table (city_id);
-CREATE INDEX hour_of_day ON hudi_table (DATE_FORMAT(timestamp, '%H'));
-```
-
-2. Write config in ingestion: A new write config is introduced `hoodie.write.index.function.list` to allow a user to add
-   and update Index Functions.
-
-Example:
-
-```
-hoodie.write.index.function.list=timestamp,datestr,col_stats,DATE_FORMAT(timestamp, '%Y-%m-%d');timestamp,,,DATE_FORMAT(timestamp, '%H')
-```
+As mentioned in the goals of this RFC, we are not going to build an expression engine. To begin with, we can simply
+parse `String` for simpler functions and match it to the functional keywords available in spark-sql. We can tackle other
+engines as we go.
 
 #### Index in Metadata Table
 
-For each Index Function, Hudi needs to populate the index metadata to facilitate file pruning. We use the metadata table
-to store these index metadata. The index metadata of each individual Index Function is stored under a new partition with
-the naming of the Index Function name and the index type, e.g., `datestr_col_stats`. For the default index type of
-file-level column stats, the index format and logic of existing column stats index is reused. Once an Index Function is
-created and the corresponding index metadata is populated in metadata table, the index metadata is always consistent
-with the data table during write transactions, using the same multi-table transaction for updating metadata table.
+For each functional index, Hudi needs to populate the index to facilitate data skipping. We reuse the metadata table and
+each functional index is stored under a new partition named as `func_index_<index_name>`. Each record in index is a
+key-value and payload will depend on `index_type`. For example, if `index_type` is not provided then key is simply the
+values based on function or expression and value is a collection of file paths. If `index_type` is `column_stats` then
+the value will be stats based on value derived from the function and key will be hash of file path. 
 
-We plan to also integrate Index Function with Hudi's Asynchronous Indexing so that the index metadata for an Index
-Function can be populated in an async way.
+For an existing table, one can use the async indexer to build the indexes concurrently with ingestion. When data is
+written:
 
-#### File Pruning
+1. Use the storage strategy (hive-style, random prefix, etc.) to determine the physical location to write the data (
+   which we will do anyway for commit metadata).
+2. Update the index i.e. update MT for each index.
+    1. Synchronous update: Data table commit is not committed until all indexes are updated.
+    2. Async update: Use the [async indexer](https://hudi.apache.org/docs/metadata_indexing) to load the records
+       incrementally and update the index.
 
-When a query with the predicates related to an Index Functions is being planned, Hudi intercepts such predicate to carry
-out the file pruning
+#### Query Planning & Execution
 
-1. Identify the relevant Index Function based on the predicate and add a new predicate based on the Index Function name
-   if needed. Take the Index Function created by
-   SQL `CREATE INDEX datestr ON hudi_table USING col_stats (DATE_FORMAT(timestamp, '%Y-%m-%d'));`:
+On receiving a query:
 
-- If the original data column of an Index Function is used, transform the predicate to a new predicate based on the
-  Index Function name if possible, e.g., `timestamp between 1666767600 and 1666897200`
+1. Parse the query and index metadata (in `.hudi_index`) to determine the relevant functional index is available or not.
+2. Lookup (point/range) index to determine:
+    * Which files match functional index predicates
+    * Where these files are physically located (irrespective of their storage layout)
+3. Use the physical paths derived from metadata to access and read the relevant data.
+
+Below are the concrete steps on how Hudi will intercept predicate in the query and use functional index whenever it can.
+
+1. Identify the relevant functional index based on the predicate and add a new predicate based on the Functional Index
+   name if needed. Take the functional index created by
+   SQL `CREATE INDEX datestr ON hudi_table USING col_stats (DATE_FORMAT(timestamp, '%Y-%m-%d'));`
+
+- If the original data column of a functional index is used, transform the predicate to a new predicate based on the
+  Functional Index name if possible, e.g., `timestamp between 1666767600 and 1666897200`
   to `datestr between '2022-10-26' and '2022-10-27'`;
-- If the expression of an Index Function is used, replace the expression to the Index Function name,
+- If the expression of a functional index is used, replace the expression to the functional index name,
   e.g., `DATE_FORMAT(timestamp, '%Y-%m-%d') between '2022-10-26' and '2022-10-27'`
   to `datestr between '2022-10-26' and '2022-10-27'`;
-- If the Index Function name is used in the predicate, e.g., `datestr between '2022-10-26' and '2022-10-27'`, no action
-  is needed here.
+- If the functional index name is used in the predicate, e.g., `datestr between '2022-10-26' and '2022-10-27'`, no
+  action is needed here.
 
-2. For the Index Function name appeared in the predicate, look up the corresponding index metadata from metadata table
+2. For the functional index name appeared in the predicate, look up the corresponding index metadata from metadata table
    and prune files that are not needed for scanning.
 
-For each query engine, we need to intercept the engine-specific representation of the predicates, and derive the
-relevant predicate based on the function. We consider integrating Spark and Presto first in the implementation.
+In order to use the functional indexes, MT has to be enabled for the readers. Spark, Hive, Presto and Trino can already
+do so today. In order to generate splits, we will rely on MT. However, we will need to add some code in query engines to
+understand the predicates. For each query engine, we need to intercept the engine-specific representation of the
+predicates, and derive the relevant predicate based on the function, e.g. break down `TupleDomain` in Presto/Trino. We
+consider integrating Spark and Presto first in the implementation.
 
-#### Index-Function-Based Ordering on Write Path
+#### Handling the Storage Layout Scenarios
 
-To unlock efficient file pruning, we plan to support Index-Function-based ordering during write operations. Similar to
-clustering, the Index functions for ordering are specified by new write config `hoodie.write.sort.columns`.
+Let's try to understand how functional indexes can help with different storage layouts.
+
+1. **Hive-Style Partitioning**: This is straightforward and use the functional index that is similar to `files`.
+2. **Random Prefix Storage Partitioning ([RFC-60](https://github.com/apache/hudi/blob/master/rfc/rfc-60/rfc-60.md)),
+   attached to a basepath**: We can still use the `files` index provided it is enriched with storage partition mapping
+   as mentioned in RFC-60.
+3. **Scattered Storage Partitions Across Buckets**: The physical paths in metadata will point to the scattered
+   locations. Key will be the partitions that user understands.
+4. **Evolved Partitioning**: Let's say data was partitioned by month (yyyy-mm) previously. New data is going to be
+   partitioned by day. Key will again be the partition value that user understands. So, metadata for the old data will
+   still have key, for instance, `2020-01` and values pointing to a bunch of files. Let's say partitioning was evolved
+   on `2023-01-01` and a query with predicate `DATESTR(ts) > '2022-10-01'` . Then the query will scan the set of files
+   given by the metadata for keys 2022-10, 2022-11, 2022-12, and each day from 2023-01-01 onwards.
+
+### Design Considerations
+
+1. Metadata table has to be enabled by default for the readers.
+2. We are not considering UDFs and complex expressions in the first cut. This needs some more thought and probably an
+   expression engine.
+
+## Rollout/Adoption Plan
+
+The functional index is going to be guarded by feature flags, `hoodie.write.index.function.enable` for creating and
+updating indexes, and `hoodie.read.index.function.enable` for enabling data skipping based on functional index in
+query engines.
+
+## Test Plan
+
+- Unit and functional tests
+    - Function can be applied correctly
+    - Functional index is populated in metadata table
+    - Expected skipping behavior is validated
+- Validation of the implementation on the use cases above
+    - The workflow should work smoothly
+
+## Appendix
+
+### Functional Index-Based Ordering on Write Path
+
+To unlock efficient data skipping, we can support functional index-based ordering during write operations. Similar to
+clustering, the functional index for ordering can be specified by new write config `hoodie.write.sort.columns`.
 
 When writing records to data files, the write client does the following:
 
-- For new inserts, sort the data based on the specified Index functions before writing to data files. This reuses
+- For new inserts, sort the data based on the specified functional index before writing to data files. This reuses
   existing flow of bulk insert and clustering
-    - Each data file contains one or a small subset of values corresponding to the Index Functions.
+    - Each data file contains one or a small subset of values corresponding to the functional index.
     - Different sort modes can be provided like bulk insert and clustering.
 
 - For updates, no change in logic is needed. The record with the same key should go into the same file group.
-- For small file handing, we need to take into account the Index functions for the workload profile, so that the new
-  inserts can be combined into the data file without expanding the minimum and maximum values of the Index Function when
+- For small file handing, we need to take into account the functional index for the workload profile, so that the new
+  inserts can be combined into the data file without expanding the minimum and maximum values of the functional index when
   the data file is small.
 
-## Related Concepts
+### Other Systems
 
-In this section, we compare Hudi's Index Function to related concepts and solutions on pruning files efficiently and
+In this section, we compare Hudi's Functional Index to related concepts and solutions on pruning files efficiently and
 improving query performance.
 
-### Hidden Partitioning
+#### Hidden Partitioning in Apache Iceberg
 
 [Hidden Partitioning](https://iceberg.apache.org/docs/latest/partitioning/#icebergs-hidden-partitioning), introduced by
 Apache Iceberg, maintains the relationship between the original column and transformed partition values, and hides the
@@ -311,10 +375,10 @@ partition columns and physical partitions from catalogs and users, using manifes
 each file to prune files and speed up queries. By using Hidden Partitioning, Iceberg can evolve partition schemes, i.e.,
 partition evolution, without rewriting data.
 
-Hudi's Index Function achieves the same goal of pruning files based on the column stats, with the support on any data
+Hudi's Functional Index achieves the same goal of pruning files based on the column stats, with the support on any data
 column or function defined on a data column, without coupling with the partition scheme.
 
-### Index on Expression
+#### Index on Expression in PostgreSQL
 
 [Index on Expression](https://www.postgresql.org/docs/current/indexes-expressional.html),
 or [Function-Based Indexes](https://oracle-base.com/articles/8i/function-based-indexes) a concept in RDBMS, provides the
@@ -323,10 +387,10 @@ queries containing the expression in the predicates. The index on expression is 
 stored separately from the record data. There is no materialization of the values from the expression in the data area.
 PostgreSQL supports Index on Expression and Oracle database supports Function-Based Indexes.
 
-Hudi's Index Function applies similar concept which allows a new index to be built based on a function defined on a data
+Hudi's Functional Index applies similar concept which allows a new index to be built based on a function defined on a data
 column at any time for file pruning.
 
-### Generated Column
+#### Generated Column in Delta Lake
 
 A [Generated Column](https://www.postgresql.org/docs/15/ddl-generated-columns.html) is a special column that is always
 computed from other columns. There are two types of generated column: (1) stored generated column: written alongside
@@ -338,10 +402,10 @@ In Delta Lake, a [generated column](https://docs.delta.io/latest/delta-batch.htm
 a partition column. When doing so, Delta Lake looks at the relationship between the base column and the generated
 column, and populates partition filters based on the generated partition column if possible.
 
-Hudi's Index Function is similar to virtual generated column, but the Index Function is not queryable except for the
+Hudi's Functional Index is similar to virtual generated column, but the Functional Index is not queryable except for the
 usage in the predicates.
 
-#### Micro Partitions
+#### Micro Partitions in Snowflake
 
 [Micro Partitions](https://docs.snowflake.com/en/user-guide/tables-clustering-micropartitions.html), used by Snowflake,
 automatically divide data into contiguous units of storage with each micro-partition containing between 50 MB and 500 MB
@@ -350,21 +414,5 @@ including the range of values for each of the columns. In this way, query prunin
 be efficient, if there are no or little overlapping among micro partitions in terms of the column value range. The
 degree of overlapping is reduced through data clustering.
 
-Hudi's Index Function depends on optimized storage layout for efficient file pruning, which can be achieved through
+Hudi's Functional Index depends on optimized storage layout for efficient file pruning, which can be achieved through
 clustering and proposed Index-Function-based ordering during write operations.
-
-### Rollout/Adoption Plan
-
-The Index Function is going to be guarded by feature flags, `hoodie.write.index.function.enable` for creating and
-updating Index functions, and `hoodie.read.index.function.enable` for enabling file pruning based on Index Function in
-query engines.
-
-## Test Plan
-
-- Unit and functional tests
-    - Function can be applied correctly
-    - Index function is populated in metadata table
-    - Expected pruning behavior is validated
-    - For Index-Function-based ordering during write operations, data is co-located at write time
-- Validation of the implementation on the use cases above
-    - The workflow should work smoothly
