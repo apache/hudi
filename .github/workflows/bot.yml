@@ -12,8 +12,6 @@ on:
 env:
   MVN_ARGS: -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn
   SPARK_COMMON_MODULES: hudi-spark-datasource/hudi-spark,hudi-spark-datasource/hudi-spark-common
-  JOB_UT_OTHER_MODULES: !hudi-client/hudi-spark-client,!hudi-common,!hudi-examples,!hudi-examples/hudi-examples-common,!hudi-examples/hudi-examples-flink,!hudi-examples/hudi-examples-java,!hudi-examples/hudi-examples-spark,!hudi-flink-datasource,!hudi-flink-datasource/hudi-flink,!hudi-flink-datasource/hudi-flink1.13.x,!hudi-flink-datasource/hudi-flink1.14.x,!hudi-flink-datasource/hudi-flink1.15.x,!hudi-flink-datasource/hudi-flink1.16.x,!hudi-flink-datasource/hudi-flink1.17.x,!hudi-spark-datasource,!hudi-spark-datasource/hudi-spark,!hudi-spark-datasource/hudi-spark3.2.x,!hudi-spark-datasource/hudi-spark3.2plus-common,!hudi-spark-datasource/hudi-spark3-common,!hudi-spark-datasource/hudi-spark-common
-  JOB_FT_OTHER_MODULES: !hudi-client/hudi-spark-client,!hudi-common,!hudi-examples,!hudi-examples/hudi-examples-common,!hudi-examples/hudi-examples-flink,!hudi-examples/hudi-examples-java,!hudi-examples/hudi-examples-spark,!hudi-flink-datasource,!hudi-flink-datasource/hudi-flink,!hudi-flink-datasource/hudi-flink1.13.x,!hudi-flink-datasource/hudi-flink1.14.x,!hudi-flink-datasource/hudi-flink1.15.x,!hudi-flink-datasource/hudi-flink1.16.x,!hudi-flink-datasource/hudi-flink1.17.x
 
 jobs:
   validate-source:
@@ -66,11 +64,11 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
-          mvn test -Punit-tests -fae -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"FLINK_PROFILE" -pl "$JOB_UT_OTHER_MODULES" $MVN_ARGS
+          mvn test -Punit-tests -fae -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"FLINK_PROFILE" -pl hudi-hadoop-mr,hudi-client/hudi-java-client $MVN_ARGS
       - name: FT - Other modules
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
-          mvn test -Pfunctional-tests -fae -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"FLINK_PROFILE" -pl "$JOB_FT_OTHER_MODULES" $MVN_ARGS
+          mvn test -Pfunctional-tests -fae -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"FLINK_PROFILE" -pl hudi-hadoop-mr,hudi-client/hudi-java-client $MVN_ARGS
