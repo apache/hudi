@@ -166,7 +166,8 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
       }
       curr++;
     }
-
+    mainTable.client.close();
+    experimentTable.client.close();
   }
 
   private void verifyRecords(TestTableContents mainTable, TestTableContents experimentTable) {

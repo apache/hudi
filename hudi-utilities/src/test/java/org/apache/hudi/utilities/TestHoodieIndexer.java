@@ -373,13 +373,14 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     HoodieWriteConfig.Builder writeConfigBuilder = getWriteConfigBuilder(basePath(), tableName);
     HoodieWriteConfig writeConfig = writeConfigBuilder.withMetadataConfig(metadataConfig).build();
     // do one upsert with synchronous metadata update
-    SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig);
-    String instant = HoodieActiveTimeline.createNewInstantTime();
-    writeClient.startCommitWithTime(instant);
-    List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
-    JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);
-    List<WriteStatus> statuses = result.collect();
-    assertNoWriteErrors(statuses);
+    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig)) {
+      String instant = HoodieActiveTimeline.createNewInstantTime();
+      writeClient.startCommitWithTime(instant);
+      List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
+      JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);
+      List<WriteStatus> statuses = result.collect();
+      assertNoWriteErrors(statuses);
+    }
   }
 
   private void scheduleAndExecuteIndexing(MetadataPartitionType partitionTypeToIndex, String tableName) {
@@ -424,13 +425,14 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(true, false).withMetadataIndexBloomFilter(true);
     HoodieWriteConfig writeConfig = writeConfigBuilder.withMetadataConfig(metadataConfigBuilder.build()).build();
     // do one upsert with synchronous metadata update
-    SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig);
-    String instant = HoodieActiveTimeline.createNewInstantTime();
-    writeClient.startCommitWithTime(instant);
-    List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
-    JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);
-    List<WriteStatus> statuses = result.collect();
-    assertNoWriteErrors(statuses);
+    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig)) {
+      String instant = HoodieActiveTimeline.createNewInstantTime();
+      writeClient.startCommitWithTime(instant);
+      List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
+      JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);
+      List<WriteStatus> statuses = result.collect();
+      assertNoWriteErrors(statuses);
+    }
 
     // validate partitions built successfully
     assertTrue(reload(metaClient).getTableConfig().getMetadataPartitions().contains(FILES.getPartitionPath()));
@@ -477,13 +479,14 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     HoodieMetadataConfig.Builder metadataConfigBuilder = getMetadataConfigBuilder(true, false);
     HoodieWriteConfig writeConfig = writeConfigBuilder.withMetadataConfig(metadataConfigBuilder.build()).build();
     // do one upsert with synchronous metadata update
-    SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig);
-    String instant = HoodieActiveTimeline.createNewInstantTime();
-    writeClient.startCommitWithTime(instant);
-    List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
-    JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);
-    List<WriteStatus> statuses = result.collect();
-    assertNoWriteErrors(statuses);
+    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig)) {
+      String instant = HoodieActiveTimeline.createNewInstantTime();
+      writeClient.startCommitWithTime(instant);
+      List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
+      JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);
+      List<WriteStatus> statuses = result.collect();
+      assertNoWriteErrors(statuses);
+    }
 
     // validate files partition built successfully
     assertTrue(reload(metaClient).getTableConfig().getMetadataPartitions().contains(FILES.getPartitionPath()));

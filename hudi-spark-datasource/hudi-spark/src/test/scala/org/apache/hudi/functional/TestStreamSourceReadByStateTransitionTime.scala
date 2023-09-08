@@ -91,6 +91,7 @@ class TestStreamSourceReadByStateTransitionTime extends TestStreamingSource {
           assertCountMatched(10, true),
           StopStream
         )
+        writeClient.close()
       }
     }
   }
