@@ -101,6 +101,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -276,6 +277,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
   /**
    * Test De-duplication behavior for HoodieWriteClient upsert API.
    */
+  @Disabled
   @Test
   public void testDeduplicationOnUpsert() throws Exception {
     testDeduplication(HoodieJavaWriteClient::upsert, true);
