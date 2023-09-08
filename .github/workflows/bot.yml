@@ -112,7 +112,7 @@ jobs:
         run:
           mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
-  test-UT-FT-other-modules:
+  test-hudi-hadoop-mr-and-hudi-java-client:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -136,7 +136,7 @@ jobs:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
           mvn clean install -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"FLINK_PROFILE" -DskipTests=true -Phudi-platform-service $MVN_ARGS
-      - name: UT - Other Modules
+      - name: UT - hudi-hadoop-mr and hudi-client/hudi-java-client
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
