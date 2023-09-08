@@ -131,7 +131,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   // It should always start with 0 for a given file slice. for roll overs and delete blocks, we increment by 1.
   private int blockSequenceNumber = 0;
   // On task failures, a given task could be retried. So, this attempt number will track the number of attempts.
-  private int attemmptNumber = 0;
+  private int attemptNumber = 0;
 
   /**
    * This is used by log compaction only.
@@ -143,7 +143,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     this.useWriterSchema = true;
     this.isLogCompaction = true;
     this.header.putAll(header);
-    this.attemmptNumber = taskContextSupplier.getAttemptNumberSupplier().get();
+    this.attemptNumber = taskContextSupplier.getAttemptNumberSupplier().get();
   }
 
   public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
@@ -154,7 +154,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     this.sizeEstimator = new DefaultSizeEstimator();
     this.statuses = new ArrayList<>();
     this.recordProperties.putAll(config.getProps());
-    this.attemmptNumber = taskContextSupplier.getAttemptNumberSupplier().get();
+    this.attemptNumber = taskContextSupplier.getAttemptNumberSupplier().get();
   }
 
   public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
@@ -459,12 +459,12 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             ? HoodieRecord.RECORD_KEY_METADATA_FIELD
             : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
 
-        blocks.add(getBlock(config, pickLogDataBlockFormat(), recordList, getUpdatedHeader(header, blockSequenceNumber++, attemmptNumber, config,
+        blocks.add(getBlock(config, pickLogDataBlockFormat(), recordList, getUpdatedHeader(header, blockSequenceNumber++, attemptNumber, config,
             addBlockIdentifier()), keyField));
       }
 
       if (appendDeleteBlocks && recordsToDelete.size() > 0) {
-        blocks.add(new HoodieDeleteBlock(recordsToDelete.toArray(new DeleteRecord[0]), getUpdatedHeader(header, blockSequenceNumber++, attemmptNumber, config,
+        blocks.add(new HoodieDeleteBlock(recordsToDelete.toArray(new DeleteRecord[0]), getUpdatedHeader(header, blockSequenceNumber++, attemptNumber, config,
             addBlockIdentifier())));
       }
 
