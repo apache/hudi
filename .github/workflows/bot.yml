@@ -24,6 +24,8 @@ on:
 env:
   MVN_ARGS: -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn
   SPARK_COMMON_MODULES: hudi-spark-datasource/hudi-spark,hudi-spark-datasource/hudi-spark-common
+  JOB_UT_OTHER_MODULES: !hudi-client/hudi-spark-client,!hudi-common,!hudi-examples,!hudi-examples/hudi-examples-common,!hudi-examples/hudi-examples-flink,!hudi-examples/hudi-examples-java,!hudi-examples/hudi-examples-spark,!hudi-flink-datasource,!hudi-flink-datasource/hudi-flink,!hudi-flink-datasource/hudi-flink1.13.x,!hudi-flink-datasource/hudi-flink1.14.x,!hudi-flink-datasource/hudi-flink1.15.x,!hudi-flink-datasource/hudi-flink1.16.x,!hudi-flink-datasource/hudi-flink1.17.x,!hudi-spark-datasource,!hudi-spark-datasource/hudi-spark,!hudi-spark-datasource/hudi-spark3.2.x,!hudi-spark-datasource/hudi-spark3.2plus-common,!hudi-spark-datasource/hudi-spark3-common,!hudi-spark-datasource/hudi-spark-common
+  JOB_FT_OTHER_MODULES: !hudi-client/hudi-spark-client,!hudi-common,!hudi-examples,!hudi-examples/hudi-examples-common,!hudi-examples/hudi-examples-flink,!hudi-examples/hudi-examples-java,!hudi-examples/hudi-examples-spark,!hudi-flink-datasource,!hudi-flink-datasource/hudi-flink,!hudi-flink-datasource/hudi-flink1.13.x,!hudi-flink-datasource/hudi-flink1.14.x,!hudi-flink-datasource/hudi-flink1.15.x,!hudi-flink-datasource/hudi-flink1.16.x,!hudi-flink-datasource/hudi-flink1.17.x
 
 jobs:
   validate-source:
@@ -111,6 +113,45 @@ jobs:
         if: ${{ !endsWith(env.SPARK_PROFILE, '3.2') }} # skip test spark 3.2 as it's covered by Azure CI
         run:
           mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+
+  test-UT-FT-other-modules:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.2"
+            flinkProfile: "flink1.17"
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up JDK 8
+        uses: actions/setup-java@v3
+        with:
+          java-version: '8'
+          distribution: 'adopt'
+          architecture: x64
+      - name: Build Project
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+        run:
+          mvn clean install -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"FLINK_PROFILE" -DskipTests=true -Phudi-platform-service $MVN_ARGS
+      - name: UT - Other Modules
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+        run:
+          mvn test -Punit-tests -fae -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"FLINK_PROFILE" -pl "$JOB_UT_OTHER_MODULES" $MVN_ARGS
+      - name: FT - Other modules
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+        run:
+          mvn test -Pfunctional-tests -fae -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"FLINK_PROFILE" -pl "$JOB_FT_OTHER_MODULES" $MVN_ARGS
 
   test-spark-java17:
     runs-on: ubuntu-latest
