@@ -2732,6 +2732,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     deltaStreamer.sync();
     TestHelpers.assertRecordCount(parquetRecordsCount + 200, tableBasePath, sqlContext);
     testNum++;
+    // dummy change to trigger testing
   }
 
   @ParameterizedTest
