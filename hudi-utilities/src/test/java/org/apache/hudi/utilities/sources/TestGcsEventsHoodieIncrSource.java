@@ -39,8 +39,6 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.CloudDataFetcher;
-import org.apache.hudi.utilities.sources.helpers.CloudObjectMetadata;
-import org.apache.hudi.utilities.sources.helpers.CloudDataFetcher;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.QueryRunner;
 import org.apache.hudi.utilities.sources.helpers.gcs.GcsObjectMetadataFetcher;
@@ -287,14 +285,14 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     HoodieWriteConfig writeConfig = getWriteConfig();
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
 
-    writeClient.startCommitWithTime(commitTime);
-    List<HoodieRecord> gcsMetadataRecords = Arrays.asList(
-        getGcsMetadataRecord(commitTime, "data-file-1.json", "bucket-1", "1"),
-        getGcsMetadataRecord(commitTime, "data-file-2.json", "bucket-1", "1"),
-        getGcsMetadataRecord(commitTime, "data-file-3.json", "bucket-1", "1"),
-        getGcsMetadataRecord(commitTime, "data-file-4.json", "bucket-1", "1")
-    );
-    JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(gcsMetadataRecords, 1), commitTime);
+      writeClient.startCommitWithTime(commitTime);
+      List<HoodieRecord> gcsMetadataRecords = Arrays.asList(
+          getGcsMetadataRecord(commitTime, "data-file-1.json", "bucket-1", "1"),
+          getGcsMetadataRecord(commitTime, "data-file-2.json", "bucket-1", "1"),
+          getGcsMetadataRecord(commitTime, "data-file-3.json", "bucket-1", "1"),
+          getGcsMetadataRecord(commitTime, "data-file-4.json", "bucket-1", "1")
+      );
+      JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(gcsMetadataRecords, 1), commitTime);
 
       List<WriteStatus> statuses = result.collect();
       assertNoWriteErrors(statuses);
