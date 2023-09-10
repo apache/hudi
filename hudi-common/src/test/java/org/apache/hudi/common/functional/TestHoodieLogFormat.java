@@ -2920,7 +2920,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   private static Map<HeaderMetadataType, String> getUpdatedHeader(Map<HeaderMetadataType, String> header, int blockSequenceNumber) {
     Map<HeaderMetadataType, String> updatedHeader = new HashMap<>();
     updatedHeader.putAll(header);
-    updatedHeader.put(HeaderMetadataType.BLOCK_SEQUENCE_NUMBER, String.valueOf(blockSequenceNumber));
+    updatedHeader.put(HeaderMetadataType.BLOCK_IDENTIFIER, String.valueOf(blockSequenceNumber));
     return updatedHeader;
   }
 
