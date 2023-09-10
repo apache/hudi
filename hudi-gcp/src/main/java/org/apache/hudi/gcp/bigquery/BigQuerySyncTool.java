@@ -19,10 +19,8 @@
 
 package org.apache.hudi.gcp.bigquery;
 
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.sync.common.HoodieSyncTool;
 import org.apache.hudi.sync.common.util.ManifestFileWriter;
@@ -126,7 +124,6 @@ public class BigQuerySyncTool extends HoodieSyncTool {
   }
 
   private void syncTable(HoodieBigQuerySyncClient bqSyncClient) {
-    ValidationUtils.checkState(bqSyncClient.getTableType() == HoodieTableType.COPY_ON_WRITE);
     LOG.info("Sync hoodie table " + snapshotViewName + " at base path " + bqSyncClient.getBasePath());
 
     if (!bqSyncClient.datasetExists()) {
