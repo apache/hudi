@@ -68,6 +68,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -603,7 +604,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     }
   }
 
-  @Test
+  @RepeatedTest(50)
   public void testArchivalWithMultiWritersMDTDisabled() throws Exception {
     testArchivalWithMultiWriters(false);
   }
@@ -669,17 +670,27 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     }
   }
 
-  public static CompletableFuture allOfTerminateOnFailure(List<CompletableFuture<Boolean>> futures) {
+  private static CompletableFuture allOfTerminateOnFailure(List<CompletableFuture<Boolean>> futures) {
     CompletableFuture<?> failure = new CompletableFuture();
     AtomicBoolean jobFailed = new AtomicBoolean(false);
-    for (CompletableFuture<?> f : futures) {
-      f.exceptionally(ex -> {
+    int counter = 0;
+    while (counter < futures.size()) {
+      CompletableFuture<Boolean> curFuture = futures.get(counter);
+      int finalCounter = counter;
+      curFuture.exceptionally(ex -> {
         if (!jobFailed.getAndSet(true)) {
           LOG.warn("One of the job failed. Cancelling all other futures. " + ex.getCause() + ", " + ex.getMessage());
-          futures.forEach(future -> future.cancel(true));
+          int tempCounter = 0;
+          while (tempCounter < futures.size()) {
+            if (tempCounter != finalCounter) {
+              futures.get(tempCounter).cancel(true);
+            }
+            tempCounter++;
+          }
         }
         return null;
       });
+      counter++;
     }
     return CompletableFuture.anyOf(failure, CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])));
   }
