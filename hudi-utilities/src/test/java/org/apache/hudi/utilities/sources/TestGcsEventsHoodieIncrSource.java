@@ -73,7 +73,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -88,9 +87,6 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
 
   @TempDir
   protected java.nio.file.Path tempDir;
-
-  @Mock
-  GcsObjectMetadataFetcher gcsObjectMetadataFetcher;
 
   @Mock
   CloudDataFetcher gcsObjectDataFetcher;
@@ -130,8 +126,6 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
 
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(commitTimeForReads), 100L, inserts.getKey());
 
-    verify(gcsObjectMetadataFetcher, times(0)).getGcsObjectMetadata(Mockito.any(), Mockito.any(),
-        anyBoolean());
     verify(gcsObjectDataFetcher, times(0)).getCloudObjectDataDF(
         Mockito.any(), Mockito.any(), Mockito.any(), eq(schemaProvider));
   }
