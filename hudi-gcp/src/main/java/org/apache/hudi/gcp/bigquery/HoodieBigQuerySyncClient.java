@@ -94,8 +94,9 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
       }
       String query =
           String.format(
-              "CREATE EXTERNAL TABLE `%s.%s` %s OPTIONS (%s "
+              "CREATE EXTERNAL TABLE `%s.%s.%s` %s OPTIONS (%s "
               + "uris=[\"%s\"], format=\"PARQUET\", file_set_spec_type=\"NEW_LINE_DELIMITED_MANIFEST\")",
+              projectId,
               datasetName,
               tableName,
               withClauses,
