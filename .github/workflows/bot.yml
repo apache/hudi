@@ -26,6 +26,7 @@ env:
 
 jobs:
   test-hudi-hadoop-mr-and-hudi-java-client:
+    timeout-minutes: 40
     runs-on: ubuntu-latest
     strategy:
       matrix:
