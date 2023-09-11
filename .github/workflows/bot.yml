@@ -16,7 +16,6 @@ on:
       - '**.png'
       - '**.svg'
       - '**.yaml'
-      - '**.yml'
       - '.gitignore'
     branches:
       - master
