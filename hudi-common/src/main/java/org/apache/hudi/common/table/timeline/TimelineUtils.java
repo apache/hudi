@@ -356,7 +356,8 @@ public class TimelineUtils {
               "Cleaner cleaned up the timestamp of interest. Please ensure sufficient commits are retained with cleaner "
                   + "for Timestamp as of query to work");
         } else {
-          // when cleaner is based on file versions, we may not find value for earliestCommitToRetain. so, lets check for archival
+          // when cleaner is based on file versions, we may not find value for earliestCommitToRetain.
+          // so, lets check if timestamp of interest is archived based on first entry in active timeline.
           Option<HoodieInstant> firstCompletedInstant = metaClient.getActiveTimeline().getWriteTimeline().filterCompletedInstants().firstInstant();
           if (firstCompletedInstant.isPresent()) {
             ValidationUtils.checkArgument(HoodieTimeline.compareTimestamps(firstCompletedInstant.get().getTimestamp(), LESSER_THAN_OR_EQUALS, timestampAsOf),
