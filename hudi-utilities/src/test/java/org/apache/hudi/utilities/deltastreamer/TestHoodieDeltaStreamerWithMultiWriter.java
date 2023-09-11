@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -44,6 +45,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Paths;
@@ -81,6 +83,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
   @AfterEach
   public void teardown() throws Exception {
     TestDataSource.resetDataGen();
+    FileIOUtils.deleteDirectory(new File(basePath));
   }
 
   @ParameterizedTest
@@ -89,7 +92,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     // NOTE : Overriding the LockProvider to InProcessLockProvider since Zookeeper locks work in unit test but fail on Jenkins with connection timeouts
     basePath = Paths.get(URI.create(basePath.replaceAll("/$", ""))).toString();
     propsFilePath = basePath + "/" + PROPS_FILENAME_TEST_MULTI_WRITER;
-    tableBasePath = basePath + "/testtable_" + tableType;
+    tableBasePath = basePath + "/testUpsertsContinuousModeWithMultipleWritersForConflicts_" + tableType;
     prepareInitialConfigs(fs, basePath, "foo");
     TypedProperties props = prepareMultiWriterProps(fs, basePath, propsFilePath);
     props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.InProcessLockProvider");
@@ -156,7 +159,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     // NOTE : Overriding the LockProvider to InProcessLockProvider since Zookeeper locks work in unit test but fail on Jenkins with connection timeouts
     basePath = Paths.get(URI.create(basePath.replaceAll("/$", ""))).toString();
     propsFilePath = basePath + "/" + PROPS_FILENAME_TEST_MULTI_WRITER;
-    tableBasePath = basePath + "/testtable_" + tableType;
+    tableBasePath = basePath + "/testUpsertsContinuousModeWithMultipleWritersWithoutConflicts_" + tableType;
     prepareInitialConfigs(fs, basePath, "foo");
     TypedProperties props = prepareMultiWriterProps(fs, basePath, propsFilePath);
     props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.InProcessLockProvider");
@@ -224,7 +227,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     // NOTE : Overriding the LockProvider to InProcessLockProvider since Zookeeper locks work in unit test but fail on Jenkins with connection timeouts
     basePath = Paths.get(URI.create(basePath.replaceAll("/$", ""))).toString();
     propsFilePath = basePath + "/" + PROPS_FILENAME_TEST_MULTI_WRITER;
-    tableBasePath = basePath + "/testtable_" + tableType;
+    tableBasePath = basePath + "/testLatestCheckpointCarryOverWithMultipleWriters_" + tableType;
     prepareInitialConfigs(fs, basePath, "foo");
     TypedProperties props = prepareMultiWriterProps(fs, basePath, propsFilePath);
     props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.InProcessLockProvider");
