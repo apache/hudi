@@ -63,6 +63,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.client.utils.MetadataTableUtils.shouldUseBatchLookup;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
 
 /**
  * Cleaner is responsible for garbage collecting older files in a given partition path. Such that
@@ -171,7 +172,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
                   .deserializeHoodieCleanMetadata(hoodieTable.getActiveTimeline().getInstantDetails(lastClean.get()).get());
           if ((cleanMetadata.getEarliestCommitToRetain() != null)
                   && (cleanMetadata.getEarliestCommitToRetain().length() > 0)
-                  && !hoodieTable.getActiveTimeline().isBeforeTimelineStarts(cleanMetadata.getEarliestCommitToRetain())) {
+                  && !hoodieTable.getActiveTimeline().getCommitsTimeline().isBeforeTimelineStarts(cleanMetadata.getEarliestCommitToRetain())) {
             return getPartitionPathsForIncrementalCleaning(cleanMetadata, instantToRetain);
           }
         }
@@ -194,7 +195,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     return hoodieTable.getCompletedCommitsTimeline().getInstantsAsStream().filter(
         instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS,
             cleanMetadata.getEarliestCommitToRetain()) && HoodieTimeline.compareTimestamps(instant.getTimestamp(),
-            HoodieTimeline.LESSER_THAN, newInstantToRetain.get().getTimestamp())).flatMap(instant -> {
+            LESSER_THAN, newInstantToRetain.get().getTimestamp())).flatMap(instant -> {
               try {
                 if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())) {
                   HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata.fromBytes(
