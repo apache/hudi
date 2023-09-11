@@ -118,6 +118,7 @@ public class UtilitiesTestBase {
   protected static HoodieSparkEngineContext context;
   protected static SparkSession sparkSession;
   protected static SQLContext sqlContext;
+  protected static Configuration hadoopConf;
 
   @BeforeAll
   public static void setLogLevel() {
@@ -131,7 +132,7 @@ public class UtilitiesTestBase {
   }
 
   public static void initTestServices(boolean needsHdfs, boolean needsHive, boolean needsZookeeper) throws Exception {
-    final Configuration hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
+    hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
     hadoopConf.set("hive.exec.scratchdir", System.getenv("java.io.tmpdir") + "/hive");
 
     if (needsHdfs) {
