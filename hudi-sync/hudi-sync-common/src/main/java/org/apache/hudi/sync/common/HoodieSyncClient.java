@@ -83,6 +83,10 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
     return metaClient.getTableConfig().getBootstrapBasePath().isPresent();
   }
 
+  public HoodieTableMetaClient getMetaClient() {
+    return metaClient;
+  }
+
   /**
    * Get the set of dropped partitions since the last synced commit.
    * If last sync time is not known then consider only active timeline.
