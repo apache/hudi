@@ -51,8 +51,8 @@ public class ManifestFileWriter {
   private final boolean useFileListingFromMetadata;
   private final boolean assumeDatePartitioning;
 
-  private ManifestFileWriter(Configuration hadoopConf, String basePath, boolean useFileListingFromMetadata, boolean assumeDatePartitioning) {
-    this.metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
+  private ManifestFileWriter(HoodieTableMetaClient metaClient, boolean useFileListingFromMetadata, boolean assumeDatePartitioning) {
+    this.metaClient = metaClient;
     this.useFileListingFromMetadata = useFileListingFromMetadata;
     this.assumeDatePartitioning = assumeDatePartitioning;
   }
@@ -122,21 +122,9 @@ public class ManifestFileWriter {
    * Builder for {@link ManifestFileWriter}.
    */
   public static class Builder {
-
-    private Configuration conf;
-    private String basePath;
     private boolean useFileListingFromMetadata;
     private boolean assumeDatePartitioning;
-
-    public Builder setConf(Configuration conf) {
-      this.conf = conf;
-      return this;
-    }
-
-    public Builder setBasePath(String basePath) {
-      this.basePath = basePath;
-      return this;
-    }
+    private HoodieTableMetaClient metaClient;
 
     public Builder setUseFileListingFromMetadata(boolean useFileListingFromMetadata) {
       this.useFileListingFromMetadata = useFileListingFromMetadata;
@@ -148,10 +136,14 @@ public class ManifestFileWriter {
       return this;
     }
 
+    public Builder setMetaClient(HoodieTableMetaClient metaClient) {
+      this.metaClient = metaClient;
+      return this;
+    }
+
     public ManifestFileWriter build() {
-      ValidationUtils.checkArgument(conf != null, "Configuration needs to be set to init ManifestFileGenerator");
-      ValidationUtils.checkArgument(basePath != null, "basePath needs to be set to init ManifestFileGenerator");
-      return new ManifestFileWriter(conf, basePath, useFileListingFromMetadata, assumeDatePartitioning);
+      ValidationUtils.checkArgument(metaClient != null, "MetaClient needs to be set to init ManifestFileGenerator");
+      return new ManifestFileWriter(metaClient, useFileListingFromMetadata, assumeDatePartitioning);
     }
   }
 }
