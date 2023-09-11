@@ -138,6 +138,12 @@ public class IncrSourceHelper {
       Option<HoodieInstant> previousInstant = activeCommitTimeline.findInstantBefore(beginInstantTime);
       if (previousInstant.isPresent()) {
         previousInstantTime = previousInstant.get().getTimestamp();
+      } else {
+        // if begin instant time matches first entry in active timeline, we can set previous = beginInstantTime - 1
+        if (activeCommitTimeline.filterCompletedInstants().firstInstant().isPresent()
+            && activeCommitTimeline.filterCompletedInstants().firstInstant().get().getTimestamp().equals(beginInstantTime)) {
+          previousInstantTime = String.valueOf(Long.parseLong(beginInstantTime) - 1);
+        }
       }
     }
 
