@@ -550,8 +550,9 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     Path baseFilePath = new Path(basePathStr, filePath);
     HoodieBaseFile baseFile = new HoodieBaseFile(baseFilePath.toString());
 
+    HoodieMergeHandle handle = null;
     try {
-      HoodieMergeHandle handle = new HoodieMergeHandle(cfg, instantTime, table, new HashMap<>(),
+      handle = new HoodieMergeHandle(cfg, instantTime, table, new HashMap<>(),
           partitionPath, FSUtils.getFileId(baseFilePath.getName()), baseFile, new JavaTaskContextSupplier(),
           config.populateMetaFields() ? Option.empty() :
               Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps()))));
@@ -561,13 +562,19 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
       handle.performMergeDataValidationCheck(writeStatus);
     } catch (HoodieCorruptedDataException e1) {
       fail("Exception not expected because merge validation check is disabled");
+    } finally {
+      if (handle != null) {
+        handle.close();
+      }
     }
 
+    handle = null;
     try {
       final String newInstantTime = "006";
       cfg.getProps().setProperty("hoodie.merge.data.validation.enabled", "true");
       HoodieWriteConfig cfg2 = HoodieWriteConfig.newBuilder().withProps(cfg.getProps()).build();
-      HoodieMergeHandle handle = new HoodieMergeHandle(cfg2, newInstantTime, table, new HashMap<>(),
+      // does the handle need to be closed to clean up the writer it contains?
+      handle = new HoodieMergeHandle(cfg2, newInstantTime, table, new HashMap<>(),
           partitionPath, FSUtils.getFileId(baseFilePath.getName()), baseFile, new JavaTaskContextSupplier(),
           config.populateMetaFields() ? Option.empty() :
               Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps()))));
@@ -578,6 +585,10 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
       fail("The above line should have thrown an exception");
     } catch (HoodieUpsertException e2) {
       // expected
+    } finally {
+      if (handle != null) {
+        handle.close();
+      }
     }
   }
 
@@ -881,7 +892,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     // create config to not update small files.
     HoodieWriteConfig config = getSmallInsertWriteConfig(2000, TRIP_EXAMPLE_SCHEMA, 10, false, populateMetaFields,
         populateMetaFields ? props : getPropertiesForKeyGen());
-    HoodieJavaWriteClient client;
+    HoodieJavaWriteClient client; // TODO
     if (failInlineClustering) {
       if (null != writeClient) {
         writeClient.close();
@@ -1329,6 +1340,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
       conditionMet = client.getHeartbeatClient().isHeartbeatExpired("300");
       Thread.sleep(2000);
     }
+    client.close();
     client = new HoodieJavaWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
     // Perform 1 successful write
     writeBatch(client, "500", "400", Option.of(Arrays.asList("500")), "500",
