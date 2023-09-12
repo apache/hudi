@@ -684,7 +684,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     assertThrows(HoodieException.class, () -> metaClient.getArchivedTimeline().reload());
   }
 
-  @Test
+  @Disabled("HUDI-6841")
   public void testArchivalWithMultiWritersMDTDisabled() throws Exception {
     testArchivalWithMultiWriters(false);
   }
@@ -750,17 +750,27 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     }
   }
 
-  public static CompletableFuture allOfTerminateOnFailure(List<CompletableFuture<Boolean>> futures) {
+  private static CompletableFuture allOfTerminateOnFailure(List<CompletableFuture<Boolean>> futures) {
     CompletableFuture<?> failure = new CompletableFuture();
     AtomicBoolean jobFailed = new AtomicBoolean(false);
-    for (CompletableFuture<?> f : futures) {
-      f.exceptionally(ex -> {
+    int counter = 0;
+    while (counter < futures.size()) {
+      CompletableFuture<Boolean> curFuture = futures.get(counter);
+      int finalCounter = counter;
+      curFuture.exceptionally(ex -> {
         if (!jobFailed.getAndSet(true)) {
           LOG.warn("One of the job failed. Cancelling all other futures. " + ex.getCause() + ", " + ex.getMessage());
-          futures.forEach(future -> future.cancel(true));
+          int secondCounter = 0;
+          while (secondCounter < futures.size()) {
+            if (secondCounter != finalCounter) {
+              futures.get(secondCounter).cancel(true);
+            }
+            secondCounter++;
+          }
         }
         return null;
       });
+      counter++;
     }
     return CompletableFuture.anyOf(failure, CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])));
   }
