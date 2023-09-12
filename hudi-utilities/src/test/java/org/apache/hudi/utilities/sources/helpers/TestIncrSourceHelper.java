@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -356,7 +355,7 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
     String limitColumn = "s3.object.size";
     QueryInfo queryInfo = IncrSourceHelper.generateQueryInfo(jsc, basePath(), 5, Option.of(startInstant), null,
         TimelineUtils.HollowCommitHandling.BLOCK, orderColumn, keyColumn, limitColumn, true, Option.empty());
-    assertEquals(HoodieTimeline.INIT_INSTANT_TS, queryInfo.getPreviousInstant());
+    assertEquals(String.valueOf(Integer.parseInt(commitTimeForReads) - 1), queryInfo.getPreviousInstant());
     assertEquals(commitTimeForReads, queryInfo.getStartInstant());
     assertEquals(commitTimeForWrites, queryInfo.getEndInstant());
 
