@@ -1829,13 +1829,16 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // Try UPSERT with filterDupes true. Expect exception
     cfg2.filterDupes = true;
     cfg2.operation = WriteOperationType.UPSERT;
-    HoodieDeltaStreamer ds4 = new HoodieDeltaStreamer(cfg2, jsc);
+    HoodieDeltaStreamer ds4 = null;
     try {
+      ds4 = new HoodieDeltaStreamer(cfg2, jsc);
       ds4.sync();
     } catch (IllegalArgumentException e) {
       assertTrue(e.getMessage().contains("'--filter-dupes' needs to be disabled when '--op' is 'UPSERT' to ensure updates are not missed."));
     } finally {
-      ds4.shutdownGracefully();
+      if (ds4 != null) {
+        ds4.shutdownGracefully();
+      }
     }
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
@@ -2611,13 +2614,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.configs.add("hoodie.keep.min.commits=4");
     cfg.configs.add("hoodie.keep.max.commits=5");
     cfg.configs.add("hoodie.test.source.generate.inserts=true");
-    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
-    try {
-      for (int i = 0; i < count; i++) {
-        ds.sync();
-      }
-    } finally {
-      ds.shutdownGracefully();
+    for (int i = 0; i < count; i++) {
+      new HoodieDeltaStreamer(cfg, jsc).sync();
     }
   }
 
