@@ -25,9 +25,12 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieTimeTravelException;
@@ -50,6 +53,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.SAVEPOINT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.compareTimestamps;
@@ -337,6 +341,32 @@ public class TimelineUtils {
         throw new HoodieTimeTravelException(String.format(
             "Time travel's timestamp '%s' must be earlier than the first incomplete commit timestamp '%s'.",
             timestampAsOf, incompleteCommitTime));
+      }
+    }
+
+    // also timestamp as of cannot query cleaned up data.
+    Option<HoodieInstant> latestCleanOpt = metaClient.getActiveTimeline().getCleanerTimeline().filterCompletedInstants().lastInstant();
+    if (latestCleanOpt.isPresent()) {
+      // Ensure timestamp as of is > than the earliest commit to retain and
+      try {
+        HoodieCleanMetadata cleanMetadata = CleanerUtils.getCleanerMetadata(metaClient, latestCleanOpt.get());
+        String earliestCommitToRetain = cleanMetadata.getEarliestCommitToRetain();
+        if (!StringUtils.isNullOrEmpty(earliestCommitToRetain)) {
+          ValidationUtils.checkArgument(HoodieTimeline.compareTimestamps(earliestCommitToRetain, LESSER_THAN_OR_EQUALS, timestampAsOf),
+              "Cleaner cleaned up the timestamp of interest. Please ensure sufficient commits are retained with cleaner "
+                  + "for Timestamp as of query to work");
+        } else {
+          // when cleaner is based on file versions, we may not find value for earliestCommitToRetain.
+          // so, lets check if timestamp of interest is archived based on first entry in active timeline
+          Option<HoodieInstant> firstCompletedInstant = metaClient.getActiveTimeline().getWriteTimeline().filterCompletedInstants().firstInstant();
+          if (firstCompletedInstant.isPresent()) {
+            ValidationUtils.checkArgument(HoodieTimeline.compareTimestamps(firstCompletedInstant.get().getTimestamp(), LESSER_THAN_OR_EQUALS, timestampAsOf),
+                "Please ensure sufficient commits are retained (uncleaned and un-archived) for timestamp as of query to work.");
+          }
+        }
+      } catch (IOException e) {
+        throw new HoodieTimeTravelException("Cleaner cleaned up the timestamp of interest. "
+            + "Please ensure sufficient commits are retained with cleaner for Timestamp as of query to work ");
       }
     }
   }
