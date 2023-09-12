@@ -21,8 +21,6 @@ package org.apache.hudi.common.bloom;
 import org.apache.hudi.common.util.Base64CodecUtil;
 import org.apache.hudi.exception.HoodieIndexException;
 
-import org.apache.hadoop.util.bloom.Key;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -46,7 +44,7 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
    *
    * @param numEntries The total number of entries.
    * @param errorRate  maximum allowable error rate.
-   * @param hashType   type of the hashing function (see {@link org.apache.hadoop.util.hash.Hash}).
+   * @param hashType   type of the hashing function (see {@link org.apache.hudi.common.util.hash.Hash}).
    * @return the {@link HoodieDynamicBoundedBloomFilter} thus created
    */
   HoodieDynamicBoundedBloomFilter(int numEntries, double errorRate, int hashType, int maxNoOfEntries) {
