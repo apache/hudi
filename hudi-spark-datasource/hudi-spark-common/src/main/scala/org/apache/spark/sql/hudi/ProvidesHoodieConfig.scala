@@ -109,15 +109,15 @@ trait ProvidesHoodieConfig extends Logging {
    */
   private def deduceSparkSqlInsertIntoWriteOperation(isOverwritePartition: Boolean, isOverwriteTable: Boolean,
                                                      shouldAutoKeyGen: Boolean, preCombineField: String,
-                                                     sqlWriteOperationSet: Boolean, sqlWriteOperation: String): String = {
+                                                     sparkSqlInsertIntoOperationSet: Boolean, sparkSqlInsertIntoOperation: String): String = {
     if (isOverwriteTable) {
       INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
     } else if (isOverwritePartition) {
       INSERT_OVERWRITE_OPERATION_OPT_VAL
-    } else if (!sqlWriteOperationSet && !shouldAutoKeyGen && preCombineField.nonEmpty) {
+    } else if (!sparkSqlInsertIntoOperationSet && !shouldAutoKeyGen && preCombineField.nonEmpty) {
       UPSERT_OPERATION_OPT_VAL
     } else {
-      sqlWriteOperation
+      sparkSqlInsertIntoOperation
     }
   }
 
@@ -201,9 +201,9 @@ trait ProvidesHoodieConfig extends Logging {
     val insertMode = InsertMode.of(combinedOpts.getOrElse(DataSourceWriteOptions.SQL_INSERT_MODE.key,
       DataSourceWriteOptions.SQL_INSERT_MODE.defaultValue()))
     val insertModeSet = combinedOpts.contains(SQL_INSERT_MODE.key)
-    val sqlWriteOperationOpt = combinedOpts.get(SPARK_SQL_INSERT_INTO_OPERATION.key())
-    val sqlWriteOperationSet = sqlWriteOperationOpt.nonEmpty
-    val sqlWriteOperation = sqlWriteOperationOpt.getOrElse(SPARK_SQL_INSERT_INTO_OPERATION.defaultValue())
+    val sparkSqlInsertIntoOperationOpt = combinedOpts.get(SPARK_SQL_INSERT_INTO_OPERATION.key())
+    val sparkSqlInsertIntoOperationSet = sparkSqlInsertIntoOperationOpt.nonEmpty
+    val sparkSqlInsertIntoOperation = sparkSqlInsertIntoOperationOpt.getOrElse(SPARK_SQL_INSERT_INTO_OPERATION.defaultValue())
     val insertDupPolicyOpt = combinedOpts.get(INSERT_DUP_POLICY.key())
     val insertDupPolicySet = insertDupPolicyOpt.nonEmpty
     val insertDupPolicy = combinedOpts.getOrElse(INSERT_DUP_POLICY.key(), INSERT_DUP_POLICY.defaultValue())
@@ -217,7 +217,7 @@ trait ProvidesHoodieConfig extends Logging {
      * legacy configs will be honored. On all other cases (i.e when both are set, either is set,
      * or when only the sql write operation is set), we honor the sql write operation.
      */
-    val useLegacyInsertModeFlow = insertModeSet && !sqlWriteOperationSet
+    val useLegacyInsertModeFlow = insertModeSet && !sparkSqlInsertIntoOperationSet
     var operation = combinedOpts.getOrElse(OPERATION.key,
       if (useLegacyInsertModeFlow) {
         // NOTE: Target operation could be overridden by the user, therefore if it has been provided as an input
@@ -226,7 +226,7 @@ trait ProvidesHoodieConfig extends Logging {
           isNonStrictMode, isPartitionedTable, combineBeforeInsert, insertMode, shouldAutoKeyGen)
       } else {
         deduceSparkSqlInsertIntoWriteOperation(isOverwritePartition, isOverwriteTable,
-          shouldAutoKeyGen, preCombineField, sqlWriteOperationSet, sqlWriteOperation)
+          shouldAutoKeyGen, preCombineField, sparkSqlInsertIntoOperationSet, sparkSqlInsertIntoOperation)
       }
     )
 
@@ -239,14 +239,14 @@ trait ProvidesHoodieConfig extends Logging {
         Map()
       }
     } else if (operation.equals(INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL)) {
-      if (sqlWriteOperation.equals(BULK_INSERT_OPERATION_OPT_VAL) || enableBulkInsert) {
+      if (sparkSqlInsertIntoOperation.equals(BULK_INSERT_OPERATION_OPT_VAL) || enableBulkInsert) {
         operation = BULK_INSERT_OPERATION_OPT_VAL
         Map(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE.key -> WriteOperationType.INSERT_OVERWRITE_TABLE.value())
       } else {
         Map()
       }
     } else if (operation.equals(INSERT_OVERWRITE_OPERATION_OPT_VAL)) {
-      if (sqlWriteOperation.equals(BULK_INSERT_OPERATION_OPT_VAL) || enableBulkInsert) {
+      if (sparkSqlInsertIntoOperation.equals(BULK_INSERT_OPERATION_OPT_VAL) || enableBulkInsert) {
         operation = BULK_INSERT_OPERATION_OPT_VAL
         Map(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE.key -> WriteOperationType.INSERT_OVERWRITE.value())
       } else {
