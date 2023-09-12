@@ -48,7 +48,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -67,6 +66,7 @@ import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serial
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRestoreMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRollbackMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRollbackPlan;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Utils for creating dummy Hudi files in testing.
@@ -121,7 +121,7 @@ public class FileCreateUtils {
   }
 
   private static void createMetaFile(String basePath, String instantTime, String suffix) throws IOException {
-    createMetaFile(basePath, instantTime, suffix, "".getBytes());
+    createMetaFile(basePath, instantTime, suffix, getUTF8Bytes(""));
   }
 
   private static void createMetaFile(String basePath, String instantTime, String suffix, byte[] content) throws IOException {
@@ -160,7 +160,7 @@ public class FileCreateUtils {
   public static void createCommit(String basePath, String instantTime, Option<HoodieCommitMetadata> metadata) throws IOException {
     if (metadata.isPresent()) {
       createMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION,
-          metadata.get().toJsonString().getBytes(StandardCharsets.UTF_8));
+          getUTF8Bytes(metadata.get().toJsonString()));
     } else {
       createMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION);
     }
@@ -183,7 +183,7 @@ public class FileCreateUtils {
   }
 
   public static void createDeltaCommit(String basePath, String instantTime, HoodieCommitMetadata metadata) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION, metadata.toJsonString().getBytes(StandardCharsets.UTF_8));
+    createMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION, getUTF8Bytes(metadata.toJsonString()));
   }
 
   public static void createDeltaCommit(String basePath, String instantTime) throws IOException {
@@ -207,7 +207,7 @@ public class FileCreateUtils {
   }
 
   public static void createReplaceCommit(String basePath, String instantTime, HoodieReplaceCommitMetadata metadata) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.REPLACE_COMMIT_EXTENSION, metadata.toJsonString().getBytes(StandardCharsets.UTF_8));
+    createMetaFile(basePath, instantTime, HoodieTimeline.REPLACE_COMMIT_EXTENSION, getUTF8Bytes(metadata.toJsonString()));
   }
 
   public static void createRequestedReplaceCommit(String basePath, String instantTime, Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata) throws IOException {
@@ -220,7 +220,7 @@ public class FileCreateUtils {
 
   public static void createInflightReplaceCommit(String basePath, String instantTime, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws IOException {
     if (inflightReplaceMetadata.isPresent()) {
-      createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_REPLACE_COMMIT_EXTENSION, inflightReplaceMetadata.get().toJsonString().getBytes(StandardCharsets.UTF_8));
+      createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_REPLACE_COMMIT_EXTENSION, getUTF8Bytes(inflightReplaceMetadata.get().toJsonString()));
     } else {
       createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_REPLACE_COMMIT_EXTENSION);
     }

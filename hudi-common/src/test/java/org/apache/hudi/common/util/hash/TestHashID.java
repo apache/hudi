@@ -25,12 +25,12 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 import javax.xml.bind.DatatypeConverter;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -53,7 +53,7 @@ public class TestHashID {
           .limit((32 + (i * 4)))
           .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
           .toString();
-      final byte[] originalData = message.getBytes(StandardCharsets.UTF_8);
+      final byte[] originalData = getUTF8Bytes(message);
       final byte[] hashBytes = HashID.hash(originalData, size);
       assertEquals(hashBytes.length, size.byteSize());
     }

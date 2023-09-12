@@ -32,7 +32,8 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-import java.nio.charset.StandardCharsets;
+
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * A Simple Bloom filter implementation built on top of {@link org.apache.hadoop.util.bloom.BloomFilter}.
@@ -77,7 +78,7 @@ public class SimpleBloomFilter implements BloomFilter {
 
   @Override
   public void add(String key) {
-    add(key.getBytes(StandardCharsets.UTF_8));
+    add(getUTF8Bytes(key));
   }
 
   @Override
@@ -93,7 +94,7 @@ public class SimpleBloomFilter implements BloomFilter {
     if (key == null) {
       throw new NullPointerException("Key cannot be null");
     }
-    return filter.membershipTest(new Key(key.getBytes(StandardCharsets.UTF_8)));
+    return filter.membershipTest(new Key(getUTF8Bytes(key)));
   }
 
   /**
@@ -125,7 +126,7 @@ public class SimpleBloomFilter implements BloomFilter {
 
   // @Override
   public void write(DataOutput out) throws IOException {
-    out.write(filter.toString().getBytes());
+    out.write(getUTF8Bytes(filter.toString()));
   }
 
   //@Override

@@ -56,6 +56,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+
 /**
  * A utility class to help translate from Proto to Avro.
  */
@@ -129,7 +131,7 @@ public class ProtoConversionUtil {
     private static final String OVERFLOW_BYTES_FIELD_NAME = "proto_bytes";
     private static final Schema RECURSION_OVERFLOW_SCHEMA = Schema.createRecord("recursion_overflow", null, "org.apache.hudi.proto", false,
         Arrays.asList(new Schema.Field(OVERFLOW_DESCRIPTOR_FIELD_NAME, STRING_SCHEMA, null, ""),
-            new Schema.Field(OVERFLOW_BYTES_FIELD_NAME, Schema.create(Schema.Type.BYTES), null, "".getBytes())));
+            new Schema.Field(OVERFLOW_BYTES_FIELD_NAME, Schema.create(Schema.Type.BYTES), null, getUTF8Bytes(""))));
     // A cache of the proto class name paired with whether wrapped primitives should be flattened as the key and the generated avro schema as the value
     private static final Map<SchemaCacheKey, Schema> SCHEMA_CACHE = new ConcurrentHashMap<>();
     // A cache with a key as the pair target avro schema and the proto descriptor for the source and the value as an array of proto field descriptors where the order matches the avro ordering.

@@ -68,7 +68,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
@@ -79,6 +78,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.client.bootstrap.BootstrapMode.FULL_RECORD;
 import static org.apache.hudi.client.bootstrap.BootstrapMode.METADATA_ONLY;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE;
 import static org.apache.hudi.table.action.bootstrap.MetadataBootstrapHandlerFactory.getMetadataHandler;
@@ -249,7 +249,7 @@ public class SparkBootstrapCommitActionExecutor<T>
 
     try {
       activeTimeline.saveAsComplete(new HoodieInstant(true, actionType, instantTime),
-          Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+          Option.of(getUTF8Bytes(metadata.toJsonString())));
       LOG.info("Committed " + instantTime);
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,

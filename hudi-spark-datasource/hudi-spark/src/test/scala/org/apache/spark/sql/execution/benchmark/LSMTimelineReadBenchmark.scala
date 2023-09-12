@@ -26,6 +26,7 @@ import org.apache.hudi.client.timeline.{ActiveAction, LSMTimelineWriter}
 import org.apache.hudi.common.model.{HoodieAvroPayload, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.timeline.{HoodieArchivedTimeline, HoodieInstant, LSMTimeline}
 import org.apache.hudi.common.testutils.{HoodieTestTable, HoodieTestUtils}
+import org.apache.hudi.common.util.StringUtils.getUTF8Bytes
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.table.HoodieJavaTable
@@ -66,7 +67,7 @@ object LSMTimelineReadBenchmark extends HoodieBenchmarkBase {
         val instantTime = startTs + i + ""
         val action = if (i % 2 == 0) "delta_commit" else "commit"
         val instant = new HoodieInstant(HoodieInstant.State.COMPLETED, action, instantTime, instantTime + 1000)
-        val metadata = HoodieTestTable.of(metaClient).createCommitMetadata(instantTime, WriteOperationType.INSERT, util.Arrays.asList("par1", "par2"), 10, false).toJsonString.getBytes()
+        val metadata = getUTF8Bytes(HoodieTestTable.of(metaClient).createCommitMetadata(instantTime, WriteOperationType.INSERT, util.Arrays.asList("par1", "par2"), 10, false).toJsonString)
         instantBuffer.add(new DummyActiveAction(instant, metadata))
         if (i % batchSize == 0) {
           // archive 10 instants each time

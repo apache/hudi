@@ -41,6 +41,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
@@ -236,7 +237,7 @@ public abstract class HoodieLogBlock {
     output.writeInt(metadata.size());
     for (Map.Entry<HeaderMetadataType, String> entry : metadata.entrySet()) {
       output.writeInt(entry.getKey().ordinal());
-      byte[] bytes = entry.getValue().getBytes();
+      byte[] bytes = getUTF8Bytes(entry.getValue());
       output.writeInt(bytes.length);
       output.write(bytes);
     }

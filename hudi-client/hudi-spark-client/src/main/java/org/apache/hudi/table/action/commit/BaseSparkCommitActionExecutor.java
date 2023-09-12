@@ -19,8 +19,8 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.utils.SparkPartitionUtils;
 import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy;
+import org.apache.hudi.client.utils.SparkPartitionUtils;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
@@ -66,7 +66,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
@@ -81,6 +80,7 @@ import java.util.stream.Collectors;
 import scala.Tuple2;
 
 import static org.apache.hudi.common.util.ClusteringUtils.getAllFileGroupsInPendingClusteringPlans;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE;
 
 public abstract class BaseSparkCommitActionExecutor<T> extends
@@ -309,7 +309,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       HoodieCommitMetadata metadata = result.getCommitMetadata().get();
       writeTableMetadata(metadata, result.getWriteStatuses(), actionType);
       activeTimeline.saveAsComplete(new HoodieInstant(true, getCommitActionType(), instantTime),
-          Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+          Option.of(getUTF8Bytes(metadata.toJsonString())));
       LOG.info("Committed " + instantTime);
       result.setCommitMetadata(Option.of(metadata));
     } catch (IOException e) {

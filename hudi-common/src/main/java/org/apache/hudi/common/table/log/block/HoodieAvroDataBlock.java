@@ -22,9 +22,9 @@ import org.apache.hudi.common.fs.SizeAwareDataInputStream;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 
@@ -60,6 +60,7 @@ import java.util.Properties;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -267,7 +268,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     try {
       OutputStream out = new DeflaterOutputStream(baos);
-      out.write(text.getBytes(StandardCharsets.UTF_8));
+      out.write(getUTF8Bytes(text));
       out.close();
     } catch (IOException e) {
       throw new HoodieIOException("IOException while compressing text " + text, e);
