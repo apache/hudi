@@ -7,9 +7,14 @@ last_modified_at:
 Every record in Hudi is uniquely identified by a primary key, which is a pair of record key and partition path where the record belongs to.
 Using primary keys, Hudi can impose a) partition level uniqueness integrity constraint b) enable fast updates and deletes on records. 
 One should choose the partitioning scheme wisely as it could be a determining factor for your ingestion and query latency.
+Some use cases do not have a naturally present record key, for ex. log ingestion type of payloads. For these type of use cases,
+users do not have to specify the record key field explicitly anymore and Hudi can automatically generate record keys 
+(from Hudi version 0.14.0, Hudi can automatically generate record keys if not specified explicitly) that are efficient
+for compute, storage and read to meet the uniqueness requirements of the primary key. 
 
-In general, Hudi supports both partitioned and global indexes. For a dataset with partitioned index(which is most commonly used), each record is uniquely identified by a pair of record key and partition path. 
-But for a dataset with global index, each record is uniquely identified by just the record key. There won't be any duplicate record keys across partitions.
+In general, Hudi supports both partitioned and global indexes. For a dataset with partitioned index(which is most commonly used), 
+each record is uniquely identified by a pair of record key and partition path. But for a dataset with global index, each record 
+is uniquely identified by just the record key. There won't be any duplicate record keys across partitions.
 
 ## Key Generators
 
@@ -20,42 +25,33 @@ generators that are readily available to use.
 [Here](https://github.com/apache/hudi/blob/6f9b02decb5bb2b83709b1b6ec04a97e4d102c11/hudi-common/src/main/java/org/apache/hudi/keygen/KeyGenerator.java)
 is the interface for KeyGenerator in Hudi for your reference.
 
-Before diving into different types of key generators, let’s go over some of the common configs required to be set for
-key generators.
+Before diving into different types of key generators, let’s go over some of the common configs relevant to key generators.
 
-| Config        | Meaning/purpose|        
-| ------------- |:-------------:| 
-| ```hoodie.datasource.write.recordkey.field```     | Refers to record key field. This is a mandatory field. | 
-| ```hoodie.datasource.write.partitionpath.field```     | Refers to partition path field. This is a mandatory field. | 
-| ```hoodie.datasource.write.keygenerator.class``` | Refers to Key generator class(including full path). Could refer to any of the available ones or user defined one. This is a mandatory field. | 
-| ```hoodie.datasource.write.partitionpath.urlencode```| When set to true, partition path will be url encoded. Default value is false. |
-| ```hoodie.datasource.write.hive_style_partitioning```| When set to true, uses hive style partitioning. Partition field name will be prefixed to the value. Format: “<partition_path_field_name>=<partition_path_value>”. Default value is false.|
+| Config Name                                                                              | Default          | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------------------------------------------------------------------------------------- |------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| hoodie.datasource.write.recordkey.field             | N/A (Optional)   | Record key field. Value to be used as the `recordKey` component of `HoodieKey`. <ul><li>When configured, actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using the dot notation eg: `a.b.c`. </li><li>When not configured record key will be automatically generated by Hudi. This feature is handy for use cases like log ingestion that do not have a naturally present record key.</li></ul> <br />`Config Param: RECORDKEY_FIELD_NAME`                                                                                                                                                                                             |
+| hoodie.datasource.write.partitionpath.field       | N/A (Optional)   | Partition path field. Value to be used at the partitionPath component of HoodieKey. This needs to be specified if a partitioned table is desired. Actual value obtained by invoking .toString()<br />`Config Param: PARTITIONPATH_FIELD_NAME`                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| hoodie.datasource.write.keygenerator.class   | N/A (Optional)   | Key generator class, that implements `org.apache.hudi.keygen.KeyGenerator` extract a key out of incoming records. <ul><li>When set, the configured value takes precedence to be in effect and automatic inference is not triggered.</li><li>When not configured, if `hoodie.datasource.write.keygenerator.type` is set, the configured value is used else automatic inference is triggered.</li><li>In case of auto generated record keys, if neither the key generator class nor type are configured, Hudi will also auto infer the partitioning. for eg, if partition field is not configured, hudi will assume its non-partitioned. </li></ul> <br />`Config Param: KEYGENERATOR_CLASS_NAME` |
+| hoodie.datasource.write.hive_style_partitioning | false (Optional) | Flag to indicate whether to use Hive style partitioning. If set true, the names of partition folders follow &lt;partition_column_name&gt;=&lt;partition_value&gt; format. By default false (the names of partition folders are only partition values)<br /><br />`Config Param: HIVE_STYLE_PARTITIONING_ENABLE`                                                                                                                                                                                                                                                                                                                                                                                 |
+| hoodie.datasource.write.partitionpath.urlencode     | false (Optional) | Should we url encode the partition path value, before creating the folder structure.<br /><br />`Config Param: URL_ENCODE_PARTITIONING`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
-There are few more configs involved if you are looking for TimestampBasedKeyGenerator. Will cover those in the respective section.
+For all advanced configs refer [here](https://hudi.apache.org/docs/next/configurations#KEY_GENERATOR).
 
 Lets go over different key generators available to be used with Hudi.
 
 ### [SimpleKeyGenerator](https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/SimpleKeyGenerator.java)
 
 Record key refers to one field(column in dataframe) by name and partition path refers to one field (single column in dataframe)
-by name. This is one of the most commonly used one. Values are interpreted as is from dataframe and converted to string.
+by name. This is one of the most commonly used one. Values are interpreted as is from dataframe and converted to string. 
 
 ### [ComplexKeyGenerator](https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/ComplexKeyGenerator.java)
 Both record key and partition paths comprise one or more than one field by name(combination of multiple fields). Fields
 are expected to be comma separated in the config value. For example ```"Hoodie.datasource.write.recordkey.field" : “col1,col4”```
 
-### [GlobalDeleteKeyGenerator](https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/GlobalDeleteKeyGenerator.java)
-Global index deletes do not require partition value. So this key generator avoids using partition value for generating HoodieKey.
-
-**_NOTE:_**
-The "GlobalDeleteKeyGenerator" has to be used with a global index to delete records solely based on the record key.
-It works for a batch with deletes only. The key generator can be used for both partitioned and non-partitioned table. Note that
-when using this key generator, the config `hoodie.[bloom|simple|hbase].index.update.partition.path` should be set to
-`false` in order to avoid redundant data written to the storage.
-
 ### [NonpartitionedKeyGenerator](https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/NonpartitionedKeyGenerator.java)
 If your hudi dataset is not partitioned, you could use this “NonpartitionedKeyGenerator” which will return an empty
 partition for all records. In other words, all records go to the same partition (which is empty “”)
+
 
 ### [CustomKeyGenerator](https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/CustomKeyGenerator.java)
 This is a generic implementation of KeyGenerator where users are able to leverage the benefits of SimpleKeyGenerator,
@@ -104,22 +100,22 @@ field name.  Users are expected to set few more configs to use this KeyGenerator
 
 Configs to be set:
 
-| Config        | Meaning/purpose |       
-| ------------- | -------------|
-| ```hoodie.streamer.keygen.timebased.timestamp.type```    | One of the timestamp types supported(UNIX_TIMESTAMP, DATE_STRING, MIXED, EPOCHMILLISECONDS, SCALAR) |
-| ```hoodie.streamer.keygen.timebased.output.dateformat```| Output date format | 
-| ```hoodie.streamer.keygen.timebased.timezone```| Timezone of the data format| 
-| ```oodie.deltastreamer.keygen.timebased.input.dateformat```| Input date format |
+| Config Name                               | Default            | Description                                                                                                                                                                                                                                  |
+|-------------------------------------------|--------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| hoodie.keygen.timebased.timestamp.type    | N/A **(Required)** | Required only when the key generator is TimestampBasedKeyGenerator. One of the timestamp types supported(UNIX_TIMESTAMP, DATE_STRING, MIXED, EPOCHMILLISECONDS, SCALAR)                                                                      |
+| hoodie.keygen.timebased.output.dateformat | "" (Optional)      | Output date format such as `yyyy-MM-dd'T'HH:mm:ss.SSSZ`                                                                                                                                                                                      | 
+| hoodie.keygen.timebased.timezone          | "UTC" (Optional)   | Timezone of both input and output timestamp if they are the same, such as `UTC`.  Please use `hoodie.keygen.timebased.input.timezone` and `hoodie.keygen.timebased.output.timezone` instead if the input and output timezones are different. | 
+| hoodie.keygen.timebased.input.dateformat  | "" (Optional)      | Input date format such as `yyyy-MM-dd'T'HH:mm:ss.SSSZ`.                                                                                                                                                                                      |
 
 Let's go over some example values for TimestampBasedKeyGenerator.
 
 #### Timestamp is GMT
 
-| Config field | Value |
-| ------------- | -------------|
-|```hoodie.streamer.keygen.timebased.timestamp.type```| "EPOCHMILLISECONDS"|
-|```hoodie.streamer.keygen.timebased.output.dateformat``` | "yyyy-MM-dd hh" |
-|```hoodie.streamer.keygen.timebased.timezone```| "GMT+8:00" |
+| Config Name                                              | Value |
+|----------------------------------------------------------| -------------|
+| ```hoodie.streamer.keygen.timebased.timestamp.type```    | "EPOCHMILLISECONDS"|
+| ```hoodie.streamer.keygen.timebased.output.dateformat``` | "yyyy-MM-dd hh" |
+| ```hoodie.streamer.keygen.timebased.timezone```          | "GMT+8:00" |
 
 Input Field value: “1578283932000L” <br/>
 Partition path generated from key generator: “2020-01-06 12”
@@ -129,12 +125,12 @@ Partition path generated from key generator: “1970-01-01 08”
 
 #### Timestamp is DATE_STRING
 
-| Config field | Value |
-| ------------- | -------------|
-|```hoodie.streamer.keygen.timebased.timestamp.type```|  "DATE_STRING"  |
-|```hoodie.streamer.keygen.timebased.output.dateformat```|  "yyyy-MM-dd hh" | 
-|```hoodie.streamer.keygen.timebased.timezone```|  "GMT+8:00" |
-|```hoodie.streamer.keygen.timebased.input.dateformat```|  "yyyy-MM-dd hh:mm:ss" |
+| Config Name                                              | Value |
+|----------------------------------------------------------| -------------|
+| ```hoodie.streamer.keygen.timebased.timestamp.type```    |  "DATE_STRING"  |
+| ```hoodie.streamer.keygen.timebased.output.dateformat``` |  "yyyy-MM-dd hh" | 
+| ```hoodie.streamer.keygen.timebased.timezone```          |  "GMT+8:00" |
+| ```hoodie.streamer.keygen.timebased.input.dateformat```  |  "yyyy-MM-dd hh:mm:ss" |
 
 Input field value: “2020-01-06 12:12:12” <br/>
 Partition path generated from key generator: “2020-01-06 12”
@@ -145,12 +141,12 @@ Partition path generated from key generator: “1970-01-01 12:00:00”
 
 #### Scalar examples
 
-| Config field | Value |
-| ------------- | -------------|
-|```hoodie.streamer.keygen.timebased.timestamp.type```| "SCALAR"|
-|```hoodie.streamer.keygen.timebased.output.dateformat```| "yyyy-MM-dd hh" |
-|```hoodie.streamer.keygen.timebased.timezone```| "GMT" |
-|```hoodie.streamer.keygen.timebased.timestamp.scalar.time.unit```| "days" |
+| Config Name                                                       | Value |
+|-------------------------------------------------------------------| -------------|
+| ```hoodie.streamer.keygen.timebased.timestamp.type```             | "SCALAR"|
+| ```hoodie.streamer.keygen.timebased.output.dateformat```          | "yyyy-MM-dd hh" |
+| ```hoodie.streamer.keygen.timebased.timezone```                   | "GMT" |
+| ```hoodie.streamer.keygen.timebased.timestamp.scalar.time.unit``` | "days" |
 
 Input field value: “20000L” <br/>
 Partition path generated from key generator: “2024-10-04 12”
@@ -160,56 +156,56 @@ Partition path generated from key generator: “1970-01-02 12”
 
 #### ISO8601WithMsZ with Single Input format
 
-| Config field | Value |
-| ------------- | -------------|
-|```hoodie.streamer.keygen.timebased.timestamp.type```| "DATE_STRING"|
-|```hoodie.streamer.keygen.timebased.input.dateformat```| "yyyy-MM-dd'T'HH:mm:ss.SSSZ" |
-|```hoodie.streamer.keygen.timebased.input.dateformat.list.delimiter.regex```| "" |
-|```hoodie.streamer.keygen.timebased.input.timezone```| "" |
-|```hoodie.streamer.keygen.timebased.output.dateformat```| "yyyyMMddHH" |
-|```hoodie.streamer.keygen.timebased.output.timezone```| "GMT" |
+| Config Name                                                                  | Value |
+|------------------------------------------------------------------------------| -------------|
+| ```hoodie.streamer.keygen.timebased.timestamp.type```                        | "DATE_STRING"|
+| ```hoodie.streamer.keygen.timebased.input.dateformat```                      | "yyyy-MM-dd'T'HH:mm:ss.SSSZ" |
+| ```hoodie.streamer.keygen.timebased.input.dateformat.list.delimiter.regex``` | "" |
+| ```hoodie.streamer.keygen.timebased.input.timezone```                        | "" |
+| ```hoodie.streamer.keygen.timebased.output.dateformat```                     | "yyyyMMddHH" |
+| ```hoodie.streamer.keygen.timebased.output.timezone```                       | "GMT" |
 
 Input field value: "2020-04-01T13:01:33.428Z" <br/>
 Partition path generated from key generator: "2020040113"
 
 #### ISO8601WithMsZ with Multiple Input formats
 
-| Config field | Value |
-| ------------- | -------------|
-|```hoodie.streamer.keygen.timebased.timestamp.type```| "DATE_STRING"|
-|```hoodie.streamer.keygen.timebased.input.dateformat```| "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ" |
-|```hoodie.streamer.keygen.timebased.input.dateformat.list.delimiter.regex```| "" |
-|```hoodie.streamer.keygen.timebased.input.timezone```| "" |
-|```hoodie.streamer.keygen.timebased.output.dateformat```| "yyyyMMddHH" |
-|```hoodie.streamer.keygen.timebased.output.timezone```| "UTC" |
+| Config Name                                                                  | Value |
+|------------------------------------------------------------------------------| -------------|
+| ```hoodie.streamer.keygen.timebased.timestamp.type```                        | "DATE_STRING"|
+| ```hoodie.streamer.keygen.timebased.input.dateformat```                      | "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ" |
+| ```hoodie.streamer.keygen.timebased.input.dateformat.list.delimiter.regex``` | "" |
+| ```hoodie.streamer.keygen.timebased.input.timezone```                        | "" |
+| ```hoodie.streamer.keygen.timebased.output.dateformat```                     | "yyyyMMddHH" |
+| ```hoodie.streamer.keygen.timebased.output.timezone```                       | "UTC" |
 
 Input field value: "2020-04-01T13:01:33.428Z" <br/>
 Partition path generated from key generator: "2020040113"
 
 #### ISO8601NoMs with offset using multiple input formats
 
-| Config field | Value |
-| ------------- | -------------|
-|```hoodie.streamer.keygen.timebased.timestamp.type```| "DATE_STRING"|
-|```hoodie.streamer.keygen.timebased.input.dateformat```| "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ" |
-|```hoodie.streamer.keygen.timebased.input.dateformat.list.delimiter.regex```| "" |
-|```hoodie.streamer.keygen.timebased.input.timezone```| "" |
-|```hoodie.streamer.keygen.timebased.output.dateformat```| "yyyyMMddHH" |
-|```hoodie.streamer.keygen.timebased.output.timezone```| "UTC" |
+| Config Name                                                                  | Value |
+|------------------------------------------------------------------------------| -------------|
+| ```hoodie.streamer.keygen.timebased.timestamp.type```                        | "DATE_STRING"|
+| ```hoodie.streamer.keygen.timebased.input.dateformat```                      | "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ" |
+| ```hoodie.streamer.keygen.timebased.input.dateformat.list.delimiter.regex``` | "" |
+| ```hoodie.streamer.keygen.timebased.input.timezone```                        | "" |
+| ```hoodie.streamer.keygen.timebased.output.dateformat```                     | "yyyyMMddHH" |
+| ```hoodie.streamer.keygen.timebased.output.timezone```                       | "UTC" |
 
 Input field value: "2020-04-01T13:01:33-**05:00**" <br/>
 Partition path generated from key generator: "2020040118"
 
 #### Input as short date string and expect date in date format
 
-| Config field | Value |
-| ------------- | -------------|
-|```hoodie.streamer.keygen.timebased.timestamp.type```| "DATE_STRING"|
-|```hoodie.streamer.keygen.timebased.input.dateformat```| "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ,yyyyMMdd" |
-|```hoodie.streamer.keygen.timebased.input.dateformat.list.delimiter.regex```| "" |
-|```hoodie.streamer.keygen.timebased.input.timezone```| "UTC" |
-|```hoodie.streamer.keygen.timebased.output.dateformat```| "MM/dd/yyyy" |
-|```hoodie.streamer.keygen.timebased.output.timezone```| "UTC" |
+| Config Name                                                                  | Value |
+|------------------------------------------------------------------------------| -------------|
+| ```hoodie.streamer.keygen.timebased.timestamp.type```                        | "DATE_STRING"|
+| ```hoodie.streamer.keygen.timebased.input.dateformat```                      | "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ,yyyyMMdd" |
+| ```hoodie.streamer.keygen.timebased.input.dateformat.list.delimiter.regex``` | "" |
+| ```hoodie.streamer.keygen.timebased.input.timezone```                        | "UTC" |
+| ```hoodie.streamer.keygen.timebased.output.dateformat```                     | "MM/dd/yyyy" |
+| ```hoodie.streamer.keygen.timebased.output.timezone```                       | "UTC" |
 
 Input field value: "20200401" <br/>
 Partition path generated from key generator: "04/01/2020"
