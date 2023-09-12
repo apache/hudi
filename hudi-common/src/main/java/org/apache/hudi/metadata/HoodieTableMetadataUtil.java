@@ -19,6 +19,7 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.ConvertingGenericData;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
@@ -66,8 +67,6 @@ import org.apache.hudi.util.Lazy;
 import org.apache.avro.AvroTypeException;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -101,7 +100,6 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
-import static org.apache.hudi.avro.HoodieAvroUtils.convertValueForSpecificDataTypes;
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.MILLIS_INSTANT_ID_LENGTH;
@@ -153,6 +151,8 @@ public class HoodieTableMetadataUtil {
   // This suffix and all after that are used for initialization of the various partitions. The unused suffixes lower than this value
   // are reserved for future operations on the MDT.
   private static final int PARTITION_INITIALIZATION_TIME_SUFFIX = 10; // corresponds to "010";
+  // we have max of 4 partitions (FILES, COL_STATS, BLOOM, RLI)
+  private static final List<String> VALID_PARTITION_INITIALIZATION_TIME_SUFFIXES = Arrays.asList("010","011","012","013");
 
   /**
    * Returns whether the files partition of metadata table is ready for read.
@@ -177,9 +177,8 @@ public class HoodieTableMetadataUtil {
    * @return map of {@link HoodieColumnRangeMetadata} for each of the provided target fields for
    *         the collection of provided records
    */
-  public static Map<String, HoodieColumnRangeMetadata<Comparable>> collectColumnRangeMetadata(List<IndexedRecord> records,
-                                                                                              List<Schema.Field> targetFields,
-                                                                                              String filePath) {
+  public static Map<String, HoodieColumnRangeMetadata<Comparable>> collectColumnRangeMetadata(
+      List<HoodieRecord> records, List<Schema.Field> targetFields, String filePath, Schema recordSchema) {
     // Helper class to calculate column stats
     class ColumnStats {
       Object minValue;
@@ -198,23 +197,26 @@ public class HoodieTableMetadataUtil {
       targetFields.forEach(field -> {
         ColumnStats colStats = allColumnStats.computeIfAbsent(field.name(), (ignored) -> new ColumnStats());
 
-        GenericRecord genericRecord = (GenericRecord) record;
-
-        final Object fieldVal = convertValueForSpecificDataTypes(field.schema(), genericRecord.get(field.name()), false);
-        final Schema fieldSchema = getNestedFieldSchemaFromWriteSchema(genericRecord.getSchema(), field.name());
+        Schema fieldSchema = getNestedFieldSchemaFromWriteSchema(recordSchema, field.name());
+        Object fieldValue;
+        if (record.getRecordType() == HoodieRecordType.AVRO) {
+          fieldValue = HoodieAvroUtils.getRecordColumnValues(record, new String[]{field.name()}, recordSchema, false)[0];
+        } else if (record.getRecordType() == HoodieRecordType.SPARK) {
+          fieldValue = record.getColumnValues(recordSchema, new String[]{field.name()}, false)[0];
+        } else {
+          throw new HoodieException(String.format("Unknown record type: %s", record.getRecordType()));
+        }
 
         colStats.valueCount++;
-
-        if (fieldVal != null && canCompare(fieldSchema)) {
+        if (fieldValue != null && canCompare(fieldSchema)) {
           // Set the min value of the field
           if (colStats.minValue == null
-              || ConvertingGenericData.INSTANCE.compare(fieldVal, colStats.minValue, fieldSchema) < 0) {
-            colStats.minValue = fieldVal;
+              || ConvertingGenericData.INSTANCE.compare(fieldValue, colStats.minValue, fieldSchema) < 0) {
+            colStats.minValue = fieldValue;
           }
-
           // Set the max value of the field
-          if (colStats.maxValue == null || ConvertingGenericData.INSTANCE.compare(fieldVal, colStats.maxValue, fieldSchema) > 0) {
-            colStats.maxValue = fieldVal;
+          if (colStats.maxValue == null || ConvertingGenericData.INSTANCE.compare(fieldValue, colStats.maxValue, fieldSchema) > 0) {
+            colStats.maxValue = fieldValue;
           }
         } else {
           colStats.nullCount++;
@@ -1282,13 +1284,14 @@ public class HoodieTableMetadataUtil {
           validInstantTimestamps.addAll(getRollbackedCommits(instant, datasetTimeline));
         });
 
-    // add restore instants from MDT.
+    // add restore and rollback instants from MDT.
     metadataMetaClient.getActiveTimeline().getRollbackAndRestoreTimeline().filterCompletedInstants()
-        .filter(instant -> instant.getAction().equals(HoodieTimeline.RESTORE_ACTION))
+        .filter(instant -> instant.getAction().equals(HoodieTimeline.RESTORE_ACTION) || instant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION))
         .getInstants().forEach(instant -> validInstantTimestamps.add(instant.getTimestamp()));
 
-    // SOLO_COMMIT_TIMESTAMP is used during bootstrap so it is a valid timestamp
-    validInstantTimestamps.add(createIndexInitTimestamp(SOLO_COMMIT_TIMESTAMP, PARTITION_INITIALIZATION_TIME_SUFFIX));
+    metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants()
+        .filter(instant ->  instant.getTimestamp().startsWith(SOLO_COMMIT_TIMESTAMP))
+        .getInstants().forEach(instant -> validInstantTimestamps.add(instant.getTimestamp()));
     return validInstantTimestamps;
   }
 

@@ -194,6 +194,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
 
     val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), getWriteConfig(commonOpts))
     writeClient.scheduleCompaction(org.apache.hudi.common.util.Option.empty())
+    writeClient.close()
 
     doWriteAndValidateColumnStats(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/update-input-table-json",

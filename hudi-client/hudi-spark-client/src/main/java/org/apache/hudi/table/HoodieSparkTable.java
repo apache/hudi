@@ -91,7 +91,7 @@ public abstract class HoodieSparkTable<T>
   protected Option<HoodieTableMetadataWriter> getMetadataWriter(
       String triggeringInstantTimestamp,
       HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
-    if (config.isMetadataTableEnabled() || metaClient.getTableConfig().isMetadataTableAvailable()) {
+    if (config.isMetadataTableEnabled()) {
       // if any partition is deleted, we need to reload the metadata table writer so that new table configs are picked up
       // to reflect the delete mdt partitions.
       deleteMetadataIndexIfNecessary();
@@ -112,6 +112,7 @@ public abstract class HoodieSparkTable<T>
         throw new HoodieMetadataException("Checking existence of metadata table failed", e);
       }
     } else {
+      // if metadata is not enabled in the write config, we should try and delete it (if present)
       maybeDeleteMetadataTable();
     }
 

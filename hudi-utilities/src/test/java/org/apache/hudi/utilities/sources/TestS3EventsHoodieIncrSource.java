@@ -41,13 +41,13 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.CloudDataFetcher;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.QueryRunner;
+import org.apache.hudi.utilities.sources.helpers.TestCloudObjectsSelectorCommon;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.utilities.sources.helpers.TestCloudObjectsSelectorCommon;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -207,18 +207,19 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
 
   private Pair<String, List<HoodieRecord>> writeS3MetadataRecords(String commitTime) throws IOException {
     HoodieWriteConfig writeConfig = getWriteConfig();
-    SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig);
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
 
-    writeClient.startCommitWithTime(commitTime);
-    List<HoodieRecord> s3MetadataRecords = Arrays.asList(
-        generateS3EventMetadata(commitTime, "bucket-1", "data-file-1.json", 1L)
-    );
-    JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(s3MetadataRecords, 1), commitTime);
+      writeClient.startCommitWithTime(commitTime);
+      List<HoodieRecord> s3MetadataRecords = Arrays.asList(
+          generateS3EventMetadata(commitTime, "bucket-1", "data-file-1.json", 1L)
+      );
+      JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(s3MetadataRecords, 1), commitTime);
 
-    List<WriteStatus> statuses = result.collect();
-    assertNoWriteErrors(statuses);
+      List<WriteStatus> statuses = result.collect();
+      assertNoWriteErrors(statuses);
 
-    return Pair.of(commitTime, s3MetadataRecords);
+      return Pair.of(commitTime, s3MetadataRecords);
+    }
   }
 
   @Test

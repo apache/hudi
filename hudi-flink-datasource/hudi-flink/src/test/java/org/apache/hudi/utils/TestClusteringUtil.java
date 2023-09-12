@@ -38,6 +38,8 @@ import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.FlinkTables;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
+
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -70,6 +72,13 @@ public class TestClusteringUtil {
 
   void beforeEach() throws IOException {
     beforeEach(Collections.emptyMap());
+  }
+
+  @AfterEach
+  void afterEach() {
+    if (this.writeClient != null) {
+      this.writeClient.close();
+    }
   }
 
   void beforeEach(Map<String, String> options) throws IOException {

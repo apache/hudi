@@ -172,7 +172,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     this.dataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(dataWriteConfig.getBasePath()).build();
 
-    if (dataMetaClient.getTableConfig().isMetadataTableAvailable() || writeConfig.isMetadataTableEnabled()) {
+    if (writeConfig.isMetadataTableEnabled()) {
       this.metadataWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(writeConfig, failedWritesCleaningPolicy);
 
       try {
@@ -1411,8 +1411,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
           .flatMapToPair(Stream::iterator)
           .reduceByKey((recordDelegate1, recordDelegate2) -> {
             if (recordDelegate1.getRecordKey().equals(recordDelegate2.getRecordKey())) {
-              if (recordDelegate1.getNewLocation().isPresent() && recordDelegate2.getNewLocation().isPresent()) {
-                throw new HoodieIOException("Both version of records does not have location set. Record V1 " + recordDelegate1.toString()
+              if (!recordDelegate1.getNewLocation().isPresent() && !recordDelegate2.getNewLocation().isPresent()) {
+                throw new HoodieIOException("Both version of records do not have location set. Record V1 " + recordDelegate1.toString()
                     + ", Record V2 " + recordDelegate2.toString());
               }
               if (recordDelegate1.getNewLocation().isPresent()) {
@@ -1434,7 +1434,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     return recordKeyDelegatePairs
         .map(writeStatusRecordDelegate -> {
           HoodieRecordDelegate recordDelegate = writeStatusRecordDelegate.getValue();
-          HoodieRecord hoodieRecord;
+          HoodieRecord hoodieRecord = null;
           Option<HoodieRecordLocation> newLocation = recordDelegate.getNewLocation();
           if (newLocation.isPresent()) {
             if (recordDelegate.getCurrentLocation().isPresent()) {
@@ -1448,11 +1448,12 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
                 LOG.error(msg);
                 throw new HoodieMetadataException(msg);
               }
+              // for updates, we can skip updating RLI partition in MDT
+            } else {
+              hoodieRecord = HoodieMetadataPayload.createRecordIndexUpdate(
+                  recordDelegate.getRecordKey(), recordDelegate.getPartitionPath(),
+                  newLocation.get().getFileId(), newLocation.get().getInstantTime(), dataWriteConfig.getWritesFileIdEncoding());
             }
-
-            hoodieRecord = HoodieMetadataPayload.createRecordIndexUpdate(
-                recordDelegate.getRecordKey(), recordDelegate.getPartitionPath(),
-                newLocation.get().getFileId(), newLocation.get().getInstantTime(), dataWriteConfig.getWritesFileIdEncoding());
           } else {
             // Delete existing index for a deleted record
             hoodieRecord = HoodieMetadataPayload.createRecordIndexDelete(recordDelegate.getRecordKey());

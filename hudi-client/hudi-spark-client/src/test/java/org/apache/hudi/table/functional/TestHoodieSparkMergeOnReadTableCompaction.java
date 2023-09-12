@@ -44,6 +44,7 @@ import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -88,6 +89,13 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
   @BeforeEach
   public void setup() {
     dataGen = new HoodieTestDataGenerator();
+  }
+
+  @AfterEach
+  public void teardown() throws IOException {
+    if (client != null) {
+      client.close();
+    }
   }
 
   @ParameterizedTest
