@@ -32,6 +32,8 @@ import org.apache.avro.Schema;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -44,6 +46,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 public class TestSchemaEvolutionClient extends HoodieJavaClientTestHarness {
 
+  private static final Logger LOG = LoggerFactory.getLogger(TestSchemaEvolutionClient.class);
+
   private static final Schema SCHEMA = getSchemaFromResource(TestSchemaEvolutionClient.class, "/exampleSchema.avsc");
 
   @BeforeEach
@@ -55,9 +59,11 @@ public class TestSchemaEvolutionClient extends HoodieJavaClientTestHarness {
 
   @AfterEach
   public void closeClient() {
+    LOG.error("Start closeClient");
     if (writeClient != null) {
       writeClient.close();
     }
+    LOG.error("End closeClient");
   }
 
   @Test

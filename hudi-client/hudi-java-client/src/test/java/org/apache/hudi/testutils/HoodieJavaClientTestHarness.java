@@ -134,7 +134,9 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
 
   @AfterAll
   public static void tearDownAll() throws IOException {
+    LOG.error("Start tearDownAll");
     FileSystem.closeAll();
+    LOG.error("End tearDownAll");
   }
 
   @BeforeEach
@@ -150,10 +152,16 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
 
   @AfterEach
   protected void cleanupResources() throws IOException {
+    LOG.error("Start cleanupResources");
     cleanupClients();
+    LOG.error("End cleanupClients");
     cleanupTestDataGenerator();
+    LOG.error("End cleanupTestDataGenerator");
     cleanupFileSystem();
+    LOG.error("End cleanupFileSystem");
     cleanupExecutorService();
+    LOG.error("End cleanupExecutorService");
+    LOG.error("End cleanupResources");
   }
 
   public class TestJavaTaskContextSupplier extends TaskContextSupplier {

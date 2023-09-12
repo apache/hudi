@@ -58,6 +58,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -72,8 +74,9 @@ import static org.apache.hadoop.hive.ql.exec.Utilities.MAPRED_MAPPER_CLASS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Disabled
 public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
+
+  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieCombineHiveInputFormat.class);
 
   private static HdfsTestService hdfsTestService;
   private static FileSystem fs;
@@ -87,10 +90,16 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
 
   @AfterAll
   public static void tearDownClass() throws IOException {
+    LOG.error("Start tearDownClass");
+    LOG.error("Before hdfsTestService stop");
     hdfsTestService.stop();
+    LOG.error("After hdfsTestService stop");
+    LOG.error("Before fs close");
     if (fs != null) {
       fs.close();
     }
+    LOG.error("After fs close");
+    LOG.error("End tearDownClass");
   }
 
   @BeforeEach
@@ -100,9 +109,13 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
 
   @AfterEach
   public void tearDown() throws IOException {
+    LOG.error("Start tearDown");
+    LOG.error("Before fs delete");
     if (fs != null) {
       fs.delete(new Path(tempDir.toAbsolutePath().toString()), true);
     }
+    LOG.error("After fs delete");
+    LOG.error("End tearDown");
   }
 
   @Test
