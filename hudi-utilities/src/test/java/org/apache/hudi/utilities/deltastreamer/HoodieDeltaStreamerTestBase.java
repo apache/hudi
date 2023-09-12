@@ -697,5 +697,19 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
       int numDeltaCommits = timeline.countInstants();
       assertTrue(minExpected <= numDeltaCommits, "Got=" + numDeltaCommits + ", exp >=" + minExpected);
     }
+
+    static void assertAtLeastNCommitsAfterRollback(int minExpectedRollback, int minExpectedCommits, String tablePath, FileSystem fs) {
+      HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).setLoadActiveTimelineOnLoad(true).build();
+      HoodieTimeline timeline = meta.getActiveTimeline().getRollbackTimeline().filterCompletedInstants();
+      LOG.info("Rollback Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      int numRollbackCommits = timeline.countInstants();
+      assertTrue(minExpectedRollback <= numRollbackCommits, "Got=" + numRollbackCommits + ", exp >=" + minExpectedRollback);
+      HoodieInstant firstRollback = timeline.getInstants().get(0);
+      //
+      HoodieTimeline commitsTimeline = meta.getActiveTimeline().filterCompletedInstants()
+          .filter(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN, firstRollback.getTimestamp()));
+      int numCommits = commitsTimeline.countInstants();
+      assertTrue(minExpectedCommits <= numCommits, "Got=" + numCommits + ", exp >=" + minExpectedCommits);
+    }
   }
 }
