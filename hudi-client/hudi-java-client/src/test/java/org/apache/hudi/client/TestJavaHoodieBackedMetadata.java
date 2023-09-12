@@ -1497,6 +1497,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     metaClient.getFs().delete(toDelete);
 
     // Write 3 (updates)
+    client.close();
     client = new HoodieJavaWriteClient(engineContext, writeConfig);
     String commit3 = HoodieActiveTimeline.createNewInstantTime();
     client.startCommitWithTime(commit3);
@@ -1518,6 +1519,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     // ensure commit3's delta commit in MDT has last mod time > the actual rollback for previous failed commit i.e. commit2.
     // if rollback wasn't eager, rollback's last mod time will be lower than the commit3'd delta commit last mod time.
     assertTrue(commit3Files.get(0).getModificationTime() > rollbackFiles.get(0).getModificationTime());
+    client.close();
   }
 
   /**
@@ -1680,6 +1682,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // Validation
     validateMetadata(writeClients[0]);
+    Arrays.stream(writeClients).forEach(HoodieJavaWriteClient::close);
   }
 
   /**
@@ -1706,25 +1709,26 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withProperties(properties)
         .build();
 
-    HoodieJavaWriteClient writeClient = new HoodieJavaWriteClient(engineContext, writeConfig);
-    String partitionPath = dataGen.getPartitionPaths()[0];
-    for (int j = 0; j < 6; j++) {
-      String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
-      List<HoodieRecord> records = dataGen.generateInsertsForPartition(newCommitTime, 100, partitionPath);
-      writeClient.startCommitWithTime(newCommitTime);
-      List<WriteStatus> writeStatuses = writeClient.insert(records, newCommitTime);
-      writeClient.commit(newCommitTime, writeStatuses);
+    try (HoodieJavaWriteClient writeClient = new HoodieJavaWriteClient(engineContext, writeConfig)) {
+      String partitionPath = dataGen.getPartitionPaths()[0];
+      for (int j = 0; j < 6; j++) {
+        String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+        List<HoodieRecord> records = dataGen.generateInsertsForPartition(newCommitTime, 100, partitionPath);
+        writeClient.startCommitWithTime(newCommitTime);
+        List<WriteStatus> writeStatuses = writeClient.insert(records, newCommitTime);
+        writeClient.commit(newCommitTime, writeStatuses);
+      }
+
+      // Ensure all commits were synced to the Metadata Table
+      HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
+      LOG.warn("total commits in metadata table " + metadataMetaClient.getActiveTimeline().getCommitsTimeline().countInstants());
+
+      // 6 commits and 2 cleaner commits.
+      assertEquals(metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().countInstants(), 8);
+      assertTrue(metadataMetaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants().countInstants() <= 1);
+      // Validation
+      validateMetadata(writeClient);
     }
-
-    // Ensure all commits were synced to the Metadata Table
-    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
-    LOG.warn("total commits in metadata table " + metadataMetaClient.getActiveTimeline().getCommitsTimeline().countInstants());
-
-    // 6 commits and 2 cleaner commits.
-    assertEquals(metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().countInstants(), 8);
-    assertTrue(metadataMetaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants().countInstants() <= 1);
-    // Validation
-    validateMetadata(writeClient);
   }
 
   /**
@@ -2584,20 +2588,21 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     metadataProps.setProperty(INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "3");
     HoodieWriteConfig metadataWriteConfig = HoodieWriteConfig.newBuilder()
         .withProperties(metadataProps).build();
-    HoodieJavaWriteClient metadataWriteClient = new HoodieJavaWriteClient(context, metadataWriteConfig);
-    final String compactionInstantTime = HoodieTableMetadataUtil.createCompactionTimestamp(commitTime);
-    assertTrue(metadataWriteClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty()));
-    metadataWriteClient.compact(compactionInstantTime);
+    try (HoodieJavaWriteClient metadataWriteClient = new HoodieJavaWriteClient(context, metadataWriteConfig)) {
+      final String compactionInstantTime = HoodieTableMetadataUtil.createCompactionTimestamp(commitTime);
+      assertTrue(metadataWriteClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty()));
+      metadataWriteClient.compact(compactionInstantTime);
 
-    // verify metadata table
-    validateMetadata(client);
+      // verify metadata table
+      validateMetadata(client);
 
-    // Execute pending clustering operation
-    clusteringClient = getHoodieWriteClient(clusterWriteCfg);
-    clusteringClient.cluster("0000003", true);
+      // Execute pending clustering operation
+      clusteringClient = getHoodieWriteClient(clusterWriteCfg);
+      clusteringClient.cluster("0000003", true);
 
-    // verify metadata table
-    validateMetadata(client);
+      // verify metadata table
+      validateMetadata(client);
+    }
   }
 
   private void validateMetadata(HoodieJavaWriteClient testClient) throws IOException {

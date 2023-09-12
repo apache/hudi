@@ -84,17 +84,18 @@ public class ITTestFlinkConsistentHashingClustering {
     // Manually set the split threshold to trigger split in the clustering
     conf.set(FlinkOptions.WRITE_PARQUET_MAX_FILE_SIZE, 1);
     conf.setString(HoodieIndexConfig.BUCKET_SPLIT_THRESHOLD.key(), String.valueOf(1 / 1024.0 / 1024.0));
-    HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf);
-    Option<String> clusteringInstantOption = writeClient.scheduleClustering(Option.empty());
-    Assertions.assertTrue(clusteringInstantOption.isPresent());
+    try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
+      Option<String> clusteringInstantOption = writeClient.scheduleClustering(Option.empty());
+      Assertions.assertTrue(clusteringInstantOption.isPresent());
 
-    // Validate clustering plan
-    HoodieClusteringPlan clusteringPlan = getLatestClusteringPlan(writeClient);
-    Assertions.assertEquals(4, clusteringPlan.getInputGroups().size());
-    Assertions.assertEquals(1, clusteringPlan.getInputGroups().get(0).getSlices().size());
-    Assertions.assertEquals(1, clusteringPlan.getInputGroups().get(1).getSlices().size());
-    Assertions.assertEquals(1, clusteringPlan.getInputGroups().get(2).getSlices().size());
-    Assertions.assertEquals(1, clusteringPlan.getInputGroups().get(3).getSlices().size());
+      // Validate clustering plan
+      HoodieClusteringPlan clusteringPlan = getLatestClusteringPlan(writeClient);
+      Assertions.assertEquals(4, clusteringPlan.getInputGroups().size());
+      Assertions.assertEquals(1, clusteringPlan.getInputGroups().get(0).getSlices().size());
+      Assertions.assertEquals(1, clusteringPlan.getInputGroups().get(1).getSlices().size());
+      Assertions.assertEquals(1, clusteringPlan.getInputGroups().get(2).getSlices().size());
+      Assertions.assertEquals(1, clusteringPlan.getInputGroups().get(3).getSlices().size());
+    }
   }
 
   @Test
@@ -103,9 +104,10 @@ public class ITTestFlinkConsistentHashingClustering {
     prepareData(tableEnv);
 
     Configuration conf = getDefaultConfiguration();
-    HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf);
-    Option<String> clusteringInstantOption = writeClient.scheduleClustering(Option.empty());
-    Assertions.assertFalse(clusteringInstantOption.isPresent());
+    try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
+      Option<String> clusteringInstantOption = writeClient.scheduleClustering(Option.empty());
+      Assertions.assertFalse(clusteringInstantOption.isPresent());
+    }
   }
 
   private HoodieClusteringPlan getLatestClusteringPlan(HoodieFlinkWriteClient writeClient) {

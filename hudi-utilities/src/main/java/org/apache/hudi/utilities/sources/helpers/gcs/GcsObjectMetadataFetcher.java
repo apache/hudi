@@ -78,17 +78,24 @@ public class GcsObjectMetadataFetcher implements Serializable {
    * @return A {@link List} of {@link CloudObjectMetadata} containing GCS info.
    */
   public List<CloudObjectMetadata> getGcsObjectMetadata(JavaSparkContext jsc, Dataset<Row> cloudObjectMetadataDF, boolean checkIfExists) {
-    String filter = createFilter();
-    LOG.info("Adding filter string to Dataset: " + filter);
-
     SerializableConfiguration serializableHadoopConf = new SerializableConfiguration(jsc.hadoopConfiguration());
-
     return cloudObjectMetadataDF
-        .filter(filter)
         .select("bucket", "name", "size")
         .distinct()
         .mapPartitions(getCloudObjectMetadataPerPartition(GCS_PREFIX, serializableHadoopConf, checkIfExists), Encoders.kryo(CloudObjectMetadata.class))
         .collectAsList();
+  }
+
+  /**
+   * @param cloudObjectMetadataDF a Dataset that contains metadata of GCS objects. Assumed to be a persisted form
+   *                              of a Cloud Storage Pubsub Notification event.
+   * @return Dataset<Row> after apply the filtering.
+   */
+  public Dataset<Row> applyFilter(Dataset<Row> cloudObjectMetadataDF) {
+    String filter = createFilter();
+    LOG.info("Adding filter string to Dataset: " + filter);
+
+    return cloudObjectMetadataDF.filter(filter);
   }
 
   /**

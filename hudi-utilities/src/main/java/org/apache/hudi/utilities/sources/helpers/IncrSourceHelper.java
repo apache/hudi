@@ -130,11 +130,20 @@ public class IncrSourceHelper {
       }
     });
 
-    String previousInstantTime = beginInstantTime;
+    // When `beginInstantTime` is present, `previousInstantTime` is set to the completed commit before `beginInstantTime` if that exists.
+    // If there is no completed commit before `beginInstantTime`, e.g., `beginInstantTime` is the first commit in the active timeline,
+    // `previousInstantTime` is set to `DEFAULT_BEGIN_TIMESTAMP`.
+    String previousInstantTime = DEFAULT_BEGIN_TIMESTAMP;
     if (!beginInstantTime.equals(DEFAULT_BEGIN_TIMESTAMP)) {
       Option<HoodieInstant> previousInstant = activeCommitTimeline.findInstantBefore(beginInstantTime);
       if (previousInstant.isPresent()) {
         previousInstantTime = previousInstant.get().getTimestamp();
+      } else {
+        // if begin instant time matches first entry in active timeline, we can set previous = beginInstantTime - 1
+        if (activeCommitTimeline.filterCompletedInstants().firstInstant().isPresent()
+            && activeCommitTimeline.filterCompletedInstants().firstInstant().get().getTimestamp().equals(beginInstantTime)) {
+          previousInstantTime = String.valueOf(Long.parseLong(beginInstantTime) - 1);
+        }
       }
     }
 

@@ -17,8 +17,9 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.AutoRecordKeyGenerationUtils.shouldAutoGenerateRecordKeys
 import org.apache.hudi.DataSourceOptionsHelper.allAlternatives
-import org.apache.hudi.DataSourceWriteOptions.{RECORD_MERGER_IMPLS, _}
+import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
@@ -29,11 +30,10 @@ import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.SparkKeyGenUtils
-import org.apache.spark.sql.{Dataset, Row, SparkSession}
 import org.apache.spark.sql.hudi.command.{MergeIntoKeyGenerator, SqlKeyGenerator}
+import org.apache.spark.sql.{Dataset, Row, SparkSession}
 import org.slf4j.LoggerFactory
 
-import java.util.Properties
 import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters._
 
@@ -43,12 +43,10 @@ import scala.collection.JavaConverters._
 object HoodieWriterUtils {
 
   private val log = LoggerFactory.getLogger(getClass)
+
   /**
-    * Add default options for unspecified write options keys.
-    *
-    * @param parameters
-    * @return
-    */
+   * Add default options for unspecified write options keys.
+   */
   def parametersWithWriteDefaults(parameters: Map[String, String]): Map[String, String] = {
     val globalProps = DFSPropertiesConfiguration.getGlobalProps.asScala
     val props = TypedProperties.fromMap(parameters)
@@ -94,15 +92,16 @@ object HoodieWriterUtils {
    * Determines whether writes need to take prepped path or regular non-prepped path.
    * - For spark-sql writes (UPDATES, DELETES), we could use prepped flow due to the presences of meta fields.
    * - For pkless tables, if incoming df has meta fields, we could use prepped flow.
+   *
    * @param hoodieConfig hoodie config of interest.
-   * @param parameters raw parameters.
-   * @param operation operation type.
-   * @param df incoming dataframe
+   * @param parameters   raw parameters.
+   * @param operation    operation type.
+   * @param df           incoming dataframe
    * @return true if prepped writes, false otherwise.
    */
-  def canDoPreppedWrites(hoodieConfig: HoodieConfig, parameters: Map[String, String], operation : WriteOperationType, df: Dataset[Row]): Boolean = {
+  def canDoPreppedWrites(hoodieConfig: HoodieConfig, parameters: Map[String, String], operation: WriteOperationType, df: Dataset[Row]): Boolean = {
     var isPrepped = false
-    if (AutoRecordKeyGenerationUtils.isAutoGenerateRecordKeys(parameters)
+    if (shouldAutoGenerateRecordKeys(parameters)
       && parameters.getOrElse(SPARK_SQL_WRITES_PREPPED_KEY, "false").equals("false")
       && parameters.getOrElse(SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").equals("false")
       && df.schema.fieldNames.contains(HoodieRecord.RECORD_KEY_METADATA_FIELD)) {
@@ -121,6 +120,7 @@ object HoodieWriterUtils {
   /**
    * Fetch params by translating alternatives if any. Do not set any default as this method is intended to be called
    * before validation.
+   *
    * @param parameters hash map of parameters.
    * @return hash map of raw with translated parameters.
    */
@@ -134,8 +134,6 @@ object HoodieWriterUtils {
 
   /**
    * Get the partition columns to stored to hoodie.properties.
-   * @param parameters
-   * @return
    */
   def getPartitionColumns(parameters: Map[String, String]): String = {
     SparkKeyGenUtils.getPartitionColumns(TypedProperties.fromMap(parameters))
@@ -164,7 +162,7 @@ object HoodieWriterUtils {
    * Detects conflicts between new parameters and existing table configurations
    */
   def validateTableConfig(spark: SparkSession, params: Map[String, String],
-      tableConfig: HoodieConfig, isOverWriteMode: Boolean): Unit = {
+                          tableConfig: HoodieConfig, isOverWriteMode: Boolean): Unit = {
     // If Overwrite is set as save mode, we don't need to do table config validation.
     if (!isOverWriteMode) {
       val resolver = spark.sessionState.conf.resolver
@@ -267,6 +265,7 @@ object HoodieWriterUtils {
     PAYLOAD_CLASS_NAME -> HoodieTableConfig.PAYLOAD_CLASS_NAME,
     RECORD_MERGER_STRATEGY -> HoodieTableConfig.RECORD_MERGER_STRATEGY
   )
+
   def mappingSparkDatasourceConfigsToTableConfigs(options: Map[String, String]): Map[String, String] = {
     val includingTableConfigs = scala.collection.mutable.Map() ++ options
     sparkDatasourceConfigsToTableConfigsMap.foreach(kv => {

@@ -74,7 +74,6 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -104,6 +103,7 @@ import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveUnionSchema;
 import static org.apache.hudi.common.util.DateTimeUtils.instantToMicros;
 import static org.apache.hudi.common.util.DateTimeUtils.microsToInstant;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.tryUpcastDecimal;
 
@@ -1033,7 +1033,7 @@ public class HoodieAvroUtils {
         break;
       case BYTES:
         if (oldSchema.getType() == Schema.Type.STRING) {
-          return (oldValue.toString()).getBytes(StandardCharsets.UTF_8);
+          return getUTF8Bytes(oldValue.toString());
         }
         break;
       case STRING:

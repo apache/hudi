@@ -20,6 +20,7 @@
 package org.apache.hudi.gcp.bigquery;
 
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 
 import com.google.cloud.bigquery.BigQuery;
@@ -49,6 +50,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_LOCATION;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_NAME;
@@ -71,6 +73,15 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
     this.createBigQueryConnection();
   }
 
+  @VisibleForTesting
+  HoodieBigQuerySyncClient(final BigQuerySyncConfig config, final BigQuery bigquery) {
+    super(config);
+    this.config = config;
+    this.projectId = config.getString(BIGQUERY_SYNC_PROJECT_ID);
+    this.datasetName = config.getString(BIGQUERY_SYNC_DATASET_NAME);
+    this.bigquery = bigquery;
+  }
+
   private void createBigQueryConnection() {
     if (bigquery == null) {
       try {
@@ -84,18 +95,20 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
     }
   }
 
-  public void createTableUsingBqManifestFile(String tableName, String bqManifestFileUri, String sourceUriPrefix) {
+  public void createTableUsingBqManifestFile(String tableName, String bqManifestFileUri, String sourceUriPrefix, Schema schema) {
     try {
-      String withClauses = "";
-      String extraOptions = "";
+      String withClauses = String.format("( %s )", BigQuerySchemaResolver.schemaToSqlString(schema));
+      String extraOptions = "enable_list_inference=true,";
       if (!StringUtils.isNullOrEmpty(sourceUriPrefix)) {
-        withClauses = "WITH PARTITION COLUMNS";
-        extraOptions = String.format("hive_partition_uri_prefix=\"%s\",", sourceUriPrefix);
+        withClauses += " WITH PARTITION COLUMNS";
+        extraOptions += String.format(" hive_partition_uri_prefix=\"%s\",", sourceUriPrefix);
       }
+
       String query =
           String.format(
-              "CREATE EXTERNAL TABLE `%s.%s` %s OPTIONS (%s "
+              "CREATE EXTERNAL TABLE `%s.%s.%s` %s OPTIONS (%s "
               + "uris=[\"%s\"], format=\"PARQUET\", file_set_spec_type=\"NEW_LINE_DELIMITED_MANIFEST\")",
+              projectId,
               datasetName,
               tableName,
               withClauses,
@@ -145,6 +158,33 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
     } catch (BigQueryException e) {
       throw new HoodieBigQuerySyncException("Manifest External table was not created ", e);
     }
+  }
+
+  /**
+   * Updates the schema for the given table if the schema has changed. The schema passed in will not have the partition columns defined,
+   * so we add them back to the schema with the values read from the existing BigQuery table. This allows us to keep the partition
+   * field type in sync with how it is registered in BigQuery.
+   * @param tableName name of the table in BigQuery
+   * @param schema latest schema for the table
+   */
+  public void updateTableSchema(String tableName, Schema schema, List<String> partitionFields) {
+    Table existingTable = bigquery.getTable(TableId.of(projectId, datasetName, tableName));
+    ExternalTableDefinition definition = existingTable.getDefinition();
+    Schema remoteTableSchema = definition.getSchema();
+    // Add the partition fields into the schema to avoid conflicts while updating
+    List<Field> updatedTableFields = remoteTableSchema.getFields().stream()
+        .filter(field -> partitionFields.contains(field.getName()))
+        .collect(Collectors.toList());
+    updatedTableFields.addAll(schema.getFields());
+    Schema finalSchema = Schema.of(updatedTableFields);
+    if (definition.getSchema() != null && definition.getSchema().equals(finalSchema)) {
+      return; // No need to update schema.
+    }
+    Table updatedTable = existingTable.toBuilder()
+        .setDefinition(definition.toBuilder().setSchema(finalSchema).setAutodetect(false).build())
+        .build();
+
+    bigquery.update(updatedTable);
   }
 
   public void createVersionsTable(String tableName, String sourceUri, String sourceUriPrefix, List<String> partitionFields) {

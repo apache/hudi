@@ -53,6 +53,8 @@ parameters:
   - name: job4UTModules
     type: object
     default:
+      - '!hudi-hadoop-mr'
+      - '!hudi-client/hudi-java-client'
       - '!hudi-client/hudi-spark-client'
       - '!hudi-common'
       - '!hudi-examples'

@@ -100,6 +100,7 @@ import static org.apache.hudi.common.model.HoodieRecord.PARTITION_PATH_METADATA_
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.hadoop.CachingPath.getPathWithoutSchemeAndAuthority;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 
@@ -1350,7 +1351,7 @@ public class HoodieMetadataTableValidator implements Serializable {
             .map(entry -> BloomFilterData.builder()
                 .setPartitionPath(entry.getKey().getKey())
                 .setFilename(entry.getKey().getValue())
-                .setBloomFilter(ByteBuffer.wrap(entry.getValue().serializeToString().getBytes()))
+                .setBloomFilter(ByteBuffer.wrap(getUTF8Bytes(entry.getValue().serializeToString())))
                 .build())
             .sorted()
             .collect(Collectors.toList());
@@ -1390,7 +1391,7 @@ public class HoodieMetadataTableValidator implements Serializable {
       return Option.of(BloomFilterData.builder()
           .setPartitionPath(partitionPath)
           .setFilename(filename)
-          .setBloomFilter(ByteBuffer.wrap(bloomFilter.serializeToString().getBytes()))
+          .setBloomFilter(ByteBuffer.wrap(getUTF8Bytes(bloomFilter.serializeToString())))
           .build());
     }
 

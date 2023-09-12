@@ -55,7 +55,7 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
     HoodieBootstrapSplit(dataFile, skeletonFile)
   }
 
-  override def updatePrunedDataSchema(prunedSchema: StructType): HoodieBootstrapRelation =
+  override def updatePrunedDataSchema(prunedSchema: StructType): Relation =
     this.copy(prunedDataSchema = Some(prunedSchema))
 
   def toHadoopFsRelation: HadoopFsRelation = {

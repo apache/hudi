@@ -35,7 +35,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -56,6 +55,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_0;
 import static org.apache.hudi.common.testutils.Assertions.assertStreamEquals;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -215,7 +215,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
       HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
       timeline.createNewInstant(instant1);
 
-      byte[] data = "commit".getBytes(StandardCharsets.UTF_8);
+      byte[] data = getUTF8Bytes("commit");
       timeline.saveAsComplete(new HoodieInstant(true, instant1.getAction(),
           instant1.getTimestamp()), Option.of(data));
 

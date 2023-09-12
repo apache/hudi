@@ -140,20 +140,21 @@ public class TestCompactionUtil {
     // write a commit with data first
     TestData.writeDataAsBatch(TestData.DATA_SET_SINGLE_INSERT, conf);
 
-    HoodieFlinkWriteClient<?> writeClient = FlinkWriteClients.createWriteClient(conf);
-    CompactionUtil.scheduleCompaction(metaClient, writeClient, true, true);
+    try (HoodieFlinkWriteClient<?> writeClient = FlinkWriteClients.createWriteClient(conf)) {
+      CompactionUtil.scheduleCompaction(metaClient, writeClient, true, true);
 
-    Option<HoodieInstant> pendingCompactionInstant = metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().lastInstant();
-    assertTrue(pendingCompactionInstant.isPresent(), "A compaction plan expects to be scheduled");
+      Option<HoodieInstant> pendingCompactionInstant = metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().lastInstant();
+      assertTrue(pendingCompactionInstant.isPresent(), "A compaction plan expects to be scheduled");
 
-    // write another commit with data and start a new instant
-    TestData.writeDataAsBatch(TestData.DATA_SET_INSERT, conf);
-    TimeUnit.SECONDS.sleep(3); // in case the instant time interval is too close
-    writeClient.startCommit();
+      // write another commit with data and start a new instant
+      TestData.writeDataAsBatch(TestData.DATA_SET_INSERT, conf);
+      TimeUnit.SECONDS.sleep(3); // in case the instant time interval is too close
+      writeClient.startCommit();
 
-    CompactionUtil.scheduleCompaction(metaClient, writeClient, true, false);
-    int numCompactionCommits = metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().countInstants();
-    assertThat("Two compaction plan expects to be scheduled", numCompactionCommits, is(2));
+      CompactionUtil.scheduleCompaction(metaClient, writeClient, true, false);
+      int numCompactionCommits = metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().countInstants();
+      assertThat("Two compaction plan expects to be scheduled", numCompactionCommits, is(2));
+    }
   }
 
   @ParameterizedTest

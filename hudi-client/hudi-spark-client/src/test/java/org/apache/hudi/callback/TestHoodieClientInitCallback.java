@@ -81,10 +81,11 @@ public class TestHoodieClientInitCallback {
         .build(false);
     assertFalse(config.contains(CUSTOM_CONFIG_KEY1));
 
-    SparkRDDWriteClient<Object> writeClient = new SparkRDDWriteClient<>(engineContext, config);
+    try (SparkRDDWriteClient<Object> writeClient = new SparkRDDWriteClient<>(engineContext, config)) {
 
-    assertFalse(writeClient.getConfig().contains(CUSTOM_CONFIG_KEY1));
-    assertFalse(writeClient.getTableServiceClient().getConfig().contains(CUSTOM_CONFIG_KEY1));
+      assertFalse(writeClient.getConfig().contains(CUSTOM_CONFIG_KEY1));
+      assertFalse(writeClient.getTableServiceClient().getConfig().contains(CUSTOM_CONFIG_KEY1));
+    }
   }
 
   @Test
@@ -100,19 +101,20 @@ public class TestHoodieClientInitCallback {
     assertFalse(new Schema.Parser().parse(config.getWriteSchema())
         .getObjectProps().containsKey(CUSTOM_CONFIG_KEY2));
 
-    SparkRDDWriteClient<Object> writeClient = new SparkRDDWriteClient<>(engineContext, config);
+    try (SparkRDDWriteClient<Object> writeClient = new SparkRDDWriteClient<>(engineContext, config)) {
 
-    HoodieWriteConfig updatedConfig = writeClient.getConfig();
-    assertFalse(updatedConfig.contains(CUSTOM_CONFIG_KEY1));
-    Schema actualSchema = new Schema.Parser().parse(updatedConfig.getWriteSchema());
-    assertTrue(actualSchema.getObjectProps().containsKey(CUSTOM_CONFIG_KEY2));
-    assertEquals(CUSTOM_CONFIG_VALUE2, actualSchema.getObjectProps().get(CUSTOM_CONFIG_KEY2));
+      HoodieWriteConfig updatedConfig = writeClient.getConfig();
+      assertFalse(updatedConfig.contains(CUSTOM_CONFIG_KEY1));
+      Schema actualSchema = new Schema.Parser().parse(updatedConfig.getWriteSchema());
+      assertTrue(actualSchema.getObjectProps().containsKey(CUSTOM_CONFIG_KEY2));
+      assertEquals(CUSTOM_CONFIG_VALUE2, actualSchema.getObjectProps().get(CUSTOM_CONFIG_KEY2));
 
-    updatedConfig = writeClient.getTableServiceClient().getConfig();
-    assertFalse(updatedConfig.contains(CUSTOM_CONFIG_KEY1));
-    actualSchema = new Schema.Parser().parse(updatedConfig.getWriteSchema());
-    assertTrue(actualSchema.getObjectProps().containsKey(CUSTOM_CONFIG_KEY2));
-    assertEquals(CUSTOM_CONFIG_VALUE2, actualSchema.getObjectProps().get(CUSTOM_CONFIG_KEY2));
+      updatedConfig = writeClient.getTableServiceClient().getConfig();
+      assertFalse(updatedConfig.contains(CUSTOM_CONFIG_KEY1));
+      actualSchema = new Schema.Parser().parse(updatedConfig.getWriteSchema());
+      assertTrue(actualSchema.getObjectProps().containsKey(CUSTOM_CONFIG_KEY2));
+      assertEquals(CUSTOM_CONFIG_VALUE2, actualSchema.getObjectProps().get(CUSTOM_CONFIG_KEY2));
+    }
   }
 
   @Test
@@ -130,21 +132,22 @@ public class TestHoodieClientInitCallback {
     assertFalse(new Schema.Parser().parse(config.getWriteSchema())
         .getObjectProps().containsKey(CUSTOM_CONFIG_KEY2));
 
-    SparkRDDWriteClient<Object> writeClient = new SparkRDDWriteClient<>(engineContext, config);
+    try (SparkRDDWriteClient<Object> writeClient = new SparkRDDWriteClient<>(engineContext, config)) {
 
-    HoodieWriteConfig updatedConfig = writeClient.getConfig();
-    assertTrue(updatedConfig.contains(CUSTOM_CONFIG_KEY1));
-    assertEquals(CUSTOM_CONFIG_VALUE1, updatedConfig.getString(CUSTOM_CONFIG_KEY1));
-    Schema actualSchema = new Schema.Parser().parse(updatedConfig.getWriteSchema());
-    assertTrue(actualSchema.getObjectProps().containsKey(CUSTOM_CONFIG_KEY2));
-    assertEquals(CUSTOM_CONFIG_VALUE2, actualSchema.getObjectProps().get(CUSTOM_CONFIG_KEY2));
+      HoodieWriteConfig updatedConfig = writeClient.getConfig();
+      assertTrue(updatedConfig.contains(CUSTOM_CONFIG_KEY1));
+      assertEquals(CUSTOM_CONFIG_VALUE1, updatedConfig.getString(CUSTOM_CONFIG_KEY1));
+      Schema actualSchema = new Schema.Parser().parse(updatedConfig.getWriteSchema());
+      assertTrue(actualSchema.getObjectProps().containsKey(CUSTOM_CONFIG_KEY2));
+      assertEquals(CUSTOM_CONFIG_VALUE2, actualSchema.getObjectProps().get(CUSTOM_CONFIG_KEY2));
 
-    updatedConfig = writeClient.getTableServiceClient().getConfig();
-    assertTrue(updatedConfig.contains(CUSTOM_CONFIG_KEY1));
-    assertEquals(CUSTOM_CONFIG_VALUE1, updatedConfig.getString(CUSTOM_CONFIG_KEY1));
-    actualSchema = new Schema.Parser().parse(updatedConfig.getWriteSchema());
-    assertTrue(actualSchema.getObjectProps().containsKey(CUSTOM_CONFIG_KEY2));
-    assertEquals(CUSTOM_CONFIG_VALUE2, actualSchema.getObjectProps().get(CUSTOM_CONFIG_KEY2));
+      updatedConfig = writeClient.getTableServiceClient().getConfig();
+      assertTrue(updatedConfig.contains(CUSTOM_CONFIG_KEY1));
+      assertEquals(CUSTOM_CONFIG_VALUE1, updatedConfig.getString(CUSTOM_CONFIG_KEY1));
+      actualSchema = new Schema.Parser().parse(updatedConfig.getWriteSchema());
+      assertTrue(actualSchema.getObjectProps().containsKey(CUSTOM_CONFIG_KEY2));
+      assertEquals(CUSTOM_CONFIG_VALUE2, actualSchema.getObjectProps().get(CUSTOM_CONFIG_KEY2));
+    }
   }
 
   @Test
