@@ -54,6 +54,12 @@ public class QueryRunner {
     this.sourcePath = getStringWithAltKeys(props, HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH);
   }
 
+  /**
+   * This is used to execute queries for cloud stores incremental pipelines.
+   * Regular Hudi incremental queries does not take this flow.
+   * @param queryInfo all meta info about the query to be executed.
+   * @return the output of the query as Dataset < Row >.
+   */
   public Dataset<Row> run(QueryInfo queryInfo) {
     Dataset<Row> dataset = null;
     if (queryInfo.isIncremental()) {
