@@ -66,7 +66,7 @@ public class FlinkStreamWriteMetrics extends HoodieFlinkMetrics {
   private long numOfOpenHandle;
 
   /**
-   * Number of files written in during a checkpoint window.
+   * Number of files written during a checkpoint window.
    */
   private long numOfFilesWritten;
 
