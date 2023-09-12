@@ -126,7 +126,7 @@ public class ConsistentBucketIdentifier extends BucketIdentifier {
    * Get the latter node of the given node (inferred from hash value).
    */
   public ConsistentHashingNode getLatterBucket(int hashValue) {
-    SortedMap<Integer, ConsistentHashingNode> tailMap = ring.tailMap(hashValue);
+    SortedMap<Integer, ConsistentHashingNode> tailMap = ring.tailMap(hashValue, false);
     return tailMap.isEmpty() ? ring.firstEntry().getValue() : tailMap.get(tailMap.firstKey());
   }
 
