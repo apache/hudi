@@ -16,7 +16,6 @@ on:
       - '**.png'
       - '**.svg'
       - '**.yaml'
-      - '**.yml'
       - '.gitignore'
     branches:
       - master
@@ -114,6 +113,7 @@ jobs:
 
   test-hudi-hadoop-mr-and-hudi-java-client:
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     strategy:
       matrix:
         include:
