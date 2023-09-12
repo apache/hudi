@@ -130,7 +130,9 @@ object HoodieSparkSqlWriter {
     while (counter <= maxRetry && !succeeded) {
       try {
         toReturn = writeInternal(sqlContext, mode, optParams, sourceDf, streamingWritesParamsOpt, hoodieWriteClient)
-        log.warn(s"Succeeded with attempt no $counter")
+        if ( counter > 0) {
+          log.warn(s"Succeeded with attempt no $counter")
+        }
         succeeded = true
       } catch {
         case e: HoodieWriteConflictException =>
