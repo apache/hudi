@@ -1359,7 +1359,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     this.index.close();
     this.tableServiceClient.close();
     // shutdown metrics
-    if (this.metrics != null) {
+    if (this.metrics != null && this.metrics.getMetrics() != null) {
       this.metrics.getMetrics().shutdown();
     }
   }
