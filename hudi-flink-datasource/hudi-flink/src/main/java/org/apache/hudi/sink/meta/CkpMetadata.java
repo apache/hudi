@@ -262,16 +262,26 @@ public class CkpMetadata implements Serializable, AutoCloseable {
     if (!this.fs.exists(ckpMetaPath)) {
       return new ArrayList<>();
     }
-    Stream<CkpMessage> ckpMessageStream;
+
+    Stream<CkpMessage> ckpMessageStream = null;
     if (timelineServerBased) {
-      List<CkpMetadataDTO> ckpMetadataDTOList = executeRequestToTimelineServerWithRetry(
-          FlinkCkpMetadataHandler.ALL_CKP_METADATA_URL, getRequestParams(ckpMetaPath.toString()),
-          new TypeReference<List<CkpMetadataDTO>>() {}, RequestMethod.GET);
       // Read ckp messages from timeline server
-      ckpMessageStream = ckpMetadataDTOList.stream().map(c -> new CkpMessage(c.getInstant(), c.getState()));
-    } else {
+      try {
+        List<CkpMetadataDTO> ckpMetadataDTOList = executeRequestToTimelineServerWithRetry(
+            FlinkCkpMetadataHandler.ALL_CKP_METADATA_URL, getRequestParams(ckpMetaPath.toString()),
+            new TypeReference<List<CkpMetadataDTO>>() {
+            }, RequestMethod.GET);
+        ckpMessageStream = ckpMetadataDTOList.stream().map(c -> new CkpMessage(c.getInstant(), c.getState()));
+      } catch (HoodieException e) {
+        LOG.error("Failed to execute scan ckp metadata", e);
+      }
+    }
+
+    if (ckpMessageStream == null) {
+      // If timelineServerBased is not enabled, or we failed to request timeline server, read ckp messages from file system directly.
       ckpMessageStream = Arrays.stream(this.fs.listStatus(ckpMetaPath)).map(CkpMessage::new);
     }
+
     return ckpMessageStream
         .collect(Collectors.groupingBy(CkpMessage::getInstant)).values().stream()
         .map(messages -> messages.stream().reduce((x, y) -> {
@@ -284,15 +294,20 @@ public class CkpMetadata implements Serializable, AutoCloseable {
         .sorted().collect(Collectors.toList());
   }
 
+  // -------------------------------------------------------------------------
+  //  Timeline based checkpoint metadata
+  // -------------------------------------------------------------------------
   private Map<String, String> getRequestParams(String dirPath) {
     return Collections.singletonMap(FlinkCkpMetadataHandler.CKP_METADATA_DIR_PATH_PARAM, dirPath);
   }
 
+  /**
+   * Refresh the ckp messages cached in timeline server.
+   */
   private void sendRefreshRequest() {
     if (!timelineServerBased) {
       return;
     }
-
     try {
       boolean success = executeRequestToTimelineServerWithRetry(
           FlinkCkpMetadataHandler.REFRESH_CKP_METADATA, getRequestParams(path.toString()),
@@ -332,9 +347,8 @@ public class CkpMetadata implements Serializable, AutoCloseable {
     queryParameters.forEach(builder::addParameter);
 
     String url = builder.toString();
-    Response response;
-    // msec
     int timeout = this.writeConfig.getViewStorageConfig().getRemoteTimelineClientTimeoutSecs() * 1000;
+    Response response;
     switch (method) {
       case GET:
         response = Request.Get(url).connectTimeout(timeout).socketTimeout(timeout).execute();

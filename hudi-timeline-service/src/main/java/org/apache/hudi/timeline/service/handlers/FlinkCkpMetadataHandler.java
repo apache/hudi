@@ -34,45 +34,62 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 /**
  * REST Handler servicing flink checkpoint metadata requests.
+ * <p>
+ * The checkpoint messages are cached in timeline server and will be refreshed after metadata in file system were changed.
  */
 public class FlinkCkpMetadataHandler extends Handler {
 
-  private static final Logger LOG = LoggerFactory.getLogger(MarkerHandler.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FlinkCkpMetadataHandler.class);
 
+  /**
+   * Base url for flink ckp metadata requests.
+   */
   private static final String BASE_URL = "/v1/hoodie/flinkckpmetadata";
 
+  /**
+   * Param for flink ckp metadata requests, which contains a uniqueId for different writers.
+   */
   public static final String CKP_METADATA_DIR_PATH_PARAM = "ckpmetdatadirpath";
 
-  // GET requests
+  /**
+   * GET requests. Returns all the checkpoint messages under checkpoint metadata path.
+   */
   public static final String ALL_CKP_METADATA_URL = String.format("%s/%s", BASE_URL, "all");
 
-  // POST requests
+  /**
+   * POST requests. Refresh the checkpoint metadata cached, called by coordinator.
+   */
   public static final String REFRESH_CKP_METADATA = String.format("%s/%s", BASE_URL, "refresh/");
 
-  private ConcurrentHashMap<String, List<CkpMetadataDTO>> cachedCkpMetadata;
-
-  private AtomicLong requestCount;
+  /**
+   * Cached ckp metadata, ckp meta path -> list of checkpoint messages in fs.
+   */
+  private final ConcurrentHashMap<String, List<CkpMetadataDTO>> cachedCkpMetadata;
 
   public FlinkCkpMetadataHandler(Configuration conf, TimelineService.Config timelineServiceConfig, FileSystem fileSystem,
                                  FileSystemViewManager viewManager) throws IOException {
     super(conf, timelineServiceConfig, fileSystem, viewManager);
-
     this.cachedCkpMetadata = new ConcurrentHashMap<>();
-    this.requestCount = new AtomicLong();
   }
 
+  /**
+   * Read checkpoint messages from cache of file system.
+   *
+   * @return Checkpoint messages under the input ckp metadata path.
+   */
   public List<CkpMetadataDTO> getAllCkpMessage(String ckpMetaPath) {
-    if (requestCount.incrementAndGet() % 3000L == 0) {
-      refresh(ckpMetaPath);
-    }
     return cachedCkpMetadata.computeIfAbsent(ckpMetaPath, k -> scanCkpMetadata(new Path(k)));
   }
 
+  /**
+   * Refresh the checkpoint messages cached. Will be called when coordinator start/commit/abort instant
+   *
+   * @return whether refreshing is successful
+   */
   public boolean refresh(String ckpMetaPath) {
     try {
       cachedCkpMetadata.put(ckpMetaPath, scanCkpMetadata(new Path(ckpMetaPath)));
@@ -83,6 +100,9 @@ public class FlinkCkpMetadataHandler extends Handler {
     return true;
   }
 
+  /**
+   * Scan the checkpoint messages from file system.
+   */
   public List<CkpMetadataDTO> scanCkpMetadata(Path ckpMetaPath) {
     try {
       // Check ckpMetaPath exists before list status, see HUDI-5915

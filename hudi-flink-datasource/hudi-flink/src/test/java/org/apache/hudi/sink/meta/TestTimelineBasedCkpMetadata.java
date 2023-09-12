@@ -18,54 +18,55 @@
 
 package org.apache.hudi.sink.meta;
 
+import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.stream.IntStream;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
- * Test cases for {@link CkpMetadata}.
+ * Test cases for {@link CkpMetadata} when timeline based enabled.
  */
-public class TestCkpMetadata {
+public class TestTimelineBasedCkpMetadata extends TestCkpMetadata {
 
-  @TempDir
-  File tempFile;
+  /**
+   * Will create timeline server when creating write client.
+   */
+  HoodieFlinkWriteClient writeClient;
 
-  @BeforeEach
-  public void beforeEach() throws Exception {
-    setup();
-  }
-
-  protected void setup() throws IOException {
+  @Override
+  public void setup() throws IOException {
     String basePath = tempFile.getAbsolutePath();
     Configuration conf = TestConfigurations.getDefaultConf(basePath);
-    conf.setString(HoodieWriteConfig.TIMELINE_SERVER_BASED_FLINK_CKP_METADATA.key(), "false");
     StreamerUtil.initTableIfNotExists(conf);
+    this.writeClient = FlinkWriteClients.createWriteClient(conf);
+  }
+
+  @AfterEach
+  public void cleanup() {
+    if (writeClient != null) {
+      writeClient.close();
+      writeClient = null;
+    }
   }
 
   @ParameterizedTest
   @ValueSource(strings = {"", "1"})
-  void testWriteAndReadMessage(String uniqueId) {
+  public void testFailOver(String uniqueId) {
     CkpMetadata metadata = getCkpMetadata(uniqueId);
     // write and read 5 committed checkpoints
     IntStream.range(0, 3).forEach(i -> metadata.startInstant(i + ""));
@@ -74,6 +75,10 @@ public class TestCkpMetadata {
     metadata.commitInstant("2");
     assertThat(metadata.lastPendingInstant(), equalTo(null));
 
+    // Close write client and timeline server
+    cleanup();
+
+    // When timeline server is not responding, we can still read ckp metadata from file system directly
     // test cleaning
     IntStream.range(3, 6).forEach(i -> metadata.startInstant(i + ""));
     assertThat(metadata.getMessages().size(), is(3));
@@ -81,29 +86,14 @@ public class TestCkpMetadata {
     metadata.commitInstant("6");
     metadata.abortInstant("7");
     assertThat(metadata.getMessages().size(), is(5));
+
   }
 
-  @Test
-  void testBootstrap() throws Exception {
-    CkpMetadata metadata = getCkpMetadata("");
-    // write 4 instants to the ckp_meta
-    IntStream.range(0, 4).forEach(i -> metadata.startInstant(i + ""));
-    assertThat("The first instant should be removed from the instant cache",
-        metadata.getInstantCache(), is(Arrays.asList("1", "2", "3")));
-
-    // simulate the reboot of coordinator
-    CkpMetadata metadata1 = getCkpMetadata("");
-    metadata1.bootstrap();
-    assertNull(metadata1.getInstantCache(), "The instant cache should be recovered from bootstrap");
-
-    metadata1.startInstant("4");
-    assertThat("The first instant should be removed from the instant cache",
-        metadata1.getInstantCache(), is(Collections.singletonList("4")));
-  }
-
+  @Override
   protected CkpMetadata getCkpMetadata(String uniqueId) {
     String basePath = tempFile.getAbsolutePath();
-    FileSystem fs = FSUtils.getFs(basePath, HadoopConfigurations.getHadoopConf(new Configuration()));
-    return CkpMetadata.getInstance(fs, basePath, uniqueId, null);
+    FileSystem fs = FSUtils.getFs(basePath, HadoopConfigurations.getHadoopConf(new org.apache.flink.configuration.Configuration()));
+    return CkpMetadata.getInstance(fs, basePath, uniqueId, writeClient.getConfig());
   }
+
 }
