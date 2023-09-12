@@ -37,8 +37,8 @@ public class TestSimpleAvroKeyGenerator {
           + "    \"type\": \"record\",\n"
           + "    \"name\": \"test\",\n"
           + "    \"fields\": [\n"
-          + "      {\"name\": \"_row_key\", \"type\": {\"type\": \"string\", \"logicalType\": \"string\"}}\n"
-          + "      {\"name\": \"key_1\", \"type\": {\"type\": \"string\", \"logicalType\": \"string\"}}\n"
+          + "      {\"name\": \"_row_key\", \"type\": {\"type\": \"string\", \"logicalType\": \"string\"}},\n"
+          + "      {\"name\": \"key_1\", \"type\": {\"type\": \"string\", \"logicalType\": \"string\"}},\n"
           + "      {\"name\": \"key_2\", \"type\": {\"type\": \"string\", \"logicalType\": \"string\"}}\n"
           + "    ]\n"
           + "  }";
@@ -62,7 +62,7 @@ public class TestSimpleAvroKeyGenerator {
 
     SimpleAvroKeyGenerator simpleAvroKeyGenerator = (SimpleAvroKeyGenerator) keyGenerator;
 
-    String expectedPartitionValue = KEY_1_VALUE + "," + KEY_2_VALUE;
+    String expectedPartitionValue = KEY_1_VALUE + "/" + KEY_2_VALUE;
     Assertions.assertEquals(simpleAvroKeyGenerator.getPartitionPath(record), expectedPartitionValue);
     Assertions.assertEquals(simpleAvroKeyGenerator.getRecordKey(record), PRIMARY_KEY_VALUE);
   }
