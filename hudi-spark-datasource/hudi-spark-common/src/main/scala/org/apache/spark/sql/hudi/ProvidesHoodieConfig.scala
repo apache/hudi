@@ -185,7 +185,7 @@ trait ProvidesHoodieConfig extends Logging {
     // NOTE: Here we fallback to "" to make sure that null value is not overridden with
     // default value ("ts")
     // TODO(HUDI-3456) clean up
-    val preCombineField = hoodieCatalogTable.preCombineKey.getOrElse("")
+    val preCombineField = combinedOpts.getOrElse(PRECOMBINE_FIELD.key, "")
 
     val hiveStylePartitioningEnable = Option(tableConfig.getHiveStylePartitioningEnable).getOrElse("true")
     val urlEncodePartitioning = Option(tableConfig.getUrlEncodePartitioning).getOrElse("false")
