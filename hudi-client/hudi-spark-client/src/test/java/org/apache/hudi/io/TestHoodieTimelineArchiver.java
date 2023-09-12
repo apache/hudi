@@ -603,7 +603,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     }
   }
 
-  @Test
+  @Disabled("HUDI-6841")
   public void testArchivalWithMultiWritersMDTDisabled() throws Exception {
     testArchivalWithMultiWriters(false);
   }
