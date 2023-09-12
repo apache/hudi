@@ -109,12 +109,12 @@ trait ProvidesHoodieConfig extends Logging {
    */
   private def deduceSparkSqlInsertIntoWriteOperation(isOverwritePartition: Boolean, isOverwriteTable: Boolean,
                                                      shouldAutoKeyGen: Boolean, preCombineField: String,
-                                                     sqlWriteOperation: String): String = {
+                                                     sqlWriteOperationSet: Boolean, sqlWriteOperation: String): String = {
     if (isOverwriteTable) {
       INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
     } else if (isOverwritePartition) {
       INSERT_OVERWRITE_OPERATION_OPT_VAL
-    } else if (!shouldAutoKeyGen && preCombineField.nonEmpty) {
+    } else if (!sqlWriteOperationSet && !shouldAutoKeyGen && preCombineField.nonEmpty) {
       UPSERT_OPERATION_OPT_VAL
     } else {
       sqlWriteOperation
@@ -226,7 +226,7 @@ trait ProvidesHoodieConfig extends Logging {
           isNonStrictMode, isPartitionedTable, combineBeforeInsert, insertMode, shouldAutoKeyGen)
       } else {
         deduceSparkSqlInsertIntoWriteOperation(isOverwritePartition, isOverwriteTable,
-          shouldAutoKeyGen, preCombineField, sqlWriteOperation)
+          shouldAutoKeyGen, preCombineField, sqlWriteOperationSet, sqlWriteOperation)
       }
     )
 
