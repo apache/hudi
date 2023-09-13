@@ -48,12 +48,13 @@ record-level indexing, cater to a diverse set of use cases, enabling efficient p
 scanned during queries. This is usually done in two ways:
 
 - **Partition pruning**:  The partition pruning relies on a table with physical partitioning, such as Hive partitioning.
-  A partitioned table uses a chosen column such as the date of `timestamp` and stores the rows with the same date to the
-  files under the same folder or physical partition, such as `date=2022-10-01/`. When the predicate in a query
-  references the partition column of the physical partitioning, the files in the partitions not matching the predicate
-  are filtered out, without scanning. For example, for the predicate `date between '2022-10-01' and '2022-10-02'`, the
-  partition pruning only returns the files from two partitions, `2022-10-01` and `2022-10-02`, for further processing.
-  The granularity of the pruning is at the partition level.
+  A partitioned table uses a chosen column such as the date of a `timestamp` column and stores the rows with the same
+  date to the files under the same folder or physical partition, such as `date=2022-10-01/`. When the predicate in a
+  query references the partition column of the physical partitioning, the files in the partitions not matching the
+  predicate are filtered out, without scanning. For example, for the
+  predicate `date between '2022-10-01' and '2022-10-02'`, the partition pruning only returns the files from two
+  partitions, `2022-10-01` and `2022-10-02`, for further processing. The granularity of the pruning is at the partition
+  level.
 
 
 - **Data Skipping**:  Skipping data at the file level, with the help of column stats or record-level index. For example,
@@ -64,38 +65,38 @@ scanned during queries. This is usually done in two ways:
 While Hudi already supports partition pruning and data skipping for different query engines, we
 recognize that the following use cases need better query performance and usability:
 
-- Data skipping based on functions defined on column(s)
+- Data skipping based on functions defined on field(s)
 - Support for different storage layouts and view partition as index
 - Support for secondary indexes
 
 Next, we explain these use cases in detail.
 
-### Use Case 1: Data skipping based on functions defined on column(s)
+### Use Case 1: Data skipping based on functions defined on field(s)
 
-Let's consider a non-partitioned table containing the events with a `timestamp` column. The events with naturally
+Let's consider a non-partitioned table containing the events with a `ts`, a timestamp column. The events with naturally
 increasing time are ingested into the table with bulk inserts every hour. In this case, assume that each file should
 contain rows for a particular hour:
 
-| File Name           | Min of `timestamp` | Max of `timestamp` | Note               |
-|---------------------|--------------------|--------------------|--------------------|
-| base_file_1.parquet | 1664582400         | 1664586000         | 2022-10-01 12-1 AM |
-| base_file_2.parquet | 1664586000         | 1664589600         | 2022-10-01 1-2 AM  |
-| ...                 | ...                | ...                | ...                |
-| base_file_13.parquet | 1664625600         | 1664629200         | 2022-10-01 12-1 PM |
-| base_file_14.parquet | 1664629200         | 1664632800         | 2022-10-01 1-2 PM  |
-| ...                 | ...                | ...                | ...                |
-| base_file_37.parquet | 1664712000         | 1664715600         | 2022-10-02 12-1 PM |
-| base_file_38.parquet | 1664715600         | 1664719200         | 2022-10-02 1-2 PM  |
+| File Name            | Min of `ts` | Max of `ts` | Note               |
+|----------------------|-------------|-------------|--------------------|
+| base_file_1.parquet  | 1664582400  | 1664586000  | 2022-10-01 12-1 AM |
+| base_file_2.parquet  | 1664586000  | 1664589600  | 2022-10-01 1-2 AM  |
+| ...                  | ...         | ...         | ...                |
+| base_file_13.parquet | 1664625600  | 1664629200  | 2022-10-01 12-1 PM |
+| base_file_14.parquet | 1664629200  | 1664632800  | 2022-10-01 1-2 PM  |
+| ...                  | ...         | ...         | ...                |
+| base_file_37.parquet | 1664712000  | 1664715600  | 2022-10-02 12-1 PM |
+| base_file_38.parquet | 1664715600  | 1664719200  | 2022-10-02 1-2 PM  |
 
 For a query to get the number of events between 12PM and 2PM each day in a month for time-of-day analysis, the
-predicates look like `DATE_FORMAT(timestamp, '%Y-%m-%d') between '2022-10-01' and '2022-10-31'`
-and `DATE_FORMAT(timestamp, '%H') between '12' and '13'`. If the data is in a good layout as above, we only need to scan
+predicates look like `DATE_FORMAT(ts, '%Y-%m-%d') between '2022-10-01' and '2022-10-31'`
+and `DATE_FORMAT(ts, '%H') between '12' and '13'`. If the data is in a good layout as above, we only need to scan
 two files (instead of 24 files) for each day of data, e.g., `base_file_13.parquet` and `base_file_14.parquet` containing
 the data for 2022-10-01 12-2 PM.
 
 Currently, such a fine-grained data skipping based on a function on a column cannot be achieved in Hudi, because
-transforming the `timestamp` to the hour of day is not order-preserving, thus the file pruning cannot directly leverage
-the file-level column stats of the original column of `timestamp`. In this case, Hudi has to scan all the files for a
+transforming the `ts` to the hour of day is not order-preserving, thus the file pruning cannot directly leverage
+the file-level column stats of the original column of `ts`. In this case, Hudi has to scan all the files for a
 day and push the predicate down when reading parquet files, increasing the amount of data to be scanned.
 
 ### Use Case 2: Support for different storage layouts and view partition as index
@@ -117,14 +118,15 @@ from how the data is queried. There can be different layouts:
    new data is not only partitioned well but queries able to efficiently skip data without rewriting the old data with
    the new partition spec.
 
-Consider a case where event logs are stream from microservices and ingested into a raw event table. Each event log
-contains a `timestamp` and an associated organization ID (`org_id`). Most queries on the table are organization specific
-and fetch logs for a particular time range. A user may attempt to physically partition the data by both `org_id`
-and `date(timestamp)`. If there are 1K organization IDs and one year of data, such a physical partitioning scheme writes
-at least `365 days x 1K IDs = 365K` data files under 365K partitions. In most cases, the data can be highly skewed based
-on the organizations, with most organizations having less data and a handful of organizations having the majority of the
-data, so that there can be many small data files. In such a case, the user may want to evolve the partitioning by
-using `org_id` only without rewriting existing data, resulting in the physical layout of data like below
+Consider a case where event logs are a stream of events from microservices and ingested into a raw event table. Each 
+event log contains `ts`, a timestamp column, and an associated organization ID (`org_id`). Most queries on the table are
+organization specific and fetch logs for a particular time range. A user may attempt to physically partition the data by
+both `org_id`and `date(ts)`. If there are 1K organization IDs and one year of data, such a physical partitioning scheme
+writes at least `365 days x 1K IDs = 365K` data files under 365K partitions. In most cases, the data can be highly
+skewed based on the organizations, with most organizations having less data and a handful of organizations having the
+majority of the data, so that there can be many small data files. In such a case, the user may want to evolve the
+partitioning by using `org_id` only without rewriting existing data, resulting in the physical layout of data like
+below.
 
 | Physical partition path      | File Name            | Min of datestr | Max of datestr | Note                    |
 |------------------------------|----------------------|----------------|----------------|-------------------------|
@@ -179,7 +181,7 @@ Based on the use cases we plan to support, we set the following goals and non-go
 At a high level, **Functional Index** design principles are as follows:
 
 1. User specifies the Functional Index, including the original data column, the expression applying a function on the
-   column(s), through **SQL** or Hudi's write config. Indexes can be created or dropped for Hudi tables at any time.
+   field(s), through **SQL** or Hudi's write config. Indexes can be created or dropped for Hudi tables at any time.
 2. While table properties will be the source of truth about what indexes are available, the metadata about each
    functional index is registered in a separate index metadata file, to keep track of the relationship between the data
    column and the functional Index. 
@@ -205,9 +207,9 @@ CREATE
 [FUNCTION] INDEX index_name ON table_name [ USING index_type ] ( { column_name | expression } );
 -- Examples --
 CREATE FUNCTION INDEX last_name_idx ON employees (UPPER(last_name)); -- functional index using column stats for UPPER(last_name)
-CREATE FUNCTION INDEX datestr ON hudi_table (DATE_FORMAT(timestamp, '%Y-%m-%d')); -- functional index using column stats for DATE_FORMAT(timestamp, '%Y-%m-%d')
+CREATE FUNCTION INDEX datestr ON hudi_table (DATE_FORMAT(ts, '%Y-%m-%d')); -- functional index using column stats for DATE_FORMAT(ts, '%Y-%m-%d')
 CREATE INDEX city_id_idx ON hudi_table (city_id); -- usual column stats within MT column_stats partition
-CREATE FUNCTION INDEX hour_of_day ON hudi_table USING BITMAP (DATE_FORMAT(timestamp, '%H')); -- functional index using bitmap for DATE_FORMAT(timestamp, '%H')
+CREATE FUNCTION INDEX hour_of_day ON hudi_table USING BITMAP (DATE_FORMAT(ts, '%H')); -- functional index using bitmap for DATE_FORMAT(ts, '%H')
 CREATE FUNCTION INDEX income_idx ON employees (salary + (salary*commission_pct)); --  functional index using column stats for given expression
 -- NO CHANGE IN DROP INDEX --
 DROP INDEX last_name_idx;
@@ -215,8 +217,8 @@ DROP INDEX last_name_idx;
 
 `index_name` - Required, should be validated by parser. The name will be used for the partition name in MT.
 
-`index_type` - Optional, column\_stats if none provided and there are no functions and expressions in the command. Valid
-options could be BITMAP, COLUMN\_STATS, LUCENE, etc. If index\_type is not provided, and there are functions or
+`index_type` - Optional, `column_stats` if none provided and there are no functions and expressions in the command. Valid
+options could be BITMAP, COLUMN_STATS, LUCENE, etc. If `index_type` is not provided, and there are functions or
 expressions in the command then a functional index using column stats will be created.
 
 `expression` - simple scalar expressions or sql functions.
@@ -226,33 +228,61 @@ expressions in the command then a functional index using column stats will be cr
 For each functional index, store a separate metadata with index details. This should be efficiently loaded. One option
 is to store the below metadata in `hoodie.properties`. This way all index metadata can be loaded with the table config.
 But, it would be better to not overload the table config. Let `hoodie.properties` still hold the list of indexes (MT
-partitions) available, and we propose to create separate `.hudi_index` directory under `basepath/.hoodie`. This has the
+partitions) available, and we propose to create separate `.index_defs` directory under `basepath/.hoodie`. This has the
 benefit of separation of concern and can be cheaply loaded with the metaclient (one extra file i/o only if there is a
 functional index in the table config). It can store the following metadata for each index.
 
 * Name of the index
-* Expression (e.g., `MONTH(timestamp)`)
-* Data column(s) it's derived from
+* Expression (e.g., `MONTH(ts)`)
+* Data field(s) it's derived from
 * Any other configuration or properties
 
 #### APIs
 
 A new interface, `HoodieFunctionalIndex`, is introduced to represent a functional index and track the relationship
-between the original data column(s) and the transformation.
+between the original data field(s) and the transformation.
 
 ```java
-interface HoodieFunctionalIndex<S, T> {
-  String indexName;
-  String expression;
-  List<String> columnsInExpression;
+/**
+ * Interface representing a functional index in Hudi.
+ *
+ * @param <S> The source type of the values from the fields used in the functional index expression.
+ *            Note that this assumes than an expression is operating on fields of same type.
+ * @param <T> The target type after applying the transformation. Represents the type of the indexed value.
+ */
+public interface HoodieFunctionalIndex<S, T> {
+  /**
+   * Get the name of the index.
+   * @return Name of the index.
+   */
+  String getIndexName();
 
-  T apply(S sourceValue);
+  /**
+   * Get the expression associated with the index.
+   * @return Expression string.
+   */
+  String getExpression();
+
+  /**
+   * Get the list of fields involved in the expression in order.
+   * @return List of fields.
+   */
+  List<String> getOrderedFieldsInExpression();
+
+  /**
+   * Apply the transformation based on the source values and the expression.
+   * @param orderedSourceValues List of source values corresponding to fields in the expression.
+   * @return Transformed value.
+   */
+  T apply(List<S> orderedSourceValues);
 }
+
 ```
 
 As mentioned in the goals of this RFC, we are not going to build an expression engine. To begin with, we can simply
 parse `String` for simpler functions and match it to the functional keywords available in spark-sql. We can tackle other
-engines as we go.
+engines as we go. We will probably store the compiled form of expression and expression engine version in the index 
+metadata in `.index_defs` directory. This RFC will cover any format changes required to that end.
 
 #### Index in Metadata Table
 
@@ -276,7 +306,7 @@ written:
 
 On receiving a query:
 
-1. Parse the query and index metadata (in `.hudi_index`) to determine the relevant functional index is available or not.
+1. Parse the query and index metadata (in `.index_defs`) to determine the relevant functional index is available or not.
 2. Lookup (point/range) index to determine:
     * Which files match functional index predicates
     * Where these files are physically located (irrespective of their storage layout)
@@ -286,13 +316,13 @@ Below are the concrete steps on how Hudi will intercept predicate in the query a
 
 1. Identify the relevant functional index based on the predicate and add a new predicate based on the Functional Index
    name if needed. Take the functional index created by
-   SQL `CREATE INDEX datestr ON hudi_table USING col_stats (DATE_FORMAT(timestamp, '%Y-%m-%d'));`
+   SQL `CREATE INDEX datestr ON hudi_table USING col_stats (DATE_FORMAT(ts, '%Y-%m-%d'));`
 
 - If the original data column of a functional index is used, transform the predicate to a new predicate based on the
-  Functional Index name if possible, e.g., `timestamp between 1666767600 and 1666897200`
+  Functional Index name if possible, e.g., `ts between 1666767600 and 1666897200`
   to `datestr between '2022-10-26' and '2022-10-27'`;
 - If the expression of a functional index is used, replace the expression to the functional index name,
-  e.g., `DATE_FORMAT(timestamp, '%Y-%m-%d') between '2022-10-26' and '2022-10-27'`
+  e.g., `DATE_FORMAT(ts, '%Y-%m-%d') between '2022-10-26' and '2022-10-27'`
   to `datestr between '2022-10-26' and '2022-10-27'`;
 - If the functional index name is used in the predicate, e.g., `datestr between '2022-10-26' and '2022-10-27'`, no
   action is needed here.
@@ -330,9 +360,8 @@ Let's try to understand how functional indexes can help with different storage l
 
 ## Rollout/Adoption Plan
 
-The functional index is going to be guarded by feature flags, `hoodie.write.index.function.enable` for creating and
-updating indexes, and `hoodie.read.index.function.enable` for enabling data skipping based on functional index in
-query engines.
+The functional index will be enabled just like any other index i.e. after the `hoodie.table.metadata.partitions` config 
+in `hoodie.properties` is updated after building the index.
 
 ## Test Plan
 
@@ -387,8 +416,8 @@ queries containing the expression in the predicates. The index on expression is 
 stored separately from the record data. There is no materialization of the values from the expression in the data area.
 PostgreSQL supports Index on Expression and Oracle database supports Function-Based Indexes.
 
-Hudi's Functional Index applies similar concept which allows a new index to be built based on a function defined on a data
-column at any time for file pruning.
+Hudi's Functional Index applies similar concept which allows a new index to be built based on a function defined on 
+field(s) at any time for data skipping.
 
 #### Generated Column in Delta Lake
 
