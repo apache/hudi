@@ -47,14 +47,7 @@ module.exports = {
                     ],
                 },
                 'writing_data',
-                {
-                    type: 'category',
-                    label: 'Streaming writers',
-                    items: [
-                        'hoodie_deltastreamer',
-                        'spark_streaming'
-                    ],
-                },
+                'hoodie_streaming_ingestion',
                 'querying_data',
                 'flink_configuration',
                 {
