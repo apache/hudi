@@ -18,7 +18,10 @@ As of version 0.14.0, the `BigQuerySyncTool` supports syncing table to BigQuery 
 	<li>Partition column no longer needs to be dropped from the files due to new schema handling improvements</li>
 </ol>
 
+To enable this feature, set `hoodie.gcp.bigquery.sync.use_bq_manifest_file` to true.
+
 ### View Over Files (Legacy)
+This is the current default behavior to preserve compatibility as users upgrade to 0.14.0 and beyond.  
 After run, the sync tool will create 2 tables and 1 view in the target dataset in BigQuery. The tables and the view
 share the same name prefix, which is taken from the Hudi table name. Query the view for the same results as querying the
 Copy-on-Write Hudi table.  
@@ -47,9 +50,10 @@ In addition to the BigQuery-specific configs, you will need to use hive style pa
 hoodie.datasource.write.hive_style_partitioning = 'true'
 ```
 
-For the view based sync you must also specify the following for partitioned tables to drop the value from your base file:
+For the view based sync you must also specify the following configurations:
 ```
 hoodie.datasource.write.drop.partition.columns  = 'true'
+hoodie.partition.metafile.use.base.format       = 'true'
 ```
 
 ## Example
