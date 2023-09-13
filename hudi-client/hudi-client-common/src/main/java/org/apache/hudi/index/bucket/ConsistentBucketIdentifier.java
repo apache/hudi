@@ -115,6 +115,21 @@ public class ConsistentBucketIdentifier extends BucketIdentifier {
     return headMap.isEmpty() ? ring.lastEntry().getValue() : headMap.get(headMap.lastKey());
   }
 
+  /**
+   * Get the latter node of the given node (inferred from file id).
+   */
+  public ConsistentHashingNode getLatterBucket(String fileId) {
+    return getLatterBucket(getBucketByFileId(fileId).getValue());
+  }
+
+  /**
+   * Get the latter node of the given node (inferred from hash value).
+   */
+  public ConsistentHashingNode getLatterBucket(int hashValue) {
+    SortedMap<Integer, ConsistentHashingNode> tailMap = ring.tailMap(hashValue, false);
+    return tailMap.isEmpty() ? ring.firstEntry().getValue() : tailMap.get(tailMap.firstKey());
+  }
+
   public List<ConsistentHashingNode> mergeBucket(List<String> fileIds) {
     ValidationUtils.checkArgument(fileIds.size() >= 2, "At least two file groups should be provided for merging");
     // Get nodes using fileIds

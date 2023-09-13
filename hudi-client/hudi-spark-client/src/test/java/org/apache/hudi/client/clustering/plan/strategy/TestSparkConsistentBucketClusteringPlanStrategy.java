@@ -169,6 +169,19 @@ public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieSpark
     Assertions.assertEquals(ConsistentHashingNode.NodeTag.DELETE, nodes.get(0).getTag());
     Assertions.assertEquals(ConsistentHashingNode.NodeTag.REPLACE, nodes.get(1).getTag());
     Assertions.assertEquals(metadata.getNodes().get(3).getValue(), nodes.get(1).getValue());
+
+    HoodieConsistentHashingMetadata metadata1 = new HoodieConsistentHashingMetadata("partition", 4);
+    ConsistentBucketIdentifier identifier1 = new ConsistentBucketIdentifier(metadata1);
+
+    int[] fsSize1 = {mergeSize / 4, mergeSize / 4, maxFileSize, mergeSize / 4};
+    List<FileSlice> fileSlices1 = IntStream.range(0, metadata1.getNodes().size()).mapToObj(
+        i -> createFileSliceWithSize(metadata1.getNodes().get(i).getFileIdPrefix(), fsSize1[i] / 2, fsSize1[i] / 2)
+    ).collect(Collectors.toList());
+
+    Triple<List<HoodieClusteringGroup>, Integer, List<FileSlice>> res1 = planStrategy.buildMergeClusteringGroup(identifier1,
+        fileSlices1.stream().filter(fs -> fs.getTotalFileSize() < mergeSize).collect(Collectors.toList()), 4);
+    Assertions.assertEquals(1, res1.getLeft().size(), "should have 1 clustering group");
+    Assertions.assertEquals(3, res1.getLeft().get(0).getSlices().size(), "should have 3 input files");
   }
 
   private FileSlice createFileSliceWithSize(String fileIdPfx, long baseFileSize, long totalLogFileSize) {
