@@ -237,6 +237,7 @@ defaultValue="scala"
 values={[
 { label: 'Scala', value: 'scala', },
 { label: 'Python', value: 'python', },
+{ label: 'Spark SQL', value: 'sparksql', },
 ]}
 >
 
@@ -269,7 +270,13 @@ dataGen = sc._jvm.org.apache.hudi.QuickstartUtils.DataGenerator()
 ```
 
 </TabItem>
+<TabItem value="sparksql">
 
+```sql
+// Next section will go over create table commands
+```
+
+</TabItem>
 </Tabs
 >
 
@@ -519,6 +526,10 @@ df.write.format("hudi").
   save(basePath)
 ```
 
+:::note
+Note the absence of RECORDKEY_FIELD_NAME.key() in the write options. 
+:::
+
 **Creating a Primary keyed Hudi table**
 ```scala
 // spark-shell
@@ -578,6 +589,10 @@ df.write.format("hudi"). \
     mode("overwrite"). \
     save(basePath)
 ```
+
+:::note
+Note the absence of RECORDKEY_FIELD_NAME.key() in the write options.
+:::
 
 **Creating to Primary keyed Hudi table**
 ```python
@@ -898,7 +913,6 @@ values={[
 >
 
 <TabItem value="scala">
-Delete records for the HoodieKeys passed in.<br/>
 
 ```scala
 // spark-shell
@@ -932,8 +946,10 @@ roAfterDeleteViewDF.registerTempTable("hudi_trips_snapshot")
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 ```
 :::note
-Only `Append` mode is supported for delete operation.
+- Only `Append` mode is supported for delete operation.
+- Deletes to a Keyless table via spark datasource is not supported. Deletes for keyless tables are supported with Spark-SQL MergeInto and DELETE commands.
 :::
+
 </TabItem>
 <TabItem value="sparksql">
 
@@ -954,11 +970,6 @@ delete from hudi_cow_pt_tbl where name = 'a1';
 </TabItem>
 
 <TabItem value="python">
-
-
-:::note
-Only `Append` mode is supported for delete operation.
-:::
 
 ```python
 # pyspark
@@ -1000,6 +1011,11 @@ roAfterDeleteViewDF.createOrReplaceTempView("hudi_trips_snapshot")
 # fetch should return (total - 2) records
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 ```
+
+:::note
+- Only `Append` mode is supported for delete operation.
+- Deletes to a Keyless table via spark datasource is not supported. Deletes for keyless tables are supported with Spark-SQL MergeInto and DELETE commands.
+:::
 
 </TabItem>
 
@@ -1217,7 +1233,14 @@ Please refer to [here](/docs/next/hoodie_deltastreamer#hudi-streamer) for more i
 
 ### Structured Streaming
 
-Hudi supports Spark Structured Streaming reads and writes as well. Please refer to [here](/docs/next/fakeurl) for more info.
+Hudi supports Spark Structured Streaming reads and writes as well. Please refer to [here](/docs/next/toBeFixed) for more info.
+
+## More of Spark SQL
+
+For advanced usage of spark SQL, please refer to [Spark SQL DDL reference guide](/docs/next/sql_ddl) and [Spark SQL DML refernece guide](/docs/next/sql_dml). 
+
+### Alter tables
+For alter table commands, check out [this](/docs/next/sql_ddl#spark-alter-table).
 
 ### Procedures
 
