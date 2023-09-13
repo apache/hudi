@@ -24,7 +24,9 @@ import java.io.IOException;
 
 /**
  * Produces 32-bit hash for hash table lookup.
- *
+ * <p>
+ * The code in class is ported from {@link org.apache.hadoop.util.hash.JenkinsHash} in Apache Hadoop.
+ * <p>
  * <pre>lookup3.c, by Bob Jenkins, May 2006, Public Domain.
  *
  * You can use this free for any purpose.  It's in the public domain.
