@@ -59,7 +59,7 @@ public class TestCkpMetadata {
   protected void setup() throws IOException {
     String basePath = tempFile.getAbsolutePath();
     Configuration conf = TestConfigurations.getDefaultConf(basePath);
-    conf.setString(HoodieWriteConfig.TIMELINE_SERVER_BASED_FLINK_CKP_METADATA.key(), "false");
+    conf.setString(HoodieWriteConfig.TIMELINE_SERVER_BASED_CKP_METADATA.key(), "false");
     StreamerUtil.initTableIfNotExists(conf);
   }
 

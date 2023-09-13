@@ -428,8 +428,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.9.0")
       .withDocumentation(MarkerType.class);
 
-  public static final ConfigProperty<Boolean> TIMELINE_SERVER_BASED_FLINK_CKP_METADATA = ConfigProperty
-      .key("hoodie.flink.ckp_metadata.timeline_server_based.enable")
+  public static final ConfigProperty<Boolean> TIMELINE_SERVER_BASED_CKP_METADATA = ConfigProperty
+      .key("hoodie.ckp_metadata.timeline_server_based.enable")
       .defaultValue(true)
       .sinceVersion("1.0.0")
       .withDocumentation("If enabled, Flink writer get instant time from timeline server rather than requesting DFS directly");
@@ -1365,8 +1365,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(FINALIZE_WRITE_PARALLELISM_VALUE);
   }
 
-  public boolean isTimelineServerBasedFlinkCkpMetadataEnabled() {
-    return getBoolean(TIMELINE_SERVER_BASED_FLINK_CKP_METADATA);
+  public boolean isTimelineServerBasedCkpMetadataEnabled() {
+    return getBoolean(TIMELINE_SERVER_BASED_CKP_METADATA);
   }
 
   public MarkerType getMarkersType() {

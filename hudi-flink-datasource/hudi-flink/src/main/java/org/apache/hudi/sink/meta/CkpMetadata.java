@@ -100,7 +100,7 @@ public class CkpMetadata implements Serializable, AutoCloseable {
     this.fs = fs;
     this.path = new Path(ckpMetaPath(basePath, uniqueId));
     this.writeConfig = writeConfig;
-    if (writeConfig != null && writeConfig.isTimelineServerBasedFlinkCkpMetadataEnabled()) {
+    if (writeConfig != null && writeConfig.isTimelineServerBasedCkpMetadataEnabled()) {
       LOG.info("Timeline server based CkpMetadata enabled");
       this.timelineServerBased = true;
       mapper = new ObjectMapper();

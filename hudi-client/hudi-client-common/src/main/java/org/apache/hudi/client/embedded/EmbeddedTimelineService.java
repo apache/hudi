@@ -100,7 +100,7 @@ public class EmbeddedTimelineService {
                   * writeConfig.getHoodieClientHeartbeatTolerableMisses());
     }
 
-    if (writeConfig.isTimelineServerBasedFlinkCkpMetadataEnabled()) {
+    if (writeConfig.isTimelineServerBasedCkpMetadataEnabled()) {
       timelineServiceConfBuilder.enableFlinkCkpMetadataRequests(true);
     }
 
