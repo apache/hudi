@@ -155,7 +155,8 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
       HoodieCommitMetadata metadata = result.getCommitMetadata().get();
 
       writeTableMetadata(metadata, writeStatuses, actionType);
-
+      // cannot serialize maps with null values
+      metadata.getExtraMetadata().entrySet().removeIf(entry -> entry.getValue() == null);
       activeTimeline.saveAsComplete(
           new HoodieInstant(true, getCommitActionType(), instantTime),
           serializeCommitMetadata(metadata));

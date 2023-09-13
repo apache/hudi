@@ -308,6 +308,8 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       HoodieCommitMetadata metadata = result.getCommitMetadata().get();
       writeTableMetadata(metadata, result.getWriteStatuses(), actionType);
+      // cannot serialize maps with null values
+      metadata.getExtraMetadata().entrySet().removeIf(entry -> entry.getValue() == null);
       activeTimeline.saveAsComplete(
           new HoodieInstant(true, getCommitActionType(), instantTime),
           serializeCommitMetadata(metadata));

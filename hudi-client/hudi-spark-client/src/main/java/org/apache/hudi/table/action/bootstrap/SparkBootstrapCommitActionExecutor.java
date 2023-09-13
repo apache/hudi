@@ -244,9 +244,9 @@ public class SparkBootstrapCommitActionExecutor<T>
     }
     metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, getSchemaToStoreInCommit());
     metadata.setOperationType(operationType);
-
     writeTableMetadata(metadata, result.getWriteStatuses(), actionType);
-
+    // cannot serialize maps with null values
+    metadata.getExtraMetadata().entrySet().removeIf(entry -> entry.getValue() == null);
     try {
       activeTimeline.saveAsComplete(
           new HoodieInstant(true, actionType, instantTime),
