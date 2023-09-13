@@ -87,6 +87,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.model.HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -290,6 +291,33 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
   @MethodSource("configParams")
   public void testViewForFileSlicesWithBaseFileAndInflightCompaction(boolean testBootstrap) throws Exception {
     testViewForFileSlicesWithAsyncCompaction(false, true, 2, 2, true, testBootstrap);
+  }
+
+  @Test
+  public void testViewForFileSlicesWithPartitionMetadataFile() throws Exception {
+    String partitionPath = "2023/09/13";
+    new File(basePath + "/" + partitionPath).mkdirs();
+    new File(basePath + "/" + partitionPath + "/" + HOODIE_PARTITION_METAFILE_PREFIX + ".parquet").mkdirs();
+
+    // create 2 fileId in partition
+    String fileId1 = UUID.randomUUID().toString();
+    String fileId2 = UUID.randomUUID().toString();
+    String commitTime1 = "1";
+    String fileName1 = FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId1);
+    String fileName2 = FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId2);
+    new File(basePath + "/" + partitionPath + "/" + fileName1).createNewFile();
+    new File(basePath + "/" + partitionPath + "/" + fileName2).createNewFile();
+    HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
+
+    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, commitTime1);
+    saveAsComplete(commitTimeline, instant1, Option.empty());
+    refreshFsView();
+
+    List<FileSlice> fileSlices = fsView.getLatestFileSlices(partitionPath).collect(Collectors.toList());
+    assertEquals(2, fileSlices.size());
+    FileSlice fileSlice = fileSlices.get(0);
+    assertEquals(commitTime1, fileSlice.getBaseInstantTime());
+    assertEquals(2, fsView.getAllFileGroups(partitionPath).count());
   }
 
   @Test
