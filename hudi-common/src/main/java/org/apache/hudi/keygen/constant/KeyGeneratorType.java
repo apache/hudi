@@ -22,6 +22,8 @@ import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
 import org.apache.hudi.common.config.HoodieConfig;
 
+import javax.annotation.Nullable;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -89,7 +91,10 @@ public enum KeyGeneratorType {
   MERGE_INTO_KEYGEN("org.apache.spark.sql.hudi.command.MergeIntoKeyGenerator"),
 
   @EnumFieldDescription("Custom spark-sql specific KeyGenerator overriding behavior handling TimestampType partition values.")
-  SQL_KEYGEN("org.apache.spark.sql.hudi.command.SqlKeyGenerator");
+  SQL_KEYGEN("org.apache.spark.sql.hudi.command.SqlKeyGenerator"),
+
+  @EnumFieldDescription("A test KeyGenerator for deltastreamer tests.")
+  TEST_KEYGEN("org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer$TestGenerator");
 
   private final String className;
 
@@ -117,6 +122,7 @@ public enum KeyGeneratorType {
     return names;
   }
 
+  @Nullable
   public static String getKeyGeneratorClassName(HoodieConfig config) {
     if (config.contains(KEY_GENERATOR_CLASS_NAME)) {
       return config.getString(KEY_GENERATOR_CLASS_NAME);

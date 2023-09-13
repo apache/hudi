@@ -41,6 +41,7 @@ import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedKeyGenerator;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.util.SparkKeyGenUtils;
 
@@ -270,7 +271,7 @@ public class BootstrapExecutorUtils implements Serializable {
     } else if (StringUtils.nonEmpty(props.getString(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), null))) {
       keyGenClass = HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName(props);
     } else if (StringUtils.nonEmpty(props.getString(HoodieTableConfig.KEY_GENERATOR_TYPE.key(), null))) {
-      keyGenClass = HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName(props);
+      keyGenClass = KeyGeneratorType.valueOf(props.getString(HoodieTableConfig.KEY_GENERATOR_TYPE.key())).getClassName();
     } else {
       keyGenClass = props.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), SimpleKeyGenerator.class.getName());
     }

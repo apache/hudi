@@ -189,7 +189,7 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
            |table_type => '${HoodieTableType.COPY_ON_WRITE.name}',
            |bootstrap_path => '$sourcePath',
            |rowKey_field => '$RECORD_KEY_FIELD',
-           |key_generator_class => 'NON_PARTITION',
+           |key_generator_class => 'NON_PARTITION_KEYGEN',
            |bootstrap_overwrite => true)""".stripMargin) {
         Seq(0)
       }
