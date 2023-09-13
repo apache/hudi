@@ -24,6 +24,8 @@ import org.apache.hudi.common.bloom.InternalBloomFilter;
 /**
  * This class represents a common API for hashing functions used by
  * {@link InternalBloomFilter}.
+ * <p>
+ * The code in class is ported from {@link org.apache.hadoop.util.hash.Hash} in Apache Hadoop.
  */
 public abstract class Hash {
   /**

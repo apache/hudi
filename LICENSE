@@ -291,7 +291,20 @@ This product includes code from Apache Hadoop
 
 * org.apache.hudi.common.bloom.InternalDynamicBloomFilter.java adapted from org.apache.hadoop.util.bloom.DynamicBloomFilter.java
 
-* org.apache.hudi.common.bloom.InternalFilter copied from classes in org.apache.hadoop.util.bloom package
+* org.apache.hudi.common.bloom.InternalFilter.java adapted from org.apache.hadoop.util.bloom.Filter.java
+  and org.apache.hadoop.io.Writable.java
+
+* org.apache.hudi.common.bloom.InternalBloomFilter adapted from org.apache.hadoop.util.bloom.BloomFilter.java
+
+* org.apache.hudi.common.bloom.Key.java adapted from org.apache.hadoop.util.bloom.Key.java
+
+* org.apache.hudi.common.bloom.HashFunction.java ported from org.apache.hadoop.util.bloom.HashFunction.java
+
+* org.apache.hudi.common.util.hash.Hash.java ported from org.apache.hadoop.util.hash.Hash.java
+
+* org.apache.hudi.common.util.hash.JenkinsHash.java ported from org.apache.hadoop.util.hash.JenkinsHash.java
+
+* org.apache.hudi.common.util.hash.MurmurHash.java ported from org.apache.hadoop.util.hash.MurmurHash.java
 
 with the following license
 
