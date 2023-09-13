@@ -1,5 +1,5 @@
 ---
-title: Streaming Ingestion
+title: Hudi's Streaming Ingestion
 keywords: [hudi, streamer, hoodiestreamer]
 ---
 
