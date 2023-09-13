@@ -10,7 +10,7 @@ This section provides all the help you need to deploy and operate Hudi tables at
 Specifically, we will cover the following aspects.
 
  - [Deployment Model](#deploying) : How various Hudi components are deployed and managed.
- - [Upgrading Versions](#upgrading) : Picking up new releases of Hudi, guidelines and general best-practices.
+ - [Upgrading/Downgrading Versions](#upgrading--downgrading) : Picking up new releases of Hudi, guidelines and general best-practices.
  - [Migrating to Hudi](#migrating) : How to migrate your existing tables to Apache Hudi.
  
 ## Deploying
@@ -151,9 +151,10 @@ inputDF.write()
        .save(basePath);
 ```
  
-## Upgrading 
+## Upgrading / Downgrading
 
-New Hudi releases are listed on the [releases page](/releases/download), with detailed notes which list all the changes, with highlights in each release. 
+New Hudi releases are listed on the [releases page](/releases/download), with detailed notes which list all the changes, with highlights in each release.
+Upgrade/Downgrade can be performed using Hudi CLI. For more details please refer documentation [here](cli#upgrade-and-downgrade-table).
 At the end of the day, Hudi is a storage system and with that comes a lot of responsibilities, which we take seriously. 
 
 As general guidelines, 
@@ -161,9 +162,9 @@ As general guidelines,
  - We strive to keep all changes backwards compatible (i.e new code can read old data/timeline files) and when we cannot, we will provide upgrade/downgrade tools via the CLI
  - We cannot always guarantee forward compatibility (i.e old code being able to read data/timeline files written by a greater version). This is generally the norm, since no new features can be built otherwise.
    However any large such changes, will be turned off by default, for smooth transition to newer release. After a few releases and once enough users deem the feature stable in production, we will flip the defaults in a subsequent release.
- - Always upgrade the query bundles (mr-bundle, presto-bundle, spark-bundle) first and then upgrade the writers (Hudi Streamer, spark jobs using datasource). This often provides the best experience and it's easy to fix 
+ - Always upgrade/downgrade the query bundles (mr-bundle, presto-bundle, spark-bundle) first and then upgrade/downgrade the writers (Hudi Streamer, spark jobs using datasource). This often provides the best experience and it's easy to fix 
    any issues by rolling forward/back the writer code (which typically you might have more control over)
- - With large, feature rich releases we recommend migrating slowly, by first testing in staging environments and running your own tests. Upgrading Hudi is no different than upgrading any database system.
+ - With large, feature rich releases we recommend migrating slowly, by first testing in staging environments and running your own tests. Upgrading/Downgrading Hudi is no different than upgrading/downgrading any database system.
 
 Note that release notes can override this information with specific instructions, applicable on case-by-case basis.
 
