@@ -1308,7 +1308,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       case BULK_INSERT_PREPPED:
       case INSERT_OVERWRITE:
       case INSERT_OVERWRITE_TABLE:
-        setWriteTimer(table);
+        setWriteTimer(table.getMetaClient().getCommitActionType());
         break;
       case CLUSTER:
       case COMPACT:
@@ -1365,8 +1365,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     this.tableServiceClient.close();
   }
 
-  private void setWriteTimer(HoodieTable table) {
-    String commitType = table.getMetaClient().getCommitActionType();
+  public void setWriteTimer(String commitType) {
     if (commitType.equals(HoodieTimeline.COMMIT_ACTION)) {
       writeTimer = metrics.getCommitCtx();
     } else if (commitType.equals(HoodieTimeline.DELTA_COMMIT_ACTION)) {
