@@ -27,7 +27,20 @@ import java.util.Collection;
 import java.util.List;
 
 /**
- * Ported from {@link org.apache.hadoop.util.bloom.Filter}.
+ * Defines the general behavior of a filter.
+ * <p>
+ * The code in class is adapted from {@link org.apache.hadoop.util.bloom.Filter} in Apache Hadoop.
+ * <p>
+ * A filter is a data structure which aims at offering a lossy summary of a set <code>A</code>.  The
+ * key idea is to map entries of <code>A</code> (also called <i>keys</i>) into several positions
+ * in a vector through the use of several hash functions.
+ * <p>
+ * Typically, a filter will be implemented as a Bloom filter (or a Bloom filter extension).
+ * <p>
+ * It must be extended in order to define the real behavior.
+ *
+ * @see Key The general behavior of a key
+ * @see HashFunction A hash function
  */
 abstract class InternalFilter {
   private static final int VERSION = -1; // negative to accommodate for old format
@@ -160,6 +173,12 @@ abstract class InternalFilter {
     }
   } //end add()
 
+  /**
+   * Serialize the fields of this object to <code>out</code>.
+   *
+   * @param out <code>DataOuput</code> to serialize this object into.
+   * @throws IOException
+   */
   public void write(DataOutput out) throws IOException {
     out.writeInt(VERSION);
     out.writeInt(this.nbHash);
@@ -167,6 +186,15 @@ abstract class InternalFilter {
     out.writeInt(this.vectorSize);
   }
 
+  /**
+   * Deserialize the fields of this object from <code>in</code>.
+   *
+   * <p>For efficiency, implementations should attempt to re-use storage in the
+   * existing object where possible.</p>
+   *
+   * @param in <code>DataInput</code> to deseriablize this object from.
+   * @throws IOException
+   */
   public void readFields(DataInput in) throws IOException {
     int ver = in.readInt();
     if (ver > 0) { // old non-versioned format

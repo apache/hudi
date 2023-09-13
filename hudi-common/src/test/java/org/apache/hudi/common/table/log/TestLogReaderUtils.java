@@ -19,13 +19,10 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.common.util.FileIOUtils;
-
 import org.junit.jupiter.api.Test;
 import org.roaringbitmap.longlong.Roaring64NavigableMap;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -35,6 +32,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.testutils.FileSystemTestUtils.readLastLineFromResourceFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
@@ -91,12 +89,5 @@ public class TestLogReaderUtils {
     }
     assertFalse(expectedIterator.hasNext());
     assertFalse(iterator.hasNext());
-  }
-
-  private String readLastLineFromResourceFile(String resourceName) throws IOException {
-    try (InputStream inputStream = TestLogReaderUtils.class.getResourceAsStream(resourceName)) {
-      List<String> lines = FileIOUtils.readAsUTFStringLines(inputStream);
-      return lines.get(lines.size() - 1);
-    }
   }
 }

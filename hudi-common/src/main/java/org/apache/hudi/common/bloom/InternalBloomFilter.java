@@ -57,6 +57,9 @@ import java.util.BitSet;
  * Implements a <i>Bloom filter</i>, as defined by Bloom in 1970.
  * <p>
  * The code in class is adapted from {@link org.apache.hadoop.util.bloom.BloomFilter} in Apache Hadoop.
+ * The serialization and deserialization are completely the same as and compatible with Hadoop's
+ * {@link org.apache.hadoop.util.bloom.BloomFilter}, so that this class correctly reads bloom
+ * filters serialized by older Hudi versions using Hadoop's BloomFilter.
  * <p>
  * Hudi serializes bloom filter(s) and write them to Parquet file footers and metadata table's
  * bloom filter partition containing bloom filters for all data files.  We want to maintain the

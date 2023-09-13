@@ -21,6 +21,8 @@ package org.apache.hudi.common.testutils;
 import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
 import org.apache.hudi.common.fs.inline.InMemoryFileSystem;
+import org.apache.hudi.common.table.log.TestLogReaderUtils;
+import org.apache.hudi.common.util.FileIOUtils;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -30,6 +32,7 @@ import org.apache.hadoop.fs.RemoteIterator;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -85,5 +88,12 @@ public class FileSystemTestUtils {
       statuses.add(itr.next());
     }
     return statuses;
+  }
+
+  public static String readLastLineFromResourceFile(String resourceName) throws IOException {
+    try (InputStream inputStream = TestLogReaderUtils.class.getResourceAsStream(resourceName)) {
+      List<String> lines = FileIOUtils.readAsUTFStringLines(inputStream);
+      return lines.get(lines.size() - 1);
+    }
   }
 }

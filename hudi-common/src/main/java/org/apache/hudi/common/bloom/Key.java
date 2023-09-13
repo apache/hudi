@@ -25,10 +25,12 @@ import java.io.IOException;
 
 /**
  * The general behavior of a key that must be stored in a bloom filter.
+ * <p>
+ * The code in class is adapted from {@link org.apache.hadoop.util.bloom.Key} in Apache Hadoop.
  *
  * @see InternalBloomFilter The general behavior of a bloom filter and how the key is used.
  */
-public final class Key implements Comparable<Key> {
+public class Key implements Comparable<Key> {
   /**
    * Byte value of key
    */
