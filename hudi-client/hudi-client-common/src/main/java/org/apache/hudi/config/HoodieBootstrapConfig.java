@@ -26,7 +26,7 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.model.BootstrapIndexType;
 
 import java.io.File;
 import java.io.FileReader;
@@ -250,8 +250,7 @@ public class HoodieBootstrapConfig extends HoodieConfig {
 
     public HoodieBootstrapConfig build() {
       // TODO: use infer function instead
-      bootstrapConfig.setDefaultValue(INDEX_CLASS_NAME, HoodieTableConfig.getDefaultBootstrapIndexClass(
-          bootstrapConfig.getProps()));
+      bootstrapConfig.setDefaultValue(INDEX_CLASS_NAME, BootstrapIndexType.getDefaultBootstrapIndexClassName(bootstrapConfig));
       bootstrapConfig.setDefaults(HoodieBootstrapConfig.class.getName());
       return bootstrapConfig;
     }

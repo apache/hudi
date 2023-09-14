@@ -19,8 +19,10 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodiePayloadProps;
+import org.apache.hudi.common.model.RecordPayloadType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
@@ -77,13 +79,7 @@ public class ConfigUtils {
    * Get payload class.
    */
   public static String getPayloadClass(Properties properties) {
-    String payloadClass = null;
-    if (properties.containsKey(HoodieTableConfig.PAYLOAD_CLASS_NAME.key())) {
-      payloadClass = properties.getProperty(HoodieTableConfig.PAYLOAD_CLASS_NAME.key());
-    } else if (properties.containsKey("hoodie.datasource.write.payload.class")) {
-      payloadClass = properties.getProperty("hoodie.datasource.write.payload.class");
-    }
-    return payloadClass;
+    return RecordPayloadType.getPayloadClassName(new HoodieConfig(properties));
   }
 
   public static List<String> split2List(String param) {

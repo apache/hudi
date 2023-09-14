@@ -134,6 +134,10 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
               && !conf.contains(FlinkOptions.PAYLOAD_CLASS_NAME)) {
             conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, tableConfig.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME));
           }
+          if (tableConfig.contains(HoodieTableConfig.PAYLOAD_TYPE)
+              && !conf.contains(FlinkOptions.PAYLOAD_CLASS_NAME)) {
+            conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, tableConfig.getPayloadClass());
+          }
         });
   }
 
