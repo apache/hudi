@@ -191,7 +191,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> KEYGENERATOR_TYPE = ConfigProperty
       .key("hoodie.datasource.write.keygenerator.type")
-      .defaultValue(KeyGeneratorType.SIMPLE_KEYGEN.name())
+      .defaultValue(KeyGeneratorType.SIMPLE.name())
       .markAdvanced()
       .withDocumentation(KeyGeneratorType.class,
           "**Note** This is being actively worked on. Please use "

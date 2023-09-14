@@ -39,62 +39,62 @@ import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_TYPE;
 public enum KeyGeneratorType {
 
   @EnumFieldDescription("Simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.")
-  SIMPLE_KEYGEN("org.apache.hudi.keygen.SimpleKeyGenerator"),
+  SIMPLE("org.apache.hudi.keygen.SimpleKeyGenerator"),
   @EnumFieldDescription("Simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.")
-  SIMPLE_AVRO_KEYGEN("org.apache.hudi.keygen.SimpleAvroKeyGenerator"),
+  SIMPLE_AVRO("org.apache.hudi.keygen.SimpleAvroKeyGenerator"),
 
   @EnumFieldDescription("Complex key generator, which takes names of fields to be used for recordKey and partitionPath as configs.")
-  COMPLEX_KEYGEN("org.apache.hudi.keygen.ComplexKeyGenerator"),
+  COMPLEX("org.apache.hudi.keygen.ComplexKeyGenerator"),
   @EnumFieldDescription("Complex key generator, which takes names of fields to be used for recordKey and partitionPath as configs.")
-  COMPLEX_AVRO_KEYGEN("org.apache.hudi.keygen.ComplexAvroKeyGenerator"),
+  COMPLEX_AVRO("org.apache.hudi.keygen.ComplexAvroKeyGenerator"),
 
   @EnumFieldDescription("Timestamp-based key generator, that relies on timestamps for partitioning field. Still picks record key by name.")
-  TIMESTAMP_KEYGEN("org.apache.hudi.keygen.TimestampBasedKeyGenerator"),
+  TIMESTAMP("org.apache.hudi.keygen.TimestampBasedKeyGenerator"),
   @EnumFieldDescription("Timestamp-based key generator, that relies on timestamps for partitioning field. Still picks record key by name.")
-  TIMESTAMP_AVRO_KEYGEN("org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator"),
+  TIMESTAMP_AVRO("org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator"),
 
   @EnumFieldDescription("This is a generic implementation type of KeyGenerator where users can configure record key as a single field or "
       + " a combination of fields. Similarly partition path can be configured to have multiple fields or only one field. "
       + " This KeyGenerator expects value for prop \"hoodie.datasource.write.partitionpath.field\" in a specific format. "
       + " For example: "
       + " properties.put(\"hoodie.datasource.write.partitionpath.field\", \"field1:PartitionKeyType1,field2:PartitionKeyType2\").")
-  CUSTOM_KEYGEN("org.apache.hudi.keygen.CustomKeyGenerator"),
+  CUSTOM("org.apache.hudi.keygen.CustomKeyGenerator"),
   @EnumFieldDescription("This is a generic implementation type of KeyGenerator where users can configure record key as a single field or "
       + " a combination of fields. Similarly partition path can be configured to have multiple fields or only one field. "
       + " This KeyGenerator expects value for prop \"hoodie.datasource.write.partitionpath.field\" in a specific format. "
       + " For example: "
       + " properties.put(\"hoodie.datasource.write.partitionpath.field\", \"field1:PartitionKeyType1,field2:PartitionKeyType2\").")
-  CUSTOM_AVRO_KEYGEN("org.apache.hudi.keygen.CustomAvroKeyGenerator"),
+  CUSTOM_AVRO("org.apache.hudi.keygen.CustomAvroKeyGenerator"),
 
   @EnumFieldDescription("Simple Key generator for non-partitioned tables.")
-  NON_PARTITION_KEYGEN("org.apache.hudi.keygen.NonpartitionedKeyGenerator"),
+  NON_PARTITION("org.apache.hudi.keygen.NonpartitionedKeyGenerator"),
   @EnumFieldDescription("Simple Key generator for non-partitioned tables.")
-  NON_PARTITION_AVRO_KEYGEN("org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator"),
+  NON_PARTITION_AVRO("org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator"),
 
   @EnumFieldDescription("Key generator for deletes using global indices.")
-  GLOBAL_DELETE_KEYGEN("org.apache.hudi.keygen.GlobalDeleteKeyGenerator"),
+  GLOBAL_DELETE("org.apache.hudi.keygen.GlobalDeleteKeyGenerator"),
   @EnumFieldDescription("Key generator for deletes using global indices.")
-  GLOBAL_DELETE_AVRO_KEYGEN("org.apache.hudi.keygen.GlobalAvroDeleteKeyGenerator"),
+  GLOBAL_DELETE_AVRO("org.apache.hudi.keygen.GlobalAvroDeleteKeyGenerator"),
 
   @EnumFieldDescription("Automatic record key generation.")
-  AUTO_RECORD_KEYGEN("org.apache.hudi.keygen.AutoRecordGenWrapperKeyGenerator"),
+  AUTO_RECORD("org.apache.hudi.keygen.AutoRecordGenWrapperKeyGenerator"),
   @EnumFieldDescription("Automatic record key generation.")
-  AUTO_RECORD_AVRO_KEYGEN("org.apache.hudi.keygen.AutoRecordGenWrapperAvroKeyGenerator"),
-
-  @EnumFieldDescription("A KeyGenerator which use the uuid as the record key.")
-  UUID_KEYGEN("org.apache.spark.sql.hudi.command.UuidKeyGenerator"),
+  AUTO_RECORD_AVRO("org.apache.hudi.keygen.AutoRecordGenWrapperAvroKeyGenerator"),
 
   @EnumFieldDescription("Custom key generator for the Hudi table metadata.")
-  HOODIE_METADATA_KEYGEN("org.apache.hudi.metadata.HoodieTableMetadataKeyGenerator"),
-
-  @EnumFieldDescription("Meant to be used internally for the spark sql MERGE INTO command.")
-  MERGE_INTO_KEYGEN("org.apache.spark.sql.hudi.command.MergeIntoKeyGenerator"),
+  HOODIE_TABLE_METADATA("org.apache.hudi.metadata.HoodieTableMetadataKeyGenerator"),
 
   @EnumFieldDescription("Custom spark-sql specific KeyGenerator overriding behavior handling TimestampType partition values.")
-  SQL_KEYGEN("org.apache.spark.sql.hudi.command.SqlKeyGenerator"),
+  SPARK_SQL("org.apache.spark.sql.hudi.command.SqlKeyGenerator"),
+
+  @EnumFieldDescription("A KeyGenerator which use the uuid as the record key.")
+  SPARK_SQL_UUID("org.apache.spark.sql.hudi.command.UuidKeyGenerator"),
+
+  @EnumFieldDescription("Meant to be used internally for the spark sql MERGE INTO command.")
+  SPARK_SQL_MERGE_INTO("org.apache.spark.sql.hudi.command.MergeIntoKeyGenerator"),
 
   @EnumFieldDescription("A test KeyGenerator for deltastreamer tests.")
-  TEST_KEYGEN("org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer$TestGenerator");
+  STREAMER_TEST("org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer$TestGenerator");
 
   private final String className;
 

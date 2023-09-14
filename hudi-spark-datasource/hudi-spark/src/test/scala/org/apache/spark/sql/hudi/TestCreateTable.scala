@@ -143,7 +143,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     assertResult("dt")(tableConfig(HoodieTableConfig.PARTITION_FIELDS.key))
     assertResult("id")(tableConfig(HoodieTableConfig.RECORDKEY_FIELDS.key))
     assertResult("ts")(tableConfig(HoodieTableConfig.PRECOMBINE_FIELD.key))
-    assertResult(KeyGeneratorType.SIMPLE_KEYGEN.name())(tableConfig(HoodieTableConfig.KEY_GENERATOR_TYPE.key))
+    assertResult(KeyGeneratorType.SIMPLE.name())(tableConfig(HoodieTableConfig.KEY_GENERATOR_TYPE.key))
     assertResult("default")(tableConfig(HoodieTableConfig.DATABASE_NAME.key()))
     assertResult(tableName)(tableConfig(HoodieTableConfig.NAME.key()))
     assertFalse(tableConfig.contains(OPERATION.key()))

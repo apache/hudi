@@ -47,8 +47,8 @@ public class TestCreateAvroKeyGeneratorByTypeWithFactory {
   private TypedProperties props;
 
   private static Stream<Arguments> configParams() {
-    String[] types = {KeyGeneratorType.SIMPLE_KEYGEN.name(), KeyGeneratorType.TIMESTAMP_KEYGEN.name(), KeyGeneratorType.COMPLEX_KEYGEN.name(),
-        KeyGeneratorType.CUSTOM_KEYGEN.name(), KeyGeneratorType.NON_PARTITION_KEYGEN.name(), KeyGeneratorType.GLOBAL_DELETE_KEYGEN.name()};
+    String[] types = {KeyGeneratorType.SIMPLE.name(), KeyGeneratorType.TIMESTAMP.name(), KeyGeneratorType.COMPLEX.name(),
+        KeyGeneratorType.CUSTOM.name(), KeyGeneratorType.NON_PARTITION.name(), KeyGeneratorType.GLOBAL_DELETE.name()};
     return Stream.of(types).map(Arguments::of);
   }
 
@@ -78,22 +78,22 @@ public class TestCreateAvroKeyGeneratorByTypeWithFactory {
 
     KeyGenerator keyGenerator = HoodieAvroKeyGeneratorFactory.createKeyGenerator(props);
     switch (keyType) {
-      case SIMPLE_KEYGEN:
+      case SIMPLE:
         Assertions.assertEquals(SimpleAvroKeyGenerator.class.getName(), keyGenerator.getClass().getName());
         return;
-      case COMPLEX_KEYGEN:
+      case COMPLEX:
         Assertions.assertEquals(ComplexAvroKeyGenerator.class.getName(), keyGenerator.getClass().getName());
         return;
-      case TIMESTAMP_KEYGEN:
+      case TIMESTAMP:
         Assertions.assertEquals(TimestampBasedAvroKeyGenerator.class.getName(), keyGenerator.getClass().getName());
         return;
-      case CUSTOM_KEYGEN:
+      case CUSTOM:
         Assertions.assertEquals(CustomAvroKeyGenerator.class.getName(), keyGenerator.getClass().getName());
         return;
-      case NON_PARTITION_KEYGEN:
+      case NON_PARTITION:
         Assertions.assertEquals(NonpartitionedAvroKeyGenerator.class.getName(), keyGenerator.getClass().getName());
         return;
-      case GLOBAL_DELETE_KEYGEN:
+      case GLOBAL_DELETE:
         Assertions.assertEquals(GlobalAvroDeleteKeyGenerator.class.getName(), keyGenerator.getClass().getName());
         return;
       default:

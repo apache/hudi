@@ -263,7 +263,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
       switch (tableExecutionContext.getTableName()) {
         case "dummy_table_short_trip":
           String tableLevelKeyGeneratorClass = tableExecutionContext.getProperties().getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key());
-          assertEquals(TestHoodieDeltaStreamer.TestTableLevelGenerator.class.getName(), tableLevelKeyGeneratorClass);
+          assertEquals(TestHoodieDeltaStreamer.TestGenerator.class.getName(), tableLevelKeyGeneratorClass);
           List<String> transformerClass = tableExecutionContext.getConfig().transformerClassNames;
           assertEquals(1, transformerClass.size());
           assertEquals("org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer$TestIdentityTransformer", transformerClass.get(0));

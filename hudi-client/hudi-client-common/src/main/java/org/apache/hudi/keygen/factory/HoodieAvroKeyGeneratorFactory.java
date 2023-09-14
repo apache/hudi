@@ -63,7 +63,7 @@ public class HoodieAvroKeyGeneratorFactory {
 
     if (StringUtils.isNullOrEmpty(keyGeneratorType)) {
       LOG.info("The value of {} is empty, using SIMPLE", HoodieWriteConfig.KEYGENERATOR_TYPE.key());
-      keyGeneratorType = KeyGeneratorType.SIMPLE_KEYGEN.name();
+      keyGeneratorType = KeyGeneratorType.SIMPLE.name();
     }
 
     KeyGeneratorType keyGeneratorTypeEnum;
@@ -76,22 +76,22 @@ public class HoodieAvroKeyGeneratorFactory {
     BaseKeyGenerator keyGenerator = null;
 
     switch (keyGeneratorTypeEnum) {
-      case SIMPLE_KEYGEN:
+      case SIMPLE:
         keyGenerator = new SimpleAvroKeyGenerator(props);
         break;
-      case COMPLEX_KEYGEN:
+      case COMPLEX:
         keyGenerator = new ComplexAvroKeyGenerator(props);
         break;
-      case TIMESTAMP_KEYGEN:
+      case TIMESTAMP:
         keyGenerator = new TimestampBasedAvroKeyGenerator(props);
         break;
-      case CUSTOM_KEYGEN:
+      case CUSTOM:
         keyGenerator = new CustomAvroKeyGenerator(props);
         break;
-      case NON_PARTITION_KEYGEN:
+      case NON_PARTITION:
         keyGenerator = new NonpartitionedAvroKeyGenerator(props);
         break;
-      case GLOBAL_DELETE_KEYGEN:
+      case GLOBAL_DELETE:
         keyGenerator = new GlobalAvroDeleteKeyGenerator(props);
         break;
       default:

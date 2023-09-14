@@ -111,7 +111,7 @@ public class FlinkStreamerConfig extends Configuration {
 
   @Parameter(names = {"--keygen-type"}, description = "Key generator type, that implements will extract the key out of incoming record \n"
       + "By default `SIMPLE`.")
-  public String keygenType = KeyGeneratorType.SIMPLE_KEYGEN.name();
+  public String keygenType = KeyGeneratorType.SIMPLE.name();
 
   @Parameter(names = {"--source-ordering-field"}, description = "Field within source record to decide how"
       + " to break ties between records with same key in input data. Default: 'ts' holding unix timestamp of record.")
