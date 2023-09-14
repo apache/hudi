@@ -114,7 +114,7 @@ public class TimelineService {
     @Parameter(names = {"--enable-marker-requests", "-em"}, description = "Enable handling of marker-related requests")
     public boolean enableMarkerRequests = false;
 
-    @Parameter(names = {"--enable-flink-ckp-requests"}, description = "Enable handling of flink ckp metadata requests")
+    @Parameter(names = {"--enable-ckp-metadata-requests"}, description = "Enable handling of flink ckp metadata requests")
     public boolean enableCkpMeatadataRequests = false;
 
     @Parameter(names = {"--marker-batch-threads", "-mbt"}, description = "Number of threads to use for batch processing marker creation requests")
@@ -291,8 +291,8 @@ public class TimelineService {
         return this;
       }
 
-      public Builder enableFlinkCkpMetadataRequests(boolean enableFlinkCkpMetadataRequests) {
-        this.enableCkpMetadataRequests = enableFlinkCkpMetadataRequests;
+      public Builder enableCkpMetadataRequests(boolean enableCkpMetadataRequests) {
+        this.enableCkpMetadataRequests = enableCkpMetadataRequests;
         return this;
       }
 

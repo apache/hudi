@@ -77,7 +77,7 @@ public class TimelineBasedCkpMetadata extends CkpMetadata {
   @Override
   protected Stream<CkpMessage> readCkpMessages(Path ckpMetaPath) throws IOException {
     // Read ckp messages from timeline server
-    Stream<CkpMessage> ckpMessageStream = null;
+    Stream<CkpMessage> ckpMessageStream;
     try {
       List<CkpMetadataDTO> ckpMetadataDTOList = executeRequestToTimelineServerWithRetry(
           CkpMetadataHandler.ALL_CKP_METADATA_URL, getRequestParams(ckpMetaPath.toString()),
@@ -85,11 +85,8 @@ public class TimelineBasedCkpMetadata extends CkpMetadata {
           }, RequestMethod.GET);
       ckpMessageStream = ckpMetadataDTOList.stream().map(c -> new CkpMessage(c.getInstant(), c.getState()));
     } catch (HoodieException e) {
-      LOG.error("Failed to execute scan ckp metadata", e);
-    }
-
-    if (ckpMessageStream == null) {
-      // If timelineServerBased is not enabled, or we failed to request timeline server, read ckp messages from file system directly.
+      LOG.error("Failed to execute scan ckp metadata, fall back to read from file system...", e);
+      // If we failed to request timeline server, read ckp messages from file system directly.
       ckpMessageStream = super.readCkpMessages(ckpMetaPath);
     }
     return ckpMessageStream;
