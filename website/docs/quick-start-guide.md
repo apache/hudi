@@ -7,8 +7,8 @@ last_modified_at: 2023-08-23T21:14:52+09:00
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-This guide provides a quick peek at Hudi's capabilities using spark. Using Spark datasources, pyspark and Spark SQL, we will walk through
-code snippets that allows you to insert, update and query a Hudi table.
+This guide provides a quick peek at Hudi's capabilities using spark. Using Spark datasources, pyspark and Spark SQL, 
+we will walk through code snippets that allows you to insert, update and query a Hudi table.
 
 ## Setup
 
@@ -93,6 +93,13 @@ spark-shell \
   --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 ```shell
+# Spark 3.0
+spark-shell \
+  --packages org.apache.hudi:hudi-spark3.0-bundle_2.12:0.13.0 \
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
+  --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
+```
+```shell
 # Spark 2.4
 spark-shell \
   --packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.14.0 \
@@ -155,6 +162,14 @@ pyspark \
 --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 ```shell
+# Spark 3.0
+export PYSPARK_PYTHON=$(which python3)
+pyspark \
+--packages org.apache.hudi:hudi-spark3.0-bundle_2.12:0.13.0 \
+--conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
+--conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
+```
+```shell
 # Spark 2.4
 export PYSPARK_PYTHON=$(which python3)
 pyspark \
@@ -207,6 +222,12 @@ spark-sql --packages org.apache.hudi:hudi-spark3.0-bundle_2.12:0.14.0 \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
 --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
 --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
+```
+```shell
+# Spark 3.0
+spark-sql --packages org.apache.hudi:hudi-spark3.0-bundle_2.12:0.13.0 \
+--conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
+--conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
 ```
 ```shell
 # Spark 2.4
@@ -291,7 +312,8 @@ Before we go further, few terminologies to familiarize:
 
 - **Table types**
 
-  Hudi supports two different table types, namely Copy-On-Write (COW) and Merge-On-Read (MOR). You can read more about different 
+  Hudi supports two different table types, namely Copy-On-Write (COW) and Merge-On-Read (MOR). Users can choose either 
+of these table types depending on their workload and SLA requirements. You can read more about different 
   table types [here](/docs/next/table_types/).
 
 - **Partitioned & Non-Partitioned tables**
@@ -370,13 +392,12 @@ create table hudi_cow_pt_tbl (
 ) using hudi
 tblproperties (
   type = 'cow',
-  preCombineField = 'ts'
  )
 partitioned by dt
 location '/tmp/hudi/hudi_cow_pt_tbl';
 ```
 
-Default value for type is 'cow' and hence could be skipped if need be. 
+Default value for type is 'cow' and hence could be skipped. 
 
 **Create Primary keyed COW Table**
 
@@ -401,7 +422,9 @@ location '/tmp/hudi/hudi_cow_pt_tbl';
 **CTAS**
 
 Hudi supports CTAS (Create Table As Select) on Spark SQL. <br/>
-Note: CTAS uses the **bulk insert** as the write operation for better writer performance. 
+:::note
+CTAS uses the **bulk insert** as the write operation for better writer performance.
+:::
 
 ***Create a Key less COW Table using CTAS***
 
@@ -409,7 +432,7 @@ Note: CTAS uses the **bulk insert** as the write operation for better writer per
 -- CTAS: create a partitioned, keyless COW table 
 create table hudi_ctas_cow_pt_tbl
 using hudi
-tblproperties (type = 'cow', preCombineField = 'ts')
+tblproperties (type = 'cow')
 partitioned by (dt)
 as
 select 1 as id, 'a1' as name, 10 as price;
@@ -519,7 +542,6 @@ val inserts = convertToStringList(dataGen.generateInserts(10))
 val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
 df.write.format("hudi").
   options(getQuickstartWriteConfigs).
-  option(PRECOMBINE_FIELD_NAME.key(), "ts").
   option(PARTITIONPATH_FIELD_NAME.key(), "partitionpath").
   option(TABLE_NAME, tableName).
   mode(Overwrite).
@@ -527,7 +549,7 @@ df.write.format("hudi").
 ```
 
 :::note
-Note the absence of RECORDKEY_FIELD_NAME.key() in the write options. 
+Note the absence of RECORDKEY_FIELD_NAME.key() in the write options to denote the key less table. 
 :::
 
 **Creating a Primary keyed Hudi table**
@@ -579,7 +601,6 @@ hudi_options = {
     'hoodie.datasource.write.partitionpath.field': 'partitionpath',
     'hoodie.datasource.write.table.name': tableName,
     'hoodie.datasource.write.operation': 'upsert',
-    'hoodie.datasource.write.precombine.field': 'ts',
     'hoodie.upsert.shuffle.parallelism': 2,
     'hoodie.insert.shuffle.parallelism': 2
 }
@@ -591,7 +612,7 @@ df.write.format("hudi"). \
 ```
 
 :::note
-Note the absence of RECORDKEY_FIELD_NAME.key() in the write options.
+Note the absence of RECORDKEY_FIELD_NAME.key() in the write options to denote the key less table.
 :::
 
 **Creating to Primary keyed Hudi table**
@@ -647,7 +668,7 @@ select 1 as id, 'a1' as name, 1000 as ts, '2021-12-09' as dt, '10' as hh;
 insert into hudi_cow_pt_tbl partition(dt = '2021-12-09', hh='11') select 2, 'a2', 1000;
 ```
 
-**NOTICE**
+:::note
 - `hoodie.spark.sql.insert.into.operation` will determine how records ingested via spark-sql INSERT_INTO will be treated. Possible values are "bulk_insert", "insert"
   and "upsert". If "bulk_insert" is chosen, hudi writes incoming records as is without any automatic small file management.
   When "insert" is chosen, hudi inserts the new incoming records and also does small file management.
@@ -655,7 +676,9 @@ insert into hudi_cow_pt_tbl partition(dt = '2021-12-09', hh='11') select 2, 'a2'
   For a table without any precombine key set, "insert" is chosen as the default value for this config. For a table with precombine key set, 
   "upsert" is chosen as the default value for this config.
 - From 0.14.0, `hoodie.sql.bulk.insert.enable` and `hoodie.sql.insert.mode` are depecrated. Users are expected to use `hoodie.spark.sql.insert.into.operation` instead.
-- Where do we discuss the insert dup policy? fail, drop, none. I feel its too much of info in quick start.  
+:::
+
+Here are examples to override the spark.sql.insert.into.operation.
 
 ```sql
 -- upserts using INSERT_INTO 
@@ -900,7 +923,6 @@ denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `rider`, `d
 
 Delete operation removes/deletes the records  of interest from the table. For example, this code snippet deletes records
 for the HoodieKeys passed in. Check out the [deletion section](/docs/next/writing_data#deletes) for more details.
-<br/><br/>
 
 <Tabs
 groupId="programming-language"
@@ -959,12 +981,12 @@ DELETE FROM tableIdentifier [ WHERE BOOL_EXPRESSION]
 ```
 **Example**
 ```sql
-delete from hudi_cow_nonpcf_tbl where uuid = 1;
+DELETE FROM hudi_cow_nonpcf_tbl where uuid = 1;
 
-delete from hudi_mor_tbl where id % 2 = 0;
+DELETE FROM hudi_mor_tbl where id % 2 = 0;
 
 -- delete using non-PK field
-delete from hudi_cow_pt_tbl where name = 'a1';
+DELETE FROM hudi_cow_pt_tbl where name = 'a1';
 ```
 
 </TabItem>
@@ -1226,7 +1248,7 @@ feature is that it now lets you author streaming pipelines on batch data.
 :::
 
 ## Streaming writers
-### Hudistreamer
+### Hudi Streamer
 Hudi provides a ingestion tool to assist with ingesting data into hudi from various difference sources in a streaming manner. 
 This has lot of niceties like auto checkpointing, schema enforcement via schema provider, transformation support and so on.
 Please refer to [here](/docs/next/hoodie_deltastreamer#hudi-streamer) for more info. 
