@@ -37,8 +37,6 @@ import org.apache.spark.sql.functions.{col, not}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api._
 
-import java.util
-import java.util.Properties
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.Collectors
 import scala.collection.JavaConverters._
