@@ -100,6 +100,8 @@ public enum RecordPayloadType {
       payloadClassName = config.getString(PAYLOAD_CLASS_NAME);
     } else if (config.contains(PAYLOAD_TYPE)) {
       payloadClassName = RecordPayloadType.valueOf(config.getString(PAYLOAD_TYPE)).getClassName();
+    } else if (config.contains("hoodie.datasource.write.payload.class")) {
+      payloadClassName = config.getString("hoodie.datasource.write.payload.class");
     } else {
       payloadClassName = RecordPayloadType.valueOf(PAYLOAD_TYPE.defaultValue()).getClassName();
     }

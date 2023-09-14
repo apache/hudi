@@ -21,6 +21,7 @@ package org.apache.hudi.cli;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -270,10 +271,8 @@ public class BootstrapExecutorUtils implements Serializable {
       keyGenClass = props.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key());
     } else if (StringUtils.nonEmpty(props.getString(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), null))) {
       keyGenClass = HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName(props);
-    } else if (StringUtils.nonEmpty(props.getString(HoodieTableConfig.KEY_GENERATOR_TYPE.key(), null))) {
-      keyGenClass = KeyGeneratorType.valueOf(props.getString(HoodieTableConfig.KEY_GENERATOR_TYPE.key())).getClassName();
     } else {
-      keyGenClass = props.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), SimpleKeyGenerator.class.getName());
+      keyGenClass = KeyGeneratorType.getKeyGeneratorClassName(new HoodieConfig(props));
     }
     props.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), keyGenClass);
     String partitionColumns = SparkKeyGenUtils.getPartitionColumns(props);
