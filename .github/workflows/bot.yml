@@ -255,7 +255,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - flinkProfile: 'flink1.18'
+          - flinkProfile: 'flink1.17'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.0'
+          - flinkProfile: 'flink1.17'
             sparkProfile: 'spark3.4'
             sparkRuntime: 'spark3.4.0'
 

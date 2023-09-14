@@ -2240,7 +2240,7 @@
         <spark3.version>${spark34.version}</spark3.version>
         <spark.version>${spark3.version}</spark.version>
         <sparkbundle.version>3</sparkbundle.version>
-        <scala12.version>2.12.17</scala12.version>
+        <scala12.version>2.12.18</scala12.version>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
         <hudi.spark.module>hudi-spark3.4.x</hudi.spark.module>
@@ -2253,18 +2253,18 @@
                    hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
                    bringing these file-formats as dependencies as well, we need to make sure that versions are
                    synchronized to avoid classpath ambiguity -->
-        <parquet.version>1.12.3</parquet.version>
-        <orc.spark.version>1.8.3</orc.spark.version>
-        <avro.version>1.11.1</avro.version>
+        <parquet.version>1.13.1</parquet.version>
+        <orc.spark.version>1.9.0</orc.spark.version>
+        <avro.version>1.11.2</avro.version>
         <antlr.version>4.9.3</antlr.version>
-        <fasterxml.spark3.version>2.14.2</fasterxml.spark3.version>
+        <fasterxml.spark3.version>2.15.2</fasterxml.spark3.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
         <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
         <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
-        <log4j2.version>2.19.0</log4j2.version>
-        <slf4j.version>2.0.6</slf4j.version>
+        <log4j2.version>2.20.0</log4j2.version>
+        <slf4j.version>2.0.7</slf4j.version>
         <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
         <skipITs>true</skipITs>
       </properties>
@@ -2461,7 +2461,7 @@
         <spark3.version>${spark34.version}</spark3.version>
         <spark.version>${spark3.version}</spark.version>
         <sparkbundle.version>3.4</sparkbundle.version>
-        <scala12.version>2.12.17</scala12.version>
+        <scala12.version>2.12.18</scala12.version>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
         <hudi.spark.module>hudi-spark3.4.x</hudi.spark.module>
