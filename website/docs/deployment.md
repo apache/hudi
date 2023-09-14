@@ -11,6 +11,7 @@ Specifically, we will cover the following aspects.
 
  - [Deployment Model](#deploying) : How various Hudi components are deployed and managed.
  - [Upgrading Versions](#upgrading) : Picking up new releases of Hudi, guidelines and general best-practices.
+ - [Downgrading Versions](#downgrading) : Reverting back to an older version of Hudi
  - [Migrating to Hudi](#migrating) : How to migrate your existing tables to Apache Hudi.
  
 ## Deploying
@@ -166,6 +167,87 @@ As general guidelines,
  - With large, feature rich releases we recommend migrating slowly, by first testing in staging environments and running your own tests. Upgrading Hudi is no different than upgrading any database system.
 
 Note that release notes can override this information with specific instructions, applicable on case-by-case basis.
+
+## Downgrading
+
+Upgrade is automatic whenever a new Hudi version is used whereas downgrade is a manual step. We need to use the Hudi
+CLI to downgrade a table from a higher version to lower version. Let's consider an example where we create a table using 
+0.12.0, upgrade it to 0.13.0 and then downgrade it via Hudi CLI.
+
+Launch spark shell with Hudi 0.11.0 version.
+```shell
+spark-shell \
+  --packages org.apache.hudi:hudi-spark3.2-bundle_2.12:0.11.0 \
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
+  --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
+  --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
+```
+
+Create a hudi table by using the scala script below.
+```scala
+import org.apache.hudi.QuickstartUtils._
+import scala.collection.JavaConversions._
+import org.apache.spark.sql.SaveMode._
+import org.apache.hudi.DataSourceReadOptions._
+import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.config.HoodieWriteConfig._
+import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.HoodieDataSourceHelpers
+
+val dataGen = new DataGenerator
+val tableType = MOR_TABLE_TYPE_OPT_VAL
+val basePath = "file:///tmp/hudi_table"
+val tableName = "hudi_table"
+
+val inserts = convertToStringList(dataGen.generateInserts(100)).toList
+val insertDf = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
+insertDf.write.format("hudi").
+        options(getQuickstartWriteConfigs).
+        option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+        option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+        option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+        option(TABLE_NAME, tableName).
+        option(OPERATION.key(), INSERT_OPERATION_OPT_VAL).
+        mode(Append).
+        save(basePath)
+```
+
+You will see an entry for table version in hoodie.properties which states the table version is 4.
+```shell
+bash$ cat /tmp/hudi_table/.hoodie/hoodie.properties | grep hoodie.table.version
+hoodie.table.version=4
+```
+
+Launch a new spark shell using version 0.13.0 and append to the same table using the script above. Note the upgrade 
+happens automatically with the new version.
+```shell
+spark-shell \
+  --packages org.apache.hudi:hudi-spark3.2-bundle_2.12:0.13.1 \
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
+  --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
+  --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
+```
+
+After upgrade, the table version is updated to 5.
+```shell
+bash$ cat /tmp/hudi_table/.hoodie/hoodie.properties | grep hoodie.table.version
+hoodie.table.version=5
+```
+
+Lets try downgrading the table back to version 4. For downgrading we will need to use Hudi CLI and execute downgrade.
+For more details on downgrade, please refer documentation [here](cli#upgrade-and-downgrade-table).
+```shell
+connect --path /tmp/hudi_table
+downgrade table --toVersion 4
+```
+
+After downgrade, the table version is updated to 4.
+```shell
+bash$ cat /tmp/hudi_table/.hoodie/hoodie.properties | grep hoodie.table.version
+hoodie.table.version=4
+```
 
 ## Migrating
 
