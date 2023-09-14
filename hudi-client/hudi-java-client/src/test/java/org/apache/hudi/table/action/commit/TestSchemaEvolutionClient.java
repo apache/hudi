@@ -71,6 +71,7 @@ public class TestSchemaEvolutionClient extends HoodieJavaClientTestHarness {
         .withEngineType(EngineType.JAVA)
         .withPath(basePath)
         .withSchema(SCHEMA.toString())
+        .withEmbeddedTimelineServerEnabled(false)
         .withProps(Collections.singletonMap(HoodieWriteConfig.TBL_NAME.key(), "hoodie_test_table"))
         .build();
     return new HoodieJavaWriteClient<>(context, config);

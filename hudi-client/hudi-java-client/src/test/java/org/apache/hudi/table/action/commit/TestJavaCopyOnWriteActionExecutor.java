@@ -115,6 +115,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     return HoodieWriteConfig.newBuilder()
         .withEngineType(EngineType.JAVA)
         .withPath(basePath)
+        .withEmbeddedTimelineServerEnabled(false)
         .withSchema(SCHEMA.toString());
   }
 
