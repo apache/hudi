@@ -1087,7 +1087,7 @@ Target table must exist before write.
 :::
 
 ### Table maintenance
-Hudi can run async or inline table services while running Strucrured Streaming query and takes care of cleaning, compaction and clustering. There's no operational overhead for the user.  
+Hudi can run async or inline table services while running Structured Streaming query and takes care of cleaning, compaction and clustering. There's no operational overhead for the user.  
 For CoW tables, table services work in inline mode by default.  
 For MoR tables, some async services are enabled by default.
 
