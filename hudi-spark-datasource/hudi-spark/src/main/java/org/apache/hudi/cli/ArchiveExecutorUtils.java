@@ -48,7 +48,7 @@ public final class ArchiveExecutorUtils {
        int maxCommits,
        int commitsRetained,
        boolean enableMetadata,
-       String basePath) {
+       String basePath) throws IOException {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(minCommits, maxCommits).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(commitsRetained).build())
@@ -62,7 +62,7 @@ public final class ArchiveExecutorUtils {
       archiver.archiveIfRequired(context, true);
     } catch (IOException ioe) {
       LOG.error("Failed to archive with IOException: " + ioe);
-      return -1;
+      throw ioe;
     }
     return 0;
   }
