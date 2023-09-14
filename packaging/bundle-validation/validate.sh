@@ -289,10 +289,10 @@ else
 fi
 
 echo "::warning::validate.sh validating utilities slim bundle"
-#test_utilities_bundle $JARS_DIR/utilities-slim.jar $JARS_DIR/spark.jar
-#if [ "$?" -ne 0 ]; then
-#    exit 1
-#fi
+test_utilities_bundle $JARS_DIR/utilities-slim.jar $JARS_DIR/spark.jar
+if [ "$?" -ne 0 ]; then
+    exit 1
+fi
 echo "::warning::validate.sh done validating utilities slim bundle"
 
 if [[ ${JAVA_RUNTIME_VERSION} == 'openjdk8' ]]; then

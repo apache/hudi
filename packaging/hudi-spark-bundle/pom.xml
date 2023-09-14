@@ -99,7 +99,7 @@
                   <include>com.github.davidmoten:hilbert-curve</include>
                   <include>com.github.ben-manes.caffeine:caffeine</include>
                   <include>org.apache.parquet:parquet-avro</include>
-                  <include>org.apache.avro:avro</include>
+                  <!--<include>org.apache.avro:avro</include>-->
                   <include>com.twitter:bijection-avro_${scala.binary.version}</include>
                   <include>com.twitter:bijection-core_${scala.binary.version}</include>
 
@@ -135,10 +135,10 @@
                   <pattern>org.apache.spark.sql.avro.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.spark.sql.avro.</shadedPattern>
                 </relocation>
-                <relocation>
+                <!--<relocation>
                   <pattern>org.apache.avro.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.avro.</shadedPattern>
-                </relocation>
+                </relocation>-->
                 <relocation>
                   <pattern>javax.servlet.</pattern>
                   <shadedPattern>org.apache.hudi.javax.servlet.</shadedPattern>
@@ -270,11 +270,11 @@
     </dependency>
 
     <!-- Avro -->
-    <dependency>
+    <!--<dependency>
       <groupId>org.apache.avro</groupId>
       <artifactId>avro</artifactId>
       <scope>compile</scope>
-    </dependency>
+    </dependency>-->
 
     <!-- Hive -->
     <dependency>
