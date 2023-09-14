@@ -24,7 +24,7 @@ import org.apache.hudi.common.table.marker.MarkerOperation;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.dto.BaseFileDTO;
-import org.apache.hudi.common.table.timeline.dto.CkpMetadataDTO;
+import org.apache.hudi.common.table.timeline.dto.InstantStateDTO;
 import org.apache.hudi.common.table.timeline.dto.ClusteringOpDTO;
 import org.apache.hudi.common.table.timeline.dto.CompactionOpDTO;
 import org.apache.hudi.common.table.timeline.dto.FileGroupDTO;
@@ -39,7 +39,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.timeline.service.handlers.BaseFileHandler;
 import org.apache.hudi.timeline.service.handlers.FileSliceHandler;
-import org.apache.hudi.timeline.service.handlers.CkpMetadataHandler;
+import org.apache.hudi.timeline.service.handlers.InstantStateHandler;
 import org.apache.hudi.timeline.service.handlers.MarkerHandler;
 import org.apache.hudi.timeline.service.handlers.TimelineHandler;
 
@@ -79,7 +79,7 @@ public class RequestHandler {
   private final FileSliceHandler sliceHandler;
   private final BaseFileHandler dataFileHandler;
   private final MarkerHandler markerHandler;
-  private final CkpMetadataHandler ckpMetadataHandler;
+  private final InstantStateHandler instantStateHandler;
   private final Registry metricsRegistry = Registry.getRegistry("TimelineService");
   private ScheduledExecutorService asyncResultService = Executors.newSingleThreadScheduledExecutor();
 
@@ -98,10 +98,10 @@ public class RequestHandler {
     } else {
       this.markerHandler = null;
     }
-    if (timelineServiceConfig.enableCkpMeatadataRequests) {
-      this.ckpMetadataHandler = new CkpMetadataHandler(conf, timelineServiceConfig, fileSystem, viewManager);
+    if (timelineServiceConfig.enableInstantRequests) {
+      this.instantStateHandler = new InstantStateHandler(conf, timelineServiceConfig, fileSystem, viewManager);
     } else {
-      this.ckpMetadataHandler = null;
+      this.instantStateHandler = null;
     }
     if (timelineServiceConfig.async) {
       asyncResultService = Executors.newSingleThreadScheduledExecutor();
@@ -147,7 +147,7 @@ public class RequestHandler {
     if (markerHandler != null) {
       registerMarkerAPI();
     }
-    if (ckpMetadataHandler != null) {
+    if (instantStateHandler != null) {
       registerCkpMetadataAPI();
     }
   }
@@ -517,18 +517,18 @@ public class RequestHandler {
   }
 
   private void registerCkpMetadataAPI() {
-    app.get(CkpMetadataHandler.ALL_CKP_METADATA_URL, new ViewHandler(ctx -> {
+    app.get(InstantStateHandler.ALL_INSTANT_STATE_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("ALL_CKP_METADATA", 1);
-      List<CkpMetadataDTO> ckpMetadata = ckpMetadataHandler.getAllCkpMessage(
-          ctx.queryParam(CkpMetadataHandler.CKP_METADATA_DIR_PATH_PARAM)
+      List<InstantStateDTO> ckpMetadata = instantStateHandler.getAllInstantStates(
+          ctx.queryParam(InstantStateHandler.INSTANT_STATE_DIR_PATH_PARAM)
       );
       writeValueAsString(ctx, ckpMetadata);
     }, false));
 
-    app.post(CkpMetadataHandler.REFRESH_CKP_METADATA, new ViewHandler(ctx -> {
+    app.post(InstantStateHandler.REFRESH_INSTANT_STATE, new ViewHandler(ctx -> {
       metricsRegistry.add("REFRESH_CKP_METADATA", 1);
-      boolean success = ckpMetadataHandler.refresh(
-          ctx.queryParam(CkpMetadataHandler.CKP_METADATA_DIR_PATH_PARAM)
+      boolean success = instantStateHandler.refresh(
+          ctx.queryParam(InstantStateHandler.INSTANT_STATE_DIR_PATH_PARAM)
       );
       writeValueAsString(ctx, success);
     }, false));

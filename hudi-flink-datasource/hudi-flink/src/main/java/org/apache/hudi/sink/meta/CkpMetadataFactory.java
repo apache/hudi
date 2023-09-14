@@ -21,7 +21,6 @@ package org.apache.hudi.sink.meta;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.table.HoodieTable;
 
 import org.apache.flink.configuration.Configuration;
 
@@ -29,15 +28,12 @@ import org.apache.flink.configuration.Configuration;
  * A factory to generate {@link CkpMetadata} instance based on whether {@link HoodieWriteConfig#INSTANT_STATE_TIMELINE_SERVER_BASED} enabled.
  */
 public class CkpMetadataFactory {
-  public static CkpMetadata get(HoodieTable table, Configuration config) {
-    String uniqueId = config.getString(FlinkOptions.WRITE_CLIENT_ID);
-    HoodieTableMetaClient metaClient = table.getMetaClient();
-    if (table.getConfig().isEmbeddedTimelineServerEnabled()
-        && table.getConfig().isTimelineServerBasedInstantStateEnabled()) {
-      return new TimelineBasedCkpMetadata(metaClient.getFs(), metaClient.getBasePath(), uniqueId, table.getConfig());
+  public static CkpMetadata getCkpMetadata(HoodieTableMetaClient metaClient, HoodieWriteConfig writeConfig, Configuration conf) {
+    String uniqueId = conf.getString(FlinkOptions.WRITE_CLIENT_ID);
+    if (writeConfig.isEmbeddedTimelineServerEnabled() && writeConfig.isTimelineServerBasedInstantStateEnabled()) {
+      return new TimelineBasedCkpMetadata(metaClient.getFs(), metaClient.getBasePath(), uniqueId, writeConfig);
     } else {
       return new CkpMetadata(metaClient.getFs(), metaClient.getBasePath(), uniqueId);
     }
   }
-
 }

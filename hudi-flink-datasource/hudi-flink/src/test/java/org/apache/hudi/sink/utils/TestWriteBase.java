@@ -150,7 +150,7 @@ public class TestWriteBase {
       // open the function and ingest data
       this.pipeline.openFunction();
       this.writeClient = FlinkWriteClients.createWriteClient(conf);
-      this.ckpMetadata = CkpMetadataFactory.get(writeClient.getHoodieTable(), conf);
+      this.ckpMetadata = CkpMetadataFactory.getCkpMetadata(StreamerUtil.createMetaClient(conf), writeClient.getConfig(), conf);
       return this;
     }
 

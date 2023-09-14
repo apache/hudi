@@ -149,7 +149,7 @@ public abstract class AbstractStreamWriteFunction<I>
             TypeInformation.of(WriteMetadataEvent.class)
         ));
 
-    this.ckpMetadata = CkpMetadataFactory.get(writeClient.getHoodieTable(), config);
+    this.ckpMetadata = CkpMetadataFactory.getCkpMetadata(metaClient, writeClient.getConfig(), config);
     this.currentInstant = lastPendingInstant();
     if (context.isRestored()) {
       restoreWriteMetadata();

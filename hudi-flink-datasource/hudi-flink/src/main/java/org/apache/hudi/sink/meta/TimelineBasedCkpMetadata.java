@@ -18,10 +18,10 @@
 
 package org.apache.hudi.sink.meta;
 
-import org.apache.hudi.common.table.timeline.dto.CkpMetadataDTO;
+import org.apache.hudi.common.table.timeline.dto.InstantStateDTO;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.timeline.service.handlers.CkpMetadataHandler;
+import org.apache.hudi.timeline.service.handlers.InstantStateHandler;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -47,7 +47,7 @@ public class TimelineBasedCkpMetadata extends CkpMetadata {
   private static final Logger LOG = LoggerFactory.getLogger(TimelineBasedCkpMetadata.class);
 
   private final HoodieWriteConfig writeConfig;
-  private ObjectMapper mapper;
+  private final ObjectMapper mapper;
 
   public TimelineBasedCkpMetadata(FileSystem fs, String basePath, String uniqueId, HoodieWriteConfig writeConfig) {
     super(fs, basePath, uniqueId);
@@ -75,25 +75,25 @@ public class TimelineBasedCkpMetadata extends CkpMetadata {
   }
 
   @Override
-  protected Stream<CkpMessage> readCkpMessages(Path ckpMetaPath) throws IOException {
+  protected Stream<CkpMessage> fetchCkpMessages(Path ckpMetaPath) throws IOException {
     // Read ckp messages from timeline server
     Stream<CkpMessage> ckpMessageStream;
     try {
-      List<CkpMetadataDTO> ckpMetadataDTOList = executeRequestToTimelineServerWithRetry(
-          CkpMetadataHandler.ALL_CKP_METADATA_URL, getRequestParams(ckpMetaPath.toString()),
-          new TypeReference<List<CkpMetadataDTO>>() {
+      List<InstantStateDTO> instantStateDTOList = executeRequestToTimelineServerWithRetry(
+          InstantStateHandler.ALL_INSTANT_STATE_URL, getRequestParams(ckpMetaPath.toString()),
+          new TypeReference<List<InstantStateDTO>>() {
           }, RequestMethod.GET);
-      ckpMessageStream = ckpMetadataDTOList.stream().map(c -> new CkpMessage(c.getInstant(), c.getState()));
-    } catch (HoodieException e) {
+      ckpMessageStream = instantStateDTOList.stream().map(c -> new CkpMessage(c.getInstant(), c.getState()));
+    } catch (Exception e) {
       LOG.error("Failed to execute scan ckp metadata, fall back to read from file system...", e);
       // If we failed to request timeline server, read ckp messages from file system directly.
-      ckpMessageStream = super.readCkpMessages(ckpMetaPath);
+      ckpMessageStream = super.fetchCkpMessages(ckpMetaPath);
     }
     return ckpMessageStream;
   }
 
   private Map<String, String> getRequestParams(String dirPath) {
-    return Collections.singletonMap(CkpMetadataHandler.CKP_METADATA_DIR_PATH_PARAM, dirPath);
+    return Collections.singletonMap(InstantStateHandler.INSTANT_STATE_DIR_PATH_PARAM, dirPath);
   }
 
   /**
@@ -102,7 +102,7 @@ public class TimelineBasedCkpMetadata extends CkpMetadata {
   private void sendRefreshRequest() {
     try {
       boolean success = executeRequestToTimelineServerWithRetry(
-          CkpMetadataHandler.REFRESH_CKP_METADATA, getRequestParams(path.toString()),
+          InstantStateHandler.REFRESH_INSTANT_STATE, getRequestParams(path.toString()),
           new TypeReference<Boolean>() {
           }, RequestMethod.POST);
       if (!success) {

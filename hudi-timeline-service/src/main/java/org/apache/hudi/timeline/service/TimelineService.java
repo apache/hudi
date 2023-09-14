@@ -114,8 +114,8 @@ public class TimelineService {
     @Parameter(names = {"--enable-marker-requests", "-em"}, description = "Enable handling of marker-related requests")
     public boolean enableMarkerRequests = false;
 
-    @Parameter(names = {"--enable-ckp-metadata-requests"}, description = "Enable handling of flink ckp metadata requests")
-    public boolean enableCkpMeatadataRequests = false;
+    @Parameter(names = {"--enable-instant-state-requests"}, description = "Enable handling of flink ckp metadata requests")
+    public boolean enableInstantRequests = false;
 
     @Parameter(names = {"--marker-batch-threads", "-mbt"}, description = "Number of threads to use for batch processing marker creation requests")
     public int markerBatchNumThreads = 20;
@@ -182,7 +182,7 @@ public class TimelineService {
       private boolean async = false;
       private boolean compress = true;
       private boolean enableMarkerRequests = false;
-      private boolean enableCkpMetadataRequests = false;
+      private boolean enableInstantStateRequests = false;
       private int markerBatchNumThreads = 20;
       private long markerBatchIntervalMs = 50L;
       private int markerParallelism = 100;
@@ -291,8 +291,8 @@ public class TimelineService {
         return this;
       }
 
-      public Builder enableCkpMetadataRequests(boolean enableCkpMetadataRequests) {
-        this.enableCkpMetadataRequests = enableCkpMetadataRequests;
+      public Builder enableInstantStateRequests(boolean enableCkpInstantStateRequests) {
+        this.enableInstantStateRequests = enableCkpInstantStateRequests;
         return this;
       }
 
@@ -317,7 +317,7 @@ public class TimelineService {
         config.asyncConflictDetectorInitialDelayMs = this.asyncConflictDetectorInitialDelayMs;
         config.asyncConflictDetectorPeriodMs = this.asyncConflictDetectorPeriodMs;
         config.maxAllowableHeartbeatIntervalInMs = this.maxAllowableHeartbeatIntervalInMs;
-        config.enableCkpMeatadataRequests = this.enableCkpMetadataRequests;
+        config.enableInstantRequests = this.enableInstantStateRequests;
         return config;
       }
     }

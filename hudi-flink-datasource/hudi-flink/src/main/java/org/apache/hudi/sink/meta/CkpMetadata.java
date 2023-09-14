@@ -210,7 +210,7 @@ public class CkpMetadata implements Serializable, AutoCloseable {
     return new Path(path, fileName);
   }
 
-  protected Stream<CkpMessage> readCkpMessages(Path ckpMetaPath) throws IOException {
+  protected Stream<CkpMessage> fetchCkpMessages(Path ckpMetaPath) throws IOException {
     // This is required when the storage is minio
     if (!this.fs.exists(ckpMetaPath)) {
       return Stream.empty();
@@ -221,7 +221,7 @@ public class CkpMetadata implements Serializable, AutoCloseable {
   }
 
   protected List<CkpMessage> scanCkpMetadata(Path ckpMetaPath) throws IOException {
-    return readCkpMessages(ckpMetaPath)
+    return fetchCkpMessages(ckpMetaPath)
         .collect(Collectors.groupingBy(CkpMessage::getInstant)).values().stream()
         .map(messages -> messages.stream().reduce((x, y) -> {
           // Pick the one with the highest state

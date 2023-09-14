@@ -25,10 +25,12 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.hadoop.fs.FileStatus;
 
 /**
- * Data transfer object for CkpMessage.
+ * Data transfer object for instant state.
+ *
+ * see org.apache.hudi.sink.meta.CkpMessage.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class CkpMetadataDTO {
+public class InstantStateDTO {
 
   /**
    * Ckp message instant.
@@ -46,8 +48,8 @@ public class CkpMetadataDTO {
   @JsonProperty("state")
   String state;
 
-  public static CkpMetadataDTO fromFileStatus(FileStatus fileStatus) {
-    CkpMetadataDTO ret = new CkpMetadataDTO();
+  public static InstantStateDTO fromFileStatus(FileStatus fileStatus) {
+    InstantStateDTO ret = new InstantStateDTO();
     String fileName = fileStatus.getPath().getName();
     String[] nameAndExt = fileName.split("\\.");
     ValidationUtils.checkState(nameAndExt.length == 2);

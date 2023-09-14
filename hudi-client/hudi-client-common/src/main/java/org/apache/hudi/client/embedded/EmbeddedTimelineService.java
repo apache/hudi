@@ -101,7 +101,7 @@ public class EmbeddedTimelineService {
     }
 
     if (writeConfig.isTimelineServerBasedInstantStateEnabled()) {
-      timelineServiceConfBuilder.enableCkpMetadataRequests(true);
+      timelineServiceConfBuilder.enableInstantStateRequests(true);
     }
 
     server = new TimelineService(context, hadoopConf.newCopy(), timelineServiceConfBuilder.build(),

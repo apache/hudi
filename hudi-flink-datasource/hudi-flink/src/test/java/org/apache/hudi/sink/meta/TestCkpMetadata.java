@@ -20,6 +20,7 @@ package org.apache.hudi.sink.meta;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -107,7 +108,8 @@ public class TestCkpMetadata {
   }
 
   protected CkpMetadata getCkpMetadata(String uniqueId) {
-    return CkpMetadataFactory.get(writeClient.getHoodieTable(), conf);
+    conf.set(FlinkOptions.WRITE_CLIENT_ID, uniqueId);
+    return CkpMetadataFactory.getCkpMetadata(writeClient.getHoodieTable().getMetaClient(), writeClient.getConfig(), conf);
   }
 
   @AfterEach
