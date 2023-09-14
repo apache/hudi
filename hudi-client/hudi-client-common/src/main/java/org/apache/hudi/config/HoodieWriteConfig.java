@@ -299,9 +299,9 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.bulkinsert.user.defined.partitioner.class")
       .noDefaultValue()
       .markAdvanced()
-      .withDocumentation("If specified, this class will be used to re-partition records before they are bulk inserted. This can be used to sort, pack, cluster data"
-          + " optimally for common query patterns. For now we support a build-in user defined bulkinsert partitioner org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner"
-          + " which can does sorting based on specified column values set by " + BULKINSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS.key());
+      .withDocumentation("If specified, this class will be used to re-partition records before they are bulk inserted. This can be used to sort, pack, cluster data "
+          + "optimally for common query patterns. For now we support a build-in user defined bulkinsert partitioner org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner "
+          + "which can does sorting based on specified column values set by " + BULKINSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS.key());
 
   public static final ConfigProperty<String> UPSERT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.upsert.shuffle.parallelism")
@@ -364,23 +364,23 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.combine.before.insert")
       .defaultValue("false")
       .markAdvanced()
-      .withDocumentation("When inserted records share same key, controls whether they should be first combined (i.e de-duplicated) before"
-          + " writing to storage.");
+      .withDocumentation("When inserted records share same key, controls whether they should be first combined (i.e de-duplicated) before "
+          + "writing to storage.");
 
   public static final ConfigProperty<String> COMBINE_BEFORE_UPSERT = ConfigProperty
       .key("hoodie.combine.before.upsert")
       .defaultValue("true")
       .markAdvanced()
-      .withDocumentation("When upserted records share same key, controls whether they should be first combined (i.e de-duplicated) before"
-          + " writing to storage. This should be turned off only if you are absolutely certain that there are no duplicates incoming, "
-          + " otherwise it can lead to duplicate keys and violate the uniqueness guarantees.");
+      .withDocumentation("When upserted records share same key, controls whether they should be first combined (i.e de-duplicated) before "
+          + "writing to storage. This should be turned off only if you are absolutely certain that there are no duplicates incoming, "
+          + "otherwise it can lead to duplicate keys and violate the uniqueness guarantees.");
 
   public static final ConfigProperty<String> COMBINE_BEFORE_DELETE = ConfigProperty
       .key("hoodie.combine.before.delete")
       .defaultValue("true")
       .markAdvanced()
       .withDocumentation("During delete operations, controls whether we should combine deletes (and potentially also upserts) before "
-          + " writing to storage.");
+          + "writing to storage.");
 
   public static final ConfigProperty<String> WRITE_STATUS_STORAGE_LEVEL_VALUE = ConfigProperty
       .key("hoodie.write.status.storage.level")
@@ -393,8 +393,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.auto.commit")
       .defaultValue("true")
       .markAdvanced()
-      .withDocumentation("Controls whether a write operation should auto commit. This can be turned off to perform inspection"
-          + " of the uncommitted write before deciding to commit.");
+      .withDocumentation("Controls whether a write operation should auto commit. This can be turned off to perform inspection "
+          + "of the uncommitted write before deciding to commit.");
 
   public static final ConfigProperty<String> WRITE_STATUS_CLASS_NAME = ConfigProperty
       .key("hoodie.writestatus.class")
@@ -450,14 +450,14 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.embed.timeline.server")
       .defaultValue("true")
       .markAdvanced()
-      .withDocumentation("When true, spins up an instance of the timeline server (meta server that serves cached file listings, statistics),"
+      .withDocumentation("When true, spins up an instance of the timeline server (meta server that serves cached file listings, statistics), "
           + "running on each writer's driver process, accepting requests during the write from executors.");
 
   public static final ConfigProperty<Boolean> EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED = ConfigProperty
       .key("hoodie.embed.timeline.server.reuse.enabled")
       .defaultValue(false)
       .markAdvanced()
-      .withDocumentation("Controls whether the timeline server instance should be cached and reused across the JVM (across task lifecycles)"
+      .withDocumentation("Controls whether the timeline server instance should be cached and reused across the JVM (across task lifecycles) "
           + "to avoid startup costs. This should rarely be changed.");
 
   public static final ConfigProperty<String> EMBEDDED_TIMELINE_SERVER_PORT_NUM = ConfigProperty
@@ -505,8 +505,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.consistency.check.initial_interval_ms")
       .defaultValue(2000L)
       .markAdvanced()
-      .withDocumentation("Initial time between successive attempts to ensure written data's metadata is consistent on storage. Grows with exponential"
-          + " backoff after the initial value.");
+      .withDocumentation("Initial time between successive attempts to ensure written data's metadata is consistent on storage. Grows with exponential "
+          + "backoff after the initial value.");
 
   public static final ConfigProperty<Long> MAX_CONSISTENCY_CHECK_INTERVAL_MS = ConfigProperty
       .key("hoodie.consistency.check.max_interval_ms")
@@ -531,8 +531,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.merge.allow.duplicate.on.inserts")
       .defaultValue("false")
       .markAdvanced()
-      .withDocumentation("When enabled, we allow duplicate keys even if inserts are routed to merge with an existing file (for ensuring file sizing)."
-          + " This is only relevant for insert operation, since upsert, delete operations will ensure unique key constraints are maintained.");
+      .withDocumentation("When enabled, we allow duplicate keys even if inserts are routed to merge with an existing file (for ensuring file sizing). "
+          + "This is only relevant for insert operation, since upsert, delete operations will ensure unique key constraints are maintained.");
 
   public static final ConfigProperty<Integer> MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT = ConfigProperty
       .key("hoodie.merge.small.file.group.candidates.limit")
@@ -596,8 +596,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue("false")
       .withAlternatives(AVRO_SCHEMA_STRING.key() + ".externalTransformation")
       .markAdvanced()
-      .withDocumentation("When enabled, records in older schema are rewritten into newer schema during upsert,delete and background"
-          + " compaction,clustering operations.");
+      .withDocumentation("When enabled, records in older schema are rewritten into newer schema during upsert,delete and background "
+          + "compaction,clustering operations.");
 
   public static final ConfigProperty<Boolean> ALLOW_EMPTY_COMMIT = ConfigProperty
       .key("hoodie.allow.empty.commit")
@@ -725,7 +725,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.14.0")
       .withDocumentation("Fully-qualified class names of the Hudi client init callbacks to run "
           + "at the initialization of the Hudi client.  The class names are separated by `,`. "
-          + "The class must be a subclass of `org.apache.hudi.callback.HoodieClientInitCallback`."
+          + "The class must be a subclass of `org.apache.hudi.callback.HoodieClientInitCallback`. "
           + "By default, no Hudi client init callback is executed.");
 
   /**

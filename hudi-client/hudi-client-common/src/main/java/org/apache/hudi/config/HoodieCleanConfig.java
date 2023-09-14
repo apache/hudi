@@ -52,9 +52,9 @@ public class HoodieCleanConfig extends HoodieConfig {
       .key("hoodie.clean.automatic")
       .defaultValue("true")
       .markAdvanced()
-      .withDocumentation("When enabled, the cleaner table service is invoked immediately after each commit,"
-          + " to delete older file slices. It's recommended to enable this, to ensure metadata and data storage"
-          + " growth is bounded.");
+      .withDocumentation("When enabled, the cleaner table service is invoked immediately after each commit, "
+          + "to delete older file slices. It's recommended to enable this, to ensure metadata and data storage "
+          + "growth is bounded.");
 
   public static final ConfigProperty<String> ASYNC_CLEAN = ConfigProperty
       .key("hoodie.clean.async")
@@ -101,16 +101,16 @@ public class HoodieCleanConfig extends HoodieConfig {
   public static final ConfigProperty<String> CLEANER_HOURS_RETAINED = ConfigProperty.key(CLEANER_HOURS_RETAINED_KEY)
       .defaultValue("24")
       .markAdvanced()
-      .withDocumentation("Number of hours for which commits need to be retained. This config provides a more flexible option as"
-          + "compared to number of commits retained for cleaning service. Setting this property ensures all the files, but the latest in a file group,"
-          + " corresponding to commits with commit times older than the configured number of hours to be retained are cleaned.");
+      .withDocumentation("Number of hours for which commits need to be retained. This config provides a more flexible option as "
+          + "compared to number of commits retained for cleaning service. Setting this property ensures all the files, but the latest in a file group, "
+          + "corresponding to commits with commit times older than the configured number of hours to be retained are cleaned.");
 
   public static final ConfigProperty<String> CLEANER_FILE_VERSIONS_RETAINED = ConfigProperty
       .key(CLEANER_FILE_VERSIONS_RETAINED_KEY)
       .defaultValue("3")
       .markAdvanced()
       .withDocumentation("When " + HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name() + " cleaning policy is used, "
-          + " the minimum number of file slices to retain in each file group, during cleaning.");
+          + "the minimum number of file slices to retain in each file group, during cleaning.");
 
   public static final ConfigProperty<String> CLEAN_TRIGGER_STRATEGY = ConfigProperty
       .key("hoodie.clean.trigger.strategy")
@@ -129,8 +129,8 @@ public class HoodieCleanConfig extends HoodieConfig {
       .defaultValue("true")
       .markAdvanced()
       .withDocumentation("When enabled, the plans for each cleaner service run is computed incrementally off the events "
-          + " in the timeline, since the last cleaner run. This is much more efficient than obtaining listings for the full"
-          + " table for each planning (even with a metadata table).");
+          + "in the timeline, since the last cleaner run. This is much more efficient than obtaining listings for the full "
+          + "table for each planning (even with a metadata table).");
 
   public static final ConfigProperty<String> FAILED_WRITES_CLEANER_POLICY = ConfigProperty
       .key("hoodie.cleaner.policy.failed.writes")
@@ -175,9 +175,9 @@ public class HoodieCleanConfig extends HoodieConfig {
       .defaultValue("false")
       .markAdvanced()
       .withDocumentation("When set to true, cleaner also deletes the bootstrap base file when it's skeleton base file is "
-          + " cleaned. Turn this to true, if you want to ensure the bootstrap dataset storage is reclaimed over time, as the"
-          + " table receives updates/deletes. Another reason to turn this on, would be to ensure data residing in bootstrap "
-          + " base files are also physically deleted, to comply with data privacy enforcement processes.");
+          + "cleaned. Turn this to true, if you want to ensure the bootstrap dataset storage is reclaimed over time, as the "
+          + "table receives updates/deletes. Another reason to turn this on, would be to ensure data residing in bootstrap "
+          + "base files are also physically deleted, to comply with data privacy enforcement processes.");
 
 
   /** @deprecated Use {@link #CLEANER_POLICY} and its methods instead */
