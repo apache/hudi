@@ -308,7 +308,7 @@ can generate sample inserts and updates based on the the sample trip schema [her
 
 ## Create Table
 
-Before we go further, few terminologies to familiarize: 
+Before we go further, let us go over few terminologies: 
 
 - **Table types**
 
@@ -329,7 +329,7 @@ of these table types depending on their workload and SLA requirements. You can r
   if contents match. Such keyless tables are supported from Hudi 0.14.0.
 
 :::note
-For the purpose of quick start guide, we will go with one table type (COW) which is partitioned.
+For the purpose of quick start guide, we will go with only COW table type which is partitioned.
 :::
 
 <Tabs
@@ -365,11 +365,11 @@ Spark SQL needs an explicit create table command.
 
 Users can set table properties while creating a hudi table. Critical options are listed here.
 
-| Parameter Name | Default | Introduction                                                                                                                                                                                                                                                                                                                                  |
-|------------------|--------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| primaryKey | uuid | The primary key field names of the table, multiple fields separated by commas. Same as `hoodie.datasource.write.recordkey.field`. This can be ignored for a key less table (from 0.14.0).                                                                                                                                                     |
-| preCombineField |  | The pre-combine field of the table. Same as `hoodie.datasource.write.precombine.field`. is used for resolving the final version of the record among multiple versions. Generally `event time` or some other similar column will be used for ordering purpose. Hudi will be able to handle out of order data using the preCombine field value. |
-| type       | cow | The table type to create. type = 'cow' means a COPY-ON-WRITE table, while type = 'mor' means a MERGE-ON-READ table. Same as `hoodie.datasource.write.table.type`                                                                                                                                                                              |
+| Parameter Name | Default | Introduction                                                                                                                                                                                                                                                                                                                                     |
+|------------------|--------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| primaryKey | uuid | The primary key field names of the table, multiple fields separated by commas. Same as `hoodie.datasource.write.recordkey.field`. This can be ignored for a key less table (from 0.14.0).                                                                                                                                                        |
+| preCombineField |  | The pre-combine field of the table. Same as `hoodie.datasource.write.precombine.field` and is used for resolving the final version of the record among multiple versions. Generally `event time` or some other similar column will be used for ordering purpose. Hudi will be able to handle out of order data using the preCombine field value. |
+| type       | cow | The table type to create. type = 'cow' means a COPY-ON-WRITE table, while type = 'mor' means a MERGE-ON-READ table. Same as `hoodie.datasource.write.table.type`                                                                                                                                                                                 |
 
 :::note
 1. `primaryKey`, `preCombineField`, and `type` are case-sensitive.
@@ -390,9 +390,6 @@ create table hudi_cow_pt_tbl (
   dt string,
   hh string
 ) using hudi
-tblproperties (
-  type = 'cow',
- )
 partitioned by dt
 location '/tmp/hudi/hudi_cow_pt_tbl';
 ```
@@ -432,7 +429,6 @@ CTAS uses the **bulk insert** as the write operation for better writer performan
 -- CTAS: create a partitioned, keyless COW table 
 create table hudi_ctas_cow_pt_tbl
 using hudi
-tblproperties (type = 'cow')
 partitioned by (dt)
 as
 select 1 as id, 'a1' as name, 10 as price;
@@ -458,7 +454,7 @@ select 1 as id, 'a1' as name, 10 as price, 1000 as ts, '2021-12-01' as dt;
 create table parquet_mngd using parquet location 'file:///tmp/parquet_dataset/*.parquet';
 
 # CTAS by loading data into hudi table
-create table hudi_ctas_cow_pt_tbl2 using hudi location 'file:/tmp/hudi/hudi_tbl/' options (
+create table hudi_ctas_cow_pt_tbl2 using hudi location 'file:/tmp/hudi/hudi_tbl/' tblproperties (
   type = 'cow',
   primaryKey = 'id',
   preCombineField = 'ts'
@@ -653,7 +649,7 @@ Here we are using the default write operation : `upsert`. If you have a workload
 
 <TabItem value="sparksql">
 
-Users can use 'INSERT_INTO' to insert data into a hudi table using spark-sql. 
+Users can use 'INSERT INTO' to insert data into a hudi table using spark-sql. 
 
 ```sql
 -- insert into non-partitioned table
@@ -669,13 +665,14 @@ insert into hudi_cow_pt_tbl partition(dt = '2021-12-09', hh='11') select 2, 'a2'
 ```
 
 :::note
-- `hoodie.spark.sql.insert.into.operation` will determine how records ingested via spark-sql INSERT_INTO will be treated. Possible values are "bulk_insert", "insert"
+- `hoodie.spark.sql.insert.into.operation` will determine how records ingested via spark-sql INSERT INTO will be treated. Possible values are "bulk_insert", "insert"
   and "upsert". If "bulk_insert" is chosen, hudi writes incoming records as is without any automatic small file management.
   When "insert" is chosen, hudi inserts the new incoming records and also does small file management.
   When "upsert" is used, hudi takes upsert flow, where incoming batch will be de-duped before ingest and also merged with previous versions of the record in storage. 
   For a table without any precombine key set, "insert" is chosen as the default value for this config. For a table with precombine key set, 
   "upsert" is chosen as the default value for this config.
 - From 0.14.0, `hoodie.sql.bulk.insert.enable` and `hoodie.sql.insert.mode` are depecrated. Users are expected to use `hoodie.spark.sql.insert.into.operation` instead.
+- To manage duplicates with `INSERT INTO`, please do check out [insert dup policy config](/docs/next/configurations#hoodiedatasourceinsertduppolicy).
 :::
 
 Here are examples to override the spark.sql.insert.into.operation.
@@ -889,7 +886,7 @@ when not matched then
 ```
 
 :::note
-For a Primary keyed Hudi table, the join condition in MIT is expected to contain the primary keys of the table. 
+For a Primary keyed Hudi table, the join condition in `Merge Into` is expected to contain the primary keys of the table. 
 For a Keyless table, the join condition in MIT can be on any arbitrary data columns.
 :::
 
@@ -1134,7 +1131,7 @@ select * from hudi_cow_pt_tbl timestamp as of '2022-03-08' where id = 1;
 ### Incremental query
 
 Hudi also provides capability to obtain a stream of records that changed since given commit timestamp. 
-This can be achieved using Hudi's incremental querying and providing a begin time from which changes need to be streamed. 
+This can be achieved using Hudi's incremental querying by providing a begin time from which changes need to be streamed. 
 We do not need to specify endTime, if we want all changes after the given commit (as is the common case). 
 
 <Tabs
@@ -1249,7 +1246,7 @@ feature is that it now lets you author streaming pipelines on batch data.
 
 ## Streaming writers
 ### Hudi Streamer
-Hudi provides a ingestion tool to assist with ingesting data into hudi from various difference sources in a streaming manner. 
+Hudi provides a ingestion tool to assist with ingesting data into hudi from various different sources in a streaming manner. 
 This has lot of niceties like auto checkpointing, schema enforcement via schema provider, transformation support and so on.
 Please refer to [here](/docs/next/hoodie_deltastreamer#hudi-streamer) for more info. 
 
@@ -1280,5 +1277,5 @@ Also, we used Spark here to show case the capabilities of Hudi. However, Hudi ca
 Hudi tables can be queried from query engines like Hive, Spark, Presto and much more. We have put together a 
 [demo video](https://www.youtube.com/watch?v=VhNgUsxdrD0) that show cases all of this on a docker based setup with all 
 dependent systems running locally. We recommend you replicate the same setup and run the demo yourself, by following 
-steps [here](/docs/next/docker_demo) to get a taste for it. Also, if you are looking for ways to migrate your existing data 
+steps [here](/docs/next/docker_demo) to get a taste of it. Also, if you are looking for ways to migrate your existing data 
 to Hudi, refer to [migration guide](/docs/next/migration_guide).
