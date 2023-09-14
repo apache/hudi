@@ -48,7 +48,6 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_AC
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_SCHEMA;
 import static org.apache.hudi.common.util.CommitUtils.getCheckpointValueAsString;
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -163,12 +162,11 @@ public class TestCommitUtils {
     commitMetadata.addMetadata(SINK_CHECKPOINT_KEY,
         getCheckpointValueAsString(id, batchId));
     timeline.createNewInstant(instant);
-    timeline.transitionRequestedToInflight(
-        instant, Option.of(getUTF8Bytes(commitMetadata.toJsonString())));
+    timeline.transitionRequestedToInflight(instant, TimelineMetadataUtils.serializeCommitMetadata(commitMetadata));
     if (isCompleted) {
-      timeline.saveAsComplete(new HoodieInstant(
-              true, instant.getAction(), instant.getTimestamp()),
-          Option.of(getUTF8Bytes(commitMetadata.toJsonString())));
+      timeline.saveAsComplete(
+          new HoodieInstant(true, instant.getAction(), instant.getTimestamp()),
+          TimelineMetadataUtils.serializeCommitMetadata(commitMetadata));
     }
   }
 
@@ -179,11 +177,10 @@ public class TestCommitUtils {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     commitMetadata.setOperationType(WriteOperationType.COMPACT);
     timeline.createNewInstant(instant);
-    timeline.transitionRequestedToInflight(
-        instant, Option.of(getUTF8Bytes(commitMetadata.toJsonString())));
-    timeline.saveAsComplete(new HoodieInstant(
-            true, instant.getAction(), instant.getTimestamp()),
-        Option.of(getUTF8Bytes(commitMetadata.toJsonString())));
+    timeline.transitionRequestedToInflight(instant, TimelineMetadataUtils.serializeCommitMetadata(commitMetadata));
+    timeline.saveAsComplete(
+        new HoodieInstant(true, instant.getAction(), instant.getTimestamp()),
+        TimelineMetadataUtils.serializeCommitMetadata(commitMetadata));
   }
 
   private void addRequestedCompaction(HoodieActiveTimeline timeline,
