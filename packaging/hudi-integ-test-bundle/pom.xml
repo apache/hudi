@@ -121,7 +121,6 @@
                   <include>com.twitter:bijection-core_${scala.binary.version}</include>
                   <include>org.apache.parquet:parquet-avro</include>
                   <include>com.twitter:parquet-avro</include>
-                  <include>org.apache.avro:avro</include>
                   <include>com.twitter.common:objectsize</include>
 
                   <include>io.confluent:kafka-avro-serializer</include>
@@ -175,10 +174,7 @@
                   <pattern>org.apache.spark.sql.avro.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.spark.sql.avro.</shadedPattern>
                 </relocation>
-                <relocation>
-                  <pattern>org.apache.avro.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.avro.</shadedPattern>
-                </relocation>
+
                 <relocation>
                   <pattern>com.beust.jcommander.</pattern>
                   <shadedPattern>org.apache.hudi.com.beust.jcommander.</shadedPattern>
@@ -611,13 +607,6 @@
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-hadoop</artifactId>
       <version>${parquet.version}</version>
-    </dependency>
-
-    <!-- Avro -->
-    <dependency>
-      <groupId>org.apache.avro</groupId>
-      <artifactId>avro</artifactId>
-      <scope>compile</scope>
     </dependency>
 
     <dependency>

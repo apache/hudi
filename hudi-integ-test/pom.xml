@@ -106,13 +106,6 @@
       <scope>test</scope>
     </dependency>
 
-    <!-- Avro -->
-    <dependency>
-      <groupId>org.apache.avro</groupId>
-      <artifactId>avro</artifactId>
-      <scope>test</scope>
-    </dependency>
-
     <!-- Hoodie -->
     <dependency>
       <groupId>org.apache.hudi</groupId>
