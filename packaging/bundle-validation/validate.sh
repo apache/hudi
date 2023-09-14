@@ -287,13 +287,13 @@ then
 else
   echo "::warning::validate.sh skip validating utilities bundle for non-spark2.4 & non-spark3.1 build"
 fi
-# TODO: HUDI-6859
-#echo "::warning::validate.sh validating utilities slim bundle"
-#test_utilities_bundle $JARS_DIR/utilities-slim.jar $JARS_DIR/spark.jar
-#if [ "$?" -ne 0 ]; then
-#    exit 1
-#fi
-#echo "::warning::validate.sh done validating utilities slim bundle"
+
+echo "::warning::validate.sh validating utilities slim bundle"
+test_utilities_bundle $JARS_DIR/utilities-slim.jar $JARS_DIR/spark.jar
+if [ "$?" -ne 0 ]; then
+    exit 1
+fi
+echo "::warning::validate.sh done validating utilities slim bundle"
 
 if [[ ${JAVA_RUNTIME_VERSION} == 'openjdk8' ]]; then
   echo "::warning::validate.sh validating flink bundle"

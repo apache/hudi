@@ -49,7 +49,6 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -116,7 +115,6 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
   /**
    * Test case for command 'compaction run'.
    */
-  @Disabled("HUDI-6859")
   @Test
   public void testCompact() throws IOException {
     // generate commits
@@ -146,7 +144,6 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
   /**
    * Test case for command 'compaction scheduleAndExecute'.
    */
-  @Disabled("HUDI-6859")
   @Test
   public void testCompactScheduleAndExecute() throws IOException {
     // generate commits

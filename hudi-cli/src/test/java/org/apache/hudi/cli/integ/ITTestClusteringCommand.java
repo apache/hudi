@@ -40,7 +40,6 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -84,7 +83,6 @@ public class ITTestClusteringCommand extends HoodieCLIIntegrationTestBase {
   /**
    * Test case for command 'clustering schedule'.
    */
-  @Disabled("HUDI-6859")
   @Test
   public void testScheduleClustering() throws IOException {
     // generate commits
@@ -104,7 +102,6 @@ public class ITTestClusteringCommand extends HoodieCLIIntegrationTestBase {
   /**
    * Test case for command 'clustering run'.
    */
-  @Disabled("HUDI-6859")
   @Test
   public void testClustering() throws IOException {
     // generate commits
@@ -144,7 +141,6 @@ public class ITTestClusteringCommand extends HoodieCLIIntegrationTestBase {
   /**
    * Test case for command 'clustering scheduleAndExecute'.
    */
-  @Disabled("HUDI-6859")
   @Test
   public void testClusteringScheduleAndExecute() throws IOException {
     // generate commits
