@@ -33,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -79,7 +80,12 @@ public class TestIndexingCatchupTask {
         metadataMetaClient,
         transactionManager,
         "001",
-        engineContext);
+        engineContext) {
+      @Override
+      public void updateIndexForWriteAction(HoodieInstant instant) throws IOException {
+        // no-op
+      }
+    };
 
     task.run();
     assertEquals("001", task.currentCaughtupInstant);
@@ -114,7 +120,12 @@ public class TestIndexingCatchupTask {
         metadataMetaClient,
         transactionManager,
         "001",
-        engineContext);
+        engineContext) {
+      @Override
+      public void updateIndexForWriteAction(HoodieInstant instant) throws IOException {
+        // no-op
+      }
+    };
 
     // Interrupt the task after a delay to simulate the negative path
     Thread thread = new Thread(task);
@@ -128,10 +139,10 @@ public class TestIndexingCatchupTask {
     }
 
     // Check if HoodieIndexException is thrown
-    assertThrows(HoodieIndexException.class, () -> task.getHoodieInstant(neverCompletedInstant));
+    assertThrows(HoodieIndexException.class, () -> task.awaitInstantCaughtUp(neverCompletedInstant));
   }
 
-  static class DummyIndexingCatchupTask extends BaseIndexingCatchupTask {
+  static abstract class DummyIndexingCatchupTask extends BaseIndexingCatchupTask {
     public DummyIndexingCatchupTask(HoodieTableMetadataWriter metadataWriter,
                                     List<HoodieInstant> instantsToIndex,
                                     Set<String> metadataCompletedInstants,

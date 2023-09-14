@@ -44,7 +44,7 @@ public class IndexingCatchupTaskFactory {
     boolean isRecordLevelIndexing = indexPartitionInfos.stream()
         .anyMatch(partitionInfo -> partitionInfo.getMetadataPartitionPath().equals(MetadataPartitionType.RECORD_INDEX.getPartitionPath()));
     if (isRecordLevelIndexing) {
-      return new HoodieRecordBasedIndexingCatchup(
+      return new RecordBasedIndexingCatchupTask(
           metadataWriter,
           instantsToIndex,
           metadataCompletedInstants,
@@ -54,7 +54,7 @@ public class IndexingCatchupTaskFactory {
           transactionManager,
           engineContext);
     } else {
-      return new HoodieCommitMetadataBasedIndexingCatchup(
+      return new WriteStatBasedIndexingCatchupTask(
           metadataWriter,
           instantsToIndex,
           metadataCompletedInstants,
