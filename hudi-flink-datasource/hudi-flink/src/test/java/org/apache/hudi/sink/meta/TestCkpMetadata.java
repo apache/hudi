@@ -18,14 +18,14 @@
 
 package org.apache.hudi.sink.meta;
 
-import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 
 import org.apache.flink.configuration.Configuration;
-import org.apache.hadoop.fs.FileSystem;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -51,6 +51,10 @@ public class TestCkpMetadata {
   @TempDir
   File tempFile;
 
+  protected Configuration conf;
+
+  protected HoodieFlinkWriteClient writeClient;
+
   @BeforeEach
   public void beforeEach() throws Exception {
     setup();
@@ -58,9 +62,10 @@ public class TestCkpMetadata {
 
   protected void setup() throws IOException {
     String basePath = tempFile.getAbsolutePath();
-    Configuration conf = TestConfigurations.getDefaultConf(basePath);
-    conf.setString(HoodieWriteConfig.TIMELINE_SERVER_BASED_CKP_METADATA.key(), "false");
+    this.conf = TestConfigurations.getDefaultConf(basePath);
+    conf.setString(HoodieWriteConfig.INSTANT_STATE_TIMELINE_SERVER_BASED.key(), "false");
     StreamerUtil.initTableIfNotExists(conf);
+    this.writeClient = FlinkWriteClients.createWriteClient(conf);
   }
 
   @ParameterizedTest
@@ -102,8 +107,15 @@ public class TestCkpMetadata {
   }
 
   protected CkpMetadata getCkpMetadata(String uniqueId) {
-    String basePath = tempFile.getAbsolutePath();
-    FileSystem fs = FSUtils.getFs(basePath, HadoopConfigurations.getHadoopConf(new Configuration()));
-    return CkpMetadata.getInstance(fs, basePath, uniqueId, null);
+    return CkpMetadataFactory.get(writeClient.getHoodieTable(), conf);
   }
+
+  @AfterEach
+  public void cleanup() {
+    if (writeClient != null) {
+      writeClient.close();
+      writeClient = null;
+    }
+  }
+
 }

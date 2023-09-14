@@ -615,6 +615,31 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .end();
   }
 
+  @Test
+  public void testTimelineBasedCkpMetadataFailover() throws Exception {
+    // reset the config option
+    conf.setString(FlinkOptions.OPERATION, "insert");
+    conf.setBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, true);
+    conf.setBoolean(FlinkOptions.CLUSTERING_ASYNC_ENABLED, true);
+    conf.setInteger(FlinkOptions.CLUSTERING_DELTA_COMMITS, 1);
+
+    preparePipeline()
+        .consume(TestData.DATA_SET_INSERT_SAME_KEY)
+        .checkpoint(1)
+        // stop the timeline server by close write client
+        .stopTimelineServer()
+        .handleEvents(1)
+        .checkpointComplete(1)
+        // will still be able to write and checkpoint
+        .checkWrittenData(EXPECTED4, 1)
+        .consume(TestData.DATA_SET_INSERT_SAME_KEY)
+        .checkpoint(2)
+        .handleEvents(1)
+        .checkpointComplete(2)
+        .checkWrittenDataCOW(EXPECTED5)
+        .end();
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------

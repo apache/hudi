@@ -428,11 +428,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.9.0")
       .withDocumentation(MarkerType.class);
 
-  public static final ConfigProperty<Boolean> TIMELINE_SERVER_BASED_CKP_METADATA = ConfigProperty
-      .key("hoodie.ckp_metadata.timeline_server_based.enable")
+  public static final ConfigProperty<Boolean> INSTANT_STATE_TIMELINE_SERVER_BASED = ConfigProperty
+      .key("hoodie.instant_state.timeline_server_based.enabled")
       .defaultValue(true)
       .sinceVersion("1.0.0")
-      .withDocumentation("If enabled, Flink writer get instant time from timeline server rather than requesting DFS directly");
+      .withDocumentation("If enabled, Flink writer get instant state from timeline server rather than requesting DFS directly");
 
   public static final ConfigProperty<Integer> MARKERS_TIMELINE_SERVER_BASED_BATCH_NUM_THREADS = ConfigProperty
       .key("hoodie.markers.timeline_server_based.batch.num_threads")
@@ -1365,8 +1365,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(FINALIZE_WRITE_PARALLELISM_VALUE);
   }
 
-  public boolean isTimelineServerBasedCkpMetadataEnabled() {
-    return getBoolean(TIMELINE_SERVER_BASED_CKP_METADATA);
+  public boolean isTimelineServerBasedInstantStateEnabled() {
+    return getBoolean(INSTANT_STATE_TIMELINE_SERVER_BASED);
   }
 
   public MarkerType getMarkersType() {
@@ -2942,6 +2942,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withEmbeddedTimelineServerPort(int port) {
       writeConfig.setValue(EMBEDDED_TIMELINE_SERVER_PORT_NUM, String.valueOf(port));
+      return this;
+    }
+
+    public Builder withTimelineServerBasedInstantStateEnable(boolean enable) {
+      writeConfig.setValue(INSTANT_STATE_TIMELINE_SERVER_BASED, String.valueOf(enable));
       return this;
     }
 

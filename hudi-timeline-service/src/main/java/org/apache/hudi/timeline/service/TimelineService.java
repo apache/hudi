@@ -115,7 +115,7 @@ public class TimelineService {
     public boolean enableMarkerRequests = false;
 
     @Parameter(names = {"--enable-flink-ckp-requests"}, description = "Enable handling of flink ckp metadata requests")
-    public boolean enableFlinkCkpRequests = false;
+    public boolean enableCkpMeatadataRequests = false;
 
     @Parameter(names = {"--marker-batch-threads", "-mbt"}, description = "Number of threads to use for batch processing marker creation requests")
     public int markerBatchNumThreads = 20;
@@ -182,7 +182,7 @@ public class TimelineService {
       private boolean async = false;
       private boolean compress = true;
       private boolean enableMarkerRequests = false;
-      private boolean enableFlinkCkpRequests = false;
+      private boolean enableCkpMetadataRequests = false;
       private int markerBatchNumThreads = 20;
       private long markerBatchIntervalMs = 50L;
       private int markerParallelism = 100;
@@ -192,7 +192,6 @@ public class TimelineService {
       private Long asyncConflictDetectorInitialDelayMs = 0L;
       private Long asyncConflictDetectorPeriodMs = 30000L;
       private Long maxAllowableHeartbeatIntervalInMs = 120000L;
-      private Boolean enableFlinkCkpMetadataRequests = false;
 
       public Builder() {
       }
@@ -293,7 +292,7 @@ public class TimelineService {
       }
 
       public Builder enableFlinkCkpMetadataRequests(boolean enableFlinkCkpMetadataRequests) {
-        this.enableFlinkCkpRequests = enableFlinkCkpMetadataRequests;
+        this.enableCkpMetadataRequests = enableFlinkCkpMetadataRequests;
         return this;
       }
 
@@ -318,7 +317,7 @@ public class TimelineService {
         config.asyncConflictDetectorInitialDelayMs = this.asyncConflictDetectorInitialDelayMs;
         config.asyncConflictDetectorPeriodMs = this.asyncConflictDetectorPeriodMs;
         config.maxAllowableHeartbeatIntervalInMs = this.maxAllowableHeartbeatIntervalInMs;
-        config.enableFlinkCkpRequests = this.enableFlinkCkpRequests;
+        config.enableCkpMeatadataRequests = this.enableCkpMetadataRequests;
         return config;
       }
     }

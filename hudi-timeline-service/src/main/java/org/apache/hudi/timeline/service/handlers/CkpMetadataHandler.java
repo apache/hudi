@@ -41,9 +41,9 @@ import java.util.stream.Collectors;
  * <p>
  * The checkpoint messages are cached in timeline server and will be refreshed after metadata in file system were changed.
  */
-public class FlinkCkpMetadataHandler extends Handler {
+public class CkpMetadataHandler extends Handler {
 
-  private static final Logger LOG = LoggerFactory.getLogger(FlinkCkpMetadataHandler.class);
+  private static final Logger LOG = LoggerFactory.getLogger(CkpMetadataHandler.class);
 
   /**
    * Base url for flink ckp metadata requests.
@@ -70,8 +70,8 @@ public class FlinkCkpMetadataHandler extends Handler {
    */
   private final ConcurrentHashMap<String, List<CkpMetadataDTO>> cachedCkpMetadata;
 
-  public FlinkCkpMetadataHandler(Configuration conf, TimelineService.Config timelineServiceConfig, FileSystem fileSystem,
-                                 FileSystemViewManager viewManager) throws IOException {
+  public CkpMetadataHandler(Configuration conf, TimelineService.Config timelineServiceConfig, FileSystem fileSystem,
+                            FileSystemViewManager viewManager) throws IOException {
     super(conf, timelineServiceConfig, fileSystem, viewManager);
     this.cachedCkpMetadata = new ConcurrentHashMap<>();
   }

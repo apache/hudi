@@ -1,0 +1,43 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.hudi.sink.meta;
+
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.table.HoodieTable;
+
+import org.apache.flink.configuration.Configuration;
+
+/**
+ * A factory to generate {@link CkpMetadata} instance based on whether {@link HoodieWriteConfig#INSTANT_STATE_TIMELINE_SERVER_BASED} enabled.
+ */
+public class CkpMetadataFactory {
+  public static CkpMetadata get(HoodieTable table, Configuration config) {
+    String uniqueId = config.getString(FlinkOptions.WRITE_CLIENT_ID);
+    HoodieTableMetaClient metaClient = table.getMetaClient();
+    if (table.getConfig().isEmbeddedTimelineServerEnabled()
+        && table.getConfig().isTimelineServerBasedInstantStateEnabled()) {
+      return new TimelineBasedCkpMetadata(metaClient.getFs(), metaClient.getBasePath(), uniqueId, table.getConfig());
+    } else {
+      return new CkpMetadata(metaClient.getFs(), metaClient.getBasePath(), uniqueId);
+    }
+  }
+
+}

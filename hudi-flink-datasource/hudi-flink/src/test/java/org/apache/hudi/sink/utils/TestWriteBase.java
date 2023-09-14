@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
@@ -31,6 +32,8 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
+import org.apache.hudi.sink.meta.CkpMetadataFactory;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestUtils;
@@ -137,6 +140,8 @@ public class TestWriteBase {
     private String lastPending;
     private String lastComplete;
 
+    private HoodieFlinkWriteClient writeClient;
+
     public TestHarness preparePipeline(File basePath, Configuration conf) throws Exception {
       this.baseFile = basePath;
       this.basePath = this.baseFile.getAbsolutePath();
@@ -144,7 +149,8 @@ public class TestWriteBase {
       this.pipeline = TestData.getWritePipeline(this.basePath, conf);
       // open the function and ingest data
       this.pipeline.openFunction();
-      this.ckpMetadata = CkpMetadata.getInstance(conf, null);
+      this.writeClient = FlinkWriteClients.createWriteClient(conf);
+      this.ckpMetadata = CkpMetadataFactory.get(writeClient.getHoodieTable(), conf);
       return this;
     }
 
@@ -257,6 +263,15 @@ public class TestWriteBase {
      */
     public TestHarness checkpoint(long checkpointId) throws Exception {
       this.pipeline.checkpointFunction(checkpointId);
+      return this;
+    }
+
+    /**
+     * Stop the timeline server by closing write client
+     */
+    public TestHarness stopTimelineServer() {
+      writeClient.close();
+      writeClient = null;
       return this;
     }
 
@@ -484,6 +499,9 @@ public class TestWriteBase {
 
     public void end() throws Exception {
       this.pipeline.close();
+      if (writeClient != null) {
+        this.writeClient.close();
+      }
     }
 
     private String lastPendingInstant() {

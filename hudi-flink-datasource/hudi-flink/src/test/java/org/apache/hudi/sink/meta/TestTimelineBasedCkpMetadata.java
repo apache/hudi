@@ -18,16 +18,10 @@
 
 package org.apache.hudi.sink.meta;
 
-import org.apache.hudi.client.HoodieFlinkWriteClient;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 
-import org.apache.flink.configuration.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -43,25 +37,12 @@ import static org.hamcrest.MatcherAssert.assertThat;
  */
 public class TestTimelineBasedCkpMetadata extends TestCkpMetadata {
 
-  /**
-   * Will create timeline server when creating write client.
-   */
-  HoodieFlinkWriteClient writeClient;
-
   @Override
   public void setup() throws IOException {
     String basePath = tempFile.getAbsolutePath();
-    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    this.conf = TestConfigurations.getDefaultConf(basePath);
     StreamerUtil.initTableIfNotExists(conf);
     this.writeClient = FlinkWriteClients.createWriteClient(conf);
-  }
-
-  @AfterEach
-  public void cleanup() {
-    if (writeClient != null) {
-      writeClient.close();
-      writeClient = null;
-    }
   }
 
   @ParameterizedTest
@@ -86,14 +67,6 @@ public class TestTimelineBasedCkpMetadata extends TestCkpMetadata {
     metadata.commitInstant("6");
     metadata.abortInstant("7");
     assertThat(metadata.getMessages().size(), is(5));
-
-  }
-
-  @Override
-  protected CkpMetadata getCkpMetadata(String uniqueId) {
-    String basePath = tempFile.getAbsolutePath();
-    FileSystem fs = FSUtils.getFs(basePath, HadoopConfigurations.getHadoopConf(new org.apache.flink.configuration.Configuration()));
-    return CkpMetadata.getInstance(fs, basePath, uniqueId, writeClient.getConfig());
   }
 
 }
