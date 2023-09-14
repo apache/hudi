@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hudi.avro.JsonEncoder;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieLSMTimelineInstant;
@@ -40,7 +41,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.DatumWriter;
-import org.apache.avro.io.NoWrappingJsonEncoder;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.avro.specific.SpecificRecordBase;
@@ -277,7 +277,7 @@ public class MetadataConversionUtils {
     Schema avroSchema = clazz == org.apache.hudi.avro.model.HoodieReplaceCommitMetadata.class ? org.apache.hudi.avro.model.HoodieReplaceCommitMetadata.getClassSchema() :
         org.apache.hudi.avro.model.HoodieCommitMetadata.getClassSchema();
     try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
-      NoWrappingJsonEncoder jsonEncoder = new NoWrappingJsonEncoder(avroSchema, outputStream);
+      JsonEncoder jsonEncoder = new JsonEncoder(avroSchema, outputStream);
       DatumWriter<GenericRecord> writer = avroMetaData instanceof SpecificRecord ? new SpecificDatumWriter<>(avroSchema) : new GenericDatumWriter<>(avroSchema);
       writer.write(avroMetaData, jsonEncoder);
       jsonEncoder.flush();
