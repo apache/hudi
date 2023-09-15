@@ -49,6 +49,7 @@ import org.mockito.Mockito.{spy, times, verify}
 import org.scalatest.Assertions.assertThrows
 import org.scalatest.Matchers.{be, convertToAnyShouldWrapper, intercept}
 
+import java.io.IOException
 import java.time.format.DateTimeFormatterBuilder
 import java.time.temporal.ChronoField
 import java.time.{Instant, ZoneId}
@@ -297,17 +298,13 @@ class TestHoodieSparkSqlWriter {
   def testValidateTableConfigWithOverwriteSaveMode(): Unit = {
     //create a new table
     val tableModifier1 = Map("path" -> tempBasePath, HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
-      "hoodie.datasource.write.recordkey.field" -> "uuid",
-      HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> "2",
-      HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> "2")
+      "hoodie.datasource.write.recordkey.field" -> "uuid")
     val dataFrame = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, tableModifier1, dataFrame)
 
     //on same path try write with different RECORDKEY_FIELD_NAME and Append SaveMode should throw an exception
     val tableModifier2 = Map("path" -> tempBasePath, HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
-      "hoodie.datasource.write.recordkey.field" -> "ts",
-      HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> "2",
-      HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> "2")
+      "hoodie.datasource.write.recordkey.field" -> "ts")
     val dataFrame2 = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
     val hoodieException = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, tableModifier2, dataFrame2))
     assert(hoodieException.getMessage.contains("Config conflict"))
@@ -324,17 +321,13 @@ class TestHoodieSparkSqlWriter {
   def testChangePartitionPath(): Unit = {
     //create a new table
     val tableModifier1 = Map("path" -> tempBasePath, HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
-      "hoodie.datasource.write.recordkey.field" -> "uuid", "hoodie.datasource.write.partitionpath.field" -> "ts",
-      HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> "2",
-      HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> "2")
+      "hoodie.datasource.write.recordkey.field" -> "uuid", "hoodie.datasource.write.partitionpath.field" -> "ts")
     val dataFrame = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, tableModifier1, dataFrame)
 
     //on same path try write with different partitionpath field and Append SaveMode should throw an exception
     val tableModifier2 = Map("path" -> tempBasePath, HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
-      "hoodie.datasource.write.recordkey.field" -> "uuid", "hoodie.datasource.write.partitionpath.field" -> "uuid",
-      HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> "2",
-      HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> "2")
+      "hoodie.datasource.write.recordkey.field" -> "uuid", "hoodie.datasource.write.partitionpath.field" -> "uuid")
     val dataFrame2 = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
     val hoodieException = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, tableModifier2, dataFrame2))
     assert(hoodieException.getMessage.contains("Config conflict"))
@@ -798,10 +791,7 @@ class TestHoodieSparkSqlWriter {
         DataSourceWriteOptions.RECORDKEY_FIELD.key -> "keyid",
         DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
         DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
-        HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
-        HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> "2",
-        HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> "2"
-      )
+        HoodieWriteConfig.TBL_NAME.key -> "hoodie_test")
       val df = spark.range(0, 1000).toDF("keyid")
         .withColumn("col3", expr("keyid"))
         .withColumn("age", lit(1))
@@ -1061,9 +1051,7 @@ class TestHoodieSparkSqlWriter {
     val options = Map(
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
       DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
-      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt",
-      HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> "2",
-      HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> "2"
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt"
     )
 
     // case 1: test table which created by sql
@@ -1141,9 +1129,7 @@ class TestHoodieSparkSqlWriter {
     val df = Seq((1, "a1", 10, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
     val options = Map(
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
-      HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> "2",
-      HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> "2"
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts"
     )
 
     // case 1: When commit C1 specifies a key generator and commit C2 does not specify key generator
@@ -1172,9 +1158,7 @@ class TestHoodieSparkSqlWriter {
     val options = Map(
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
       DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
-      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt",
-      HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> "2",
-      HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> "2"
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt"
     )
 
     // case 1: When commit C1 does not specify key generator and commit C2 specifies a key generator
@@ -1207,9 +1191,7 @@ class TestHoodieSparkSqlWriter {
     val options = Map(
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
       DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
-      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt",
-      HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> "2",
-      HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> "2"
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt"
     )
 
     // case 1: When commit C1 specifies a key generator and commkt C2 does not specify key generator
@@ -1241,9 +1223,7 @@ class TestHoodieSparkSqlWriter {
     val options = Map(
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
       DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
-      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt",
-      HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> "2",
-      HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> "2"
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt"
     )
 
     // case 1: When commit C1 specifies a key generator and commkt C2 does not specify key generator
@@ -1299,9 +1279,7 @@ class TestHoodieSparkSqlWriter {
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
       DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
       HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key -> "CONSISTENT_HASHING",
-      HoodieIndexConfig.INDEX_TYPE.key -> "BUCKET",
-      HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> "2",
-      HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> "2"
+      HoodieIndexConfig.INDEX_TYPE.key -> "BUCKET"
     )
 
     val (tableName1, tablePath1) = ("hoodie_test_params_1", s"$tempBasePath" + "_1")
