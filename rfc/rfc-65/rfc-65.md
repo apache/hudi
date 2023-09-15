@@ -101,7 +101,7 @@ public abstract class PartitionTTLManagementStrategy {
    /**
     * Scan and list all partitions for partition TTL management.
     *
-    * @return all partitions paths for the dataset.
+    * @return Partitions to apply TTL management strategy
     */
    protected List<String> getPartitionPathsForTTLManagement() {
       if (StringUtils.isNullOrEmpty(config.getTTLManagementPartitionSelected())) {
@@ -147,7 +147,58 @@ public HoodieWriteMetadata<HoodieData<WriteStatus>> managePartitionTTL(HoodieEng
 
 We can call `hoodieTable.managePartitionTTL` in independent flink/spark job, in async/sync inline table services like clustering/compaction/clean etc.
 
+
+### User interface for Partition TTL Management
+
+We can do partition TTL management inline with streaming ingestion job or do it with a independent batch job, for both spark and flink engine.
+
+#### Run inline with Streaming Ingestion 
+
+Since we can run clustering inline with streaming ingestion job through the following config: 
+
+```properties
+hoodie.clustering.async.enabled=true
+hoodie.clustering.async.max.commits=5
+```
+
+We can do similar thing for partition TTL management. The config for async ttl management are: 
+
+| Config key                              | Remarks                                                                                                            | Default |
+|-----------------------------------------|--------------------------------------------------------------------------------------------------------------------|---------|
+| hoodie.ttl.management.async.enabled     | Enable running of TTL management service, asynchronously as writes happen on the table.                            | False   |
+| hoodie.ttl.management.async.max.commits | Control frequency of async TTL management by specifying after how many commits TTL management should be triggered. | 4       |
+
+
+We can easily implement async ttl management for both spark and flink engine since we only need to call `hoodieTable.managePartitionTTL`. And we can support synchronized ttl management if we want.
+
+#### Run by Independent Job
+
+Deleting a large number of partitions is a heavy operation so we may want to run TTL management through a independent job. We will provide a SparkSQL Call Command to run TTL management and it may look like this: 
+
+```sql
+call managePartitionTTL(table => 'hudi_table', strategy => 'KEEP_BY_TIME', daysRetain => '10', predicate => 'productid = 1');
+```
+
+The params are as follows:
+
+| Param name | Remarks                                                                                                           | Default      |
+|------------|-------------------------------------------------------------------------------------------------------------------|--------------|
+| table      | The hoodie table to run partition TTL management                                                                  | empty string |
+| basePath   | The hoodie table path to run partition TTL management                                                             | empty string |
+| strategy   | The partition TTL management strategy, corresponding to a implementation of `PartitionTTLManagementStrategy`      | KEEP_BY_TIME |
+| predicate  | Partition predicate for TTL management, will only apply ttl strategy on the partitions selected by this predicate | empty string |
+
+
+And we can support run TTL with a spark jar like running clustering by`HoodieClusteringJob`, and run TTL with a flink job like `HoodieFlinkClusteringJob` in the future.
+
 ### Future plan
+
+We can do a lot of things about TTL management in the future:
+
+* Support record level TTL management
+* Move the partitions to be cleaned up to cold/cheaper storage in objects stores instead of delete them forever
+* Stash the partitions to be cleaned up in .stashedForDeletion folder (at .hoodie level) and introduce some recover mechanism, for data security.
+* ...
 
 ## Rollout/Adoption Plan
 
