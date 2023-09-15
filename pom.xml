@@ -2619,6 +2619,25 @@
       </activation>
     </profile>
 
+    <profile>
+      <id>hadoop3.3</id>
+      <properties>
+        <hadoop.version>3.3.0</hadoop.version>
+      </properties>
+      <dependencies>
+        <dependency>
+          <groupId>org.codehaus.jackson</groupId>
+          <artifactId>jackson-core-asl</artifactId>
+          <version>1.9.13</version>
+        </dependency>
+      </dependencies>
+      <activation>
+        <property>
+          <name>hadoop3.3</name>
+        </property>
+      </activation>
+    </profile>
+
   </profiles>
 
 </project>
