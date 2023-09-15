@@ -110,7 +110,7 @@ trait HoodieCatalystPlansUtils {
    * Decomposes [[InsertIntoStatement]] into its arguments allowing to accommodate for API
    * changes in Spark 3.3
    */
-  def unapplyInsertIntoStatement(plan: LogicalPlan): Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)]
+  def unapplyInsertIntoStatement(plan: LogicalPlan): Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean, Boolean)]
 
   /**
    * Decomposes [[CreateTableLikeCommand]] into its arguments allowing to accommodate for API

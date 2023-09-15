@@ -33,9 +33,13 @@ import java.time.ZoneId;
 public class ReflectUtil {
 
   public static InsertIntoStatement createInsertInto(LogicalPlan table, Map<String, Option<String>> partition, Seq<String> userSpecifiedCols,
-                                                     LogicalPlan query, boolean overwrite, boolean ifPartitionNotExists) {
+                                                     LogicalPlan query, boolean overwrite, boolean ifPartitionNotExists, boolean byName) {
     try {
-      if (HoodieSparkUtils.isSpark3_0()) {
+      if (HoodieSparkUtils.isSpark3_5()) {
+        Constructor<InsertIntoStatement> constructor = InsertIntoStatement.class.getConstructor(
+            LogicalPlan.class, Map.class, Seq.class, LogicalPlan.class, boolean.class, boolean.class, boolean.class);
+        return constructor.newInstance(table, partition, userSpecifiedCols, query, overwrite, ifPartitionNotExists, byName);
+      } else if (HoodieSparkUtils.isSpark3_0()) {
         Constructor<InsertIntoStatement> constructor = InsertIntoStatement.class.getConstructor(
                 LogicalPlan.class, Map.class, LogicalPlan.class, boolean.class, boolean.class);
         return constructor.newInstance(table, partition, query, overwrite, ifPartitionNotExists);

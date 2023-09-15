@@ -49,7 +49,8 @@ public class TestReflectUtil extends HoodieClientTestBase {
         asScalaBuffer(Collections.<String>emptyList()).toSeq(),
         statement.query(),
         statement.overwrite(),
-        statement.ifPartitionNotExists());
+        statement.ifPartitionNotExists(),
+        statement.byName);
 
     Assertions.assertTrue(
         ((UnresolvedRelation)newStatment.table()).multipartIdentifier().contains("test_reflect_util"));

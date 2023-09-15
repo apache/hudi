@@ -184,7 +184,7 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
       planUtils.resolveOutputColumns(catalogTable.catalogTableName, DataTypeUtils.toAttributes(expectedSchema), query, byName = true, conf)
     } catch {
       // NOTE: In case matching by name didn't match the query output, we will attempt positional matching
-      case ae: AnalysisException if ae.getMessage().startsWith("Cannot write incompatible data to table") =>
+      case ae: AnalysisException if ae.getMessage().startsWith("[INCOMPATIBLE_DATA_FOR_TABLE.CANNOT_FIND_DATA] Cannot write incompatible data for the table") =>
         planUtils.resolveOutputColumns(catalogTable.catalogTableName, DataTypeUtils.toAttributes(expectedSchema), query, byName = false, conf)
     }
   }
