@@ -56,4 +56,9 @@ public interface HoodieRecordMerger extends Serializable {
    * The kind of merging strategy this recordMerger belongs to. An UUID represents merging strategy.
    */
   String getMergingStrategy();
+
+  /**
+   * Determines whether or not the merge process will operate on sorted records.
+   */
+  boolean useSortedMerge(TypedProperties props);
 }
