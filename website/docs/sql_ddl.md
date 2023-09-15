@@ -9,47 +9,53 @@ import TabItem from '@theme/TabItem';
 
 The following are SparkSQL DDL actions available:
 
-## Spark Create Table
+# Spark Create Table
 :::note
 Only SparkSQL needs an explicit Create Table command. No Create Table command is required in Spark when using Scala or 
-Python. The first batch of a [Write](/docs/writing_data) to a table will create the table if it does not exist.
+Python. The first batch of a [Write](/docs/writing_data) to a table will create the table if it does not exist. Feel free to take a look 
+at our (quick start guide)[/docs/next/quick-start-guide] for scala or pypsark usage. 
 :::
 
-### Options
+### Create table Properties
 
-Users can set table options while creating a hudi table.
+Users can set table properties while creating a hudi table. Critical options are listed here.
 
-| Parameter Name | Description                                                                                                                                                                                                        | (Optional/Required) : Default Value |
-|------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------|
-| primaryKey | The primary key names of the table, multiple fields separated by commas. When set, hudi will ensure uniqueness during updates and deletes. When this config is skipped, hudi treats the table as a key less table. | (Optional) : `id`|
-| type       | The type of table to create ([read more](/docs/table_types)). <br></br> `cow` = COPY-ON-WRITE, `mor` = MERGE-ON-READ.                                                                                              | (Optional) : `cow` |
-| preCombineField | The Pre-Combine field of the table. This field will be used in resolving the final version of the record when two versions are combined with merges or updates.                                                    | (Optional) : `ts`|
+| Parameter Name | Default | Description                                                                                                                                                                                                                                                                                                                                      |
+|------------------|--------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| primaryKey | uuid | The primary key field names of the table, multiple fields separated by commas. Same as `hoodie.datasource.write.recordkey.field`. This can be ignored for a key less table (from 0.14.0).                                                                                                                                                        |
+| preCombineField |  | The pre-combine field of the table. Same as `hoodie.datasource.write.precombine.field` and is used for resolving the final version of the record among multiple versions. Generally `event time` or some other similar column will be used for ordering purpose. Hudi will be able to handle out of order data using the preCombine field value. |
+| type       | cow | The table type to create. type = 'cow' means a COPY-ON-WRITE table, while type = 'mor' means a MERGE-ON-READ table. Same as `hoodie.datasource.write.table.type`. More details can be found [here](/docs/table_types)                                                                                                                            |
 
-To set any custom hudi config(like index type, max parquet size, etc), see the  "Set hudi config section" .
+:::note
+1. `primaryKey`, `preCombineField`, and `type` are case-sensitive.
+2. While setting `primaryKey`, `preCombineField`, `type` or other Hudi configs, `tblproperties` is preferred over `options`.
+3. A new Hudi table created by Spark SQL will by default set `hoodie.datasource.write.hive_style_partitioning=true`.
+:::
 
-### Table Type
-Here is an example of creating a COW table.
+## Creating a Hudi table 
+Here is an example of creating a key less COW non-partitioned table. 
 
 ```sql
--- create a non-primary key (or key less) table
-create table if not exists hudi_table2(
+-- create a key less COW table
+create table if not exists hudi_table(
   id int, 
   name string, 
   price double
-) using hudi
-tblproperties (
-  type = 'cow'
-);
+) using hudi;
 ```
 
-There could be datasets where primary key may not be feasible. For such use-cases, user don't need to elect any primary key for 
-the table and hudi will treat them as key less table. Users can still perform Merge Into, updates and deletes based on any random data column. 
+There could be cases where electing a primary key may not be feasible due to various reasons. Some payloads actually 
+don't have a naturally present record key: for ex, when ingesting some kind of "logs" into Hudi there 
+might be no unique identifier held in every record that could serve the purpose of being record key, while meeting global 
+uniqueness requirements of the primary key. So, users can choose to create a keyless table during such situations. 
+Users can still perform Merge Into, updates and deletes based on any random data column for such keyless tables. 
 
-### Primary Key
-Here is an example of creating COW table with a primary key 'id'. For mutable datasets, it is recommended to set appropriate primary key. 
+### Creating a Primary Keyed table
+Here is an example of creating a COW non-partitioned table with primary keyed on `id`. For mutable datasets, 
+it is recommended to set appropriate primary key configs. 
 
 ```sql
--- create a managed cow table
+-- create a managed primary keyed cow table
 create table if not exists hudi_table0 (
   id int, 
   name string, 
@@ -61,13 +67,17 @@ tblproperties (
 );
 ```
 
+:::note
+You can elect multiple fields as primary keys for a given table on a need basis. For eg, "primaryKey = 'id,name'". 
+:::
+
 ### PreCombineField
-Here is an example of creating an MOR external table. The **preCombineField** option
-is used to specify the preCombine field for merge. Generally 'event time' or some other similar column will be used for 
+Here is an example of creating an MOR table. The **preCombineField** option
+is used to specify the preCombine field for merge. Generally 'event time' or a similar column will be used for 
 ordering purpose. Hudi will be able to handle out of order data using the precombine field value.
 
 ```sql
--- create an external mor table
+-- create an mor table
 create table if not exists hudi_table1 (
   id int, 
   name string, 
@@ -76,7 +86,7 @@ create table if not exists hudi_table1 (
 ) using hudi
 tblproperties (
   type = 'mor',
-  primaryKey = 'id,name',
+  primaryKey = 'id',
   preCombineField = 'ts' 
 );
 ```
@@ -85,7 +95,9 @@ tblproperties (
 :::note
 When created in spark-sql, partition columns will always be the last columns of the table.
 :::
-Here is an example of creating a COW partitioned key less table.
+Here is an example of creating a key less COW partitioned table. Adding `partitioned by` clause to the create table syntax refers 
+to a partitioned dataset. 
+
 ```sql
 create table if not exists hudi_table_p0 (
 id bigint,
@@ -94,59 +106,14 @@ dt string,
 hh string  
 ) using hudi
 tblproperties (
-  type = 'cow',
-  primaryKey = 'id'
+  type = 'cow'
  ) 
 partitioned by dt;
 ```
 
-Here is an example of creating a MOR partitioned table with preCombine field.
-```sql
-create table if not exists hudi_table_p0 (
-id bigint,
-name string,
-dt string,
-hh string  
-) using hudi
-tblproperties (
-  type = 'mor',
-  primaryKey = 'id',
-  preCombineField = 'ts'
- ) 
-partitioned by dt;
-```
-
-### Un-Partitioned Table
-Here is an example of creating a COW un-partitioned table.
-
-```sql
--- create a cow table, with primaryKey 'uuid' and unpartitioned. 
-create table hudi_cow_nonpcf_tbl (
-  uuid int,
-  name string,
-  price double
-) using hudi
-tblproperties (
-  primaryKey = 'uuid'
-);
-```
-
-Here is an example of creating a MOR un-partitioned table.
-
-```sql
--- create a mor non-partitioned table with preCombineField provided
-create table hudi_mor_tbl (
-    id int,
-    name string,
-    price double,
-    ts bigint
-) using hudi
-tblproperties (
-    type = 'mor',
-    primaryKey = 'id',
-    preCombineField = 'ts'
-);
-```
+:::note
+You can create multi-field partitioned table by giving comma separated field names. for eg "partitioned by dt,hh". 
+:::
 
 ### Create Table for an External Hudi Table
 You can create an External table using the `location` statement. If an external location is not specified it is considered a managed table. 
@@ -159,34 +126,60 @@ An external table is useful if you need to read/write to/from a pre-existing hud
 ```
 
 :::tip
-You don't need to specify schema and any properties except the partitioned columns if existed. Hudi can automatically recognize the schema and configurations.
+You don't need to specify schema and any properties except the partitioned columns if existed. Hudi can automatically 
+recognize the schema and configurations.
 :::
 
-### Create Table AS SELECT
+## Create Table As Select (CTAS)
 
 Hudi supports CTAS(Create table as select) on spark sql. <br/>
 **Note:** For better performance to load data to hudi table, CTAS uses **bulk insert** as the write operation.
 
-**Example CTAS command to create a non-partitioned COW key less table.**
+### CTAS key less table
 
 ```sql 
-create table h3 using hudi
-tblproperties (type = 'cow')
+create table hudi_tbl using hudi
 as
 select 1 as id, 'a1' as name, 10 as price;
 ```
 
-**Example CTAS command to create a partitioned, primary keyed COW table.**
+### CTAS Primary keyed partitioned table
 
 ```sql
-create table h2 using hudi
+create table hudi_tbl using hudi
 tblproperties (type = 'cow', primaryKey = 'id')
 partitioned by (dt)
 as
 select 1 as id, 'a1' as name, 10 as price, 1000 as dt;
 ```
 
-**Example CTAS command to load data from another table.**
+### CTAS key less table by loading data from another table
+
+```sql
+# create managed parquet table 
+create table parquet_mngd using parquet location 'file:///tmp/parquet_dataset/*.parquet';
+
+# CTAS by loading data into hudi table
+create table hudi_tbl using hudi location 'file:/tmp/hudi/hudi_tbl/' tblproperties ( 
+  type = 'cow'
+ ) 
+as select * from parquet_mngd;
+```
+
+### CTAS Primary keyed table by loading data from another table
+
+```sql
+# create managed parquet table 
+create table parquet_mngd using parquet location 'file:///tmp/parquet_dataset/*.parquet';
+
+# CTAS by loading data into hudi table
+create table hudi_tbl using hudi location 'file:/tmp/hudi/hudi_tbl/' tblproperties ( 
+  type = 'cow'
+ ) 
+as select * from parquet_mngd;
+```
+
+### CTAS Primary keyed partitioned table by loading data from another table
 
 ```sql
 # create managed parquet table 
@@ -201,9 +194,23 @@ create table hudi_tbl using hudi location 'file:/tmp/hudi/hudi_tbl/' tblproperti
 partitioned by (datestr) as select * from parquet_mngd;
 ```
 
-### Set hoodie config options
-You can also set the config with table options when creating table which will work for
+
+## Setting configs 
+
+There are differet ways you can set the configs for a given hudi table. 
+
+### Using set command
+You can use the **set** command to set any custom hudi's write config. This will work for the whole spark session scope.
+```sql
+set hoodie.insert.shuffle.parallelism = 100;
+set hoodie.upsert.shuffle.parallelism = 100;
+set hoodie.delete.shuffle.parallelism = 100;
+```
+
+### Using tblproperties
+You can also set the config with table options when creating table. This will work for
 the table scope only and override the config set by the SET command.
+
 ```sql
 create table if not exists h3(
   id bigint, 
@@ -231,6 +238,7 @@ tblproperties (
   hoodie.keep.max.commits = '20'
 );
 ```
+
 
 ## Spark Alter Table
 ### Syntax
@@ -301,15 +309,6 @@ You can also alter the write config for a table by the **ALTER SERDEPROPERTIES**
 Example:
 ```sql
  alter table h3 set serdeproperties (hoodie.keep.max.commits = '10') 
-```
-
-### Use set command
-You can use the **set** command to set any custom hudi's config, which will work for the
-whole spark session scope.
-```sql
-set hoodie.insert.shuffle.parallelism = 100;
-set hoodie.upsert.shuffle.parallelism = 100;
-set hoodie.delete.shuffle.parallelism = 100;
 ```
 
 ### Show and Drop partitions
