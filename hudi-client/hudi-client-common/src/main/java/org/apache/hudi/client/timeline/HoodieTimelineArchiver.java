@@ -153,54 +153,54 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       return Collections.emptyList();
     }
 
-    // Step1: Get all candidates of oldestInstantToRetain.
-    List<Option<HoodieInstant>> oldestInstantToRetainCandidates = new ArrayList<>();
+    // Step1: Get all candidates of earliestInstantToRetain.
+    List<Option<HoodieInstant>> earliestInstantToRetainCandidates = new ArrayList<>();
 
-    // 1. Oldest commit to retain is the greatest completed commit, that is less than the oldest pending instant.
-    // In some cases when inflight is the lowest commit then oldest commit to retain will be equal to oldest
+    // 1. Earliest commit to retain is the greatest completed commit, that is less than the earliest pending instant.
+    // In some cases when inflight is the lowest commit then earliest commit to retain will be equal to the earliest
     // inflight commit.
-    Option<HoodieInstant> oldestPendingInstant = table.getActiveTimeline()
+    Option<HoodieInstant> earliestPendingInstant = table.getActiveTimeline()
         .getWriteTimeline()
         .filter(instant -> !instant.isCompleted())
         .firstInstant();
 
-    Option<HoodieInstant> oldestCommitToRetain;
-    if (oldestPendingInstant.isPresent()) {
-      Option<HoodieInstant> completedCommitBeforeOldestPendingInstant = Option.fromJavaOptional(completedCommitsTimeline
-          .filter(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), LESSER_THAN, oldestPendingInstant.get().getTimestamp()))
+    Option<HoodieInstant> earliestCommitToRetain;
+    if (earliestPendingInstant.isPresent()) {
+      Option<HoodieInstant> completedCommitBeforeEarliestPendingInstant = Option.fromJavaOptional(completedCommitsTimeline
+          .filter(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), LESSER_THAN, earliestPendingInstant.get().getTimestamp()))
           .getReverseOrderedInstants().findFirst());
-      // Check if the completed instant is higher than the oldest inflight instant
-      // in that case update the oldestCommitToRetain to oldestInflight commit time.
-      if (!completedCommitBeforeOldestPendingInstant.isPresent()) {
-        oldestCommitToRetain = oldestPendingInstant;
+      // Check if the completed instant is higher than the earliest inflight instant
+      // in that case update the earliestCommitToRetain to earliestInflight commit time.
+      if (!completedCommitBeforeEarliestPendingInstant.isPresent()) {
+        earliestCommitToRetain = earliestPendingInstant;
       } else {
-        oldestCommitToRetain = completedCommitBeforeOldestPendingInstant;
+        earliestCommitToRetain = completedCommitBeforeEarliestPendingInstant;
       }
     } else {
-      oldestCommitToRetain = Option.empty();
+      earliestCommitToRetain = Option.empty();
     }
-    oldestInstantToRetainCandidates.add(oldestCommitToRetain);
+    earliestInstantToRetainCandidates.add(earliestCommitToRetain);
 
     // 2. For Merge-On-Read table, inline or async compaction is enabled
     // We need to make sure that there are enough delta commits in the active timeline
     // to trigger compaction scheduling, when the trigger strategy of compaction is
     // NUM_COMMITS or NUM_AND_TIME.
-    Option<HoodieInstant> oldestInstantToRetainForCompaction =
+    Option<HoodieInstant> earliestInstantToRetainForCompaction =
         (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ
             && (config.getInlineCompactTriggerStrategy() == CompactionTriggerStrategy.NUM_COMMITS
             || config.getInlineCompactTriggerStrategy() == CompactionTriggerStrategy.NUM_AND_TIME))
-            ? CompactionUtils.getOldestInstantToRetainForCompaction(
+            ? CompactionUtils.getEarliestInstantToRetainForCompaction(
             table.getActiveTimeline(), config.getInlineCompactDeltaCommitMax())
             : Option.empty();
-    oldestInstantToRetainCandidates.add(oldestInstantToRetainForCompaction);
+    earliestInstantToRetainCandidates.add(earliestInstantToRetainForCompaction);
 
     // 3. The clustering commit instant can not be archived unless we ensure that the replaced files have been cleaned,
     // without the replaced files metadata on the timeline, the fs view would expose duplicates for readers.
     // Meanwhile, when inline or async clustering is enabled, we need to ensure that there is a commit in the active timeline
     // to check whether the file slice generated in pending clustering after archive isn't committed.
-    Option<HoodieInstant> oldestInstantToRetainForClustering =
-        ClusteringUtils.getOldestInstantToRetainForClustering(table.getActiveTimeline(), table.getMetaClient());
-    oldestInstantToRetainCandidates.add(oldestInstantToRetainForClustering);
+    Option<HoodieInstant> earliestInstantToRetainForClustering =
+        ClusteringUtils.getEarliestInstantToRetainForClustering(table.getActiveTimeline(), table.getMetaClient());
+    earliestInstantToRetainCandidates.add(earliestInstantToRetainForClustering);
 
     // 4. If metadata table is enabled, do not archive instants which are more recent than the last compaction on the
     // metadata table.
@@ -212,7 +212,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
           return Collections.emptyList();
         } else {
           LOG.info("Limiting archiving of instants to latest compaction on metadata table at " + latestCompactionTime.get());
-          oldestInstantToRetainCandidates.add(Option.of(new HoodieInstant(
+          earliestInstantToRetainCandidates.add(Option.of(new HoodieInstant(
               HoodieInstant.State.COMPLETED, COMPACTION_ACTION, latestCompactionTime.get())));
         }
       } catch (Exception e) {
@@ -243,12 +243,12 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       // CLEAN or ROLLBACK instant can block the archive of metadata table timeline and causes
       // the active timeline of metadata table to be extremely long, leading to performance issues
       // for loading the timeline.
-      oldestInstantToRetainCandidates.add(qualifiedEarliestInstant);
+      earliestInstantToRetainCandidates.add(qualifiedEarliestInstant);
     }
 
-    // Choose the instant in oldestInstantToRetainCandidates with the smallest
-    // timestamp as oldestInstantToRetain.
-    java.util.Optional<HoodieInstant> oldestInstantToRetain = oldestInstantToRetainCandidates
+    // Choose the instant in earliestInstantToRetainCandidates with the smallest
+    // timestamp as earliestInstantToRetain.
+    java.util.Optional<HoodieInstant> earliestInstantToRetain = earliestInstantToRetainCandidates
         .stream()
         .filter(Option::isPresent)
         .map(Option::get)
@@ -269,7 +269,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
             // stop at first savepoint commit
             return !firstSavepoint.isPresent() || compareTimestamps(s.getTimestamp(), LESSER_THAN, firstSavepoint.get().getTimestamp());
           }
-        }).filter(s -> oldestInstantToRetain
+        }).filter(s -> earliestInstantToRetain
             .map(instant -> compareTimestamps(s.getTimestamp(), LESSER_THAN, instant.getTimestamp()))
             .orElse(true));
     return instantToArchiveStream.limit(completedCommitsTimeline.countInstants() - minInstantsToKeep)

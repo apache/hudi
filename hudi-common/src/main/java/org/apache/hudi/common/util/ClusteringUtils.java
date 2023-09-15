@@ -236,14 +236,14 @@ public class ClusteringUtils {
   }
 
   /**
-   * Returns the oldest instant to retain.
-   * Make sure the clustering instant won't be archived before cleaned, and the oldest inflight clustering instant has a previous commit.
+   * Returns the earliest instant to retain.
+   * Make sure the clustering instant won't be archived before cleaned, and the earliest inflight clustering instant has a previous commit.
    *
    * @param activeTimeline The active timeline
    * @param metaClient     The meta client
-   * @return the oldest instant to retain for clustering
+   * @return the earliest instant to retain for clustering
    */
-  public static Option<HoodieInstant> getOldestInstantToRetainForClustering(
+  public static Option<HoodieInstant> getEarliestInstantToRetainForClustering(
       HoodieActiveTimeline activeTimeline, HoodieTableMetaClient metaClient) throws IOException {
     Option<HoodieInstant> oldestInstantToRetain = Option.empty();
     HoodieTimeline replaceTimeline = activeTimeline.getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.REPLACE_COMMIT_ACTION));
