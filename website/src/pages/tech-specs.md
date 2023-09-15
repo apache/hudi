@@ -155,8 +155,13 @@ By reconciling all the actions in the timeline, the state of the Hudi table can 
 Hudi automatically extracts the physical data statistics and stores the metadata along with the data to improve write and query performance. Hudi Metadata is an internally-managed table which organizes the table metadata under the base path *.hoodie/metadata.* The metadata is in itself a Hudi table, organized with the Hudi merge-on-read storage format. Every record stored in the metadata table is a Hudi record and hence has partitioning key and record key specified. Following are the metadata table partitions
 
 - **files** - Partition path to file name index. Key for the Hudi record is the partition path and the 
-actual record is a map of file name to an instance of [HoodieMetadataFileInfo][15]. HoodieMetadataFileInfo has 
-fields `size` and `isDeleted` which provide information about size of the file and whether file has been deleted. 
+actual record is a map of file name to an instance of [HoodieMetadataFileInfo][15].
+
+| Schema                 | Field Name  | Data Type | Description                      |
+|------------------------|-------------|-----------|----------------------------------|
+| HoodieMetadataFileInfo | `size`      | long      | size of the file                 |
+|                        | `isDeleted` | boolean   | whether file has been deleted    |
+
 The files index can be used to do file listing and do filter based pruning of the scanset during query.
 - **bloom\_filters** - Bloom filter index to help map a record key to the actual file. The Hudi key is 
 `str_concat(hash(partition name), hash(file name))` and the actual payload is an instance of 
