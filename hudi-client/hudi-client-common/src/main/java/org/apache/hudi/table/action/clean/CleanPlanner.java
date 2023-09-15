@@ -171,7 +171,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
                   .deserializeHoodieCleanMetadata(hoodieTable.getActiveTimeline().getInstantDetails(lastClean.get()).get());
           if ((cleanMetadata.getEarliestCommitToRetain() != null)
                   && (cleanMetadata.getEarliestCommitToRetain().length() > 0)
-                  && !hoodieTable.getActiveTimeline().isBeforeTimelineStarts(cleanMetadata.getEarliestCommitToRetain())) {
+                  && !hoodieTable.getActiveTimeline().getCommitsTimeline().isBeforeTimelineStarts(cleanMetadata.getEarliestCommitToRetain())) {
             return getPartitionPathsForIncrementalCleaning(cleanMetadata, instantToRetain);
           }
         }
