@@ -61,7 +61,7 @@ public class InstantStateHandler extends Handler {
   public static final String ALL_INSTANT_STATE_URL = String.format("%s/%s", BASE_URL, "all");
 
   /**
-   * POST requests. Refresh the instant state data cached in memory
+   * POST requests. Refresh the instant state data cached in memory.
    */
   public static final String REFRESH_INSTANT_STATE = String.format("%s/%s", BASE_URL, "refresh/");
 
@@ -79,16 +79,16 @@ public class InstantStateHandler extends Handler {
   /**
    * Read instant states from cache of file system.
    *
-   * @return Instant states under the input instant state path
+   * @return Instant states under the input instant state path.
    */
   public List<InstantStateDTO> getAllInstantStates(String instantStatePath) {
     return cachedInstantStates.computeIfAbsent(instantStatePath, k -> scanInstantState(new Path(k)));
   }
 
   /**
-   * Refresh the checkpoint messages cached. Will be called when coordinator start/commit/abort instant
+   * Refresh the checkpoint messages cached. Will be called when coordinator start/commit/abort instant.
    *
-   * @return whether refreshing is successful
+   * @return Whether refreshing is successful.
    */
   public boolean refresh(String instantStatePath) {
     try {
