@@ -21,7 +21,7 @@ PARENT_PATH=$(dirname "$PWD")
 THRIFT_FILE_PATH=${PARENT_PATH}/src/main/thrift
 THRIFT_OUT_PATH=${PARENT_PATH}/target/generated-sources
 THRIFT_VERSION=0.13.0
-THRIFT_IMAGE=thrift:$THRIFT_VERSION
+THRIFT_IMAGE=omnisci/thrift:$THRIFT_VERSION
 docker pull $THRIFT_IMAGE
 printf "====== INSTALL THRIFT END ======\n"
 printf "====== COMPILE THRIFT SOURCE FILE START ======\n"
