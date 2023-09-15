@@ -228,14 +228,18 @@ expressions in the command then a functional index using column stats will be cr
 For each functional index, store a separate metadata with index details. This should be efficiently loaded. One option
 is to store the below metadata in `hoodie.properties`. This way all index metadata can be loaded with the table config.
 But, it would be better to not overload the table config. Let `hoodie.properties` still hold the list of indexes (MT
-partitions) available, and we propose to create separate `.index_defs` directory under `basepath/.hoodie`. This has the
-benefit of separation of concern and can be cheaply loaded with the metaclient (one extra file i/o only if there is a
-functional index in the table config). It can store the following metadata for each index.
+partitions) available, and we propose to create separate `.index_defs` directory, which will be under `basepath/.hoodie`
+by default. However, the full path to the index definition will be added to `hoodie.properties`. This has the benefit of
+separation of concern and can be cheaply loaded with the metaclient (one extra file i/o only if there is a functional
+index in the table config). It can store the following metadata for each index.
 
 * Name of the index
 * Expression (e.g., `MONTH(ts)`)
 * Data field(s) it's derived from
 * Any other configuration or properties
+
+As mentioned above, the path to index definition will be added to `hoodie.properties` as a new config
+called `hoodie.table.index_defs.path`.
 
 #### APIs
 
@@ -312,6 +316,18 @@ On receiving a query:
     * Where these files are physically located (irrespective of their storage layout)
 3. Use the physical paths derived from metadata to access and read the relevant data.
 
+Let's take an example. Assume that we have a functional index on `DATE_FORMAT(ts, '%Y-%m-%d')` and a query
+`SELECT * FROM hudi_tbl where DATE_FORMAT(ts) > 2022-03-01`. The index will be a collection of key-values where keys are
+the value after evaluating the expression and values are the list of files. Also, keys are sorted by their natural
+order. In this case, the reader will look up the index and find the first key that is greater than `2022-03-01` and 
+return the set of files to be scanned.
+
+When the functional index is created using `column_stats` then the index will be a collection of key-values where keys
+are the hash of storage partition and file paths and values are the stats of the value after evaluating the expression.
+In this case, the reader will look up the `files` index first to prune partitions and then look up the functional index
+to skip files.
+
+
 Below are the concrete steps on how Hudi will intercept predicate in the query and use functional index whenever it can.
 
 1. Identify the relevant functional index based on the predicate and add a new predicate based on the Functional Index
@@ -356,7 +372,8 @@ Let's try to understand how functional indexes can help with different storage l
 
 1. Metadata table has to be enabled by default for the readers.
 2. We are not considering UDFs and complex expressions in the first cut. This needs some more thought and probably an
-   expression engine.
+   expression engine. However, any format changes to be done in order to support UDFs and complex expressions should be
+   covered.
 
 ## Rollout/Adoption Plan
 
@@ -390,6 +407,13 @@ When writing records to data files, the write client does the following:
 - For small file handing, we need to take into account the functional index for the workload profile, so that the new
   inserts can be combined into the data file without expanding the minimum and maximum values of the functional index when
   the data file is small.
+
+Additionally, when using SQL, users can add hints to specify the functional index for ordering, e.g.,
+
+```sql
+INSERT INTO TABLE hudi_table
+SELECT /*+ ORDER BY datestr */ * FROM source_table;
+```
 
 ### Other Systems
 
