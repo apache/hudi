@@ -199,7 +199,7 @@
     </dependency>
 
     <dependency>
-      <groupId>org.apache.hive</groupId>
+      <groupId>${hive.groupid}</groupId>
       <artifactId>hive-storage-api</artifactId>
       <version>${hive.storage.version}</version>
     </dependency>
