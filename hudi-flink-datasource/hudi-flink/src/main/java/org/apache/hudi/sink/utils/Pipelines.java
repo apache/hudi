@@ -73,12 +73,16 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
  * Utilities to generate all kinds of sub-pipelines.
  */
 public class Pipelines {
+
+  // The counter of operators, avoiding duplicate uids caused by the same operator
+  private static final ConcurrentHashMap<String,Integer> OPERATOR_COUNTERS = new ConcurrentHashMap<>();
 
   /**
    * Bulk insert the input dataset at once.
@@ -482,7 +486,8 @@ public class Pipelines {
   }
 
   public static String opUID(String operatorN, Configuration conf) {
-    return "uid_" + operatorN + "_" + getTablePath(conf);
+    Integer operatorCount = OPERATOR_COUNTERS.merge(operatorN, 1, (oldValue, value) -> oldValue + value);
+    return "uid_" + operatorN + (operatorCount == 1 ? "" : "_" + (operatorCount - 1)) + "_" + getTablePath(conf);
   }
 
   public static String getTablePath(Configuration conf) {
