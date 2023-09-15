@@ -432,7 +432,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.instant_state.timeline_server_based.enabled")
       .defaultValue(true)
       .sinceVersion("1.0.0")
-      .withDocumentation("If enabled, Flink writer get instant state from timeline server rather than requesting DFS directly");
+      .withDocumentation("If enabled, writers get instant state from timeline server rather than requesting DFS directly");
 
   public static final ConfigProperty<Integer> MARKERS_TIMELINE_SERVER_BASED_BATCH_NUM_THREADS = ConfigProperty
       .key("hoodie.markers.timeline_server_based.batch.num_threads")

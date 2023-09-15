@@ -20,16 +20,13 @@ package org.apache.hudi.sink.meta;
 
 import org.apache.hudi.common.table.timeline.dto.InstantStateDTO;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.timeline.service.handlers.InstantStateHandler;
+import org.apache.hudi.util.TimelineServerHelper;
+import org.apache.hudi.util.TimelineServerHelper.RequestMethod;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.http.client.fluent.Request;
-import org.apache.http.client.fluent.Response;
-import org.apache.http.client.utils.URIBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,13 +43,11 @@ public class TimelineBasedCkpMetadata extends CkpMetadata {
 
   private static final Logger LOG = LoggerFactory.getLogger(TimelineBasedCkpMetadata.class);
 
-  private final HoodieWriteConfig writeConfig;
-  private final ObjectMapper mapper;
+  private final TimelineServerHelper timelineServerHelper;
 
   public TimelineBasedCkpMetadata(FileSystem fs, String basePath, String uniqueId, HoodieWriteConfig writeConfig) {
     super(fs, basePath, uniqueId);
-    this.writeConfig = writeConfig;
-    mapper = new ObjectMapper();
+    this.timelineServerHelper = new TimelineServerHelper(writeConfig);
     LOG.info("Timeline server based CkpMetadata enabled");
   }
 
@@ -79,7 +74,7 @@ public class TimelineBasedCkpMetadata extends CkpMetadata {
     // Read ckp messages from timeline server
     Stream<CkpMessage> ckpMessageStream;
     try {
-      List<InstantStateDTO> instantStateDTOList = executeRequestToTimelineServerWithRetry(
+      List<InstantStateDTO> instantStateDTOList = timelineServerHelper.executeRequestToTimelineServerWithRetry(
           InstantStateHandler.ALL_INSTANT_STATE_URL, getRequestParams(ckpMetaPath.toString()),
           new TypeReference<List<InstantStateDTO>>() {
           }, RequestMethod.GET);
@@ -101,7 +96,7 @@ public class TimelineBasedCkpMetadata extends CkpMetadata {
    */
   private void sendRefreshRequest() {
     try {
-      boolean success = executeRequestToTimelineServerWithRetry(
+      boolean success = timelineServerHelper.executeRequestToTimelineServerWithRetry(
           InstantStateHandler.REFRESH_INSTANT_STATE, getRequestParams(path.toString()),
           new TypeReference<Boolean>() {
           }, RequestMethod.POST);
@@ -112,51 +107,6 @@ public class TimelineBasedCkpMetadata extends CkpMetadata {
       // Do not propagate the exception because the server will also do auto refresh
       LOG.error("Failed to execute refresh", e);
     }
-  }
-
-  private <T> T executeRequestToTimelineServerWithRetry(String requestPath, Map<String, String> queryParameters,
-                                                        TypeReference reference, RequestMethod method) {
-    int retry = 5;
-    while (--retry >= 0) {
-      long start = System.currentTimeMillis();
-      try {
-        return executeRequestToTimelineServer(requestPath, queryParameters, reference, method);
-      } catch (IOException e) {
-        LOG.warn("Failed to execute ckp request (" + requestPath + ") to timeline server", e);
-      } finally {
-        LOG.info("Execute request : (" + requestPath + "), costs: " + (System.currentTimeMillis() - start) + " ms");
-      }
-    }
-    throw new HoodieException("Failed to execute ckp request (" + requestPath + ")");
-  }
-
-  private <T> T executeRequestToTimelineServer(String requestPath, Map<String, String> queryParameters,
-                                               TypeReference reference, RequestMethod method) throws IOException {
-    URIBuilder builder =
-        new URIBuilder().setHost(this.writeConfig.getViewStorageConfig().getRemoteViewServerHost())
-            .setPort(this.writeConfig.getViewStorageConfig().getRemoteViewServerPort())
-            .setPath(requestPath).setScheme("http");
-
-    queryParameters.forEach(builder::addParameter);
-
-    String url = builder.toString();
-    int timeout = this.writeConfig.getViewStorageConfig().getRemoteTimelineClientTimeoutSecs() * 1000;
-    Response response;
-    switch (method) {
-      case GET:
-        response = Request.Get(url).connectTimeout(timeout).socketTimeout(timeout).execute();
-        break;
-      case POST:
-      default:
-        response = Request.Post(url).connectTimeout(timeout).socketTimeout(timeout).execute();
-        break;
-    }
-    String content = response.returnContent().asString();
-    return (T) mapper.readValue(content, reference);
-  }
-
-  enum RequestMethod {
-    GET, POST
   }
 
 }
