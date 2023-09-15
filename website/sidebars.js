@@ -43,6 +43,7 @@ module.exports = {
                     label: 'SQL',
                     items: [
                         'sql_ddl',
+                        'sql_dml',
                         'procedures'
                     ],
                 },

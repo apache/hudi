@@ -1,350 +1,186 @@
 ---
-title: SQL DDL
-summary: "In this page, we introduce how to create tables with Hudi."
+title: SQL DML
+summary: "In this page, we go will cover details on how to modify data with Hudi tables"
 toc: true
 last_modified_at: 
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-The following are SparkSQL DDL actions available:
 
-## Spark Create Table
-:::note
-Only SparkSQL needs an explicit Create Table command. No Create Table command is required in Spark when using Scala or 
-Python. The first batch of a [Write](/docs/writing_data) to a table will create the table if it does not exist.
-:::
+# Spark DML Operations
 
-### Options
+The following are SparkSQL DML actions available:
 
-Users can set table options while creating a hudi table.
+Insert Into
+Merge Into
+Update
+Delete
 
-| Parameter Name | Description                                                                                                                                                                                                        | (Optional/Required) : Default Value |
-|------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------|
-| primaryKey | The primary key names of the table, multiple fields separated by commas. When set, hudi will ensure uniqueness during updates and deletes. When this config is skipped, hudi treats the table as a key less table. | (Optional) : `id`|
-| type       | The type of table to create ([read more](/docs/table_types)). <br></br> `cow` = COPY-ON-WRITE, `mor` = MERGE-ON-READ.                                                                                              | (Optional) : `cow` |
-| preCombineField | The Pre-Combine field of the table. This field will be used in resolving the final version of the record when two versions are combined with merges or updates.                                                    | (Optional) : `ts`|
+You can ingest data, modify or delete data from a given hudi table using these operations. Lets go over them one by one. 
 
-To set any custom hudi config(like index type, max parquet size, etc), see the section [Set hudi config options](#set-hoodie-config-options) .
+Please refer to [SQL DDL](/docs/next/sql_ddl) for creating Hudi tables. This page goes over ingesting and modifying data once the
+table is created. 
 
-### Table Type
-Here is an example of creating a COW table.
+## Insert Into
+
+Users can use 'INSERT INTO' to insert data into a hudi table using spark-sql.
 
 ```sql
--- create a non-primary key (or key less) table
-create table if not exists hudi_table2(
-  id int, 
-  name string, 
-  price double
-) using hudi
-tblproperties (
-  type = 'cow'
-);
-```
+insert into hudi_cow_nonpcf_tbl select 1, 'a1', 20;
+insert into hudi_mor_tbl select 1, 'a1', 20, 1000;
 
-There could be datasets where primary key may not be feasible. For such use-cases, user don't need to elect any primary key for 
-the table and hudi will treat them as key less table. Users can still perform Merge Into, updates and deletes based on any random data column. 
-
-### Primary Key
-Here is an example of creating COW table with a primary key 'id'. For mutable datasets, it is recommended to set appropriate primary key. 
-
-```sql
--- create a managed cow table
-create table if not exists hudi_table0 (
-  id int, 
-  name string, 
-  price double
-) using hudi
-tblproperties (
-  type = 'cow',
-  primaryKey = 'id'
-);
-```
-
-### PreCombineField
-Here is an example of creating an MOR external table. The **preCombineField** option
-is used to specify the preCombine field for merge. Generally 'event time' or some other similar column will be used for 
-ordering purpose. Hudi will be able to handle out of order data using the precombine field value.
-
-```sql
--- create an external mor table
-create table if not exists hudi_table1 (
-  id int, 
-  name string, 
-  price double,
-  ts bigint
-) using hudi
-tblproperties (
-  type = 'mor',
-  primaryKey = 'id,name',
-  preCombineField = 'ts' 
-);
-```
-
-### Partitioned Table
-:::note
-When created in spark-sql, partition columns will always be the last columns of the table. 
-:::
-Here is an example of creating a COW partitioned key less table.
-```sql
-create table if not exists hudi_table_p0 (
-id bigint,
-name string,
-dt string,
-hh string  
-) using hudi
-tblproperties (
-  type = 'cow',
-  primaryKey = 'id'
- ) 
-partitioned by dt;
-```
-
-Here is an example of creating a MOR partitioned table with preCombine field.
-```sql
-create table if not exists hudi_table_p0 (
-id bigint,
-name string,
-dt string,
-hh string  
-) using hudi
-tblproperties (
-  type = 'mor',
-  primaryKey = 'id',
-  preCombineField = 'ts'
- ) 
-partitioned by dt;
-```
-
-### Un-Partitioned Table
-Here is an example of creating a COW un-partitioned table.
-
-```sql
--- create a cow table, with primaryKey 'uuid' and unpartitioned. 
-create table hudi_cow_nonpcf_tbl (
-  uuid int,
-  name string,
-  price double
-) using hudi
-tblproperties (
-  primaryKey = 'uuid'
-);
-```
-
-Here is an example of creating a MOR un-partitioned table.
-
-```sql
--- create a mor non-partitioned table with preCombineField provided
-create table hudi_mor_tbl (
-    id int,
-    name string,
-    price double,
-    ts bigint
-) using hudi
-tblproperties (
-    type = 'mor',
-    primaryKey = 'id',
-    preCombineField = 'ts'
-);
-```
-
-### Create Table for an External Hudi Table
-You can create an External table using the `location` statement. If an external location is not specified it is considered a managed table. 
-You can read more about external vs managed tables [here](https://sparkbyexamples.com/apache-hive/difference-between-hive-internal-tables-and-external-tables/).
-An external table is useful if you need to read/write to/from a pre-existing hudi table.
-
-```sql
- create table h_p1 using hudi
- location '/path/to/hudi';
-```
-
-:::tip
-You don't need to specify schema and any properties except the partitioned columns if existed. Hudi can automatically recognize the schema and configurations.
-:::
-
-### Create Table AS SELECT
-
-Hudi supports CTAS(Create table as select) on spark sql. <br/>
-**Note:** For better performance to load data to hudi table, CTAS uses **bulk insert** as the write operation.
-
-**Example CTAS command to create a non-partitioned COW key less table.**
-
-```sql 
-create table h3 using hudi
-tblproperties (type = 'cow')
-as
-select 1 as id, 'a1' as name, 10 as price;
-```
-
-**Example CTAS command to create a partitioned, primary keyed COW table.**
-
-```sql
-create table h2 using hudi
-tblproperties (type = 'cow', primaryKey = 'id')
-partitioned by (dt)
-as
-select 1 as id, 'a1' as name, 10 as price, 1000 as dt;
-```
-
-**Example CTAS command to load data from another table.**
-
-```sql
-# create managed parquet table 
-create table parquet_mngd using parquet location 'file:///tmp/parquet_dataset/*.parquet';
-
-# CTAS by loading data into hudi table
-create table hudi_tbl using hudi location 'file:/tmp/hudi/hudi_tbl/' tblproperties ( 
-  type = 'cow', 
-  primaryKey = 'id', 
-  preCombineField = 'ts' 
- ) 
-partitioned by (datestr) as select * from parquet_mngd;
-```
-
-### Set hoodie config options
-You can also set the config with table options when creating table which will work for
-the table scope only and override the config set by the SET command.
-```sql
-create table if not exists h3(
-  id bigint, 
-  name string, 
-  price double
-) using hudi
-tblproperties (
-  primaryKey = 'id',
-  type = 'mor',
-  ${hoodie.config.key1} = '${hoodie.config.value2}',
-  ${hoodie.config.key2} = '${hoodie.config.value2}',
-  ....
-);
-
-e.g.
-create table if not exists h3(
-  id bigint, 
-  name string, 
-  price double
-) using hudi
-tblproperties (
-  primaryKey = 'id',
-  type = 'mor',
-  hoodie.cleaner.fileversions.retained = '20',
-  hoodie.keep.max.commits = '20'
-);
-```
-
-## Spark Alter Table
-### Syntax
-```sql
--- Alter table name
-ALTER TABLE oldTableName RENAME TO newTableName
-
--- Alter table add columns
-ALTER TABLE tableIdentifier ADD COLUMNS(colAndType (,colAndType)*)
-
--- Alter table column type
-ALTER TABLE tableIdentifier CHANGE COLUMN colName colName colType
+-- insert dynamic partition
+insert into hudi_cow_pt_tbl partition (dt, hh)
+select 1 as id, 'a1' as name, 1000 as ts, '2021-12-09' as dt, '10' as hh;
 ```
 
 :::note
-`ALTER TABLE ... RENAME TO ...` is not supported when using AWS Glue Data Catalog as hive metastore as Glue itself does 
-not support table renames.
+- `hoodie.spark.sql.insert.into.operation` will determine how records ingested via spark-sql INSERT INTO will be treated. Possible values are "bulk_insert", "insert"
+  and "upsert". If "bulk_insert" is chosen, hudi writes incoming records as is without any automatic small file management.
+  When "insert" is chosen, hudi inserts the new incoming records and also does small file management.
+  When "upsert" is used, hudi takes upsert flow, where incoming batch will be de-duped before ingest and also merged with previous versions of the record in storage.
+  For a table without any precombine key set, "insert" is chosen as the default value for this config. For a table with precombine key set,
+  "upsert" is chosen as the default value for this config.
+- From 0.14.0, `hoodie.sql.bulk.insert.enable` and `hoodie.sql.insert.mode` are depecrated. Users are expected to use `hoodie.spark.sql.insert.into.operation` instead.
+- When operation type is set to "insert", users can optionally enforce a dedup policy using `hoodie.datasource.insert.dup.policy`. 
+This policy will be employed when records being ingested already exists in storage. Default policy is none and no action will be taken. 
+Another option is to choose "drop", on which matching records from incoming will be dropped and the rest will be ingested. 
+Third option is "fail" which will fail the write operation when same records are re-ingested. In other words, a given record 
+as deduced by the key generation policy can be ingested only once to the target table of interest.
 :::
 
-### Examples
+Here are examples to override the spark.sql.insert.into.operation.
+
 ```sql
-alter table h0 rename to h0_1;
+-- upserts using INSERT_INTO 
+set hoodie.spark.sql.insert.into.operation = 'upsert' 
 
-alter table h0_1 add columns(ext0 string);
+insert into hudi_mor_tbl select 1, 'a1_1', 20, 1001;
+select id, name, price, ts from hudi_mor_tbl;
+1	a1_1	20.0	1001
 
-alter table h0_1 change column id id bigint;
+-- bulk_insert using INSERT_INTO 
+set hoodie.spark.sql.insert.into.operation = 'bulk_insert' 
+
+insert into hudi_mor_tbl select 1, 'a1_2', 20, 1002;
+select id, name, price, ts from hudi_mor_tbl;
+1	a1_1	20.0	1001
+1	a1_2	20.0	1002
 ```
-### Alter hoodie config options
-You can also alter the write config for a table by the **ALTER SERDEPROPERTIES**
 
-Example:
+### Insert overwrite 
+
+Users can execute `insert_overwrite` on a given hudi table. Matching partition records on storage will be overridden with those 
+incoming.
+
 ```sql
- alter table h3 set serdeproperties (hoodie.keep.max.commits = '10') 
+-- insert overwrite non-partitioned table
+insert overwrite hudi_mor_tbl select 99, 'a99', 20.0, 900;
+insert overwrite hudi_cow_nonpcf_tbl select 99, 'a99', 20.0;
+
+-- insert overwrite partitioned table with dynamic partition
+insert overwrite table hudi_cow_pt_tbl select 10, 'a10', 1100, '2021-12-09', '10';
+
+-- insert overwrite partitioned table with static partition
+insert overwrite hudi_cow_pt_tbl partition(dt = '2021-12-09', hh='12') select 13, 'a13', 1100;
+
 ```
 
-### Use set command
-You can use the **set** command to set any custom hudi's config, which will work for the
-whole spark session scope.
+## Update data
+
+Spark SQL supports two kinds of DML to update hudi table: Update and Merge-Into.
+
+### Update
+
+**Syntax**
 ```sql
-set hoodie.insert.shuffle.parallelism = 100;
-set hoodie.upsert.shuffle.parallelism = 100;
-set hoodie.delete.shuffle.parallelism = 100;
+UPDATE tableIdentifier SET column = EXPRESSION(,column = EXPRESSION) [ WHERE boolExpression]
 ```
-
-## Flink
-
-### Create Catalog
-
-The catalog helps to manage the SQL tables, the table can be shared among CLI sessions if the catalog persists the table DDLs.
-For `hms` mode, the catalog also supplements the hive syncing options.
-
-HMS mode catalog SQL demo:
+**Case**
 ```sql
-CREATE CATALOG hoodie_catalog
-  WITH (
-    'type'='hudi',
-    'catalog.path' = '${catalog default root path}',
-    'hive.conf.dir' = '${directory where hive-site.xml is located}',
-    'mode'='hms' -- supports 'dfs' mode that uses the DFS backend for table DDLs persistence
-  );
+update hudi_mor_tbl set price = price * 2, ts = 1111 where id = 1;
+
+update hudi_cow_pt_tbl set name = 'a1_1', ts = 1001 where id = 1;
+
+-- update using non-PK field
+update hudi_cow_pt_tbl set ts = 1001 where name = 'a1';
 ```
+:::note
+`Update` operation requires `preCombineField` specified.
+:::
 
-#### Options
-|  Option Name  | Required | Default | Remarks |
-|  -----------  | -------  | ------- | ------- |
-| `catalog.path` | true | -- | Default root path for the catalog, the path is used to infer the table path automatically, the default table path: `${catalog.path}/${db_name}/${table_name}` |
-| `default-database` | false | default | default database name |
-| `hive.conf.dir` | false | -- | The directory where hive-site.xml is located, only valid in `hms` mode |
-| `mode` | false | dfs | Supports `hms` mode that uses HMS to persist the table options |
-| `table.external` | false | false | Whether to create the external table, only valid in `hms` mode |
+### MergeInto
 
-### Create Table
+**Syntax**
 
-The following is a Flink example to create a table. [Read the Flink Quick Start](/docs/flink-quick-start-guide) guide for more examples.
-
-```sql 
-CREATE TABLE hudi_table2(
-  id int, 
-  name string, 
-  price double
-)
-WITH (
-'connector' = 'hudi',
-'path' = 's3://bucket-name/hudi/',
-'table.type' = 'MERGE_ON_READ' -- this creates a MERGE_ON_READ table, by default is COPY_ON_WRITE
-);
-```
-
-### Alter Table
 ```sql
-alter table h0 rename to h0_1;
+MERGE INTO tableIdentifier AS target_alias
+USING (sub_query | tableIdentifier) AS source_alias
+ON <merge_condition>
+[ WHEN MATCHED [ AND <condition> ] THEN <matched_action> ]
+[ WHEN NOT MATCHED [ AND <condition> ]  THEN <not_matched_action> ]
+
+<merge_condition> =A equal bool condition 
+<matched_action>  =
+  DELETE  |
+  UPDATE SET *  |
+  UPDATE SET column1 = expression1 [, column2 = expression2 ...]
+<not_matched_action>  =
+  INSERT *  |
+  INSERT (column1 [, column2 ...]) VALUES (value1 [, value2 ...])
+```
+**Example**
+```sql
+-- source table using hudi for testing merging into non-partitioned table
+create table merge_source (id int, name string, price double, ts bigint) using hudi
+tblproperties (primaryKey = 'id', preCombineField = 'ts');
+insert into merge_source values (1, "old_a1", 22.22, 900), (2, "new_a2", 33.33, 2000), (3, "new_a3", 44.44, 2000);
+
+merge into hudi_mor_tbl as target
+using merge_source as source
+on target.id = source.id
+when matched then update set *
+when not matched then insert *
+;
+
+-- source table using parquet for testing merging into partitioned table
+create table merge_source2 (id int, name string, flag string, dt string, hh string) using parquet;
+insert into merge_source2 values (1, "new_a1", 'update', '2021-12-09', '10'), (2, "new_a2", 'delete', '2021-12-09', '11'), (3, "new_a3", 'insert', '2021-12-09', '12');
+
+merge into hudi_cow_pt_tbl as target
+using (
+  select id, name, '1000' as ts, flag, dt, hh from merge_source2
+) source
+on target.id = source.id
+when matched and flag != 'delete' then
+ update set id = source.id, name = source.name, ts = source.ts, dt = source.dt, hh = source.hh
+when matched and flag = 'delete' then delete
+when not matched then
+ insert (id, name, ts, dt, hh) values(source.id, source.name, source.ts, source.dt, source.hh)
+;
+
 ```
 
-## Supported Types
+:::note
+For a Primary keyed Hudi table, the join condition in `Merge Into` is expected to contain the primary keys of the table.
+For a Keyless table, the join condition in MIT can be on any arbitrary data columns.
+:::
 
-| Spark           |     Hudi     |     Notes     |
-|-----------------|--------------|---------------|
-| boolean         |  boolean     |               |
-| byte            |  int         |               |
-| short           |  int         |               |
-| integer         |  int         |               |
-| long            |  long        |               |
-| date            |  date        |               |
-| timestamp       |  timestamp   |               |
-| float           |  float       |               |
-| double          |  double      |               |
-| string          |  string      |               |
-| decimal         |  decimal     |               |
-| binary          |  bytes       |               |
-| array           |  array       |               |
-| map             |  map         |               |
-| struct          |  struct      |               |
-| char            |              | not supported |
-| varchar         |              | not supported |
-| numeric         |              | not supported |
-| null            |              | not supported |
-| object          |              | not supported |
+
+## Delete data 
+
+
+**Syntax**
+```sql
+DELETE FROM tableIdentifier [ WHERE BOOL_EXPRESSION]
+```
+**Example**
+```sql
+DELETE FROM hudi_cow_nonpcf_tbl where uuid = 1;
+
+DELETE FROM hudi_mor_tbl where id % 2 = 0;
+
+-- delete using non-PK field
+DELETE FROM hudi_cow_pt_tbl where name = 'a1';
+```
