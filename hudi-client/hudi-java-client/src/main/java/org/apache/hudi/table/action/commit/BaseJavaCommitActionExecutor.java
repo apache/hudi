@@ -65,7 +65,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 
 public abstract class BaseJavaCommitActionExecutor<T> extends
     BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, HoodieWriteMetadata> {
@@ -73,19 +73,19 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
   private static final Logger LOG = LoggerFactory.getLogger(BaseJavaCommitActionExecutor.class);
 
   public BaseJavaCommitActionExecutor(HoodieEngineContext context,
-                                       HoodieWriteConfig config,
-                                       HoodieTable table,
-                                       String instantTime,
-                                       WriteOperationType operationType) {
+                                      HoodieWriteConfig config,
+                                      HoodieTable table,
+                                      String instantTime,
+                                      WriteOperationType operationType) {
     super(context, config, table, instantTime, operationType, Option.empty());
   }
 
   public BaseJavaCommitActionExecutor(HoodieEngineContext context,
-                                       HoodieWriteConfig config,
-                                       HoodieTable table,
-                                       String instantTime,
-                                       WriteOperationType operationType,
-                                       Option extraMetadata) {
+                                      HoodieWriteConfig config,
+                                      HoodieTable table,
+                                      String instantTime,
+                                      WriteOperationType operationType,
+                                      Option extraMetadata) {
     super(context, config, table, instantTime, operationType, extraMetadata);
   }
 
@@ -94,7 +94,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
     HoodieWriteMetadata<List<WriteStatus>> result = new HoodieWriteMetadata<>();
 
     WorkloadProfile workloadProfile =
-            new WorkloadProfile(buildProfile(inputRecords), table.getIndex().canIndexLogFiles());
+        new WorkloadProfile(buildProfile(inputRecords), table.getIndex().canIndexLogFiles());
     LOG.info("Input workload profile :" + workloadProfile);
 
     final Partitioner partitioner = getPartitioner(workloadProfile);
@@ -212,16 +212,16 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
       LOG.info("Committing " + instantTime + ", action Type " + getCommitActionType());
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       HoodieCommitMetadata metadata = result.getCommitMetadata().get();
-
       writeTableMetadata(metadata, HoodieListData.eager(result.getWriteStatuses()), actionType);
-
-      activeTimeline.saveAsComplete(new HoodieInstant(true, getCommitActionType(), instantTime),
-          Option.of(getUTF8Bytes(metadata.toJsonString())));
+      // cannot serialize maps with null values
+      metadata.getExtraMetadata().entrySet().removeIf(entry -> entry.getValue() == null);
+      activeTimeline.saveAsComplete(
+          new HoodieInstant(true, getCommitActionType(), instantTime),
+          serializeCommitMetadata(metadata));
       LOG.info("Committed " + instantTime);
       result.setCommitMetadata(Option.of(metadata));
     } catch (IOException e) {
-      throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
-          e);
+      throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime, e);
     }
   }
 
@@ -269,7 +269,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
     return handleUpdateInternal(upsertHandle, fileId);
   }
 
-  protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?,?,?,?> upsertHandle, String fileId)
+  protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?, ?, ?, ?> upsertHandle, String fileId)
       throws IOException {
     if (upsertHandle.getOldFilePath() == null) {
       throw new HoodieUpsertException(

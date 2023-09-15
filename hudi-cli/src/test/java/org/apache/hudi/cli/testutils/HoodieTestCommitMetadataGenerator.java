@@ -39,9 +39,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
 import static org.apache.hudi.common.util.CollectionUtils.createImmutableList;
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Class to be used in tests to keep generating test inserts and updates against a corpus.
@@ -90,8 +90,7 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
     for (String name : commitFileNames) {
       HoodieCommitMetadata commitMetadata =
               generateCommitMetadata(basePath, commitTime, fileId1, fileId2, writes, updates, extraMetadata, true);
-      String content = commitMetadata.toJsonString();
-      createFileWithMetadata(basePath, configuration, name, content);
+      createFileWithMetadata(basePath, configuration, name, serializeCommitMetadata(commitMetadata).get());
     }
   }
 
@@ -106,15 +105,14 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
     for (String name : commitFileNames) {
       HoodieCommitMetadata commitMetadata =
           generateCommitMetadata(basePath, commitTime, fileId1, fileId2, writes, updates, extraMetadata, setDefaultFileId);
-      String content = commitMetadata.toJsonString();
-      createFileWithMetadata(basePath, configuration, name, content);
+      createFileWithMetadata(basePath, configuration, name, serializeCommitMetadata(commitMetadata).get());
     }
   }
 
-  static void createFileWithMetadata(String basePath, Configuration configuration, String name, String content) throws IOException {
+  static void createFileWithMetadata(String basePath, Configuration configuration, String name, byte[] content) throws IOException {
     Path commitFilePath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + name);
     try (FSDataOutputStream os = FSUtils.getFs(basePath, configuration).create(commitFilePath, true)) {
-      os.writeBytes(new String(getUTF8Bytes(content)));
+      os.write(content);
     }
   }
 

@@ -74,7 +74,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
 
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class HiveTestCluster implements BeforeAllCallback, AfterAllCallback, BeforeEachCallback, AfterEachCallback {
@@ -171,7 +171,7 @@ public class HiveTestCluster implements BeforeAllCallback, AfterAllCallback, Bef
   }
 
   private void createCommitFile(HoodieCommitMetadata commitMetadata, String commitTime, String basePath) throws IOException {
-    byte[] bytes = getUTF8Bytes(commitMetadata.toJsonString());
+    byte[] bytes = serializeCommitMetadata(commitMetadata).get();
     Path fullPath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
         + HoodieTimeline.makeCommitFileName(commitTime));
     FSDataOutputStream fsout = dfsCluster.getFileSystem().create(fullPath, true);

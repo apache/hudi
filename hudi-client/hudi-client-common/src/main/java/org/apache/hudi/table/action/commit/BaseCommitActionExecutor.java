@@ -70,7 +70,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE;
 
 public abstract class BaseCommitActionExecutor<T, I, K, O, R>
@@ -153,8 +153,9 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       String commitActionType = getCommitActionType();
       HoodieInstant requested = new HoodieInstant(State.REQUESTED, commitActionType, instantTime);
-      activeTimeline.transitionRequestedToInflight(requested,
-          Option.of(getUTF8Bytes(metadata.toJsonString())),
+      activeTimeline.transitionRequestedToInflight(
+          requested,
+          serializeCommitMetadata(metadata),
           config.shouldAllowMultiWriteOnSameInstant());
     } catch (IOException io) {
       throw new HoodieCommitException("Failed to commit " + instantTime + " unable to save inflight metadata ", io);
@@ -231,10 +232,10 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
   }
 
   protected abstract Iterator<List<WriteStatus>> handleInsert(String idPfx,
-      Iterator<HoodieRecord<T>> recordItr) throws Exception;
+                                                              Iterator<HoodieRecord<T>> recordItr) throws Exception;
 
   protected abstract Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId,
-      Iterator<HoodieRecord<T>> recordItr) throws IOException;
+                                                              Iterator<HoodieRecord<T>> recordItr) throws IOException;
 
   protected HoodieWriteMetadata<HoodieData<WriteStatus>> executeClustering(HoodieClusteringPlan clusteringPlan) {
     HoodieInstant instant = HoodieTimeline.getReplaceCommitRequestedInstant(instantTime);

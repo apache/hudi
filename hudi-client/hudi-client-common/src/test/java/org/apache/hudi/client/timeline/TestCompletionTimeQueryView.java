@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.ActiveAction;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -46,7 +47,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -99,7 +100,10 @@ public class TestCompletionTimeQueryView {
       String completionTime = String.format("%08d", i + 1000);
       HoodieCommitMetadata metadata = testTable.createCommitMetadata(instantTime, WriteOperationType.INSERT, Arrays.asList("par1", "par2"), 10, false);
       testTable.addCommit(instantTime, Option.of(metadata));
-      activeActions.add(new DummyActiveAction(new HoodieInstant(HoodieInstant.State.COMPLETED, "commit", instantTime, completionTime), getUTF8Bytes(metadata.toJsonString())));
+      activeActions.add(
+          new DummyActiveAction(
+              new HoodieInstant(HoodieInstant.State.COMPLETED, "commit", instantTime, completionTime),
+              serializeCommitMetadata(metadata).get()));
     }
     testTable.addRequestedCommit(String.format("%08d", 11));
     List<HoodieInstant> instants = new HoodieActiveTimeline(metaClient, false).getInstantsAsStream().sorted().collect(Collectors.toList());

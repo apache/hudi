@@ -105,7 +105,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY;
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 
 /**
@@ -283,8 +283,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
     // update Metadata table
     writeTableMetadata(table, instantTime, metadata, writeStatuses);
-    activeTimeline.saveAsComplete(new HoodieInstant(true, commitActionType, instantTime),
-        Option.of(getUTF8Bytes(metadata.toJsonString())));
+    activeTimeline.saveAsComplete(
+        new HoodieInstant(true, commitActionType, instantTime),
+        serializeCommitMetadata(metadata));
   }
 
   // Save internal schema
@@ -497,7 +498,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public abstract O delete(K keys, final String instantTime);
 
   /**
-   * Delete records from Hoodie table based on {@link HoodieKey} and {@link HoodieRecordLocation} specified in
+   * Delete records from Hoodie table based on {@link HoodieKey} and {@link org.apache.hudi.common.model.HoodieRecordLocation} specified in
    * preppedRecords.
    *
    * @param preppedRecords Empty records with key and locator set.
@@ -513,7 +514,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param metaClient
    */
   public void preWrite(String instantTime, WriteOperationType writeOperationType,
-      HoodieTableMetaClient metaClient) {
+                       HoodieTableMetaClient metaClient) {
     setOperationType(writeOperationType);
     this.lastCompletedTxnAndMetadata = txnManager.isLockRequired()
         ? TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient) : Option.empty();
@@ -954,8 +955,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     metaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant().ifPresent(latestPending ->
         ValidationUtils.checkArgument(
             HoodieTimeline.compareTimestamps(latestPending.getTimestamp(), HoodieTimeline.LESSER_THAN, instantTime),
-        "Latest pending compaction instant time must be earlier than this instant time. Latest Compaction :"
-            + latestPending + ",  Ingesting at " + instantTime));
+            "Latest pending compaction instant time must be earlier than this instant time. Latest Compaction :"
+                + latestPending + ",  Ingesting at " + instantTime));
     if (config.getFailedWritesCleanPolicy().isLazy()) {
       this.heartbeatClient.start(instantTime);
     }
@@ -964,7 +965,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       metaClient.getActiveTimeline().createRequestedReplaceCommit(instantTime, actionType);
     } else {
       metaClient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.REQUESTED, actionType,
-              instantTime));
+          instantTime));
     }
   }
 
@@ -1072,7 +1073,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param extraMetadata Extra Metadata to be stored
    */
   public void commitCompaction(String compactionInstantTime, HoodieCommitMetadata metadata,
-                                        Option<Map<String, String>> extraMetadata) {
+                               Option<Map<String, String>> extraMetadata) {
     tableServiceClient.commitCompaction(compactionInstantTime, metadata, extraMetadata);
   }
 
@@ -1322,14 +1323,14 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
-     * Sets write schema from last instant since deletes may not have schema set in the config.
-     */
+   * Sets write schema from last instant since deletes may not have schema set in the config.
+   */
   protected void setWriteSchemaForDeletes(HoodieTableMetaClient metaClient) {
     try {
       HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
       Option<HoodieInstant> lastInstant =
           activeTimeline.filterCompletedInstants().filter(s -> s.getAction().equals(metaClient.getCommitActionType())
-          || s.getAction().equals(HoodieActiveTimeline.REPLACE_COMMIT_ACTION))
+                  || s.getAction().equals(HoodieActiveTimeline.REPLACE_COMMIT_ACTION))
               .lastInstant();
       if (lastInstant.isPresent()) {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
@@ -1541,7 +1542,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
     metadata.setOperationType(WriteOperationType.ALTER_SCHEMA);
     try {
-      timeLine.transitionRequestedToInflight(requested, Option.of(getUTF8Bytes(metadata.toJsonString())));
+      timeLine.transitionRequestedToInflight(requested, serializeCommitMetadata(metadata));
     } catch (IOException io) {
       throw new HoodieCommitException("Failed to commit " + instantTime + " unable to save inflight metadata ", io);
     }

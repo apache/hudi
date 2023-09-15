@@ -249,7 +249,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         }
 
       } catch (IOException e) {
-        throw new HoodieIOException("error reading commit metadata for " + instant);
+        throw new HoodieIOException("error reading commit metadata for " + instant, e);
       }
     });
 

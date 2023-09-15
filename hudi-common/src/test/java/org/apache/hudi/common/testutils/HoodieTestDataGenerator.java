@@ -80,6 +80,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -525,7 +526,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
 
   private static void createMetadataFile(String f, String basePath, Configuration configuration, HoodieCommitMetadata commitMetadata) {
     try {
-      createMetadataFile(f, basePath, configuration, getUTF8Bytes(commitMetadata.toJsonString()));
+      createMetadataFile(f, basePath, configuration, serializeCommitMetadata(commitMetadata).get());
     } catch (IOException e) {
       throw new HoodieIOException(e.getMessage(), e);
     }
@@ -618,7 +619,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     try (FSDataOutputStream os = fs.create(commitFile, true)) {
       HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
       // Write empty commit metadata
-      os.writeBytes(new String(getUTF8Bytes(commitMetadata.toJsonString())));
+      os.writeBytes(new String(serializeCommitMetadata(commitMetadata).get()));
     }
   }
 

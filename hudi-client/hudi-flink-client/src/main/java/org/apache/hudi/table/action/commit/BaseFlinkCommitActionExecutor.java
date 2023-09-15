@@ -54,7 +54,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 
 /**
  * With {@code org.apache.hudi.operator.partitioner.BucketAssigner}, each hoodie record
@@ -142,7 +142,7 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
   }
 
   protected void commit(Option<Map<String, String>> extraMetadata, HoodieData<WriteStatus> writeStatuses, HoodieWriteMetadata<List<WriteStatus>> result,
-      List<HoodieWriteStat> writeStats) {
+                        List<HoodieWriteStat> writeStats) {
     String actionType = getCommitActionType();
     LOG.info("Committing " + instantTime + ", action Type " + actionType);
     result.setCommitted(true);
@@ -155,9 +155,11 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
       HoodieCommitMetadata metadata = result.getCommitMetadata().get();
 
       writeTableMetadata(metadata, writeStatuses, actionType);
-
-      activeTimeline.saveAsComplete(new HoodieInstant(true, getCommitActionType(), instantTime),
-          Option.of(getUTF8Bytes(metadata.toJsonString())));
+      // cannot serialize maps with null values
+      metadata.getExtraMetadata().entrySet().removeIf(entry -> entry.getValue() == null);
+      activeTimeline.saveAsComplete(
+          new HoodieInstant(true, getCommitActionType(), instantTime),
+          serializeCommitMetadata(metadata));
       LOG.info("Committed " + instantTime);
       result.setCommitMetadata(Option.of(metadata));
     } catch (IOException e) {

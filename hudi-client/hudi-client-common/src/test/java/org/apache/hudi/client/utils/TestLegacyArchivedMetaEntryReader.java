@@ -19,7 +19,7 @@
 package org.apache.hudi.client.utils;
 
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
-import org.apache.hudi.client.timeline.ActiveAction;
+import org.apache.hudi.common.table.timeline.ActiveAction;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.MetadataConversionUtils;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;

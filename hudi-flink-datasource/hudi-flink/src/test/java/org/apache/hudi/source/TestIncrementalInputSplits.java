@@ -52,7 +52,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 
@@ -139,7 +139,7 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
             HoodieTimeline.REPLACE_COMMIT_ACTION);
     timeline.transitionReplaceInflightToComplete(
         HoodieTimeline.getReplaceCommitInflightInstant(commit3.getTimestamp()),
-        Option.of(getUTF8Bytes(commitMetadata.toJsonString())));
+        serializeCommitMetadata(commitMetadata));
     timeline = timeline.reload();
 
     conf.set(FlinkOptions.READ_END_COMMIT, "3");
