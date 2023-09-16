@@ -18,13 +18,13 @@ Only SparkSQL needs an explicit Create Table command. No Create Table command is
 
 Users can set table options while creating a hudi table.
 
-| Parameter Name | Description | (Optional/Required) : Default Value |
-|------------|--------|--------|
-| primaryKey | The primary key names of the table, multiple fields separated by commas. | (Optional) : `id`|
-| type       | The type of table to create ([read more](/docs/table_types)). <br></br> `cow` = COPY-ON-WRITE, `mor` = MERGE-ON-READ.| (Optional) : `cow` |
-| preCombineField | The Pre-Combine field of the table. | (Optional) : `ts`|
+| Parameter Name  | Default        | Description                                                                                                           |
+|-----------------|----------------|-----------------------------------------------------------------------------------------------------------------------|
+| primaryKey      | id (Optional)  | The primary key names of the table, multiple fields separated by commas.                                              |
+| type            | cow (Optional) | The type of table to create ([read more](/docs/table_types)). <br></br> `cow` = COPY-ON-WRITE, `mor` = MERGE-ON-READ. |
+| preCombineField | ts (Optional)  | The Pre-Combine field of the table.                                                                                   |
 
-To set any custom hudi config(like index type, max parquet size, etc), see the  "Set hudi config section" .
+To set any custom hudi config(like index type, max parquet size, etc), see the section [Set hudi config options](#set-hoodie-config-options) .
 
 ### Table Type
 Here is an example of creating a COW table.
@@ -36,7 +36,7 @@ create table if not exists hudi_table2(
   name string, 
   price double
 ) using hudi
-options (
+tblproperties (
   type = 'cow'
 );
 ```
@@ -51,7 +51,7 @@ create table if not exists hudi_table0 (
   name string, 
   price double
 ) using hudi
-options (
+tblproperties (
   type = 'cow',
   primaryKey = 'id'
 );
@@ -69,7 +69,7 @@ create table if not exists hudi_table1 (
   price double,
   ts bigint
 ) using hudi
-options (
+tblproperties (
   type = 'mor',
   primaryKey = 'id,name',
   preCombineField = 'ts' 
@@ -77,6 +77,9 @@ options (
 ```
 
 ### Partitioned Table
+:::note
+When created in spark-sql, partition columns will always be the last columns of the table. 
+:::
 Here is an example of creating a COW partitioned table.
 ```sql
 create table if not exists hudi_table_p0 (
@@ -85,7 +88,7 @@ name string,
 dt string,
 hh string  
 ) using hudi
-options (
+tblproperties (
   type = 'cow',
   primaryKey = 'id'
  ) 
@@ -118,7 +121,7 @@ select 1 as id, 'a1' as name, 10 as price;
 
 ```sql
 create table h2 using hudi
-options (type = 'cow', primaryKey = 'id')
+tblproperties (type = 'cow', primaryKey = 'id')
 partitioned by (dt)
 as
 select 1 as id, 'a1' as name, 10 as price, 1000 as dt;
@@ -131,7 +134,7 @@ select 1 as id, 'a1' as name, 10 as price, 1000 as dt;
 create table parquet_mngd using parquet location 'file:///tmp/parquet_dataset/*.parquet';
 
 # CTAS by loading data into hudi table
-create table hudi_tbl using hudi location 'file:/tmp/hudi/hudi_tbl/' options ( 
+create table hudi_tbl using hudi location 'file:/tmp/hudi/hudi_tbl/' tblproperties ( 
   type = 'cow', 
   primaryKey = 'id', 
   preCombineField = 'ts' 
@@ -148,7 +151,7 @@ create table if not exists h3(
   name string, 
   price double
 ) using hudi
-options (
+tblproperties (
   primaryKey = 'id',
   type = 'mor',
   ${hoodie.config.key1} = '${hoodie.config.value2}',
@@ -162,7 +165,7 @@ create table if not exists h3(
   name string, 
   price double
 ) using hudi
-options (
+tblproperties (
   primaryKey = 'id',
   type = 'mor',
   hoodie.cleaner.fileversions.retained = '20',
