@@ -537,6 +537,10 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   test("Test insert for uppercase table name") {
     withRecordType()(withTempDir{ tmp =>
       val tableName = s"H_$generateTableName"
+      if (HoodieSparkUtils.gteqSpark3_5) {
+        // [SPARK-44284] Spark 3.5+ requires conf below to be case sensitive
+        spark.sql(s"set spark.sql.caseSensitive=true")
+      }
 
       spark.sql(
         s"""
@@ -557,7 +561,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         .setBasePath(tmp.getCanonicalPath)
         .setConf(spark.sessionState.newHadoopConf())
         .build()
-      assertResult(metaClient.getTableConfig.getTableName)(tableName)
+      assertResult(tableName)(metaClient.getTableConfig.getTableName)
     })
   }
 
