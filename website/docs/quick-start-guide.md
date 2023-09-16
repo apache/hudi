@@ -162,7 +162,8 @@ export PYSPARK_PYTHON=$(which python3)
 pyspark \
 --packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.14.0 \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
---conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
+--conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
+--conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 </TabItem>
 
@@ -213,7 +214,8 @@ spark-sql --packages org.apache.hudi:hudi-spark3.0-bundle_2.12:0.14.0 \
 # Spark 2.4
 spark-sql --packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.14.0 \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
---conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
+--conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
+--conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 
 </TabItem>
