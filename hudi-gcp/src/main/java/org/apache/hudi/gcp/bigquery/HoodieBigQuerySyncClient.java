@@ -120,9 +120,9 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
           .build();
       JobId jobId = JobId.of(UUID.randomUUID().toString());
       Job queryJob = bigquery.create(JobInfo.newBuilder(queryConfig)
-                             .setProjectId(projectId)
                              .setJobId(jobId)
-                             .build());
+                             .build()
+                             .setProjectId(projectId));
 
       queryJob = queryJob.waitFor();
 
