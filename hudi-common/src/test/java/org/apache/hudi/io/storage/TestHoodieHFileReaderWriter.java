@@ -19,16 +19,16 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -57,6 +57,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.Spliterator;
 import java.util.Spliterators;
@@ -95,20 +96,16 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
   protected HoodieAvroHFileWriter createWriter(
       Schema avroSchema, boolean populateMetaFields) throws Exception {
     String instantTime = "000";
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
-        .withPath(DUMMY_BASE_PATH)
-        .withIndexConfig(HoodieIndexConfig.newBuilder()
-            .bloomFilterNumEntries(1000).bloomFilterFPP(0.00001).build())
-        .withPopulateMetaFields(populateMetaFields)
-        .build();
     Configuration conf = new Configuration();
+    Properties props = new Properties();
+    props.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(), Boolean.toString(populateMetaFields));
     TaskContextSupplier mockTaskContextSupplier = Mockito.mock(TaskContextSupplier.class);
     Supplier<Integer> partitionSupplier = Mockito.mock(Supplier.class);
     when(mockTaskContextSupplier.getPartitionIdSupplier()).thenReturn(partitionSupplier);
     when(partitionSupplier.get()).thenReturn(10);
 
     return (HoodieAvroHFileWriter)HoodieFileWriterFactory.getFileWriter(
-        instantTime, getFilePath(), conf, writeConfig.getStorageConfig(), avroSchema, mockTaskContextSupplier, writeConfig.getRecordMerger().getRecordType());
+        instantTime, getFilePath(), conf, HoodieStorageConfig.newBuilder().fromProperties(props).build(), avroSchema, mockTaskContextSupplier, HoodieRecord.HoodieRecordType.AVRO);
   }
 
   @Override
