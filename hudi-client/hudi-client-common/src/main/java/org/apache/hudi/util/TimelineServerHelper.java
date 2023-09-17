@@ -62,13 +62,10 @@ public class TimelineServerHelper {
                                                        TypeReference reference, RequestMethod method) {
     int retry = maxRetry;
     while (--retry >= 0) {
-      long start = System.currentTimeMillis();
       try {
         return executeRequestToTimelineServer(requestPath, queryParameters, reference, method);
       } catch (IOException e) {
         LOG.warn("Failed to execute request (" + requestPath + ") to timeline server", e);
-      } finally {
-        LOG.info("Execute request : (" + requestPath + "), costs: " + (System.currentTimeMillis() - start) + " ms");
       }
     }
     throw new HoodieException("Failed to execute timeline server request (" + requestPath + ")");
