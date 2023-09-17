@@ -7,7 +7,7 @@ last_modified_at: 2023-08-23T21:14:52+09:00
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-This guide provides a quick peek at Hudi's capabilities using spark. Using Spark datasources, pyspark and Spark SQL, 
+This guide provides a quick peek at Hudi's capabilities using spark. Using Spark datasources(scala and python) and Spark SQL, 
 we will walk through code snippets that allows you to insert, update and query a Hudi table.
 
 ## Setup
@@ -308,29 +308,8 @@ can generate sample inserts and updates based on the the sample trip schema [her
 
 ## Create Table
 
-Before we go further, let us go over few terminologies: 
-
-- **Table types**
-
-  Hudi supports two different table types, namely Copy-On-Write (COW) and Merge-On-Read (MOR). Users can choose either 
-of these table types depending on their workload and SLA requirements. You can read more about different 
-  table types [here](/docs/next/table_types/).
-
-- **Partitioned & Non-Partitioned tables**
-
-  Users can create a partitioned table or a non-partitioned table with Apache Hudi. Partitioning can help with 
-  reducing query run times. For quick start purpose, we will go with partitioned table. 
-
-- **Primary key and Hudi table**
-
-  Optionally users can choose to create a Primary keyed table. When primary key is set for a given table,
-  Hudi ensures uniqueness during updates and deletes. Each record is uniquely identified by the primary key configuration.
-  If primary key is not set, Hudi treats it as key less table and every record ingested is treated as a new record even
-  if contents match. Such keyless tables are supported from Hudi 0.14.0.
-
-:::note
-For the purpose of quick start guide, we will go with only COW table type which is partitioned.
-:::
+Lets take a look at creating a Hudi table. For the purpose of quick start guide, we will go with COW table type which 
+is partitioned.
 
 <Tabs
 groupId="programming-language"
@@ -367,7 +346,7 @@ Users can set table properties while creating a hudi table. Critical options are
 
 | Parameter Name | Default | Introduction                                                                                                                                                                                                                                                                                                                                     |
 |------------------|--------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| primaryKey | uuid | The primary key field names of the table, multiple fields separated by commas. Same as `hoodie.datasource.write.recordkey.field`. This can be ignored for a key less table (from 0.14.0).                                                                                                                                                        |
+| primaryKey | uuid | The primary key field names of the table, multiple fields separated by commas. Same as `hoodie.datasource.write.recordkey.field`. If this config is ignored, hudi will auto generate keys for the records of interest (from 0.14.0).                                                                                                             |
 | preCombineField |  | The pre-combine field of the table. Same as `hoodie.datasource.write.precombine.field` and is used for resolving the final version of the record among multiple versions. Generally `event time` or some other similar column will be used for ordering purpose. Hudi will be able to handle out of order data using the preCombine field value. |
 | type       | cow | The table type to create. type = 'cow' means a COPY-ON-WRITE table, while type = 'mor' means a MERGE-ON-READ table. Same as `hoodie.datasource.write.table.type`. More details can be found [here](/docs/table_types)                                                                                                                            |
 
@@ -379,8 +358,6 @@ Users can set table properties while creating a hudi table. Critical options are
 
 Here is an example of creating a Hudi table.
 
-**Create a Key less COW Table**
-
 ```sql
 -- create a partitioned, key less COW table
 create table hudi_cow_pt_tbl (
@@ -390,31 +367,14 @@ create table hudi_cow_pt_tbl (
   dt string,
   hh string
 ) using hudi
+tblproperties (
+  type = 'cow'
+ )
 partitioned by dt
 location '/tmp/hudi/hudi_cow_pt_tbl';
 ```
 
 Default value for type is 'cow' and hence could be skipped. 
-
-**Create Primary keyed COW Table**
-
-```sql
--- create a partitioned, primary keyed COW table
-create table hudi_cow_pt_tbl (
-  id bigint,
-  name string,
-  ts bigint,
-  dt string,
-  hh string
-) using hudi
-tblproperties (
-  type = 'cow',
-  primaryKey = 'id',
-  preCombineField = 'ts'
- )
-partitioned by (dt, hh)
-location '/tmp/hudi/hudi_cow_pt_tbl';
-```
 
 **CTAS**
 
@@ -423,31 +383,22 @@ Hudi supports CTAS (Create Table As Select) on Spark SQL. <br/>
 CTAS uses the **bulk insert** as the write operation for better writer performance.
 :::
 
-***Create a Key less COW Table using CTAS***
+***Create a Hudi Table using CTAS***
 
 ```sql
 -- CTAS: create a partitioned, keyless COW table 
 create table hudi_ctas_cow_pt_tbl
 using hudi
+tblproperties (
+  type = 'cow', 
+  preCombineField = 'name'
+ )
 partitioned by (dt)
 as
-select 1 as id, 'a1' as name, 10 as price;
+select 1 as id, 'a1' as name, 2021-12-01' as dt;
 ```
 
-***Create a Primary keyed COW Table using CTAS***
-
-```sql
--- CTAS: create a partitioned, primary keyed COW table
-create table hudi_ctas_cow_pt_tbl
-using hudi
-tblproperties (type = 'cow', primaryKey = 'id', preCombineField = 'ts')
-partitioned by (dt)
-as
-select 1 as id, 'a1' as name, 10 as price, 1000 as ts, '2021-12-01' as dt;
-
-```
-
-***Create a Primary keyed COW Table using CTAS by loading data from another parquet table***
+***Create a Hudi Table using CTAS by loading data from another parquet table***
 
 ```sql
 # create managed parquet table
@@ -456,47 +407,17 @@ create table parquet_mngd using parquet location 'file:///tmp/parquet_dataset/*.
 # CTAS by loading data into hudi table
 create table hudi_ctas_cow_pt_tbl2 using hudi location 'file:/tmp/hudi/hudi_tbl/' tblproperties (
   type = 'cow',
-  primaryKey = 'id',
   preCombineField = 'ts'
  )
 partitioned by (datestr) as select * from parquet_mngd;
 ```
 
-***Create a Primary keyed COW Table using CTAS by loading data from another hudi table***
-
-```sql
-# create a source hudi table
-create table source_hudi (
-  id int,
-  name string,
-  price double,
-  ts long
-) using hudi
-tblproperties (
-  primaryKey = 'id,name',
-  type = 'cow'
- );
-
-# create a new hudi table based on the source table
-create table target_hudi1
-like source_hudi
-using hudi;
-
-# create a new hudi table based on the source table with override options
-create table target_hudi2
-like source_hudi
-using hudi
-tblproperties (primaryKey = 'id');
-
-# create a new external hudi table based on the source table with location
-create table target_hudi3
-like source_hudi
-using hudi
-location 'file:/tmp/hudi/target_hudi3/';
-```
+:::note
+If you prefer to explicitly set the primary keys, you can do so by setting `primaryKey` with tblproperties. 
+:::
 
 :::note
-For the purpose of quick start guide, we will go with one table type (cow), partitioned table and external tables. For more
+For the purpose of quick start guide, we covering just COW table type, partitioned and external tables. For more
 options, please refer to [SQL DDL](/docs/next/sql_ddl) and [SQL DML](/docs/next/sql_dml) reference guide.  
 :::
 
@@ -522,16 +443,9 @@ values={[
 
 Generate some new trips, load them into a DataFrame and write the DataFrame into the Hudi table as below.
 
-:::note
-Users can choose to create a Primary keyed table or a Key less table(from 0.14.0) with Hudi. When primary key is set for a given table,
-Hudi ensures uniqueness during updates and deletes. Each record is uniquely identified by the primary key configuration.
-If primary key is not set, Hudi treats it as key less table and every record ingested is treated as a new record even
-when contents match.
-:::
-
 First insert will also create the table with spark datasource writes.
 
-**Creating a Key less Hudi table**
+**Creating a Hudi table**
 ```scala
 // spark-shell
 val inserts = convertToStringList(dataGen.generateInserts(10))
@@ -545,23 +459,10 @@ df.write.format("hudi").
 ```
 
 :::note
-Note the absence of RECORDKEY_FIELD_NAME.key() in the write options to denote the key less table. 
+- In the absence of RECORDKEY_FIELD_NAME.key(), hudi will auto generate primary keys for the records being ingested. If users prefer to 
+explicitly set the primary key columns, they can do so by setting appropriate values for RECORDKEY_FIELD_NAME.key() config.
+- When primary key configs are set by the user, it is recommended to also configure `PRECOMBINE_FIELD_NAME.key()`.  
 :::
-
-**Creating a Primary keyed Hudi table**
-```scala
-// spark-shell
-val inserts = convertToStringList(dataGen.generateInserts(10))
-val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
-df.write.format("hudi").
-  options(getQuickstartWriteConfigs).
-  option(PRECOMBINE_FIELD_NAME.key(), "ts").
-  option(RECORDKEY_FIELD_NAME.key(), "uuid").
-  option(PARTITIONPATH_FIELD_NAME.key(), "partitionpath").
-  option(TABLE_NAME, tableName).
-  mode(Overwrite).
-  save(basePath)
-```
 
 :::info
 `mode(Overwrite)` overwrites and recreates the table if it already exists.
@@ -577,16 +478,9 @@ Here we are using the default write operation : `upsert`. If you have a workload
 </TabItem>
 <TabItem value="python">
 
-:::note
-Users can choose to create a Primary keyed table or a Key less table(from 0.14.0) with Hudi. When primary key is set for a given table,
-Hudi ensures uniqueness during updates and deletes. Each record is uniquely identified by the primary key configuration.
-If primary key is not set, Hudi treats it as key less table and every record ingested is treated as a new record even
-if contents match.
-:::
-
 Generate some new trips, load them into a DataFrame and write the DataFrame into the Hudi table as below.
 
-**Creating to a Key less Hudi table**
+**Creating to a Hudi table**
 ```python
 # pyspark
 inserts = sc._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(dataGen.generateInserts(10))
@@ -608,31 +502,10 @@ df.write.format("hudi"). \
 ```
 
 :::note
-Note the absence of RECORDKEY_FIELD_NAME.key() in the write options to denote the key less table.
+- In the absence of RECORDKEY_FIELD_NAME.key(), hudi will auto generate primary keys for the records being ingested. If users prefer to
+  explicitly set the primary key columns, they can do so by setting appropriate values for RECORDKEY_FIELD_NAME.key() config.
+- When primary key configs are set by the user, it is recommended to also configure `PRECOMBINE_FIELD_NAME.key()`.  
 :::
-
-**Creating to Primary keyed Hudi table**
-```python
-# pyspark
-inserts = sc._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(dataGen.generateInserts(10))
-df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
-
-hudi_options = {
-    'hoodie.table.name': tableName,
-    'hoodie.datasource.write.recordkey.field': 'uuid',
-    'hoodie.datasource.write.partitionpath.field': 'partitionpath',
-    'hoodie.datasource.write.table.name': tableName,
-    'hoodie.datasource.write.operation': 'upsert',
-    'hoodie.datasource.write.precombine.field': 'ts',
-    'hoodie.upsert.shuffle.parallelism': 2,
-    'hoodie.insert.shuffle.parallelism': 2
-}
-
-df.write.format("hudi"). \
-    options(**hudi_options). \
-    mode("overwrite"). \
-    save(basePath)
-```
 
 :::info
 `mode(Overwrite)` overwrites and recreates the table if it already exists.
@@ -774,8 +647,7 @@ Refer to [Table types and queries](/docs/next/concepts#table-types--queries) for
 
 ## Update data
 
-This is similar to inserting new data. Generate updates to existing trips using the data generator, load into a DataFrame 
-and write DataFrame into the hudi table.
+Lets take a look at how to update existing data for a Hudi table. 
 
 <Tabs
 groupId="programming-language"
@@ -790,13 +662,12 @@ values={[
 <TabItem value="scala">
 
 ```scala
-// spark-shell
-val updates = convertToStringList(dataGen.generateUpdates(10))
-val df = spark.read.json(spark.sparkContext.parallelize(updates, 2))
-df.write.format("hudi").
+// Lets read data from target hudi table, modify fare column and update it. 
+val updatesDf = spark.read.format("hudi").load(basePath).withColumn("fare",col("fare")*100)
+
+updatesDf.write.format("hudi").
   options(getQuickstartWriteConfigs).
   option(PRECOMBINE_FIELD_NAME.key(), "ts").
-  option(RECORDKEY_FIELD_NAME.key(), "uuid").
   option(PARTITIONPATH_FIELD_NAME.key(), "partitionpath").
   option(TABLE_NAME, tableName).
   mode(Append).
@@ -806,7 +677,9 @@ df.write.format("hudi").
 - Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
 [Querying](#query-data) the data again will now show updated trips. Each write operation generates a new [commit](/docs/next/concepts)
 denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `rider`, `driver` fields for the same `_hoodie_record_key`s in previous commit.
-- Updates to a Keyless table via spark datasource is not supported. Updates for keyless tables are supported with Spark-SQL MergeInto and UPDATE commands.
+- Updates to a Hudi table with Hudi generated primary keys are recommended to go with spark-sql's Merge Into or Update commands. With 
+spark datasource writers, updates are expected to contain meta fields when updating the table. If not, records being ingested might be treated as new inserts.
+- With explicit primary key configurations, there are no such constraints to use with spark-datasource writes.
 :::
 
 </TabItem>
@@ -855,7 +728,7 @@ ON <merge_condition>
 ```
 **Example**
 ```sql
--- source table using hudi for testing merging into non-partitioned table
+-- source table using hudi for testing merging into target hudi table
 create table merge_source (id int, name string, price double, ts bigint) using hudi
 tblproperties (primaryKey = 'id', preCombineField = 'ts');
 insert into merge_source values (1, "old_a1", 22.22, 900), (2, "new_a2", 33.33, 2000), (3, "new_a3", 44.44, 2000);
@@ -867,27 +740,11 @@ when matched then update set *
 when not matched then insert *
 ;
 
--- source table using parquet for testing merging into partitioned table
-create table merge_source2 (id int, name string, flag string, dt string, hh string) using parquet;
-insert into merge_source2 values (1, "new_a1", 'update', '2021-12-09', '10'), (2, "new_a2", 'delete', '2021-12-09', '11'), (3, "new_a3", 'insert', '2021-12-09', '12');
-
-merge into hudi_cow_pt_tbl as target
-using (
-  select id, name, '1000' as ts, flag, dt, hh from merge_source2
-) source
-on target.id = source.id
-when matched and flag != 'delete' then
- update set id = source.id, name = source.name, ts = source.ts, dt = source.dt, hh = source.hh
-when matched and flag = 'delete' then delete
-when not matched then
- insert (id, name, ts, dt, hh) values(source.id, source.name, source.ts, source.dt, source.hh)
-;
-
 ```
 
 :::note
-For a Primary keyed Hudi table, the join condition in `Merge Into` is expected to contain the primary keys of the table. 
-For a Keyless table, the join condition in MIT can be on any arbitrary data columns.
+For a Hudi table with user defined primary keys, the join condition in `Merge Into` is expected to contain the primary keys of the table.
+For a Hudi table with Hudi generated primary keys, the join condition in MIT can be on any arbitrary data columns.
 :::
 
 
@@ -896,9 +753,11 @@ For a Keyless table, the join condition in MIT can be on any arbitrary data colu
 
 ```python
 # pyspark
-updates = sc._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(dataGen.generateUpdates(10))
-df = spark.read.json(spark.sparkContext.parallelize(updates, 2))
-df.write.format("hudi"). \
+
+// Lets read data from target hudi table, modify fare column and update it. 
+val updatesDf = spark.read.format("hudi").load(basePath).withColumn("fare",col("fare")*100)
+
+updatesDf.write.format("hudi"). \
   options(**hudi_options). \
   mode("append"). \
   save(basePath)
@@ -907,7 +766,9 @@ df.write.format("hudi"). \
 - Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
 [Querying](#query-data) the data again will now show updated trips. Each write operation generates a new [commit](/docs/next/concepts)
 denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `rider`, `driver` fields for the same `_hoodie_record_key`s in previous commit.
-- Updates to a Keyless table via spark datasource is not supported. Updates for keyless tables are supported with Spark-SQL MergeInto and UPDATE commands.
+- Updates to a Hudi table with Hudi generated primary keys are recommended to go with spark-sql's Merge Into or Update commands. With
+spark datasource writers, updates are expected to contain meta fields when updating the table. If not, records being ingested might be treated as new inserts.
+- With explicit primary key configurations, there are no such constraints to use with spark-datasource writes.
 :::
 
 </TabItem>
@@ -935,20 +796,11 @@ values={[
 
 ```scala
 // spark-shell
-// fetch total records count
-spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
-// fetch two records to be deleted
-val ds = spark.sql("select uuid, partitionpath from hudi_trips_snapshot").limit(2)
+val deletesDf = spark.read.format("hudi").load(basePath).limit(2)
 
-// issue deletes
-val deletes = dataGen.generateDeletes(ds.collectAsList())
-val hardDeleteDf = spark.read.json(spark.sparkContext.parallelize(deletes, 2))
-
-hardDeleteDf.write.format("hudi").
+deletesDf.write.format("hudi").
   options(getQuickstartWriteConfigs).
   option(OPERATION_OPT_KEY, "delete").
-  option(PRECOMBINE_FIELD_NAME.key(), "ts").
-  option(RECORDKEY_FIELD_NAME.key(), "uuid").
   option(PARTITIONPATH_FIELD_NAME.key(), "partitionpath").
   option(TABLE_NAME, tableName).
   mode(Append).
@@ -966,7 +818,10 @@ spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 ```
 :::note
 - Only `Append` mode is supported for delete operation.
-- Deletes to a Keyless table via spark datasource is not supported. Deletes for keyless tables are supported with Spark-SQL MergeInto and DELETE commands.
+- Deletes to a Hudi table with Hudi generated primary keys are recommended to go with spark-sql's Delete command. With
+spark datasource writers, deletes are expected to contain meta fields when updating the table. If not, records being ingested might be treated as new records. 
+- With explicit primary key configurations, there are no such constraints to use with spark-datasource writes.
+
 :::
 
 </TabItem>
@@ -992,15 +847,12 @@ DELETE FROM hudi_cow_pt_tbl where name = 'a1';
 
 ```python
 # pyspark
-# fetch total records count
-spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
-# fetch two records to be deleted
-ds = spark.sql("select uuid, partitionpath from hudi_trips_snapshot").limit(2)
+
+val deletesDf = spark.read.format("hudi").load(basePath).limit(2)
 
 # issue deletes
 hudi_hard_delete_options = {
   'hoodie.table.name': tableName,
-  'hoodie.datasource.write.recordkey.field': 'uuid',
   'hoodie.datasource.write.partitionpath.field': 'partitionpath',
   'hoodie.datasource.write.table.name': tableName,
   'hoodie.datasource.write.operation': 'delete',
@@ -1010,12 +862,8 @@ hudi_hard_delete_options = {
 }
 
 from pyspark.sql.functions import lit
-deletes = list(map(lambda row: (row[0], row[1]), ds.collect()))
-hard_delete_df = spark.sparkContext.parallelize(deletes).toDF(['uuid', 'partitionpath']).withColumn('ts', lit(0.0))
-hard_delete_df.write.format("hudi"). \
-  options(**hudi_hard_delete_options). \
-  mode("append"). \
-  save(basePath)
+
+val hard_delete_df = spark.read.format("hudi").load(basePath).limit(2)
 
 # run the same read query as above.
 roAfterDeleteViewDF = spark. \
@@ -1033,7 +881,9 @@ spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 
 :::note
 - Only `Append` mode is supported for delete operation.
-- Deletes to a Keyless table via spark datasource is not supported. Deletes for keyless tables are supported with Spark-SQL MergeInto and DELETE commands.
+- Deletes to a Hudi table with Hudi generated primary keys are recommended to go with spark-sql's Delete command. With
+ spark datasource writers, deletes are expected to contain meta fields when updating the table. If not, records being ingested might be treated as new records.
+- With explicit primary key configurations, there are no such constraints to use with spark-datasource writes.
 :::
 
 </TabItem>
