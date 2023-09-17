@@ -36,29 +36,31 @@ import java.util.Map;
  * Helper class for executing timeline server requests.
  */
 public class TimelineServerHelper {
-
   private static final Logger LOG = LoggerFactory.getLogger(TimelineServerHelper.class);
   private final ObjectMapper mapper;
   private final String timelineServerHost;
   private final int timelineServerPort;
   private final int timeoutSecs;
+  private final int maxRetry;
 
   public TimelineServerHelper(HoodieWriteConfig writeConfig) {
     this(writeConfig.getViewStorageConfig().getRemoteViewServerHost(),
         writeConfig.getViewStorageConfig().getRemoteViewServerPort(),
-        writeConfig.getViewStorageConfig().getRemoteTimelineClientTimeoutSecs());
+        writeConfig.getViewStorageConfig().getRemoteTimelineClientTimeoutSecs(),
+        writeConfig.getViewStorageConfig().getRemoteTimelineClientMaxRetryNumbers());
   }
 
-  public TimelineServerHelper(String timelineServerHost, int timelineServerPort, int timeoutSecs) {
+  public TimelineServerHelper(String timelineServerHost, int timelineServerPort, int timeoutSecs, int maxRetry) {
     this.mapper = new ObjectMapper();
     this.timelineServerHost = timelineServerHost;
     this.timelineServerPort = timelineServerPort;
     this.timeoutSecs = timeoutSecs;
+    this.maxRetry = maxRetry;
   }
 
   public <T> T executeRequestToTimelineServerWithRetry(String requestPath, Map<String, String> queryParameters,
                                                        TypeReference reference, RequestMethod method) {
-    int retry = 5;
+    int retry = maxRetry;
     while (--retry >= 0) {
       long start = System.currentTimeMillis();
       try {

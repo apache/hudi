@@ -76,7 +76,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
   TimelineServerBasedWriteMarkers(String basePath, String markerFolderPath, String instantTime,
                                   String timelineServerHost, int timelineServerPort, int timeoutSecs) {
     super(basePath, markerFolderPath, instantTime);
-    this.timelineServerHelper = new TimelineServerHelper(timelineServerHost, timelineServerPort, timeoutSecs);
+    this.timelineServerHelper = new TimelineServerHelper(timelineServerHost, timelineServerPort, timeoutSecs, 0);
   }
 
   @Override

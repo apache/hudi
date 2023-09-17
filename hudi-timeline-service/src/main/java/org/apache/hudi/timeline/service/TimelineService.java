@@ -115,7 +115,7 @@ public class TimelineService {
     public boolean enableMarkerRequests = false;
 
     @Parameter(names = {"--enable-instant-state-requests"}, description = "Enable handling of flink ckp metadata requests")
-    public boolean enableInstantRequests = false;
+    public boolean enableInstantStateRequests = false;
 
     @Parameter(names = {"--marker-batch-threads", "-mbt"}, description = "Number of threads to use for batch processing marker creation requests")
     public int markerBatchNumThreads = 20;
@@ -161,6 +161,10 @@ public class TimelineService {
             + "Instants whose heartbeat is greater than the current value will not be used in early conflict detection.")
     public Long maxAllowableHeartbeatIntervalInMs = 120000L;
 
+    @Parameter(names = {"--instant-state-refresh-threshold"}, description =
+        "Used for timeline-server-based instant state requests, every N read requests will trigger instant state refreshing")
+    public Integer instantStateRefreshThreshold = 100;
+
     @Parameter(names = {"--help", "-h"})
     public Boolean help = false;
 
@@ -192,6 +196,8 @@ public class TimelineService {
       private Long asyncConflictDetectorInitialDelayMs = 0L;
       private Long asyncConflictDetectorPeriodMs = 30000L;
       private Long maxAllowableHeartbeatIntervalInMs = 120000L;
+
+      private int instantStateRefreshThreshold = 100;
 
       public Builder() {
       }
@@ -296,6 +302,11 @@ public class TimelineService {
         return this;
       }
 
+      public Builder instantStateRefreshThreshold(int instantStateRefreshThreshold) {
+        this.instantStateRefreshThreshold = instantStateRefreshThreshold;
+        return this;
+      }
+
       public Config build() {
         Config config = new Config();
         config.serverPort = this.serverPort;
@@ -317,7 +328,8 @@ public class TimelineService {
         config.asyncConflictDetectorInitialDelayMs = this.asyncConflictDetectorInitialDelayMs;
         config.asyncConflictDetectorPeriodMs = this.asyncConflictDetectorPeriodMs;
         config.maxAllowableHeartbeatIntervalInMs = this.maxAllowableHeartbeatIntervalInMs;
-        config.enableInstantRequests = this.enableInstantStateRequests;
+        config.enableInstantStateRequests = this.enableInstantStateRequests;
+        config.instantStateRefreshThreshold = this.instantStateRefreshThreshold;
         return config;
       }
     }

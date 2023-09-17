@@ -101,7 +101,9 @@ public class EmbeddedTimelineService {
     }
 
     if (writeConfig.isTimelineServerBasedInstantStateEnabled()) {
-      timelineServiceConfBuilder.enableInstantStateRequests(true);
+      timelineServiceConfBuilder
+          .instantStateRefreshThreshold(writeConfig.getTimelineServerBasedInstantStateRefreshThreshold())
+          .enableInstantStateRequests(true);
     }
 
     server = new TimelineService(context, hadoopConf.newCopy(), timelineServiceConfBuilder.build(),

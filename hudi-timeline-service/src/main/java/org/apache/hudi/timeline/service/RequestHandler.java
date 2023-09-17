@@ -98,7 +98,7 @@ public class RequestHandler {
     } else {
       this.markerHandler = null;
     }
-    if (timelineServiceConfig.enableInstantRequests) {
+    if (timelineServiceConfig.enableInstantStateRequests) {
       this.instantStateHandler = new InstantStateHandler(conf, timelineServiceConfig, fileSystem, viewManager);
     } else {
       this.instantStateHandler = null;

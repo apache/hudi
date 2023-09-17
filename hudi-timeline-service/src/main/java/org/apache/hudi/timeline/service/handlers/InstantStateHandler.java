@@ -34,6 +34,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 /**
@@ -70,10 +71,16 @@ public class InstantStateHandler extends Handler {
    */
   private final ConcurrentHashMap<String, List<InstantStateDTO>> cachedInstantStates;
 
+  /**
+   * Number of requests after the last refresh.
+   */
+  private final AtomicLong requestCount;
+
   public InstantStateHandler(Configuration conf, TimelineService.Config timelineServiceConfig, FileSystem fileSystem,
                              FileSystemViewManager viewManager) throws IOException {
     super(conf, timelineServiceConfig, fileSystem, viewManager);
     this.cachedInstantStates = new ConcurrentHashMap<>();
+    this.requestCount = new AtomicLong();
   }
 
   /**
@@ -82,6 +89,10 @@ public class InstantStateHandler extends Handler {
    * @return Instant states under the input instant state path.
    */
   public List<InstantStateDTO> getAllInstantStates(String instantStatePath) {
+    if (requestCount.incrementAndGet() >= 100) {
+      // Do refresh for every N requests to ensure the writers won't be blocked forever
+      refresh(instantStatePath);
+    }
     return cachedInstantStates.computeIfAbsent(instantStatePath, k -> scanInstantState(new Path(k)));
   }
 
@@ -93,6 +104,7 @@ public class InstantStateHandler extends Handler {
   public boolean refresh(String instantStatePath) {
     try {
       cachedInstantStates.put(instantStatePath, scanInstantState(new Path(instantStatePath)));
+      requestCount.set(0);
     } catch (Exception e) {
       LOG.error("Failed to load instant states, path: " + instantStatePath, e);
       return false;
