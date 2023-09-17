@@ -89,7 +89,7 @@ public class InstantStateHandler extends Handler {
    * @return Instant states under the input instant state path.
    */
   public List<InstantStateDTO> getAllInstantStates(String instantStatePath) {
-    if (requestCount.incrementAndGet() >= 100) {
+    if (requestCount.incrementAndGet() >= timelineServiceConfig.instantStateRefreshThreshold) {
       // Do refresh for every N requests to ensure the writers won't be blocked forever
       refresh(instantStatePath);
     }
