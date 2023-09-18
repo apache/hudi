@@ -103,8 +103,10 @@ object HoodieAnalysis extends SparkAdapterSupport {
     }
 
     if (HoodieSparkUtils.isSpark3) {
-      val resolveAlterTableCommandsClass =
-        if (HoodieSparkUtils.gteqSpark3_4) {
+      val resolveAlterTableCommandsClass = {
+        if (HoodieSparkUtils.gteqSpark3_5) {
+          "org.apache.spark.sql.hudi.Spark35ResolveHudiAlterTableCommand"
+        } else if (HoodieSparkUtils.gteqSpark3_4) {
           "org.apache.spark.sql.hudi.Spark34ResolveHudiAlterTableCommand"
         } else if (HoodieSparkUtils.gteqSpark3_3) {
           "org.apache.spark.sql.hudi.Spark33ResolveHudiAlterTableCommand"
@@ -117,6 +119,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
         } else {
           throw new IllegalStateException("Unsupported Spark version")
         }
+      }
 
       val resolveAlterTableCommands: RuleBuilder =
         session => instantiateKlass(resolveAlterTableCommandsClass, session)
