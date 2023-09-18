@@ -21,8 +21,8 @@ package org.apache.hudi.sink.meta;
 import org.apache.hudi.common.table.timeline.dto.InstantStateDTO;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.timeline.service.handlers.InstantStateHandler;
-import org.apache.hudi.util.TimelineServerHelper;
-import org.apache.hudi.util.TimelineServerHelper.RequestMethod;
+import org.apache.hudi.util.HttpRequestClient;
+import org.apache.hudi.util.HttpRequestClient.RequestMethod;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import org.apache.hadoop.fs.FileSystem;
@@ -43,11 +43,11 @@ public class TimelineBasedCkpMetadata extends CkpMetadata {
 
   private static final Logger LOG = LoggerFactory.getLogger(TimelineBasedCkpMetadata.class);
 
-  private final TimelineServerHelper timelineServerHelper;
+  private final HttpRequestClient httpRequestClient;
 
   public TimelineBasedCkpMetadata(FileSystem fs, String basePath, String uniqueId, HoodieWriteConfig writeConfig) {
     super(fs, basePath, uniqueId);
-    this.timelineServerHelper = new TimelineServerHelper(writeConfig);
+    this.httpRequestClient = new HttpRequestClient(writeConfig);
     LOG.info("Timeline server based CkpMetadata enabled");
   }
 
@@ -74,7 +74,7 @@ public class TimelineBasedCkpMetadata extends CkpMetadata {
     // Read ckp messages from timeline server
     Stream<CkpMessage> ckpMessageStream;
     try {
-      List<InstantStateDTO> instantStateDTOList = timelineServerHelper.executeRequestToTimelineServerWithRetry(
+      List<InstantStateDTO> instantStateDTOList = httpRequestClient.executeRequestWithRetry(
           InstantStateHandler.ALL_INSTANT_STATE_URL, getRequestParams(ckpMetaPath.toString()),
           new TypeReference<List<InstantStateDTO>>() {
           }, RequestMethod.GET);
@@ -96,7 +96,7 @@ public class TimelineBasedCkpMetadata extends CkpMetadata {
    */
   private void sendRefreshRequest() {
     try {
-      boolean success = timelineServerHelper.executeRequestToTimelineServerWithRetry(
+      boolean success = httpRequestClient.executeRequestWithRetry(
           InstantStateHandler.REFRESH_INSTANT_STATE, getRequestParams(path.toString()),
           new TypeReference<Boolean>() {
           }, RequestMethod.POST);

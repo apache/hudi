@@ -35,35 +35,35 @@ import java.util.Map;
 /**
  * Helper class for executing timeline server requests.
  */
-public class TimelineServerHelper {
-  private static final Logger LOG = LoggerFactory.getLogger(TimelineServerHelper.class);
+public class HttpRequestClient {
+  private static final Logger LOG = LoggerFactory.getLogger(HttpRequestClient.class);
   private final ObjectMapper mapper;
-  private final String timelineServerHost;
-  private final int timelineServerPort;
+  private final String serverHost;
+  private final int serverPort;
   private final int timeoutSecs;
   private final int maxRetry;
 
-  public TimelineServerHelper(HoodieWriteConfig writeConfig) {
+  public HttpRequestClient(HoodieWriteConfig writeConfig) {
     this(writeConfig.getViewStorageConfig().getRemoteViewServerHost(),
         writeConfig.getViewStorageConfig().getRemoteViewServerPort(),
         writeConfig.getViewStorageConfig().getRemoteTimelineClientTimeoutSecs(),
         writeConfig.getViewStorageConfig().getRemoteTimelineClientMaxRetryNumbers());
   }
 
-  public TimelineServerHelper(String timelineServerHost, int timelineServerPort, int timeoutSecs, int maxRetry) {
+  public HttpRequestClient(String serverHost, int serverPort, int timeoutSecs, int maxRetry) {
     this.mapper = new ObjectMapper();
-    this.timelineServerHost = timelineServerHost;
-    this.timelineServerPort = timelineServerPort;
+    this.serverHost = serverHost;
+    this.serverPort = serverPort;
     this.timeoutSecs = timeoutSecs;
     this.maxRetry = maxRetry;
   }
 
-  public <T> T executeRequestToTimelineServerWithRetry(String requestPath, Map<String, String> queryParameters,
-                                                       TypeReference reference, RequestMethod method) {
+  public <T> T executeRequestWithRetry(String requestPath, Map<String, String> queryParameters,
+                                       TypeReference reference, RequestMethod method) {
     int retry = maxRetry;
     while (--retry >= 0) {
       try {
-        return executeRequestToTimelineServer(requestPath, queryParameters, reference, method);
+        return executeRequest(requestPath, queryParameters, reference, method);
       } catch (IOException e) {
         LOG.warn("Failed to execute request (" + requestPath + ") to timeline server", e);
       }
@@ -71,10 +71,10 @@ public class TimelineServerHelper {
     throw new HoodieException("Failed to execute timeline server request (" + requestPath + ")");
   }
 
-  public <T> T executeRequestToTimelineServer(String requestPath, Map<String, String> queryParameters,
-                                              TypeReference reference, RequestMethod method) throws IOException {
+  public <T> T executeRequest(String requestPath, Map<String, String> queryParameters,
+                              TypeReference reference, RequestMethod method) throws IOException {
     URIBuilder builder =
-        new URIBuilder().setHost(timelineServerHost).setPort(timelineServerPort).setPath(requestPath).setScheme("http");
+        new URIBuilder().setHost(serverHost).setPort(serverPort).setPath(requestPath).setScheme("http");
 
     queryParameters.forEach(builder::addParameter);
 
