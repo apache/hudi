@@ -7,22 +7,18 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
-package org.apache.hudi.config;
+package org.apache.hudi.common.config;
 
-import org.apache.hudi.common.config.ConfigClassProperty;
-import org.apache.hudi.common.config.ConfigGroups;
-import org.apache.hudi.common.config.ConfigProperty;
-import org.apache.hudi.common.config.HoodieCommonConfig;
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.util.FileIOUtils;
 
 import javax.annotation.concurrent.Immutable;
@@ -31,7 +27,6 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
-
 
 /**
  * Memory related config.
@@ -55,12 +50,16 @@ public class HoodieMemoryConfig extends HoodieConfig {
   public static final ConfigProperty<String> MAX_MEMORY_FRACTION_FOR_COMPACTION = ConfigProperty
       .key("hoodie.memory.compaction.fraction")
       .defaultValue(String.valueOf(0.6))
+      .withAlternatives("compaction.memory.fraction")
       .markAdvanced()
       .withDocumentation("HoodieCompactedLogScanner reads logblocks, converts records to HoodieRecords and then "
           + "merges these log blocks and records. At any point, the number of entries in a log block can be "
           + "less than or equal to the number of entries in the corresponding parquet file. This can lead to "
           + "OOM in the Scanner. Hence, a spillable map helps alleviate the memory pressure. Use this config to "
           + "set the max allowable inMemory footprint of the spillable map");
+
+  // Maximum fraction of mapper/reducer task memory to use for compaction of log files in MR
+  public static final String DEFAULT_MR_COMPACTION_MEMORY_FRACTION = "0.75";
 
   // Default memory size (1GB) per compaction (used if SparkEnv is absent), excess spills to disk
   public static final long DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES = HoodieCommonConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
@@ -76,6 +75,10 @@ public class HoodieMemoryConfig extends HoodieConfig {
   public static final ConfigProperty<String> MAX_MEMORY_FOR_COMPACTION = HoodieCommonConfig.MAX_MEMORY_FOR_COMPACTION;
 
   public static final ConfigProperty<Integer> MAX_DFS_STREAM_BUFFER_SIZE = HoodieCommonConfig.MAX_DFS_STREAM_BUFFER_SIZE;
+
+  // Default value for MR
+  // Setting this to lower value of 1 MB since no control over how many RecordReaders will be started in a mapper
+  public static final int DEFAULT_MR_MAX_DFS_STREAM_BUFFER_SIZE = 1024 * 1024; // 1 MB
 
   public static final ConfigProperty<String> SPILLABLE_MAP_BASE_PATH = ConfigProperty
       .key("hoodie.memory.spillable.map.path")

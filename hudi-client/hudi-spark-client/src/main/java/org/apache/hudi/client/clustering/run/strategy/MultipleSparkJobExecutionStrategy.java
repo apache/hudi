@@ -26,6 +26,7 @@ import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.ConcatenatingIterator;
+import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -431,9 +432,10 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
 
     Path[] paths;
     if (hasLogFiles) {
-      String compactionFractor = Option.ofNullable(getWriteConfig().getString("compaction.memory.fraction"))
-          .orElse("0.75");
-      params.put("compaction.memory.fraction", compactionFractor);
+      String rawFractionConfig = getWriteConfig().getString(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION);
+      String compactionFractor = rawFractionConfig != null
+          ? rawFractionConfig : HoodieMemoryConfig.DEFAULT_MR_COMPACTION_MEMORY_FRACTION;
+      params.put(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION.key(), compactionFractor);
 
       Path[] deltaPaths = clusteringOps
           .stream()
