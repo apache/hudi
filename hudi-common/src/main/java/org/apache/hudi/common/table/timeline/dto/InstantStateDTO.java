@@ -33,17 +33,17 @@ import org.apache.hadoop.fs.FileStatus;
 public class InstantStateDTO {
 
   /**
-   * Ckp message instant.
+   * The instant time.
    *
-   * see org.apache.hudi.sink.meta.CkpMessage#instant
+   * @see org.apache.hudi.sink.meta.CkpMessage#instant
    */
   @JsonProperty("instant")
   String instant;
 
   /**
-   * Ckp message state.
+   * The instant state.
    *
-   * see org.apache.hudi.sink.meta.CkpMessage#state
+   * @see org.apache.hudi.sink.meta.CkpMessage#state
    */
   @JsonProperty("state")
   String state;
