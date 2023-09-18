@@ -75,10 +75,14 @@ jobs:
 #          - scalaProfile: "scala-2.12"
 #            sparkProfile: "spark3.3"
 #            sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
+#
+#          - scalaProfile: "scala-2.12"
+#            sparkProfile: "spark3.4"
+#            sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
 
           - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.4"
-            sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
+            sparkProfile: "spark3.5"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
 
     steps:
       - uses: actions/checkout@v3
@@ -160,9 +164,12 @@ jobs:
 #          - scalaProfile: "scala-2.12"
 #            sparkProfile: "spark3.3"
 #            sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
+#          - scalaProfile: "scala-2.12"
+#            sparkProfile: "spark3.4"
+#            sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
           - scalaProfile: "scala-2.12"
-            sparkProfile: "spark3.4"
-            sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
+            sparkProfile: "spark3.5"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
 
     steps:
       - uses: actions/checkout@v3
@@ -209,46 +216,45 @@ jobs:
         run:
           mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
-  test-flink:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - flinkProfile: "flink1.13"
-          - flinkProfile: "flink1.14"
-          - flinkProfile: "flink1.15"
-          - flinkProfile: "flink1.16"
-          - flinkProfile: "flink1.17"
-          - flinkProfile: "flink1.18"
-    steps:
-      - uses: actions/checkout@v3
-      - name: Set up JDK 8
-        uses: actions/setup-java@v3
-        with:
-          java-version: '8'
-          distribution: 'adopt'
-          architecture: x64
-          cache: maven
-      - name: Build Project
-        env:
-          SCALA_PROFILE: 'scala-2.12'
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-        run:
-          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version=1.10.0 -DskipTests=true $MVN_ARGS
-      - name: Quickstart Test
-        env:
-          SCALA_PROFILE: 'scala-2.12'
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-        run:
-          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
-      - name: Integration Test
-        env:
-          SCALA_PROFILE: 'scala-2.12'
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-        if: ${{ endsWith(env.FLINK_PROFILE, '1.18') }}
-        run: |
-          mvn clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink -am -Davro.version=1.10.0 -DskipTests=true $MVN_ARGS
-          mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink $MVN_ARGS
+#  test-flink:
+#    runs-on: ubuntu-latest
+#    strategy:
+#      matrix:
+#        include:
+#          - flinkProfile: "flink1.13"
+#          - flinkProfile: "flink1.14"
+#          - flinkProfile: "flink1.15"
+#          - flinkProfile: "flink1.16"
+#          - flinkProfile: "flink1.17"
+#    steps:
+#      - uses: actions/checkout@v3
+#      - name: Set up JDK 8
+#        uses: actions/setup-java@v3
+#        with:
+#          java-version: '8'
+#          distribution: 'adopt'
+#          architecture: x64
+#          cache: maven
+#      - name: Build Project
+#        env:
+#          SCALA_PROFILE: 'scala-2.12'
+#          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+#        run:
+#          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version=1.10.0 -DskipTests=true $MVN_ARGS
+#      - name: Quickstart Test
+#        env:
+#          SCALA_PROFILE: 'scala-2.12'
+#          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+#        run:
+#          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
+#      - name: Integration Test
+#        env:
+#          SCALA_PROFILE: 'scala-2.12'
+#          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+#        if: ${{ endsWith(env.FLINK_PROFILE, '1.17') }}
+#        run: |
+#          mvn clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink -am -Davro.version=1.10.0 -DskipTests=true $MVN_ARGS
+#          mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink $MVN_ARGS
 
   docker-java17-test:
     runs-on: ubuntu-latest

@@ -22,6 +22,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.spark.package$;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -29,7 +30,6 @@ import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer$;
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder;
 import org.apache.spark.sql.catalyst.expressions.Attribute;
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema;
-import org.apache.spark.sql.catalyst.types.DataTypeUtils;
 import org.apache.spark.sql.types.StructType;
 import scala.Function1;
 import scala.collection.JavaConversions;
@@ -101,7 +101,7 @@ public class KeyGeneratorTestUtilities {
   }
 
   private static ExpressionEncoder getEncoder(StructType schema) {
-    List<Attribute> attributes = JavaConversions.asJavaCollection(DataTypeUtils.toAttributes(schema)).stream()
+    List<Attribute> attributes = JavaConversions.asJavaCollection(SparkAdapterSupport$.MODULE$.sparkAdapter().toAttributes(schema)).stream()
         .map(Attribute::toAttribute).collect(Collectors.toList());
     return ExpressionEncoder.apply(schema)
         .resolveAndBind(JavaConverters.asScalaBufferConverter(attributes).asScala().toSeq(),

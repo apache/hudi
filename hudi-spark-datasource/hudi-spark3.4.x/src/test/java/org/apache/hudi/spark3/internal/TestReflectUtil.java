@@ -45,8 +45,7 @@ public class TestReflectUtil extends HoodieClientTestBase {
         scala.collection.immutable.List.empty(),
         statement.query(),
         statement.overwrite(),
-        statement.ifPartitionNotExists(),
-        statement.byName());
+        statement.ifPartitionNotExists());
 
     Assertions.assertTrue(
         ((UnresolvedRelation)newStatment.table()).multipartIdentifier().contains("test_reflect_util"));

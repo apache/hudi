@@ -18,12 +18,11 @@
 
 package org.apache.spark.sql
 
-import org.apache.hudi.HoodieUnsafeRDD
+import org.apache.hudi.{HoodieUnsafeRDD, SparkAdapterSupport}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan}
 import org.apache.spark.sql.catalyst.plans.physical.{Partitioning, UnknownPartitioning}
-import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.execution.LogicalRDD
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.MutablePair
@@ -76,7 +75,7 @@ object HoodieUnsafeUtils {
    * @param schema target [[DataFrame]]'s schema
    */
   def createDataFrameFromRows(spark: SparkSession, rows: Seq[Row], schema: StructType): DataFrame =
-    Dataset.ofRows(spark, LocalRelation.fromExternalRows(DataTypeUtils.toAttributes(schema), rows))
+    Dataset.ofRows(spark, LocalRelation.fromExternalRows(SparkAdapterSupport.sparkAdapter.toAttributes(schema), rows))
 
   /**
    * Creates [[DataFrame]] from the in-memory [[Seq]] of [[InternalRow]]s with provided [[schema]]
@@ -89,7 +88,7 @@ object HoodieUnsafeUtils {
    * @param schema target [[DataFrame]]'s schema
    */
   def createDataFrameFromInternalRows(spark: SparkSession, rows: Seq[InternalRow], schema: StructType): DataFrame =
-    Dataset.ofRows(spark, LocalRelation(DataTypeUtils.toAttributes(schema), rows))
+    Dataset.ofRows(spark, LocalRelation(SparkAdapterSupport.sparkAdapter.toAttributes(schema), rows))
 
 
   /**

@@ -17,18 +17,16 @@
 
 package org.apache.spark.sql.hudi.command
 
+import org.apache.hudi.SparkAdapterSupport
 import org.apache.spark.sql.catalyst.expressions.Attribute
-import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.hudi.command.procedures.{Procedure, ProcedureArgs}
 import org.apache.spark.sql.{Row, SparkSession}
-
-import scala.collection.Seq
 
 case class CallProcedureHoodieCommand(
    procedure: Procedure,
    args: ProcedureArgs) extends HoodieLeafRunnableCommand {
 
-  override def output: Seq[Attribute] = DataTypeUtils.toAttributes(procedure.outputType)
+  override def output: Seq[Attribute] = SparkAdapterSupport.sparkAdapter.toAttributes(procedure.outputType)
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     procedure.call(args)

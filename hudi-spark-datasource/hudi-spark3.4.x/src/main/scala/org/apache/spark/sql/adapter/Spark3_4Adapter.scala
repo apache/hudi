@@ -18,12 +18,14 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.avro.Schema
+import org.apache.hadoop.fs.FileStatus
 import org.apache.hudi.Spark34HoodieFileScanRDD
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression}
+import org.apache.spark.sql.catalyst.encoders.RowEncoder
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, Expression}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical._
@@ -65,6 +67,11 @@ class Spark3_4Adapter extends BaseSpark3Adapter {
     new MetadataBuilder()
       .putBoolean(METADATA_COL_ATTR_KEY, value = true)
       .build()
+
+  override def createSparkRowSerDe(schema: StructType): SparkRowSerDe = {
+    val encoder = RowEncoder(schema).resolveAndBind()
+    new Spark3RowSerDe(encoder)
+  }
 
   override def getCatalogUtils: HoodieSpark3CatalogUtils = HoodieSpark34CatalogUtils
 
@@ -123,5 +130,17 @@ class Spark3_4Adapter extends BaseSpark3Adapter {
     case MEMORY_AND_DISK_SER_2 => "MEMORY_AND_DISK_SER_2"
     case OFF_HEAP => "OFF_HEAP"
     case _ => throw new IllegalArgumentException(s"Invalid StorageLevel: $level")
+  }
+
+  override def toAttributes(struct: StructType): Seq[Attribute] = {
+    struct.toAttributes
+  }
+
+  override def toFileStatuses(partitionDirs: Seq[PartitionDirectory]): Seq[FileStatus] = {
+    partitionDirs.flatMap(_.files)
+  }
+
+  override def newPartitionDirectory(internalRow: InternalRow, statuses: Seq[FileStatus]): PartitionDirectory = {
+    PartitionDirectory(internalRow, statuses)
   }
 }

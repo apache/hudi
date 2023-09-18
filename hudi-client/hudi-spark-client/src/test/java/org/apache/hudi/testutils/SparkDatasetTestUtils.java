@@ -18,6 +18,7 @@
 
 package org.apache.hudi.testutils;
 
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -38,7 +39,6 @@ import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder;
 import org.apache.spark.sql.catalyst.expressions.Attribute;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericRow;
-import org.apache.spark.sql.catalyst.types.DataTypeUtils;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructField;
@@ -96,7 +96,7 @@ public class SparkDatasetTestUtils {
    * @return the encoder thus generated.
    */
   private static ExpressionEncoder getEncoder(StructType schema) {
-    List<Attribute> attributes = JavaConversions.asJavaCollection(DataTypeUtils.toAttributes(schema)).stream()
+    List<Attribute> attributes = JavaConversions.asJavaCollection(SparkAdapterSupport$.MODULE$.sparkAdapter().toAttributes(schema)).stream()
         .map(Attribute::toAttribute).collect(Collectors.toList());
     return ExpressionEncoder.apply(schema)
         .resolveAndBind(JavaConverters.asScalaBufferConverter(attributes).asScala().toSeq(),

@@ -49,7 +49,7 @@ class HoodieInMemoryFileIndex(sparkSession: SparkSession,
    */
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
     val selectedPartitions = if (partitionSpec().partitionColumns.isEmpty) {
-      PartitionDirectory(InternalRow.empty, allFiles().filter(f => isDataPath(f.getPath)).toArray) :: Nil
+      sparkAdapter.newPartitionDirectory(InternalRow.empty, allFiles().filter(f => isDataPath(f.getPath))) :: Nil
     } else {
       prunePartitions(partitionFilters, partitionSpec()).map {
         case PartitionPath(values, path) =>
@@ -62,7 +62,7 @@ class HoodieInMemoryFileIndex(sparkSession: SparkSession,
               // Directory does not exist, or has no children files
               Nil
           }
-          PartitionDirectory(values, files.toArray)
+          sparkAdapter.newPartitionDirectory(values, files)
       }
     }
     logTrace("Selected files after partition pruning:\n\t" + selectedPartitions.mkString("\n\t"))
