@@ -154,7 +154,7 @@ case class HoodieFileIndex(spark: SparkSession,
     val prunedPartitionsAndFilteredFileSlices = filterFileSlices(dataFilters, partitionFilters).map {
       case (partitionOpt, fileSlices) =>
         if (shouldEmbedFileSlices) {
-          val baseFileStatusesAndLogFileOnly: Array[FileStatus] = fileSlices.map(slice => {
+          val baseFileStatusesAndLogFileOnly: Seq[FileStatus] = fileSlices.map(slice => {
             if (slice.getBaseFile.isPresent) {
               slice.getBaseFile.get().getFileStatus
             } else if (includeLogFiles && slice.getLogFiles.findAny().isPresent) {
@@ -162,18 +162,18 @@ case class HoodieFileIndex(spark: SparkSession,
             } else {
               null
             }
-          }).filter(slice => slice != null).toArray
+          }).filter(slice => slice != null)
           val c = fileSlices.filter(f => (includeLogFiles && f.getLogFiles.findAny().isPresent)
             || (f.getBaseFile.isPresent && f.getBaseFile.get().getBootstrapBaseFile.isPresent)).
             foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
           if (c.nonEmpty) {
-            PartitionDirectory(new HoodiePartitionFileSliceMapping(InternalRow.fromSeq(partitionOpt.get.values), c), baseFileStatusesAndLogFileOnly)
+            sparkAdapter.newPartitionDirectory(new HoodiePartitionFileSliceMapping(InternalRow.fromSeq(partitionOpt.get.values), c), baseFileStatusesAndLogFileOnly)
           } else {
-            PartitionDirectory(InternalRow.fromSeq(partitionOpt.get.values), baseFileStatusesAndLogFileOnly)
+            sparkAdapter.newPartitionDirectory(InternalRow.fromSeq(partitionOpt.get.values), baseFileStatusesAndLogFileOnly)
           }
 
         } else {
-          val allCandidateFiles: Array[FileStatus] = fileSlices.flatMap(fs => {
+          val allCandidateFiles: Seq[FileStatus] = fileSlices.flatMap(fs => {
             val baseFileStatusOpt = getBaseFileStatus(Option.apply(fs.getBaseFile.orElse(null)))
             val logFilesStatus = if (includeLogFiles) {
               fs.getLogFiles.map[FileStatus](JFunction.toJavaFunction[HoodieLogFile, FileStatus](lf => lf.getFileStatus))
@@ -183,8 +183,8 @@ case class HoodieFileIndex(spark: SparkSession,
             val files = logFilesStatus.collect(Collectors.toList[FileStatus]).asScala
             baseFileStatusOpt.foreach(f => files.append(f))
             files
-          }).toArray
-          PartitionDirectory(InternalRow.fromSeq(partitionOpt.get.values), allCandidateFiles)
+          })
+          sparkAdapter.newPartitionDirectory(InternalRow.fromSeq(partitionOpt.get.values), allCandidateFiles)
         }
     }
 

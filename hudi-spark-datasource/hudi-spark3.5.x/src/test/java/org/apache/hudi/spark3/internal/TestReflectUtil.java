@@ -23,13 +23,9 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation;
 import org.apache.spark.sql.catalyst.plans.logical.InsertIntoStatement;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-
-import java.util.Collections;
-
-import static scala.collection.JavaConverters.asScalaBuffer;
-
 
 /**
  * Unit tests {@link ReflectUtil}.
@@ -46,7 +42,7 @@ public class TestReflectUtil extends HoodieClientTestBase {
     InsertIntoStatement newStatment = ReflectUtil.createInsertInto(
         statement.table(),
         statement.partitionSpec(),
-        asScalaBuffer(Collections.<String>emptyList()).toSeq(),
+        scala.collection.immutable.List.empty(),
         statement.query(),
         statement.overwrite(),
         statement.ifPartitionNotExists(),

@@ -39,7 +39,6 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.catalyst.expressions.{Cast, JoinedRow}
-import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.WholeStageCodegenExec
 import org.apache.spark.sql.execution.datasources.parquet.Spark34LegacyHoodieParquetFileFormat._
@@ -386,17 +385,16 @@ class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
         try {
           reader.initialize(split, hadoopAttemptContext)
 
-          val fullSchema = DataTypeUtils.toAttributes(requiredSchema) ++ DataTypeUtils.toAttributes(partitionSchema)
+          val fullSchema = requiredSchema.toAttributes ++ partitionSchema.toAttributes
           val unsafeProjection = if (typeChangeInfos.isEmpty) {
             GenerateUnsafeProjection.generate(fullSchema, fullSchema)
           } else {
             // find type changed.
-            val newSchema = new StructType(requiredSchema.fields.zipWithIndex.map { case (f, i) =>
+            val newFullSchema = new StructType(requiredSchema.fields.zipWithIndex.map { case (f, i) =>
               if (typeChangeInfos.containsKey(i)) {
                 StructField(f.name, typeChangeInfos.get(i).getRight, f.nullable, f.metadata)
               } else f
-            })
-            val newFullSchema = DataTypeUtils.toAttributes(newSchema) ++ DataTypeUtils.toAttributes(partitionSchema)
+            }).toAttributes ++ partitionSchema.toAttributes
             val castSchema = newFullSchema.zipWithIndex.map { case (attr, i) =>
               if (typeChangeInfos.containsKey(i)) {
                 val srcType = typeChangeInfos.get(i).getRight

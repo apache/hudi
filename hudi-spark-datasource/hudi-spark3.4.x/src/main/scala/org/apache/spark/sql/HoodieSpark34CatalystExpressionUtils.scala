@@ -67,7 +67,7 @@ object HoodieSpark34CatalystExpressionUtils extends HoodieSpark3CatalystExpressi
         case DateDiff(_, OrderPreservingTransformation(attrRef)) => Some(attrRef)
         case FromUnixTime(OrderPreservingTransformation(attrRef), _, _) => Some(attrRef)
         case FromUTCTimestamp(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
-        case ParseToDate(OrderPreservingTransformation(attrRef), _, _, _) => Some(attrRef)
+        case ParseToDate(OrderPreservingTransformation(attrRef), _, _) => Some(attrRef)
         case ParseToTimestamp(OrderPreservingTransformation(attrRef), _, _, _, _) => Some(attrRef)
         case ToUnixTimestamp(OrderPreservingTransformation(attrRef), _, _, _) => Some(attrRef)
         case ToUTCTimestamp(OrderPreservingTransformation(attrRef), _) => Some(attrRef)

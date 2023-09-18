@@ -26,7 +26,6 @@ import org.apache.spark.sql.catalyst.expressions.codegen.{GenerateMutableProject
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeEq, AttributeReference, Cast, Expression, Like, Literal, MutableProjection, SubqueryExpression, UnsafeProjection}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, AttributeSet, CreateStruct, Expression, GetStructField, Like, Literal, Projection, SubqueryExpression, UnsafeProjection, UnsafeRow}
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan}
-import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{DataType, StructType}
@@ -270,7 +269,7 @@ object HoodieCatalystExpressionUtils extends SparkAdapterSupport {
   }
 
   private def generateUnsafeProjectionInternal(from: StructType, to: StructType): UnsafeProjection = {
-    val attrs = DataTypeUtils.toAttributes(from)
+    val attrs = sparkAdapter.toAttributes(from)
     val attrsMap = attrs.map(attr => (attr.name, attr)).toMap
     val targetExprs = to.fields.map(f => attrsMap(f.name))
 
