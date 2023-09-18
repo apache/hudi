@@ -184,13 +184,13 @@ public class InternalSchemaUtils {
       // the read file does not contain current col, so current colFilter is invalid
       return "";
     } else {
-      if (name.equals(fileSchema.findfullName(nameId))) {
+      if (name.equals(fileSchema.findFullName(nameId))) {
         // no change happened on current col
         return name;
       } else {
         // find rename operation on current col
         // return the name from fileSchema
-        return fileSchema.findfullName(nameId);
+        return fileSchema.findFullName(nameId);
       }
     }
   }
@@ -210,8 +210,8 @@ public class InternalSchemaUtils {
     Map<Integer, Pair<Type, Type>> result = new HashMap<>();
     ids.stream().filter(f -> otherIds.contains(f)).forEach(f -> {
       if (!schema.findType(f).equals(oldSchema.findType(f))) {
-        String[] fieldNameParts = schema.findfullName(f).split("\\.");
-        String[] otherFieldNameParts = oldSchema.findfullName(f).split("\\.");
+        String[] fieldNameParts = schema.findFullName(f).split("\\.");
+        String[] otherFieldNameParts = oldSchema.findFullName(f).split("\\.");
         String parentName = fieldNameParts[0];
         String otherParentName = otherFieldNameParts[0];
         if (fieldNameParts.length == otherFieldNameParts.length && schema.findIdByName(parentName) == oldSchema.findIdByName(otherParentName)) {
@@ -280,8 +280,8 @@ public class InternalSchemaUtils {
     return colNamesFromWriteSchema.stream().filter(f -> {
       int fieldIdFromWriteSchema = oldSchema.findIdByName(f);
       // try to find the cols which has the same id, but have different colName;
-      return newSchema.getAllIds().contains(fieldIdFromWriteSchema) && !newSchema.findfullName(fieldIdFromWriteSchema).equalsIgnoreCase(f);
-    }).collect(Collectors.toMap(e -> newSchema.findfullName(oldSchema.findIdByName(e)), e -> {
+      return newSchema.getAllIds().contains(fieldIdFromWriteSchema) && !newSchema.findFullName(fieldIdFromWriteSchema).equalsIgnoreCase(f);
+    }).collect(Collectors.toMap(e -> newSchema.findFullName(oldSchema.findIdByName(e)), e -> {
       int lastDotIndex = e.lastIndexOf(".");
       return e.substring(lastDotIndex == -1 ? 0 : lastDotIndex + 1);
     }));
