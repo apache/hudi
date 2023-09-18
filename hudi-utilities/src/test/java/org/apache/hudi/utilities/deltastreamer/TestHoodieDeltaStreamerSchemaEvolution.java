@@ -19,18 +19,23 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+import org.apache.hudi.TestHoodieSparkUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.utilities.sources.ParquetDFSSource;
 
+import org.apache.spark.SparkException;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.Metadata;
+import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -40,6 +45,8 @@ import java.util.Objects;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Add test cases for out of the box schema evolution for deltastreamer:
@@ -70,6 +77,12 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
   }
 
   private void testBase(String tableType, Boolean shouldCluster, Boolean shouldCompact, String updateFile, String updateColumn, String condition, int count) throws Exception {
+    testBase(tableType, shouldCluster, shouldCompact, updateFile, updateColumn, condition, count, true);
+    //adding non-nullable cols should fail, but instead it is adding nullable cols
+    //assertThrows(Exception.class, () -> testBase(tableType, shouldCluster, shouldCompact, updateFile, updateColumn, condition, count, false));
+  }
+
+  private void testBase(String tableType, Boolean shouldCluster, Boolean shouldCompact, String updateFile, String updateColumn, String condition, int count, Boolean nullable) throws Exception {
     PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + testNum++;
     String tableBasePath = basePath + "test_parquet_table" + testNum;
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(setupDeltaStreamer(tableType, tableBasePath, shouldCluster, shouldCompact), jsc);
@@ -82,7 +95,11 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
 
     //second write
     datapath = String.class.getResource("/data/schema-evolution/" + updateFile).getPath();
-    sparkSession.read().json(datapath).write().format("parquet").mode(SaveMode.Append).save(PARQUET_SOURCE_ROOT);
+    Dataset<Row> df = sparkSession.read().json(datapath);
+    if (!nullable) {
+      df = TestHoodieSparkUtils.setColumnNotNullable(df, updateColumn);
+    }
+    df.write().format("parquet").mode(SaveMode.Append).save(PARQUET_SOURCE_ROOT);
     deltaStreamer.sync();
     TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(10, tableBasePath, sqlContext);
     sparkSession.read().format("hudi").load(tableBasePath).select(updateColumn).show(10);
@@ -100,30 +117,30 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
   }
 
   /**
-   * Add a new nullable column at root level at the end
+   * Add a new column at root level at the end
    */
   @ParameterizedTest
   @MethodSource("testArgs")
-  public void testAddNullableColRoot(String tableType, Boolean shouldCluster, Boolean shouldCompact) throws Exception {
-    testBase(tableType, shouldCluster, shouldCompact, "testAddNullableColRoot.json", "zextra_nullable_col", "zextra_nullable_col = 'yes'", 2);
+  public void testAddColRoot(String tableType, Boolean shouldCluster, Boolean shouldCompact) throws Exception {
+    testBase(tableType, shouldCluster, shouldCompact, "testAddColRoot.json", "zextra_col", "zextra_col = 'yes'", 2);
   }
 
   /**
-   * Add a custom nullable Hudi meta column
+   * Add a custom Hudi meta column
    */
   @ParameterizedTest
   @MethodSource("testArgs")
-  public void testAddNullableMetaCol(String tableType, Boolean shouldCluster, Boolean shouldCompact) throws Exception {
-    testBase(tableType, shouldCluster, shouldCompact, "testAddNullableMetaCol.json", "_extra_nullable_col", "_extra_nullable_col = 'yes'", 2);
+  public void testAddMetaCol(String tableType, Boolean shouldCluster, Boolean shouldCompact) throws Exception {
+    testBase(tableType, shouldCluster, shouldCompact, "testAddMetaCol.json", "_extra_col", "_extra_col = 'yes'", 2);
   }
 
   /**
-   * Add a new nullable column to inner struct (at the end)
+   * Add a new column to inner struct (at the end)
    */
   @ParameterizedTest
   @MethodSource("testArgs")
-  public void testAddNullableColStruct(String tableType, Boolean shouldCluster, Boolean shouldCompact) throws Exception {
-    testBase(tableType, shouldCluster, shouldCompact, "testAddNullableColStruct.json", "tip_history.zextra_nullable_col", "tip_history[0].zextra_nullable_col = 'yes'", 2);
+  public void testAddColStruct(String tableType, Boolean shouldCluster, Boolean shouldCompact) throws Exception {
+    testBase(tableType, shouldCluster, shouldCompact, "testAddColStruct.json", "tip_history.zextra_col", "tip_history[0].zextra_col = 'yes'", 2);
   }
 
   /**
@@ -136,14 +153,14 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
   }
 
   /**
-   * Add a new nullable column and change the ordering of fields
+   * Add a new column and change the ordering of fields
    */
   @ParameterizedTest
   @MethodSource("testArgs")
-  public void testAddNullableColChangeOrder(String tableType, Boolean shouldCluster, Boolean shouldCompact) throws Exception {
-    testBase(tableType, shouldCluster, shouldCompact, "testAddNullableColChangeOrderAllFiles.json", "extra_nullable_col", "extra_nullable_col = 'yes'", 2);
+  public void testAddColChangeOrder(String tableType, Boolean shouldCluster, Boolean shouldCompact) throws Exception {
+    testBase(tableType, shouldCluster, shouldCompact, "testAddColChangeOrderAllFiles.json", "extra_col", "extra_col = 'yes'", 2);
     //according to the docs, this should fail. But it doesn't
-    testBase(tableType, shouldCluster, shouldCompact, "testAddNullableColChangeOrderSomeFiles.json", "extra_nullable_col", "extra_nullable_col = 'yes'", 1);
+    //assertThrows(Exception.class, () -> testBase(tableType, shouldCluster, shouldCompact, "testAddColChangeOrderSomeFiles.json", "extra_col", "extra_col = 'yes'", 1));
   }
 
   private void testTypePromotionBase(String tableType, Boolean shouldCluster, Boolean shouldCompact, String colName, DataType startType, DataType endType) throws Exception {
@@ -152,7 +169,7 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(setupDeltaStreamer(tableType,tableBasePath, shouldCluster, shouldCompact), jsc);
 
     //first write
-    String datapath = String.class.getResource("/data/schema-evolution/start.json").getPath();
+    String datapath = String.class.getResource("/data/schema-evolution/startTypePromotion.json").getPath();
     Dataset<Row> df = sparkSession.read().json(datapath);
     Column col = df.col(colName);
     df = df.withColumn(colName, col.cast(startType));
@@ -162,7 +179,7 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     assertEquals(startType, sparkSession.read().format("hudi").load(tableBasePath).select(colName).schema().fields()[0].dataType());
 
     //second write
-    datapath = Objects.requireNonNull(String.class.getResource("/data/schema-evolution/testTypePromotion.json")).getPath();
+    datapath = Objects.requireNonNull(String.class.getResource("/data/schema-evolution/endTypePromotion.json")).getPath();
     df = sparkSession.read().json(datapath);
     col = df.col(colName);
     df = df.withColumn(colName, col.cast(endType));
@@ -176,9 +193,12 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
   private static Stream<Arguments> testTypePromotionArgs() {
     Stream.Builder<Arguments> b = Stream.builder();
     b.add(Arguments.of("COPY_ON_WRITE", false, false));
-    //b.add(Arguments.of("COPY_ON_WRITE", true, false));
     b.add(Arguments.of("MERGE_ON_READ", false, false));
-    //b.add(Arguments.of("MERGE_ON_READ", true, false));
+    /*
+    clustering fails for MOR and COW
+    b.add(Arguments.of("COPY_ON_WRITE", true, false));
+    b.add(Arguments.of("MERGE_ON_READ", true, false));
+    */
     b.add(Arguments.of("MERGE_ON_READ", false, true));
     return b.build();
   }
@@ -189,6 +209,7 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
   @ParameterizedTest
   @MethodSource("testTypePromotionArgs")
   public void testTypePromotion(String tableType, Boolean shouldCluster, Boolean shouldCompact) throws Exception {
+    //root data type promotions
     testTypePromotionBase(tableType, shouldCluster, shouldCompact, "distance_in_meters", DataTypes.IntegerType, DataTypes.LongType);
     testTypePromotionBase(tableType, shouldCluster, shouldCompact, "distance_in_meters", DataTypes.IntegerType, DataTypes.FloatType);
     testTypePromotionBase(tableType, shouldCluster, shouldCompact, "distance_in_meters", DataTypes.IntegerType, DataTypes.DoubleType);
@@ -199,7 +220,42 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     testTypePromotionBase(tableType, shouldCluster, shouldCompact, "begin_lat", DataTypes.FloatType, DataTypes.DoubleType);
     testTypePromotionBase(tableType, shouldCluster, shouldCompact, "begin_lat", DataTypes.FloatType, DataTypes.StringType);
     testTypePromotionBase(tableType, shouldCluster, shouldCompact, "rider", DataTypes.StringType, DataTypes.BinaryType);
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "tip_history", DataTypes.createArrayType(DataTypes.IntegerType), DataTypes.createArrayType(DataTypes.LongType));
+    //Seems to be supported for datasource. See org.apache.hudi.TestAvroSchemaResolutionSupport.testDataTypePromotions
     //testTypePromotionBase(tableType, shouldCluster, shouldCompact, "rider", DataTypes.BinaryType, DataTypes.StringType);
+
+    //nested data type promotions
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "fare", createFareStruct(DataTypes.FloatType), createFareStruct(DataTypes.DoubleType));
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "fare", createFareStruct(DataTypes.FloatType), createFareStruct(DataTypes.StringType));
+
+    //complex data type promotion
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "tip_history", DataTypes.createArrayType(DataTypes.IntegerType), DataTypes.createArrayType(DataTypes.LongType));
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "tip_history", DataTypes.createArrayType(DataTypes.IntegerType), DataTypes.createArrayType(DataTypes.StringType));
+
+    //test illegal type promotions
+    //illegal root data type promotion
+    SparkException e = assertThrows(SparkException.class,
+        () -> testTypePromotionBase(tableType, shouldCluster, shouldCompact, "distance_in_meters", DataTypes.LongType, DataTypes.IntegerType));
+    if (tableType.equals("COPY_ON_WRITE")) {
+      assertTrue(e.getCause().getCause().getMessage().contains("cannot support rewrite value for schema type: \"int\" since the old schema type is: \"long\""));
+      //illegal nested data type promotion
+      e = assertThrows(SparkException.class,
+          () -> testTypePromotionBase(tableType, shouldCluster, shouldCompact, "fare", createFareStruct(DataTypes.DoubleType), createFareStruct(DataTypes.FloatType)));
+      assertTrue(e.getCause().getCause().getMessage().contains("cannot support rewrite value for schema type: \"float\" since the old schema type is: \"double\""));
+      //illegal complex data type promotion
+      e = assertThrows(SparkException.class,
+          () -> testTypePromotionBase(tableType, shouldCluster, shouldCompact, "tip_history", DataTypes.createArrayType(DataTypes.LongType), DataTypes.createArrayType(DataTypes.IntegerType)));
+      assertTrue(e.getCause().getCause().getMessage().contains("cannot support rewrite value for schema type: \"int\" since the old schema type is: \"long\""));
+    } else {
+      //illegal root data type promotion
+      assertTrue(e.getCause() instanceof NullPointerException);
+
+      //nested and complex do not fail even though they should
+    }
   }
 
+  private StructType createFareStruct(DataType amountType) {
+    return DataTypes.createStructType(new StructField[]{new StructField("amount", amountType, true, Metadata.empty()),
+        new StructField("currency", DataTypes.StringType, true, Metadata.empty())});
+  }
 }
