@@ -148,7 +148,7 @@ public class RequestHandler {
       registerMarkerAPI();
     }
     if (instantStateHandler != null) {
-      registerCkpMetadataAPI();
+      registerInstantStateAPI();
     }
   }
 
@@ -516,17 +516,17 @@ public class RequestHandler {
     }, false));
   }
 
-  private void registerCkpMetadataAPI() {
+  private void registerInstantStateAPI() {
     app.get(InstantStateHandler.ALL_INSTANT_STATE_URL, new ViewHandler(ctx -> {
-      metricsRegistry.add("ALL_CKP_METADATA", 1);
-      List<InstantStateDTO> ckpMetadata = instantStateHandler.getAllInstantStates(
+      metricsRegistry.add("ALL_INSTANT_STATE", 1);
+      List<InstantStateDTO> instantStates = instantStateHandler.getAllInstantStates(
           ctx.queryParam(InstantStateHandler.INSTANT_STATE_DIR_PATH_PARAM)
       );
-      writeValueAsString(ctx, ckpMetadata);
+      writeValueAsString(ctx, instantStates);
     }, false));
 
     app.post(InstantStateHandler.REFRESH_INSTANT_STATE, new ViewHandler(ctx -> {
-      metricsRegistry.add("REFRESH_CKP_METADATA", 1);
+      metricsRegistry.add("REFRESH_INSTANT_STATE", 1);
       boolean success = instantStateHandler.refresh(
           ctx.queryParam(InstantStateHandler.INSTANT_STATE_DIR_PATH_PARAM)
       );
