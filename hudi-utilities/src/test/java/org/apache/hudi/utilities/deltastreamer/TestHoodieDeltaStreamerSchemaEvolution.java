@@ -99,36 +99,51 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     return b.build();
   }
 
+  /**
+   * Add a new nullable column at root level at the end
+   */
   @ParameterizedTest
   @MethodSource("testArgs")
   public void testAddNullableColRoot(String tableType, Boolean shouldCluster, Boolean shouldCompact) throws Exception {
     testBase(tableType, shouldCluster, shouldCompact, "testAddNullableColRoot.json", "zextra_nullable_col", "zextra_nullable_col = 'yes'", 2);
   }
 
+  /**
+   * Add a custom nullable Hudi meta column
+   */
   @ParameterizedTest
   @MethodSource("testArgs")
   public void testAddNullableMetaCol(String tableType, Boolean shouldCluster, Boolean shouldCompact) throws Exception {
     testBase(tableType, shouldCluster, shouldCompact, "testAddNullableMetaCol.json", "_extra_nullable_col", "_extra_nullable_col = 'yes'", 2);
   }
 
+  /**
+   * Add a new nullable column to inner struct (at the end)
+   */
   @ParameterizedTest
   @MethodSource("testArgs")
   public void testAddNullableColStruct(String tableType, Boolean shouldCluster, Boolean shouldCompact) throws Exception {
     testBase(tableType, shouldCluster, shouldCompact, "testAddNullableColStruct.json", "tip_history.zextra_nullable_col", "tip_history[0].zextra_nullable_col = 'yes'", 2);
   }
 
+  /**
+   * Add a new complex type field with default (array)
+   */
   @ParameterizedTest
   @MethodSource("testArgs")
   public void testAddComplexField(String tableType, Boolean shouldCluster, Boolean shouldCompact) throws Exception {
     testBase(tableType, shouldCluster, shouldCompact, "testAddComplexField.json", "zcomplex_array", "size(zcomplex_array) > 0", 2);
   }
 
+  /**
+   * Add a new nullable column and change the ordering of fields
+   */
   @ParameterizedTest
   @MethodSource("testArgs")
   public void testAddNullableColChangeOrder(String tableType, Boolean shouldCluster, Boolean shouldCompact) throws Exception {
-    testBase(tableType, shouldCluster, shouldCompact, "testAddNullableColChangeOrderPass.json", "extra_nullable_col", "extra_nullable_col = 'yes'", 2);
+    testBase(tableType, shouldCluster, shouldCompact, "testAddNullableColChangeOrderAllFiles.json", "extra_nullable_col", "extra_nullable_col = 'yes'", 2);
     //according to the docs, this should fail. But it doesn't
-    testBase(tableType, shouldCluster, shouldCompact, "testAddNullableColChangeOrderFail.json", "extra_nullable_col", "extra_nullable_col = 'yes'", 1);
+    testBase(tableType, shouldCluster, shouldCompact, "testAddNullableColChangeOrderSomeFiles.json", "extra_nullable_col", "extra_nullable_col = 'yes'", 1);
   }
 
   private void testTypePromotionBase(String tableType, Boolean shouldCluster, Boolean shouldCompact, String colName, DataType startType, DataType endType) throws Exception {
@@ -168,6 +183,9 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     return b.build();
   }
 
+  /**
+   * Test type promotion for root level fields
+   */
   @ParameterizedTest
   @MethodSource("testTypePromotionArgs")
   public void testTypePromotion(String tableType, Boolean shouldCluster, Boolean shouldCompact) throws Exception {
