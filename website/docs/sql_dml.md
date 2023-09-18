@@ -12,14 +12,14 @@ import TabItem from '@theme/TabItem';
 
 The following are SparkSQL DML actions available:
 
-Insert Into
-Merge Into
-Update
-Delete
+- Insert Into
+- Merge Into
+- Update
+- Delete
 
 You can ingest data, modify or delete data from a given hudi table using these operations. Lets go over them one by one. 
 
-Please refer to [SQL DDL](/docs/next/sql_ddl) for creating Hudi tables. This page goes over ingesting and modifying data once the
+Please refer to [SQL DDL](/docs/next/sql_ddl) for creating Hudi tables using Spark SQL. This page goes over ingesting and modifying data once the
 table is created. 
 
 ## Insert Into
@@ -30,9 +30,13 @@ Users can use 'INSERT INTO' to insert data into a hudi table using spark-sql.
 insert into hudi_cow_nonpcf_tbl select 1, 'a1', 20;
 insert into hudi_mor_tbl select 1, 'a1', 20, 1000;
 
+-- insert static partition
+insert into hudi_cow_pt_tbl partition(dt = '2021-12-09', hh='11') select 2, 'a2', 1000;
+
 -- insert dynamic partition
 insert into hudi_cow_pt_tbl partition (dt, hh)
 select 1 as id, 'a1' as name, 1000 as ts, '2021-12-09' as dt, '10' as hh;
+
 ```
 
 :::note
@@ -163,13 +167,12 @@ when not matched then
 ```
 
 :::note
-For a Primary keyed Hudi table, the join condition in `Merge Into` is expected to contain the primary keys of the table.
-For a Keyless table, the join condition in MIT can be on any arbitrary data columns.
+For a Hudi table with user configured primary keys, the join condition in `Merge Into` is expected to contain the primary keys of the table.
+For a Table where Hudi auto generates primary keys, the join condition in MIT can be on any arbitrary data columns.
 :::
 
 
-## Delete data 
-
+## Delete data
 
 **Syntax**
 ```sql

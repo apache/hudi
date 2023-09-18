@@ -1,19 +1,19 @@
 ---
 title: SQL DDL
-summary: "In this page, we introduce how to create tables with Hudi."
+summary: "In this page, we discuss DDL commands in Spark-SQL with Hudi"
 toc: true
 last_modified_at: 
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-The following are SparkSQL DDL actions available:
+The following DDL actions are available via SparkSQL:
 
 # Spark Create Table
 :::note
-Only SparkSQL needs an explicit Create Table command. No Create Table command is required in Spark when using Scala or 
-Python. The first batch of a [Write](/docs/writing_data) to a table will create the table if it does not exist. Feel free to take a look 
-at our (quick start guide)[/docs/next/quick-start-guide] for scala or pypsark usage. 
+Only SparkSQL needs an explicit Create Table command. No explicit Create Table is required for Spark Datasource APIs (both Scala or 
+Python, batch or streaming). The first batch of a [Write](/docs/writing_data) to a table will create the table if it does not exist. 
+Feel free to take a look at our (quick start guide)[/docs/next/quick-start-guide] for spark datasource writes using scala or pyspark. 
 :::
 
 ### Create table Properties
@@ -22,7 +22,7 @@ Users can set table properties while creating a hudi table. Critical options are
 
 | Parameter Name | Default | Description                                                                                                                                                                                                                                                                                                                                      |
 |------------------|--------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| primaryKey | uuid | The primary key field names of the table, multiple fields separated by commas. Same as `hoodie.datasource.write.recordkey.field`. This can be ignored for a key less table (from 0.14.0).                                                                                                                                                        |
+| primaryKey | uuid | The primary key field names of the table, multiple fields separated by commas. Same as `hoodie.datasource.write.recordkey.field`. If this config is ignored (from 0.14.0), hudi will auto generate primary keys. If explicitly set, primary key generation will honor user configugration.                                                       |
 | preCombineField |  | The pre-combine field of the table. Same as `hoodie.datasource.write.precombine.field` and is used for resolving the final version of the record among multiple versions. Generally `event time` or some other similar column will be used for ordering purpose. Hudi will be able to handle out of order data using the preCombine field value. |
 | type       | cow | The table type to create. type = 'cow' means a COPY-ON-WRITE table, while type = 'mor' means a MERGE-ON-READ table. Same as `hoodie.datasource.write.table.type`. More details can be found [here](/docs/table_types)                                                                                                                            |
 
@@ -33,10 +33,10 @@ Users can set table properties while creating a hudi table. Critical options are
 :::
 
 ## Creating a Hudi table 
-Here is an example of creating a key less COW non-partitioned table. 
+Here is an example of creating a non-partitioned Hudi table. 
 
 ```sql
--- create a key less COW table
+-- create a Hudi table
 create table if not exists hudi_table(
   id int, 
   name string, 
@@ -44,18 +44,20 @@ create table if not exists hudi_table(
 ) using hudi;
 ```
 
+:::note
 There could be cases where electing a primary key may not be feasible due to various reasons. Some payloads actually 
 don't have a naturally present record key: for ex, when ingesting some kind of "logs" into Hudi there 
 might be no unique identifier held in every record that could serve the purpose of being record key, while meeting global 
-uniqueness requirements of the primary key. So, users can choose to create a keyless table during such situations. 
-Users can still perform Merge Into, updates and deletes based on any random data column for such keyless tables. 
+uniqueness requirements of the primary key. So, users can choose to ignore configuring 'primaryKey' in which case, 
+Hudi will auto generate primary keys for the records during ingestion. Users can still perform Merge Into, updates and 
+deletes based on any random data column for such tables. 
+::: 
 
-### Creating a Primary Keyed table
+### Creating a Hudi table w/ user configured primary keys
 Here is an example of creating a COW non-partitioned table with primary keyed on `id`. For mutable datasets, 
 it is recommended to set appropriate primary key configs. 
 
 ```sql
--- create a managed primary keyed cow table
 create table if not exists hudi_table0 (
   id int, 
   name string, 
@@ -72,12 +74,11 @@ You can elect multiple fields as primary keys for a given table on a need basis.
 :::
 
 ### PreCombineField
-Here is an example of creating an MOR table. The **preCombineField** option
+Here is an example of creating an COW table. The **preCombineField** option
 is used to specify the preCombine field for merge. Generally 'event time' or a similar column will be used for 
-ordering purpose. Hudi will be able to handle out of order data using the precombine field value.
+ordering purpose. Hudi will be able to handle out of order data using the preCombine field value.
 
 ```sql
--- create an mor table
 create table if not exists hudi_table1 (
   id int, 
   name string, 
@@ -85,7 +86,7 @@ create table if not exists hudi_table1 (
   ts bigint
 ) using hudi
 tblproperties (
-  type = 'mor',
+  type = 'cow',
   primaryKey = 'id',
   preCombineField = 'ts' 
 );
@@ -93,9 +94,9 @@ tblproperties (
 
 ### Partitioned Table
 :::note
-When created in spark-sql, partition columns will always be the last columns of the table.
+When created in spark-sql, partition columns will always be the last columns in the table.
 :::
-Here is an example of creating a key less COW partitioned table. Adding `partitioned by` clause to the create table syntax refers 
+Here is an example of creating a COW partitioned table. Adding `partitioned by` clause to the create table syntax, refers 
 to a partitioned dataset. 
 
 ```sql
@@ -135,7 +136,7 @@ recognize the schema and configurations.
 Hudi supports CTAS(Create table as select) on spark sql. <br/>
 **Note:** For better performance to load data to hudi table, CTAS uses **bulk insert** as the write operation.
 
-### CTAS key less table
+### CTAS Hudi table
 
 ```sql 
 create table hudi_tbl using hudi
@@ -143,7 +144,7 @@ as
 select 1 as id, 'a1' as name, 10 as price;
 ```
 
-### CTAS Primary keyed partitioned table
+### CTAS Hudi table with user configured Primary key
 
 ```sql
 create table hudi_tbl using hudi
@@ -153,7 +154,7 @@ as
 select 1 as id, 'a1' as name, 10 as price, 1000 as dt;
 ```
 
-### CTAS key less table by loading data from another table
+### CTAS by loading data from another table
 
 ```sql
 # create managed parquet table 
@@ -165,35 +166,6 @@ create table hudi_tbl using hudi location 'file:/tmp/hudi/hudi_tbl/' tblproperti
  ) 
 as select * from parquet_mngd;
 ```
-
-### CTAS Primary keyed table by loading data from another table
-
-```sql
-# create managed parquet table 
-create table parquet_mngd using parquet location 'file:///tmp/parquet_dataset/*.parquet';
-
-# CTAS by loading data into hudi table
-create table hudi_tbl using hudi location 'file:/tmp/hudi/hudi_tbl/' tblproperties ( 
-  type = 'cow'
- ) 
-as select * from parquet_mngd;
-```
-
-### CTAS Primary keyed partitioned table by loading data from another table
-
-```sql
-# create managed parquet table 
-create table parquet_mngd using parquet location 'file:///tmp/parquet_dataset/*.parquet';
-
-# CTAS by loading data into hudi table
-create table hudi_tbl using hudi location 'file:/tmp/hudi/hudi_tbl/' tblproperties ( 
-  type = 'cow', 
-  primaryKey = 'id', 
-  preCombineField = 'ts' 
- ) 
-partitioned by (datestr) as select * from parquet_mngd;
-```
-
 
 ## Setting configs 
 
@@ -219,7 +191,7 @@ create table if not exists h3(
 ) using hudi
 tblproperties (
   primaryKey = 'id',
-  type = 'mor',
+  type = 'cow',
   ${hoodie.config.key1} = '${hoodie.config.value2}',
   ${hoodie.config.key2} = '${hoodie.config.value2}',
   ....
@@ -233,7 +205,7 @@ create table if not exists h3(
 ) using hudi
 tblproperties (
   primaryKey = 'id',
-  type = 'mor',
+  type = 'cow',
   hoodie.cleaner.fileversions.retained = '20',
   hoodie.keep.max.commits = '20'
 );
