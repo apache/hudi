@@ -145,35 +145,109 @@ but the write_token has deterministic priority in sorting, which breaks the file
 
 ### Pseudocode for New File Slicing
 
+Assume we have the following inputs to build the file slices:
+1. `base_files_by_file_id`: a map of filegroup id to list of base files.
+2. `log_files_by_file_id`: a map of feilgroup id to list of log files.
+3. `timeline`: Hudi write timeline .
+
+The pseudocode below introduces a notion of **file slice barriers**, which contain a list of instant (start) times of 
+the base files in descending order. Barriers will help in demarcating file slices.
+
 ```python
 # new file slicing
-file_slice_barriers = []
-# sort the base file by start time reversely and get the barriers
-for base_file in fg.getBaseFilesSortedReverselyByStartTime():
-  file_slice_barriers.add(instant_time(base_file))
+def build_file_slices(base_files_by_file_id, log_files_by_file_id, timeline):
+    # get set of all filegroup ids
+    file_id_set = base_files_by_file_id.keys
+    file_id_set.add_all(log_files_by_file_id.keys)
+    
+    for file_id in file_id_set:
+        # sort the base files by descending order of instant (start) time, i.e. last written base file first
+        base_files_in_file_id = base_files_by_file_id[file_id].sort(BASE_FILE_REVERSE_COMPARATOR)
+        # filter out log files that have been log-compacted
+        log_files_in_file_id = handle_log_compaction(log_files_by_file_id[file_id], timeline)
+        # sort the log files by ascending order of completion time
+        log_files_in_file_id.sort(LOG_FILE_COMPARATOR)
+        # get list of file slice barriers for this fielgroup id
+        file_slice_barriers = []
+        if base_files_in_file_id.size > 0:
+            for base_file in base_files_in_file_id:
+                file_slice_barriers.add(instant_time(base_file))
+        elif log_files_in_file_id.size > 0:
+            # for a file group with no base file, the instant time of the earliest log file is the barrier
+            file_slice_barriers.add(instant_time(log_files_in_file_id[0]))
+            
+        # build file slices
+        file_slices = []
+        for log_file in log_files_in_file_id:
+            file_slice = find_file_slice(log_file, file_slice_barriers)
+            file_slices.add(file_slice)
+            
+        return file_slices
+            
+            
+# Given all log files for a file id, filter out such log files that have been log-compacted.
+def handle_log_compaction(log_files_in_file_id, timeline):
+    log_compaction_instants = timeline.get_completed_log_compaction()
+    for log_compaction_instant in log_compaction_instant:
+        log_files_compacted = get_log_files_compacted(log_compaction_instant)
+        log_files_in_file_id.remove(log_files_compacted)
+        
+    return log_files_in_file_id
 
-file_slices = []
-for log_file in fg.getLogFilesSortedByCompletionTime():
+
+# Given base files and log files for a filegroup id, return a list containing file slice barriers. 
+def get_file_slice_barriers(base_files_in_file_id, log_files_in_file_id):
+    file_slice_barriers = []
+    if base_files_in_file_id.size > 0:
+        for base_file in base_files_in_file_id:
+            file_slice_barriers.add(instant_time(base_file))
+    elif log_files_in_file_id.size > 0:
+        # for a file group with no base file, the instant time of the earliest log file is the barrier
+        file_slice_barriers.add(instant_time(log_files_in_file_id[0]))
+    
+    return file_slice_barriers
+
+
+def find_file_slice(log_file, file_slice_barriers):
   completion_time = completion_time(log_file)
-  file_slice = find_file_slice(completion_time, file_slice_barriers)
-  file_slices.add(file_slice)
-
-def find_file_slice(completion_time, file_slice_barriers):
-  # Note: needs to handle special case where file_slice_barriers is empty (no base file)
   for barrier in file_slice_barriers:
     if (barrier < completion_time):
       # each file slice is attached to a barrier, returns the existing file slice or a fresh new one based on the barrier.
-      return get_or_create_file_slice(barrier)
+      # note that since file_slice_barriers is reverse sorted, we would return the file slice 
+      # corresponding to the max barrier just less than the completion_time
+      return get_or_create_file_slice(log_file, barrier)
 
-all_file_slices = {}
-def get_or_create_file_slice(barrier):
+
+all_file_slices = {} # map of barrier to file slice
+
+def get_or_create_file_slice(log_file, barrier):
   if barrier in all_file_slices:
-    return all_file_slices[barrier]
+    # add log file to the file slice for the barrier
+    all_file_slices[barrier].add_log_file(log_file)
   else:
+    # else create a new file slice with the barrier time
     file_slice = FileSlice(barrier)
+    file_slice.add_log_file(log_file)
     all_file_slices[barrier] = file_slice
-    return file_slice
+
+  return all_file_slices[barrier]
 ```
+
+In order to prove the correctness, let's use the following notations:
+1. `Ts_Fx`: instant (start) time for a base file `Fx`.
+2. `Tc_Fx`: completion time for a base file `Fx`.
+3. `Ts_Lx`: instant (start) time for a log file `Lx` for the same file id as `Fx`.
+4. `Tc_Lx`: completion time for a log file `Lx` for the same file id as `Fx`.
+
+The main idea is that the file slicing per file group should satisfy the following temporal order of base files and log 
+files within that file group:
+1. A log file `Ly` _temporally follows_ another base file `Fx` if `Ts_Fx` < `Ts_Ly`. 
+2. A base file `Fy` _temporally follows_ another base file `Fx` if `Ts_Fx` < `Tc_Fx` < `Ts_Fy`.
+3. A log file `Ly` _temporally follows_ another log file `Lx` if `Ts_Lx` < `Tc_Lx` < `Ts_Ly`.
+4. A base file `Fy` _temporally follows_ another log file `Lx` if `Ts_Lx` < `Tc_Lx` < `Ts_Fy`.
+
+Barriers (sorted by latest first) demarcates file slicing boundary, as in, whenever you hit a barrier, a new slice needs
+to be created and attached to the barrier.
 
 #### A Demo Conducive to Comprehension
 
@@ -188,7 +262,8 @@ fg_t60 -> base file due to compaction [t60, t80].
 l3 -> concurrent log file version 3 [t35, t90].
 ```
 
-In this case, file_slice_barriers list is [t60, t10]. For a query at t100, getAllFileSlices should return the following list:
+In this case, file_slice_barriers list is [t60, t10]. For a query at `t100`, `build_file_slices` should return the 
+following file slices corresponding to each barrier time:
 
 ```xml
 [
@@ -203,7 +278,8 @@ This assumes that file slicing is done based on completion time.
 
 ```python
 # This is based on the new file slicing.
-# find the write 'w' with completionTime(w) < t, among all the writes that completed before t 
+# Given a time travel query with "as of timestamp" t, 
+# first find the write 'w' with max completionTime(w) < t, among all the writes that completed before t 
 # (Note t may not match an existing completion time directly) 
 max_completion_time = findMaxCompletedTimeBefore(t) 
 
@@ -220,9 +296,13 @@ def latestFileSliceThatIsOverlappingWithCompletionTime(fg, max_completion_time):
     fs_min_completion_time = getMinCompletionTime(f_slice)
     fs_max_completion_time = getMaxCompletionTime(f_slice)
 
-    if (fs_min_completion_time <= max_completion_time <= fs_max_completion_time):
-      # Needs to remove the logs files that completed later than the maxCompletionTime
-      return fix_file_slice_by_max_completion_time(f_slice, maxCompletionTime)
+    if (fs_min_completion_time <= max_completion_time):
+      # Needs to remove the log files that completed later than the maxCompletionTime
+      if (fs_max_completion_time > max_completion_time):
+        f_slice.getLogFiles().removeIf(log_file -> completion_time(log_file) > max_completion_time)
+      
+      return f_slice
+  
   return empty
 ```
 
