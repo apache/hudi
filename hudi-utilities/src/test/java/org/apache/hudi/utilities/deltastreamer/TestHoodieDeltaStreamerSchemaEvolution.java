@@ -21,11 +21,23 @@ package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.utilities.sources.ParquetDFSSource;
 
+import org.apache.spark.sql.Column;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
+import org.apache.spark.sql.types.DataType;
+import org.apache.spark.sql.types.DataTypes;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+
+import java.io.IOException;
+import java.util.Objects;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -33,62 +45,143 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * Add test cases for out of the box schema evolution for deltastreamer:
  * https://hudi.apache.org/docs/schema_evolution#out-of-the-box-schema-evolution
  */
-public class TestHoodieDeltaStreamerSchemaEvolution extends TestHoodieDeltaStreamer {
+public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerTestBase {
 
-  private void testBase(String tableType, String updateFile, String updateColumn, String condition, int count) throws Exception {
-    PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + testNum++;
-    String datapath = String.class.getResource("/data/schema-evolution/start.json").getPath();
-    sparkSession.read().json(datapath).write().format("parquet").save(PARQUET_SOURCE_ROOT);
-
+  private HoodieDeltaStreamer.Config setupDeltaStreamer(String tableType, String tableBasePath, Boolean shouldCluster, Boolean shouldCompact) throws IOException {
     TypedProperties extraProps = new TypedProperties();
     extraProps.setProperty("hoodie.datasource.write.table.type", tableType);
+
+    if (shouldCompact) {
+      extraProps.setProperty(HoodieCompactionConfig.INLINE_COMPACT.key(), "true");
+      extraProps.setProperty(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1");
+    }
+
+    if (shouldCluster) {
+      extraProps.setProperty(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true");
+      extraProps.setProperty(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "2");
+      extraProps.setProperty(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key(), "_row_key");
+    }
+
     prepareParquetDFSSource(false, false, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
         PARQUET_SOURCE_ROOT, false, "partition_path", "", extraProps);
-    String tableBasePath = basePath + "test_parquet_table" + testNum;
-    HoodieDeltaStreamer.Config deltaCfg =  TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, ParquetDFSSource.class.getName(),
+    return TestHoodieDeltaStreamer.TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, ParquetDFSSource.class.getName(),
         null, PROPS_FILENAME_TEST_PARQUET, false,
-        false, 100000, false, null, "COPY_ON_WRITE", "timestamp", null);
+        false, 100000, false, null, tableType, "timestamp", null);
+  }
 
-    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(deltaCfg, jsc);
+  private void testBase(String tableType, Boolean shouldCluster, Boolean shouldCompact, String updateFile, String updateColumn, String condition, int count) throws Exception {
+    PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + testNum++;
+    String tableBasePath = basePath + "test_parquet_table" + testNum;
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(setupDeltaStreamer(tableType, tableBasePath, shouldCluster, shouldCompact), jsc);
+
+    //first write
+    String datapath = String.class.getResource("/data/schema-evolution/start.json").getPath();
+    sparkSession.read().json(datapath).write().format("parquet").save(PARQUET_SOURCE_ROOT);
     deltaStreamer.sync();
-    TestHelpers.assertRecordCount(10, tableBasePath, sqlContext);
+    TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(10, tableBasePath, sqlContext);
+
+    //second write
     datapath = String.class.getResource("/data/schema-evolution/" + updateFile).getPath();
     sparkSession.read().json(datapath).write().format("parquet").mode(SaveMode.Append).save(PARQUET_SOURCE_ROOT);
     deltaStreamer.sync();
-    TestHelpers.assertRecordCount(10, tableBasePath, sqlContext);
+    TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(10, tableBasePath, sqlContext);
     sparkSession.read().format("hudi").load(tableBasePath).select(updateColumn).show(10);
     assertEquals(count, sparkSession.read().format("hudi").load(tableBasePath).filter(condition).count());
+  }
 
+  private static Stream<Arguments> testArgs() {
+    Stream.Builder<Arguments> b = Stream.builder();
+    b.add(Arguments.of("COPY_ON_WRITE", false, false));
+    b.add(Arguments.of("COPY_ON_WRITE", true, false));
+    b.add(Arguments.of("MERGE_ON_READ", false, false));
+    //b.add(Arguments.of("MERGE_ON_READ", true, false));
+    b.add(Arguments.of("MERGE_ON_READ", false, true));
+    return b.build();
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"COPY_ON_WRITE", "MERGE_ON_READ"})
-  public void testAddNullableColRoot(String tableType) throws Exception {
-    testBase(tableType, "testAddNullableColRoot.json", "zextra_nullable_col", "zextra_nullable_col = 'yes'", 2);
+  @MethodSource("testArgs")
+  public void testAddNullableColRoot(String tableType, Boolean shouldCluster, Boolean shouldCompact) throws Exception {
+    testBase(tableType, shouldCluster, shouldCompact, "testAddNullableColRoot.json", "zextra_nullable_col", "zextra_nullable_col = 'yes'", 2);
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"COPY_ON_WRITE", "MERGE_ON_READ"})
-  public void testAddNullableMetaCol(String tableType) throws Exception {
-    testBase(tableType, "testAddNullableMetaCol.json", "_extra_nullable_col", "_extra_nullable_col = 'yes'", 2);
+  @MethodSource("testArgs")
+  public void testAddNullableMetaCol(String tableType, Boolean shouldCluster, Boolean shouldCompact) throws Exception {
+    testBase(tableType, shouldCluster, shouldCompact, "testAddNullableMetaCol.json", "_extra_nullable_col", "_extra_nullable_col = 'yes'", 2);
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"COPY_ON_WRITE", "MERGE_ON_READ"})
-  public void testAddNullableColStruct(String tableType) throws Exception {
-    testBase(tableType, "testAddNullableColStruct.json", "tip_history.zextra_nullable_col", "tip_history[0].zextra_nullable_col = 'yes'", 2);
+  @MethodSource("testArgs")
+  public void testAddNullableColStruct(String tableType, Boolean shouldCluster, Boolean shouldCompact) throws Exception {
+    testBase(tableType, shouldCluster, shouldCompact, "testAddNullableColStruct.json", "tip_history.zextra_nullable_col", "tip_history[0].zextra_nullable_col = 'yes'", 2);
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"COPY_ON_WRITE", "MERGE_ON_READ"})
-  public void testAddComplexField(String tableType) throws Exception {
-    testBase(tableType, "testAddComplexField.json", "zcomplex_array", "size(zcomplex_array) > 0", 2);
+  @MethodSource("testArgs")
+  public void testAddComplexField(String tableType, Boolean shouldCluster, Boolean shouldCompact) throws Exception {
+    testBase(tableType, shouldCluster, shouldCompact, "testAddComplexField.json", "zcomplex_array", "size(zcomplex_array) > 0", 2);
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"COPY_ON_WRITE", "MERGE_ON_READ"})
-  public void testAddNullableColChangeOrder(String tableType) throws Exception {
-    testBase(tableType, "testAddNullableColChangeOrderPass.json", "extra_nullable_col", "extra_nullable_col = 'yes'", 2);
-    testBase(tableType, "testAddNullableColChangeOrderFail.json", "extra_nullable_col", "extra_nullable_col = 'yes'", 1);
+  @MethodSource("testArgs")
+  public void testAddNullableColChangeOrder(String tableType, Boolean shouldCluster, Boolean shouldCompact) throws Exception {
+    testBase(tableType, shouldCluster, shouldCompact, "testAddNullableColChangeOrderPass.json", "extra_nullable_col", "extra_nullable_col = 'yes'", 2);
+    //according to the docs, this should fail. But it doesn't
+    testBase(tableType, shouldCluster, shouldCompact, "testAddNullableColChangeOrderFail.json", "extra_nullable_col", "extra_nullable_col = 'yes'", 1);
   }
+
+  private void testTypePromotionBase(String tableType, Boolean shouldCluster, Boolean shouldCompact, String colName, DataType startType, DataType endType) throws Exception {
+    PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + testNum++;
+    String tableBasePath = basePath + "test_parquet_table" + testNum;
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(setupDeltaStreamer(tableType,tableBasePath, shouldCluster, shouldCompact), jsc);
+
+    //first write
+    String datapath = String.class.getResource("/data/schema-evolution/start.json").getPath();
+    Dataset<Row> df = sparkSession.read().json(datapath);
+    Column col = df.col(colName);
+    df = df.withColumn(colName, col.cast(startType));
+    df.write().format("parquet").save(PARQUET_SOURCE_ROOT);
+    deltaStreamer.sync();
+    TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(10, tableBasePath, sqlContext);
+    assertEquals(startType, sparkSession.read().format("hudi").load(tableBasePath).select(colName).schema().fields()[0].dataType());
+
+    //second write
+    datapath = Objects.requireNonNull(String.class.getResource("/data/schema-evolution/testTypePromotion.json")).getPath();
+    df = sparkSession.read().json(datapath);
+    col = df.col(colName);
+    df = df.withColumn(colName, col.cast(endType));
+    df.write().format("parquet").mode(SaveMode.Append).save(PARQUET_SOURCE_ROOT);
+    deltaStreamer.sync();
+    TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(10, tableBasePath, sqlContext);
+    sparkSession.read().format("hudi").load(tableBasePath).select(colName).show(10);
+    assertEquals(endType, sparkSession.read().format("hudi").load(tableBasePath).select(colName).schema().fields()[0].dataType());
+  }
+
+  private static Stream<Arguments> testTypePromotionArgs() {
+    Stream.Builder<Arguments> b = Stream.builder();
+    b.add(Arguments.of("COPY_ON_WRITE", false, false));
+    //b.add(Arguments.of("COPY_ON_WRITE", true, false));
+    b.add(Arguments.of("MERGE_ON_READ", false, false));
+    //b.add(Arguments.of("MERGE_ON_READ", true, false));
+    b.add(Arguments.of("MERGE_ON_READ", false, true));
+    return b.build();
+  }
+
+  @ParameterizedTest
+  @MethodSource("testTypePromotionArgs")
+  public void testTypePromotion(String tableType, Boolean shouldCluster, Boolean shouldCompact) throws Exception {
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "distance_in_meters", DataTypes.IntegerType, DataTypes.LongType);
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "distance_in_meters", DataTypes.IntegerType, DataTypes.FloatType);
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "distance_in_meters", DataTypes.IntegerType, DataTypes.DoubleType);
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "distance_in_meters", DataTypes.IntegerType, DataTypes.StringType);
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "distance_in_meters", DataTypes.LongType, DataTypes.FloatType);
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "distance_in_meters", DataTypes.LongType, DataTypes.DoubleType);
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "distance_in_meters", DataTypes.LongType, DataTypes.StringType);
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "begin_lat", DataTypes.FloatType, DataTypes.DoubleType);
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "begin_lat", DataTypes.FloatType, DataTypes.StringType);
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "rider", DataTypes.StringType, DataTypes.BinaryType);
+    //testTypePromotionBase(tableType, shouldCluster, shouldCompact, "rider", DataTypes.BinaryType, DataTypes.StringType);
+  }
+
 }
