@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -248,7 +249,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         }
 
       } catch (IOException e) {
-        throw new HoodieIOException("error reading commit metadata for " + instant);
+        throw new HoodieIOException("error reading commit metadata for " + instant, e);
       }
     });
 
@@ -478,8 +479,14 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param statuses List of File-Status
    */
   private Stream<HoodieBaseFile> convertFileStatusesToBaseFiles(FileStatus[] statuses) {
-    Predicate<FileStatus> roFilePredicate = fileStatus -> fileStatus.getPath().getName()
-        .contains(metaClient.getTableConfig().getBaseFileFormat().getFileExtension());
+    Predicate<FileStatus> roFilePredicate = fileStatus -> {
+      String pathName = fileStatus.getPath().getName();
+      // Filter base files if:
+      // 1. file extension equals to table configured file extension
+      // 2. file is not .hoodie_partition_metadata
+      return pathName.contains(metaClient.getTableConfig().getBaseFileFormat().getFileExtension())
+          && !pathName.startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX);
+    };
     return Arrays.stream(statuses).filter(roFilePredicate).map(HoodieBaseFile::new);
   }
 

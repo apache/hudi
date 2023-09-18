@@ -42,6 +42,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.RecordPayloadType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
@@ -150,6 +151,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting. "
           + "This will render any value set for PRECOMBINE_FIELD_OPT_VAL in-effective");
+
+  public static final ConfigProperty<String> WRITE_PAYLOAD_TYPE = ConfigProperty
+      .key("hoodie.datasource.write.payload.type")
+      .defaultValue(RecordPayloadType.OVERWRITE_LATEST_AVRO.name())
+      .markAdvanced()
+      .withDocumentation(RecordPayloadType.class);
 
   public static final ConfigProperty<String> RECORD_MERGER_IMPLS = ConfigProperty
       .key("hoodie.datasource.write.record.merger.impls")
@@ -1240,10 +1247,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getPreCombineField() {
     return getString(PRECOMBINE_FIELD_NAME);
-  }
-
-  public String getWritePayloadClass() {
-    return getString(WRITE_PAYLOAD_CLASS_NAME);
   }
 
   public String getKeyGeneratorClass() {

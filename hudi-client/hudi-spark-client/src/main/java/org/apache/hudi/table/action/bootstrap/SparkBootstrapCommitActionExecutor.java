@@ -68,7 +68,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
@@ -79,6 +78,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.client.bootstrap.BootstrapMode.FULL_RECORD;
 import static org.apache.hudi.client.bootstrap.BootstrapMode.METADATA_ONLY;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE;
 import static org.apache.hudi.table.action.bootstrap.MetadataBootstrapHandlerFactory.getMetadataHandler;
@@ -244,16 +244,16 @@ public class SparkBootstrapCommitActionExecutor<T>
     }
     metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, getSchemaToStoreInCommit());
     metadata.setOperationType(operationType);
-
     writeTableMetadata(metadata, result.getWriteStatuses(), actionType);
-
+    // cannot serialize maps with null values
+    metadata.getExtraMetadata().entrySet().removeIf(entry -> entry.getValue() == null);
     try {
-      activeTimeline.saveAsComplete(new HoodieInstant(true, actionType, instantTime),
-          Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+      activeTimeline.saveAsComplete(
+          new HoodieInstant(true, actionType, instantTime),
+          serializeCommitMetadata(metadata));
       LOG.info("Committed " + instantTime);
     } catch (IOException e) {
-      throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
-          e);
+      throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime, e);
     }
     result.setCommitMetadata(Option.of(metadata));
   }
@@ -304,7 +304,7 @@ public class SparkBootstrapCommitActionExecutor<T>
    */
   private Map<BootstrapMode, List<Pair<String, List<HoodieFileStatus>>>> listAndProcessSourcePartitions() throws IOException {
     List<Pair<String, List<HoodieFileStatus>>> folders = BootstrapUtils.getAllLeafFoldersWithFiles(
-            table.getMetaClient(), bootstrapSourceFileSystem, config.getBootstrapSourceBasePath(), context);
+        table.getMetaClient(), bootstrapSourceFileSystem, config.getBootstrapSourceBasePath(), context);
 
     LOG.info("Fetching Bootstrap Schema !!");
     HoodieBootstrapSchemaProvider sourceSchemaProvider = new HoodieSparkBootstrapSchemaProvider(config);
@@ -324,7 +324,7 @@ public class SparkBootstrapCommitActionExecutor<T>
         result.values().stream().flatMap(Collection::stream).collect(Collectors.toSet())));
 
     return result.entrySet().stream().map(e -> Pair.of(e.getKey(), e.getValue().stream()
-        .map(p -> Pair.of(p, partitionToFiles.get(p))).collect(Collectors.toList())))
+            .map(p -> Pair.of(p, partitionToFiles.get(p))).collect(Collectors.toList())))
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
   }
 

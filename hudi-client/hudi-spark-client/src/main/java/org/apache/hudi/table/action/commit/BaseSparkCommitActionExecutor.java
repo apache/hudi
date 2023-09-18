@@ -19,8 +19,8 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.utils.SparkPartitionUtils;
 import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy;
+import org.apache.hudi.client.utils.SparkPartitionUtils;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
@@ -66,7 +66,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
@@ -80,6 +79,7 @@ import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.util.ClusteringUtils.getAllFileGroupsInPendingClusteringPlans;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE;
 
@@ -171,7 +171,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
     context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile:" + config.getTableName());
     WorkloadProfile workloadProfile =
-            new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
+        new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
     LOG.debug("Input workload profile :" + workloadProfile);
 
     // partition using the insert partitioner
@@ -308,8 +308,11 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       HoodieCommitMetadata metadata = result.getCommitMetadata().get();
       writeTableMetadata(metadata, result.getWriteStatuses(), actionType);
-      activeTimeline.saveAsComplete(new HoodieInstant(true, getCommitActionType(), instantTime),
-          Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+      // cannot serialize maps with null values
+      metadata.getExtraMetadata().entrySet().removeIf(entry -> entry.getValue() == null);
+      activeTimeline.saveAsComplete(
+          new HoodieInstant(true, getCommitActionType(), instantTime),
+          serializeCommitMetadata(metadata));
       LOG.info("Committed " + instantTime);
       result.setCommitMetadata(Option.of(metadata));
     } catch (IOException e) {
@@ -425,7 +428,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
   public Partitioner getLayoutPartitioner(WorkloadProfile profile, String layoutPartitionerClass) {
     return (Partitioner) ReflectionUtils.loadClass(layoutPartitionerClass,
-        new Class[] { WorkloadProfile.class, HoodieEngineContext.class, HoodieTable.class, HoodieWriteConfig.class },
+        new Class[] {WorkloadProfile.class, HoodieEngineContext.class, HoodieTable.class, HoodieWriteConfig.class},
         profile, context, table, config);
   }
 

@@ -417,7 +417,6 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
 
         checkAnswer(s"select id, name, ts, year, month, day from $tableName")(
-          Seq(2, "l4", "v1", "2021", "10", "02"),
           Seq(2, "l4", "v1", "2021", "10", "02")
         )
 

@@ -116,9 +116,9 @@ public class InternalSchemaMerger {
       Type newType = newTypes.get(i);
       Types.Field oldField = oldFields.get(i);
       int fieldId = oldField.fieldId();
-      String fullName = querySchema.findfullName(fieldId);
+      String fullName = querySchema.findFullName(fieldId);
       if (fileSchema.findField(fieldId) != null) {
-        if (fileSchema.findfullName(fieldId).equals(fullName)) {
+        if (fileSchema.findFullName(fieldId).equals(fullName)) {
           // maybe col type changed, deal with it.
           newFields.add(Types.Field.get(oldField.fieldId(), oldField.isOptional(), oldField.name(), newType, oldField.doc()));
         } else {
@@ -173,7 +173,7 @@ public class InternalSchemaMerger {
       }
       String parentName = sb.toString();
       int parentFieldIdFromQuerySchema = querySchema.findIdByName(parentName);
-      String parentNameFromFileSchema = fileSchema.findfullName(parentFieldIdFromQuerySchema);
+      String parentNameFromFileSchema = fileSchema.findFullName(parentFieldIdFromQuerySchema);
       if (parentNameFromFileSchema.isEmpty()) {
         break;
       }

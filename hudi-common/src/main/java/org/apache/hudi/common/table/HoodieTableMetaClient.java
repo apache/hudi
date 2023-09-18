@@ -29,9 +29,11 @@ import org.apache.hudi.common.fs.FileSystemRetryConfig;
 import org.apache.hudi.common.fs.HoodieRetryWrapperFileSystem;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.fs.NoOpConsistencyGuard;
+import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.common.model.RecordPayloadType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -47,6 +49,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.hadoop.SerializablePath;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -447,7 +450,10 @@ public class HoodieTableMetaClient implements Serializable {
 
     // Meta fields can be disabled only when either {@code SimpleKeyGenerator}, {@code ComplexKeyGenerator}, {@code NonpartitionedKeyGenerator} is used
     if (!getTableConfig().populateMetaFields()) {
-      String keyGenClass = properties.getProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), "org.apache.hudi.keygen.SimpleKeyGenerator");
+      String keyGenClass = KeyGeneratorType.getKeyGeneratorClassName(new HoodieConfig(properties));
+      if (StringUtils.isNullOrEmpty(keyGenClass)) {
+        keyGenClass = "org.apache.hudi.keygen.SimpleKeyGenerator";
+      }
       if (!keyGenClass.equals("org.apache.hudi.keygen.SimpleKeyGenerator")
           && !keyGenClass.equals("org.apache.hudi.keygen.NonpartitionedKeyGenerator")
           && !keyGenClass.equals("org.apache.hudi.keygen.ComplexKeyGenerator")) {
@@ -793,6 +799,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String recordKeyFields;
     private String archiveLogFolder;
     private String payloadClassName;
+    private String payloadType;
     private String recordMergerStrategy;
     private Integer timelineLayoutVersion;
     private String baseFileFormat;
@@ -805,6 +812,7 @@ public class HoodieTableMetaClient implements Serializable {
     private Boolean bootstrapIndexEnable;
     private Boolean populateMetaFields;
     private String keyGeneratorClassProp;
+    private String keyGeneratorType;
     private Boolean hiveStylePartitioningEnable;
     private Boolean urlEncodePartitioning;
     private HoodieTimelineTimeZone commitTimeZone;
@@ -860,6 +868,11 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder setPayloadClassName(String payloadClassName) {
       this.payloadClassName = payloadClassName;
+      return this;
+    }
+
+    public PropertyBuilder setPayloadType(String payloadType) {
+      this.payloadType = payloadType;
       return this;
     }
 
@@ -924,6 +937,11 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder setKeyGeneratorClassProp(String keyGeneratorClassProp) {
       this.keyGeneratorClassProp = keyGeneratorClassProp;
+      return this;
+    }
+
+    public PropertyBuilder setKeyGeneratorType(String keyGeneratorType) {
+      this.keyGeneratorType = keyGeneratorType;
       return this;
     }
 
@@ -1013,8 +1031,9 @@ public class HoodieTableMetaClient implements Serializable {
             hoodieConfig.getString(HoodieTableConfig.ARCHIVELOG_FOLDER));
       }
       if (hoodieConfig.contains(HoodieTableConfig.PAYLOAD_CLASS_NAME)) {
-        setPayloadClassName(
-            hoodieConfig.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME));
+        setPayloadClassName(hoodieConfig.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME));
+      } else if (hoodieConfig.contains(HoodieTableConfig.PAYLOAD_TYPE)) {
+        setPayloadClassName(RecordPayloadType.valueOf(hoodieConfig.getString(HoodieTableConfig.PAYLOAD_TYPE)).getClassName());
       }
       if (hoodieConfig.contains(HoodieTableConfig.RECORD_MERGER_STRATEGY)) {
         setRecordMergerStrategy(
@@ -1030,6 +1049,9 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.BOOTSTRAP_INDEX_CLASS_NAME)) {
         setBootstrapIndexClass(
             hoodieConfig.getString(HoodieTableConfig.BOOTSTRAP_INDEX_CLASS_NAME));
+      }
+      if (hoodieConfig.contains(HoodieTableConfig.BOOTSTRAP_INDEX_TYPE)) {
+        setPayloadClassName(BootstrapIndexType.valueOf(hoodieConfig.getString(HoodieTableConfig.BOOTSTRAP_INDEX_TYPE)).getClassName());
       }
       if (hoodieConfig.contains(HoodieTableConfig.BOOTSTRAP_BASE_PATH)) {
         setBootstrapBasePath(hoodieConfig.getString(HoodieTableConfig.BOOTSTRAP_BASE_PATH));
@@ -1063,6 +1085,8 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (hoodieConfig.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME)) {
         setKeyGeneratorClassProp(hoodieConfig.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME));
+      } else if (hoodieConfig.contains(HoodieTableConfig.KEY_GENERATOR_TYPE)) {
+        setKeyGeneratorClassProp(KeyGeneratorType.valueOf(hoodieConfig.getString(HoodieTableConfig.KEY_GENERATOR_TYPE)).getClassName());
       }
       if (hoodieConfig.contains(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE)) {
         setHiveStylePartitioningEnable(hoodieConfig.getBoolean(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE));
@@ -1101,13 +1125,17 @@ public class HoodieTableMetaClient implements Serializable {
       }
       tableConfig.setValue(HoodieTableConfig.NAME, tableName);
       tableConfig.setValue(HoodieTableConfig.TYPE, tableType.name());
-      tableConfig.setValue(HoodieTableConfig.VERSION,
-          String.valueOf(HoodieTableVersion.current().versionCode()));
-      if (tableType == HoodieTableType.MERGE_ON_READ && payloadClassName != null) {
-        tableConfig.setValue(HoodieTableConfig.PAYLOAD_CLASS_NAME, payloadClassName);
-      }
-      if (tableType == HoodieTableType.MERGE_ON_READ && recordMergerStrategy != null) {
-        tableConfig.setValue(HoodieTableConfig.RECORD_MERGER_STRATEGY, recordMergerStrategy);
+      tableConfig.setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.current().versionCode()));
+
+      if (tableType == HoodieTableType.MERGE_ON_READ) {
+        if (null != payloadClassName) {
+          tableConfig.setValue(HoodieTableConfig.PAYLOAD_TYPE, RecordPayloadType.fromClassName(payloadClassName).name());
+        } else if (null != payloadType) {
+          tableConfig.setValue(HoodieTableConfig.PAYLOAD_TYPE, payloadType);
+        }
+        if (recordMergerStrategy != null) {
+          tableConfig.setValue(HoodieTableConfig.RECORD_MERGER_STRATEGY, recordMergerStrategy);
+        }
       }
 
       if (null != tableCreateSchema) {
@@ -1130,7 +1158,7 @@ public class HoodieTableMetaClient implements Serializable {
       }
 
       if (null != bootstrapIndexClass) {
-        tableConfig.setValue(HoodieTableConfig.BOOTSTRAP_INDEX_CLASS_NAME, bootstrapIndexClass);
+        tableConfig.setValue(HoodieTableConfig.BOOTSTRAP_INDEX_TYPE, BootstrapIndexType.fromClassName(bootstrapIndexClass).name());
       }
 
       if (null != bootstrapIndexEnable) {
@@ -1161,7 +1189,9 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
       }
       if (null != keyGeneratorClassProp) {
-        tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, keyGeneratorClassProp);
+        tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, KeyGeneratorType.fromClassName(keyGeneratorClassProp).name());
+      } else if (null != keyGeneratorType) {
+        tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, keyGeneratorType);
       }
       if (null != hiveStylePartitioningEnable) {
         tableConfig.setValue(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE, Boolean.toString(hiveStylePartitioningEnable));

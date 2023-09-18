@@ -78,7 +78,6 @@ import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -121,7 +120,6 @@ import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
@@ -481,12 +479,12 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // Global dedup should be done based on recordKey only
     HoodieIndex index = mock(HoodieIndex.class);
     when(index.isGlobal()).thenReturn(true);
-    int dedupParallelism = records.getNumPartitions() + 100;
+    int dedupParallelism = records.getNumPartitions() + 2;
     HoodieData<HoodieRecord<RawTripTestPayload>> dedupedRecsRdd =
         (HoodieData<HoodieRecord<RawTripTestPayload>>) HoodieWriteHelper.newInstance()
             .deduplicateRecords(records, index, dedupParallelism, writeConfig.getSchema(), writeConfig.getProps(), HoodiePreCombineAvroRecordMerger.INSTANCE);
     List<HoodieRecord<RawTripTestPayload>> dedupedRecs = dedupedRecsRdd.collectAsList();
-    assertEquals(records.getNumPartitions(), dedupedRecsRdd.getNumPartitions());
+    assertEquals(dedupParallelism, dedupedRecsRdd.getNumPartitions());
     assertEquals(1, dedupedRecs.size());
     assertEquals(dedupedRecs.get(0).getPartitionPath(), recordThree.getPartitionPath());
     assertNodupesWithinPartition(dedupedRecs);
@@ -498,7 +496,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         (HoodieData<HoodieRecord<RawTripTestPayload>>) HoodieWriteHelper.newInstance()
             .deduplicateRecords(records, index, dedupParallelism, writeConfig.getSchema(), writeConfig.getProps(), HoodiePreCombineAvroRecordMerger.INSTANCE);
     dedupedRecs = dedupedRecsRdd.collectAsList();
-    assertEquals(records.getNumPartitions(), dedupedRecsRdd.getNumPartitions());
+    assertEquals(dedupParallelism, dedupedRecsRdd.getNumPartitions());
     assertEquals(2, dedupedRecs.size());
     assertNodupesWithinPartition(dedupedRecs);
 
@@ -2214,10 +2212,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void testCommitWritesRelativePaths(boolean populateMetaFields) throws Exception {
-
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withAutoCommit(false);
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
-    try (SparkRDDWriteClient client = getHoodieWriteClient(cfgBuilder.build());) {
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfgBuilder.build())) {
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
       HoodieSparkTable table = HoodieSparkTable.create(cfgBuilder.build(), context, metaClient);
 
@@ -2243,14 +2240,13 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       Collection<String> commitPathNames = commitMetadata.getFileIdAndFullPaths(new Path(basePath)).values();
 
       // Read from commit file
-      try (FSDataInputStream inputStream = fs.open(testTable.getCommitFilePath(instantTime))) {
-        String everything = FileIOUtils.readAsUTFString(inputStream);
-        HoodieCommitMetadata metadata = HoodieCommitMetadata.fromJsonString(everything, HoodieCommitMetadata.class);
-        HashMap<String, String> paths = metadata.getFileIdAndFullPaths(new Path(basePath));
-        // Compare values in both to make sure they are equal.
-        for (String pathName : paths.values()) {
-          assertTrue(commitPathNames.contains(pathName));
-        }
+      HoodieCommitMetadata metadata = HoodieCommitMetadata.fromBytes(
+          metaClient.reloadActiveTimeline().getInstantDetails(new HoodieInstant(COMPLETED, COMMIT_ACTION, instantTime)).get(),
+          HoodieCommitMetadata.class);
+      HashMap<String, String> paths = metadata.getFileIdAndFullPaths(new Path(basePath));
+      // Compare values in both to make sure they are equal.
+      for (String pathName : paths.values()) {
+        assertTrue(commitPathNames.contains(pathName));
       }
     }
   }
@@ -2278,18 +2274,16 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         "After explicit commit, commit file should be created");
 
     // Read from commit file
-    try (FSDataInputStream inputStream = fs.open(testTable.getCommitFilePath(instantTime0))) {
-      String everything = FileIOUtils.readAsUTFString(inputStream);
-      HoodieCommitMetadata metadata =
-          HoodieCommitMetadata.fromJsonString(everything, HoodieCommitMetadata.class);
-      int inserts = 0;
-      for (Map.Entry<String, List<HoodieWriteStat>> pstat : metadata.getPartitionToWriteStats().entrySet()) {
-        for (HoodieWriteStat stat : pstat.getValue()) {
-          inserts += stat.getNumInserts();
-        }
+    HoodieCommitMetadata metadata = HoodieCommitMetadata.fromBytes(
+        metaClient.reloadActiveTimeline().getInstantDetails(new HoodieInstant(COMPLETED, COMMIT_ACTION, instantTime0)).get(),
+        HoodieCommitMetadata.class);
+    int inserts = 0;
+    for (Map.Entry<String, List<HoodieWriteStat>> pstat : metadata.getPartitionToWriteStats().entrySet()) {
+      for (HoodieWriteStat stat : pstat.getValue()) {
+        inserts += stat.getNumInserts();
       }
-      assertEquals(200, inserts);
     }
+    assertEquals(200, inserts);
 
     // Update + Inserts such that they just expand file1
     String instantTime1 = "001";
@@ -2304,20 +2298,19 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         "After explicit commit, commit file should be created");
 
     // Read from commit file
-    try (FSDataInputStream inputStream = fs.open(testTable.getCommitFilePath(instantTime1))) {
-      String everything = FileIOUtils.readAsUTFString(inputStream);
-      HoodieCommitMetadata metadata = HoodieCommitMetadata.fromJsonString(everything, HoodieCommitMetadata.class);
-      int inserts = 0;
-      int upserts = 0;
-      for (Map.Entry<String, List<HoodieWriteStat>> pstat : metadata.getPartitionToWriteStats().entrySet()) {
-        for (HoodieWriteStat stat : pstat.getValue()) {
-          inserts += stat.getNumInserts();
-          upserts += stat.getNumUpdateWrites();
-        }
+    metadata = HoodieCommitMetadata.fromBytes(
+        metaClient.reloadActiveTimeline().getInstantDetails(new HoodieInstant(COMPLETED, COMMIT_ACTION, instantTime1)).get(),
+        HoodieCommitMetadata.class);
+    inserts = 0;
+    int upserts = 0;
+    for (Map.Entry<String, List<HoodieWriteStat>> pstat : metadata.getPartitionToWriteStats().entrySet()) {
+      for (HoodieWriteStat stat : pstat.getValue()) {
+        inserts += stat.getNumInserts();
+        upserts += stat.getNumUpdateWrites();
       }
-      assertEquals(0, inserts);
-      assertEquals(200, upserts);
     }
+    assertEquals(0, inserts);
+    assertEquals(200, upserts);
   }
 
   /**

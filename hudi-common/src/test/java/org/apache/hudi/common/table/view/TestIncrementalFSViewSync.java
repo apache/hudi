@@ -60,7 +60,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -77,6 +76,7 @@ import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LOG_COMPACTION_ACTION;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -247,7 +247,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, firstEmptyInstantTs));
     metaClient.getActiveTimeline().saveAsComplete(
         new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, firstEmptyInstantTs),
-        Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+        serializeCommitMetadata(metadata));
 
     view.sync();
     assertTrue(view.getLastInstant().isPresent());
@@ -290,7 +290,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, firstEmptyInstantTs));
     metaClient.getActiveTimeline().saveAsComplete(
         new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, firstEmptyInstantTs),
-        Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+        serializeCommitMetadata(metadata));
 
     view.sync();
     assertTrue(view.getLastInstant().isPresent());
@@ -982,13 +982,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     HoodieInstant inflightInstant = new HoodieInstant(true,
         deltaCommit ? HoodieTimeline.DELTA_COMMIT_ACTION : HoodieTimeline.COMMIT_ACTION, instant);
     metaClient.getActiveTimeline().createNewInstant(inflightInstant);
-    metaClient.getActiveTimeline().saveAsComplete(inflightInstant,
-        Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
-    /*
-    // Delete pending compaction if present
-    metaClient.getFs().delete(new Path(metaClient.getMetaPath(),
-        new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instant).getFileName()));
-     */
+    metaClient.getActiveTimeline().saveAsComplete(inflightInstant, serializeCommitMetadata(metadata));
     return writeStats.stream().map(e -> e.getValue().getPath()).collect(Collectors.toList());
   }
 
@@ -1009,8 +1003,9 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     HoodieReplaceCommitMetadata replaceCommitMetadata = new HoodieReplaceCommitMetadata();
     writeStats.forEach(e -> replaceCommitMetadata.addWriteStat(e.getKey(), e.getValue()));
     replaceCommitMetadata.setPartitionToReplaceFileIds(partitionToReplaceFileIds);
-    metaClient.getActiveTimeline().saveAsComplete(inflightInstant,
-        Option.of(replaceCommitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+    metaClient.getActiveTimeline().saveAsComplete(
+        inflightInstant,
+        serializeCommitMetadata(replaceCommitMetadata));
     return writeStats.stream().map(e -> e.getValue().getPath()).collect(Collectors.toList());
   }
 

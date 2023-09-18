@@ -47,8 +47,8 @@ import scala.language.implicitConversions
  */
 
 /**
-  * Options supported for reading hoodie tables.
-  */
+ * Options supported for reading hoodie tables.
+ */
 object DataSourceReadOptions {
 
   val QUERY_TYPE_SNAPSHOT_OPT_VAL = "snapshot"
@@ -272,8 +272,8 @@ object DataSourceReadOptions {
 }
 
 /**
-  * Options supported for writing hoodie tables.
-  */
+ * Options supported for writing hoodie tables.
+ */
 object DataSourceWriteOptions {
 
   val BULK_INSERT_OPERATION_OPT_VAL = WriteOperationType.BULK_INSERT.value
@@ -325,11 +325,11 @@ object DataSourceWriteOptions {
   val SPARK_SQL_WRITES_PREPPED_KEY = "_hoodie.spark.sql.writes.prepped";
 
   /**
-    * May be derive partition path from incoming df if not explicitly set.
-    *
-    * @param optParams Parameters to be translated
-    * @return Parameters after translation
-    */
+   * May be derive partition path from incoming df if not explicitly set.
+   *
+   * @param optParams Parameters to be translated
+   * @return Parameters after translation
+   */
   def mayBeDerivePartitionPath(optParams: Map[String, String]): Map[String, String] = {
     var translatedOptParams = optParams
     // translate the api partitionBy of spark DataFrameWriter to PARTITIONPATH_FIELD
@@ -383,6 +383,8 @@ object DataSourceWriteOptions {
    * This will render any value set for `PRECOMBINE_FIELD_OPT_VAL` in-effective
    */
   val PAYLOAD_CLASS_NAME = HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME
+
+  val PAYLOAD_TYPE = HoodieWriteConfig.WRITE_PAYLOAD_TYPE
 
   /**
    * HoodieMerger will replace the payload to process the merge of data
@@ -475,7 +477,7 @@ object DataSourceWriteOptions {
     .defaultValue("false")
     .markAdvanced()
     .withDocumentation("If set to true, records from the incoming dataframe will not overwrite existing records with the same key during the write operation. " +
-    "This config is deprecated as of 0.14.0. Please use hoodie.datasource.insert.dup.policy instead.");
+      "This config is deprecated as of 0.14.0. Please use hoodie.datasource.insert.dup.policy instead.");
 
   val PARTITIONS_TO_DELETE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.partitions.to.delete")
@@ -557,7 +559,7 @@ object DataSourceWriteOptions {
     .withValidValues(NONE_INSERT_DUP_POLICY, DROP_INSERT_DUP_POLICY, FAIL_INSERT_DUP_POLICY)
     .withDocumentation("When operation type is set to \"insert\", users can optionally enforce a dedup policy. This policy will be employed "
       + " when records being ingested already exists in storage. Default policy is none and no action will be taken. Another option is to choose " +
-    " \"drop\", on which matching records from incoming will be dropped and the rest will be ingested. Third option is \"fail\" which will " +
+      " \"drop\", on which matching records from incoming will be dropped and the rest will be ingested. Third option is \"fail\" which will " +
       "fail the write operation when same records are re-ingested. In other words, a given record as deduced by the key generation policy " +
       "can be ingested only once to the target table of interest.")
 
@@ -904,7 +906,7 @@ object DataSourceOptionsHelper {
   private val log = LoggerFactory.getLogger(DataSourceOptionsHelper.getClass)
 
   // put all the configs with alternatives here
-  val allConfigsWithAlternatives = List(
+  private val allConfigsWithAlternatives = List(
     DataSourceReadOptions.QUERY_TYPE,
     DataSourceWriteOptions.TABLE_TYPE,
     HoodieTableConfig.BASE_FILE_FORMAT,

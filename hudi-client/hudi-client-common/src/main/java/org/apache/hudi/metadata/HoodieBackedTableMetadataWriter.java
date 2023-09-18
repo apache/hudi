@@ -1434,7 +1434,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     return recordKeyDelegatePairs
         .map(writeStatusRecordDelegate -> {
           HoodieRecordDelegate recordDelegate = writeStatusRecordDelegate.getValue();
-          HoodieRecord hoodieRecord;
+          HoodieRecord hoodieRecord = null;
           Option<HoodieRecordLocation> newLocation = recordDelegate.getNewLocation();
           if (newLocation.isPresent()) {
             if (recordDelegate.getCurrentLocation().isPresent()) {
@@ -1448,11 +1448,12 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
                 LOG.error(msg);
                 throw new HoodieMetadataException(msg);
               }
+              // for updates, we can skip updating RLI partition in MDT
+            } else {
+              hoodieRecord = HoodieMetadataPayload.createRecordIndexUpdate(
+                  recordDelegate.getRecordKey(), recordDelegate.getPartitionPath(),
+                  newLocation.get().getFileId(), newLocation.get().getInstantTime(), dataWriteConfig.getWritesFileIdEncoding());
             }
-
-            hoodieRecord = HoodieMetadataPayload.createRecordIndexUpdate(
-                recordDelegate.getRecordKey(), recordDelegate.getPartitionPath(),
-                newLocation.get().getFileId(), newLocation.get().getInstantTime(), dataWriteConfig.getWritesFileIdEncoding());
           } else {
             // Delete existing index for a deleted record
             hoodieRecord = HoodieMetadataPayload.createRecordIndexDelete(recordDelegate.getRecordKey());

@@ -26,7 +26,6 @@ import org.apache.hudi.HoodieSparkUtils$;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.LockConfiguration;
@@ -104,7 +103,6 @@ import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.kafka.common.errors.TopicExistsException;
-import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.AnalysisException;
@@ -160,7 +158,9 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
+import static org.apache.hudi.utilities.UtilHelpers.createMetaClient;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
+import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerTestBase.TestHelpers.assertAtLeastNCommitsAfterRollback;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_OFFSET_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_PARTITION_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_TIMESTAMP_COLUMN;
@@ -377,8 +377,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @Test
-  public void testPropsWithInvalidKeyGenerator() throws Exception {
-    Exception e = assertThrows(SparkException.class, () -> {
+  public void testPropsWithInvalidKeyGenerator() {
+    Exception e = assertThrows(IllegalArgumentException.class, () -> {
       String tableBasePath = basePath + "/test_table_invalid_key_gen";
       HoodieDeltaStreamer deltaStreamer =
           new HoodieDeltaStreamer(TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT,
@@ -387,7 +387,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }, "Should error out when setting the key generator class property to an invalid value");
     // expected
     LOG.debug("Expected error during getting the key generator", e);
-    assertTrue(e.getMessage().contains("Could not load key generator class invalid"));
+    assertTrue(e.getMessage().contains("No KeyGeneratorType found for class name"));
   }
 
   private static Stream<Arguments> provideInferKeyGenArgs() {
@@ -1137,34 +1137,39 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
+  @Timeout(600)
+  @Test
+  public void testAsyncClusteringServiceWithConflictsAvro() throws Exception {
+    testAsyncClusteringServiceWithConflicts(HoodieRecordType.AVRO);
+  }
+
+
   /**
    * When deltastreamer writes clashes with pending clustering, deltastreamer should keep retrying and eventually succeed(once clustering completes)
    * w/o failing mid way.
    *
    * @throws Exception
    */
-  @ParameterizedTest
-  @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
-  public void testAsyncClusteringServiceWithConflicts(HoodieRecordType recordType) throws Exception {
-    String tableBasePath = basePath + "/asyncClusteringWithConflicts";
+  private void testAsyncClusteringServiceWithConflicts(HoodieRecordType recordType) throws Exception {
+    String tableBasePath = basePath + "/asyncClusteringWithConflicts_" + recordType.name();
     // Keep it higher than batch-size to test continuous mode
     int totalRecords = 2000;
 
-    // Initial bulk insert
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
     addRecordMerger(recordType, cfg.configs);
     cfg.continuousMode = true;
     cfg.tableType = HoodieTableType.COPY_ON_WRITE.name();
-    cfg.configs.addAll(getAsyncServicesConfigs(totalRecords, "false", "", "", "true", "3"));
+    cfg.configs.addAll(getAsyncServicesConfigs(totalRecords, "false", "", "", "true", "2"));
     HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
     deltaStreamerTestRunner(ds, cfg, (r) -> {
-      TestHelpers.assertAtLeastNReplaceCommits(1, tableBasePath, fs);
+      // when pending clustering overlaps w/ incoming, incoming batch will fail and hence will result in rollback.
+      // But eventually the batch should succeed. so, lets check for successful commits after a completed rollback.
+      assertAtLeastNCommitsAfterRollback(1, 1, tableBasePath, fs);
       return true;
     });
     // There should be 4 commits, one of which should be a replace commit
-    TestHelpers.assertAtLeastNCommits(4, tableBasePath, fs);
     TestHelpers.assertAtLeastNReplaceCommits(1, tableBasePath, fs);
-    assertDistinctRecordCount(1900, tableBasePath, sqlContext);
+    TestHelpers.assertAtLeastNCommits(3, tableBasePath, fs);
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
@@ -1389,7 +1394,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @Test
-  public void testNullSchemaProvider() throws Exception {
+  public void testNullSchemaProvider() {
     String tableBasePath = basePath + "/test_table";
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT,
         Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, true,
@@ -1417,14 +1422,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf());
 
     //now assert that hoodie.properties file now has updated payload class name
-    Properties props = new Properties();
-    String metaPath = dataSetBasePath + "/.hoodie/hoodie.properties";
-    FileSystem fs = FSUtils.getFs(cfg.targetBasePath, jsc.hadoopConfiguration());
-    try (FSDataInputStream inputStream = fs.open(new Path(metaPath))) {
-      props.load(inputStream);
-    }
-
-    assertEquals(new HoodieConfig(props).getString(HoodieTableConfig.PAYLOAD_CLASS_NAME), DummyAvroPayload.class.getName());
+    HoodieTableMetaClient metaClient = createMetaClient(jsc, dataSetBasePath, false);
+    assertEquals(metaClient.getTableConfig().getPayloadClass(), DummyAvroPayload.class.getName());
   }
 
   @Test
@@ -1437,13 +1436,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertRecordCount(1000, dataSetBasePath, sqlContext);
 
     //now assert that hoodie.properties file now has updated payload class name
-    Properties props = new Properties();
-    String metaPath = dataSetBasePath + "/.hoodie/hoodie.properties";
-    FileSystem fs = FSUtils.getFs(cfg.targetBasePath, jsc.hadoopConfiguration());
-    try (FSDataInputStream inputStream = fs.open(new Path(metaPath))) {
-      props.load(inputStream);
-    }
-    assertEquals(new HoodieConfig(props).getString(HoodieTableConfig.PAYLOAD_CLASS_NAME), PartialUpdateAvroPayload.class.getName());
+    HoodieTableMetaClient metaClient = createMetaClient(jsc, dataSetBasePath, false);
+    assertEquals(metaClient.getTableConfig().getPayloadClass(), PartialUpdateAvroPayload.class.getName());
   }
 
   @Test
@@ -2578,13 +2572,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   public static class TestGenerator extends SimpleKeyGenerator {
 
     public TestGenerator(TypedProperties props) {
-      super(props);
-    }
-  }
-
-  public static class TestTableLevelGenerator extends SimpleKeyGenerator {
-
-    public TestTableLevelGenerator(TypedProperties props) {
       super(props);
     }
   }

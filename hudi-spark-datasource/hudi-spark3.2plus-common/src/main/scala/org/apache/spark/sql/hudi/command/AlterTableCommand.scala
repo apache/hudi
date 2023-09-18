@@ -23,6 +23,7 @@ import org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteOperationType}
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{CommitUtils, Option}
@@ -44,7 +45,6 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Row, SparkSession}
 
 import java.net.URI
-import java.nio.charset.StandardCharsets
 import java.util
 import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.JavaConverters._
@@ -102,14 +102,17 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
     SchemaChangeUtils.applyTableChanges2Schema(oldSchema, addChange)
   }
 
-  def applyDeleteAction2Schema(sparkSession: SparkSession, oldSchema: InternalSchema, deleteChanges: Seq[DeleteColumn]): InternalSchema = {
+  private def applyDeleteAction2Schema(sparkSession: SparkSession, oldSchema: InternalSchema, deleteChanges: Seq[DeleteColumn]): InternalSchema = {
     val deleteChange = TableChanges.ColumnDeleteChange.get(oldSchema)
     deleteChanges.foreach { c =>
       val originalColName = c.fieldNames().mkString(".")
       checkSchemaChange(Seq(originalColName), table)
       deleteChange.deleteColumn(originalColName)
     }
-    SchemaChangeUtils.applyTableChanges2Schema(oldSchema, deleteChange).setSchemaId(oldSchema.getMaxColumnId)
+    val newSchema = SchemaChangeUtils.applyTableChanges2Schema(oldSchema, deleteChange)
+    // delete action should not change the getMaxColumnId field
+    newSchema.setMaxColumnId(oldSchema.getMaxColumnId)
+    newSchema
   }
 
 
@@ -128,8 +131,6 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
   def applyDeleteAction(sparkSession: SparkSession): Unit = {
     val (oldSchema, historySchema) = getInternalSchemaAndHistorySchemaStr(sparkSession)
     val newSchema = applyDeleteAction2Schema(sparkSession, oldSchema, changes.map(_.asInstanceOf[DeleteColumn]))
-    // delete action should not change the getMaxColumnId field.
-    newSchema.setMaxColumnId(oldSchema.getMaxColumnId)
     val verifiedHistorySchema = if (historySchema == null || historySchema.isEmpty) {
       SerDeHelper.inheritSchemas(oldSchema, "")
     } else {
@@ -269,7 +270,7 @@ object AlterTableCommand extends Logging {
     val requested = new HoodieInstant(State.REQUESTED, commitActionType, instantTime)
     val metadata = new HoodieCommitMetadata
     metadata.setOperationType(WriteOperationType.ALTER_SCHEMA)
-    timeLine.transitionRequestedToInflight(requested, Option.of(metadata.toJsonString.getBytes(StandardCharsets.UTF_8)))
+    timeLine.transitionRequestedToInflight(requested, serializeCommitMetadata(metadata))
     val extraMeta = new util.HashMap[String, String]()
     extraMeta.put(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(internalSchema.setSchemaId(instantTime.toLong)))
     val schemaManager = new FileBasedInternalSchemaStorageManager(metaClient)

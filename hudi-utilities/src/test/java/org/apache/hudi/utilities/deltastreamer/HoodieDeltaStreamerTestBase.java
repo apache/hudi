@@ -28,7 +28,6 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -53,7 +52,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -65,6 +63,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
 import static org.apache.hudi.hive.testutils.HiveTestService.HS2_JDBC_URL;
@@ -447,7 +446,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     metaClient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.INFLIGHT, commitActiontype, commitTime));
     metaClient.getActiveTimeline().saveAsComplete(
         new HoodieInstant(HoodieInstant.State.INFLIGHT, commitActiontype, commitTime),
-        Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+        serializeCommitMetadata(commitMetadata));
   }
 
   void assertRecordCount(long expected, String tablePath, SQLContext sqlContext) {
@@ -696,6 +695,20 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
       LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
       int numDeltaCommits = timeline.countInstants();
       assertTrue(minExpected <= numDeltaCommits, "Got=" + numDeltaCommits + ", exp >=" + minExpected);
+    }
+
+    static void assertAtLeastNCommitsAfterRollback(int minExpectedRollback, int minExpectedCommits, String tablePath, FileSystem fs) {
+      HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).setLoadActiveTimelineOnLoad(true).build();
+      HoodieTimeline timeline = meta.getActiveTimeline().getRollbackTimeline().filterCompletedInstants();
+      LOG.info("Rollback Timeline Instants=" + meta.getActiveTimeline().getInstants());
+      int numRollbackCommits = timeline.countInstants();
+      assertTrue(minExpectedRollback <= numRollbackCommits, "Got=" + numRollbackCommits + ", exp >=" + minExpectedRollback);
+      HoodieInstant firstRollback = timeline.getInstants().get(0);
+      //
+      HoodieTimeline commitsTimeline = meta.getActiveTimeline().filterCompletedInstants()
+          .filter(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN, firstRollback.getTimestamp()));
+      int numCommits = commitsTimeline.countInstants();
+      assertTrue(minExpectedCommits <= numCommits, "Got=" + numCommits + ", exp >=" + minExpectedCommits);
     }
   }
 }

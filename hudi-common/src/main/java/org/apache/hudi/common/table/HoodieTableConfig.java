@@ -19,17 +19,18 @@
 package org.apache.hudi.common.table;
 
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
-import org.apache.hudi.common.bootstrap.index.NoOpBootstrapIndex;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.OrderedProperties;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.RecordPayloadType;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -40,6 +41,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.MetadataPartitionType;
 
 import org.apache.avro.Schema;
@@ -61,7 +63,6 @@ import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.DATE_TIME_PARSER;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.INPUT_TIME_UNIT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT;
@@ -70,6 +71,7 @@ import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAM
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Configurations on the Hoodie Table like type of ingestion, storage formats, hive table name etc Configurations are loaded from hoodie.properties, these properties are usually set during
@@ -164,8 +166,15 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<String> PAYLOAD_CLASS_NAME = ConfigProperty
       .key("hoodie.compaction.payload.class")
       .defaultValue(OverwriteWithLatestAvroPayload.class.getName())
+      .deprecatedAfter("1.0.0")
       .withDocumentation("Payload class to use for performing compactions, i.e merge delta logs with current base file and then "
           + " produce a new base file.");
+
+  public static final ConfigProperty<String> PAYLOAD_TYPE = ConfigProperty
+      .key("hoodie.compaction.payload.type")
+      .defaultValue(RecordPayloadType.OVERWRITE_LATEST_AVRO.name())
+      .sinceVersion("1.0.0")
+      .withDocumentation(RecordPayloadType.class);
 
   public static final ConfigProperty<String> RECORD_MERGER_STRATEGY = ConfigProperty
       .key("hoodie.compaction.record.merger.strategy")
@@ -186,7 +195,14 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<String> BOOTSTRAP_INDEX_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.index.class")
       .defaultValue(HFileBootstrapIndex.class.getName())
+      .deprecatedAfter("1.0.0")
       .withDocumentation("Implementation to use, for mapping base files to bootstrap base file, that contain actual data.");
+
+  public static final ConfigProperty<String> BOOTSTRAP_INDEX_TYPE = ConfigProperty
+      .key("hoodie.bootstrap.index.type")
+      .defaultValue(BootstrapIndexType.HFILE.name())
+      .sinceVersion("1.0.0")
+      .withDocumentation("Bootstrap index type determines which implementation to use, for mapping base files to bootstrap base file, that contain actual data.");
 
   public static final ConfigProperty<String> BOOTSTRAP_BASE_PATH = ConfigProperty
       .key("hoodie.bootstrap.base.path")
@@ -202,7 +218,14 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<String> KEY_GENERATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.table.keygenerator.class")
       .noDefaultValue()
+      .deprecatedAfter("1.0.0")
       .withDocumentation("Key Generator class property for the hoodie table");
+
+  public static final ConfigProperty<String> KEY_GENERATOR_TYPE = ConfigProperty
+      .key("hoodie.table.keygenerator.type")
+      .noDefaultValue()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Key Generator type to determine key generator class");
 
   public static final ConfigProperty<HoodieTimelineTimeZone> TIMELINE_TIMEZONE = ConfigProperty
       .key("hoodie.table.timeline.timezone")
@@ -234,8 +257,6 @@ public class HoodieTableConfig extends HoodieConfig {
       TIMESTAMP_TIMEZONE_FORMAT,
       DATE_TIME_PARSER
   );
-
-  public static final String NO_OP_BOOTSTRAP_INDEX_CLASS = NoOpBootstrapIndex.class.getName();
 
   public static final ConfigProperty<String> TABLE_CHECKSUM = ConfigProperty
       .key("hoodie.table.checksum")
@@ -280,6 +301,11 @@ public class HoodieTableConfig extends HoodieConfig {
       if (contains(PAYLOAD_CLASS_NAME) && payloadClassName != null
           && !getString(PAYLOAD_CLASS_NAME).equals(payloadClassName)) {
         setValue(PAYLOAD_CLASS_NAME, payloadClassName);
+        needStore = true;
+      }
+      if (contains(PAYLOAD_TYPE) && payloadClassName != null
+          && !payloadClassName.equals(RecordPayloadType.valueOf(getString(PAYLOAD_TYPE)).getClassName())) {
+        setValue(PAYLOAD_TYPE, RecordPayloadType.fromClassName(payloadClassName).name());
         needStore = true;
       }
       if (contains(RECORD_MERGER_STRATEGY) && recordMergerStrategyId != null
@@ -476,7 +502,7 @@ public class HoodieTableConfig extends HoodieConfig {
       }
       hoodieConfig.setDefaultValue(TYPE);
       if (hoodieConfig.getString(TYPE).equals(HoodieTableType.MERGE_ON_READ.name())) {
-        hoodieConfig.setDefaultValue(PAYLOAD_CLASS_NAME);
+        hoodieConfig.setDefaultValue(PAYLOAD_TYPE);
         hoodieConfig.setDefaultValue(RECORD_MERGER_STRATEGY);
       }
       hoodieConfig.setDefaultValue(ARCHIVELOG_FOLDER);
@@ -486,7 +512,7 @@ public class HoodieTableConfig extends HoodieConfig {
       }
       if (hoodieConfig.contains(BOOTSTRAP_BASE_PATH)) {
         // Use the default bootstrap index class.
-        hoodieConfig.setDefaultValue(BOOTSTRAP_INDEX_CLASS_NAME, getDefaultBootstrapIndexClass(properties));
+        hoodieConfig.setDefaultValue(BOOTSTRAP_INDEX_CLASS_NAME, BootstrapIndexType.getDefaultBootstrapIndexClassName(hoodieConfig));
       }
       if (hoodieConfig.contains(TIMELINE_TIMEZONE)) {
         HoodieInstantTimeGenerator.setCommitTimeZone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getString(TIMELINE_TIMEZONE)));
@@ -503,7 +529,7 @@ public class HoodieTableConfig extends HoodieConfig {
     }
     String table = props.getProperty(NAME.key());
     String database = props.getProperty(DATABASE_NAME.key(), "");
-    return BinaryUtil.generateChecksum(String.format(TABLE_CHECKSUM_FORMAT, database, table).getBytes(UTF_8));
+    return BinaryUtil.generateChecksum(getUTF8Bytes(String.format(TABLE_CHECKSUM_FORMAT, database, table)));
   }
 
   public static boolean validateChecksum(Properties props) {
@@ -540,10 +566,7 @@ public class HoodieTableConfig extends HoodieConfig {
    * Read the payload class for HoodieRecords from the table properties.
    */
   public String getPayloadClass() {
-    // There could be tables written with payload class from com.uber.hoodie. Need to transparently
-    // change to org.apache.hudi
-    return getStringOrDefault(PAYLOAD_CLASS_NAME).replace("com.uber.hoodie",
-        "org.apache.hudi");
+    return RecordPayloadType.getPayloadClassName(this);
   }
 
   /**
@@ -602,18 +625,26 @@ public class HoodieTableConfig extends HoodieConfig {
    * Read the payload class for HoodieRecords from the table properties.
    */
   public String getBootstrapIndexClass() {
-    // There could be tables written with payload class from com.uber.hoodie. Need to transparently
-    // change to org.apache.hudi
-    return getStringOrDefault(BOOTSTRAP_INDEX_CLASS_NAME, getDefaultBootstrapIndexClass(props));
+    if (!props.getBoolean(BOOTSTRAP_INDEX_ENABLE.key(), BOOTSTRAP_INDEX_ENABLE.defaultValue())) {
+      return BootstrapIndexType.NO_OP.getClassName();
+    }
+    String bootstrapIndexClassName;
+    if (contains(BOOTSTRAP_INDEX_TYPE)) {
+      bootstrapIndexClassName = BootstrapIndexType.valueOf(getString(BOOTSTRAP_INDEX_TYPE)).getClassName();
+    } else if (contains(BOOTSTRAP_INDEX_CLASS_NAME)) {
+      bootstrapIndexClassName = getString(BOOTSTRAP_INDEX_CLASS_NAME);
+    } else {
+      bootstrapIndexClassName = BootstrapIndexType.valueOf(BOOTSTRAP_INDEX_TYPE.defaultValue()).getClassName();
+    }
+    return bootstrapIndexClassName;
   }
 
   public static String getDefaultBootstrapIndexClass(Properties props) {
     HoodieConfig hoodieConfig = new HoodieConfig(props);
-    String defaultClass = BOOTSTRAP_INDEX_CLASS_NAME.defaultValue();
     if (!hoodieConfig.getBooleanOrDefault(BOOTSTRAP_INDEX_ENABLE)) {
-      defaultClass = NO_OP_BOOTSTRAP_INDEX_CLASS;
+      return BootstrapIndexType.NO_OP.getClassName();
     }
-    return defaultClass;
+    return BootstrapIndexType.valueOf(BOOTSTRAP_INDEX_TYPE.defaultValue()).getClassName();
   }
 
   public Option<String> getBootstrapBasePath() {
@@ -697,7 +728,7 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   public String getKeyGeneratorClassName() {
-    return getString(KEY_GENERATOR_CLASS_NAME);
+    return KeyGeneratorType.getKeyGeneratorClassName(this);
   }
 
   public HoodieTimelineTimeZone getTimelineTimezone() {

@@ -26,7 +26,7 @@ import org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions
+import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.{AvroConversionUtils, DataSourceOptionsHelper}
 import org.apache.spark.internal.Logging
@@ -304,6 +304,10 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
       extraConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) =
         HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(
           originTableConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key))
+    } else if (originTableConfig.contains(HoodieTableConfig.KEY_GENERATOR_TYPE.key)) {
+      extraConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) =
+        HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(
+          KeyGeneratorType.valueOf(originTableConfig(HoodieTableConfig.KEY_GENERATOR_TYPE.key)).getClassName)
     } else {
       val primaryKeys = table.properties.getOrElse(SQL_KEY_TABLE_PRIMARY_KEY.sqlKeyName, table.storage.properties.get(SQL_KEY_TABLE_PRIMARY_KEY.sqlKeyName)).toString
       val partitions = table.partitionColumnNames.mkString(",")
