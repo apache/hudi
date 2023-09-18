@@ -139,4 +139,9 @@ class Spark3_1Adapter extends BaseSpark3Adapter {
   override def newPartitionDirectory(internalRow: InternalRow, statuses: Seq[FileStatus]): PartitionDirectory = {
     PartitionDirectory(internalRow, statuses)
   }
+
+  override def getEncoder(schema: StructType): ExpressionEncoder[Row] = {
+    val attributes = toAttributes(schema).map(_.toAttribute)
+    RowEncoder.apply(schema).resolveAndBind(attributes)
+  }
 }

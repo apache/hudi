@@ -96,11 +96,7 @@ public class SparkDatasetTestUtils {
    * @return the encoder thus generated.
    */
   private static ExpressionEncoder getEncoder(StructType schema) {
-    List<Attribute> attributes = JavaConversions.asJavaCollection(SparkAdapterSupport$.MODULE$.sparkAdapter().toAttributes(schema)).stream()
-        .map(Attribute::toAttribute).collect(Collectors.toList());
-    return ExpressionEncoder.apply(schema)
-        .resolveAndBind(JavaConverters.asScalaBufferConverter(attributes).asScala().toSeq(),
-            SimpleAnalyzer$.MODULE$);
+    return SparkAdapterSupport$.MODULE$.sparkAdapter().getEncoder(schema);
   }
 
   /**

@@ -20,11 +20,12 @@ package org.apache.spark.sql.adapter
 import org.apache.avro.Schema
 import org.apache.hadoop.fs.FileStatus
 import org.apache.hudi.client.utils.SparkRowSerDe
-import org.apache.hudi.{DefaultSource, Spark35HoodieFileScanRDD, Spark3RowSerDe}
+import org.apache.hudi.{Spark35HoodieFileScanRDD, Spark3RowSerDe}
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
+import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, Expression}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
@@ -40,8 +41,6 @@ import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark3_
 import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
 import org.apache.spark.sql.vectorized.ColumnarBatchRow
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
-import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
 
@@ -145,5 +144,10 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
   override def createSparkRowSerDe(schema: StructType): SparkRowSerDe = {
     val encoder = ExpressionEncoder(schema).resolveAndBind()
     new Spark3RowSerDe(encoder)
+  }
+
+  override def getEncoder(schema: StructType): ExpressionEncoder[Row] = {
+    val attributes = toAttributes(schema).map(_.toAttribute)
+    ExpressionEncoder.apply(schema).resolveAndBind(attributes)
   }
 }

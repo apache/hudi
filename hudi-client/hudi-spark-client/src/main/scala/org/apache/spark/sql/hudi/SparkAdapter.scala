@@ -26,6 +26,7 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
+import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
@@ -216,7 +217,7 @@ trait SparkAdapter extends Serializable {
   def translateFilter(predicate: Expression, supportNestedPredicatePushdown: Boolean = false): Option[Filter]
 
   /**
-   * SPARK-44353 StructType#toAttributes was removed in Spark 3.5
+   * SPARK-44353 StructType#toAttributes was removed in Spark 3.5.0
    * Use DataTypeUtils#toAttributes for Spark 3.5+
    */
   def toAttributes(struct: StructType): Seq[Attribute]
@@ -224,4 +225,10 @@ trait SparkAdapter extends Serializable {
   def toFileStatuses(partitionDirs: Seq[PartitionDirectory]): Seq[FileStatus]
 
   def newPartitionDirectory(internalRow: InternalRow, statuses: Seq[FileStatus]): PartitionDirectory
+
+  /**
+   * SPARK-44531 Encoder inference moved elsewhere in Spark 3.5.0
+   * Mainly used for unit tests
+   */
+  def getEncoder(schema: StructType): ExpressionEncoder[Row]
 }

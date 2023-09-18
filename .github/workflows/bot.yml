@@ -262,11 +262,11 @@ jobs:
       matrix:
         include:
           - flinkProfile: 'flink1.17'
-            sparkProfile: 'spark3.5'
-            sparkRuntime: 'spark3.5.0'
-          - flinkProfile: 'flink1.17'
             sparkProfile: 'spark3.4'
             sparkRuntime: 'spark3.4.0'
+          - flinkProfile: 'flink1.17'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.0'
 
     steps:
       - uses: actions/checkout@v3
@@ -320,6 +320,7 @@ jobs:
 #          - flinkProfile: 'flink1.13'
 #            sparkProfile: 'spark2.4'
 #            sparkRuntime: 'spark2.4.8'
+
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK 8

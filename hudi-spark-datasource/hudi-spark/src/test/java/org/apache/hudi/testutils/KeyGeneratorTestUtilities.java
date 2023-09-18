@@ -101,11 +101,7 @@ public class KeyGeneratorTestUtilities {
   }
 
   private static ExpressionEncoder getEncoder(StructType schema) {
-    List<Attribute> attributes = JavaConversions.asJavaCollection(SparkAdapterSupport$.MODULE$.sparkAdapter().toAttributes(schema)).stream()
-        .map(Attribute::toAttribute).collect(Collectors.toList());
-    return ExpressionEncoder.apply(schema)
-        .resolveAndBind(JavaConverters.asScalaBufferConverter(attributes).asScala().toSeq(),
-            SimpleAnalyzer$.MODULE$);
+    return SparkAdapterSupport$.MODULE$.sparkAdapter().getEncoder(schema);
   }
 
   public static InternalRow getInternalRow(Row row, ExpressionEncoder<Row> encoder) throws ClassNotFoundException, InvocationTargetException, IllegalAccessException, NoSuchMethodException {
