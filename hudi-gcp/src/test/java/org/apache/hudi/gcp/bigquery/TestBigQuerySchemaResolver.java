@@ -108,22 +108,22 @@ public class TestBigQuerySchemaResolver {
 
   @Test
   void convertSchemaToString_primitiveTypes() {
-    String expectedSqlSchema = "requiredBoolean BOOL NOT NULL, "
-        + "optionalBoolean BOOL, "
-        + "requiredInt INT64 NOT NULL, "
-        + "optionalInt INT64, "
-        + "requiredLong INT64 NOT NULL, "
-        + "optionalLong INT64, "
-        + "requiredDouble FLOAT64 NOT NULL, "
-        + "optionalDouble FLOAT64, "
-        + "requiredFloat FLOAT64 NOT NULL, "
-        + "optionalFloat FLOAT64, "
-        + "requiredString STRING NOT NULL, "
-        + "optionalString STRING, "
-        + "requiredBytes BYTES NOT NULL, "
-        + "optionalBytes BYTES, "
-        + "requiredEnum STRING NOT NULL, "
-        + "optionalEnum STRING";
+    String expectedSqlSchema = "`requiredBoolean` BOOL NOT NULL, "
+        + "`optionalBoolean` BOOL, "
+        + "`requiredInt` INT64 NOT NULL, "
+        + "`optionalInt` INT64, "
+        + "`requiredLong` INT64 NOT NULL, "
+        + "`optionalLong` INT64, "
+        + "`requiredDouble` FLOAT64 NOT NULL, "
+        + "`optionalDouble` FLOAT64, "
+        + "`requiredFloat` FLOAT64 NOT NULL, "
+        + "`optionalFloat` FLOAT64, "
+        + "`requiredString` STRING NOT NULL, "
+        + "`optionalString` STRING, "
+        + "`requiredBytes` BYTES NOT NULL, "
+        + "`optionalBytes` BYTES, "
+        + "`requiredEnum` STRING NOT NULL, "
+        + "`optionalEnum` STRING";
     Assertions.assertEquals(expectedSqlSchema, schemaToSqlString(SCHEMA_RESOLVER.convertSchema(PRIMITIVE_TYPES)));
   }
 
@@ -142,10 +142,10 @@ public class TestBigQuerySchemaResolver {
 
   @Test
   void convertSchemaToString_nestedFields() {
-    String expectedSqlSchema = "nestedOne STRUCT<"
-        + "nestedOptionalInt INT64, "
-        + "nestedRequiredDouble FLOAT64 NOT NULL, "
-        + "nestedTwo STRUCT<doublyNestedString STRING> NOT NULL>";
+    String expectedSqlSchema = "`nestedOne` STRUCT<"
+        + "`nestedOptionalInt` INT64, "
+        + "`nestedRequiredDouble` FLOAT64 NOT NULL, "
+        + "`nestedTwo` STRUCT<`doublyNestedString` STRING> NOT NULL>";
     Assertions.assertEquals(expectedSqlSchema, schemaToSqlString(SCHEMA_RESOLVER.convertSchema(NESTED_FIELDS)));
   }
 
@@ -170,8 +170,8 @@ public class TestBigQuerySchemaResolver {
 
   @Test
   void convertSchemaToString_lists() {
-    String expectedSqlSchema = "intList ARRAY<INT64>, "
-        + "recordList ARRAY<STRUCT<requiredDouble FLOAT64 NOT NULL, optionalString STRING>>";
+    String expectedSqlSchema = "`intList` ARRAY<INT64>, "
+        + "`recordList` ARRAY<STRUCT<`requiredDouble` FLOAT64 NOT NULL, `optionalString` STRING>>";
     Assertions.assertEquals(expectedSqlSchema, schemaToSqlString(SCHEMA_RESOLVER.convertSchema(LISTS)));
   }
 
