@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.utilities.sources.ParquetDFSSource;
 
 import org.apache.spark.SparkException;
@@ -233,10 +234,10 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     testTypePromotionBase(tableType, shouldCluster, shouldCompact, "tip_history", DataTypes.createArrayType(DataTypes.IntegerType), DataTypes.createArrayType(DataTypes.StringType));
 
     //test illegal type promotions
-    //illegal root data type promotion
-    SparkException e = assertThrows(SparkException.class,
-        () -> testTypePromotionBase(tableType, shouldCluster, shouldCompact, "distance_in_meters", DataTypes.LongType, DataTypes.IntegerType));
     if (tableType.equals("COPY_ON_WRITE")) {
+      //illegal root data type promotion
+      SparkException e = assertThrows(SparkException.class,
+          () -> testTypePromotionBase(tableType, shouldCluster, shouldCompact, "distance_in_meters", DataTypes.LongType, DataTypes.IntegerType));
       assertTrue(e.getCause().getCause().getMessage().contains("cannot support rewrite value for schema type: \"int\" since the old schema type is: \"long\""));
       //illegal nested data type promotion
       e = assertThrows(SparkException.class,
@@ -248,7 +249,14 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
       assertTrue(e.getCause().getCause().getMessage().contains("cannot support rewrite value for schema type: \"int\" since the old schema type is: \"long\""));
     } else {
       //illegal root data type promotion
-      assertTrue(e.getCause() instanceof NullPointerException);
+      if (shouldCompact) {
+        assertThrows(HoodieCompactionException.class,
+            () -> testTypePromotionBase(tableType, shouldCluster, shouldCompact, "distance_in_meters", DataTypes.LongType, DataTypes.IntegerType));
+      } else {
+        SparkException e = assertThrows(SparkException.class,
+            () -> testTypePromotionBase(tableType, shouldCluster, shouldCompact, "distance_in_meters", DataTypes.LongType, DataTypes.IntegerType));
+        assertTrue(e.getCause() instanceof NullPointerException);
+      }
 
       //nested and complex do not fail even though they should
     }
