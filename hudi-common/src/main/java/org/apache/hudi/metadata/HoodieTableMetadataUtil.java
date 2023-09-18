@@ -32,6 +32,7 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -40,6 +41,7 @@ import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
@@ -47,6 +49,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -54,6 +57,8 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -101,10 +106,15 @@ import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
+import static org.apache.hudi.common.config.HoodieCommonConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
+import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
+import static org.apache.hudi.common.config.HoodieCommonConfig.MAX_MEMORY_FOR_COMPACTION;
+import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.MILLIS_INSTANT_ID_LENGTH;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
@@ -174,11 +184,12 @@ public class HoodieTableMetadataUtil {
    * Collects {@link HoodieColumnRangeMetadata} for the provided collection of records, pretending
    * as if provided records have been persisted w/in given {@code filePath}
    *
-   * @param records      target records to compute column range metadata for
+   * @param records target records to compute column range metadata for
    * @param targetFields columns (fields) to be collected
-   * @param filePath     file path value required for {@link HoodieColumnRangeMetadata}
+   * @param filePath file path value required for {@link HoodieColumnRangeMetadata}
+   *
    * @return map of {@link HoodieColumnRangeMetadata} for each of the provided target fields for
-   * the collection of provided records
+   *         the collection of provided records
    */
   public static Map<String, HoodieColumnRangeMetadata<Comparable>> collectColumnRangeMetadata(
       List<HoodieRecord> records, List<Schema.Field> targetFields, String filePath, Schema recordSchema) {
@@ -675,7 +686,7 @@ public class HoodieTableMetadataUtil {
         // invalid once rollback is complete.
         if (!rollbackRequest.getLogBlocksToBeDeleted().isEmpty()) {
           Map<String, Long> logFiles = new HashMap<>();
-          rollbackRequest.getLogBlocksToBeDeleted().forEach((k, v) -> {
+          rollbackRequest.getLogBlocksToBeDeleted().forEach((k,v) -> {
             String fileName = k.substring(k.lastIndexOf("/") + 1);
             // rollback plan may not have size for log files to be rolled back. but while merging w/ original commits, the size will get adjusted.
             logFiles.put(fileName, 1L);
@@ -1183,9 +1194,9 @@ public class HoodieTableMetadataUtil {
   /**
    * Given a schema, coerces provided value to instance of {@link Comparable<?>} such that
    * it could subsequently used in column stats
-   * <p>
+   *
    * NOTE: This method has to stay compatible with the semantic of
-   * {@link ParquetUtils#readRangeFromParquetMetadata} as they are used in tandem
+   *      {@link ParquetUtils#readRangeFromParquetMetadata} as they are used in tandem
    */
   private static Comparable<?> coerceToComparable(Schema schema, Object val) {
     if (val == null) {
@@ -1703,7 +1714,9 @@ public class HoodieTableMetadataUtil {
 
   /**
    * Reads the record keys from the base files and returns a {@link HoodieData} of {@link HoodieRecord} to be updated in the metadata table.
+   * Use {@link #readRecordKeysFromFileSlices(HoodieEngineContext, List, boolean, int, String, HoodieTableMetaClient, EngineType)} instead.
    */
+  @Deprecated
   public static HoodieData<HoodieRecord> readRecordKeysFromBaseFiles(HoodieEngineContext engineContext,
                                                                      List<Pair<String, HoodieBaseFile>> partitionBaseFilePairs,
                                                                      boolean forDelete,
@@ -1720,6 +1733,99 @@ public class HoodieTableMetadataUtil {
     return engineContext.parallelize(partitionBaseFilePairs, parallelism).flatMap(partitionAndBaseFile -> {
       final String partition = partitionAndBaseFile.getKey();
       final HoodieBaseFile baseFile = partitionAndBaseFile.getValue();
+      final String filename = baseFile.getFileName();
+      Path dataFilePath = new Path(basePath, partition + Path.SEPARATOR + filename);
+
+      final String fileId = baseFile.getFileId();
+      final String instantTime = baseFile.getCommitTime();
+      HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(configuration.get(), dataFilePath);
+      ClosableIterator<String> recordKeyIterator = reader.getRecordKeyIterator();
+
+      return new ClosableIterator<HoodieRecord>() {
+        @Override
+        public void close() {
+          recordKeyIterator.close();
+        }
+
+        @Override
+        public boolean hasNext() {
+          return recordKeyIterator.hasNext();
+        }
+
+        @Override
+        public HoodieRecord next() {
+          return forDelete
+              ? HoodieMetadataPayload.createRecordIndexDelete(recordKeyIterator.next())
+              : HoodieMetadataPayload.createRecordIndexUpdate(recordKeyIterator.next(), partition, fileId, instantTime, 0);
+        }
+      };
+    });
+  }
+
+  /**
+   * Reads the record keys from the given file slices and returns a {@link HoodieData} of {@link HoodieRecord} to be updated in the metadata table.
+   * If file slice does not have any base file, then iterates over the log files to get the record keys.
+   */
+  public static HoodieData<HoodieRecord> readRecordKeysFromFileSlices(HoodieEngineContext engineContext,
+                                                                      List<Pair<String, FileSlice>> partitionFileSlicePairs,
+                                                                      boolean forDelete,
+                                                                      int recordIndexMaxParallelism,
+                                                                      String activeModule, HoodieTableMetaClient metaClient, EngineType engineType) {
+    if (partitionFileSlicePairs.isEmpty()) {
+      return engineContext.emptyHoodieData();
+    }
+
+    engineContext.setJobStatus(activeModule, "Record Index: reading record keys from " + partitionFileSlicePairs.size() + " file slices");
+    final int parallelism = Math.min(partitionFileSlicePairs.size(), recordIndexMaxParallelism);
+    final String basePath = metaClient.getBasePathV2().toString();
+    final SerializableConfiguration configuration = new SerializableConfiguration(metaClient.getHadoopConf());
+    return engineContext.parallelize(partitionFileSlicePairs, parallelism).flatMap(partitionAndBaseFile -> {
+      final String partition = partitionAndBaseFile.getKey();
+      final FileSlice fileSlice = partitionAndBaseFile.getValue();
+      if (!fileSlice.getBaseFile().isPresent()) {
+        List<String> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
+            .map(l -> l.getPath().toString()).collect(toList());
+        HoodieMergedLogRecordScanner mergedLogRecordScanner = HoodieMergedLogRecordScanner.newBuilder()
+            .withFileSystem(metaClient.getFs())
+            .withBasePath(basePath)
+            .withLogFilePaths(logFilePaths)
+            .withReaderSchema(HoodieAvroUtils.getRecordKeySchema())
+            .withLatestInstantTime(metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::getTimestamp).orElse(""))
+            .withReadBlocksLazily(configuration.get().getBoolean("", true))
+            .withReverseReader(false)
+            .withMaxMemorySizeInBytes(configuration.get().getLongBytes(MAX_MEMORY_FOR_COMPACTION.key(), DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES))
+            .withSpillableMapBasePath(FileIOUtils.getDefaultSpillableMapBasePath())
+            .withPartition(fileSlice.getPartitionPath())
+            .withOptimizedLogBlocksScan(configuration.get().getBoolean("hoodie" + HoodieMetadataConfig.OPTIMIZED_LOG_BLOCKS_SCAN, false))
+            .withDiskMapType(configuration.get().getEnum(SPILLABLE_DISK_MAP_TYPE.key(), SPILLABLE_DISK_MAP_TYPE.defaultValue()))
+            .withBitCaskDiskMapCompressionEnabled(configuration.get().getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()))
+            .withRecordMerger(HoodieRecordUtils.createRecordMerger(
+                metaClient.getBasePathV2().toString(),
+                engineType,
+                Collections.emptyList(), // TODO: support different merger classes, which is currently only known to write config
+                metaClient.getTableConfig().getRecordMergerStrategy()))
+            .build();
+        ClosableIterator<String> recordKeyIterator = ClosableIterator.wrap(mergedLogRecordScanner.getRecords().keySet().iterator());
+        return new ClosableIterator<HoodieRecord>() {
+          @Override
+          public void close() {
+            recordKeyIterator.close();
+          }
+
+          @Override
+          public boolean hasNext() {
+            return recordKeyIterator.hasNext();
+          }
+
+          @Override
+          public HoodieRecord next() {
+            return forDelete
+                ? HoodieMetadataPayload.createRecordIndexDelete(recordKeyIterator.next())
+                : HoodieMetadataPayload.createRecordIndexUpdate(recordKeyIterator.next(), partition, fileSlice.getFileId(), fileSlice.getBaseInstantTime(), 0);
+          }
+        };
+      }
+      final HoodieBaseFile baseFile = fileSlice.getBaseFile().get();
       final String filename = baseFile.getFileName();
       Path dataFilePath = new Path(basePath, partition + Path.SEPARATOR + filename);
 

@@ -81,11 +81,11 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartition
  */
 public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieIndexCommitMetadata>> {
 
+  static final int TIMELINE_RELOAD_INTERVAL_MILLIS = 5000;
   private static final Logger LOG = LoggerFactory.getLogger(RunIndexActionExecutor.class);
   private static final Integer INDEX_COMMIT_METADATA_VERSION_1 = 1;
   private static final Integer LATEST_INDEX_COMMIT_METADATA_VERSION = INDEX_COMMIT_METADATA_VERSION_1;
   private static final int MAX_CONCURRENT_INDEXING = 1;
-  static final int TIMELINE_RELOAD_INTERVAL_MILLIS = 5000;
 
   private final Option<HoodieMetadataMetrics> metrics;
 
@@ -274,10 +274,8 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
     }
   }
 
-  private void catchupWithInflightWriters(HoodieTableMetadataWriter metadataWriter,
-                                          List<HoodieInstant> instantsToIndex,
-                                          HoodieTableMetaClient metadataMetaClient,
-                                          Set<String> metadataCompletedTimestamps,
+  private void catchupWithInflightWriters(HoodieTableMetadataWriter metadataWriter, List<HoodieInstant> instantsToIndex,
+                                          HoodieTableMetaClient metadataMetaClient, Set<String> metadataCompletedTimestamps,
                                           List<HoodieIndexPartitionInfo> indexPartitionInfos) {
     ExecutorService executorService = Executors.newFixedThreadPool(MAX_CONCURRENT_INDEXING);
     Future<?> indexingCatchupTaskFuture = executorService.submit(

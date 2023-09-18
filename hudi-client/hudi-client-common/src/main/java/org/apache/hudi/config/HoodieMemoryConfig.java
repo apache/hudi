@@ -21,6 +21,7 @@ package org.apache.hudi.config;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.util.FileIOUtils;
 
@@ -30,9 +31,6 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
 
 
 /**
@@ -65,7 +63,7 @@ public class HoodieMemoryConfig extends HoodieConfig {
           + "set the max allowable inMemory footprint of the spillable map");
 
   // Default memory size (1GB) per compaction (used if SparkEnv is absent), excess spills to disk
-  public static final long DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES = 1024 * 1024 * 1024L;
+  public static final long DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES = HoodieCommonConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
   // Minimum memory size (100MB) for the spillable map.
   public static final long DEFAULT_MIN_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES = 100 * 1024 * 1024L;
 
@@ -75,17 +73,9 @@ public class HoodieMemoryConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Maximum amount of memory used  in bytes for merge operations, before spilling to local storage.");
 
-  public static final ConfigProperty<String> MAX_MEMORY_FOR_COMPACTION = ConfigProperty
-      .key("hoodie.memory.compaction.max.size")
-      .noDefaultValue()
-      .markAdvanced()
-      .withDocumentation("Maximum amount of memory used  in bytes for compaction operations in bytes , before spilling to local storage.");
+  public static final ConfigProperty<String> MAX_MEMORY_FOR_COMPACTION = HoodieCommonConfig.MAX_MEMORY_FOR_COMPACTION;
 
-  public static final ConfigProperty<Integer> MAX_DFS_STREAM_BUFFER_SIZE = ConfigProperty
-      .key("hoodie.memory.dfs.buffer.max.size")
-      .defaultValue(16 * 1024 * 1024)
-      .markAdvanced()
-      .withDocumentation("Property to control the max memory in bytes for dfs input stream buffer size");
+  public static final ConfigProperty<Integer> MAX_DFS_STREAM_BUFFER_SIZE = HoodieCommonConfig.MAX_DFS_STREAM_BUFFER_SIZE;
 
   public static final ConfigProperty<String> SPILLABLE_MAP_BASE_PATH = ConfigProperty
       .key("hoodie.memory.spillable.map.path")
@@ -130,7 +120,7 @@ public class HoodieMemoryConfig extends HoodieConfig {
   public static final String SPILLABLE_MAP_BASE_PATH_PROP = SPILLABLE_MAP_BASE_PATH.key();
   /** @deprecated Use getDefaultSpillableMapBasePath() instead */
   @Deprecated
-  public static final String DEFAULT_SPILLABLE_MAP_BASE_PATH = getDefaultSpillableMapBasePath();
+  public static final String DEFAULT_SPILLABLE_MAP_BASE_PATH = FileIOUtils.getDefaultSpillableMapBasePath();
   /** @deprecated Use {@link #WRITESTATUS_FAILURE_FRACTION} and its methods instead */
   @Deprecated
   public static final String WRITESTATUS_FAILURE_FRACTION_PROP = WRITESTATUS_FAILURE_FRACTION.key();
@@ -140,13 +130,6 @@ public class HoodieMemoryConfig extends HoodieConfig {
 
   private HoodieMemoryConfig() {
     super();
-  }
-
-  public static String getDefaultSpillableMapBasePath() {
-    String[] localDirs = FileIOUtils.getConfiguredLocalDirs();
-    List<String> localDirLists = Arrays.asList(localDirs);
-    Collections.shuffle(localDirLists);
-    return !localDirLists.isEmpty() ? localDirLists.get(0) : "/tmp/";
   }
 
   public static HoodieMemoryConfig.Builder newBuilder() {

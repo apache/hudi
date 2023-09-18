@@ -33,16 +33,15 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import java.io.IOException;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.apache.hudi.table.action.index.RunIndexActionExecutor.TIMELINE_RELOAD_INTERVAL_MILLIS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -82,7 +81,7 @@ public class TestIndexingCatchupTask {
         "001",
         engineContext) {
       @Override
-      public void updateIndexForWriteAction(HoodieInstant instant) throws IOException {
+      public void updateIndexForWriteAction(HoodieInstant instant) {
         // no-op
       }
     };
@@ -122,27 +121,30 @@ public class TestIndexingCatchupTask {
         "001",
         engineContext) {
       @Override
-      public void updateIndexForWriteAction(HoodieInstant instant) throws IOException {
+      public void updateIndexForWriteAction(HoodieInstant instant) {
         // no-op
       }
     };
 
-    // Interrupt the task after a delay to simulate the negative path
-    Thread thread = new Thread(task);
+    // simulate catchup task timeout
+    CountDownLatch latch = new CountDownLatch(1);
+    Thread thread = new Thread(() -> {
+      try {
+        task.awaitInstantCaughtUp(neverCompletedInstant);
+      } catch (HoodieIndexException e) {
+        latch.countDown();
+      }
+    });
+    // validate that the task throws the expected exception
     thread.start();
     try {
-      Thread.sleep(TIMELINE_RELOAD_INTERVAL_MILLIS / 2);
-      thread.interrupt();
-      thread.join();
+      latch.await();
     } catch (InterruptedException e) {
-      // nothing to handle
+      fail("Should have thrown HoodieIndexException and not interrupted exception. This means latch count down was not called.");
     }
-
-    // Check if HoodieIndexException is thrown
-    assertThrows(HoodieIndexException.class, () -> task.awaitInstantCaughtUp(neverCompletedInstant));
   }
 
-  static abstract class DummyIndexingCatchupTask extends BaseIndexingCatchupTask {
+  abstract class DummyIndexingCatchupTask extends BaseIndexingCatchupTask {
     public DummyIndexingCatchupTask(HoodieTableMetadataWriter metadataWriter,
                                     List<HoodieInstant> instantsToIndex,
                                     Set<String> metadataCompletedInstants,

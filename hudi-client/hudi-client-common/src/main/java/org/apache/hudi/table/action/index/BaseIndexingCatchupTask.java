@@ -139,7 +139,6 @@ public abstract class BaseIndexingCatchupTask implements Runnable {
    * i.e. for commit/deltacommit/compaction/replacecommit and not for clean/restore/rollback actions.
    *
    * @param instant HoodieInstant for which to update metadata table
-   * @throws IOException
    */
   public abstract void updateIndexForWriteAction(HoodieInstant instant) throws IOException;
 
@@ -155,19 +154,27 @@ public abstract class BaseIndexingCatchupTask implements Runnable {
       currentCaughtupInstant = instant.getTimestamp();
       return null;
     }
-    while (!instant.isCompleted()) {
+    if (!instant.isCompleted()) {
       try {
         LOG.warn("instant not completed, reloading timeline " + instant);
-        // reload timeline and fetch instant details again wait until timeout
-        String instantTime = instant.getTimestamp();
-        Option<HoodieInstant> currentInstant = metaClient.reloadActiveTimeline()
-            .filterCompletedInstants().filter(i -> i.getTimestamp().equals(instantTime)).firstInstant();
-        instant = currentInstant.orElse(instant);
-        Thread.sleep(TIMELINE_RELOAD_INTERVAL_MILLIS);
+        reloadTimelineWithWait(instant);
       } catch (InterruptedException e) {
         throw new HoodieIndexException(String.format("Thread interrupted while running indexing check for instant: %s", instant), e);
       }
     }
     return instant;
+  }
+
+  private void reloadTimelineWithWait(HoodieInstant instant) throws InterruptedException {
+    String instantTime = instant.getTimestamp();
+    Option<HoodieInstant> currentInstant;
+
+    do {
+      currentInstant = metaClient.reloadActiveTimeline()
+          .filterCompletedInstants().filter(i -> i.getTimestamp().equals(instantTime)).firstInstant();
+      if (!currentInstant.isPresent() || !currentInstant.get().isCompleted()) {
+        Thread.sleep(TIMELINE_RELOAD_INTERVAL_MILLIS);
+      }
+    } while (!currentInstant.isPresent() || !currentInstant.get().isCompleted());
   }
 }
