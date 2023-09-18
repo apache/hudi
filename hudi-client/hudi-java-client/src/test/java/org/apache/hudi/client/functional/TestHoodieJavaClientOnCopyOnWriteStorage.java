@@ -892,7 +892,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     // create config to not update small files.
     HoodieWriteConfig config = getSmallInsertWriteConfig(2000, TRIP_EXAMPLE_SCHEMA, 10, false, populateMetaFields,
         populateMetaFields ? props : getPropertiesForKeyGen());
-    HoodieJavaWriteClient client; // TODO
+    HoodieJavaWriteClient client;
     if (failInlineClustering) {
       if (null != writeClient) {
         writeClient.close();
@@ -912,6 +912,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     String commitTime2 = HoodieActiveTimeline.createNewInstantTime();
     List<HoodieRecord> records2 = dataGen.generateInserts(commitTime2, 200);
     List<WriteStatus> statuses2 = writeAndVerifyBatch(client, records2, commitTime2, populateMetaFields, failInlineClustering);
+    client.close();
     Set<HoodieFileGroupId> fileIds2 = getFileGroupIdsFromWriteStatus(statuses2);
     Set<HoodieFileGroupId> fileIdsUnion = new HashSet<>(fileIds1);
     fileIdsUnion.addAll(fileIds2);

@@ -758,7 +758,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         // expected
       } finally {
         if (handle != null) {
-          handle.close();
+          try {
+            handle.close();
+          } catch (Exception ex) {
+            // ignore exception from validation check
+          }
         }
       }
       return true;
@@ -1805,6 +1809,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     String commitTime2 = HoodieActiveTimeline.createNewInstantTime();
     List<HoodieRecord> records2 = dataGen.generateInserts(commitTime2, 200);
     List<WriteStatus> statuses2 = writeAndVerifyBatch(client, records2, commitTime2, populateMetaFields, failInlineClustering);
+    client.close();
     Set<HoodieFileGroupId> fileIds2 = getFileGroupIdsFromWriteStatus(statuses2);
     Set<HoodieFileGroupId> fileIdsUnion = new HashSet<>(fileIds1);
     fileIdsUnion.addAll(fileIds2);
