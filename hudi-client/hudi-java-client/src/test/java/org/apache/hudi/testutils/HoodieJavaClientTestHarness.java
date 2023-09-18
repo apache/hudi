@@ -135,6 +135,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
 
   @AfterAll
   public static void tearDownAll() throws IOException {
+    LOG.warn("closing all FS");
     FileSystem.closeAll();
   }
 
@@ -151,6 +152,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
 
   @AfterEach
   protected void cleanupResources() throws IOException {
+    LOG.warn("cleaning up resources");
     cleanupClients();
     cleanupTestDataGenerator();
     cleanupFileSystem();
@@ -228,6 +230,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
   }
 
   protected void cleanupClients() {
+    LOG.warn("cleaning up clients");
     if (metaClient != null) {
       metaClient = null;
     }
@@ -243,6 +246,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
 
   protected void cleanupExecutorService() {
     if (this.executorService != null) {
+      LOG.warn("cleaning up executor service");
       this.executorService.shutdownNow();
       this.executorService = null;
     }
