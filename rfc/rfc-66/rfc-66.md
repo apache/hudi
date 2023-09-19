@@ -151,7 +151,8 @@ Assume we have the following inputs to build the file slices:
 3. `timeline`: Hudi write timeline .
 
 The pseudocode below introduces a notion of **file slice barriers**, which contain a list of instant (start) times of 
-the base files in descending order. Barriers will help in demarcating file slices.
+the base files in descending order. Barriers will help in demarcating file slices. The below pseudocode builds the file 
+slices per file group. Building file groups from file slices is not shown but can be easily done.
 
 ```python
 # new file slicing
@@ -168,21 +169,12 @@ def build_file_slices(base_files_by_file_id, log_files_by_file_id, timeline):
         # sort the log files by ascending order of completion time
         log_files_in_file_id.sort(LOG_FILE_COMPARATOR)
         # get list of file slice barriers for this fielgroup id
-        file_slice_barriers = []
-        if base_files_in_file_id.size > 0:
-            for base_file in base_files_in_file_id:
-                file_slice_barriers.add(instant_time(base_file))
-        elif log_files_in_file_id.size > 0:
-            # for a file group with no base file, the instant time of the earliest log file is the barrier
-            file_slice_barriers.add(instant_time(log_files_in_file_id[0]))
-            
+        file_slice_barriers = get_file_slice_barriers(base_files_in_file_id, log_files_in_file_id)    
         # build file slices
         file_slices = []
         for log_file in log_files_in_file_id:
             file_slice = find_file_slice(log_file, file_slice_barriers)
             file_slices.add(file_slice)
-            
-        return file_slices
             
             
 # Given all log files for a file id, filter out such log files that have been log-compacted.
@@ -262,7 +254,7 @@ fg_t60 -> base file due to compaction [t60, t80].
 l3 -> concurrent log file version 3 [t35, t90].
 ```
 
-In this case, file_slice_barriers list is [t60, t10]. For a query at `t100`, `build_file_slices` should return the 
+In this case, file_slice_barriers list is [t60, t10]. For a query at `t100`, `build_file_slices` should build the 
 following file slices corresponding to each barrier time:
 
 ```xml
