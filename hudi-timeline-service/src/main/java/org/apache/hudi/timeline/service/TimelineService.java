@@ -161,9 +161,9 @@ public class TimelineService {
             + "Instants whose heartbeat is greater than the current value will not be used in early conflict detection.")
     public Long maxAllowableHeartbeatIntervalInMs = 120000L;
 
-    @Parameter(names = {"--instant-state-refresh-threshold"}, description =
+    @Parameter(names = {"--instant-state-force-refresh-request-number"}, description =
         "Used for timeline-server-based instant state requests, every N read requests will trigger instant state refreshing")
-    public Integer instantStateRefreshThreshold = 100;
+    public Integer instantStateForceRefreshRequestNumber = 100;
 
     @Parameter(names = {"--help", "-h"})
     public Boolean help = false;
@@ -197,7 +197,7 @@ public class TimelineService {
       private Long asyncConflictDetectorPeriodMs = 30000L;
       private Long maxAllowableHeartbeatIntervalInMs = 120000L;
 
-      private int instantStateRefreshThreshold = 100;
+      private int instantStateForceRefreshRequestNumber = 100;
 
       public Builder() {
       }
@@ -302,8 +302,8 @@ public class TimelineService {
         return this;
       }
 
-      public Builder instantStateRefreshThreshold(int instantStateRefreshThreshold) {
-        this.instantStateRefreshThreshold = instantStateRefreshThreshold;
+      public Builder instantStateForceRefreshRequestNumber(int instantStateForceRefreshRequestNumber) {
+        this.instantStateForceRefreshRequestNumber = instantStateForceRefreshRequestNumber;
         return this;
       }
 
@@ -329,7 +329,7 @@ public class TimelineService {
         config.asyncConflictDetectorPeriodMs = this.asyncConflictDetectorPeriodMs;
         config.maxAllowableHeartbeatIntervalInMs = this.maxAllowableHeartbeatIntervalInMs;
         config.enableInstantStateRequests = this.enableInstantStateRequests;
-        config.instantStateRefreshThreshold = this.instantStateRefreshThreshold;
+        config.instantStateForceRefreshRequestNumber = this.instantStateForceRefreshRequestNumber;
         return config;
       }
     }
