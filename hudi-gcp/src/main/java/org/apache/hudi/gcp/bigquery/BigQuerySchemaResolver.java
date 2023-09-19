@@ -92,9 +92,9 @@ class BigQuerySchemaResolver {
       }
       String name = field.getName();
       if (field.getMode() == Field.Mode.REPEATED) {
-        return String.format("%s ARRAY<%s>", name, type);
+        return String.format("`%s` ARRAY<%s>", name, type);
       } else {
-        return String.format("%s %s%s", name, type, mode);
+        return String.format("`%s` %s%s", name, type, mode);
       }
     }).collect(Collectors.joining(", "));
   }
