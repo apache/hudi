@@ -25,7 +25,6 @@ import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Cast, Literal, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
-import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
@@ -187,7 +186,7 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
       // SPARK-42309 Error message changed in Spark 3.5.0 so we need to match two strings here
       case ae: AnalysisException if (ae.getMessage().startsWith("[INCOMPATIBLE_DATA_FOR_TABLE.CANNOT_FIND_DATA] Cannot write incompatible data for the table")
         || ae.getMessage().startsWith("Cannot write incompatible data to table")) =>
-        planUtils.resolveOutputColumns(catalogTable.catalogTableName, DataTypeUtils.toAttributes(expectedSchema), query, byName = false, conf)
+        planUtils.resolveOutputColumns(catalogTable.catalogTableName, sparkAdapter.toAttributes(expectedSchema), query, byName = false, conf)
     }
   }
 
