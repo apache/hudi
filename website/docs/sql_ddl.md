@@ -219,10 +219,13 @@ tblproperties (
 ALTER TABLE oldTableName RENAME TO newTableName
 
 -- Alter table add columns
-ALTER TABLE tableIdentifier ADD COLUMNS(colAndType (,colAndType)*)
+ALTER TABLE tableIdentifier ADD COLUMNS(colAndType [, colAndType])
 
 -- Alter table column type
 ALTER TABLE tableIdentifier CHANGE COLUMN colName colName colType
+
+-- Alter table properties
+ALTER TABLE tableIdentifier SET TBLPROPERTIES (key = 'value')
 ```
 
 :::note
@@ -232,11 +235,17 @@ not support table renames.
 
 ### Examples
 ```sql
-alter table h0 rename to h0_1;
+--rename to:
+ALTER TABLE hudi_cow_tbl RENAME TO hudi_cow_tbl2;
 
-alter table h0_1 add columns(ext0 string);
+--add column:
+ALTER TABLE hudi_cow_tbl2 add columns(remark string);
 
-alter table h0_1 change column id id bigint;
+--change column:
+ALTER TABLE hudi_cow_tbl2 change column uuid uuid bigint;
+
+--set properties;
+alter table hudi_cow_tbl2 set tblproperties (hoodie.keep.max.commits = '10');
 ```
 
 Schema evolution can be achieved via `ALTER TABLE` commands. Below shows some basic examples.
@@ -245,40 +254,10 @@ Schema evolution can be achieved via `ALTER TABLE` commands. Below shows some ba
 For more detailed examples, please prefer to [schema evolution](/docs/schema_evolution)
 :::
 
-**Syntax**
-```sql
--- Alter table name
-ALTER TABLE oldTableName RENAME TO newTableName
-
--- Alter table add columns
-ALTER TABLE tableIdentifier ADD COLUMNS(colAndType (,colAndType)*)
-
--- Alter table column type
-ALTER TABLE tableIdentifier CHANGE COLUMN colName colName colType
-
--- Alter table properties
-ALTER TABLE tableIdentifier SET TBLPROPERTIES (key = 'value')
-```
-
-**Examples**
-```sql
---rename to:
-ALTER TABLE hudi_cow_nonpcf_tbl RENAME TO hudi_cow_nonpcf_tbl2;
-
---add column:
-ALTER TABLE hudi_cow_nonpcf_tbl2 add columns(remark string);
-
---change column:
-ALTER TABLE hudi_cow_nonpcf_tbl2 change column uuid uuid bigint;
-
---set properties;
-alter table hudi_cow_nonpcf_tbl2 set tblproperties (hoodie.keep.max.commits = '10');
-```
-
 ### Alter hoodie config options
-You can also alter the write config for a table by the **ALTER SERDEPROPERTIES**
+You can also alter the write config for a table by the **ALTER TABLE SET SERDEPROPERTIES**
 
-Example:
+**Example**
 ```sql
  alter table h3 set serdeproperties (hoodie.keep.max.commits = '10') 
 ```
@@ -315,7 +294,7 @@ Currently,  the result of `show partitions` is based on the filesystem table pat
 The catalog helps to manage the SQL tables, the table can be shared among CLI sessions if the catalog persists the table DDLs.
 For `hms` mode, the catalog also supplements the hive syncing options.
 
-HMS mode catalog SQL demo:
+**Example**
 ```sql
 CREATE CATALOG hoodie_catalog
   WITH (
@@ -348,7 +327,7 @@ CREATE TABLE hudi_table2(
 WITH (
 'connector' = 'hudi',
 'path' = 's3://bucket-name/hudi/',
-'table.type' = 'MERGE_ON_READ' -- this creates a MERGE_ON_READ table, by default is COPY_ON_WRITE
+'table.type' = 'MERGE_ON_READ' -- this creates a MERGE_ON_READ table, default is COPY_ON_WRITE
 );
 ```
 

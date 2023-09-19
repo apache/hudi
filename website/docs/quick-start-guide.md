@@ -7,8 +7,8 @@ last_modified_at: 2023-08-23T21:14:52+09:00
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-This guide provides a quick peek at Hudi's capabilities using Spark. Using Spark datasources(scala and python) and Spark SQL, 
-we will walk through code snippets that allows you to insert, update and query a Hudi table.
+This guide provides a quick peek at Hudi's capabilities using Spark. Using Spark Datasource APIs(both scala and python) and using Spark SQL, 
+we will walk through code snippets that allows you to insert, update, delete and query a Hudi table.
 
 ## Setup
 
@@ -50,57 +50,26 @@ values={[
 From the extracted directory run spark-shell with Hudi:
 
 ```shell
-# Spark 3.4
+# For Spark versions: 3.2 - 3.4
+export SPARK_VERSION=3.4 # Can be any of [3.2, 3.3, 3.4]
 spark-shell \
-  --packages org.apache.hudi:hudi-spark3.4-bundle_2.12:0.14.0 \
+  --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
   --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
   --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
   --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 ```shell
-# Spark 3.3
+# For Spark versions: 3.0 - 3.1
+export SPARK_VERSION=3.1 # Can be any of [3.0, 3.1]
 spark-shell \
-  --packages org.apache.hudi:hudi-spark3.3-bundle_2.12:0.14.0 \
-  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
-  --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
-  --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
-  --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
-```
-```shell
-# Spark 3.2
-spark-shell \
-  --packages org.apache.hudi:hudi-spark3.2-bundle_2.12:0.14.0 \
-  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
-  --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
-  --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
-  --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
-```
-```shell
-# Spark 3.1
-spark-shell \
-  --packages org.apache.hudi:hudi-spark3.1-bundle_2.12:0.14.0 \
+  --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
   --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
   --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 ```shell
-# Spark 3.0
-spark-shell \
-  --packages org.apache.hudi:hudi-spark3.0-bundle_2.12:0.14.0 \
-  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
-  --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
-  --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
-```
-```shell
-# Spark 3.0
-spark-shell \
-  --packages org.apache.hudi:hudi-spark3.0-bundle_2.12:0.14.0 \
-  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
-  --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
-```
-```shell
-# Spark 2.4
+# For Spark version: 2.4
 spark-shell \
   --packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.14.0 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
@@ -114,63 +83,28 @@ spark-shell \
 From the extracted directory run pyspark with Hudi:
 
 ```shell
-# Spark 3.4
+# For Spark versions: 3.2 - 3.4
 export PYSPARK_PYTHON=$(which python3)
+export SPARK_VERSION=3.4 # Can be any of [3.2, 3.3, 3.4]
 pyspark \
---packages org.apache.hudi:hudi-spark3.4-bundle_2.12:0.14.0 \
+--packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
 --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
 --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
 --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 ```shell
-# Spark 3.3
+# For Spark versions: 3.0 - 3.1
 export PYSPARK_PYTHON=$(which python3)
+export SPARK_VERSION=3.1 # Can be any of [3.0, 3.1]
 pyspark \
---packages org.apache.hudi:hudi-spark3.3-bundle_2.12:0.14.0 \
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
---conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
---conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
---conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
-```
-```shell
-# Spark 3.2
-export PYSPARK_PYTHON=$(which python3)
-pyspark \
---packages org.apache.hudi:hudi-spark3.2-bundle_2.12:0.14.0 \
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
---conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
---conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
---conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
-```
-```shell
-# Spark 3.1
-export PYSPARK_PYTHON=$(which python3)
-pyspark \
---packages org.apache.hudi:hudi-spark3.1-bundle_2.12:0.14.0 \
+--packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
 --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
 --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 ```shell
-# Spark 3.0
-export PYSPARK_PYTHON=$(which python3)
-pyspark \
---packages org.apache.hudi:hudi-spark3.0-bundle_2.12:0.14.0 \
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
---conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
---conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
-```
-```shell
-# Spark 3.0
-export PYSPARK_PYTHON=$(which python3)
-pyspark \
---packages org.apache.hudi:hudi-spark3.0-bundle_2.12:0.14.0 \
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
---conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
-```
-```shell
-# Spark 2.4
+# For Spark version: 2.4
 export PYSPARK_PYTHON=$(which python3)
 pyspark \
 --packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.14.0 \
@@ -186,51 +120,24 @@ Hudi support using Spark SQL to write and read data with the **HoodieSparkSessio
 From the extracted directory run Spark SQL with Hudi:
 
 ```shell
-# Spark 3.4
-spark-sql --packages org.apache.hudi:hudi-spark3.4-bundle_2.12:0.14.0 \
+# For Spark versions: 3.2 - 3.4
+export SPARK_VERSION=3.4 # Can be any of [3.2, 3.3, 3.4]
+spark-sql --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
 --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
 --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
 --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 ```shell
-# Spark 3.3
-spark-sql --packages org.apache.hudi:hudi-spark3.3-bundle_2.12:0.14.0 \
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
---conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
---conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
---conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
-```
-```shell
-# Spark 3.2
-spark-sql --packages org.apache.hudi:hudi-spark3.2-bundle_2.12:0.14.0 \
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
---conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
---conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
---conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
-```
-```shell
-# Spark 3.1
-spark-sql --packages org.apache.hudi:hudi-spark3.1-bundle_2.12:0.14.0 \
+# For Spark versions: 3.0 - 3.1
+export SPARK_VERSION=3.1 # Can be any of [3.0, 3.1]
+spark-sql --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
 --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
 --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 ```shell
-# Spark 3.0
-spark-sql --packages org.apache.hudi:hudi-spark3.0-bundle_2.12:0.14.0 \
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
---conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
---conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
-```
-```shell
-# Spark 3.0
-spark-sql --packages org.apache.hudi:hudi-spark3.0-bundle_2.12:0.14.0 \
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
---conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
-```
-```shell
-# Spark 2.4
+# For Spark version: 2.4
 spark-sql --packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.14.0 \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
 --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
@@ -325,7 +232,7 @@ values={[
 
 ```scala
 // scala
-// No separate create table command required in spark. First batch of write to a table will create the table if not exists. 
+// No separate create table command required here. First batch of write to a table will create the table if not exists. 
 ```
 
 </TabItem>
@@ -333,7 +240,7 @@ values={[
 
 ```python
 # pyspark
-# No separate create table command required in spark. First batch of write to a table will create the table if not exists.
+# No separate create table command required here. First batch of write to a table will create the table if not exists.
 ```
 
 </TabItem>
@@ -343,11 +250,11 @@ Spark SQL needs an explicit create table command.
 
 **Create Table Properties**
 
-Users can set table properties while creating a hudi table. Critical options are listed here.
+Users can set table properties while creating a Hudi table. Critical options are listed here.
 
 | Parameter Name | Default | Introduction                                                                                                                                                                                                                                                                                                                                     |
 |------------------|--------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| primaryKey | uuid | The primary key field names of the table, multiple fields separated by commas. Same as `hoodie.datasource.write.recordkey.field`. If this config is ignored, hudi will auto generate keys for the records of interest (from 0.14.0).                                                                                                             |
+| primaryKey | uuid | The primary key field names of the table, multiple fields separated by commas. Same as `hoodie.datasource.write.recordkey.field`. If this config is ignored, Hudi will auto generate keys for the records of interest (from 0.14.0).                                                                                                             |
 | preCombineField |  | The pre-combine field of the table. Same as `hoodie.datasource.write.precombine.field` and is used for resolving the final version of the record among multiple versions. Generally `event time` or some other similar column will be used for ordering purpose. Hudi will be able to handle out of order data using the preCombine field value. |
 | type       | cow | The table type to create. type = 'cow' means a COPY-ON-WRITE table, while type = 'mor' means a MERGE-ON-READ table. Same as `hoodie.datasource.write.table.type`. More details can be found [here](/docs/table_types)                                                                                                                            |
 
@@ -405,7 +312,7 @@ select 1 as id, 'a1' as name, '2021-12-01'' as dt;
 # create managed parquet table
 create table parquet_mngd using parquet location 'file:///tmp/parquet_dataset/*.parquet';
 
-# CTAS by loading data into hudi table
+# CTAS by loading data into Hudi table
 create table hudi_ctas_cow_pt_tbl2 using hudi location 'file:/tmp/hudi/hudi_tbl/' tblproperties (
   type = 'cow',
   preCombineField = 'ts'
@@ -460,9 +367,8 @@ df.write.format("hudi").
 ```
 
 :::note
-- RECORDKEY_FIELD_NAME.key() config is used to configure primary keys for a given Hudi table. In the absence of
-  this config, hudi will auto generate record keys(primary keys) for the records being ingested. If explicitly set by the user,
-  primary keys are generated as per the user configuration.
+- Users can explicitly set RECORDKEY_FIELD_NAME.key() config to configure primary keys for a given Hudi table. In the absence of
+  this config, Hudi will auto generate record keys (primary keys) for the records being ingested. 
 - When primary key configs are set by the user, it is recommended to also configure `PRECOMBINE_FIELD_NAME.key()`.  
 :::
 
@@ -472,8 +378,8 @@ You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<
 [Modeling data stored in Hudi](https://hudi.apache.org/docs/faq#how-do-i-model-the-data-stored-in-hudi)
 and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/next/writing_data).
 For a table where primary keys are not configured by user, `bulk_insert` will be chosen as the default operation. If primary key 
-configuration (RECORDKEY_FIELD_NAME.key()) is set the user, `upsert` is chosen as the default operation. If you have a workload 
-without updates, you can also issue`insert` or `bulk_insert` operations which could be faster. To know more, refer to 
+configuration (RECORDKEY_FIELD_NAME.key()) is set by the user, `upsert` is chosen as the default operation. If you have a workload 
+without updates, you can issue `insert` or `bulk_insert` operations which could be faster. To know more, refer to 
 [Write operations](/docs/next/write_operations)
 :::
 
@@ -504,9 +410,8 @@ df.write.format("hudi"). \
 ```
 
 :::note
-- RECORDKEY_FIELD_NAME.key() config is used to configure primary keys for a given Hudi table. In the absence of
-  this config, hudi will auto generate record keys(primary keys) for the records being ingested. If explicitly set by the user,
-  primary keys are generated as per the user configuration.
+- Users can explicitly set RECORDKEY_FIELD_NAME.key() config to configure primary keys for a given Hudi table. In the absence of
+  this config, Hudi will auto generate record keys (primary keys) for the records being ingested.
 - When primary key configs are set by the user, it is recommended to also configure `PRECOMBINE_FIELD_NAME.key()`.  
 :::
 
@@ -516,8 +421,8 @@ You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<
 [Modeling data stored in Hudi](https://hudi.apache.org/docs/faq#how-do-i-model-the-data-stored-in-hudi)
 and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/next/writing_data).
 For a table where primary keys are not configured by user, `bulk_insert` will be chosen as the default operation. If primary key
-configuration (RECORDKEY_FIELD_NAME.key()) is set the user, `upsert` is chosen as the default operation. If you have a workload
-without updates, you can also issue`insert` or `bulk_insert` operations which could be faster. To know more, refer to
+configuration (RECORDKEY_FIELD_NAME.key()) is set by the user, `upsert` is chosen as the default operation. If you have a workload
+without updates, you can issue `insert` or `bulk_insert` operations which could be faster. To know more, refer to
 [Write operations](/docs/next/write_operations)
 :::
 
@@ -525,17 +430,18 @@ without updates, you can also issue`insert` or `bulk_insert` operations which co
 
 <TabItem value="sparksql">
 
-Users can use 'INSERT INTO' to insert data into a hudi table using spark-sql. 
+Users can use 'INSERT INTO' to insert data into a Hudi table using spark-sql. 
 
 ```sql
 insert into hudi_cow_pt_tbl select 2, 'a2', '2021-12-02';
 ```
 
 :::note
-- `hoodie.spark.sql.insert.into.operation` will determine how records ingested via spark-sql INSERT INTO will be treated. Possible values are "bulk_insert", "insert"
-  and "upsert". If "bulk_insert" is chosen, hudi writes incoming records as is without any automatic small file management.
-  When "insert" is chosen, hudi inserts the new incoming records and also does small file management.
-  When "upsert" is used, hudi takes upsert flow, where incoming batch will be de-duped before ingest and also merged with previous versions of the record in storage. 
+- `hoodie.spark.sql.insert.into.operation` will determine how records ingested via spark-sql INSERT INTO will be treated. Possible values are:
+  - "bulk_insert": Here, Hudi writes incoming records as is without any automatic small file management.
+  - "insert": Here, Hudi inserts the new incoming records and also does small file management.
+  - "upsert": Here, Hudi takes upsert flow, where incoming batch will be de-duped before ingest and also merged with previous versions of the record in storage.
+  
   For a table without any preCombine key set, "insert" is chosen as the default value for this config. For a table with preCombine key set, 
   "upsert" is chosen as the default value for this config.
 - From 0.14.0, `hoodie.sql.bulk.insert.enable` and `hoodie.sql.insert.mode` are depecrated. Users are expected to use `hoodie.spark.sql.insert.into.operation` instead.
@@ -633,11 +539,11 @@ spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_pat
 >
 
 :::info
-Since 0.9.0 hudi has support a hudi built-in FileIndex: **HoodieFileIndex** to query hudi table,
-which supports partition pruning and metatable for query. This will help improve query performance.
+Since 0.9.0 Hudi has support for a built-in FileIndex: **HoodieFileIndex** to query Hudi table,
+which supports partition pruning and metatable for query which helps improve query performance.
 It also supports non-global query path which means users can query the table by the base path without
-specifing the "*" in the query path. This feature has enabled by default for the non-global query path.
-For the global query path, hudi uses the old query path.
+specifing the "*" in the query path. This feature has been enabled by default for the non-global query path.
+For the global query path, Hudi uses the old query path.
 Refer to [Table types and queries](/docs/next/concepts#table-types--queries) for more info on all table types and query types supported.
 :::
 
@@ -658,7 +564,7 @@ values={[
 <TabItem value="scala">
 
 ```scala
-// Lets read data from target hudi table, modify fare column and update it. 
+// Lets read data from target Hudi table, modify fare column and update it. 
 val updatesDf = spark.read.format("hudi").load(basePath).withColumn("fare",col("fare")*100)
 
 updatesDf.write.format("hudi").
@@ -669,10 +575,11 @@ updatesDf.write.format("hudi").
   mode(Append).
   save(basePath)
 ```
-:::note
-- Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
 [Querying](#query-data) the data again will now show updated trips. Each write operation generates a new [commit](/docs/next/concepts)
 denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `fare` fields for the same `_hoodie_record_key`s in previous commit.
+
+:::note
+- Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
 - For a table with Hudi generated primary keys, updates with spark-datasource is feasible when the dataframe being ingested contains Hudi's meta fields.
 If not, its recommended to use spark-sql's `Merge Into` and `Update` to update such tables. For a table with user defined primary keys, there are no 
 such constraints with updates via spark-datasource (updates would work for a dataframe with just the data columns).
@@ -681,7 +588,7 @@ such constraints with updates via spark-datasource (updates would work for a dat
 </TabItem>
 <TabItem value="sparksql">
 
-Spark SQL supports two kinds of DML to update hudi table: Merge-Into and Update.
+Spark SQL supports two kinds of DML to update Hudi table: Merge-Into and Update.
 
 ### Update
 
@@ -721,7 +628,7 @@ ON <merge_condition>
 ```
 **Example**
 ```sql
--- source table using hudi for testing merging into target hudi table
+-- source table using Hudi for testing merging into target Hudi table
 create table merge_source (id int, name string, dt string) using hudi
 tblproperties (primaryKey = 'id', preCombineField = 'name');
 insert into merge_source values (1, 'a1_new', 2021-12-05), (2, "a2_new", 2021-12-05), (3, "a3_new", 2021-12-05);
@@ -737,7 +644,7 @@ when not matched then insert *
 
 :::note
 For a Hudi table with user defined primary keys, the join condition in `Merge Into` is expected to contain the primary keys of the table.
-For a Hudi table with Hudi generated primary keys, the join condition in MIT can be on any arbitrary data columns.
+For a Hudi table with Hudi generated primary keys, the join condition in `Merge Into` can be on any arbitrary data columns.
 :::
 
 
@@ -747,7 +654,7 @@ For a Hudi table with Hudi generated primary keys, the join condition in MIT can
 ```python
 # pyspark
 
-// Lets read data from target hudi table, modify fare column and update it. 
+// Lets read data from target Hudi table, modify fare column and update it. 
 val updatesDf = spark.read.format("hudi").load(basePath).withColumn("fare",col("fare")*100)
 
 updatesDf.write.format("hudi"). \
@@ -756,10 +663,10 @@ updatesDf.write.format("hudi"). \
   save(basePath)
 ```
 
+[Querying](#query-data) the data again will now show updated trips. Each write operation generates a new [commit](/docs/next/concepts)
+denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `fare` fields for the same `_hoodie_record_key`s in previous commit.
 :::note
 - Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
-  [Querying](#query-data) the data again will now show updated trips. Each write operation generates a new [commit](/docs/next/concepts)
-  denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `fare` fields for the same `_hoodie_record_key`s in previous commit.
 - For a table with Hudi generated primary keys, updates with spark-datasource is feasible when the dataframe being ingested contains Hudi's meta fields.
   If not, its recommended to use spark-sql's `Merge Into` and `Update` to update such tables. For a table with user defined primary keys, there are no
   such constraints with updates via spark-datasource (updates would work for a dataframe with just the data columns).
@@ -880,7 +787,7 @@ spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 >
 
 ## Advanced Write operations
-Apart from inserts and updates, Apache Hudi supports plethora of write operations like bulk_insert, insert_overwrite, 
+Apart from inserts, updates and deletes, Apache Hudi supports plethora of write operations like bulk_insert, insert_overwrite, 
 delete_partition etc to cater to different needs of the users. Please refer [here](/docs/next/writing_data) for more 
 advanced write operations.
 
@@ -1084,17 +991,17 @@ feature is that it now lets you author streaming pipelines on batch data.
 
 ## Streaming writers
 ### Hudi Streamer
-Hudi provides a ingestion tool to assist with ingesting data into hudi from various different sources in a streaming manner. 
+Hudi provides an ingestion tool - HoodieStreamer, to assist with ingesting data into Hudi from various different sources in a streaming manner. 
 This has lot of niceties like auto checkpointing, schema enforcement via schema provider, transformation support and so on.
 Please refer to [here](/docs/next/hoodie_streaming_ingestion#hudi-streamer) for more info. 
 
 ### Structured Streaming
 
-Hudi supports Spark Structured Streaming reads and writes as well. Please refer to [here](/docs/next/hoodie_streaming_ingestion#streaming-write) for more info.
+Hudi supports Spark Structured Streaming reads and writes as well. Please refer to [here](/docs/next/hoodie_streaming_ingestion#structured-streaming) for more info.
 
 ## More of Spark SQL
 
-For advanced usage of spark SQL, please refer to [Spark SQL DDL reference guide](/docs/next/sql_ddl) and [Spark SQL DML refernece guide](/docs/next/sql_dml). 
+For advanced usage of spark SQL, please refer to [Spark SQL DDL](/docs/next/sql_ddl) and [Spark SQL DML](/docs/next/sql_dml) reference guides. 
 
 ### Alter tables
 For alter table commands, check out [this](/docs/next/sql_ddl#spark-alter-table).
@@ -1115,5 +1022,5 @@ Also, we used Spark here to show case the capabilities of Hudi. However, Hudi ca
 Hudi tables can be queried from query engines like Hive, Spark, Presto and much more. We have put together a 
 [demo video](https://www.youtube.com/watch?v=VhNgUsxdrD0) that show cases all of this on a docker based setup with all 
 dependent systems running locally. We recommend you replicate the same setup and run the demo yourself, by following 
-steps [here](/docs/next/docker_demo) to get a taste of it. Also, if you are looking for ways to migrate your existing data 
+steps [here](/docs/next/docker_demo) to get a taste for it. Also, if you are looking for ways to migrate your existing data 
 to Hudi, refer to [migration guide](/docs/next/migration_guide).

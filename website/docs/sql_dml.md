@@ -40,10 +40,11 @@ select 1 as id, 'a1' as name, 1000 as ts, '2021-12-09' as dt, '10' as hh;
 ```
 
 :::note
-- `hoodie.spark.sql.insert.into.operation` will determine how records ingested via spark-sql INSERT INTO will be treated. Possible values are "bulk_insert", "insert"
-  and "upsert". If "bulk_insert" is chosen, hudi writes incoming records as is without any automatic small file management.
-  When "insert" is chosen, hudi inserts the new incoming records and also does small file management.
-  When "upsert" is used, hudi takes upsert flow, where incoming batch will be de-duped before ingest and also merged with previous versions of the record in storage.
+- `hoodie.spark.sql.insert.into.operation` will determine how records ingested via spark-sql INSERT INTO will be treated. Possible values are:
+  - "bulk_insert": Here, Hudi writes incoming records as is without any automatic small file management.
+  - "insert": Here, Hudi inserts the new incoming records and also does small file management.
+  - "upsert": Here, Hudi takes upsert flow, where incoming batch will be de-duped before ingest and also merged with previous versions of the record in storage.
+    
   For a table without any precombine key set, "insert" is chosen as the default value for this config. For a table with precombine key set,
   "upsert" is chosen as the default value for this config.
 - From 0.14.0, `hoodie.sql.bulk.insert.enable` and `hoodie.sql.insert.mode` are depecrated. Users are expected to use `hoodie.spark.sql.insert.into.operation` instead.
