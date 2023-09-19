@@ -19,10 +19,10 @@ package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.spark.sql.SPARK_VERSION_METADATA_KEY
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.internal.LegacyBehaviorPolicy
+import org.apache.spark.sql.internal.SQLConf.LegacyBehaviorPolicy
 import org.apache.spark.util.Utils
 
-object Spark32PlusDataSourceUtils {
+object Spark33DataSourceUtils {
 
   /**
    * NOTE: This method was copied from Spark 3.2.0, and is required to maintain runtime
