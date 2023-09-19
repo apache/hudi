@@ -439,6 +439,8 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
         LOG.error("Conflict happened, but not expected " + e.getCause().getMessage());
         throw e;
       }
+    } finally {
+      service.shutdown();
     }
   }
 

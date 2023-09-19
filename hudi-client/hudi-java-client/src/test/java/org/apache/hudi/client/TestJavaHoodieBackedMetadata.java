@@ -191,6 +191,13 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         Arguments.of(MERGE_ON_READ, false)
     );
   }
+  private final List<BaseHoodieWriteClient> clientsToClose = new ArrayList<>();
+
+  @Override
+  public void clean() throws Exception {
+    super.clean();
+    clientsToClose.forEach(BaseHoodieWriteClient::close);
+  }
 
   /**
    * Metadata Table bootstrap scenarios.
@@ -2619,6 +2626,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     } else {
       client = testClient;
     }
+    clientsToClose.add(client);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTableMetadata tableMetadata = metadata(client);
