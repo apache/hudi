@@ -1319,9 +1319,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       }
       UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
     } finally {
-      if (ds != null) {
-        ds.shutdownGracefully();
-      }
+      ds.shutdownGracefully();
       if (ds2 != null) {
         ds2.shutdownGracefully();
       }
@@ -1829,16 +1827,13 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // Try UPSERT with filterDupes true. Expect exception
     cfg2.filterDupes = true;
     cfg2.operation = WriteOperationType.UPSERT;
-    HoodieDeltaStreamer ds4 = null;
+    HoodieDeltaStreamer ds4 = new HoodieDeltaStreamer(cfg2, jsc);
     try {
-      ds4 = new HoodieDeltaStreamer(cfg2, jsc);
       ds4.sync();
     } catch (IllegalArgumentException e) {
       assertTrue(e.getMessage().contains("'--filter-dupes' needs to be disabled when '--op' is 'UPSERT' to ensure updates are not missed."));
     } finally {
-      if (ds4 != null) {
-        ds4.shutdownGracefully();
-      }
+      ds4.shutdownGracefully();
     }
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
