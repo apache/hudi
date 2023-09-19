@@ -59,7 +59,7 @@ import scala.Tuple2;
  * Provides an RDD based API for accessing/filtering Hoodie tables, based on keys.
  */
 public class SparkRDDReadClient<T> implements Serializable {
-
+  // TODO: remove before commit. Added to trigger test runs in PR.
   private static final long serialVersionUID = 1L;
 
   /**
