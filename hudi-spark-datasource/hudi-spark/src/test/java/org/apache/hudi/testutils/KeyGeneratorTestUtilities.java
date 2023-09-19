@@ -26,19 +26,13 @@ import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.spark.package$;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer$;
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder;
-import org.apache.spark.sql.catalyst.expressions.Attribute;
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema;
 import org.apache.spark.sql.types.StructType;
 import scala.Function1;
-import scala.collection.JavaConversions;
-import scala.collection.JavaConverters;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.List;
-import java.util.stream.Collectors;
 
 public class KeyGeneratorTestUtilities {
 
