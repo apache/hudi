@@ -140,6 +140,6 @@ class Spark3_4Adapter extends BaseSpark3Adapter {
   }
 
   override def getEncoder(schema: StructType): ExpressionEncoder[Row] = {
-    RowEncoder.apply(schema).resolveAndBind(attributes)
+    RowEncoder.apply(schema).resolveAndBind()
   }
 }
