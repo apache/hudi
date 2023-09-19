@@ -161,12 +161,12 @@ jobs:
     strategy:
       matrix:
         include:
-#          - scalaProfile: "scala-2.12"
-#            sparkProfile: "spark3.3"
-#            sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
-#          - scalaProfile: "scala-2.12"
-#            sparkProfile: "spark3.4"
-#            sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.3"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.4"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.5"
             sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
