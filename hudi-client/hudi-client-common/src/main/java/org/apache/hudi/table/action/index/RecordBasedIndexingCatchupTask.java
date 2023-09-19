@@ -43,7 +43,7 @@ import java.util.Set;
 /**
  * Indexing catchup task for record level indexing.
  */
-public class RecordBasedIndexingCatchupTask extends BaseIndexingCatchupTask {
+public class RecordBasedIndexingCatchupTask extends AbstractIndexingCatchupTask {
 
   public RecordBasedIndexingCatchupTask(HoodieTableMetadataWriter metadataWriter,
                                         List<HoodieInstant> instantsToIndex,

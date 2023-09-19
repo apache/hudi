@@ -33,7 +33,7 @@ import java.util.Set;
 /**
  * Indexing catchup task for commit metadata based indexing.
  */
-public class WriteStatBasedIndexingCatchupTask extends BaseIndexingCatchupTask {
+public class WriteStatBasedIndexingCatchupTask extends AbstractIndexingCatchupTask {
 
   public WriteStatBasedIndexingCatchupTask(HoodieTableMetadataWriter metadataWriter,
                                            List<HoodieInstant> instantsToIndex,

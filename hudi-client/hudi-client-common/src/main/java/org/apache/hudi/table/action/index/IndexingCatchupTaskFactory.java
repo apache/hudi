@@ -32,15 +32,15 @@ import java.util.Set;
 
 public class IndexingCatchupTaskFactory {
 
-  public static BaseIndexingCatchupTask createCatchupTask(List<HoodieIndexPartitionInfo> indexPartitionInfos,
-                                                          HoodieTableMetadataWriter metadataWriter,
-                                                          List<HoodieInstant> instantsToIndex,
-                                                          Set<String> metadataCompletedInstants,
-                                                          HoodieTableMetaClient metaClient,
-                                                          HoodieTableMetaClient metadataMetaClient,
-                                                          String currentCaughtupInstant,
-                                                          TransactionManager transactionManager,
-                                                          HoodieEngineContext engineContext) {
+  public static IndexingCatchupTask createCatchupTask(List<HoodieIndexPartitionInfo> indexPartitionInfos,
+                                                      HoodieTableMetadataWriter metadataWriter,
+                                                      List<HoodieInstant> instantsToIndex,
+                                                      Set<String> metadataCompletedInstants,
+                                                      HoodieTableMetaClient metaClient,
+                                                      HoodieTableMetaClient metadataMetaClient,
+                                                      String currentCaughtupInstant,
+                                                      TransactionManager transactionManager,
+                                                      HoodieEngineContext engineContext) {
     boolean hasRecordLevelIndexing = indexPartitionInfos.stream()
         .anyMatch(partitionInfo -> partitionInfo.getMetadataPartitionPath().equals(MetadataPartitionType.RECORD_INDEX.getPartitionPath()));
     if (hasRecordLevelIndexing) {

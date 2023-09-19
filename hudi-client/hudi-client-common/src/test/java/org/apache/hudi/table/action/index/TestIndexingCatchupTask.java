@@ -71,7 +71,7 @@ public class TestIndexingCatchupTask {
   public void testTaskSuccessful() {
     List<HoodieInstant> instants = Collections.singletonList(new HoodieInstant(HoodieInstant.State.REQUESTED, "commit", "001"));
     Set<String> metadataCompletedInstants = new HashSet<>();
-    BaseIndexingCatchupTask task = new DummyIndexingCatchupTask(
+    AbstractIndexingCatchupTask task = new DummyIndexingCatchupTask(
         metadataWriter,
         instants,
         metadataCompletedInstants,
@@ -79,12 +79,7 @@ public class TestIndexingCatchupTask {
         metadataMetaClient,
         transactionManager,
         "001",
-        engineContext) {
-      @Override
-      public void updateIndexForWriteAction(HoodieInstant instant) {
-        // no-op
-      }
-    };
+        engineContext);
 
     task.run();
     assertEquals("001", task.currentCaughtupInstant);
@@ -111,7 +106,7 @@ public class TestIndexingCatchupTask {
       return Option.empty();
     });
 
-    BaseIndexingCatchupTask task = new DummyIndexingCatchupTask(
+    AbstractIndexingCatchupTask task = new DummyIndexingCatchupTask(
         metadataWriter,
         Collections.singletonList(neverCompletedInstant),
         new HashSet<>(),
@@ -119,12 +114,7 @@ public class TestIndexingCatchupTask {
         metadataMetaClient,
         transactionManager,
         "001",
-        engineContext) {
-      @Override
-      public void updateIndexForWriteAction(HoodieInstant instant) {
-        // no-op
-      }
-    };
+        engineContext);
 
     // simulate catchup task timeout
     CountDownLatch latch = new CountDownLatch(1);
@@ -144,7 +134,7 @@ public class TestIndexingCatchupTask {
     }
   }
 
-  abstract class DummyIndexingCatchupTask extends BaseIndexingCatchupTask {
+  static class DummyIndexingCatchupTask extends AbstractIndexingCatchupTask {
     public DummyIndexingCatchupTask(HoodieTableMetadataWriter metadataWriter,
                                     List<HoodieInstant> instantsToIndex,
                                     Set<String> metadataCompletedInstants,
@@ -158,6 +148,11 @@ public class TestIndexingCatchupTask {
 
     @Override
     public void run() {
+      // no-op, just a test dummy implementation
+    }
+
+    @Override
+    public void updateIndexForWriteAction(HoodieInstant instant) {
       // no-op, just a test dummy implementation
     }
   }

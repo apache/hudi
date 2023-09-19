@@ -51,8 +51,8 @@ import static org.apache.hudi.table.action.index.RunIndexActionExecutor.TIMELINE
  * It will check if these later instants have logged updates to metadata table or not.
  * If not, then it will do the update. If a later instant is inflight, it will wait until it is completed or the task times out.
  */
-public abstract class BaseIndexingCatchupTask implements Runnable {
-  private static final Logger LOG = LoggerFactory.getLogger(BaseIndexingCatchupTask.class);
+public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask {
+  private static final Logger LOG = LoggerFactory.getLogger(AbstractIndexingCatchupTask.class);
 
   protected final HoodieTableMetadataWriter metadataWriter;
   protected final List<HoodieInstant> instantsToIndex;
@@ -63,14 +63,14 @@ public abstract class BaseIndexingCatchupTask implements Runnable {
   protected final HoodieEngineContext engineContext;
   protected String currentCaughtupInstant;
 
-  public BaseIndexingCatchupTask(HoodieTableMetadataWriter metadataWriter,
-                                 List<HoodieInstant> instantsToIndex,
-                                 Set<String> metadataCompletedInstants,
-                                 HoodieTableMetaClient metaClient,
-                                 HoodieTableMetaClient metadataMetaClient,
-                                 TransactionManager transactionManager,
-                                 String currentCaughtupInstant,
-                                 HoodieEngineContext engineContext) {
+  public AbstractIndexingCatchupTask(HoodieTableMetadataWriter metadataWriter,
+                                     List<HoodieInstant> instantsToIndex,
+                                     Set<String> metadataCompletedInstants,
+                                     HoodieTableMetaClient metaClient,
+                                     HoodieTableMetaClient metadataMetaClient,
+                                     TransactionManager transactionManager,
+                                     String currentCaughtupInstant,
+                                     HoodieEngineContext engineContext) {
     this.metadataWriter = metadataWriter;
     this.instantsToIndex = instantsToIndex;
     this.metadataCompletedInstants = metadataCompletedInstants;

@@ -246,6 +246,9 @@ public class FileIOUtils {
 
   public static String getDefaultSpillableMapBasePath() {
     String[] localDirs = getConfiguredLocalDirs();
+    if (localDirs == null) {
+      return "/tmp/";
+    }
     List<String> localDirLists = Arrays.asList(localDirs);
     Collections.shuffle(localDirLists);
     return !localDirLists.isEmpty() ? localDirLists.get(0) : "/tmp/";
