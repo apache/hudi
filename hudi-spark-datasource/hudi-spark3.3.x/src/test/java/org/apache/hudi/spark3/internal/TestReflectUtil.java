@@ -46,7 +46,7 @@ public class TestReflectUtil extends HoodieClientTestBase {
         statement.query(),
         statement.overwrite(),
         statement.ifPartitionNotExists(),
-        null);
+        false);
 
     Assertions.assertTrue(
         ((UnresolvedRelation)newStatment.table()).multipartIdentifier().contains("test_reflect_util"));
