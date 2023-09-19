@@ -272,7 +272,7 @@ object HoodieSparkSqlWriter {
         .getOrElse(getAvroRecordNameAndNamespace(tblName))
 
       val sourceSchema = convertStructTypeToAvroSchema(df.schema, avroRecordName, avroRecordNamespace)
-      val internalSchemaOpt = getLatestTableInternalSchema(hoodieConfig, tableMetaClient).orElse {
+      val internalSchemaOpt = HoodieSchemaUtils.getLatestTableInternalSchema(hoodieConfig, tableMetaClient).orElse {
         // In case we need to reconcile the schema and schema evolution is enabled,
         // we will force-apply schema evolution to the writer's schema
         if (shouldReconcileSchema && hoodieConfig.getBooleanOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED)) {
@@ -306,7 +306,7 @@ object HoodieSparkSqlWriter {
             }
 
             // Create a HoodieWriteClient & issue the delete.
-            val internalSchemaOpt = getLatestTableInternalSchema(hoodieConfig, tableMetaClient)
+            val internalSchemaOpt = HoodieSchemaUtils.getLatestTableInternalSchema(hoodieConfig, tableMetaClient)
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
               null, path, tblName,
               mapAsJavaMap(addSchemaEvolutionParameters(parameters, internalSchemaOpt) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)))
@@ -704,29 +704,6 @@ object HoodieSparkSqlWriter {
    */
   private def canonicalizeSchema(sourceSchema: Schema, latestTableSchema: Schema, opts : Map[String, String]): Schema = {
     reconcileNullability(sourceSchema, latestTableSchema, opts)
-  }
-
-
-  /**
-   * get latest internalSchema from table
-   *
-   * @param config instance of {@link HoodieConfig}
-   * @param tableMetaClient instance of HoodieTableMetaClient
-   * @return Pair of(boolean, table schema), where first entry will be true only if schema conversion is required.
-   */
-  def getLatestTableInternalSchema(config: HoodieConfig,
-                                   tableMetaClient: HoodieTableMetaClient): Option[InternalSchema] = {
-    if (!config.getBooleanOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED)) {
-      Option.empty[InternalSchema]
-    } else {
-      try {
-        val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
-        val internalSchemaOpt = tableSchemaResolver.getTableInternalSchemaFromCommitMetadata
-        if (internalSchemaOpt.isPresent) Some(internalSchemaOpt.get()) else None
-      } catch {
-        case _: Exception => None
-      }
-    }
   }
 
   private def registerAvroSchemasWithKryo(sparkContext: SparkContext, targetAvroSchemas: Schema*): Unit = {
