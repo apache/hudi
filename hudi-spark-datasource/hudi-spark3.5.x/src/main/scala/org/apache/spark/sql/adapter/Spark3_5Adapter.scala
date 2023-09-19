@@ -19,8 +19,7 @@ package org.apache.spark.sql.adapter
 
 import org.apache.avro.Schema
 import org.apache.hadoop.fs.FileStatus
-import org.apache.hudi.client.utils.SparkRowSerDe
-import org.apache.hudi.{Spark35HoodieFileScanRDD, Spark3RowSerDe}
+import org.apache.hudi.Spark35HoodieFileScanRDD
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
@@ -141,13 +140,7 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
     PartitionDirectory(internalRow, statuses.toArray)
   }
 
-  override def createSparkRowSerDe(schema: StructType): SparkRowSerDe = {
-    val encoder = ExpressionEncoder(schema).resolveAndBind()
-    new Spark3RowSerDe(encoder)
-  }
-
   override def getEncoder(schema: StructType): ExpressionEncoder[Row] = {
-    val attributes = toAttributes(schema).map(_.toAttribute)
-    ExpressionEncoder.apply(schema).resolveAndBind(attributes)
+    ExpressionEncoder.apply(schema).resolveAndBind()
   }
 }

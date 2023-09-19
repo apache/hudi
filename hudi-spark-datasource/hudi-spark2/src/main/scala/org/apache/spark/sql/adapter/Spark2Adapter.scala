@@ -92,7 +92,7 @@ class Spark2Adapter extends SparkAdapter {
   override def getAvroSchemaConverters: HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters
 
   override def createSparkRowSerDe(schema: StructType): SparkRowSerDe = {
-    val encoder = RowEncoder(schema).resolveAndBind()
+    val encoder = getEncoder(schema)
     new Spark2RowSerDe(encoder)
   }
 
@@ -222,7 +222,6 @@ class Spark2Adapter extends SparkAdapter {
   }
 
   override def getEncoder(schema: StructType): ExpressionEncoder[Row] = {
-    val attributes = toAttributes(schema).map(_.toAttribute)
-    RowEncoder.apply(schema).resolveAndBind(attributes)
+    RowEncoder.apply(schema).resolveAndBind()
   }
 }
