@@ -96,8 +96,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     super(headers, footer, blockContentLocation, content, inputStream, readBlockLazily);
     this.records = Option.empty();
     this.keyFieldName = keyFieldName;
-    // If no reader-schema has been provided assume writer-schema as one
-    this.readerSchema = readerSchema.orElseGet(() -> getWriterSchema(super.getLogBlockHeader()));
+    this.readerSchema = getReaderSchema(readerSchema);
     this.enablePointLookups = enablePointLookups;
   }
 
@@ -113,6 +112,35 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     }
 
     return serializeRecords(records.get());
+  }
+
+  private Schema getReaderSchema(Option<Schema> readerSchemaOpt) {
+    Schema writerSchema = getWriterSchema(super.getLogBlockHeader());
+    // If no reader-schema has been provided assume writer-schema as one
+    if (!readerSchemaOpt.isPresent()) {
+      return writerSchema;
+    }
+
+    // Handle table renames when there are still log files
+    Schema readerSchema = readerSchemaOpt.get();
+    if (isHandleDifferingNamespaceRequired(readerSchema, writerSchema)) {
+      return writerSchema;
+    } else {
+      return readerSchema;
+    }
+  }
+
+  /**
+   * Spark3.1 uses avro:1.8.2, which matches fields by their fully qualified name. If namespaces are differs, reads will fail for fields that have the same name and type, but differing name(spaces).
+   * Such cases can arise when an ALTER-TABLE-RENAME ddl is performed.
+   *
+   * @param readerSchema the reader schema
+   * @param writerSchema the writer schema
+   * @return boolean if handling of differing namespaces between reader and writer schema are required
+   */
+  private static boolean isHandleDifferingNamespaceRequired(Schema readerSchema, Schema writerSchema) {
+    return readerSchema.getClass().getPackage().getImplementationVersion().compareTo("1.8.2") <= 0
+        && !readerSchema.getName().equals(writerSchema.getName());
   }
 
   protected static Schema getWriterSchema(Map<HeaderMetadataType, String> logBlockHeader) {
