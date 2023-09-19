@@ -215,9 +215,7 @@ public class CkpMetadata implements Serializable, AutoCloseable {
     if (!this.fs.exists(ckpMetaPath)) {
       return Stream.empty();
     }
-    Stream<CkpMessage> ckpMessageStream;
-    ckpMessageStream = Arrays.stream(this.fs.listStatus(ckpMetaPath)).map(CkpMessage::new);
-    return ckpMessageStream;
+    return Arrays.stream(this.fs.listStatus(ckpMetaPath)).map(CkpMessage::new);
   }
 
   protected List<CkpMessage> scanCkpMetadata(Path ckpMetaPath) throws IOException {

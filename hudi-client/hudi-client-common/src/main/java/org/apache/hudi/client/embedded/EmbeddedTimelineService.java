@@ -102,7 +102,7 @@ public class EmbeddedTimelineService {
 
     if (writeConfig.isTimelineServerBasedInstantStateEnabled()) {
       timelineServiceConfBuilder
-          .instantStateRefreshThreshold(writeConfig.getTimelineServerBasedInstantStateRefreshThreshold())
+          .instantStateRefreshThreshold(writeConfig.getTimelineServerBasedInstantStateForceRefreshRequestNumber())
           .enableInstantStateRequests(true);
     }
 
