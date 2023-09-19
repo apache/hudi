@@ -34,7 +34,7 @@ import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.connector.catalog.V2TableWithV1Fallback
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark31LegacyHoodieParquetFileFormat}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
-import org.apache.spark.sql.execution.datasources.{FileIndex, FilePartition, FileScanRDD, HoodieSpark31PartitionedFileUtils, HoodieSparkPartitionedFileUtils, PartitionedFile}
+import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, HoodieSpark31PartitionedFileUtils, HoodieSparkPartitionedFileUtils, PartitionDirectory, PartitionedFile}
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark3_1ExtendedSqlParser}
 import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
