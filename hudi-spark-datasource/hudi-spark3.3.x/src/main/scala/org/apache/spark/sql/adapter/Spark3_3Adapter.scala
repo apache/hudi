@@ -68,11 +68,6 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
       .putBoolean(METADATA_COL_ATTR_KEY, value = true)
       .build()
 
-  override def createSparkRowSerDe(schema: StructType): SparkRowSerDe = {
-    val encoder = RowEncoder(schema).resolveAndBind()
-    new Spark3RowSerDe(encoder)
-  }
-
   override def getCatalogUtils: HoodieSpark3CatalogUtils = HoodieSpark33CatalogUtils
 
   override def getCatalystPlanUtils: HoodieCatalystPlansUtils = HoodieSpark33CatalystPlanUtils
@@ -145,7 +140,6 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
   }
 
   override def getEncoder(schema: StructType): ExpressionEncoder[Row] = {
-    val attributes = toAttributes(schema).map(_.toAttribute)
-    RowEncoder.apply(schema).resolveAndBind(attributes)
+    RowEncoder.apply(schema).resolveAndBind()
   }
 }

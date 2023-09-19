@@ -67,11 +67,6 @@ class Spark3_0Adapter extends BaseSpark3Adapter {
   //       we simply produce an empty [[Metadata]] instance
     new MetadataBuilder().build()
 
-  override def createSparkRowSerDe(schema: StructType): SparkRowSerDe = {
-    val encoder = RowEncoder(schema).resolveAndBind()
-    new Spark3RowSerDe(encoder)
-  }
-
   override def getCatalogUtils: HoodieSpark3CatalogUtils = HoodieSpark30CatalogUtils
 
   override def getCatalystPlanUtils: HoodieCatalystPlansUtils = HoodieSpark30CatalystPlanUtils
@@ -139,7 +134,6 @@ class Spark3_0Adapter extends BaseSpark3Adapter {
   }
 
   override def getEncoder(schema: StructType): ExpressionEncoder[Row] = {
-    val attributes = toAttributes(schema).map(_.toAttribute)
-    RowEncoder.apply(schema).resolveAndBind(attributes)
+    RowEncoder.apply(schema).resolveAndBind()
   }
 }
