@@ -93,6 +93,7 @@
           <foreach collection="states" item="state" open="(" close=")" separator=",">
               #{state}
           </foreach>
+        ORDER BY ts DESC
         <if test ="limit > 0">
             LIMIT #{limit}
         </if>
