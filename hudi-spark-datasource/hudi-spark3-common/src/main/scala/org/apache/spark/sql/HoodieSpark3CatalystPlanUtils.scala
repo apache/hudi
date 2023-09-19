@@ -56,10 +56,10 @@ trait HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
     Join(left, right, joinType, None, JoinHint.NONE)
   }
 
-  override def unapplyInsertIntoStatement(plan: LogicalPlan): Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean, Boolean)] = {
+  override def unapplyInsertIntoStatement(plan: LogicalPlan): Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] = {
     plan match {
       case insert: InsertIntoStatement =>
-        Some((insert.table, insert.partitionSpec, insert.query, insert.overwrite, insert.ifPartitionNotExists, insert.byName))
+        Some((insert.table, insert.partitionSpec, insert.query, insert.overwrite, insert.ifPartitionNotExists))
       case _ =>
         None
     }
