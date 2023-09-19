@@ -114,7 +114,7 @@ public class TimelineService {
     @Parameter(names = {"--enable-marker-requests", "-em"}, description = "Enable handling of marker-related requests")
     public boolean enableMarkerRequests = false;
 
-    @Parameter(names = {"--enable-instant-state-requests"}, description = "Enable handling of flink ckp metadata requests")
+    @Parameter(names = {"--enable-instant-state-requests"}, description = "Enable handling of instant state requests")
     public boolean enableInstantStateRequests = false;
 
     @Parameter(names = {"--marker-batch-threads", "-mbt"}, description = "Number of threads to use for batch processing marker creation requests")
