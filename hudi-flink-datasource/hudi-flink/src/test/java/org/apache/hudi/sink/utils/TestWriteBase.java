@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
@@ -140,8 +141,6 @@ public class TestWriteBase {
     private String lastPending;
     private String lastComplete;
 
-    private HoodieFlinkWriteClient writeClient;
-
     public TestHarness preparePipeline(File basePath, Configuration conf) throws Exception {
       this.baseFile = basePath;
       this.basePath = this.baseFile.getAbsolutePath();
@@ -149,8 +148,8 @@ public class TestWriteBase {
       this.pipeline = TestData.getWritePipeline(this.basePath, conf);
       // open the function and ingest data
       this.pipeline.openFunction();
-      this.writeClient = this.pipeline.getCoordinator().getWriteClient();
-      this.ckpMetadata = CkpMetadataFactory.getCkpMetadata(StreamerUtil.createMetaClient(conf), writeClient.getConfig(), conf);
+      HoodieWriteConfig writeConfig = this.pipeline.getCoordinator().getWriteClient().getConfig();
+      this.ckpMetadata = CkpMetadataFactory.getCkpMetadata(StreamerUtil.createMetaClient(conf), writeConfig, conf);
       return this;
     }
 
@@ -267,10 +266,10 @@ public class TestWriteBase {
     }
 
     /**
-     * Stop the timeline server
+     * Stop the timeline server.
      */
     public TestHarness stopTimelineServer() {
-      writeClient.getTimelineServer().ifPresent(EmbeddedTimelineService::stop);
+      pipeline.getCoordinator().getWriteClient().getTimelineServer().ifPresent(EmbeddedTimelineService::stop);
       return this;
     }
 
@@ -498,9 +497,6 @@ public class TestWriteBase {
 
     public void end() throws Exception {
       this.pipeline.close();
-      if (writeClient != null) {
-        this.writeClient.close();
-      }
     }
 
     private String lastPendingInstant() {
