@@ -191,6 +191,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         Arguments.of(MERGE_ON_READ, false)
     );
   }
+
   private final List<BaseHoodieWriteClient> clientsToClose = new ArrayList<>();
 
   @Override
