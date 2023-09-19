@@ -20,6 +20,7 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.TestHoodieSparkUtils;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -55,9 +56,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerTestBase {
 
-  private HoodieDeltaStreamer.Config setupDeltaStreamer(String tableType, String tableBasePath, Boolean shouldCluster, Boolean shouldCompact) throws IOException {
+  private HoodieDeltaStreamer.Config setupDeltaStreamer(String tableType, String tableBasePath, Boolean shouldCluster, Boolean shouldCompact, Boolean reconcileSchema) throws IOException {
     TypedProperties extraProps = new TypedProperties();
     extraProps.setProperty("hoodie.datasource.write.table.type", tableType);
+    extraProps.setProperty(HoodieCommonConfig.RECONCILE_SCHEMA.key(), reconcileSchema.toString());
 
     if (shouldCompact) {
       extraProps.setProperty(HoodieCompactionConfig.INLINE_COMPACT.key(), "true");
@@ -70,7 +72,7 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
       extraProps.setProperty(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key(), "_row_key");
     }
 
-    prepareParquetDFSSource(false, false, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
+    prepareParquetDFSSource(false, false, "", "", PROPS_FILENAME_TEST_PARQUET,
         PARQUET_SOURCE_ROOT, false, "partition_path", "", extraProps);
     return TestHoodieDeltaStreamer.TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, ParquetDFSSource.class.getName(),
         null, PROPS_FILENAME_TEST_PARQUET, false,
@@ -78,15 +80,17 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
   }
 
   private void testBase(String tableType, Boolean shouldCluster, Boolean shouldCompact, String updateFile, String updateColumn, String condition, int count) throws Exception {
-    testBase(tableType, shouldCluster, shouldCompact, updateFile, updateColumn, condition, count, true);
+    testBase(tableType, shouldCluster, shouldCompact, updateFile, updateColumn, condition, count, true, false);
+    testBase(tableType, shouldCluster, shouldCompact, updateFile, updateColumn, condition, count, true, true);
     //adding non-nullable cols should fail, but instead it is adding nullable cols
     //assertThrows(Exception.class, () -> testBase(tableType, shouldCluster, shouldCompact, updateFile, updateColumn, condition, count, false));
   }
 
-  private void testBase(String tableType, Boolean shouldCluster, Boolean shouldCompact, String updateFile, String updateColumn, String condition, int count, Boolean nullable) throws Exception {
+  private void testBase(String tableType, Boolean shouldCluster, Boolean shouldCompact, String updateFile, String updateColumn,
+                        String condition, int count, Boolean nullable, Boolean reconcileSchema) throws Exception {
     PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + testNum++;
     String tableBasePath = basePath + "test_parquet_table" + testNum;
-    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(setupDeltaStreamer(tableType, tableBasePath, shouldCluster, shouldCompact), jsc);
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(setupDeltaStreamer(tableType, tableBasePath, shouldCluster, shouldCompact, reconcileSchema), jsc);
 
     //first write
     String datapath = String.class.getResource("/data/schema-evolution/start.json").getPath();
@@ -164,10 +168,10 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     //assertThrows(Exception.class, () -> testBase(tableType, shouldCluster, shouldCompact, "testAddColChangeOrderSomeFiles.json", "extra_col", "extra_col = 'yes'", 1));
   }
 
-  private void testTypePromotionBase(String tableType, Boolean shouldCluster, Boolean shouldCompact, String colName, DataType startType, DataType endType) throws Exception {
+  private void testTypePromotionBase(String tableType, Boolean shouldCluster, Boolean shouldCompact, Boolean reconcileSchema, String colName, DataType startType, DataType endType) throws Exception {
     PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + testNum++;
     String tableBasePath = basePath + "test_parquet_table" + testNum;
-    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(setupDeltaStreamer(tableType,tableBasePath, shouldCluster, shouldCompact), jsc);
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(setupDeltaStreamer(tableType,tableBasePath, shouldCluster, shouldCompact, reconcileSchema), jsc);
 
     //first write
     String datapath = String.class.getResource("/data/schema-evolution/startTypePromotion.json").getPath();
@@ -188,19 +192,19 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     deltaStreamer.sync();
     TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(10, tableBasePath, sqlContext);
     sparkSession.read().format("hudi").load(tableBasePath).select(colName).show(10);
-    assertEquals(endType, sparkSession.read().format("hudi").load(tableBasePath).select(colName).schema().fields()[0].dataType());
+    assertEquals(reconcileSchema ? startType : endType, sparkSession.read().format("hudi").load(tableBasePath).select(colName).schema().fields()[0].dataType());
   }
 
   private static Stream<Arguments> testTypePromotionArgs() {
     Stream.Builder<Arguments> b = Stream.builder();
-    b.add(Arguments.of("COPY_ON_WRITE", false, false));
-    b.add(Arguments.of("MERGE_ON_READ", false, false));
+    b.add(Arguments.of("COPY_ON_WRITE", false, false, false));
+    b.add(Arguments.of("MERGE_ON_READ", false, false, false));
     /*
     clustering fails for MOR and COW
-    b.add(Arguments.of("COPY_ON_WRITE", true, false));
-    b.add(Arguments.of("MERGE_ON_READ", true, false));
+    b.add(Arguments.of("COPY_ON_WRITE", true, false, false));
+    b.add(Arguments.of("MERGE_ON_READ", true, false, false));
     */
-    b.add(Arguments.of("MERGE_ON_READ", false, true));
+    b.add(Arguments.of("MERGE_ON_READ", false, true, false));
     return b.build();
   }
 
@@ -209,52 +213,56 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
    */
   @ParameterizedTest
   @MethodSource("testTypePromotionArgs")
-  public void testTypePromotion(String tableType, Boolean shouldCluster, Boolean shouldCompact) throws Exception {
+  public void testTypePromotion(String tableType, Boolean shouldCluster, Boolean shouldCompact, Boolean reconcileSchema) throws Exception {
     //root data type promotions
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "distance_in_meters", DataTypes.IntegerType, DataTypes.LongType);
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "distance_in_meters", DataTypes.IntegerType, DataTypes.FloatType);
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "distance_in_meters", DataTypes.IntegerType, DataTypes.DoubleType);
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "distance_in_meters", DataTypes.IntegerType, DataTypes.StringType);
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "distance_in_meters", DataTypes.LongType, DataTypes.FloatType);
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "distance_in_meters", DataTypes.LongType, DataTypes.DoubleType);
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "distance_in_meters", DataTypes.LongType, DataTypes.StringType);
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "begin_lat", DataTypes.FloatType, DataTypes.DoubleType);
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "begin_lat", DataTypes.FloatType, DataTypes.StringType);
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "rider", DataTypes.StringType, DataTypes.BinaryType);
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "tip_history", DataTypes.createArrayType(DataTypes.IntegerType), DataTypes.createArrayType(DataTypes.LongType));
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, "distance_in_meters", DataTypes.IntegerType, DataTypes.LongType);
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, "distance_in_meters", DataTypes.IntegerType, DataTypes.FloatType);
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, "distance_in_meters", DataTypes.IntegerType, DataTypes.DoubleType);
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, "distance_in_meters", DataTypes.IntegerType, DataTypes.StringType);
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, "distance_in_meters", DataTypes.LongType, DataTypes.FloatType);
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, "distance_in_meters", DataTypes.LongType, DataTypes.DoubleType);
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, "distance_in_meters", DataTypes.LongType, DataTypes.StringType);
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, "begin_lat", DataTypes.FloatType, DataTypes.DoubleType);
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, "begin_lat", DataTypes.FloatType, DataTypes.StringType);
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, "rider", DataTypes.StringType, DataTypes.BinaryType);
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, "tip_history",
+        DataTypes.createArrayType(DataTypes.IntegerType), DataTypes.createArrayType(DataTypes.LongType));
     //Seems to be supported for datasource. See org.apache.hudi.TestAvroSchemaResolutionSupport.testDataTypePromotions
     //testTypePromotionBase(tableType, shouldCluster, shouldCompact, "rider", DataTypes.BinaryType, DataTypes.StringType);
 
     //nested data type promotions
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "fare", createFareStruct(DataTypes.FloatType), createFareStruct(DataTypes.DoubleType));
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "fare", createFareStruct(DataTypes.FloatType), createFareStruct(DataTypes.StringType));
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, "fare", createFareStruct(DataTypes.FloatType), createFareStruct(DataTypes.DoubleType));
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, "fare", createFareStruct(DataTypes.FloatType), createFareStruct(DataTypes.StringType));
 
     //complex data type promotion
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "tip_history", DataTypes.createArrayType(DataTypes.IntegerType), DataTypes.createArrayType(DataTypes.LongType));
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, "tip_history", DataTypes.createArrayType(DataTypes.IntegerType), DataTypes.createArrayType(DataTypes.StringType));
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, "tip_history",
+        DataTypes.createArrayType(DataTypes.IntegerType), DataTypes.createArrayType(DataTypes.LongType));
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, "tip_history",
+        DataTypes.createArrayType(DataTypes.IntegerType), DataTypes.createArrayType(DataTypes.StringType));
 
     //test illegal type promotions
     if (tableType.equals("COPY_ON_WRITE")) {
       //illegal root data type promotion
       SparkException e = assertThrows(SparkException.class,
-          () -> testTypePromotionBase(tableType, shouldCluster, shouldCompact, "distance_in_meters", DataTypes.LongType, DataTypes.IntegerType));
+          () -> testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, "distance_in_meters", DataTypes.LongType, DataTypes.IntegerType));
       assertTrue(e.getCause().getCause().getMessage().contains("cannot support rewrite value for schema type: \"int\" since the old schema type is: \"long\""));
       //illegal nested data type promotion
       e = assertThrows(SparkException.class,
-          () -> testTypePromotionBase(tableType, shouldCluster, shouldCompact, "fare", createFareStruct(DataTypes.DoubleType), createFareStruct(DataTypes.FloatType)));
+          () -> testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, "fare", createFareStruct(DataTypes.DoubleType), createFareStruct(DataTypes.FloatType)));
       assertTrue(e.getCause().getCause().getMessage().contains("cannot support rewrite value for schema type: \"float\" since the old schema type is: \"double\""));
       //illegal complex data type promotion
       e = assertThrows(SparkException.class,
-          () -> testTypePromotionBase(tableType, shouldCluster, shouldCompact, "tip_history", DataTypes.createArrayType(DataTypes.LongType), DataTypes.createArrayType(DataTypes.IntegerType)));
+          () -> testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, "tip_history",
+              DataTypes.createArrayType(DataTypes.LongType), DataTypes.createArrayType(DataTypes.IntegerType)));
       assertTrue(e.getCause().getCause().getMessage().contains("cannot support rewrite value for schema type: \"int\" since the old schema type is: \"long\""));
     } else {
       //illegal root data type promotion
       if (shouldCompact) {
         assertThrows(HoodieCompactionException.class,
-            () -> testTypePromotionBase(tableType, shouldCluster, shouldCompact, "distance_in_meters", DataTypes.LongType, DataTypes.IntegerType));
+            () -> testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, "distance_in_meters", DataTypes.LongType, DataTypes.IntegerType));
       } else {
         SparkException e = assertThrows(SparkException.class,
-            () -> testTypePromotionBase(tableType, shouldCluster, shouldCompact, "distance_in_meters", DataTypes.LongType, DataTypes.IntegerType));
+            () -> testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, "distance_in_meters", DataTypes.LongType, DataTypes.IntegerType));
         assertTrue(e.getCause() instanceof NullPointerException);
       }
 
