@@ -20,6 +20,7 @@ package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -33,7 +34,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.sink.meta.CkpMetadataFactory;
-import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestUtils;
@@ -149,7 +149,7 @@ public class TestWriteBase {
       this.pipeline = TestData.getWritePipeline(this.basePath, conf);
       // open the function and ingest data
       this.pipeline.openFunction();
-      this.writeClient = FlinkWriteClients.createWriteClient(conf);
+      this.writeClient = this.pipeline.getCoordinator().getWriteClient();
       this.ckpMetadata = CkpMetadataFactory.getCkpMetadata(StreamerUtil.createMetaClient(conf), writeClient.getConfig(), conf);
       return this;
     }
@@ -267,11 +267,10 @@ public class TestWriteBase {
     }
 
     /**
-     * Stop the timeline server by closing write client
+     * Stop the timeline server
      */
     public TestHarness stopTimelineServer() {
-      writeClient.close();
-      writeClient = null;
+      writeClient.getTimelineServer().ifPresent(EmbeddedTimelineService::stop);
       return this;
     }
 
