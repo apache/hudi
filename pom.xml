@@ -2557,6 +2557,11 @@
           <version>${slf4j.version}</version>
           <scope>test</scope>
         </dependency>
+        <dependency>
+          <groupId>${hive.groupid}</groupId>
+          <artifactId>hive-storage-api</artifactId>
+          <version>${hive.storage.version}</version>
+        </dependency>
       </dependencies>
       <activation>
         <property>
