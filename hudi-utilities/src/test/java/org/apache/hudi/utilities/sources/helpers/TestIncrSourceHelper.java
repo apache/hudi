@@ -325,18 +325,19 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
 
   private Pair<String, List<HoodieRecord>> writeS3MetadataRecords(String commitTime) throws IOException {
     HoodieWriteConfig writeConfig = getWriteConfig();
-    SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig);
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
 
-    writeClient.startCommitWithTime(commitTime);
-    List<HoodieRecord> s3MetadataRecords = Arrays.asList(
-        generateS3EventMetadata(commitTime, "bucket-1", "data-file-1.json", 1L)
-    );
-    JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(s3MetadataRecords, 1), commitTime);
+      writeClient.startCommitWithTime(commitTime);
+      List<HoodieRecord> s3MetadataRecords = Arrays.asList(
+          generateS3EventMetadata(commitTime, "bucket-1", "data-file-1.json", 1L)
+      );
+      JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(s3MetadataRecords, 1), commitTime);
 
-    List<WriteStatus> statuses = result.collect();
-    assertNoWriteErrors(statuses);
+      List<WriteStatus> statuses = result.collect();
+      assertNoWriteErrors(statuses);
 
-    return Pair.of(commitTime, s3MetadataRecords);
+      return Pair.of(commitTime, s3MetadataRecords);
+    }
   }
 
   // Tests to validate previous, begin and end instances during query generation for
