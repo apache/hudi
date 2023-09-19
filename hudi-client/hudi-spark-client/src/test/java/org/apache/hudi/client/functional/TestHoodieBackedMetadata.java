@@ -122,6 +122,7 @@ import org.apache.hadoop.util.Time;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.schema.MessageType;
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -213,9 +214,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   private final List<BaseHoodieWriteClient> clientsToClose = new ArrayList<>();
 
-  @Override
-  public void clean() throws Exception {
-    super.clean();
+  @AfterEach
+  public void closeClients() {
     clientsToClose.forEach(BaseHoodieWriteClient::close);
   }
 

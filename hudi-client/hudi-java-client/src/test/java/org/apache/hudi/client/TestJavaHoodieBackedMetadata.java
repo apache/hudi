@@ -113,6 +113,7 @@ import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.util.Time;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.schema.MessageType;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -194,9 +195,8 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   private final List<BaseHoodieWriteClient> clientsToClose = new ArrayList<>();
 
-  @Override
-  public void clean() throws Exception {
-    super.clean();
+  @AfterEach
+  public void closeClients() {
     clientsToClose.forEach(BaseHoodieWriteClient::close);
   }
 
