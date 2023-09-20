@@ -27,14 +27,14 @@ import org.apache.hudi.HoodieBaseRelation.BaseFileReader
 import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
 import org.apache.hudi.LogFileIterator._
-import org.apache.hudi.common.config._
+import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMemoryConfig, HoodieMetadataConfig, HoodieReaderConfig, TypedProperties}
 import org.apache.hudi.common.engine.{EngineType, HoodieLocalEngineContext}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
-import org.apache.hudi.common.util.{ConfigUtils, HoodieRecordUtils}
+import org.apache.hudi.common.util.{ConfigUtils, FileIOUtils, HoodieRecordUtils}
 import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
 import org.apache.hudi.internal.schema.InternalSchema
@@ -305,7 +305,7 @@ object LogFileIterator extends SparkAdapterSupport {
       val metadataConfig = HoodieMetadataConfig.newBuilder()
         .fromProperties(tableState.metadataConfig.getProps)
         .withSpillableMapDir(hadoopConf.get(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(),
-          HoodieMemoryConfig.getDefaultSpillableMapBasePath))
+          FileIOUtils.getDefaultSpillableMapBasePath))
         .enable(true).build()
       val dataTableBasePath = getDataTableBasePathFromMetadataTable(tablePath)
       val metadataTable = new HoodieBackedTableMetadata(
@@ -350,7 +350,7 @@ object LogFileIterator extends SparkAdapterSupport {
         .withMaxMemorySizeInBytes(maxCompactionMemoryInBytes)
         .withSpillableMapBasePath(
           hadoopConf.get(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key,
-            HoodieMemoryConfig.getDefaultSpillableMapBasePath))
+            FileIOUtils.getDefaultSpillableMapBasePath))
         .withDiskMapType(
           hadoopConf.getEnum(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key,
             HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue))

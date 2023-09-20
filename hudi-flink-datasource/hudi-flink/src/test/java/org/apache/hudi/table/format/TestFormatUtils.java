@@ -42,7 +42,7 @@ public class TestFormatUtils {
     assertEquals(Option.of(String.valueOf(setValue)),
         FormatUtils.getRawValueWithAltKeys(flinkConf, TEST_CONFIG_PROPERTY));
 
-    flinkConf.removeKey(TEST_CONFIG_PROPERTY.key());
+    flinkConf = new Configuration();
     flinkConf.setBoolean(TEST_CONFIG_PROPERTY.getAlternatives().get(0), setValue);
     assertEquals(Option.of(String.valueOf(setValue)),
         FormatUtils.getRawValueWithAltKeys(flinkConf, TEST_CONFIG_PROPERTY));
@@ -59,7 +59,7 @@ public class TestFormatUtils {
     assertEquals(setValue,
         FormatUtils.getBooleanWithAltKeys(flinkConf, TEST_CONFIG_PROPERTY));
 
-    flinkConf.removeKey(TEST_CONFIG_PROPERTY.key());
+    flinkConf = new Configuration();
     flinkConf.setBoolean(TEST_CONFIG_PROPERTY.getAlternatives().get(0), setValue);
     assertEquals(setValue,
         FormatUtils.getBooleanWithAltKeys(flinkConf, TEST_CONFIG_PROPERTY));

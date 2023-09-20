@@ -18,7 +18,6 @@
 
 package org.apache.hudi.hadoop.realtime;
 
-import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -26,6 +25,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -118,7 +118,7 @@ public class HoodieMergeOnReadSnapshotReader extends AbstractRealtimeRecordReade
     this.mergedRecordsByKey = new ExternalSpillableMap<>(
         getMaxCompactionMemoryInBytes(jobConf),
         jobConf.get(SPILLABLE_MAP_BASE_PATH.key(),
-            HoodieMemoryConfig.getDefaultSpillableMapBasePath()),
+            FileIOUtils.getDefaultSpillableMapBasePath()),
         new DefaultSizeEstimator(),
         new HoodieRecordSizeEstimator(readerSchema),
         jobConf.getEnum(SPILLABLE_DISK_MAP_TYPE.key(), SPILLABLE_DISK_MAP_TYPE.defaultValue()),
@@ -192,7 +192,7 @@ public class HoodieMergeOnReadSnapshotReader extends AbstractRealtimeRecordReade
         .withBufferSize(jobConf.getInt(MAX_DFS_STREAM_BUFFER_SIZE.key(),
             DEFAULT_MR_MAX_DFS_STREAM_BUFFER_SIZE))
         .withSpillableMapBasePath(jobConf.get(SPILLABLE_MAP_BASE_PATH.key(),
-            HoodieMemoryConfig.getDefaultSpillableMapBasePath()))
+            FileIOUtils.getDefaultSpillableMapBasePath()))
         .withDiskMapType(jobConf.getEnum(SPILLABLE_DISK_MAP_TYPE.key(), SPILLABLE_DISK_MAP_TYPE.defaultValue()))
         .withBitCaskDiskMapCompressionEnabled(jobConf.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()))
         .withOptimizedLogBlocksScan(jobConf.getBoolean(ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(),
