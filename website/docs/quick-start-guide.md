@@ -14,7 +14,7 @@ we will walk through code snippets that allows you to insert, update, delete and
 
 Hudi works with Spark-2.4.3+ & Spark 3.x versions. You can follow instructions [here](https://spark.apache.org/downloads) for setting up Spark.
 
-**Spark 3 Support Matrix**
+### Spark 3 Support Matrix
 
 | Hudi            | Supported Spark 3 version                         |
 |:----------------|:--------------------------------------------------|
@@ -26,15 +26,15 @@ Hudi works with Spark-2.4.3+ & Spark 3.x versions. You can follow instructions [
 | 0.7.0 - 0.9.0   | 3.0.x                                             |
 | 0.6.0 and prior | not supported                                     |
 
-The *default build* Spark version indicates that it is used to build the `hudi-spark3-bundle`.
+The *default build* Spark version indicates how we build `hudi-spark3-bundle`.
 
 :::note
-In 0.14.0, we introduce the support for Spark 3.4.x and add back the support for Spark 3.0.x.
-In 0.12.0, we introduce the experimental support for Spark 3.3.0.
-In 0.11.0, there are changes on using Spark bundles, please refer
-to [0.11.0 release notes](https://hudi.apache.org/releases/release-0.11.0/#spark-versions-and-bundles) for detailed
-instructions.
+In 0.14.0, we introduced the support for Spark 3.4.x and bring back the support for Spark 3.0.x.
+In 0.12.0, we introduced the experimental support for Spark 3.3.0.
+In 0.11.0, there are changes on using Spark bundles, please refer to [0.11.0 release notes](https://hudi.apache.org/releases/release-0.11.0/#spark-versions-and-bundles) for detailed instructions.
 :::
+
+### Spark Shell/SQL
 
 <Tabs
 groupId="programming-language"
@@ -47,7 +47,9 @@ values={[
 >
 <TabItem value="scala">
 
+
 From the extracted directory run spark-shell with Hudi:
+
 
 ```shell
 # For Spark versions: 3.2 - 3.4
@@ -150,14 +152,14 @@ spark-sql --packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.14.0 \
 >
 
 :::note Please note the following
-<ul>
-  <li> For Spark 3.2 and above, the additional spark_catalog config is required: 
---conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' </li>
-  <li> We have used hudi-spark-bundle built for scala 2.12 since the spark-avro module used can also depend on 2.12. </li>
-</ul>
+For Spark 3.2 onwards, scala 2.12 builds are to be used with an additional config: 
+<p>--conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog'</p>
 :::
 
-Setup table name, base path and a data generator to generate records for this guide.
+### Data Generation
+
+The [DataGenerator](https://github.com/apache/hudi/blob/master/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L51) can generate sample inserts and updates based on the sample trip schema [here](https://github.com/apache/hudi/blob/master/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58).
+Below, we setup table name, base path and a data generator to generate records for this guide.
 
 <Tabs
 groupId="programming-language"
@@ -208,11 +210,6 @@ dataGen = sc._jvm.org.apache.hudi.QuickstartUtils.DataGenerator()
 </TabItem>
 </Tabs
 >
-
-:::tip
-The [DataGenerator](https://github.com/apache/hudi/blob/master/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L51) 
-can generate sample inserts and updates based on the the sample trip schema [here](https://github.com/apache/hudi/blob/master/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)
-:::
 
 ## Create Table
 
@@ -786,15 +783,8 @@ spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 </Tabs
 >
 
-## Advanced Write operations
-Apart from inserts, updates and deletes, Apache Hudi supports plethora of write operations like bulk_insert, insert_overwrite, 
-delete_partition etc to cater to different needs of the users. Please refer [here](/docs/next/writing_data) for more 
-advanced write operations.
 
-## Advanced Query types
-In addition to snapshot query, Apache Hudi also offers additional querying capabilities. 
-
-### Time Travel Query
+## Time Travel Query
 
 Hudi supports time travel query since 0.9.0. Currently three query time formats are supported as given below.
 
@@ -873,7 +863,7 @@ select * from hudi_cow_pt_tbl timestamp as of '2022-03-08' where id = 1;
 >
 
 
-### Incremental query
+## Incremental query
 
 Hudi also provides capability to obtain a stream of records that changed since given commit timestamp. 
 This can be achieved using Hudi's incremental querying by providing a begin time from which changes need to be streamed. 
@@ -989,38 +979,113 @@ This will give all changes that happened after the beginTime commit with the fil
 feature is that it now lets you author streaming pipelines on batch data.
 :::
 
-## Streaming writers
-### Hudi Streamer
-Hudi provides an ingestion tool - HoodieStreamer, to assist with ingesting data into Hudi from various different sources in a streaming manner. 
-This has lot of niceties like auto checkpointing, schema enforcement via schema provider, transformation support and so on.
-Please refer to [here](/docs/next/hoodie_streaming_ingestion#hudi-streamer) for more info. 
+## Change Data Capture Query
 
-### Structured Streaming
 
-Hudi supports Spark Structured Streaming reads and writes as well. Please refer to [here](/docs/next/hoodie_streaming_ingestion#structured-streaming) for more info.
+## Table Types 
 
-## More of Spark SQL
+## Keys 
 
-For advanced usage of spark SQL, please refer to [Spark SQL DDL](/docs/next/sql_ddl) and [Spark SQL DML](/docs/next/sql_dml) reference guides. 
+## Ordering Field
 
-### Alter tables
-For alter table commands, check out [this](/docs/next/sql_ddl#spark-alter-table).
+Users can set table properties while creating a Hudi table. Critical options are listed here.
 
-### Procedures
+| Parameter Name | Default | Introduction                                                                                                                                                                                                                                                                                                                                     |
+|------------------|--------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| primaryKey | uuid | The primary key field names of the table, multiple fields separated by commas. Same as `hoodie.datasource.write.recordkey.field`. If this config is ignored, Hudi will auto generate keys for the records of interest (from 0.14.0).                                                                                                             |
+| preCombineField |  | The pre-combine field of the table. Same as `hoodie.datasource.write.precombine.field` and is used for resolving the final version of the record among multiple versions. Generally `event time` or some other similar column will be used for ordering purpose. Hudi will be able to handle out of order data using the preCombine field value. |
+| type       | cow | The table type to create. type = 'cow' means a COPY-ON-WRITE table, while type = 'mor' means a MERGE-ON-READ table. Same as `hoodie.datasource.write.table.type`. More details can be found [here](/docs/table_types)                                                                                                                            |
 
-If you are interested in trying out Stored procedures available when use Hudi SparkSQL to assist with monitoring,
-managing and operationalizing Hudi tables, please check [this](/docs/next/procedures) out.
+:::note
+1. `primaryKey`, `preCombineField`, and `type` are case-sensitive.
+2. While setting `primaryKey`, `preCombineField`, `type` or other Hudi configs, `tblproperties` is preferred over `options`.
+3. A new Hudi table created by Spark SQL will by default set `hoodie.datasource.write.hive_style_partitioning=true`.
+   :::
+
+Here is an example of creating a Hudi table.
+
+```sql
+-- create a Hudi table that is partitioned.
+create table hudi_cow_pt_tbl (
+  id bigint,
+  name string,
+  ts bigint,
+  dt string,
+  hh string
+) using hudi
+tblproperties (
+  type = 'cow'
+ )
+partitioned by dt
+location '/tmp/hudi/hudi_cow_pt_tbl';
+```
+
+Default value for type is 'cow' and hence could be skipped.
+
+**CTAS**
+
+Hudi supports CTAS (Create Table As Select) on Spark SQL. <br/>
+:::note
+CTAS uses the **bulk insert** as the write operation for better writer performance.
+:::
+
+***Create a Hudi Table using CTAS***
+
+```sql
+-- CTAS: create a partitioned Hudi table. 
+create table hudi_ctas_cow_pt_tbl
+using hudi
+tblproperties (
+  type = 'cow', 
+  preCombineField = 'name'
+ )
+partitioned by (dt)
+as
+select 1 as id, 'a1' as name, '2021-12-01'' as dt;
+```
+
+***Create a Hudi Table using CTAS by loading data from another parquet table***
+
+```sql
+# create managed parquet table
+create table parquet_mngd using parquet location 'file:///tmp/parquet_dataset/*.parquet';
+
+# CTAS by loading data into Hudi table
+create table hudi_ctas_cow_pt_tbl2 using hudi location 'file:/tmp/hudi/hudi_tbl/' tblproperties (
+  type = 'cow',
+  preCombineField = 'ts'
+ )
+partitioned by (datestr) as select * from parquet_mngd;
+```
+
+:::note
+If you prefer to explicitly set the primary keys, you can do so by setting `primaryKey` config in tblproperties.
+:::
 
 ## Where to go from here?
+You can also [build hudi yourself](https://github.com/apache/hudi#building-apache-hudi-from-source) and try this quickstart using `--jars <path to spark bundle jar>`(see also [build with scala 2.12](https://github.com/apache/hudi#build-with-different-spark-versions))
+for more info. If you are looking for ways to migrate your existing data to Hudi, refer to [migration guide](/docs/next/migration_guide).
 
-You can also do the quickstart by [building hudi yourself](https://github.com/apache/hudi#building-apache-hudi-from-source), 
-and using `--jars <path to hudi_code>/packaging/hudi-spark-bundle/target/hudi-spark3.2-bundle_2.1?-*.*.*-SNAPSHOT.jar` in the spark-shell command above
-instead of `--packages org.apache.hudi:hudi-spark3.2-bundle_2.12:0.14.0`. Hudi also supports scala 2.12. Refer [build with scala 2.12](https://github.com/apache/hudi#build-with-different-spark-versions)
-for more info.
-
-Also, we used Spark here to show case the capabilities of Hudi. However, Hudi can support multiple table types/query types and 
-Hudi tables can be queried from query engines like Hive, Spark, Presto and much more. We have put together a 
-[demo video](https://www.youtube.com/watch?v=VhNgUsxdrD0) that show cases all of this on a docker based setup with all 
+### Dockerized Demo 
+Even as we showcased the core capabilities, Hudi supports a lot more advanced functionality that can make it easy 
+to get your transactional data lakes up and running quickly, across a variety query engines like Hive, Flink, Spark, Presto, Trino and much more.
+We have put together a [demo video](https://www.youtube.com/watch?v=VhNgUsxdrD0) that showcases all of this on a docker based setup with all 
 dependent systems running locally. We recommend you replicate the same setup and run the demo yourself, by following 
-steps [here](/docs/next/docker_demo) to get a taste for it. Also, if you are looking for ways to migrate your existing data 
-to Hudi, refer to [migration guide](/docs/next/migration_guide).
+steps [here](/docs/next/docker_demo) to get a taste for it. 
+
+### Streaming workloads
+
+Hudi provides industry-leading performance and functionality for streaming data. 
+
+**Hudi Streamer** - Hudi provides an incremental ingestion/ETL tool - [HoodieStreamer](/docs/next/hoodie_streaming_ingestion#hudi-streamer), to assist with ingesting data into Hudi 
+from various different sources in a streaming manner, with powerful built-in capabilities like auto checkpointing, schema enforcement via schema provider, 
+transformation support, automatic table services and so on.
+
+**Structured Streaming** - Hudi supports Spark Structured Streaming reads and writes as well. Please see [here](/docs/next/hoodie_streaming_ingestion#structured-streaming) for more.
+
+### Spark SQL Reference
+
+- For advanced usage of spark SQL, please refer to [Spark SQL DDL](/docs/next/sql_ddl) and [Spark SQL DML](/docs/next/sql_dml) reference guides.
+- For alter table commands, check out [this](/docs/next/sql_ddl#spark-alter-table). 
+- Stored procedures provide a lot of powerful capabilities using Hudi SparkSQL to assist with monitoring, managing and operating Hudi tables, please check [this](/docs/next/procedures) out.
+
