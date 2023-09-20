@@ -19,7 +19,7 @@ package org.apache.hudi.functional
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.hudi.DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME
+import org.apache.hudi.DataSourceWriteOptions.{INLINE_CLUSTERING_ENABLE, KEYGENERATOR_CLASS_NAME}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.QuickstartUtils.{convertToStringList, getQuickstartWriteConfigs}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
@@ -1723,6 +1723,54 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assert(latestCommit.get().isCompleted)
     val metadata = TimelineUtils.getCommitMetadata(latestCommit.get(), timeline)
     metadata.getOperationType.equals(WriteOperationType.UPSERT)
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
+  def testInsertOverwriteCluster(recordType: HoodieRecordType): Unit = {
+    val (writeOpts, _) = getWriterReaderOpts(recordType)
+
+    // Insert Operation
+    val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+
+    val optsWithCluster = Map(
+      INLINE_CLUSTERING_ENABLE.key() -> "true",
+      "hoodie.clustering.inline.max.commits" -> "2",
+      "hoodie.clustering.plan.strategy.sort.columns" -> "_row_key",
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
+    ) ++ writeOpts
+    inputDF.write.format("hudi")
+      .options(optsWithCluster)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    for (i <- 1 until 6) {
+      val records = recordsToStrings(dataGen.generateInsertsForPartition("00" + i, 10, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).toList
+      val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+      inputDF.write.format("hudi")
+        .options(optsWithCluster)
+        .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OVERWRITE_OPERATION_OPT_VAL)
+        .mode(SaveMode.Append)
+        .save(basePath)
+    }
+
+    val metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(hadoopConf)
+      .build()
+    val timeline = metaClient.getActiveTimeline
+    val instants = timeline.getAllCommitsTimeline.filterCompletedInstants.getInstants
+    assertEquals(9, instants.size)
+    val compactionInstants = instants.filter(i => {
+      TimelineUtils.getCommitMetadata(i, metaClient.getActiveTimeline).getOperationType.equals(WriteOperationType.CLUSTER)
+    })
+    assertEquals(3, compactionInstants.size)
   }
 }
 
