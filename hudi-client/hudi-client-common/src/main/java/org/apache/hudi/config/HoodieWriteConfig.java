@@ -1460,7 +1460,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean enableOptimizedLogBlocksScan() {
-    return getBoolean(HoodieCompactionConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN);
+    return getBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN);
   }
 
   public HoodieCleaningPolicy getCleanerPolicy() {

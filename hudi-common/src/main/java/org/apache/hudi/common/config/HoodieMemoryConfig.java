@@ -50,7 +50,6 @@ public class HoodieMemoryConfig extends HoodieConfig {
   public static final ConfigProperty<String> MAX_MEMORY_FRACTION_FOR_COMPACTION = ConfigProperty
       .key("hoodie.memory.compaction.fraction")
       .defaultValue(String.valueOf(0.6))
-      .withAlternatives("compaction.memory.fraction")
       .markAdvanced()
       .withDocumentation("HoodieCompactedLogScanner reads logblocks, converts records to HoodieRecords and then "
           + "merges these log blocks and records. At any point, the number of entries in a log block can be "

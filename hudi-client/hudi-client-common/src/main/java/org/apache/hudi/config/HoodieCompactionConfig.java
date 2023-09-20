@@ -34,6 +34,8 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
 
+import static org.apache.hudi.common.config.HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN;
+
 /**
  * Compaction related config.
  */
@@ -146,12 +148,6 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + "compaction during each compaction run. By default. Hudi picks the log file "
           + "with most accumulated unmerged data");
 
-  // These config properties are kept to make sure defaults are properly propagated
-  public static final ConfigProperty<String> COMPACTION_LAZY_BLOCK_READ_ENABLE =
-      HoodieReaderConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE;
-
-  public static final ConfigProperty<String> COMPACTION_REVERSE_LOG_READ_ENABLE =
-      HoodieReaderConfig.COMPACTION_REVERSE_LOG_READ_ENABLE;
   public static final ConfigProperty<String> TARGET_PARTITIONS_PER_DAYBASED_COMPACTION = ConfigProperty
       .key("hoodie.compaction.daybased.target.partitions")
       .defaultValue("10")
@@ -194,11 +190,6 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .sinceVersion("0.13.0")
       .withDocumentation("Log compaction can be scheduled if the no. of log blocks crosses this threshold value. "
           + "This is effective only when log compaction is enabled via " + INLINE_LOG_COMPACT.key());
-
-  // This config property is kept to make sure default is properly propagated
-  public static final ConfigProperty<String> ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN =
-      HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN;
-
 
   /**
    * @deprecated Use {@link #INLINE_COMPACT} and its methods instead
@@ -472,6 +463,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public HoodieCompactionConfig build() {
       compactionConfig.setDefaults(HoodieCompactionConfig.class.getName());
+      compactionConfig.setDefaults(HoodieReaderConfig.class.getName());
       return compactionConfig;
     }
   }
