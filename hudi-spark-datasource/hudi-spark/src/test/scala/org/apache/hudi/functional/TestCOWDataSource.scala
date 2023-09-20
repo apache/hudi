@@ -28,7 +28,7 @@ import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
-import org.apache.hudi.common.table.timeline.{HoodieInstant, TimelineUtils}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineUtils}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
@@ -1767,10 +1767,12 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val timeline = metaClient.getActiveTimeline
     val instants = timeline.getAllCommitsTimeline.filterCompletedInstants.getInstants
     assertEquals(9, instants.size)
-    val compactionInstants = instants.filter(i => {
+    val replaceInstants = instants.filter(i => i.getAction.equals(HoodieTimeline.REPLACE_COMMIT_ACTION)).toList
+    assertEquals(8, replaceInstants.size)
+    val clusterInstants = replaceInstants.filter(i => {
       TimelineUtils.getCommitMetadata(i, metaClient.getActiveTimeline).getOperationType.equals(WriteOperationType.CLUSTER)
     })
-    assertEquals(3, compactionInstants.size)
+    assertEquals(3, clusterInstants.size)
   }
 }
 
