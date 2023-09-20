@@ -1,18 +1,21 @@
 ---
 title: Rollback Mechanism
 toc: true
+toc_min_heading_level: 2
+toc_max_heading_level: 4
 ---
-
-## Partially failed commits
 
 Your pipelines could fail due to numerous reasons like crashes, valid bugs in the code, unavailability of any external 
 third-party system (like a lock provider), or user could kill the job midway to change some properties. A well-designed 
-system should detect such partially failed commits, ensure dirty data is not exposed to the queries, and clean them up. 
-We have already taken a peek into Hudi’s timeline which forms the core for reader and writer isolation. If a commit has 
-not transitioned to complete as per the hudi timeline, the readers will ignore the data from the respective write. And 
-so partially failed writes are never read by any readers (for all query types). But the curious question is, how is the 
-partially written data eventually deleted? Does it require manual command to be executed from time to time or should it 
-be automatically handled by the system?
+system should detect such partially failed commits, ensure dirty data is not exposed to the queries, and clean them up.
+Hudi's rollback mechanism takes care of cleaning up such failed writes. 
+
+Hudi’s timeline forms the core for reader and writer isolation. If a commit has not transitioned to complete as per the
+hudi timeline, the readers will ignore the data from the respective write. And so partially failed writes are never read
+by any readers (for all query types). But the curious question is, how is the partially written data eventually deleted? 
+Does it require manual command to be executed from time to time or should it be automatically handled by the system? This
+page presents insights on how "rollback" in Hudi can automatically clean up handling partially failed writes without 
+manual input from users.
 
 ### Handling partially failed commits
 Hudi has a lot of platformization built in so as to ease the operationalization of lakehouse tables. One such feature 
@@ -42,7 +45,7 @@ timeline, it does not mean current writer (new) can assume that it's a partially
 a concurrent writer that’s currently making progress. Hudi has been designed to not have any centralized server 
 running always and in such a case Hudi has an ingenious way to deduce such partially failed writes.
 
-#### Heartbeats to the rescue
+#### Heartbeats
 We are leveraging heartbeats to our rescue here. Each commit will keep emitting heartbeats from the start of the 
 write until its completion. During rollback deduction, Hudi checks for heartbeat timeouts for all ongoing or incomplete 
 commits and detects partially failed commits on such timeouts. For any ongoing commits, the heartbeat should not 
@@ -52,7 +55,6 @@ multi-writers are lazy and is not eager as we saw with single writer model. But 
 need to execute any explicit command to trigger such cleanup of failed writes. When such lazy rollback kicks in, both 
 data files and timeline files for the failed writes are deleted.
 
-#### Heartbeats
 Hudi employs a simple yet effective heartbeat mechanism to notify that a commit is still making progress. A heartbeat 
 file is created for every commit under “.hoodie/.heartbeat/” (for eg, “.hoodie/.heartbeat/20230819183853177”). 
 The writer will start a background thread which will keep updating this heartbeat file at a regular cadence to refresh
@@ -64,7 +66,4 @@ file is no longer updated, so other writers can deduce the failed write after a 
 ![An example illustration of multi writer rollbacks](/assets/images/blog/rollbacks/multi_writer_rollback.png)
 _Figure 2: multi-writer with lazy cleaning of failed commits_
 
-## Conclusion
-We hope this page gave you insights into how partially failed writes are handled by Hudi and how they are automatically 
-cleaned up without manual input from the user.
 
