@@ -72,6 +72,7 @@ module.exports = {
                 'metadata_indexing',
                 'hoodie_cleaner',
                 'transforms',
+                'rollbacks',
                 'markers',
                 'file_sizing',
                 'disaster_recovery',
