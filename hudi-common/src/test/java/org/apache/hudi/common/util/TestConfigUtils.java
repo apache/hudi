@@ -31,10 +31,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestConfigUtils {
-  public static final ConfigProperty<String> TEST_CONFIG_PROPERTY = ConfigProperty
-      .key("hoodie.test.config")
+  public static final ConfigProperty<String> TEST_BOOLEAN_CONFIG_PROPERTY = ConfigProperty
+      .key("hoodie.test.boolean.config")
       .defaultValue("true")
-      .withAlternatives("hudi.test.config")
+      .withAlternatives("hudi.test.boolean.config")
       .markAdvanced()
       .withDocumentation("Testing boolean config.");
 
@@ -80,33 +80,33 @@ public class TestConfigUtils {
   @Test
   public void testGetRawValueWithAltKeysFromHadoopConf() {
     Configuration conf = new Configuration();
-    assertEquals(Option.empty(), ConfigUtils.getRawValueWithAltKeys(conf, TEST_CONFIG_PROPERTY));
+    assertEquals(Option.empty(), ConfigUtils.getRawValueWithAltKeys(conf, TEST_BOOLEAN_CONFIG_PROPERTY));
 
-    boolean setValue = !Boolean.parseBoolean(TEST_CONFIG_PROPERTY.defaultValue());
-    conf.setBoolean(TEST_CONFIG_PROPERTY.key(), setValue);
+    boolean setValue = !Boolean.parseBoolean(TEST_BOOLEAN_CONFIG_PROPERTY.defaultValue());
+    conf.setBoolean(TEST_BOOLEAN_CONFIG_PROPERTY.key(), setValue);
     assertEquals(Option.of(String.valueOf(setValue)),
-        ConfigUtils.getRawValueWithAltKeys(conf, TEST_CONFIG_PROPERTY));
+        ConfigUtils.getRawValueWithAltKeys(conf, TEST_BOOLEAN_CONFIG_PROPERTY));
 
     conf = new Configuration();
-    conf.setBoolean(TEST_CONFIG_PROPERTY.getAlternatives().get(0), setValue);
+    conf.setBoolean(TEST_BOOLEAN_CONFIG_PROPERTY.getAlternatives().get(0), setValue);
     assertEquals(Option.of(String.valueOf(setValue)),
-        ConfigUtils.getRawValueWithAltKeys(conf, TEST_CONFIG_PROPERTY));
+        ConfigUtils.getRawValueWithAltKeys(conf, TEST_BOOLEAN_CONFIG_PROPERTY));
   }
 
   @Test
   public void testGetBooleanWithAltKeysFromHadoopConf() {
     Configuration conf = new Configuration();
-    assertEquals(Boolean.parseBoolean(TEST_CONFIG_PROPERTY.defaultValue()),
-        ConfigUtils.getBooleanWithAltKeys(conf, TEST_CONFIG_PROPERTY));
+    assertEquals(Boolean.parseBoolean(TEST_BOOLEAN_CONFIG_PROPERTY.defaultValue()),
+        ConfigUtils.getBooleanWithAltKeys(conf, TEST_BOOLEAN_CONFIG_PROPERTY));
 
-    boolean setValue = !Boolean.parseBoolean(TEST_CONFIG_PROPERTY.defaultValue());
-    conf.setBoolean(TEST_CONFIG_PROPERTY.key(), setValue);
+    boolean setValue = !Boolean.parseBoolean(TEST_BOOLEAN_CONFIG_PROPERTY.defaultValue());
+    conf.setBoolean(TEST_BOOLEAN_CONFIG_PROPERTY.key(), setValue);
     assertEquals(setValue,
-        ConfigUtils.getBooleanWithAltKeys(conf, TEST_CONFIG_PROPERTY));
+        ConfigUtils.getBooleanWithAltKeys(conf, TEST_BOOLEAN_CONFIG_PROPERTY));
 
     conf = new Configuration();
-    conf.setBoolean(TEST_CONFIG_PROPERTY.getAlternatives().get(0), setValue);
+    conf.setBoolean(TEST_BOOLEAN_CONFIG_PROPERTY.getAlternatives().get(0), setValue);
     assertEquals(setValue,
-        ConfigUtils.getBooleanWithAltKeys(conf, TEST_CONFIG_PROPERTY));
+        ConfigUtils.getBooleanWithAltKeys(conf, TEST_BOOLEAN_CONFIG_PROPERTY));
   }
 }

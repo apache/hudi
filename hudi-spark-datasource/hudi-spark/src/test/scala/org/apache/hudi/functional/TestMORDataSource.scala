@@ -338,14 +338,14 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
 
     // Make force spill
     spark.sparkContext.hadoopConfiguration.set(
-      HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION.getAlternatives.get(0), "0.00001")
+      HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION.key, "0.00001")
     val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .load(basePath + "/*/*/*/*")
     assertEquals(100, hudiSnapshotDF1.count()) // still 100, since we only updated
     spark.sparkContext.hadoopConfiguration.set(
-      HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION.getAlternatives.get(0),
+      HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION.key,
       HoodieMemoryConfig.DEFAULT_MR_COMPACTION_MEMORY_FRACTION)
   }
 
