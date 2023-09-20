@@ -96,4 +96,29 @@ public class TestFileIOUtils extends HoodieCommonTestHarness {
     assertEquals(String.join("", FileIOUtils.getConfiguredLocalDirs()),
             envMaps.get("LOCAL_DIRS"));
   }
+
+  @Test
+  public void testGetDefaultSpillableMapBasePath() {
+    // Store the original value of the system property, so we can reset it after the test
+    String originalTmpDir = System.getProperty("java.io.tmpdir");
+
+    // Case when local dirs provided
+    System.setProperty("java.io.tmpdir", "dir1,dir2,dir3");
+    String result = FileIOUtils.getDefaultSpillableMapBasePath();
+    assertTrue(result.equals("dir1") || result.equals("dir2") || result.equals("dir3"));
+
+    // Clear the property for the next case
+    System.clearProperty("java.io.tmpdir");
+
+    // Case when local dirs not provided
+    result = FileIOUtils.getDefaultSpillableMapBasePath();
+    assertEquals("/tmp/", result);
+
+    // Reset the original value
+    if (originalTmpDir != null) {
+      System.setProperty("java.io.tmpdir", originalTmpDir);
+    } else {
+      System.clearProperty("java.io.tmpdir");
+    }
+  }
 }
