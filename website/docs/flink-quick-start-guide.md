@@ -36,7 +36,7 @@ quick start tool for SQL users.
 
 #### Step.1 download Flink jar
 
-Hudi works with both Flink 1.13, Flink 1.14, Flink 1.15 and Flink 1.16. You can follow the
+Hudi works with both Flink 1.13, Flink 1.14, Flink 1.15, Flink 1.16 and Flink 1.17. You can follow the
 instructions [here](https://flink.apache.org/downloads) for setting up Flink. Then choose the desired Hudi-Flink bundle
 jar to work with different Flink and Scala versions:
 
@@ -44,6 +44,7 @@ jar to work with different Flink and Scala versions:
 - `hudi-flink1.14-bundle`
 - `hudi-flink1.15-bundle`
 - `hudi-flink1.16-bundle`
+- `hudi-flink1.17-bundle`
 
 #### Step.2 start Flink cluster
 Start a standalone Flink cluster within hadoop environment.
@@ -74,7 +75,7 @@ Now starts the SQL CLI:
 # HADOOP_HOME is your hadoop root directory after unpack the binary package.
 export HADOOP_CLASSPATH=`$HADOOP_HOME/bin/hadoop classpath`
 
-./bin/sql-client.sh embedded -j .../hudi-flink-bundle_2.1?-*.*.*.jar shell
+./bin/sql-client.sh embedded -j .../hudi-flink1.1*-bundle-*.*.*.jar shell
 ```
 
 <div className="notice--info">
@@ -91,14 +92,14 @@ The SQL CLI only executes the SQL line by line.
 
 <TabItem value="dataStream">
 
-Hudi works with Flink 1.13, Flink 1.14 and Flink 1.15. Please add the desired
+Hudi works with Flink 1.13, Flink 1.14, Flink 1.15, Flink 1.16 and Flink 1.17. Please add the desired
 dependency to your project:
 ```xml
 <!-- Flink 1.13 -->
 <dependency>
     <groupId>org.apache.hudi</groupId>
     <artifactId>hudi-flink1.13-bundle</artifactId>
-    <version>0.13.0/version>
+    <version>0.14.0/version>
 </dependency>
 ```
 
@@ -107,7 +108,7 @@ dependency to your project:
 <dependency>
     <groupId>org.apache.hudi</groupId>
     <artifactId>hudi-flink1.14-bundle</artifactId>
-    <version>0.13.0</version>
+    <version>0.14.0</version>
 </dependency>
 ```
 
@@ -116,7 +117,7 @@ dependency to your project:
 <dependency>
     <groupId>org.apache.hudi</groupId>
     <artifactId>hudi-flink1.15-bundle</artifactId>
-    <version>0.13.0</version>
+    <version>0.14.0</version>
 </dependency>
 ```
 
@@ -125,7 +126,16 @@ dependency to your project:
 <dependency>
     <groupId>org.apache.hudi</groupId>
     <artifactId>hudi-flink1.16-bundle</artifactId>
-    <version>0.13.0</version>
+    <version>0.14.0</version>
+</dependency>
+```
+
+```xml
+<!-- Flink 1.17 -->
+<dependency>
+    <groupId>org.apache.hudi</groupId>
+    <artifactId>hudi-flink1.17-bundle</artifactId>
+    <version>0.14.0</version>
 </dependency>
 ```
 
@@ -284,14 +294,24 @@ Refers to [Table types and queries](/docs/concepts#table-types--queries) for mor
 This is similar to inserting new data.
 
 ```sql
--- this would update the record with key 'id1'
+-- this would update the record with primary key 'id1'
+-- if the operation is defined as UPSERT
 insert into t1 values
   ('id1','Danny',27,TIMESTAMP '1970-01-01 00:00:01','par1');
+
+-- this would update the specific records with constant age 19,
+-- NOTE: only works for batch sql queries
+UPDATE t1 SET age=19 WHERE uuid in ('id1', 'id2');
 ```
 
 Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
 [Querying](#query-data) the data again will now show updated records. Each write operation generates a new [commit](/docs/concepts) 
 denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `age` fields for the same `_hoodie_record_key`s in previous commit.
+
+:::note
+The `UPDATE` statement is supported since Flink 1.17, so only Hudi Flink bundle compiled with Flink 1.17+ supplies this functionality.
+Only **batch** queries on Hudi table with primary key work correctly. 
+:::
 
 ### Streaming Query
 
@@ -331,9 +351,23 @@ feature is that it now lets you author streaming pipelines on streaming or batch
 
 ### Delete Data {#deletes}
 
-When consuming data in streaming query, Hudi Flink source can also accepts the change logs from the underneath data source,
-it can then applies the UPDATE and DELETE by per-row level. You can then sync a NEAR-REAL-TIME snapshot on Hudi for all kinds
+#### Row-level Delete
+When consuming data in streaming query, Hudi Flink source can also accept the change logs from the upstream data source if the `RowKind` is set up per-row,
+it can then apply the UPDATE and DELETE in row level. You can then sync a NEAR-REAL-TIME snapshot on Hudi for all kinds
 of RDBMS.
+
+#### Batch Delete
+
+```sql
+-- delete all the records with age greater than 23
+-- NOTE: only works for batch sql queries
+DELETE FROM t1 WHERE age > 23;
+```
+
+:::note
+The `DELETE` statement is supported since Flink 1.17, so only Hudi Flink bundle compiled with Flink 1.17+ supplies this functionality.
+Only **batch** queries on Hudi table with primary key work correctly.
+:::
 
 ## Where To Go From Here?
 Check out the [Flink Setup](/docs/next/flink_configuration) how-to page for deeper dive into configuration settings. 
