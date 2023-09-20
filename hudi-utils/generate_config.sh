@@ -17,12 +17,12 @@
 # limitations under the License.
 #
 
-VERSION=0.14.0-SNAPSHOT
+VERSION=1.0.0-SNAPSHOT
 
 JARS=(
-"$HOME/.m2/repository/org/apache/hudi/hudi-utilities-bundle_2.11/$VERSION/hudi-utilities-bundle_2.11-$VERSION.jar"
-"$HOME/.m2/repository/org/apache/hudi/hudi-spark2.4-bundle_2.11/$VERSION/hudi-spark2.4-bundle_2.11-$VERSION.jar"
-"$HOME/.m2/repository/org/apache/hudi/hudi-flink1.14-bundle_2.11/$VERSION/hudi-flink1.14-bundle_2.11-$VERSION.jar"
+"$HOME/.m2/repository/org/apache/hudi/hudi-utilities-bundle_2.12/$VERSION/hudi-utilities-bundle_2.12-$VERSION.jar"
+"$HOME/.m2/repository/org/apache/hudi/hudi-spark3.2-bundle_2.12/$VERSION/hudi-spark3.2-bundle_2.12-$VERSION.jar"
+"$HOME/.m2/repository/org/apache/hudi/hudi-flink1.17-bundle/$VERSION/hudi-flink1.17-bundle-$VERSION.jar"
 "$HOME/.m2/repository/org/apache/hudi/hudi-kafka-connect-bundle/$VERSION/hudi-kafka-connect-bundle-$VERSION.jar"
 "$HOME/.m2/repository/org/apache/hudi/hudi-datahub-sync-bundle/$VERSION/hudi-datahub-sync-bundle-$VERSION.jar"
 "$HOME/.m2/repository/org/apache/hudi/hudi-gcp-bundle/$VERSION/hudi-gcp-bundle-$VERSION.jar"

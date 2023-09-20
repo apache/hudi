@@ -196,7 +196,7 @@ public class HoodieConfigDocGenerator {
 
       // Description
       String configParam = "`Config Param: " + field.getName() + "`";
-      String description = StringUtils.isNullOrEmpty(cfgProperty.doc()) ? "" : cfgProperty.doc().replaceAll("[\\t\\n\\r]+", " ").replaceAll("&", "&amp;").replaceAll("\\|", " &#124; ").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+      String description = StringUtils.isNullOrEmpty(cfgProperty.doc()) ? "" : cfgProperty.doc().replaceAll("[\\t\\n\\r]+", " ").replaceAll("&", "&amp;").replaceAll("\\|", " &#124; ").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll("&lt;ul&gt;", "<ul>").replaceAll("&lt;/ul&gt;", "</ul>").replaceAll("&lt;li&gt;", "<li>").replaceAll("&lt;/li&gt;", "</li>");
 
       // First version
       String versionInfo = "";
@@ -208,7 +208,7 @@ public class HoodieConfigDocGenerator {
         }
         versionInfo = sinceVersion + deprecatedVersion;
       }
-      columns.add(description + "<br /><br />" + configParam + versionInfo);
+      columns.add(description + "<br />" + configParam + versionInfo);
 
       return new ConfigTableRow(cfgProperty.key(), new TableRow<>(columns), isConfigRequired, cfgProperty.isAdvanced());
     } catch (IllegalAccessException e) {
@@ -448,7 +448,7 @@ public class HoodieConfigDocGenerator {
         // Description
         String configParam = " `Config Param: " + field.getName() + "`";
         String desc = StringUtils.isNullOrEmpty(description) ? "" : description.replaceAll("[\\t\\n\\r]+", " ");
-        columns.add(desc + "<br /><br />" + configParam);
+        columns.add(desc + "<br />" + configParam);
 
         ConfigTableRow configRow = new ConfigTableRow(cfgProperty.key(), new TableRow<>(columns), isConfigRequired);
 
