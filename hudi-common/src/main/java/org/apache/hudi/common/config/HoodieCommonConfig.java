@@ -112,6 +112,20 @@ public class HoodieCommonConfig extends HoodieConfig {
           + " since some FS does not support atomic file creation (eg: S3), we decide the FileSystemLockProvider only support HDFS,local FS"
           + " and View FS as default. if you want to use FileSystemLockProvider with other FS, you can set this config with the FS scheme, eg: fs1,fs2");
 
+  public static final ConfigProperty<String> MAX_MEMORY_FOR_COMPACTION = ConfigProperty
+      .key("hoodie.memory.compaction.max.size")
+      .noDefaultValue()
+      .markAdvanced()
+      .withDocumentation("Maximum amount of memory used  in bytes for compaction operations in bytes , before spilling to local storage.");
+
+  public static final ConfigProperty<Integer> MAX_DFS_STREAM_BUFFER_SIZE = ConfigProperty
+      .key("hoodie.memory.dfs.buffer.max.size")
+      .defaultValue(16 * 1024 * 1024)
+      .markAdvanced()
+      .withDocumentation("Property to control the max memory in bytes for dfs input stream buffer size");
+
+  public static final long DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES = 1024 * 1024 * 1024L;
+
   public ExternalSpillableMap.DiskMapType getSpillableDiskMapType() {
     return ExternalSpillableMap.DiskMapType.valueOf(getString(SPILLABLE_DISK_MAP_TYPE).toUpperCase(Locale.ROOT));
   }

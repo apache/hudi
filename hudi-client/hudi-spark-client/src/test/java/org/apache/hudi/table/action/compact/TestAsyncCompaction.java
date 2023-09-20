@@ -347,8 +347,6 @@ public class TestAsyncCompaction extends CompactionTestBase {
       String secondInstantTime = "004";
       String compactionInstantTime = "005";
       String replaceInstantTime = "006";
-      String fourthInstantTime = "007";
-
       int numRecs = 2000;
 
       List<HoodieRecord> records = dataGen.generateInserts(firstInstantTime, numRecs);

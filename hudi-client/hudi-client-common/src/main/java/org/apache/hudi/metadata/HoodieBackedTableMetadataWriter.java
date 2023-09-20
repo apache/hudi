@@ -62,7 +62,6 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -72,8 +71,6 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.hadoop.SerializablePath;
-import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.hadoop.conf.Configuration;
@@ -113,6 +110,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_S
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.createRollbackTimestamp;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetadataPartitions;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.readRecordKeysFromBaseFiles;
 
 /**
  * Writer implementation backed by an internal hudi table. Partition and file listing are saved within an internal MOR table
@@ -512,7 +510,14 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         + partitions.size() + " partitions");
 
     // Collect record keys from the files in parallel
-    HoodieData<HoodieRecord> records = readRecordKeysFromBaseFiles(engineContext, partitionBaseFilePairs, false);
+    HoodieData<HoodieRecord> records = readRecordKeysFromBaseFiles(
+        engineContext,
+        partitionBaseFilePairs,
+        false,
+        dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism(),
+        dataWriteConfig.getBasePath(),
+        hadoopConf,
+        this.getClass().getSimpleName());
     records.persist("MEMORY_AND_DISK_SER");
     final long recordCount = records.count();
 
@@ -524,50 +529,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     LOG.info(String.format("Initializing record index with %d mappings and %d file groups.", recordCount, fileGroupCount));
     return Pair.of(fileGroupCount, records);
-  }
-
-  /**
-   * Read the record keys from base files in partitions and return records.
-   */
-  private HoodieData<HoodieRecord> readRecordKeysFromBaseFiles(HoodieEngineContext engineContext,
-                                                               List<Pair<String, HoodieBaseFile>> partitionBaseFilePairs,
-                                                               boolean forDelete) {
-    if (partitionBaseFilePairs.isEmpty()) {
-      return engineContext.emptyHoodieData();
-    }
-
-    engineContext.setJobStatus(this.getClass().getSimpleName(), "Record Index: reading record keys from " + partitionBaseFilePairs.size() + " base files");
-    final int parallelism = Math.min(partitionBaseFilePairs.size(), dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism());
-    return engineContext.parallelize(partitionBaseFilePairs, parallelism).flatMap(partitionAndBaseFile -> {
-      final String partition = partitionAndBaseFile.getKey();
-      final HoodieBaseFile baseFile = partitionAndBaseFile.getValue();
-      final String filename = baseFile.getFileName();
-      Path dataFilePath = new Path(dataWriteConfig.getBasePath(), partition + Path.SEPARATOR + filename);
-
-      final String fileId = baseFile.getFileId();
-      final String instantTime = baseFile.getCommitTime();
-      HoodieFileReader reader = HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(hadoopConf.get(), dataFilePath);
-      ClosableIterator<String> recordKeyIterator = reader.getRecordKeyIterator();
-
-      return new ClosableIterator<HoodieRecord>() {
-        @Override
-        public void close() {
-          recordKeyIterator.close();
-        }
-
-        @Override
-        public boolean hasNext() {
-          return recordKeyIterator.hasNext();
-        }
-
-        @Override
-        public HoodieRecord next() {
-          return forDelete
-              ? HoodieMetadataPayload.createRecordIndexDelete(recordKeyIterator.next())
-              : HoodieMetadataPayload.createRecordIndexUpdate(recordKeyIterator.next(), partition, fileId, instantTime, 0);
-        }
-      };
-    });
   }
 
   private Pair<Integer, HoodieData<HoodieRecord>> initializeFilesPartition(List<DirectoryInfo> partitionInfoList) {
@@ -906,7 +867,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * @param instantTime    Timestamp at which the commit was performed
    */
   @Override
-  public void update(HoodieCommitMetadata commitMetadata, HoodieData<WriteStatus> writeStatus, String instantTime) {
+  public void updateFromWriteStatuses(HoodieCommitMetadata commitMetadata, HoodieData<WriteStatus> writeStatus, String instantTime) {
     processAndCommit(instantTime, () -> {
       Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordMap =
           HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, commitMetadata, instantTime, getRecordsGenerationParams());
@@ -916,6 +877,19 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       HoodieData<HoodieRecord> updatesFromWriteStatuses = getRecordIndexUpdates(writeStatus);
       HoodieData<HoodieRecord> additionalUpdates = getRecordIndexAdditionalUpdates(updatesFromWriteStatuses, commitMetadata);
       partitionToRecordMap.put(MetadataPartitionType.RECORD_INDEX, updatesFromWriteStatuses.union(additionalUpdates));
+
+      return partitionToRecordMap;
+    });
+    closeInternal();
+  }
+
+  @Override
+  public void update(HoodieCommitMetadata commitMetadata, HoodieData<HoodieRecord> records, String instantTime) {
+    processAndCommit(instantTime, () -> {
+      Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordMap =
+          HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, commitMetadata, instantTime, getRecordsGenerationParams());
+      HoodieData<HoodieRecord> additionalUpdates = getRecordIndexAdditionalUpdates(records, commitMetadata);
+      partitionToRecordMap.put(MetadataPartitionType.RECORD_INDEX, records.union(additionalUpdates));
 
       return partitionToRecordMap;
     });
@@ -1081,6 +1055,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
   /**
    * Converts the input records to the input format expected by the write client.
+   *
    * @param records records to be converted
    * @return converted records
    */
@@ -1140,6 +1115,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
   /**
    * Allows the implementation to perform any pre-commit operations like transitioning a commit to inflight if required.
+   *
    * @param instantTime time of commit
    */
   protected void preWrite(String instantTime) {
@@ -1381,9 +1357,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
             .filter(n -> !fsFiles.containsKey(n)).collect(Collectors.toList());
         Map<String, Long> filesToAdd = new HashMap<>();
         // new files could be added to DT due to restore that just happened which may not be tracked in RestoreMetadata.
-        dirInfoMap.get(partition).getFileNameToSizeMap().forEach((k,v) -> {
+        dirInfoMap.get(partition).getFileNameToSizeMap().forEach((k, v) -> {
           if (!mdtFiles.contains(k)) {
-            filesToAdd.put(k,v);
+            filesToAdd.put(k, v);
           }
         });
         if (!filesToAdd.isEmpty()) {
@@ -1472,7 +1448,14 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
             -> fsView.getLatestBaseFiles(partition).map(f -> Pair.of(partition, f)))
         .collect(Collectors.toList());
 
-    return readRecordKeysFromBaseFiles(engineContext, partitionBaseFilePairs, true);
+    return readRecordKeysFromBaseFiles(
+        engineContext,
+        partitionBaseFilePairs,
+        true,
+        dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism(),
+        dataWriteConfig.getBasePath(),
+        hadoopConf,
+        this.getClass().getSimpleName());
   }
 
   private HoodieData<HoodieRecord> getRecordIndexAdditionalUpdates(HoodieData<HoodieRecord> updatesFromWriteStatuses, HoodieCommitMetadata commitMetadata) {

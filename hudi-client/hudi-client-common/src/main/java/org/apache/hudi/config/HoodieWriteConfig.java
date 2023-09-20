@@ -49,6 +49,7 @@ import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -2264,7 +2265,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getSpillableMapBasePath() {
     return Option.ofNullable(getString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH))
-        .orElseGet(HoodieMemoryConfig::getDefaultSpillableMapBasePath);
+        .orElseGet(FileIOUtils::getDefaultSpillableMapBasePath);
   }
 
   public double getWriteStatusFailureFraction() {

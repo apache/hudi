@@ -19,22 +19,17 @@
 
 package org.apache.hudi.table.action.index;
 
-import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieIndexCommitMetadata;
 import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
 import org.apache.hudi.avro.model.HoodieIndexPlan;
-import org.apache.hudi.avro.model.HoodieRestoreMetadata;
-import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
-import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -54,7 +49,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -63,11 +57,11 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT;
-import static org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLEAN_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN_OR_EQUALS;
@@ -87,11 +81,11 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartition
  */
 public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieIndexCommitMetadata>> {
 
+  static final int TIMELINE_RELOAD_INTERVAL_MILLIS = 5000;
   private static final Logger LOG = LoggerFactory.getLogger(RunIndexActionExecutor.class);
   private static final Integer INDEX_COMMIT_METADATA_VERSION_1 = 1;
   private static final Integer LATEST_INDEX_COMMIT_METADATA_VERSION = INDEX_COMMIT_METADATA_VERSION_1;
   private static final int MAX_CONCURRENT_INDEXING = 1;
-  private static final int TIMELINE_RELOAD_INTERVAL_MILLIS = 5000;
 
   private final Option<HoodieMetadataMetrics> metrics;
 
@@ -144,7 +138,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
 
       // transition requested indexInstant to inflight
       table.getActiveTimeline().transitionIndexRequestedToInflight(indexInstant, Option.empty());
-      List<HoodieIndexPartitionInfo> finalIndexPartitionInfos = null;
+      List<HoodieIndexPartitionInfo> finalIndexPartitionInfos;
       if (!firstTimeInitializingMetadataTable) {
         // start indexing for each partition
         try (HoodieTableMetadataWriter metadataWriter = table.getIndexingMetadataWriter(instantTime)
@@ -162,14 +156,14 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
           LOG.info("Total remaining instants to index: " + instantsToCatchup.size());
 
           // reconcile with metadata table timeline
-          String metadataBasePath = getMetadataTableBasePath(table.getMetaClient().getBasePath());
+          String metadataBasePath = getMetadataTableBasePath(table.getMetaClient().getBasePathV2().toString());
           HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataBasePath).build();
           Set<String> metadataCompletedTimestamps = getCompletedArchivedAndActiveInstantsAfter(indexUptoInstant, metadataMetaClient).stream()
               .map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
 
           // index catchup for all remaining instants with a timeout
           currentCaughtupInstant = indexUptoInstant;
-          catchupWithInflightWriters(metadataWriter, instantsToCatchup, metadataMetaClient, metadataCompletedTimestamps);
+          catchupWithInflightWriters(metadataWriter, instantsToCatchup, metadataMetaClient, metadataCompletedTimestamps, indexPartitionInfos);
           // save index commit metadata and update table config
           finalIndexPartitionInfos = indexPartitionInfos.stream()
               .map(info -> new HoodieIndexPartitionInfo(
@@ -179,7 +173,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
               .collect(Collectors.toList());
         } catch (Exception e) {
           throw new HoodieMetadataException("Failed to index partition " + Arrays.toString(indexPartitionInfos.stream()
-              .map(entry -> entry.getMetadataPartitionPath()).collect(Collectors.toList()).toArray()));
+              .map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toList()).toArray()), e);
         }
       } else {
         String indexUptoInstant = fileIndexPartitionInfo.getIndexUptoInstant();
@@ -188,7 +182,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
         table.getIndexingMetadataWriter(instantTime)
             .orElseThrow(() -> new HoodieIndexException(String.format(
                 "Could not get metadata writer to run index action for instant: %s", instantTime)));
-        finalIndexPartitionInfos = Collections.singletonList(fileIndexPartitionInfo).stream()
+        finalIndexPartitionInfos = Stream.of(fileIndexPartitionInfo)
             .map(info -> new HoodieIndexPartitionInfo(
                 info.getVersion(),
                 info.getMetadataPartitionPath(),
@@ -222,8 +216,8 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
     // delete metadata partition
     requestedPartitions.forEach(partition -> {
       MetadataPartitionType partitionType = MetadataPartitionType.valueOf(partition.toUpperCase(Locale.ROOT));
-      if (metadataPartitionExists(table.getMetaClient().getBasePath(), context, partitionType)) {
-        deleteMetadataPartition(table.getMetaClient().getBasePath(), context, partitionType);
+      if (metadataPartitionExists(table.getMetaClient().getBasePathV2().toString(), context, partitionType)) {
+        deleteMetadataPartition(table.getMetaClient().getBasePathV2().toString(), context, partitionType);
       }
     });
 
@@ -281,10 +275,12 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
   }
 
   private void catchupWithInflightWriters(HoodieTableMetadataWriter metadataWriter, List<HoodieInstant> instantsToIndex,
-                                          HoodieTableMetaClient metadataMetaClient, Set<String> metadataCompletedTimestamps) {
+                                          HoodieTableMetaClient metadataMetaClient, Set<String> metadataCompletedTimestamps,
+                                          List<HoodieIndexPartitionInfo> indexPartitionInfos) {
     ExecutorService executorService = Executors.newFixedThreadPool(MAX_CONCURRENT_INDEXING);
     Future<?> indexingCatchupTaskFuture = executorService.submit(
-        new IndexingCatchupTask(metadataWriter, instantsToIndex, metadataCompletedTimestamps, table.getMetaClient(), metadataMetaClient));
+        IndexingCatchupTaskFactory.createCatchupTask(indexPartitionInfos, metadataWriter, instantsToIndex, metadataCompletedTimestamps,
+            table.getMetaClient(), metadataMetaClient, currentCaughtupInstant, txnManager, context));
     try {
       LOG.info("Starting index catchup task");
       HoodieTimer timer = HoodieTimer.start();
@@ -321,107 +317,5 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
   private void updateMetadataPartitionsTableConfig(HoodieTableMetaClient metaClient, Set<String> metadataPartitions) {
     metadataPartitions.forEach(metadataPartition -> metaClient.getTableConfig().setMetadataPartitionState(
         metaClient, MetadataPartitionType.valueOf(metadataPartition.toUpperCase(Locale.ROOT)), true));
-  }
-
-  /**
-   * Indexing check runs for instants that completed after the base instant (in the index plan).
-   * It will check if these later instants have logged updates to metadata table or not.
-   * If not, then it will do the update. If a later instant is inflight, it will wait until it is completed or the task times out.
-   */
-  class IndexingCatchupTask implements Runnable {
-
-    private final HoodieTableMetadataWriter metadataWriter;
-    private final List<HoodieInstant> instantsToIndex;
-    private final Set<String> metadataCompletedInstants;
-    private final HoodieTableMetaClient metaClient;
-    private final HoodieTableMetaClient metadataMetaClient;
-
-    IndexingCatchupTask(HoodieTableMetadataWriter metadataWriter,
-                        List<HoodieInstant> instantsToIndex,
-                        Set<String> metadataCompletedInstants,
-                        HoodieTableMetaClient metaClient,
-                        HoodieTableMetaClient metadataMetaClient) {
-      this.metadataWriter = metadataWriter;
-      this.instantsToIndex = instantsToIndex;
-      this.metadataCompletedInstants = metadataCompletedInstants;
-      this.metaClient = metaClient;
-      this.metadataMetaClient = metadataMetaClient;
-    }
-
-    @Override
-    public void run() {
-      for (HoodieInstant instant : instantsToIndex) {
-        // metadata index already updated for this instant
-        if (!metadataCompletedInstants.isEmpty() && metadataCompletedInstants.contains(instant.getTimestamp())) {
-          currentCaughtupInstant = instant.getTimestamp();
-          continue;
-        }
-        while (!instant.isCompleted()) {
-          try {
-            LOG.warn("instant not completed, reloading timeline " + instant);
-            // reload timeline and fetch instant details again wait until timeout
-            String instantTime = instant.getTimestamp();
-            Option<HoodieInstant> currentInstant = metaClient.reloadActiveTimeline()
-                .filterCompletedInstants().filter(i -> i.getTimestamp().equals(instantTime)).firstInstant();
-            instant = currentInstant.orElse(instant);
-            // so that timeline is not reloaded very frequently
-            // TODO: HUDI-6371: this does not handle the case that the commit has indeed failed. Maybe use HB detection here.
-            Thread.sleep(TIMELINE_RELOAD_INTERVAL_MILLIS);
-          } catch (InterruptedException e) {
-            throw new HoodieIndexException(String.format("Thread interrupted while running indexing check for instant: %s", instant), e);
-          }
-        }
-        // if instant completed, ensure that there was metadata commit, else update metadata for this completed instant
-        if (COMPLETED.equals(instant.getState())) {
-          String instantTime = instant.getTimestamp();
-          Option<HoodieInstant> metadataInstant = metadataMetaClient.reloadActiveTimeline()
-              .filterCompletedInstants().filter(i -> i.getTimestamp().equals(instantTime)).firstInstant();
-          if (metadataInstant.isPresent()) {
-            currentCaughtupInstant = instantTime;
-            continue;
-          }
-          try {
-            // we need take a lock here as inflight writer could also try to update the timeline
-            txnManager.beginTransaction(Option.of(instant), Option.empty());
-            LOG.info("Updating metadata table for instant: " + instant);
-            switch (instant.getAction()) {
-              // TODO: see if this can be moved to metadata writer itself
-              case HoodieTimeline.COMMIT_ACTION:
-              case HoodieTimeline.DELTA_COMMIT_ACTION:
-              case HoodieTimeline.REPLACE_COMMIT_ACTION:
-                // TODO: HUDI-6372: Record index requires WriteStatus which cannot be read from the HoodieCommitMetadata. So if the original commit has not
-                // written to the MDT then we cannot sync that commit here.
-                if (metaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX)) {
-                  throw new HoodieIndexException(String.format("Cannot sync completed instant %s to metadata table as record index is enabled", instant));
-                }
-                HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-                    table.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-                metadataWriter.update(commitMetadata, context.emptyHoodieData(), instant.getTimestamp());
-                break;
-              case CLEAN_ACTION:
-                HoodieCleanMetadata cleanMetadata = CleanerUtils.getCleanerMetadata(table.getMetaClient(), instant);
-                metadataWriter.update(cleanMetadata, instant.getTimestamp());
-                break;
-              case RESTORE_ACTION:
-                HoodieRestoreMetadata restoreMetadata = TimelineMetadataUtils.deserializeHoodieRestoreMetadata(
-                    table.getActiveTimeline().getInstantDetails(instant).get());
-                metadataWriter.update(restoreMetadata, instant.getTimestamp());
-                break;
-              case ROLLBACK_ACTION:
-                HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils.deserializeHoodieRollbackMetadata(
-                    table.getActiveTimeline().getInstantDetails(instant).get());
-                metadataWriter.update(rollbackMetadata, instant.getTimestamp());
-                break;
-              default:
-                throw new IllegalStateException("Unexpected value: " + instant.getAction());
-            }
-          } catch (IOException e) {
-            throw new HoodieIndexException(String.format("Could not update metadata partition for instant: %s", instant), e);
-          } finally {
-            txnManager.endTransaction(Option.of(instant));
-          }
-        }
-      }
-    }
   }
 }

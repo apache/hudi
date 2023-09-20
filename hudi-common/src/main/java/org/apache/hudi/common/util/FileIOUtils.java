@@ -40,6 +40,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -240,5 +242,15 @@ public class FileIOUtils {
       throw new HoodieIOException("Yarn Local dirs can't be empty");
     }
     return localDirs;
+  }
+
+  public static String getDefaultSpillableMapBasePath() {
+    String[] localDirs = getConfiguredLocalDirs();
+    if (localDirs == null) {
+      return "/tmp/";
+    }
+    List<String> localDirLists = Arrays.asList(localDirs);
+    Collections.shuffle(localDirLists);
+    return !localDirLists.isEmpty() ? localDirLists.get(0) : "/tmp/";
   }
 }
