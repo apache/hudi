@@ -152,45 +152,65 @@ By reconciling all the actions in the timeline, the state of the Hudi table can 
 
 ## Metadata
 
-Hudi automatically extracts the physical data statistics and stores the metadata along with the data to improve write and query performance. Hudi Metadata is an internally-managed table which organizes the table metadata under the base path *.hoodie/metadata.* The metadata is in itself a Hudi table, organized with the Hudi merge-on-read storage format. Every record stored in the metadata table is a Hudi record and hence has partitioning key and record key specified. Following are the metadata table partitions
+Hudi automatically extracts the physical data statistics and stores the metadata along with the data to improve write and query performance. Hudi Metadata is an internally-managed table which organizes the table metadata under the base path *.hoodie/metadata.* The metadata is in itself a Hudi table, organized with the Hudi merge-on-read storage format. Every record stored in the metadata table is a Hudi record and hence has partitioning key and record key specified.
+
+Apache Hudi platform employs HFile format, to store metadata and indexes, to ensure high performance, though 
+different implementations are free to choose their own. Following are the metadata table partitions :-
 
 - **files** - Partition path to file name index. Key for the Hudi record is the partition path and the 
-actual record is a map of file name to an instance of [HoodieMetadataFileInfo][15].
+actual record is a map of file name to an instance of [HoodieMetadataFileInfo][15] (Refer the schema below). 
+The files index can be used to do file listing and do filter based pruning of the scanset during query.
 
 | Schema                 | Field Name  | Data Type | Description                      |
 |------------------------|-------------|-----------|----------------------------------|
 | HoodieMetadataFileInfo | `size`      | long      | size of the file                 |
 |                        | `isDeleted` | boolean   | whether file has been deleted    |
 
-The files index can be used to do file listing and do filter based pruning of the scanset during query.
 - **bloom\_filters** - Bloom filter index to help map a record key to the actual file. The Hudi key is 
 `str_concat(hash(partition name), hash(file name))` and the actual payload is an instance of 
-[HudiMetadataBloomFilter][16]. HudiMetadataBloomFilter has fields `type`(type code of the bloom filter), 
-`timestamp`(timestamp when the bloom filter was created/updated), `bloomFilter`(the actual bloom filter for 
-the data file) and `isDeleted`(whether the bloom filter entr is valid). Bloom filter is used to accelerate 
+[HudiMetadataBloomFilter][16] (Refer the schema below). Bloom filter is used to accelerate 
 'presence checks' validating whether particular record is present in the file, which is used during merging, 
 hash-based joins, point-lookup queries, etc.
+
+| Schema                   | Field Name    | Data Type | Description                                         |
+|--------------------------|---------------|-----------|-----------------------------------------------------|
+| HudiMetadataBloomFilter  | `size`        | long      | size of the file                                    |
+|                          | `type`        | string    | type code of the bloom filter                       |
+|                          | `timestamp`   | string    | timestamp when the bloom filter was created/updated |
+|                          | `bloomFilter` | bytes     | the actual bloom filter for the data file           |
+|                          | `isDeleted`   | boolean   | whether the bloom filter entry is valid             |
+
 - **column\_stats** - contains statistics of columns for all the records in the table. This enables fine 
 grained file pruning for filters and join conditions in the query. The actual payload is an instance of 
-[HoodieMetadataColumnStats][17].  
-HoodieMetadataColumnStats has fields `fileName`(file name for which the 
-column stat applies), `columnName`(column name for which the column stat apples), `minValue`(minimum value 
-of the column in the file), `maxValue`(maximum value of the column in the file), `valueCount`(total count of 
-values), `nullCount`(total count of null values), `totalSize`(total storage size on disk), `totalUncompressedSize`
-(total uncompressed storage size on disk) and `isDeleted`(whether the column stat entry is valid).
+[HoodieMetadataColumnStats][17] (Refer the schema below).
+
+| Schema                     | Field Name              | Data Type                                 | Description                                  |
+|----------------------------|-------------------------|-------------------------------------------|----------------------------------------------|
+| HoodieMetadataColumnStats  | `fileName`              | string                                    | file name for which the column stat applies  |
+|                            | `columnName`            | string                                    | column name for which the column stat apples |
+|                            | `minValue`              | [Wrapper type][19] (based on data schema) | minimum value of the column in the file      |
+|                            | `maxValue`              | [Wrapper type][19] (based on data schema) | maximum value of the column in the file      |
+|                            | `valueCount`            | long                                      | total count of values                        |
+|                            | `nullCount`             | long                                      | total count of null values                   |
+|                            | `totalSize`             | long                                      | total storage size on disk                   |
+|                            | `totalUncompressedSize` | long                                      | total uncompressed storage size on disk      |
+|                            | `isDeleted`             | boolean                                   | whether the column stat entry is valid       |
+
 - **record\_index** - contains information about record keys and their location in the dataset. This improves 
 performance of updates since it provides file locations for the updated records and also enables fine grained 
 file pruning for filters and join conditions in the query. The payload is an instance of 
-[HoodieRecordIndexInfo][18].  
-HoodieRecordIndexInfo has fields `partitionName`(partition name to which the 
-record belongs), `fileIdEncoding`(determines the fields used to deduce file id. When the encoding is 0, 
-file Id can be deduced from fileIdLowBits, fileIdLowBits and fileIndex. When encoding is 1, file Id is available 
-in raw string format in fileId field"), `fileId`(file id in raw string format available when encoding is set to 1), 
-(`fileIdHighBits`, `fileIdLowBits`, `fileIndex`)(file Id can be deduced as {UUID}-{fileIndex} when encoding is set to 0. 
-fileIdHighBits and fileIdLowBits form the UUID), `instantTime`(Epoch time in millisecond representing the commit time at 
-which record was added).
+[HoodieRecordIndexInfo][18] (Refer the schema below).
 
-Apache Hudi platform employs HFile format, to store metadata and indexes, to ensure high performance, though different implementations are free to choose their own. 
+| Schema                 | Field Name          | Data Type | Description                                                                                                                                                                                                                  |
+|------------------------|---------------------|-----------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| HoodieRecordIndexInfo  | `partitionName`     | string    | partition name to which the record belongs                                                                                                                                                                                   |
+|                        | `fileIdEncoding`    | int       | determines the fields used to deduce file id. When the encoding is 0, file Id can be deduced from fileIdLowBits, fileIdHighBits and fileIndex. When encoding is 1, file Id is available in raw string format in fileId field |
+|                        | `fileId`            | string    | file id in raw string format is available when encoding is set to 1                                                                                                                                                          |
+|                        | `fileIdHighBits`    | long      | file Id can be deduced as {UUID}-{fileIndex} when encoding is set to 0. fileIdHighBits and fileIdLowBits form the UUID                                                                                                       |
+|                        | `fileIdLowBits`     | long      | file Id can be deduced as {UUID}-{fileIndex} when encoding is set to 0. fileIdHighBits and fileIdLowBits form the UUID                                                                                                       |
+|                        | `fileIndex`         | int       | file Id can be deduced as {UUID}-{fileIndex} when encoding is set to 0. fileIdHighBits and fileIdLowBits form the UUID                                                                                                       |
+|                        | `instantTime`       | long      | Epoch time in millisecond representing the commit time at which record was added                                                                                                                                             |
+
 
 ## File Layout Hierarchy
 
@@ -460,6 +480,7 @@ The efficiency of Optimistic concurrency is inversely proportional to the possib
 [16]:	https://github.com/apache/hudi/blob/master/hudi-common/src/main/avro/HoodieMetadata.avsc#L66
 [17]:	https://github.com/apache/hudi/blob/master/hudi-common/src/main/avro/HoodieMetadata.avsc#L101
 [18]:	https://github.com/apache/hudi/blob/master/hudi-common/src/main/avro/HoodieMetadata.avsc#L369
+[19]:   https://github.com/apache/hudi/blob/master/hudi-common/src/main/avro/HoodieMetadata.avsc#L125
 
 [image-1]:	/assets/images/hudi_log_format_v2.png
 [image-2]:	/assets/images/spec/spec_log_format_delete_block.png
