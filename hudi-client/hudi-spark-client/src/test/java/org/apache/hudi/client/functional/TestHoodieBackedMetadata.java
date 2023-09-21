@@ -3089,6 +3089,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, HoodieIndex.IndexType indexType,
                                                     HoodieFailedWritesCleaningPolicy cleaningPolicy) {
+    Properties properties = getDisabledRowWriterProperties();
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr)
         .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2).withDeleteParallelism(2)
         .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
@@ -3102,7 +3103,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withEnableBackupForRemoteFileSystemView(false) // Fail test if problem connecting to timeline-server
             .withRemoteServerPort(timelineServicePort)
-            .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build());
+            .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build())
+        .withProperties(properties);
   }
 
   @Test
@@ -3135,6 +3137,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withClusteringConfig(HoodieClusteringConfig.newBuilder()
             .withInlineClusteringNumCommits(0)
             .build())
+        .withProperties(getDisabledRowWriterProperties())
         .build();
     SparkRDDWriteClient clusteringClient = getHoodieWriteClient(clusterWriteCfg);
     clusteringClient.scheduleTableService("0000003", Option.empty(), TableServiceType.CLUSTER);
@@ -3193,6 +3196,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withClusteringConfig(HoodieClusteringConfig.newBuilder()
             .withInlineClusteringNumCommits(0)
             .build())
+        .withProperties(getDisabledRowWriterProperties())
         .build();
     SparkRDDWriteClient clusteringClient = getHoodieWriteClient(clusterWriteCfg);
     clusteringClient.scheduleTableService("0000003", Option.empty(), TableServiceType.CLUSTER);
@@ -3564,5 +3568,17 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   @Override
   protected HoodieTableType getTableType() {
     return tableType;
+  }
+
+  /**
+   * Disabling row writer here as clustering tests will throw the error below if it is used.
+   * java.util.concurrent.CompletionException: java.lang.ClassNotFoundException
+   * TODO: Fix this and increase test coverage to include clustering via row writers
+   * @return
+   */
+  private static Properties getDisabledRowWriterProperties() {
+    Properties properties = new Properties();
+    properties.setProperty("hoodie.datasource.write.row.writer.enable", String.valueOf(false));
+    return properties;
   }
 }
