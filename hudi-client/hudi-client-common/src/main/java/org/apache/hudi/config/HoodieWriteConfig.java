@@ -562,7 +562,8 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> NUM_RETRIES_ON_CONFLICT_FAILURES = ConfigProperty
       .key("hoodie.write.num.retries.on.conflict.failures")
       .defaultValue(0)
-      .sinceVersion("0.13.0")
+      .markAdvanced()
+      .sinceVersion("0.14.0")
       .withDocumentation("Maximum number of times to retry a batch on conflict failure.");
 
   public static final ConfigProperty<String> WRITE_SCHEMA_OVERRIDE = ConfigProperty

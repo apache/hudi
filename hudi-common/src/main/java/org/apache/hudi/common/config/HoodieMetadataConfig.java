@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import javax.annotation.concurrent.Immutable;
+
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -91,7 +92,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".log.compaction.enable")
       .defaultValue("false")
       .markAdvanced()
-      .sinceVersion("0.14")
+      .sinceVersion("0.14.0")
       .withDocumentation("This configs enables logcompaction for the metadata table.");
 
   // Log blocks threshold, after a file slice crosses this threshold log compact operation is scheduled.
@@ -281,6 +282,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> RECORD_INDEX_MAX_PARALLELISM = ConfigProperty
       .key(METADATA_PREFIX + ".max.init.parallelism")
       .defaultValue(100000)
+      .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Maximum parallelism to use when initializing Record Index.");
 
@@ -309,6 +311,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   public static final ConfigProperty<Long> MAX_LOG_FILE_SIZE_BYTES_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".max.logfile.size")
       .defaultValue(2 * 1024 * 1024 * 1024L)  // 2GB
+      .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Maximum size in bytes of a single log file. Larger log files can contain larger log blocks "
           + "thereby reducing the number of blocks to search for keys");
