@@ -722,8 +722,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       Path baseFilePath = new Path(basePathStr, filePath);
       HoodieBaseFile baseFile = new HoodieBaseFile(baseFilePath.toString());
 
+      HoodieMergeHandle handle = null;
       try {
-        HoodieMergeHandle handle = new HoodieMergeHandle(cfg, instantTime, table, new HashMap<>(),
+        handle = new HoodieMergeHandle(cfg, instantTime, table, new HashMap<>(),
             partitionPath, FSUtils.getFileId(baseFilePath.getName()), baseFile, new SparkTaskContextSupplier(),
             config.populateMetaFields() ? Option.empty() :
                 Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps()))));
@@ -733,13 +734,18 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         handle.performMergeDataValidationCheck(writeStatus);
       } catch (HoodieCorruptedDataException e1) {
         fail("Exception not expected because merge validation check is disabled");
+      } finally {
+        if (handle != null) {
+          handle.close();
+        }
       }
 
+      handle = null;
       try {
         final String newInstantTime = "006";
         cfg.getProps().setProperty("hoodie.merge.data.validation.enabled", "true");
         HoodieWriteConfig cfg2 = HoodieWriteConfig.newBuilder().withProps(cfg.getProps()).build();
-        HoodieMergeHandle handle = new HoodieMergeHandle(cfg2, newInstantTime, table, new HashMap<>(),
+        handle = new HoodieMergeHandle(cfg2, newInstantTime, table, new HashMap<>(),
             partitionPath, FSUtils.getFileId(baseFilePath.getName()), baseFile, new SparkTaskContextSupplier(),
             config.populateMetaFields() ? Option.empty() :
                 Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps()))));
@@ -750,6 +756,14 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         fail("The above line should have thrown an exception");
       } catch (HoodieCorruptedDataException e2) {
         // expected
+      } finally {
+        if (handle != null) {
+          try {
+            handle.close();
+          } catch (Exception ex) {
+            // ignore exception from validation check
+          }
+        }
       }
       return true;
     }).collect();
@@ -1795,6 +1809,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     String commitTime2 = HoodieActiveTimeline.createNewInstantTime();
     List<HoodieRecord> records2 = dataGen.generateInserts(commitTime2, 200);
     List<WriteStatus> statuses2 = writeAndVerifyBatch(client, records2, commitTime2, populateMetaFields, failInlineClustering);
+    client.close();
     Set<HoodieFileGroupId> fileIds2 = getFileGroupIdsFromWriteStatus(statuses2);
     Set<HoodieFileGroupId> fileIdsUnion = new HashSet<>(fileIds1);
     fileIdsUnion.addAll(fileIds2);
