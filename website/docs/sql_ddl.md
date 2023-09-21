@@ -136,6 +136,24 @@ recognize the schema and configurations.
 Hudi supports CTAS(Create table as select) on spark sql. <br/>
 **Note:** For better performance to load data to hudi table, CTAS uses **bulk insert** as the write operation.
 
+***Create a Hudi Table using CTAS by loading data from another parquet table***
+
+```sql
+# create managed parquet table
+create table parquet_mngd using parquet location 'file:///tmp/parquet_dataset/*.parquet';
+
+# CTAS by loading data into Hudi table
+create table hudi_ctas_cow_pt_tbl2 using hudi location 'file:/tmp/hudi/hudi_tbl/' tblproperties (
+  type = 'cow',
+  preCombineField = 'ts'
+ )
+partitioned by (datestr) as select * from parquet_mngd;
+```
+
+:::note
+If you prefer to explicitly set the primary keys, you can do so by setting `primaryKey` config in tblproperties.
+:::
+
 ### CTAS Hudi table
 
 ```sql 
@@ -161,7 +179,8 @@ select 1 as id, 'a1' as name, 10 as price, 1000 as dt;
 create table parquet_mngd using parquet location 'file:///tmp/parquet_dataset/*.parquet';
 
 # CTAS by loading data into hudi table
-create table hudi_tbl using hudi location 'file:/tmp/hudi/hudi_tbl/' tblproperties ( 
+create table hudi_tbl using hudi location 'file:/tmp/hudi/hudi_tbl/' 
+tblproperties ( 
   type = 'cow'
  ) 
 as select * from parquet_mngd;

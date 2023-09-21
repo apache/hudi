@@ -55,6 +55,18 @@ Third option is "fail" which will fail the write operation when same records are
 as deduced by the key generation policy can be ingested only once to the target table of interest.
 :::
 
+:::note
+- `hoodie.spark.sql.insert.into.operation` will determine how records ingested via spark-sql INSERT INTO will be treated. Possible values are:
+  - "bulk_insert": Here, Hudi writes incoming records as is without any automatic small file management.
+  - "insert": Here, Hudi inserts the new incoming records and also does small file management.
+  - "upsert": Here, Hudi takes upsert flow, where incoming batch will be de-duped before ingest and also merged with previous versions of the record in storage.
+
+  For a table without any preCombine key set, "insert" is chosen as the default value for this config. For a table with preCombine key set,
+  "upsert" is chosen as the default value for this config.
+- From 0.14.0, `hoodie.sql.bulk.insert.enable` and `hoodie.sql.insert.mode` are depecrated. Users are expected to use `hoodie.spark.sql.insert.into.operation` instead.
+- To manage duplicates with `INSERT INTO`, please do check out [insert dup policy config](/docs/next/configurations#hoodiedatasourceinsertduppolicy).
+  :::
+
 Here are examples to override the spark.sql.insert.into.operation.
 
 ```sql
@@ -135,6 +147,7 @@ ON <merge_condition>
   INSERT *  |
   INSERT (column1 [, column2 ...]) VALUES (value1 [, value2 ...])
 ```
+
 **Example**
 ```sql
 -- source table using hudi for testing merging into non-partitioned table

@@ -28,7 +28,7 @@ Hudi works with Spark-2.4.3+ & Spark 3.x versions. You can follow instructions [
 
 The *default build* Spark version indicates how we build `hudi-spark3-bundle`.
 
-:::note
+:::note Change summary
 In 0.14.0, we introduced the support for Spark 3.4.x and bring back the support for Spark 3.0.x.
 In 0.12.0, we introduced the experimental support for Spark 3.3.0.
 In 0.11.0, there are changes on using Spark bundles, please refer to [0.11.0 release notes](https://hudi.apache.org/releases/release-0.11.0/#spark-versions-and-bundles) for detailed instructions.
@@ -151,9 +151,8 @@ spark-sql --packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.14.0 \
 </Tabs
 >
 
-:::note Please note the following
-For Spark 3.2 onwards, scala 2.12 builds are to be used with an additional config: 
-<p>--conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog'</p>
+:::note for Spark 3.2 and higher versions
+Use scala 2.12 builds with an additional config: --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog'
 :::
 
 ### Data Generation
@@ -181,8 +180,7 @@ import org.apache.spark.sql.SaveMode._
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.config.HoodieWriteConfig._
-import org.apache.hudi.key
-gen.constant.KeyGeneratorOptions._
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions._
 import org.apache.hudi.common.model.HoodieRecord
 
 val tableName = "hudi_trips_cow"
@@ -213,8 +211,7 @@ dataGen = sc._jvm.org.apache.hudi.QuickstartUtils.DataGenerator()
 
 ## Create Table
 
-Lets take a look at creating a Hudi table. For the purpose of quick start guide, we will go with COW table type which 
-is partitioned. You can read more on different table types [here](/docs/table_types).
+First, let's create a Hudi table. Here, we use a partitioned table for illustration, but Hudi also supports non-partitioned tables.
 
 <Tabs
 groupId="programming-language"
@@ -229,7 +226,7 @@ values={[
 
 ```scala
 // scala
-// No separate create table command required here. First batch of write to a table will create the table if not exists. 
+// First commit will auto-initialize the table, if it did not exist in the specified base path. 
 ```
 
 </TabItem>
@@ -237,94 +234,29 @@ values={[
 
 ```python
 # pyspark
-# No separate create table command required here. First batch of write to a table will create the table if not exists.
+# First commit will auto-initialize the table, if it did not exist in the specified base path. 
 ```
 
 </TabItem>
 <TabItem value="sparksql">
 
-Spark SQL needs an explicit create table command.
 
-**Create Table Properties**
-
-Users can set table properties while creating a Hudi table. Critical options are listed here.
-
-| Parameter Name | Default | Introduction                                                                                                                                                                                                                                                                                                                                     |
-|------------------|--------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| primaryKey | uuid | The primary key field names of the table, multiple fields separated by commas. Same as `hoodie.datasource.write.recordkey.field`. If this config is ignored, Hudi will auto generate keys for the records of interest (from 0.14.0).                                                                                                             |
-| preCombineField |  | The pre-combine field of the table. Same as `hoodie.datasource.write.precombine.field` and is used for resolving the final version of the record among multiple versions. Generally `event time` or some other similar column will be used for ordering purpose. Hudi will be able to handle out of order data using the preCombine field value. |
-| type       | cow | The table type to create. type = 'cow' means a COPY-ON-WRITE table, while type = 'mor' means a MERGE-ON-READ table. Same as `hoodie.datasource.write.table.type`. More details can be found [here](/docs/table_types)                                                                                                                            |
-
-:::note
-1. `primaryKey`, `preCombineField`, and `type` are case-sensitive.
-2. While setting `primaryKey`, `preCombineField`, `type` or other Hudi configs, `tblproperties` is preferred over `options`.
-3. A new Hudi table created by Spark SQL will by default set `hoodie.datasource.write.hive_style_partitioning=true`.
-:::
 
 Here is an example of creating a Hudi table.
 
 ```sql
 -- create a Hudi table that is partitioned.
-create table hudi_cow_pt_tbl (
+create table hudi_table (
   id bigint,
   name string,
   ts bigint,
   dt string,
   hh string
 ) using hudi
-tblproperties (
-  type = 'cow'
- )
-partitioned by dt
-location '/tmp/hudi/hudi_cow_pt_tbl';
+partitioned by dt;
 ```
 
-Default value for type is 'cow' and hence could be skipped. 
-
-**CTAS**
-
-Hudi supports CTAS (Create Table As Select) on Spark SQL. <br/>
-:::note
-CTAS uses the **bulk insert** as the write operation for better writer performance.
-:::
-
-***Create a Hudi Table using CTAS***
-
-```sql
--- CTAS: create a partitioned Hudi table. 
-create table hudi_ctas_cow_pt_tbl
-using hudi
-tblproperties (
-  type = 'cow', 
-  preCombineField = 'name'
- )
-partitioned by (dt)
-as
-select 1 as id, 'a1' as name, '2021-12-01'' as dt;
-```
-
-***Create a Hudi Table using CTAS by loading data from another parquet table***
-
-```sql
-# create managed parquet table
-create table parquet_mngd using parquet location 'file:///tmp/parquet_dataset/*.parquet';
-
-# CTAS by loading data into Hudi table
-create table hudi_ctas_cow_pt_tbl2 using hudi location 'file:/tmp/hudi/hudi_tbl/' tblproperties (
-  type = 'cow',
-  preCombineField = 'ts'
- )
-partitioned by (datestr) as select * from parquet_mngd;
-```
-
-:::note
-If you prefer to explicitly set the primary keys, you can do so by setting `primaryKey` config in tblproperties. 
-:::
-
-:::note
-For the purpose of quick start guide, we covering just COW table type, partitioned and external tables. For more
-options, please refer to [SQL DDL](/docs/next/sql_ddl) and [SQL DML](/docs/next/sql_dml) reference guide.  
-:::
+For more options for creating Hudi tables, please refer to [SQL DDL](/docs/sql_ddl) reference guide.  
 
 </TabItem>
 
@@ -332,7 +264,7 @@ options, please refer to [SQL DDL](/docs/next/sql_ddl) and [SQL DML](/docs/next/
 >
 
 
-## Insert data
+## Insert data {#inserts}
 
 <Tabs
 groupId="programming-language"
@@ -346,11 +278,9 @@ values={[
 
 <TabItem value="scala">
 
-Generate some new trips, load them into a DataFrame and write the DataFrame into the Hudi table as below.
+Generate some new records as a DataFrame and write the DataFrame into a Hudi table.
+Since, this is the first write, it will also auto-create the table. 
 
-First insert will also create the table with spark datasource writes.
-
-**Creating a Hudi table**
 ```scala
 // spark-shell
 val inserts = convertToStringList(dataGen.generateInserts(10))
@@ -363,29 +293,18 @@ df.write.format("hudi").
   save(basePath)
 ```
 
-:::note
-- Users can explicitly set RECORDKEY_FIELD_NAME.key() config to configure primary keys for a given Hudi table. In the absence of
-  this config, Hudi will auto generate record keys (primary keys) for the records being ingested. 
-- When primary key configs are set by the user, it is recommended to also configure `PRECOMBINE_FIELD_NAME.key()`.  
-:::
-
-:::info
-`mode(Overwrite)` overwrites and recreates the table if it already exists.
-You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<city>/`. For more info, refer to
-[Modeling data stored in Hudi](https://hudi.apache.org/docs/faq#how-do-i-model-the-data-stored-in-hudi)
-and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/next/writing_data).
-For a table where primary keys are not configured by user, `bulk_insert` will be chosen as the default operation. If primary key 
-configuration (RECORDKEY_FIELD_NAME.key()) is set by the user, `upsert` is chosen as the default operation. If you have a workload 
-without updates, you can issue `insert` or `bulk_insert` operations which could be faster. To know more, refer to 
-[Write operations](/docs/next/write_operations)
+:::info Mapping to Hudi write operations
+Hudi provides a wide range of [write operations](/docs/next/write_operations) - both batch and incremental - to write data into Hudi tables,
+with different semantics and performance. When record keys are not configured (see [keys](#keys) below), `bulk_insert` will be chosen as 
+the write operation, matching the out-of-behavior of Spark's Parquet Datasource. 
 :::
 
 </TabItem>
 <TabItem value="python">
 
-Generate some new trips, load them into a DataFrame and write the DataFrame into the Hudi table as below.
+Generate some new records as a DataFrame and write the DataFrame into a Hudi table.
+Since, this is the first write, it will also auto-create the table.
 
-**Creating to a Hudi table**
 ```python
 # pyspark
 inserts = sc._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(dataGen.generateInserts(10))
@@ -394,76 +313,38 @@ df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
 hudi_options = {
     'hoodie.table.name': tableName,
     'hoodie.datasource.write.partitionpath.field': 'partitionpath',
-    'hoodie.datasource.write.table.name': tableName,
-    'hoodie.datasource.write.operation': 'upsert',
-    'hoodie.upsert.shuffle.parallelism': 2,
-    'hoodie.insert.shuffle.parallelism': 2
+    'hoodie.datasource.write.table.name': tableName
 }
 
-df.write.format("hudi"). \
+df.write.format("hudi").
     options(**hudi_options). \
     mode("overwrite"). \
     save(basePath)
 ```
 
-:::note
-- Users can explicitly set RECORDKEY_FIELD_NAME.key() config to configure primary keys for a given Hudi table. In the absence of
-  this config, Hudi will auto generate record keys (primary keys) for the records being ingested.
-- When primary key configs are set by the user, it is recommended to also configure `PRECOMBINE_FIELD_NAME.key()`.  
-:::
-
-:::info
-`mode(Overwrite)` overwrites and recreates the table if it already exists.
-You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<city>/`. For more info, refer to
-[Modeling data stored in Hudi](https://hudi.apache.org/docs/faq#how-do-i-model-the-data-stored-in-hudi)
-and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/next/writing_data).
-For a table where primary keys are not configured by user, `bulk_insert` will be chosen as the default operation. If primary key
-configuration (RECORDKEY_FIELD_NAME.key()) is set by the user, `upsert` is chosen as the default operation. If you have a workload
-without updates, you can issue `insert` or `bulk_insert` operations which could be faster. To know more, refer to
-[Write operations](/docs/next/write_operations)
+:::info Mapping to Hudi write operations
+Hudi provides a wide range of [write operations](/docs/next/write_operations) - both batch and incremental - to write data into Hudi tables,
+with different semantics and performance. When record keys are not configured (see [keys](#keys) below), `bulk_insert` will be chosen as
+the write operation, matching the out-of-behavior of Spark's Parquet Datasource.
 :::
 
 </TabItem>
 
 <TabItem value="sparksql">
 
-Users can use 'INSERT INTO' to insert data into a Hudi table using spark-sql. 
+Users can use 'INSERT INTO' to insert data into a Hudi table. See [Insert Into](/docs/sql_dml#insert-into) for more advanced options.
 
 ```sql
-insert into hudi_cow_pt_tbl select 2, 'a2', '2021-12-02';
+insert into hudi_cow_pt_tbl 
+select 2, 'a2', '2021-12-02';
 ```
 
-:::note
-- `hoodie.spark.sql.insert.into.operation` will determine how records ingested via spark-sql INSERT INTO will be treated. Possible values are:
-  - "bulk_insert": Here, Hudi writes incoming records as is without any automatic small file management.
-  - "insert": Here, Hudi inserts the new incoming records and also does small file management.
-  - "upsert": Here, Hudi takes upsert flow, where incoming batch will be de-duped before ingest and also merged with previous versions of the record in storage.
-  
-  For a table without any preCombine key set, "insert" is chosen as the default value for this config. For a table with preCombine key set, 
-  "upsert" is chosen as the default value for this config.
-- From 0.14.0, `hoodie.sql.bulk.insert.enable` and `hoodie.sql.insert.mode` are depecrated. Users are expected to use `hoodie.spark.sql.insert.into.operation` instead.
-- To manage duplicates with `INSERT INTO`, please do check out [insert dup policy config](/docs/next/configurations#hoodiedatasourceinsertduppolicy).
-:::
-
-Here are examples to override the spark.sql.insert.into.operation.
+If you want to control the Hudi write operation used for the INSERT statement, you can set the following config before issuing 
+the INSERT statement:
 
 ```sql
--- upserts using INSERT_INTO 
-set hoodie.spark.sql.insert.into.operation = 'upsert' 
-
-insert into hudi_cow_pt_tbl select 2, 'a2', '2021-12-03';
-insert into hudi_cow_pt_tbl select 2, 'a2', '2021-12-04';
-select id, name, dt from hudi_cow_pt_tbl;
-2	a2   	2021-12-04
-
 -- bulk_insert using INSERT_INTO 
 set hoodie.spark.sql.insert.into.operation = 'bulk_insert' 
-
-insert into hudi_cow_pt_tbl select 2, 'a2', '2021-12-03';
-insert into hudi_cow_pt_tbl select 2, 'a2', '2021-12-04';
-select id, name, dt from hudi_cow_pt_tbl;
-2	a2   	2021-12-03
-2	a2   	2021-12-04
 ```
 
 </TabItem>
@@ -471,20 +352,9 @@ select id, name, dt from hudi_cow_pt_tbl;
 </Tabs
 >
 
+## Query data {#querying}
 
-Checkout https://hudi.apache.org/blog/2021/02/13/hudi-key-generators for various key generator options, like Timestamp based,
-complex, custom, NonPartitioned Key gen, etc.
-
-
-:::tip
-With [externalized config file](/docs/next/configurations#externalized-config-file),
-instead of directly passing configuration settings to every Hudi job, 
-you can also centrally set them in a configuration file `hudi-default.conf`.
-:::
-
-## Query data 
-
-Load the data files into a DataFrame.
+Hudi tables can be queried back into a DataFrame or Spark SQL. 
 
 <Tabs
 groupId="programming-language"
@@ -528,25 +398,18 @@ spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_pat
 <TabItem value="sparksql">
 
 ```sql
- select fare, begin_lon, begin_lat, ts from  hudi_trips_snapshot where fare > 20.0
+ select fare, begin_lon, begin_lat, ts 
+ from  hudi_trips_snapshot 
+ where fare > 20.0
 ```
 </TabItem>
 
 </Tabs
 >
 
-:::info
-Since 0.9.0 Hudi has support for a built-in FileIndex: **HoodieFileIndex** to query Hudi table,
-which supports partition pruning and metatable for query which helps improve query performance.
-It also supports non-global query path which means users can query the table by the base path without
-specifing the "*" in the query path. This feature has been enabled by default for the non-global query path.
-For the global query path, Hudi uses the old query path.
-Refer to [Table types and queries](/docs/next/concepts#table-types--queries) for more info on all table types and query types supported.
-:::
+## Update data {#upserts}
 
-## Update data
-
-Lets take a look at how to update existing data for a Hudi table. 
+Hudi tables can be updated by streaming in a DataFrame or using a standard UPDATE statement.
 
 <Tabs
 groupId="programming-language"
@@ -562,88 +425,35 @@ values={[
 
 ```scala
 // Lets read data from target Hudi table, modify fare column and update it. 
-val updatesDf = spark.read.format("hudi").load(basePath).withColumn("fare",col("fare")*100)
+val updatesDf = spark.read.format("hudi").load(basePath).withColumn("fare", col("fare") * 100)
 
 updatesDf.write.format("hudi").
   options(getQuickstartWriteConfigs).
   option(PRECOMBINE_FIELD_NAME.key(), "ts").
+  option(OPERATION_OPT_KEY, "upsert").
   option(PARTITIONPATH_FIELD_NAME.key(), "partitionpath").
   option(TABLE_NAME, tableName).
   mode(Append).
   save(basePath)
 ```
-[Querying](#query-data) the data again will now show updated trips. Each write operation generates a new [commit](/docs/next/concepts)
-denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `fare` fields for the same `_hoodie_record_key`s in previous commit.
 
-:::note
-- Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
-- For a table with Hudi generated primary keys, updates with spark-datasource is feasible when the dataframe being ingested contains Hudi's meta fields.
-If not, its recommended to use spark-sql's `Merge Into` and `Update` to update such tables. For a table with user defined primary keys, there are no 
-such constraints with updates via spark-datasource (updates would work for a dataframe with just the data columns).
+:::info Key requirements
+Updates with spark-datasource is feasible only when the source dataframe contains Hudi's meta fields or a [key field](#keys) is configured.
+Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
 :::
+
+
 
 </TabItem>
 <TabItem value="sparksql">
 
-Spark SQL supports two kinds of DML to update Hudi table: Merge-Into and Update.
-
-### Update
-
-**Syntax**
-```sql
-UPDATE tableIdentifier SET column = EXPRESSION(,column = EXPRESSION) [ WHERE boolExpression]
-```
-
-**Example**
-```sql
-update hudi_cow_pt_tbl set name = 'a1_1' where id = 1;
-
-```
-:::note
-`Update` operation requires `preCombineField` specified.
-:::
-
-### MergeInto
-
-**Syntax**
+Hudi table can be update using a regular UPDATE statement. See [Update](/docs/sql_dml#update) for more advanced options.
 
 ```sql
-MERGE INTO tableIdentifier AS target_alias
-USING (sub_query | tableIdentifier) AS source_alias
-ON <merge_condition>
-[ WHEN MATCHED [ AND <condition> ] THEN <matched_action> ]
-[ WHEN NOT MATCHED [ AND <condition> ]  THEN <not_matched_action> ]
-
-<merge_condition> =A equal bool condition 
-<matched_action>  =
-  DELETE  |
-  UPDATE SET *  |
-  UPDATE SET column1 = expression1 [, column2 = expression2 ...]
-<not_matched_action>  =
-  INSERT *  |
-  INSERT (column1 [, column2 ...]) VALUES (value1 [, value2 ...])
+update hudi_table 
+set name = 'a1_1' 
+where id = 1;
 ```
-**Example**
-```sql
--- source table using Hudi for testing merging into target Hudi table
-create table merge_source (id int, name string, dt string) using hudi
-tblproperties (primaryKey = 'id', preCombineField = 'name');
-insert into merge_source values (1, 'a1_new', 2021-12-05), (2, "a2_new", 2021-12-05), (3, "a3_new", 2021-12-05);
-
-merge into hudi_cow_pt_tbl as target
-using merge_source as source
-on target.id = source.id
-when matched then update set *
-when not matched then insert *
-;
-
-```
-
-:::note
-For a Hudi table with user defined primary keys, the join condition in `Merge Into` is expected to contain the primary keys of the table.
-For a Hudi table with Hudi generated primary keys, the join condition in `Merge Into` can be on any arbitrary data columns.
-:::
-
 
 </TabItem>
 <TabItem value="python">
@@ -660,13 +470,9 @@ updatesDf.write.format("hudi"). \
   save(basePath)
 ```
 
-[Querying](#query-data) the data again will now show updated trips. Each write operation generates a new [commit](/docs/next/concepts)
-denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `fare` fields for the same `_hoodie_record_key`s in previous commit.
-:::note
-- Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
-- For a table with Hudi generated primary keys, updates with spark-datasource is feasible when the dataframe being ingested contains Hudi's meta fields.
-  If not, its recommended to use spark-sql's `Merge Into` and `Update` to update such tables. For a table with user defined primary keys, there are no
-  such constraints with updates via spark-datasource (updates would work for a dataframe with just the data columns).
+:::info Key requirements
+Updates with spark-datasource is feasible only when the source dataframe contains Hudi's meta fields or a [key field](#keys) is configured.
+Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
 :::
 
 </TabItem>
@@ -674,10 +480,66 @@ denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `fare` fiel
 </Tabs
 >
 
+[Querying](#query-data) the data again will now show updated records. Each write operation generates a new [commit](/docs/next/concepts).
+Look for changes in `_hoodie_commit_time`, `fare` fields for the given `_hoodie_record_key` value from a previous commit.
+
+## Merging Data {#merge}
+
+<Tabs
+groupId="programming-language"
+defaultValue="scala"
+values={[
+{ label: 'Scala', value: 'scala', },
+{ label: 'Python', value: 'python', },
+{ label: 'Spark SQL', value: 'sparksql', },
+]}
+>
+
+<TabItem value="scala">
+
+```scala
+    // spark-shell
+```
+</TabItem>
+
+<TabItem value="python">
+
+```scala
+    // spark-shell
+```
+</TabItem>
+
+<TabItem value="sparksql">
+
+```sql
+-- source table using Hudi for testing merging into target Hudi table
+create table merge_source (id int, name string, dt string) 
+using hudi
+tblproperties (primaryKey = 'id', preCombineField = 'name');
+insert into merge_source values 
+  (1, 'a1_new', 2021-12-05), 
+  (2, "a2_new", 2021-12-05), 
+  (3, "a3_new", 2021-12-05);
+
+merge into hudi_cow_pt_tbl as target
+using merge_source as source
+on target.id = source.id
+when matched then update set *
+when not matched then insert *
+;
+
+```
+
+:::info Key requirements
+For a Hudi table with user defined primary record [keys](#keys), the join condition is expected to contain the primary keys of the table.
+For a Hudi table with Hudi generated primary keys, the join condition can be on any arbitrary data columns.
+:::
+</TabItem>
+</Tabs>
 
 ## Delete data {#deletes}
 
-Delete operation removes/deletes the records  of interest from the table. For example, this code snippet deletes records
+Delete operation removes the records specified from the table. For example, this code snippet deletes records
 for the HoodieKeys passed in. Check out the [deletion section](/docs/next/writing_data#deletes) for more details.
 
 <Tabs
@@ -705,32 +567,23 @@ deletesDf.write.format("hudi").
   save(basePath)
 
 // run the same read query as above.
-val roAfterDeleteViewDF = spark.
-  read.
-  format("hudi").
-  load(basePath)
-
+val roAfterDeleteViewDF = spark.read.format("hudi").load(basePath)
 roAfterDeleteViewDF.registerTempTable("hudi_trips_snapshot")
 // fetch should return (total - 2) records
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 ```
-:::note
-- Only `Append` mode is supported for delete operation.
-- For a table with Hudi generated primary keys, deletes with spark-datasource is feasible when the dataframe being ingested contains Hudi's meta fields.
-If not, its recommended to use spark-sql's `Delete` to update such tables. For a table with user defined primary keys, there are no
-such constraints with deleteing via spark-datasource (deletes would work for a dataframe with just the data columns).
+
+:::info Key requirements
+Deletes with spark-datasource is supported only when the source dataframe contains Hudi's meta fields or a [key field](#keys) is configured.
+Notice that the save mode is again `Append`. 
 :::
 
 </TabItem>
 <TabItem value="sparksql">
 
-**Syntax**
 ```sql
-DELETE FROM tableIdentifier [ WHERE BOOL_EXPRESSION]
-```
-**Example**
-```sql
-DELETE FROM hudi_cow_pt_tbl where id = 1;
+DELETE FROM hudi_cow_pt_tbl 
+WHERE id = 1;
 ```
 
 </TabItem>
@@ -739,7 +592,6 @@ DELETE FROM hudi_cow_pt_tbl where id = 1;
 
 ```python
 # pyspark
-
 val deletesDf = spark.read.format("hudi").load(basePath).limit(2)
 
 # issue deletes
@@ -770,12 +622,9 @@ roAfterDeleteViewDF.createOrReplaceTempView("hudi_trips_snapshot")
 # fetch should return (total - 2) records
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 ```
-
-:::note
-- Only `Append` mode is supported for delete operation.
-- For a table with Hudi generated primary keys, deletes with spark-datasource is feasible when the dataframe being ingested contains Hudi's meta fields.
-  If not, its recommended to use spark-sql's `Delete` to update such tables. For a table with user defined primary keys, there are no
-  such constraints with deleteing via spark-datasource (deletes would work for a dataframe with just the data columns).
+:::info Key requirements
+Deletes with spark-datasource is supported only when the source dataframe contains Hudi's meta fields or a [key field](#keys) is configured.
+Notice that the save mode is again `Append`.
 :::
 
 </TabItem>
@@ -784,9 +633,9 @@ spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 >
 
 
-## Time Travel Query
+## Time Travel Query {#timetravel}
 
-Hudi supports time travel query since 0.9.0. Currently three query time formats are supported as given below.
+Hudi supports time travel query to query the table as of a point-in-time in history. Three timestamp formats are supported as illustrated below.
 
 <Tabs
 groupId="programming-language"
@@ -826,7 +675,7 @@ spark.read.
 #pyspark
 spark.read. \
   format("hudi"). \
-  option("as.of.instant", "20210728141108"). \
+  option("as.of.instant", "20210728141108100"). \
   load(basePath)
 
 spark.read. \
@@ -844,9 +693,7 @@ spark.read. \
 </TabItem>
 <TabItem value="sparksql">
 
-:::note
-Requires Spark 3.2+
-:::
+
 
 ```sql
 
@@ -856,6 +703,9 @@ select * from hudi_cow_pt_tbl timestamp as of '20220307091628793' where id = 1;
 select * from hudi_cow_pt_tbl timestamp as of '2022-03-07 09:16:28.100' where id = 1;
 select * from hudi_cow_pt_tbl timestamp as of '2022-03-08' where id = 1;
 ```
+:::note
+Requires Spark 3.2+
+:::
 
 </TabItem>
 
@@ -863,11 +713,13 @@ select * from hudi_cow_pt_tbl timestamp as of '2022-03-08' where id = 1;
 >
 
 
-## Incremental query
+## Incremental query {#incremental-query}
+Hudi provides the unique capability to obtain a set of records that changed between a start and end commit time, providing you with the
+"latest state" for each such record as of the end commit time. By default, Hudi tables are configured to support incremental queries, using
+record level [metadata tracking](https://hudi.apache.org/blog/2023/05/19/hudi-metafields-demystified).
 
-Hudi also provides capability to obtain a stream of records that changed since given commit timestamp. 
-This can be achieved using Hudi's incremental querying by providing a begin time from which changes need to be streamed. 
-We do not need to specify endTime, if we want all changes after the given commit (as is the common case). 
+Below, we fetch changes since a given begin time while the end time defaults to the latest commit on the table. Users can also specify an
+end time using `END_INSTANTTIME.key()` option. 
 
 <Tabs
 groupId="programming-language"
@@ -883,14 +735,12 @@ values={[
 
 ```scala
 // spark-shell
-// reload data
-spark.
-  read.
-  format("hudi").
-  load(basePath).
-  createOrReplaceTempView("hudi_trips_snapshot")
+spark.read.format("hudi")
+  .load(basePath)
+  .createOrReplaceTempView("hudi_trips_snapshot")
 
-val commits = spark.sql("select distinct(_hoodie_commit_time) as commitTime from  hudi_trips_snapshot order by commitTime").map(k => k.getString(0)).take(50)
+val commits = spark.sql("select distinct(_hoodie_commit_time) as commitTime from  hudi_trips_snapshot order by commitTime")
+  .map(k => k.getString(0)).take(50)
 val beginTime = commits(commits.length - 2) // commit time we are interested in
 
 // incrementally query data
@@ -909,9 +759,7 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 ```python
 # pyspark
 # reload data
-spark. \
-  read. \
-  format("hudi"). \
+spark.read.format("hudi"). \
   load(basePath). \
   createOrReplaceTempView("hudi_trips_snapshot")
 
@@ -956,7 +804,46 @@ select * from hudi_table_changes('table', 'latest_state', 'earliest', '202305160
 
 -- start from 202305150000, end at 202305160000.
 select * from hudi_table_changes('table', 'latest_state', '202305150000', '202305160000');
+```
 
+</TabItem>
+
+</Tabs
+>
+
+
+## Change Data Capture Query {#cdc-query}
+
+Hudi also exposes first-class support for Change Data Capture (CDC) queries. CDC queries are useful for applications that need to
+obtain all the changes, along with before/after images of records, given a commit time range.
+
+<Tabs
+groupId="programming-language"
+defaultValue="scala"
+values={[
+{ label: 'Scala', value: 'scala', },
+{ label: 'Python', value: 'python', },
+{ label: 'Spark SQL', value: 'sparksql', },
+]}
+>
+
+<TabItem value="scala">
+
+```scala
+    // spark-shell
+```
+</TabItem>
+
+<TabItem value="python">
+
+```scala
+    // spark-shell
+```
+</TabItem>
+
+<TabItem value="sparksql">
+
+```sql
 -- incrementally query data by path
 -- start from earliest available commit, end at latest available commit.
 select * from hudi_table_changes('path/to/table', 'cdc', 'earliest');
@@ -966,112 +853,178 @@ select * from hudi_table_changes('path/to/table', 'cdc', 'earliest', '2023051600
 
 -- start from 202305150000, end at 202305160000.
 select * from hudi_table_changes('path/to/table', 'cdc', '202305150000', '202305160000');
+```
+</TabItem
+>
+</Tabs
+>
 
+:::info Key requirements
+Note that CDC queries are currently only supported on Copy-on-Write tables.
+:::
+
+## Table Types 
+
+The examples thus far have showcased one of the two table types, that Hudi supports - Copy-on-Write (COW) tables. Hudi also supports
+a more advanced write-optimized table type called Merge-on-Read (MOR) tables, that can balance read and write performance in a more
+flexible manner. See [table types](/docs/table_types) for more details.
+
+Any of these examples can be run on a Merge-on-Read table by simply changing the table type to MOR, while creating the table, as below.
+
+<Tabs
+groupId="programming-language"
+defaultValue="scala"
+values={[
+{ label: 'Scala', value: 'scala', },
+{ label: 'Python', value: 'python', },
+{ label: 'Spark SQL', value: 'sparksql', },
+]}
+>
+
+<TabItem value="scala">
+
+```scala
+    // spark-shell
+```
+</TabItem>
+
+<TabItem value="python">
+
+```scala
+    // spark-shell
+```
+</TabItem>
+
+<TabItem value="sparksql">
+
+```sql
+create table hudi_table (
+  ...
+) using hudi
+tblproperties (
+  type = 'mor'
+)
+```
+</TabItem
+>
+</Tabs
+>
+
+
+## Keys
+
+Hudi also allows users to specify a record key, which will be used to uniquely identify a record within a Hudi table. This is useful and 
+critical to support features like indexing and clustering, which speed up upserts and queries respectively, in a consistent manner. Some of the other
+benefits of keys are explained in detail [here](https://hudi.apache.org/blog/2023/05/19/hudi-metafields-demystified). To this end, Hudi supports a 
+wide range of built-in [key generators](https://hudi.apache.org/blog/2021/02/13/hudi-key-generators), that make it easy to generate record 
+keys for a given table. In the absence of a user configured key, Hudi will auto generate record keys, which are highly compressible.
+
+<Tabs
+groupId="programming-language"
+defaultValue="scala"
+values={[
+{ label: 'Scala', value: 'scala', },
+{ label: 'Python', value: 'python', },
+{ label: 'Spark SQL', value: 'sparksql', },
+]}
+>
+
+<TabItem value="scala">
+
+```scala
+    // spark-shell
 ```
 
 </TabItem>
 
+<TabItem value="python">
+
+```scala
+    // spark-shell
+```
+
+
+</TabItem>
+
+<TabItem value="sparksql">
+
+```sql
+create table hudi_table (
+  ...
+) using hudi
+tblproperties (
+  type = 'mor'
+)
+```
+</TabItem
+>
 </Tabs
 >
 
-:::info
-This will give all changes that happened after the beginTime commit with the filter of fare > 20.0. The unique thing about this
-feature is that it now lets you author streaming pipelines on batch data.
+:::note Implications of defining record keys
+Configuring keys for a Hudi table, has a new implications on the table. If record key is set by the user, `upsert` is chosen as the [write operation](/docs/next/write_operations).
+Also if a record key is configured, then it's also advisable to specify a precombine or ordering field, to correctly handle cases where the source data has 
+multiple records with the same key. See section below. 
 :::
-
-## Change Data Capture Query
-
-
-## Table Types 
-
-## Keys 
 
 ## Ordering Field
+Hudi also allows users to specify a _precombine_ field, which will be used to order and resolve conflicts between multiple versions of the same record. This is very important for 
+use-cases like applying database CDC logs to a Hudi table, where a given record may be appear multiple times in the source data due to repeated upstream updates. 
+Hudi also uses this mechanism to support out-of-order data arrival into a table, where records may need to be resolved in a different order than their commit time. 
+For e.g using a _created_at_ timestamp field as the precombine field will prevent older versions of a record from overwriting newer ones or being exposed to queries, even 
+if they are written at a later commit time to the table. This is one of the key features, that makes Hudi, best suited for dealing with streaming data.
 
-Users can set table properties while creating a Hudi table. Critical options are listed here.
+<Tabs
+groupId="programming-language"
+defaultValue="scala"
+values={[
+{ label: 'Scala', value: 'scala', },
+{ label: 'Python', value: 'python', },
+{ label: 'Spark SQL', value: 'sparksql', },
+]}
+>
 
-| Parameter Name | Default | Introduction                                                                                                                                                                                                                                                                                                                                     |
-|------------------|--------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| primaryKey | uuid | The primary key field names of the table, multiple fields separated by commas. Same as `hoodie.datasource.write.recordkey.field`. If this config is ignored, Hudi will auto generate keys for the records of interest (from 0.14.0).                                                                                                             |
-| preCombineField |  | The pre-combine field of the table. Same as `hoodie.datasource.write.precombine.field` and is used for resolving the final version of the record among multiple versions. Generally `event time` or some other similar column will be used for ordering purpose. Hudi will be able to handle out of order data using the preCombine field value. |
-| type       | cow | The table type to create. type = 'cow' means a COPY-ON-WRITE table, while type = 'mor' means a MERGE-ON-READ table. Same as `hoodie.datasource.write.table.type`. More details can be found [here](/docs/table_types)                                                                                                                            |
+<TabItem value="scala">
 
-:::note
-1. `primaryKey`, `preCombineField`, and `type` are case-sensitive.
-2. While setting `primaryKey`, `preCombineField`, `type` or other Hudi configs, `tblproperties` is preferred over `options`.
-3. A new Hudi table created by Spark SQL will by default set `hoodie.datasource.write.hive_style_partitioning=true`.
-   :::
+```scala
+    // spark-shell
+```
 
-Here is an example of creating a Hudi table.
+</TabItem>
+
+<TabItem value="python">
+
+```scala
+    // spark-shell
+```
+
+
+</TabItem>
+
+<TabItem value="sparksql">
 
 ```sql
--- create a Hudi table that is partitioned.
-create table hudi_cow_pt_tbl (
-  id bigint,
-  name string,
-  ts bigint,
-  dt string,
-  hh string
+create table hudi_table (
+  ...
 ) using hudi
 tblproperties (
-  type = 'cow'
- )
-partitioned by dt
-location '/tmp/hudi/hudi_cow_pt_tbl';
+  type = 'mor'
+)
 ```
+</TabItem
+>
+</Tabs
+>
 
-Default value for type is 'cow' and hence could be skipped.
-
-**CTAS**
-
-Hudi supports CTAS (Create Table As Select) on Spark SQL. <br/>
-:::note
-CTAS uses the **bulk insert** as the write operation for better writer performance.
-:::
-
-***Create a Hudi Table using CTAS***
-
-```sql
--- CTAS: create a partitioned Hudi table. 
-create table hudi_ctas_cow_pt_tbl
-using hudi
-tblproperties (
-  type = 'cow', 
-  preCombineField = 'name'
- )
-partitioned by (dt)
-as
-select 1 as id, 'a1' as name, '2021-12-01'' as dt;
-```
-
-***Create a Hudi Table using CTAS by loading data from another parquet table***
-
-```sql
-# create managed parquet table
-create table parquet_mngd using parquet location 'file:///tmp/parquet_dataset/*.parquet';
-
-# CTAS by loading data into Hudi table
-create table hudi_ctas_cow_pt_tbl2 using hudi location 'file:/tmp/hudi/hudi_tbl/' tblproperties (
-  type = 'cow',
-  preCombineField = 'ts'
- )
-partitioned by (datestr) as select * from parquet_mngd;
-```
-
-:::note
-If you prefer to explicitly set the primary keys, you can do so by setting `primaryKey` config in tblproperties.
-:::
 
 ## Where to go from here?
 You can also [build hudi yourself](https://github.com/apache/hudi#building-apache-hudi-from-source) and try this quickstart using `--jars <path to spark bundle jar>`(see also [build with scala 2.12](https://github.com/apache/hudi#build-with-different-spark-versions))
 for more info. If you are looking for ways to migrate your existing data to Hudi, refer to [migration guide](/docs/next/migration_guide).
 
-### Dockerized Demo 
-Even as we showcased the core capabilities, Hudi supports a lot more advanced functionality that can make it easy 
-to get your transactional data lakes up and running quickly, across a variety query engines like Hive, Flink, Spark, Presto, Trino and much more.
-We have put together a [demo video](https://www.youtube.com/watch?v=VhNgUsxdrD0) that showcases all of this on a docker based setup with all 
-dependent systems running locally. We recommend you replicate the same setup and run the demo yourself, by following 
-steps [here](/docs/next/docker_demo) to get a taste for it. 
+### Spark SQL Reference
+
+For advanced usage of spark SQL, please refer to [Spark SQL DDL](/docs/next/sql_ddl) and [Spark SQL DML](/docs/next/sql_dml) reference guides. 
+For alter table commands, check out [this](/docs/next/sql_ddl#spark-alter-table). Stored procedures provide a lot of powerful capabilities using Hudi SparkSQL to assist with monitoring, managing and operating Hudi tables, please check [this](/docs/next/procedures) out.
 
 ### Streaming workloads
 
@@ -1083,9 +1036,12 @@ transformation support, automatic table services and so on.
 
 **Structured Streaming** - Hudi supports Spark Structured Streaming reads and writes as well. Please see [here](/docs/next/hoodie_streaming_ingestion#structured-streaming) for more.
 
-### Spark SQL Reference
+Check out more information on [modeling data in Hudi](/docs/faq#how-do-i-model-the-data-stored-in-hudi) and different ways to [writing Hudi Tables](/docs/next/writing_data).
 
-- For advanced usage of spark SQL, please refer to [Spark SQL DDL](/docs/next/sql_ddl) and [Spark SQL DML](/docs/next/sql_dml) reference guides.
-- For alter table commands, check out [this](/docs/next/sql_ddl#spark-alter-table). 
-- Stored procedures provide a lot of powerful capabilities using Hudi SparkSQL to assist with monitoring, managing and operating Hudi tables, please check [this](/docs/next/procedures) out.
+### Dockerized Demo
+Even as we showcased the core capabilities, Hudi supports a lot more advanced functionality that can make it easy
+to get your transactional data lakes up and running quickly, across a variety query engines like Hive, Flink, Spark, Presto, Trino and much more.
+We have put together a [demo video](https://www.youtube.com/watch?v=VhNgUsxdrD0) that showcases all of this on a docker based setup with all
+dependent systems running locally. We recommend you replicate the same setup and run the demo yourself, by following
+steps [here](/docs/next/docker_demo) to get a taste for it. 
 
