@@ -20,6 +20,7 @@ package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
 
 import org.apache.flink.table.data.RowData;
@@ -74,5 +75,6 @@ public class HoodieRowDataParquetWriter extends ParquetWriter<RowData>
   @Override
   public void close() throws IOException {
     super.close();
+    IOUtils.checkParquetFileVaid(fs.getConf(), file);
   }
 }
