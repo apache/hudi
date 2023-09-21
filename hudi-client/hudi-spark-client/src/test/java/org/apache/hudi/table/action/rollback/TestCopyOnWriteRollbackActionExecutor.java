@@ -59,6 +59,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -429,7 +430,10 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
         2, true);
 
     // Create completed clustering commit
-    SparkRDDWriteClient clusteringClient = getHoodieWriteClient(ClusteringTestUtils.getClusteringConfig(basePath));
+    Properties properties = new Properties();
+    properties.put("hoodie.datasource.write.row.writer.enable", String.valueOf(false));
+    SparkRDDWriteClient clusteringClient = getHoodieWriteClient(
+        ClusteringTestUtils.getClusteringConfig(basePath, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, properties));
 
     // Save an older instant for us to run clustering.
     String clusteringInstant1 = HoodieActiveTimeline.createNewInstantTime();
