@@ -435,10 +435,9 @@ will be supported in the future.
 
 ## StarRocks
 
-Copy on Write tables in Apache Hudi 0.10.0 and above can be queried via StarRocks external tables from StarRocks version
-2.2.0. Only snapshot queries are supported currently. In future releases Merge on Read tables will also be supported.
+[StarRocks](http://starrocks.io), a Linux Foundation project, is a next-generation sub-second MPP OLAP database for full analytics scenarios, including multi-dimensional analytics, real-time analytics, and ad-hoc queries.  StarRocks provides complete support for Copy On Write (COW) tables and Merge On Read (MOR) tables from Hudi.
 Please refer
-to [StarRocks Hudi external table](https://docs.starrocks.io/en-us/latest/using_starrocks/External_table#hudi-external-table)
+to [StarRocks Hudi external catalog](https://docs.starrocks.io/en-us/latest/data_source/catalog/hudi_catalog)
 for more details on the setup.
 
 ## ClickHouse
