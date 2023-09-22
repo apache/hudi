@@ -235,9 +235,6 @@ public class HoodieSyncConfig extends HoodieConfig {
     @Parameter(names = "--partition-value-extractor", description = "Class which implements PartitionValueExtractor "
         + "to extract the partition values from HDFS path")
     public String partitionValueExtractorClass;
-    @Parameter(names = {"--assume-date-partitioning"}, description = "Assume standard yyyy/mm/dd partitioning, this"
-        + " exists to support backward compatibility. If you use hoodie 0.3.x, do not set this parameter")
-    public Boolean assumeDatePartitioning;
     @Parameter(names = {"--decode-partition"}, description = "Decode the partition value if the partition has encoded during writing")
     public Boolean decodePartition;
     @Parameter(names = {"--use-file-listing-from-metadata"}, description = "Fetch file listing from Hudi's metadata")

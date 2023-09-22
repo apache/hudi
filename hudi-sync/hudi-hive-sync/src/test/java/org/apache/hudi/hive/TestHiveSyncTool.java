@@ -964,7 +964,7 @@ public class TestHiveSyncTool {
         "Table " + HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE
             + " should not exist initially");
 
-    // Lets do the sync
+    // Let's do the sync
     reSyncHiveTable();
 
     assertTrue(hiveClient.tableExists(snapshotTableName),

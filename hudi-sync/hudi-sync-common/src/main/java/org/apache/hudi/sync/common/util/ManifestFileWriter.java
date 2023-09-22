@@ -120,7 +120,6 @@ public class ManifestFileWriter {
    */
   public static class Builder {
     private boolean useFileListingFromMetadata;
-    private boolean assumeDatePartitioning;
     private HoodieTableMetaClient metaClient;
 
     public Builder setUseFileListingFromMetadata(boolean useFileListingFromMetadata) {

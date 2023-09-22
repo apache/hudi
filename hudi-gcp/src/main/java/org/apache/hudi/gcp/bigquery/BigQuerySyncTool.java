@@ -130,9 +130,6 @@ public class BigQuerySyncTool extends HoodieSyncTool {
 
     List<String> partitionFields = !StringUtils.isNullOrEmpty(config.getString(BIGQUERY_SYNC_SOURCE_URI_PREFIX)) ? config.getSplitStrings(BIGQUERY_SYNC_PARTITION_FIELDS) : Collections.emptyList();
     Schema latestSchema = bqSchemaResolver.getTableSchema(metaClient, partitionFields);
-    ManifestFileWriter manifestFileWriter = ManifestFileWriter.builder()
-        .setUseFileListingFromMetadata(config.getBoolean(BIGQUERY_SYNC_USE_FILE_LISTING_FROM_METADATA))
-        .build();
     if (config.getBoolean(BIGQUERY_SYNC_USE_BQ_MANIFEST_FILE)) {
       manifestFileWriter.writeManifestFile(true);
       if (!tableExists(bqSyncClient, tableName)) {
