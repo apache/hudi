@@ -82,6 +82,7 @@ class TestSparkDataSourceDAGExecution extends HoodieSparkClientTestBase with Sca
     cleanupTestDataGenerator()
     cleanupFileSystem()
     FileSystem.closeAll()
+    System.gc()
   }
 
   @ParameterizedTest
