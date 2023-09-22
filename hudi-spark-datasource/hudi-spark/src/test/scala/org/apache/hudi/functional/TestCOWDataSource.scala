@@ -94,7 +94,6 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     cleanupTestDataGenerator()
     cleanupFileSystem()
     FileSystem.closeAll()
-    System.gc()
   }
 
   @ParameterizedTest

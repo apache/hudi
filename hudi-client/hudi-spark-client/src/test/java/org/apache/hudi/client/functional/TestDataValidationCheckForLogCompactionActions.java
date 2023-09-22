@@ -113,7 +113,6 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
     cleanupTestDataGenerator();
     cleanupFileSystem();
     cleanupExecutorService();
-    System.gc();
   }
 
   /**

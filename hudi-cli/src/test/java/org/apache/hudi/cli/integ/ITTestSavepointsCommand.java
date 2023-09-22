@@ -18,7 +18,6 @@
 
 package org.apache.hudi.cli.integ;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.commands.TableCommand;
 import org.apache.hudi.cli.testutils.HoodieCLIIntegrationTestBase;
@@ -31,10 +30,11 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -141,7 +141,7 @@ public class ITTestSavepointsCommand extends HoodieCLIIntegrationTestBase {
    * Test case of command 'savepoint rollback' with metadata table bootstrap.
    */
   @Disabled("HUDI-6571")
-  public void testRollbackToSavepointWithMetadataTableEnable() throws IOException {
+  public void testRollbackToSavepointWithMetadataTableEnable() throws Exception {
     // generate for savepoints
     for (int i = 101; i < 105; i++) {
       String instantTime = String.valueOf(i);
@@ -157,7 +157,7 @@ public class ITTestSavepointsCommand extends HoodieCLIIntegrationTestBase {
     // then bootstrap metadata table at instant 104
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(HoodieCLI.basePath)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build()).build();
-    SparkHoodieBackedTableMetadataWriter.create(HoodieCLI.conf, writeConfig, new HoodieSparkEngineContext(jsc));
+    SparkHoodieBackedTableMetadataWriter.create(HoodieCLI.conf, writeConfig, new HoodieSparkEngineContext(jsc)).close();
 
     assertTrue(HoodieCLI.fs.exists(metadataTableBasePath));
 

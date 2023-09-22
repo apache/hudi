@@ -70,7 +70,6 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
     cleanupTestDataGenerator()
     cleanupFileSystem()
     FileSystem.closeAll()
-    System.gc()
   }
 
   @ParameterizedTest

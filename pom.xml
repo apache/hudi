@@ -383,6 +383,9 @@
           <skip>${skipITs}</skip>
           <argLine>@{argLine}</argLine>
           <useSystemClassLoader>false</useSystemClassLoader>
+          <systemPropertyVariables>
+            <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
+          </systemPropertyVariables>
         </configuration>
       </plugin>
       <plugin>

@@ -128,6 +128,9 @@ public class TestHoodieMetadataBase extends HoodieSparkClientTestHarness {
   @AfterEach
   public void clean() throws Exception {
     cleanupResources();
+    if (metadataWriter != null) {
+      metadataWriter.close();
+    }
   }
 
   protected void doWriteInsertAndUpsert(HoodieTestTable testTable, String commit1, String commit2, boolean nonPartitioned) throws Exception {
