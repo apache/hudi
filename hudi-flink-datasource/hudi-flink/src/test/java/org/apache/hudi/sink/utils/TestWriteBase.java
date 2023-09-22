@@ -148,7 +148,7 @@ public class TestWriteBase {
       // open the function and ingest data
       this.pipeline.openFunction();
       HoodieWriteConfig writeConfig = this.pipeline.getCoordinator().getWriteClient().getConfig();
-      this.ckpMetadata = CkpMetadataFactory.getCkpMetadata(StreamerUtil.createMetaClient(conf), writeConfig, conf);
+      this.ckpMetadata = CkpMetadataFactory.getCkpMetadata(writeConfig, conf);
       return this;
     }
 

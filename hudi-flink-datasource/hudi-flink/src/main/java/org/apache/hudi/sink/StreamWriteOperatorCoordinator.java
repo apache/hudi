@@ -190,7 +190,7 @@ public class StreamWriteOperatorCoordinator
     this.metaClient = initTableIfNotExists(this.conf);
     // the write client must create after the table creation
     this.writeClient = FlinkWriteClients.createWriteClient(conf);
-    this.ckpMetadata = initCkpMetadata(metaClient, writeClient.getConfig(), this.conf);
+    this.ckpMetadata = initCkpMetadata(writeClient.getConfig(), this.conf);
     initMetadataTable(this.writeClient);
     this.tableState = TableState.create(conf);
     // start the executor
@@ -351,8 +351,8 @@ public class StreamWriteOperatorCoordinator
     writeClient.initMetadataTable();
   }
 
-  private static CkpMetadata initCkpMetadata(HoodieTableMetaClient metaClient, HoodieWriteConfig writeConfig, Configuration conf) throws IOException {
-    CkpMetadata ckpMetadata = CkpMetadataFactory.getCkpMetadata(metaClient, writeConfig, conf);
+  private static CkpMetadata initCkpMetadata(HoodieWriteConfig writeConfig, Configuration conf) throws IOException {
+    CkpMetadata ckpMetadata = CkpMetadataFactory.getCkpMetadata(writeConfig, conf);
     ckpMetadata.bootstrap();
     return ckpMetadata;
   }

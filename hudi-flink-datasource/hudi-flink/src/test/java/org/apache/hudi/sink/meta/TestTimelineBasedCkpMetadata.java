@@ -42,6 +42,7 @@ public class TestTimelineBasedCkpMetadata extends TestCkpMetadata {
   public void setup() throws IOException {
     String basePath = tempFile.getAbsolutePath();
     this.conf = TestConfigurations.getDefaultConf(basePath);
+    conf.setString(HoodieWriteConfig.INSTANT_STATE_TIMELINE_SERVER_BASED.key(), "true");
     StreamerUtil.initTableIfNotExists(conf);
     this.writeClient = FlinkWriteClients.createWriteClient(conf);
   }

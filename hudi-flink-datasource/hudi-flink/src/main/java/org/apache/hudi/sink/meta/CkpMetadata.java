@@ -200,6 +200,10 @@ public class CkpMetadata implements Serializable, AutoCloseable {
     return this.instantCache;
   }
 
+  // -------------------------------------------------------------------------
+  //  Utilities
+  // -------------------------------------------------------------------------
+
   protected static String ckpMetaPath(String basePath, String uniqueId) {
     // .hoodie/.aux/ckp_meta
     String metaPath = basePath + Path.SEPARATOR + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + Path.SEPARATOR + CKP_META;
@@ -230,5 +234,4 @@ public class CkpMetadata implements Serializable, AutoCloseable {
         }).get())
         .sorted().collect(Collectors.toList());
   }
-
 }

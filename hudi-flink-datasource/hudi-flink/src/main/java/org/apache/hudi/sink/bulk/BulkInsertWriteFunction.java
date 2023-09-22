@@ -21,7 +21,6 @@ package org.apache.hudi.sink.bulk;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.common.AbstractWriteFunction;
@@ -30,7 +29,6 @@ import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.sink.meta.CkpMetadataFactory;
 import org.apache.hudi.sink.utils.TimeWait;
 import org.apache.hudi.util.FlinkWriteClients;
-import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
@@ -116,8 +114,7 @@ public class BulkInsertWriteFunction<I>
   public void open(Configuration parameters) throws IOException {
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
     this.writeClient = FlinkWriteClients.createWriteClient(this.config, getRuntimeContext());
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(this.config);
-    this.ckpMetadata = CkpMetadataFactory.getCkpMetadata(metaClient, writeClient.getConfig(), config);
+    this.ckpMetadata = CkpMetadataFactory.getCkpMetadata(writeClient.getConfig(), config);
     this.initInstant = lastPendingInstant();
     sendBootstrapEvent();
     initWriterHelper();

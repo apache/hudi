@@ -430,7 +430,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> INSTANT_STATE_TIMELINE_SERVER_BASED = ConfigProperty
       .key("hoodie.instant_state.timeline_server_based.enabled")
-      .defaultValue(true)
+      .defaultValue(false)
       .sinceVersion("1.0.0")
       .withDocumentation("If enabled, writers get instant state from timeline server rather than requesting DFS directly");
 

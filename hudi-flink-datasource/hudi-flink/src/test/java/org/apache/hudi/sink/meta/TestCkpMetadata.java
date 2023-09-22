@@ -19,8 +19,6 @@
 package org.apache.hudi.sink.meta;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
@@ -57,8 +55,6 @@ public class TestCkpMetadata {
 
   protected HoodieFlinkWriteClient writeClient;
 
-  protected HoodieTableMetaClient metaClient;
-
   @BeforeEach
   public void beforeEach() throws Exception {
     setup();
@@ -67,10 +63,8 @@ public class TestCkpMetadata {
   protected void setup() throws IOException {
     String basePath = tempFile.getAbsolutePath();
     this.conf = TestConfigurations.getDefaultConf(basePath);
-    conf.setString(HoodieWriteConfig.INSTANT_STATE_TIMELINE_SERVER_BASED.key(), "false");
     StreamerUtil.initTableIfNotExists(conf);
     this.writeClient = FlinkWriteClients.createWriteClient(conf);
-    this.metaClient = StreamerUtil.createMetaClient(conf);
   }
 
   @ParameterizedTest
@@ -113,7 +107,7 @@ public class TestCkpMetadata {
 
   protected CkpMetadata getCkpMetadata(String uniqueId) {
     conf.set(FlinkOptions.WRITE_CLIENT_ID, uniqueId);
-    return CkpMetadataFactory.getCkpMetadata(metaClient, writeClient.getConfig(), conf);
+    return CkpMetadataFactory.getCkpMetadata(writeClient.getConfig(), conf);
   }
 
   @AfterEach
