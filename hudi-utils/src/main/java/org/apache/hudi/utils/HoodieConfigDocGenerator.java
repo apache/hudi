@@ -19,7 +19,6 @@
 
 package org.apache.hudi.utils;
 
-import com.sun.tools.doclets.internal.toolkit.NestedClassWriter;
 import org.apache.hudi.common.config.*;
 import org.apache.hudi.common.config.ConfigGroups.Names;
 import org.apache.hudi.common.config.ConfigGroups.SubGroupNames;
@@ -188,9 +187,9 @@ public class HoodieConfigDocGenerator {
       // Default value
       Object defaultValue = cfgProperty.hasDefaultValue() ? cfgProperty.defaultValue() : (cfgProperty.hasInferFunction() ? "" : null);
       if (defaultValue != null) {
-        columns.add(defaultValue + " (Optional)");
+        columns.add(defaultValue + " ");
       } else {
-        columns.add("N/A " + new BoldText("(Required)"));
+        columns.add(" ");
       }
       boolean isConfigRequired = (defaultValue == null);
 
@@ -439,9 +438,9 @@ public class HoodieConfigDocGenerator {
         // Default value
         Object defaultValue = cfgProperty.hasDefaultValue() ? cfgProperty.defaultValue() : null;
         if (defaultValue != null) {
-          columns.add(defaultValue + " (Optional)");
+          columns.add(defaultValue + " ");
         } else {
-          columns.add("N/A " + new BoldText("(Required)"));
+          columns.add(" ");
         }
         boolean isConfigRequired = (defaultValue == null);
 
