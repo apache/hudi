@@ -54,29 +54,16 @@ From the extracted directory run spark-shell with Hudi:
 ```shell
 # For Spark versions: 3.2 - 3.4
 export SPARK_VERSION=3.4 # Can be any of [3.2, 3.3, 3.4]
-spark-shell \
-  --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 \
-  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
-  --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
-  --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
-  --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
+spark-shell --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 ```shell
 # For Spark versions: 3.0 - 3.1
 export SPARK_VERSION=3.1 # Can be any of [3.0, 3.1]
-spark-shell \
-  --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 \
-  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
-  --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
-  --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
+spark-shell --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 ```shell
 # For Spark version: 2.4
-spark-shell \
-  --packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.14.0 \
-  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
-  --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
-  --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
+spark-shell --packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.14.0 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 </TabItem>
 
@@ -88,31 +75,18 @@ From the extracted directory run pyspark with Hudi:
 # For Spark versions: 3.2 - 3.4
 export PYSPARK_PYTHON=$(which python3)
 export SPARK_VERSION=3.4 # Can be any of [3.2, 3.3, 3.4]
-pyspark \
---packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 \
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
---conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
---conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
---conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
+pyspark --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 ```shell
 # For Spark versions: 3.0 - 3.1
 export PYSPARK_PYTHON=$(which python3)
 export SPARK_VERSION=3.1 # Can be any of [3.0, 3.1]
-pyspark \
---packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 \
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
---conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
---conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
+pyspark --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 ```shell
 # For Spark version: 2.4
 export PYSPARK_PYTHON=$(which python3)
-pyspark \
---packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.14.0 \
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
---conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
---conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
+pyspark --packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.14.0 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 </TabItem>
 
@@ -124,26 +98,16 @@ From the extracted directory run Spark SQL with Hudi:
 ```shell
 # For Spark versions: 3.2 - 3.4
 export SPARK_VERSION=3.4 # Can be any of [3.2, 3.3, 3.4]
-spark-sql --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 \
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
---conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
---conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
---conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
+spark-sql --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 ```shell
 # For Spark versions: 3.0 - 3.1
 export SPARK_VERSION=3.1 # Can be any of [3.0, 3.1]
-spark-sql --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 \
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
---conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
---conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
+spark-sql --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 ```shell
 # For Spark version: 2.4
-spark-sql --packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.14.0 \
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
---conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
---conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
+spark-sql --packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.14.0 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 
 </TabItem>
@@ -246,14 +210,14 @@ Here is an example of creating a Hudi table.
 
 ```sql
 -- create a Hudi table that is partitioned.
-create table hudi_table (
-  id bigint,
-  name string,
-  ts bigint,
-  dt string,
-  hh string
-) using hudi
-partitioned by dt;
+CREATE TABLE hudi_table (
+  id BIGINT,
+  name STRING,
+  ts BIGINT,
+  dt STRING,
+  hh STRING
+) USING HUDI
+PARTITIONED BY dt;
 ```
 
 For more options for creating Hudi tables, please refer to [SQL DDL](/docs/sql_ddl) reference guide.  
@@ -335,8 +299,8 @@ the write operation, matching the out-of-behavior of Spark's Parquet Datasource.
 Users can use 'INSERT INTO' to insert data into a Hudi table. See [Insert Into](/docs/sql_dml#insert-into) for more advanced options.
 
 ```sql
-insert into hudi_cow_pt_tbl 
-select 2, 'a2', '2021-12-02';
+INSERT INTO hudi_cow_pt_tbl 
+SELECT 2, 'a2', '2021-12-02';
 ```
 
 If you want to control the Hudi write operation used for the INSERT statement, you can set the following config before issuing 
@@ -344,7 +308,7 @@ the INSERT statement:
 
 ```sql
 -- bulk_insert using INSERT_INTO 
-set hoodie.spark.sql.insert.into.operation = 'bulk_insert' 
+SET hoodie.spark.sql.insert.into.operation = 'bulk_insert' 
 ```
 
 </TabItem>
@@ -370,37 +334,28 @@ values={[
 
 ```scala
 // spark-shell
-val tripsSnapshotDF = spark.
-  read.
-  format("hudi").
-  load(basePath)
+val tripsSnapshotDF = spark.read.format("hudi").load(basePath)
 tripsSnapshotDF.createOrReplaceTempView("hudi_trips_snapshot")
 
-spark.sql("select fare, begin_lon, begin_lat, ts from  hudi_trips_snapshot where fare > 20.0").show()
-spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare from  hudi_trips_snapshot").show()
+spark.sql("SELECT fare, begin_lon, begin_lat, ts FROM  hudi_trips_snapshot WHERE fare > 20.0").show()
+spark.sql("SELECT _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare FROM  hudi_trips_snapshot").show()
 ```
 </TabItem>
 <TabItem value="python">
 
 ```python
 # pyspark
-tripsSnapshotDF = spark. \
-  read. \
-  format("hudi"). \
-  load(basePath)
-
+tripsSnapshotDF = spark.read.format("hudi").load(basePath)
 tripsSnapshotDF.createOrReplaceTempView("hudi_trips_snapshot")
 
-spark.sql("select fare, begin_lon, begin_lat, ts from  hudi_trips_snapshot where fare > 20.0").show()
-spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare from  hudi_trips_snapshot").show()
+spark.sql("SELECT fare, begin_lon, begin_lat, ts FROM  hudi_trips_snapshot WHERE fare > 20.0").show()
+spark.sql("SELECT _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare FROM  hudi_trips_snapshot").show()
 ```
 </TabItem>
 <TabItem value="sparksql">
 
 ```sql
- select fare, begin_lon, begin_lat, ts 
- from  hudi_trips_snapshot 
- where fare > 20.0
+ SELECT fare, begin_lon, begin_lat, ts FROM  hudi_trips_snapshot WHERE fare > 20.0
 ```
 </TabItem>
 
@@ -450,9 +405,7 @@ Notice that the save mode is now `Append`. In general, always use append mode un
 Hudi table can be update using a regular UPDATE statement. See [Update](/docs/sql_dml#update) for more advanced options.
 
 ```sql
-update hudi_table 
-set name = 'a1_1' 
-where id = 1;
+UPDATE hudi_table SET name = 'a1_1' WHERE id = 1;
 ```
 
 </TabItem>
@@ -460,7 +413,6 @@ where id = 1;
 
 ```python
 # pyspark
-
 // Lets read data from target Hudi table, modify fare column and update it. 
 val updatesDf = spark.read.format("hudi").load(basePath).withColumn("fare",col("fare")*100)
 
@@ -513,19 +465,19 @@ values={[
 
 ```sql
 -- source table using Hudi for testing merging into target Hudi table
-create table merge_source (id int, name string, dt string) 
-using hudi
-tblproperties (primaryKey = 'id', preCombineField = 'name');
-insert into merge_source values 
+CREATE TABLE merge_source (id INT, name STRING, dt STRING) 
+USING HUDI
+TBLPROPERTIES (primaryKey = 'id', preCombineField = 'name');
+INSERT INTO merge_source VALUES 
   (1, 'a1_new', 2021-12-05), 
   (2, "a2_new", 2021-12-05), 
   (3, "a3_new", 2021-12-05);
 
-merge into hudi_cow_pt_tbl as target
-using merge_source as source
-on target.id = source.id
-when matched then update set *
-when not matched then insert *
+MERGE INTO hudi_cow_pt_tbl AS target
+USING merge_source AS source
+ON target.id = source.id
+WHEN MATCHED THEN UPDATE SET *
+WHEN NOT MATCHED THEN INSERT *
 ;
 
 ```
@@ -569,8 +521,9 @@ deletesDf.write.format("hudi").
 // run the same read query as above.
 val roAfterDeleteViewDF = spark.read.format("hudi").load(basePath)
 roAfterDeleteViewDF.registerTempTable("hudi_trips_snapshot")
+
 // fetch should return (total - 2) records
-spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
+spark.sql("SELECT uuid, partitionpath FROM hudi_trips_snapshot").count()
 ```
 
 :::info Key requirements
@@ -582,8 +535,7 @@ Notice that the save mode is again `Append`.
 <TabItem value="sparksql">
 
 ```sql
-DELETE FROM hudi_cow_pt_tbl 
-WHERE id = 1;
+DELETE FROM hudi_cow_pt_tbl WHERE id = 1;
 ```
 
 </TabItem>
@@ -610,17 +562,14 @@ from pyspark.sql.functions import lit
 val hard_delete_df = spark.read.format("hudi").load(basePath).limit(2)
 
 # run the same read query as above.
-roAfterDeleteViewDF = spark. \
-  read. \
-  format("hudi"). \
-  load(basePath)
+roAfterDeleteViewDF = spark.read.format("hudi").load(basePath)
 ```
 
 ```python
 roAfterDeleteViewDF.createOrReplaceTempView("hudi_trips_snapshot") 
 
 # fetch should return (total - 2) records
-spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
+spark.sql("SELECT uuid, partitionpath FROM hudi_trips_snapshot").count()
 ```
 :::info Key requirements
 Deletes with spark-datasource is supported only when the source dataframe contains Hudi's meta fields or a [key field](#keys) is configured.
@@ -650,19 +599,16 @@ values={[
 <TabItem value="scala">
 
 ```scala
-spark.read.
-  format("hudi").
+spark.read.format("hudi").
   option("as.of.instant", "20210728141108100").
   load(basePath)
 
-spark.read.
-  format("hudi").
+spark.read.format("hudi").
   option("as.of.instant", "2021-07-28 14:11:08.200").
   load(basePath)
 
 // It is equal to "as.of.instant = 2021-07-28 00:00:00"
-spark.read.
-  format("hudi").
+spark.read.format("hudi").
   option("as.of.instant", "2021-07-28").
   load(basePath)
 
@@ -673,19 +619,16 @@ spark.read.
 
 ```python
 #pyspark
-spark.read. \
-  format("hudi"). \
+spark.read.format("hudi"). \
   option("as.of.instant", "20210728141108100"). \
   load(basePath)
 
-spark.read. \
-  format("hudi"). \
+spark.read.format("hudi"). \
   option("as.of.instant", "2021-07-28 14:11:08.000"). \
   load(basePath)
 
 # It is equal to "as.of.instant = 2021-07-28 00:00:00"
-spark.read. \
-  format("hudi"). \
+spark.read.format("hudi"). \
   option("as.of.instant", "2021-07-28"). \
   load(basePath)
 ```
@@ -698,10 +641,10 @@ spark.read. \
 ```sql
 
 -- time travel based on commit time, for eg: `20220307091628793`
-select * from hudi_cow_pt_tbl timestamp as of '20220307091628793' where id = 1;
+SELECT * FROM hudi_cow_pt_tbl TIMESTAMP AS OF '20220307091628793' WHERE id = 1;
 -- time travel based on different timestamp formats
-select * from hudi_cow_pt_tbl timestamp as of '2022-03-07 09:16:28.100' where id = 1;
-select * from hudi_cow_pt_tbl timestamp as of '2022-03-08' where id = 1;
+SELECT * FROM hudi_cow_pt_tbl TIMESTAMP AS OF '2022-03-07 09:16:28.100' WHERE id = 1;
+SELECT * FROM hudi_cow_pt_tbl TIMESTAMP AS OF '2022-03-08' WHERE id = 1;
 ```
 :::note
 Requires Spark 3.2+
@@ -739,7 +682,7 @@ spark.read.format("hudi")
   .load(basePath)
   .createOrReplaceTempView("hudi_trips_snapshot")
 
-val commits = spark.sql("select distinct(_hoodie_commit_time) as commitTime from  hudi_trips_snapshot order by commitTime")
+val commits = spark.sql("SELECT DISTINCT(_hoodie_commit_time) AS commitTime FROM  hudi_trips_snapshot ORDER BY commitTime")
   .map(k => k.getString(0)).take(50)
 val beginTime = commits(commits.length - 2) // commit time we are interested in
 
@@ -750,7 +693,7 @@ val tripsIncrementalDF = spark.read.format("hudi").
   load(basePath)
 tripsIncrementalDF.createOrReplaceTempView("hudi_trips_incremental")
 
-spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_trips_incremental where fare > 20.0").show()
+spark.sql("SELECT `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts FROM  hudi_trips_incremental WHERE fare > 20.0").show()
 ```
 
 </TabItem>
@@ -763,7 +706,7 @@ spark.read.format("hudi"). \
   load(basePath). \
   createOrReplaceTempView("hudi_trips_snapshot")
 
-commits = list(map(lambda row: row[0], spark.sql("select distinct(_hoodie_commit_time) as commitTime from  hudi_trips_snapshot order by commitTime").limit(50).collect()))
+commits = list(map(lambda row: row[0], spark.sql("SELECT DISTINCT(_hoodie_commit_time) AS commitTime FROM  hudi_trips_snapshot ORDER BY commitTime").limit(50).collect()))
 beginTime = commits[len(commits) - 2] # commit time we are interested in
 
 # incrementally query data
@@ -777,7 +720,7 @@ tripsIncrementalDF = spark.read.format("hudi"). \
   load(basePath)
 tripsIncrementalDF.createOrReplaceTempView("hudi_trips_incremental")
 
-spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_trips_incremental where fare > 20.0").show()
+spark.sql("SELECT `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts FROM hudi_trips_incremental WHERE fare > 20.0").show()
 ```
 
 </TabItem>
@@ -797,13 +740,13 @@ hudi_table_changes(table or path, queryType, beginTime [, endTime]);
 
 -- incrementally query data by table name
 -- start from earliest available commit, end at latest available commit.  
-select * from hudi_table_changes('db.table', 'latest_state', 'earliest');
+SELECT * FROM hudi_table_changes('db.table', 'latest_state', 'earliest');
 
 -- start from earliest, end at 202305160000.  
-select * from hudi_table_changes('table', 'latest_state', 'earliest', '202305160000');  
+SELECT * FROM hudi_table_changes('table', 'latest_state', 'earliest', '202305160000');  
 
 -- start from 202305150000, end at 202305160000.
-select * from hudi_table_changes('table', 'latest_state', '202305150000', '202305160000');
+SELECT * FROM hudi_table_changes('table', 'latest_state', '202305150000', '202305160000');
 ```
 
 </TabItem>
@@ -846,13 +789,13 @@ values={[
 ```sql
 -- incrementally query data by path
 -- start from earliest available commit, end at latest available commit.
-select * from hudi_table_changes('path/to/table', 'cdc', 'earliest');
+SELECT * FROM hudi_table_changes('path/to/table', 'cdc', 'earliest');
 
 -- start from earliest, end at 202305160000.
-select * from hudi_table_changes('path/to/table', 'cdc', 'earliest', '202305160000');
+SELECT * FROM hudi_table_changes('path/to/table', 'cdc', 'earliest', '202305160000');
 
 -- start from 202305150000, end at 202305160000.
-select * from hudi_table_changes('path/to/table', 'cdc', '202305150000', '202305160000');
+SELECT * FROM hudi_table_changes('path/to/table', 'cdc', '202305150000', '202305160000');
 ```
 </TabItem
 >
@@ -898,12 +841,9 @@ values={[
 <TabItem value="sparksql">
 
 ```sql
-create table hudi_table (
+CREATE TABLE hudi_table (
   ...
-) using hudi
-tblproperties (
-  type = 'mor'
-)
+) USING HUDI TBLPROPERTIES (type = 'mor')
 ```
 </TabItem
 >
@@ -949,12 +889,9 @@ values={[
 <TabItem value="sparksql">
 
 ```sql
-create table hudi_table (
+CREATE TABLE hudi_table (
   ...
-) using hudi
-tblproperties (
-  primaryKey = 'uuid'
-)
+) USING HUDI TBLPROPERTIES (primaryKey = 'uuid')
 ```
 </TabItem
 >
@@ -1008,12 +945,9 @@ updatesDf.write.format("hudi").
 <TabItem value="sparksql">
 
 ```sql
-create table hudi_table (
+CREATE TABLE hudi_table (
   ...
-) using hudi
-tblproperties (
-  preCombineField = 'ts'
-)
+) USING HUDI TBLPROPERTIES (preCombineField = 'ts')
 ```
 </TabItem
 >
