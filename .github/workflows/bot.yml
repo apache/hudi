@@ -46,6 +46,7 @@ jobs:
         run: ./scripts/release/validate_source_rat.sh
 
   test-spark:
+    if: false
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -112,6 +113,7 @@ jobs:
           mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-hudi-hadoop-mr-and-hudi-java-client:
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 40
     strategy:
@@ -145,6 +147,7 @@ jobs:
           mvn test -Punit-tests -fae -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"FLINK_PROFILE" -pl hudi-hadoop-mr,hudi-client/hudi-java-client $MVN_ARGS
 
   test-spark-java17:
+    if: false
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -200,6 +203,7 @@ jobs:
           mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-flink:
+    if: false
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -239,6 +243,7 @@ jobs:
           mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink $MVN_ARGS
 
   docker-java17-test:
+    if: false
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -267,6 +272,7 @@ jobs:
           ./packaging/bundle-validation/run_docker_java17.sh
 
   validate-bundles:
+    if: false
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -343,16 +349,18 @@ jobs:
           ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk17
 
   validate-release-candidate-bundles:
-    if: false
     runs-on: ubuntu-latest
     env:
-      HUDI_VERSION: 0.13.1-rcx
-      STAGING_REPO_NUM: 1123
+      HUDI_VERSION: 0.14.0-rc3
+      STAGING_REPO_NUM: 1127
     strategy:
       matrix:
         include:
+          - flinkProfile: 'flink1.17'
+            sparkProfile: 'spark3.4'
+            sparkRuntime: 'spark3.4.0'
           - flinkProfile: 'flink1.16'
-            sparkProfile: 'spark3'
+            sparkProfile: 'spark3.3'
             sparkRuntime: 'spark3.3.2'
           - flinkProfile: 'flink1.15'
             sparkProfile: 'spark3.3'
@@ -402,6 +410,7 @@ jobs:
           ./packaging/bundle-validation/ci_run.sh $HUDI_VERSION openjdk17 $STAGING_REPO_NUM
 
   integration-tests:
+    if: false
     runs-on: ubuntu-latest
     strategy:
       matrix:

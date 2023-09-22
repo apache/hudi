@@ -146,6 +146,10 @@ else
     HUDI_SPARK_BUNDLE_NAME=hudi-spark3.3-bundle_2.12
     HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.12
     HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
+  elif [[ ${SPARK_PROFILE} == 'spark3.4' ]]; then
+    HUDI_SPARK_BUNDLE_NAME=hudi-spark3.4-bundle_2.12
+    HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.12
+    HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
   elif [[ ${SPARK_PROFILE} == 'spark3' ]]; then
     HUDI_SPARK_BUNDLE_NAME=hudi-spark3-bundle_2.12
     HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.12
@@ -199,8 +203,9 @@ docker build \
 -t hudi-ci-bundle-validation:$IMAGE_TAG \
 .
 
+CURR_TS=$(date +%s%N)
 # run validation script in docker
-docker run --name hudi_docker \
+docker run --name hudi_docker_$CURR_TS \
   -v ${GITHUB_WORKSPACE}:/opt/bundle-validation/docker-test \
   -v $TMP_JARS_DIR:/opt/bundle-validation/jars \
   -v $TMP_DATA_DIR:/opt/bundle-validation/data \
