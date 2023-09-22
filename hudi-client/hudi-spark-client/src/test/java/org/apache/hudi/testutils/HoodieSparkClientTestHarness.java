@@ -167,6 +167,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     cleanupTestDataGenerator();
     cleanupFileSystem();
     cleanupExecutorService();
+    System.gc();
   }
 
   protected Option<Consumer<SparkSessionExtensions>> getSparkSessionExtensionsInjector() {

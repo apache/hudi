@@ -62,6 +62,7 @@ class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
     cleanupTestDataGenerator()
     cleanupFileSystem()
     FileSystem.closeAll()
+    System.gc()
   }
 
   @ParameterizedTest

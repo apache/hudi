@@ -77,6 +77,7 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
     cleanupTestDataGenerator()
     cleanupFileSystem()
     FileSystem.closeAll()
+    System.gc()
   }
 
   // TODO add test-case for upcasting

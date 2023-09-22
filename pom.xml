@@ -1965,6 +1965,7 @@
               </includes>
               <systemPropertyVariables>
                 <dynamodb-local.endpoint>${dynamodb-local.endpoint}</dynamodb-local.endpoint>
+                <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
               </systemPropertyVariables>
               <useSystemClassLoader>false</useSystemClassLoader>
             </configuration>

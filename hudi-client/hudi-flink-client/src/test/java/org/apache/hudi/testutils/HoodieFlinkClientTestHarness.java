@@ -123,6 +123,7 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness {
     cleanupTestDataGenerator();
     cleanupFileSystem();
     cleanupExecutorService();
+    System.gc();
   }
 
   /**
