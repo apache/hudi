@@ -61,7 +61,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
   private static Stream<Arguments> testClustering() {
     // enableClusteringAsRow, doUpdates, populateMetaFields, preserveCommitMetadata
     return Stream.of(
-        Arguments.of(true, true, true),
+        Arguments.of(false, true, true),
         Arguments.of(true, true, false),
         Arguments.of(true, false, true),
         Arguments.of(true, false, false),
