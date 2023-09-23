@@ -99,6 +99,7 @@ public class KafkaSourceConfig extends HoodieConfig {
       .defaultValue(0L)
       .withAlternatives(OLD_PREFIX + "minPartitions")
       .markAdvanced()
+      .sinceVersion("0.14.0")
           .withDocumentation("Desired minimum number of partitions to read from Kafka. "
               + "By default, Hudi has a 1-1 mapping of topicPartitions to Hudi partitions consuming from Kafka. "
               + "If set this option to a value greater than topicPartitions, "

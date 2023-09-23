@@ -66,6 +66,7 @@ public class HoodieCommonConfig extends HoodieConfig {
       .key("hoodie.datasource.write.new.columns.nullable")
       .defaultValue(false)
       .markAdvanced()
+      .sinceVersion("0.14.0")
       .withDocumentation("When a non-nullable column is added to datasource during a write operation, the write "
           + " operation will fail schema compatibility check. Set this option to true will make the newly added "
           + " column nullable to successfully complete the write operation.");
@@ -106,6 +107,7 @@ public class HoodieCommonConfig extends HoodieConfig {
       .key("hoodie.fs.atomic_creation.support")
       .defaultValue("")
       .markAdvanced()
+      .sinceVersion("0.14.0")
       .withDocumentation("This config is used to specify the file system which supports atomic file creation . "
           + "atomic means that an operation either succeeds and has an effect or has fails and has no effect;"
           + " now this feature is used by FileSystemLockProvider to guaranteeing that only one writer can create the lock file at a time."

@@ -99,6 +99,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".log.compaction.blocks.threshold")
       .defaultValue(5)
       .markAdvanced()
+      .sinceVersion("0.14.0")
       .withDocumentation("Controls the criteria to log compacted files groups in metadata table.");
 
   // Regex to filter out matching directories during bootstrap

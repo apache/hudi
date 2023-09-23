@@ -119,6 +119,8 @@ public class HoodieStreamerConfig extends HoodieConfig {
       .key(STREAMER_CONFIG_PREFIX + "sample.writes.enabled")
       .defaultValue(false)
       .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "sample.writes.enabled")
+      .markAdvanced()
+      .sinceVersion("0.14.0")
       .withDocumentation("Set this to true to sample from the first batch of records and write to the auxiliary path, before writing to the table."
           + "The sampled records are used to calculate the average record size. The relevant write client will have `" + COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.key()
           + "` being overwritten by the calculated result.");
@@ -126,6 +128,8 @@ public class HoodieStreamerConfig extends HoodieConfig {
       .key(STREAMER_CONFIG_PREFIX + "sample.writes.size")
       .defaultValue(5000)
       .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "sample.writes.size")
+      .markAdvanced()
+      .sinceVersion("0.14.0")
       .withDocumentation("Number of records to sample from the first write. To improve the estimation's accuracy, "
           + "for smaller or more compressable record size, set the sample size bigger. For bigger or less compressable record size, set smaller.");
 }

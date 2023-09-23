@@ -703,6 +703,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.sensitive.config.keys")
       .defaultValue("ssl,tls,sasl,auth,credentials")
       .markAdvanced()
+      .sinceVersion("0.14.0")
       .withDocumentation("Comma separated list of filters for sensitive config keys. Hudi Streamer "
           + "will not print any configuration which contains the configured filter. For example with "
           + "a configured filter `ssl`, value for config `ssl.trustore.location` would be masked.");

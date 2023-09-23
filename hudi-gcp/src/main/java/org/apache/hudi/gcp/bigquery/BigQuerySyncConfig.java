@@ -83,6 +83,7 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
       .key("hoodie.gcp.bigquery.sync.use_bq_manifest_file")
       .defaultValue(false)
       .markAdvanced()
+      .sinceVersion("0.14.0")
       .withDocumentation("If true, generate a manifest file with data file absolute paths and use BigQuery manifest file support to "
           + "directly create one external table over the Hudi table. If false (default), generate a manifest file with data file "
           + "names and create two external tables and one view in BigQuery. Query the view for the same results as querying the Hudi table");
