@@ -103,7 +103,7 @@ public class TestLegacyArchivedMetaEntryReader {
     try {
       return HoodieLogFormat.newWriterBuilder().onParentPath(new Path(metaClient.getArchivePath()))
           .withFileId("commits").withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION)
-          .withFs(metaClient.getFs()).overBaseCommit("").build();
+          .withFs(metaClient.getFs()).withDeltaCommit("").build();
     } catch (IOException e) {
       throw new HoodieException("Unable to initialize HoodieLogFormat writer", e);
     }

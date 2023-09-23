@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.ActiveAction;
+import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -56,7 +57,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * Test cases for {@link org.apache.hudi.client.timeline.CompletionTimeQueryView}.
+ * Test cases for {@link CompletionTimeQueryView}.
  */
 public class TestCompletionTimeQueryView {
   @TempDir
@@ -85,6 +86,8 @@ public class TestCompletionTimeQueryView {
       assertFalse(view.getCompletionTime(String.format("%08d", 11)).isPresent());
       // query with non-exist start time
       assertFalse(view.getCompletionTime(String.format("%08d", 12)).isPresent());
+      // test with invalid base instant time
+      assertThat(view.getCompletionTime("111", String.format("%08d", 3)).orElse(""), is(String.format("%08d", 3)));
     }
   }
 

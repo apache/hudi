@@ -126,21 +126,19 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     for (Map.Entry<String, HoodieRollbackPartitionMetadata> entry : rollbackMetadata.entrySet()) {
       HoodieRollbackPartitionMetadata meta = entry.getValue();
       assertEquals(0, meta.getFailedDeleteFiles().size());
-      assertEquals(0, meta.getSuccessDeleteFiles().size());
+      assertEquals(1, meta.getSuccessDeleteFiles().size());
     }
 
     //4. assert file group after rollback, and compare to the rollbackstat
     // assert the first partition data and log file size
+
     List<HoodieFileGroup> firstPartitionRollBack1FileGroups = table.getFileSystemView().getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH).collect(Collectors.toList());
     assertEquals(1, firstPartitionRollBack1FileGroups.size());
     List<FileSlice> firstPartitionRollBack1FileSlices = firstPartitionRollBack1FileGroups.get(0).getAllFileSlices().collect(Collectors.toList());
     assertEquals(1, firstPartitionRollBack1FileSlices.size());
     FileSlice firstPartitionRollBack1FileSlice = firstPartitionRollBack1FileSlices.get(0);
     List<HoodieLogFile> firstPartitionRollBackLogFiles = firstPartitionRollBack1FileSlice.getLogFiles().collect(Collectors.toList());
-    assertEquals(2, firstPartitionRollBackLogFiles.size());
-
-    firstPartitionRollBackLogFiles.removeAll(firstPartitionCommit2LogFiles);
-    assertEquals(1, firstPartitionRollBackLogFiles.size());
+    assertEquals(0, firstPartitionRollBackLogFiles.size());
 
     // assert the second partition data and log file size
     List<HoodieFileGroup> secondPartitionRollBack1FileGroups = table.getFileSystemView().getAllFileGroups(DEFAULT_SECOND_PARTITION_PATH).collect(Collectors.toList());
@@ -149,10 +147,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     assertEquals(1, secondPartitionRollBack1FileSlices.size());
     FileSlice secondPartitionRollBack1FileSlice = secondPartitionRollBack1FileSlices.get(0);
     List<HoodieLogFile> secondPartitionRollBackLogFiles = secondPartitionRollBack1FileSlice.getLogFiles().collect(Collectors.toList());
-    assertEquals(2, secondPartitionRollBackLogFiles.size());
-
-    secondPartitionRollBackLogFiles.removeAll(secondPartitionCommit2LogFiles);
-    assertEquals(1, secondPartitionRollBackLogFiles.size());
+    assertEquals(0, secondPartitionRollBackLogFiles.size());
 
     assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), table, "002").doesMarkerDirExist());
   }
@@ -344,9 +339,9 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     //4. assert filegroup after rollback, and compare to the rollbackstat
     // assert the first partition data and log file size
     HoodieRollbackPartitionMetadata partitionMetadata = rollbackMetadata.get(DEFAULT_FIRST_PARTITION_PATH);
-    assertTrue(partitionMetadata.getSuccessDeleteFiles().isEmpty());
+    assertEquals(1, partitionMetadata.getSuccessDeleteFiles().size(), "Always use file deletion based rollback");
     assertTrue(partitionMetadata.getFailedDeleteFiles().isEmpty());
-    assertEquals(1, partitionMetadata.getRollbackLogFiles().size());
+    assertTrue(partitionMetadata.getRollbackLogFiles().isEmpty());
 
     // assert the second partition data and log file size
     partitionMetadata = rollbackMetadata.get(DEFAULT_SECOND_PARTITION_PATH);

@@ -25,8 +25,10 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileAlreadyExistsException;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hdfs.protocol.AlreadyBeingCreatedException;
+import org.apache.hadoop.ipc.RemoteException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,16 +51,25 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   private final Integer bufferSize;
   private final Short replication;
   private final String rolloverLogWriteToken;
+  private final LogFileCreationCallback fileCreationHook;
   private boolean closed = false;
   private transient Thread shutdownThread = null;
 
-  HoodieLogFormatWriter(FileSystem fs, HoodieLogFile logFile, Integer bufferSize, Short replication, Long sizeThreshold, String rolloverLogWriteToken) {
+  HoodieLogFormatWriter(
+      FileSystem fs,
+      HoodieLogFile logFile,
+      Integer bufferSize,
+      Short replication,
+      Long sizeThreshold,
+      String rolloverLogWriteToken,
+      LogFileCreationCallback fileCreationHook) {
     this.fs = fs;
     this.logFile = logFile;
     this.sizeThreshold = sizeThreshold;
     this.bufferSize = bufferSize;
     this.replication = replication;
     this.rolloverLogWriteToken = rolloverLogWriteToken;
+    this.fileCreationHook = fileCreationHook;
     addShutDownHook();
   }
 
@@ -90,15 +101,25 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
    */
   private FSDataOutputStream getOutputStream() throws IOException {
     if (this.output == null) {
-      Path path = logFile.getPath();
-      if (fs.exists(path)) {
-        rollOver();
-        createNewFile();
-        LOG.info("File {} already exists, rolling over to {}", path, logFile.getPath());
-      } else {
-        LOG.info(logFile + " does not exist. Create a new file");
-        // Block size does not matter as we will always manually autoflush
-        createNewFile();
+      boolean created = false;
+      while (!created) {
+        try {
+          // Block size does not matter as we will always manually auto-flush
+          createNewFile();
+          LOG.info("Created a new log file: {}", logFile);
+          created = true;
+        } catch (FileAlreadyExistsException ignored) {
+          LOG.info("File {} already exists, rolling over", logFile.getPath());
+          rollOver();
+        } catch (RemoteException re) {
+          if (re.getClassName().contentEquals(AlreadyBeingCreatedException.class.getName())) {
+            LOG.warn("Another task executor writing to the same log file(" + logFile + ", rolling over");
+            // Rollover the current log file (since cannot get a stream handle) and create new one
+            rollOver();
+          } else {
+            throw re;
+          }
+        }
       }
     }
     return output;
@@ -204,6 +225,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   }
 
   private void createNewFile() throws IOException {
+    fileCreationHook.preFileCreation(this.logFile);
     this.output =
         fs.create(this.logFile.getPath(), false, bufferSize, replication, WriterBuilder.DEFAULT_SIZE_THRESHOLD, null);
   }
