@@ -1,39 +1,35 @@
 ---
 title: SQL DDL
-summary: "In this page, we discuss DDL commands in Spark-SQL with Hudi"
+summary: "In this page, we discuss using SQL DDL commands with Hudi"
 toc: true
 last_modified_at: 
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-The following DDL actions are available via SparkSQL:
+This page describes support for creating and altering Hudi tables using SQL across various engines. 
 
-# Spark Create Table
-:::note
-Only SparkSQL needs an explicit Create Table command. No explicit Create Table is required for Spark Datasource APIs (both Scala or 
-Python, batch or streaming). The first batch of a [Write](/docs/writing_data) to a table will create the table if it does not exist. 
-Feel free to take a look at our (quick start guide)[/docs/next/quick-start-guide] for spark datasource writes using scala or pyspark. 
-:::
+## Spark SQL
 
-### Create table Properties
+### Create table 
 
-Users can set table properties while creating a hudi table. Critical options are listed here.
+You can create tables using standard CREATE TABLE syntax, which supports partitioning and passing table properties.
 
-| Parameter Name | Default | Description                                                                                                                                                                                                                                                                                                                                      |
-|------------------|--------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| primaryKey | uuid | The primary key field names of the table, multiple fields separated by commas. Same as `hoodie.datasource.write.recordkey.field`. If this config is ignored (from 0.14.0), hudi will auto generate primary keys. If explicitly set, primary key generation will honor user configugration.                                                       |
-| preCombineField |  | The pre-combine field of the table. Same as `hoodie.datasource.write.precombine.field` and is used for resolving the final version of the record among multiple versions. Generally `event time` or some other similar column will be used for ordering purpose. Hudi will be able to handle out of order data using the preCombine field value. |
-| type       | cow | The table type to create. type = 'cow' means a COPY-ON-WRITE table, while type = 'mor' means a MERGE-ON-READ table. Same as `hoodie.datasource.write.table.type`. More details can be found [here](/docs/table_types)                                                                                                                            |
+```sql
+CREATE TABLE [IF NOT EXISTS] [db_name.]table_name
+  [(col_name data_type [COMMENT col_comment], ...)]
+  [COMMENT table_comment]
+  [PARTITIONED BY (col_name, ...)]
+  [ROW FORMAT row_format]
+  [STORED AS file_format]
+  [LOCATION path]
+  [TBLPROPERTIES (property_name=property_value, ...)]
+  [AS select_statement];
+```
 
-:::note
-1. `primaryKey`, `preCombineField`, and `type` are case-sensitive.
-2. While setting `primaryKey`, `preCombineField`, `type` or other Hudi configs, `tblproperties` is preferred over `options`.
-3. A new Hudi table created by Spark SQL will by default set `hoodie.datasource.write.hive_style_partitioning=true`.
-:::
+### Create non-partitioned table
 
-## Creating a Hudi table 
-Here is an example of creating a non-partitioned Hudi table. 
+Creating a non-partitioned table is as simple as creating a regular table.
 
 ```sql
 -- create a Hudi table
@@ -44,39 +40,42 @@ create table if not exists hudi_table(
 ) using hudi;
 ```
 
-:::note
-There could be cases where electing a primary key may not be feasible due to various reasons. Some payloads actually 
-don't have a naturally present record key: for ex, when ingesting some kind of "logs" into Hudi there 
-might be no unique identifier held in every record that could serve the purpose of being record key, while meeting global 
-uniqueness requirements of the primary key. So, users can choose to ignore configuring 'primaryKey' in which case, 
-Hudi will auto generate primary keys for the records during ingestion. Users can still perform Merge Into, updates and 
-deletes based on any random data column for such tables. 
-::: 
-
-### Creating a Hudi table w/ user configured primary keys
-Here is an example of creating a COW non-partitioned table with primary keyed on `id`. For mutable datasets, 
-it is recommended to set appropriate primary key configs. 
+### Create partitioned table
+A partitioned table can be created by adding a `partitioned by` clause. Partitioning helps to organize the data into multiple folders based on 
+the partition columns. It can also help speed up queries and index lookups by limiting the amount of data scanned.
 
 ```sql
-create table if not exists hudi_table0 (
-  id int, 
-  name string, 
-  price double
+create table if not exists hudi_table_p0 (
+id bigint,
+name string,
+dt string,
+hh string  
 ) using hudi
 tblproperties (
-  type = 'cow',
-  primaryKey = 'id'
-);
+  type = 'cow'
+) 
+partitioned by dt;
 ```
 
 :::note
-You can elect multiple fields as primary keys for a given table on a need basis. For eg, "primaryKey = 'id,name'". 
+You can also create a table partitioned by multiple fields by supplying comma-separated field names. For, e.g., "partitioned by dt, hh"
 :::
 
-### PreCombineField
-Here is an example of creating an COW table. The **preCombineField** option
-is used to specify the preCombine field for merge. Generally 'event time' or a similar column will be used for 
-ordering purpose. Hudi will be able to handle out of order data using the preCombine field value.
+### Create table with record keys and pre-combine fields
+
+As discussed [here](/docs/quick-start-guide#keys), Hudi tables track each record in the table using a record key. Hudi auto-generated a highly compressed 
+key automatically for each new record in the examples so far. If you want to use an existing field as the key,
+you can set the `primaryKey` option. Typically, this is also accompanied by configuring a `preCombineField` option
+to deal with out-of-order data and potential duplicates in the incoming writes.
+
+:::note
+You can choose multiple fields as primary keys for a given table on a need basis. For eg, "primaryKey = 'id,name'", and
+this materializes a composite key of the two fields, which can be useful for exploring the table.
+:::
+
+Here is an example of creating a table using both options. Typically, a field that denotes the time of the event or
+fact, e.g., order creation time, event generation time etc., is used as the _preCombineField_. Hudi ensures that the latest
+version of the record is picked up based on this field when queries are run on the table.
 
 ```sql
 create table if not exists hudi_table1 (
@@ -92,34 +91,9 @@ tblproperties (
 );
 ```
 
-### Partitioned Table
-:::note
-When created in spark-sql, partition columns will always be the last columns in the table.
-:::
-Here is an example of creating a COW partitioned table. Adding `partitioned by` clause to the create table syntax, refers 
-to a partitioned dataset. 
-
-```sql
-create table if not exists hudi_table_p0 (
-id bigint,
-name string,
-dt string,
-hh string  
-) using hudi
-tblproperties (
-  type = 'cow'
- ) 
-partitioned by dt;
-```
-
-:::note
-You can create multi-field partitioned table by giving comma separated field names. for eg "partitioned by dt,hh". 
-:::
-
-### Create Table for an External Hudi Table
-You can create an External table using the `location` statement. If an external location is not specified it is considered a managed table. 
-You can read more about external vs managed tables [here](https://sparkbyexamples.com/apache-hive/difference-between-hive-internal-tables-and-external-tables/).
-An external table is useful if you need to read/write to/from a pre-existing hudi table.
+### Create table from an external location
+Often, Hudi tables are created from streaming writers like the [Streamer tool](/docs/hoodie_streaming_ingestion#hudi-streamer), which
+may later need some SQL statements to run on them. You can create an External table using the `location` statement.
 
 ```sql
  create table h_p1 using hudi
@@ -127,16 +101,14 @@ An external table is useful if you need to read/write to/from a pre-existing hud
 ```
 
 :::tip
-You don't need to specify schema and any properties except the partitioned columns if existed. Hudi can automatically 
+You don't need to specify the schema and any properties except the partitioned columns if they existed. Hudi can automatically
 recognize the schema and configurations.
 :::
 
-## Create Table As Select (CTAS)
+### Create Table As Select (CTAS)
 
-Hudi supports CTAS(Create table as select) on spark sql. <br/>
-**Note:** For better performance to load data to hudi table, CTAS uses **bulk insert** as the write operation.
-
-***Create a Hudi Table using CTAS by loading data from another parquet table***
+Hudi supports CTAS(Create table as select) to support initial loads into Hudi tables. To ensure this is done efficiently,
+even for large loads, CTAS uses **bulk insert** as the write operation
 
 ```sql
 # create managed parquet table
@@ -150,19 +122,7 @@ create table hudi_ctas_cow_pt_tbl2 using hudi location 'file:/tmp/hudi/hudi_tbl/
 partitioned by (datestr) as select * from parquet_mngd;
 ```
 
-:::note
-If you prefer to explicitly set the primary keys, you can do so by setting `primaryKey` config in tblproperties.
-:::
-
-### CTAS Hudi table
-
-```sql 
-create table hudi_tbl using hudi
-as
-select 1 as id, 'a1' as name, 10 as price;
-```
-
-### CTAS Hudi table with user configured Primary key
+If you prefer explicitly setting the record keys, you can do so by setting `primaryKey` config in table properties.
 
 ```sql
 create table hudi_tbl using hudi
@@ -172,7 +132,7 @@ as
 select 1 as id, 'a1' as name, 10 as price, 1000 as dt;
 ```
 
-### CTAS by loading data from another table
+You can also use CTAS to copy data across external locations
 
 ```sql
 # create managed parquet table 
@@ -186,21 +146,20 @@ tblproperties (
 as select * from parquet_mngd;
 ```
 
-## Setting configs 
+### Setting Hudi configs 
 
-There are differet ways you can set the configs for a given hudi table. 
+There are different ways you can pass the configs for a given hudi table. 
 
-### Using set command
-You can use the **set** command to set any custom hudi's write config. This will work for the whole spark session scope.
+#### Using set command
+You can use the **set** command to set any of Hudi's write configs. This will apply to operations across the whole spark session.
 ```sql
 set hoodie.insert.shuffle.parallelism = 100;
 set hoodie.upsert.shuffle.parallelism = 100;
 set hoodie.delete.shuffle.parallelism = 100;
 ```
 
-### Using tblproperties
-You can also set the config with table options when creating table. This will work for
-the table scope only and override the config set by the SET command.
+#### Using table properties
+You can also configure table options when creating a table. This will be applied only for the table and override any SET command values.
 
 ```sql
 create table if not exists h3(
@@ -230,9 +189,22 @@ tblproperties (
 );
 ```
 
+### Table Properties
 
-## Spark Alter Table
-### Syntax
+Users can set table properties while creating a hudi table. The important table properties are discussed below.
+
+| Parameter Name | Default | Description                                                                                                                                                                                                                                                                                 |
+|------------------|--------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| primaryKey | uuid | The primary key field names of the table separated by commas. Same as `hoodie.datasource.write.recordkey.field`. If this config is ignored, hudi will auto-generate primary keys. If explicitly set, primary key generation will honor user configuration.                                  |
+| preCombineField |  | The pre-combine field of the table. It is used for resolving the final version of the record among multiple versions. Generally, `event time` or another similar column will be used for ordering purposes. Hudi will be able to handle out-of-order data using the preCombine field value. |
+| type       | cow | The table type to create. `type = 'cow'` creates a COPY-ON-WRITE table, while `type = 'mor'` creates a MERGE-ON-READ table. Same as `hoodie.datasource.write.table.type`. More details can be found [here](/docs/table_types)                                                               |
+
+:::note
+`primaryKey`, `preCombineField`, and `type` and other properties are case-sensitive. 
+:::
+
+### Spark Alter Table
+
 ```sql
 -- Alter table name
 ALTER TABLE oldTableName RENAME TO newTableName
@@ -247,12 +219,7 @@ ALTER TABLE tableIdentifier CHANGE COLUMN colName colName colType
 ALTER TABLE tableIdentifier SET TBLPROPERTIES (key = 'value')
 ```
 
-:::note
-`ALTER TABLE ... RENAME TO ...` is not supported when using AWS Glue Data Catalog as hive metastore as Glue itself does 
-not support table renames.
-:::
-
-### Examples
+Some examples below 
 ```sql
 --rename to:
 ALTER TABLE hudi_cow_tbl RENAME TO hudi_cow_tbl2;
@@ -267,13 +234,40 @@ ALTER TABLE hudi_cow_tbl2 change column uuid uuid bigint;
 alter table hudi_cow_tbl2 set tblproperties (hoodie.keep.max.commits = '10');
 ```
 
+### Modifying Table Properties
+**Syntax**
+```sql
+-- alter table ... set|unset
+ALTER TABLE tableName SET|UNSET tblproperties
+```
+
+**Examples**
+
+```sql
+ALTER TABLE table SET TBLPROPERTIES ('table_property' = 'property_value')
+ALTER TABLE table UNSET TBLPROPERTIES [IF EXISTS] ('comment', 'key')
+```
+
+### Changing a Table Name
+**Syntax**
+```sql
+-- alter table ... rename
+ALTER TABLE tableName RENAME TO newTableName
+```
+
+**Examples**
+
+```sql
+ALTER TABLE table1 RENAME TO table2
+```
+
 Schema evolution can be achieved via `ALTER TABLE` commands. Below shows some basic examples.
 
 :::note
 For more detailed examples, please prefer to [schema evolution](/docs/schema_evolution)
 :::
 
-### Alter hoodie config options
+### Alter config options
 You can also alter the write config for a table by the **ALTER TABLE SET SERDEPROPERTIES**
 
 **Example**
@@ -281,7 +275,7 @@ You can also alter the write config for a table by the **ALTER TABLE SET SERDEPR
  alter table h3 set serdeproperties (hoodie.keep.max.commits = '10') 
 ```
 
-### Show and Drop partitions
+### Show and drop partitions
 
 **Syntax**
 
@@ -302,15 +296,22 @@ show partitions hudi_cow_pt_tbl;
 alter table hudi_cow_pt_tbl drop partition (dt='2021-12-09', hh='10');
 ```
 
-:::note
-Currently,  the result of `show partitions` is based on the filesystem table path. It's not precise when delete the whole partition data or drop certain partition directly.
-:::
+
+### Caveats 
+
+Hudi currently has the following limitations when using Spark SQL, to create/alter tables.
+
+ - `ALTER TABLE ... RENAME TO ...` is not supported when using AWS Glue Data Catalog as hive metastore as Glue itself does
+   not support table renames. 
+ - A new Hudi table created by Spark SQL will by default set `hoodie.datasource.write.hive_style_partitioning=true`, for ease
+     of use. This can be overridden using table properties.
+ - ?? Currently,  the result of `show partitions` is based on the filesystem table path. It's not precise when delete the whole partition data or drop certain partition directly.
 
 ## Flink
 
 ### Create Catalog
 
-The catalog helps to manage the SQL tables, the table can be shared among CLI sessions if the catalog persists the table DDLs.
+The catalog helps to manage the SQL tables, the table can be shared among sessions if the catalog persists the table DDLs.
 For `hms` mode, the catalog also supplements the hive syncing options.
 
 **Example**
@@ -335,7 +336,7 @@ CREATE CATALOG hoodie_catalog
 
 ### Create Table
 
-The following is a Flink example to create a table. [Read the Flink Quick Start](/docs/flink-quick-start-guide) guide for more examples.
+The following is an example of creating a Flink table. [Read the Flink Quick Start](/docs/flink-quick-start-guide) guide for more examples.
 
 ```sql 
 CREATE TABLE hudi_table2(

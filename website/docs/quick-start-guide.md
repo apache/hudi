@@ -953,7 +953,7 @@ create table hudi_table (
   ...
 ) using hudi
 tblproperties (
-  type = 'mor'
+  primaryKey = 'uuid'
 )
 ```
 </TabItem
@@ -987,14 +987,18 @@ values={[
 <TabItem value="scala">
 
 ```scala
-    // spark-shell
+// spark-shell 
+updatesDf.write.format("hudi").
+  ...
+  option(PRECOMBINE_FIELD_NAME.key(), "ts").
+  ...
 ```
 
 </TabItem>
 
 <TabItem value="python">
 
-```scala
+```python
     // spark-shell
 ```
 
@@ -1008,7 +1012,7 @@ create table hudi_table (
   ...
 ) using hudi
 tblproperties (
-  type = 'mor'
+  preCombineField = 'ts'
 )
 ```
 </TabItem
@@ -1030,7 +1034,7 @@ For alter table commands, check out [this](/docs/next/sql_ddl#spark-alter-table)
 
 Hudi provides industry-leading performance and functionality for streaming data. 
 
-**Hudi Streamer** - Hudi provides an incremental ingestion/ETL tool - [HoodieStreamer](/docs/next/hoodie_streaming_ingestion#hudi-streamer), to assist with ingesting data into Hudi 
+**Hudi Streamer** - Hudi provides an incremental ingestion/ETL tool - [HoodieStreamer](/docs/hoodie_streaming_ingestion#hudi-streamer), to assist with ingesting data into Hudi 
 from various different sources in a streaming manner, with powerful built-in capabilities like auto checkpointing, schema enforcement via schema provider, 
 transformation support, automatic table services and so on.
 
