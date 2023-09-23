@@ -309,6 +309,8 @@
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>
+
+    <!-- Parquet -->
     <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>

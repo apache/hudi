@@ -271,6 +271,13 @@
         </exclusion>
       </exclusions>
     </dependency>
+
+    <!-- Parquet -->
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-avro</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
 </project>
