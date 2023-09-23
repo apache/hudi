@@ -7,7 +7,7 @@ last_modified_at:
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-This page describes support for creating and altering Hudi tables using SQL across various engines. 
+This page describes support for creating and altering tables using SQL across various engines. 
 
 ## Spark SQL
 
@@ -41,8 +41,8 @@ create table if not exists hudi_table(
 ```
 
 ### Create partitioned table
-A partitioned table can be created by adding a `partitioned by` clause. Partitioning helps to organize the data into multiple folders based on 
-the partition columns. It can also help speed up queries and index lookups by limiting the amount of data scanned.
+A partitioned table can be created by adding a `partitioned by` clause. Partitioning helps to organize the data into multiple folders 
+based on the partition columns. It can also help speed up queries and index lookups by limiting the amount of metadata, index and data scanned.
 
 ```sql
 create table if not exists hudi_table_p0 (
@@ -63,19 +63,19 @@ You can also create a table partitioned by multiple fields by supplying comma-se
 
 ### Create table with record keys and pre-combine fields
 
-As discussed [here](/docs/quick-start-guide#keys), Hudi tables track each record in the table using a record key. Hudi auto-generated a highly compressed 
-key automatically for each new record in the examples so far. If you want to use an existing field as the key,
-you can set the `primaryKey` option. Typically, this is also accompanied by configuring a `preCombineField` option
-to deal with out-of-order data and potential duplicates in the incoming writes.
+As discussed [here](/docs/quick-start-guide#keys), tables track each record in the table using a record key. Hudi auto-generated a highly compressed 
+key for each new record in the examples so far. If you want to use an existing field as the key, you can set the `primaryKey` option. 
+Typically, this is also accompanied by configuring a `preCombineField` option to deal with out-of-order data and potential 
+duplicate records with the same key in the incoming writes.
 
 :::note
-You can choose multiple fields as primary keys for a given table on a need basis. For eg, "primaryKey = 'id,name'", and
+You can choose multiple fields as primary keys for a given table on a need basis. For eg, "primaryKey = 'id, name'", and
 this materializes a composite key of the two fields, which can be useful for exploring the table.
 :::
 
 Here is an example of creating a table using both options. Typically, a field that denotes the time of the event or
-fact, e.g., order creation time, event generation time etc., is used as the _preCombineField_. Hudi ensures that the latest
-version of the record is picked up based on this field when queries are run on the table.
+fact, e.g., order creation time, event generation time etc., is used as the _preCombineField_. Hudi resolves multiple versions
+of the same record based on this field when queries are run on the table.
 
 ```sql
 create table if not exists hudi_table1 (
@@ -92,7 +92,7 @@ tblproperties (
 ```
 
 ### Create table from an external location
-Often, Hudi tables are created from streaming writers like the [Streamer tool](/docs/hoodie_streaming_ingestion#hudi-streamer), which
+Often, Hudi tables are created from streaming writers like the [streamer tool](/docs/hoodie_streaming_ingestion#hudi-streamer), which
 may later need some SQL statements to run on them. You can create an External table using the `location` statement.
 
 ```sql
@@ -136,7 +136,8 @@ You can also use CTAS to copy data across external locations
 
 ```sql
 # create managed parquet table 
-create table parquet_mngd using parquet location 'file:///tmp/parquet_dataset/*.parquet';
+create table parquet_mngd using parquet 
+location 'file:///tmp/parquet_dataset/*.parquet';
 
 # CTAS by loading data into hudi table
 create table hudi_tbl using hudi location 'file:/tmp/hudi/hudi_tbl/' 
@@ -191,13 +192,13 @@ tblproperties (
 
 ### Table Properties
 
-Users can set table properties while creating a hudi table. The important table properties are discussed below.
+Users can set table properties while creating a table. The important table properties are discussed below.
 
 | Parameter Name | Default | Description                                                                                                                                                                                                                                                                                 |
 |------------------|--------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| type       | cow | The table type to create. `type = 'cow'` creates a COPY-ON-WRITE table, while `type = 'mor'` creates a MERGE-ON-READ table. Same as `hoodie.datasource.write.table.type`. More details can be found [here](/docs/table_types)                                                               |
 | primaryKey | uuid | The primary key field names of the table separated by commas. Same as `hoodie.datasource.write.recordkey.field`. If this config is ignored, hudi will auto-generate primary keys. If explicitly set, primary key generation will honor user configuration.                                  |
 | preCombineField |  | The pre-combine field of the table. It is used for resolving the final version of the record among multiple versions. Generally, `event time` or another similar column will be used for ordering purposes. Hudi will be able to handle out-of-order data using the preCombine field value. |
-| type       | cow | The table type to create. `type = 'cow'` creates a COPY-ON-WRITE table, while `type = 'mor'` creates a MERGE-ON-READ table. Same as `hoodie.datasource.write.table.type`. More details can be found [here](/docs/table_types)                                                               |
 
 :::note
 `primaryKey`, `preCombineField`, and `type` and other properties are case-sensitive. 
@@ -263,10 +264,6 @@ ALTER TABLE table1 RENAME TO table2
 
 Schema evolution can be achieved via `ALTER TABLE` commands. Below shows some basic examples.
 
-:::note
-For more detailed examples, please prefer to [schema evolution](/docs/schema_evolution)
-:::
-
 ### Alter config options
 You can also alter the write config for a table by the **ALTER TABLE SET SERDEPROPERTIES**
 
@@ -275,24 +272,28 @@ You can also alter the write config for a table by the **ALTER TABLE SET SERDEPR
  alter table h3 set serdeproperties (hoodie.keep.max.commits = '10') 
 ```
 
+:::note
+For more details, please prefer to [schema evolution](/docs/schema_evolution)
+:::
+
 ### Show and drop partitions
 
 **Syntax**
 
 ```sql
--- Show Partitions
+-- Show partitions
 SHOW PARTITIONS tableIdentifier
 
--- Drop Partition
+-- Drop partition
 ALTER TABLE tableIdentifier DROP PARTITION ( partition_col_name = partition_col_val [ , ... ] )
 ```
 
 **Examples**
 ```sql
---show partition:
+--Show partition:
 show partitions hudi_cow_pt_tbl;
 
---drop partition：
+--Drop partition：
 alter table hudi_cow_pt_tbl drop partition (dt='2021-12-09', hh='10');
 ```
 
@@ -310,8 +311,7 @@ Hudi currently has the following limitations when using Spark SQL, to create/alt
 ## Flink
 
 ### Create Catalog
-
-The catalog helps to manage the SQL tables, the table can be shared among sessions if the catalog persists the table DDLs.
+The catalog helps to manage the SQL tables, the table can be shared among sessions if the catalog persists the table definitions.
 For `hms` mode, the catalog also supplements the hive syncing options.
 
 **Example**
@@ -326,17 +326,17 @@ CREATE CATALOG hoodie_catalog
 ```
 
 #### Options
-|  Option Name  | Required | Default | Remarks |
-|  -----------  | -------  | ------- | ------- |
-| `catalog.path` | true | -- | Default root path for the catalog, the path is used to infer the table path automatically, the default table path: `${catalog.path}/${db_name}/${table_name}` |
-| `default-database` | false | default | default database name |
-| `hive.conf.dir` | false | -- | The directory where hive-site.xml is located, only valid in `hms` mode |
-| `mode` | false | dfs | Supports `hms` mode that uses HMS to persist the table options |
-| `table.external` | false | false | Whether to create the external table, only valid in `hms` mode |
+|  Option Name  | Required | Default | Remarks                                                                                                                                                                  |
+|  -----------  | -------  | ------- |--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `catalog.path` | true | -- | Default path for the catalog's table storage, the path is used to infer the table path automatically, the default table path: `${catalog.path}/${db_name}/${table_name}` |
+| `default-database` | false | default | default database name                                                                                                                                                    |
+| `hive.conf.dir` | false | -- | The directory where hive-site.xml is located, only valid in `hms` mode                                                                                                   |
+| `mode` | false | dfs | Supports `hms` mode that uses HMS to persist the table options                                                                                                           |
+| `table.external` | false | false | Whether to create the external table, only valid in `hms` mode                                                                                                           |
 
 ### Create Table
 
-The following is an example of creating a Flink table. [Read the Flink Quick Start](/docs/flink-quick-start-guide) guide for more examples.
+The following is an example of creating a Flink table. Read the [Flink Quick Start](/docs/flink-quick-start-guide) guide for more examples.
 
 ```sql 
 CREATE TABLE hudi_table2(
@@ -358,25 +358,25 @@ alter table h0 rename to h0_1;
 
 ## Supported Types
 
-| Spark           |     Hudi     |     Notes     |
-|-----------------|--------------|---------------|
-| boolean         |  boolean     |               |
-| byte            |  int         |               |
-| short           |  int         |               |
-| integer         |  int         |               |
-| long            |  long        |               |
-| date            |  date        |               |
-| timestamp       |  timestamp   |               |
-| float           |  float       |               |
-| double          |  double      |               |
-| string          |  string      |               |
-| decimal         |  decimal     |               |
-| binary          |  bytes       |               |
-| array           |  array       |               |
-| map             |  map         |               |
-| struct          |  struct      |               |
-| char            |              | not supported |
-| varchar         |              | not supported |
-| numeric         |              | not supported |
-| null            |              | not supported |
-| object          |              | not supported |
+| Spark         |     Hudi     |     Notes     |
+|---------------|--------------|---------------|
+| boolean       |  boolean     |               |
+| byte          |  int         |               |
+| short         |  int         |               |
+| integer       |  int         |               |
+| long          |  long        |               |
+| date          |  date        |               |
+| timestamp     |  timestamp   |               |
+| float         |  float       |               |
+| double        |  double      |               |
+| string        |  string      |               |
+| decimal       |  decimal     |               |
+| binary        |  bytes       |               |
+| array         |  array       |               |
+| map           |  map         |               |
+| struct        |  struct      |               |
+| char          |              | not supported |
+| varchar       |              | not supported |
+| numeric       |              | not supported |
+| null          |              | not supported |
+| object        |              | not supported |
