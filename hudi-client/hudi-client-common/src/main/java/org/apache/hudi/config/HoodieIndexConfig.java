@@ -229,6 +229,7 @@ public class HoodieIndexConfig extends HoodieConfig {
       .key("hoodie.record.index.update.partition.path")
       .defaultValue("false")
       .markAdvanced()
+      .sinceVersion("0.14.0")
       .withDocumentation("Similar to " + BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE + ", but for record index.");
 
   public static final ConfigProperty<String> GLOBAL_INDEX_RECONCILE_PARALLELISM = ConfigProperty
@@ -320,6 +321,7 @@ public class HoodieIndexConfig extends HoodieConfig {
       .key("hoodie.record.index.use.caching")
       .defaultValue("true")
       .markAdvanced()
+      .sinceVersion("0.14.0")
       .withDocumentation("Only applies if index type is RECORD_INDEX."
           + "When true, the input RDD will be cached to speed up index lookup by reducing IO "
           + "for computing parallelism or affected partitions");
@@ -328,6 +330,7 @@ public class HoodieIndexConfig extends HoodieConfig {
       .key("hoodie.record.index.input.storage.level")
       .defaultValue("MEMORY_AND_DISK_SER")
       .markAdvanced()
+      .sinceVersion("0.14.0")
       .withDocumentation("Only applies when #recordIndexUseCaching is set. Determine what level of persistence is used to cache input RDDs. "
           + "Refer to org.apache.spark.storage.StorageLevel for different values");
 
