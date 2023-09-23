@@ -52,6 +52,9 @@ import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
 
 /**
  * Dataset test utils.
+ * Note: This util class can be only used within `hudi-spark<spark_version>` modules because it
+ * relies on SparkAdapterSupport to get encoder for different versions of Spark. If used elsewhere this
+ * class won't be initialized properly amd could cause ClassNotFoundException or NoClassDefFoundError
  */
 public class SparkDatasetTestUtils {
 
