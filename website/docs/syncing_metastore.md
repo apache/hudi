@@ -3,6 +3,13 @@ title: Hive Metastore
 keywords: [hudi, hive, sync]
 ---
 
+[Hive Metastore](https://cwiki.apache.org/confluence/display/Hive/AdminManual+Metastore+Administration) is an
+RDBMS-backed service from Apache Hive that acts as a catalog for your data warehouse or data lake. It can store all the
+metadata about the tables, such as partitions, columns, column types, etc. One can sync the Hudi table metadata to the
+Hive metastore as well. This unlocks the capability to query Hudi tables not only through Hive but also using
+interactive query engines such as Presto and Trino. In this document, we will go through different ways to sync the Hudi
+table to Hive metastore.
+
 ## Hive Sync Tool
 
 Writing data with [DataSource](/docs/writing_data) writer or [HoodieStreamer](/docs/hoodie_deltastreamer) supports syncing of the table's latest schema to Hive metastore, such that queries can pick up new columns and partitions.
@@ -33,17 +40,20 @@ Among them, following are the required arguments:
 ```
 Corresponding datasource options for the most commonly used hive sync configs are as follows:
 
-| HiveSyncConfig | DataSourceWriteOption | Description |
-| -----------   | ----------- | ----------- |
-| --database       | hoodie.datasource.hive_sync.database       | name of the target database in Hive       |
-| --table   | hoodie.datasource.hive_sync.table        | name of the target table in Hive        |
-| --user   | hoodie.datasource.hive_sync.username        | username for hive metastore        | 
-| --pass   | hoodie.datasource.hive_sync.password        | password for hive metastore        | 
-| --use-jdbc   | hoodie.datasource.hive_sync.use_jdbc        | use JDBC to connect to metastore        | 
-| --jdbc-url   | hoodie.datasource.hive_sync.jdbcurl        | Hive metastore url        |
-| --sync-mode   | hoodie.datasource.hive_sync.mode        | Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql.        |
-| --partitioned-by   | hoodie.datasource.hive_sync.partition_fields        | Comma-separated column names in the table to use for determining hive partition.        |
-| --partition-value-extractor   | hoodie.datasource.hive_sync.partition_extractor_class        | Class which implements PartitionValueExtractor to extract the partition values. `SlashEncodedDayPartitionValueExtractor` by default.        |
+:::note 
+In the table below **(N/A)** means there is no default value set.
+:::
+
+| HiveSyncConfig | DataSourceWriteOption | Default Value | Description |
+| -----------   | ----------- | ----------- | ----------- |
+| --database       | hoodie.datasource.hive_sync.database  |  default   | Name of the target database in Hive       |
+| --table   | hoodie.datasource.hive_sync.table |  (N/A)     | Name of the target table in Hive. Inferred from the table name in Hudi table config if not specified.        |
+| --user   | hoodie.datasource.hive_sync.username |   hive     | Username for hive metastore        | 
+| --pass   | hoodie.datasource.hive_sync.password  |  hive    | Password for hive metastore        | 
+| --jdbc-url   | hoodie.datasource.hive_sync.jdbcurl  |  jdbc:hive2://localhost:10000    | Hive server url if using `jdbc` mode to sync     |
+| --sync-mode   | hoodie.datasource.hive_sync.mode    |  (N/A)  | Mode to choose for Hive ops. Valid values are `hms`, `jdbc` and `hiveql`. More details in the following section.       |
+| --partitioned-by   | hoodie.datasource.hive_sync.partition_fields   |  (N/A)   | Comma-separated column names in the table to use for determining hive partition.        |
+| --partition-value-extractor   | hoodie.datasource.hive_sync.partition_extractor_class   |  `org.apache.hudi.hive.MultiPartKeysValueExtractor`   | Class which implements `PartitionValueExtractor` to extract the partition values. Inferred automatically depending on the partition fields specified.        |
 
 
 ### Sync modes
