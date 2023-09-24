@@ -34,7 +34,14 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
  * Utils class for cli commands.
  */
 public class CLIUtils {
-
+  /**
+   * Gets a {@link HoodieDefaultTimeline} instance containing the instants in the specified range.
+   *
+   * @param startTs                 Start instant time.
+   * @param endTs                   End instant time.
+   * @param includeArchivedTimeline Whether to include intants from the archived timeline.
+   * @return a {@link HoodieDefaultTimeline} instance containing the instants in the specified range.
+   */
   public static HoodieDefaultTimeline getTimelineInRange(String startTs, String endTs, boolean includeArchivedTimeline) {
     if (isNullOrEmpty(startTs)) {
       startTs = getTimeDaysAgo(10);
