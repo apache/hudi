@@ -56,6 +56,9 @@ import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadTableState;
+import org.apache.hudi.table.lookup.HoodieLookupPartitionReader;
+import org.apache.hudi.table.lookup.HoodiePartitionFetcher;
+import org.apache.hudi.table.lookup.HoodiePartitionFetcherContext;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.ChangelogModes;
 import org.apache.hudi.util.ExpressionUtils;
@@ -79,12 +82,15 @@ import org.apache.flink.table.catalog.Column;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.source.DynamicTableSource;
+import org.apache.flink.table.connector.source.LookupTableSource;
 import org.apache.flink.table.connector.source.ScanTableSource;
+import org.apache.flink.table.connector.source.TableFunctionProvider;
 import org.apache.flink.table.connector.source.abilities.SupportsFilterPushDown;
 import org.apache.flink.table.connector.source.abilities.SupportsLimitPushDown;
 import org.apache.flink.table.connector.source.abilities.SupportsProjectionPushDown;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.expressions.ResolvedExpression;
+import org.apache.flink.table.filesystem.FileSystemLookupFunction;
 import org.apache.flink.table.runtime.types.TypeInfoDataTypeConverter;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
@@ -95,20 +101,23 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.configuration.FlinkOptions.LOOKUP_JOIN_CACHE_TTL;
 import static org.apache.hudi.configuration.HadoopConfigurations.getParquetConf;
-import static org.apache.hudi.util.ExpressionUtils.splitExprByPartitionCall;
 import static org.apache.hudi.util.ExpressionUtils.filterSimpleCallExpression;
+import static org.apache.hudi.util.ExpressionUtils.splitExprByPartitionCall;
 
 /**
  * Hoodie batch table source that always read the latest snapshot of the underneath table.
@@ -117,7 +126,8 @@ public class HoodieTableSource implements
     ScanTableSource,
     SupportsProjectionPushDown,
     SupportsLimitPushDown,
-    SupportsFilterPushDown {
+    SupportsFilterPushDown,
+    LookupTableSource {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieTableSource.class);
 
   private static final int NO_LIMIT_CONSTANT = -1;
@@ -306,7 +316,7 @@ public class HoodieTableSource implements
     LOG.info("Partition pruner for hoodie source, condition is:\n" + joiner);
     List<ExpressionEvaluators.Evaluator> evaluators = ExpressionEvaluators.fromExpression(partitionFilters);
     List<DataType> partitionTypes = this.partitionKeys.stream().map(name ->
-        this.schema.getColumn(name).orElseThrow(() -> new HoodieValidationException("Field " + name + " does not exist")))
+            this.schema.getColumn(name).orElseThrow(() -> new HoodieValidationException("Field " + name + " does not exist")))
         .map(Column::getDataType)
         .collect(Collectors.toList());
     String defaultParName = conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME);
@@ -622,5 +632,34 @@ public class HoodieTableSource implements
   @VisibleForTesting
   public int getDataBucket() {
     return dataBucket;
+  }
+
+  @Override
+  public LookupRuntimeProvider getLookupRuntimeProvider(LookupContext context) {
+
+
+    Duration duration = conf.get(LOOKUP_JOIN_CACHE_TTL);
+    return TableFunctionProvider.of(
+        new FileSystemLookupFunction<>(new HoodiePartitionFetcher(),
+            new HoodiePartitionFetcherContext(),
+            new HoodieLookupPartitionReader<Map<String, String>, RowData>(getBatchInputFormat(), conf),
+            tableRowType,
+            getLookupFunction(context.getKeys()),
+            duration
+        ));
+  }
+
+  private int[] getLookupFunction(int[][] keys) {
+    int[] keyIndices = new int[keys.length];
+    int i = 0;
+    for (int[] key : keys) {
+      if (key.length > 1) {
+        throw new UnsupportedOperationException(
+            "Hive lookup can not support nested key now.");
+      }
+      keyIndices[i] = key[0];
+      i++;
+    }
+    return keyIndices;
   }
 }

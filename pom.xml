@@ -152,6 +152,7 @@
     <flink.table.planner.artifactId>flink-table-planner_2.12</flink.table.planner.artifactId>
     <flink.parquet.artifactId>flink-parquet</flink.parquet.artifactId>
     <flink.statebackend.rocksdb.artifactId>flink-statebackend-rocksdb</flink.statebackend.rocksdb.artifactId>
+    <flink.hive.artifactId>flink-connector-hive_2.12</flink.hive.artifactId>
     <flink.test.utils.artifactId>flink-test-utils</flink.test.utils.artifactId>
     <flink.streaming.java.artifactId>flink-streaming-java</flink.streaming.java.artifactId>
     <flink.clients.artifactId>flink-clients</flink.clients.artifactId>
