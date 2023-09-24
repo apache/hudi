@@ -49,7 +49,7 @@ Corresponding datasource options for the most commonly used hive sync configs ar
 | --jdbc-url   | hoodie.datasource.hive_sync.jdbcurl  |  jdbc:hive2://localhost:10000    | Hive server url if using `jdbc` mode to sync     |
 | --sync-mode   | hoodie.datasource.hive_sync.mode    |    | Mode to choose for Hive ops. Valid values are `hms`, `jdbc` and `hiveql`. More details in the following section.       |
 | --partitioned-by   | hoodie.datasource.hive_sync.partition_fields   |     | Comma-separated column names in the table to use for determining hive partition.        |
-| --partition-value-extractor   | hoodie.datasource.hive_sync.partition_extractor_class   |  MultiPartKeysValueExtractor   | Class which implements PartitionValueExtractor to extract the partition values. Inferred automatically depending on the partition fields specified.        |
+| --partition-value-extractor   | hoodie.datasource.hive_sync.partition_extractor_class   |  `org.apache.hudi.hive.MultiPartKeysValueExtractor`   | Class which implements `PartitionValueExtractor` to extract the partition values. Inferred automatically depending on the partition fields specified.        |
 
 
 ### Sync modes
