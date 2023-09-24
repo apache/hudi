@@ -211,11 +211,11 @@ public class TestHoodieHiveCatalog {
   @Test
   public void testCreateNonHoodieTable() throws TableAlreadyExistException, DatabaseNotExistException {
     CatalogTable table =
-        new CatalogTableImpl(schema, Collections.emptyMap(), "hudi table");
+        new CatalogTableImpl(schema, Collections.singletonMap(FactoryUtil.CONNECTOR.key(), "hudi-fake"), "hudi table");
     try {
       hoodieCatalog.createTable(tablePath, table, false);
     } catch (HoodieCatalogException e) {
-      assertEquals(String.format("The %s is not hoodie table", tablePath.getObjectName()), e.getMessage());
+      assertEquals("Unsupported connector identity hudi-fake, supported identity is hudi", e.getMessage());
     }
   }
 
