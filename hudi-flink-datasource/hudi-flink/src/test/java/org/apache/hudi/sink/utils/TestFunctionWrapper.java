@@ -59,9 +59,28 @@ public interface TestFunctionWrapper<I> {
   void checkpointFunction(long checkpointId) throws Exception;
 
   /**
+   * End inputs for all the operators in the wrapper.
+   */
+  void endInput();
+
+  /**
    * Mark checkpoint with id {code checkpointId} as success.
    */
   void checkpointComplete(long checkpointId);
+
+  /**
+   * Triggers the job failover, including the coordinator and the write tasks.
+   */
+  default void jobFailover() throws Exception {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Triggers the coordinator failover separately.
+   */
+  default void coordinatorFails() throws Exception {
+    throw new UnsupportedOperationException();
+  }
 
   /**
    * Returns the operator coordinator.
@@ -92,7 +111,7 @@ public interface TestFunctionWrapper<I> {
   /**
    * Mark sub-task with id {@code taskId} as failed.
    */
-  default void subTaskFails(int taskId) throws Exception {
+  default void subTaskFails(int taskId, int attemptNumber) throws Exception {
     throw new UnsupportedOperationException();
   }
 

@@ -20,13 +20,14 @@ package org.apache.hudi.functional.cdc
 
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.op_key_only
+import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils.schemaBySupplementalLoggingMode
 import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplementalLoggingMode}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
-import org.apache.spark.sql.SaveMode
+import org.apache.spark.sql.{Row, SaveMode}
+import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
@@ -40,8 +41,10 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
    * Step2: Upsert 50
    * Step3: Delete 20 With Clustering
    * Step4: Insert Overwrite 50
-   * Step5: Upsert 30 With Clean
-   * Step6: Bulk_Insert 20
+   * Step5: Insert 7
+   * Step6: Insert 3
+   * Step7: Upsert 30 With Clean
+   * Step8: Bulk_Insert 20
    */
   @ParameterizedTest
   @EnumSource(classOf[HoodieCDCSupplementalLoggingMode])
@@ -162,52 +165,63 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
-    // Upsert Operation With Clean Operation
-    val records5 = recordsToStrings(dataGen.generateUniqueUpdates("004", 30)).toList
+    val records5 = recordsToStrings(dataGen.generateInserts("005", 7)).toList
     val inputDF5 = spark.read.json(spark.sparkContext.parallelize(records5, 2))
     inputDF5.write.format("org.apache.hudi")
       .options(options)
-      .option("hoodie.clean.automatic", "true")
-      .option("hoodie.keep.min.commits", "2")
-      .option("hoodie.keep.max.commits", "3")
-      .option("hoodie.cleaner.commits.retained", "1")
       .mode(SaveMode.Append)
       .save(basePath)
-    val instant5 = metaClient.reloadActiveTimeline.lastInstant().get()
+
+    val records6 = recordsToStrings(dataGen.generateInserts("006", 3)).toList
+    val inputDF6 = spark.read.json(spark.sparkContext.parallelize(records6, 2))
+    inputDF6.write.format("org.apache.hudi")
+      .options(options)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // Upsert Operation With Clean Operation
+    val records7 = recordsToStrings(dataGen.generateUniqueUpdates("007", 30)).toList
+    val inputDF7 = spark.read.json(spark.sparkContext.parallelize(records7, 2))
+    inputDF7.write.format("org.apache.hudi")
+      .options(options)
+      .option("hoodie.clean.automatic", "true")
+      .option("hoodie.keep.min.commits", "4")
+      .option("hoodie.keep.max.commits", "5")
+      .option("hoodie.cleaner.commits.retained", "3")
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val instant7 = metaClient.reloadActiveTimeline.getCommitsTimeline.lastInstant().get()
     // part of data are updated, it will write out cdc log files.
-    // But instant5 is the clean instant, not the upsert one. so we omit to test.
-    val commitTime5 = instant5.getTimestamp
-    // here we use `commitTime4` to query the change data in commit 5.
-    // because `commitTime5` is the ts of the clean operation, not the upsert operation.
-    val cdcDataOnly5 = cdcDataFrame(commitTime4)
+    val cdcDataOnly7 = cdcDataFrame((instant7.getTimestamp.toLong - 1).toString)
     val currentData = spark.read.format("hudi").load(basePath)
-    val insertedCnt5 = currentData.count() - 50
-    val updatedCnt5 = 30 - insertedCnt5
-    assertCDCOpCnt(cdcDataOnly5, insertedCnt5, updatedCnt5, 0)
-    // here cause we do the clean operation and just remain the commit4 and commit5, so we need to reset the total cnt.
-    // 50 is the number of inserted records at commit 4.
-    totalInsertedCnt = 50 + insertedCnt5
-    totalUpdatedCnt = updatedCnt5
+    val insertedCnt7 = currentData.count() - 60
+    val updatedCnt7 = 30 - insertedCnt7
+    assertCDCOpCnt(cdcDataOnly7, insertedCnt7, updatedCnt7, 0)
+    // here cause we do the clean operation and just remain the commit4 to commit7,
+    // so we need to reset the total cnt.
+    // 60 is the number of inserted records since commit 4.
+    totalInsertedCnt = 60 + insertedCnt7
+    totalUpdatedCnt = updatedCnt7
     totalDeletedCnt = 0
     allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
     // Bulk_Insert Operation With Clean Operation
-    val records6 = recordsToStrings(dataGen.generateInserts("005", 20)).toList
-    val inputDF6 = spark.read.json(spark.sparkContext.parallelize(records6, 2))
-    inputDF6.write.format("org.apache.hudi")
+    val records8 = recordsToStrings(dataGen.generateInserts("008", 20)).toList
+    val inputDF8 = spark.read.json(spark.sparkContext.parallelize(records8, 2))
+    inputDF8.write.format("org.apache.hudi")
       .options(options)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
-    val instant6 = metaClient.reloadActiveTimeline.lastInstant().get()
+    val instant8 = metaClient.reloadActiveTimeline.lastInstant().get()
     // the files which keep all the old data will be replaced directly.
     // and all the new data will write out some new file groups.
     // it will NOT write out cdc log files
-    assertFalse(hasCDCLogFile(instant6))
-    val commitTime6 = instant6.getTimestamp
-    val cdcDataOnly6 = cdcDataFrame((commitTime6.toLong - 1).toString)
-    assertCDCOpCnt(cdcDataOnly6, 20, 0, 0)
+    assertFalse(hasCDCLogFile(instant8))
+    val commitTime8 = instant8.getTimestamp
+    val cdcDataOnly8 = cdcDataFrame((commitTime8.toLong - 1).toString)
+    assertCDCOpCnt(cdcDataOnly8, 20, 0, 0)
     totalInsertedCnt += 20
     allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
@@ -221,7 +235,8 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
    * Step4: Bulk_Insert 100
    * Step5: Upsert 60 With Clustering
    * Step6: Insert Overwrite 70
-   * Step7: Upsert 30 With CLean
+   * Step7,8: Insert 10 in two commits
+   * Step9: Upsert 30 With Clean
    */
   @ParameterizedTest
   @EnumSource(classOf[HoodieCDCSupplementalLoggingMode])
@@ -348,7 +363,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       .save(basePath)
     val instant5 = metaClient.reloadActiveTimeline.lastInstant().get()
     // in cases that there is log files, it will NOT write out cdc log files.
-    // But instant5 is the clustering instant, not the upsert one. so we omit to test.
+    // But instant9 is the clustering instant, not the upsert one. so we omit to test.
     val commitTime5 = instant5.getTimestamp
     // here we use `commitTime4` to query the change data in commit 5.
     // because `commitTime5` is the ts of the clean operation, not the upsert operation.
@@ -389,31 +404,48 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
 
-    // 7. Upsert Operation With Clean Operation
-    val records7 = recordsToStrings(dataGen.generateUniqueUpdates("006", 30)).toList
+    // 7,8. insert 10 records
+    val records7 = recordsToStrings(dataGen.generateInserts("006", 7)).toList
     val inputDF7 = spark.read.json(spark.sparkContext.parallelize(records7, 2))
     inputDF7.write.format("org.apache.hudi")
       .options(options)
-      .option("hoodie.clean.automatic", "true")
-      .option("hoodie.keep.min.commits", "2")
-      .option("hoodie.keep.max.commits", "3")
-      .option("hoodie.cleaner.commits.retained", "1")
       .mode(SaveMode.Append)
       .save(basePath)
-    val instant7 = metaClient.reloadActiveTimeline.lastInstant().get()
+
+    val records8 = recordsToStrings(dataGen.generateInserts("007", 3)).toList
+    val inputDF8 = spark.read.json(spark.sparkContext.parallelize(records8, 2))
+    inputDF8.write.format("org.apache.hudi")
+      .options(options)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val instant8 = metaClient.reloadActiveTimeline.lastInstant().get()
+    val commitTime8 = instant8.getTimestamp
+
+    // 8. Upsert Operation With Clean Operation
+    val records9 = recordsToStrings(dataGen.generateUniqueUpdates("008", 30)).toList
+    val inputDF9 = spark.read.json(spark.sparkContext.parallelize(records9, 2))
+    inputDF9.write.format("org.apache.hudi")
+      .options(options)
+      .option("hoodie.clean.automatic", "true")
+      .option("hoodie.keep.min.commits", "4")
+      .option("hoodie.keep.max.commits", "5")
+      .option("hoodie.cleaner.commits.retained", "3")
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val instant9 = metaClient.reloadActiveTimeline.lastInstant().get()
     // in cases that there is log files, it will NOT write out cdc log files.
-    // But instant7 is the clean instant, not the upsert one. so we omit to test.
-    val commitTime7 = instant7.getTimestamp
-    val cntForInstant7 = spark.read.format("hudi").load(basePath).count()
-    val cdcDataOnly7 = cdcDataFrame(commitTime6)
-    val insertedCnt7 = cntForInstant7 - cntForInstant6
-    val updatedCnt7 = 30 - insertedCnt7
-    assertCDCOpCnt(cdcDataOnly7, insertedCnt7, updatedCnt7, 0)
+    // But instant9 is the clean instant, not the upsert one. so we omit to test.
+    val commitTime9 = instant9.getTimestamp
+    val cntForInstant9 = spark.read.format("hudi").load(basePath).count()
+    val cdcDataOnly9 = cdcDataFrame(commitTime8)
+    val insertedCnt9 = cntForInstant9 - cntForInstant6 - 10
+    val updatedCnt9 = 30 - insertedCnt9
+    assertCDCOpCnt(cdcDataOnly9, insertedCnt9, updatedCnt9, 0)
 
     // here cause we do the clean operation and just remain the commit6 and commit7, so we need to reset the total cnt.
     // 70 is the number of inserted records at commit 6.
-    totalInsertedCnt = 70 + insertedCnt7
-    totalUpdatedCnt = updatedCnt7
+    totalInsertedCnt = 80 + insertedCnt9
+    totalUpdatedCnt = updatedCnt9
     totalDeletedCnt = 0
     allVisibleCDCData = cdcDataFrame((commitTime1.toLong - 1).toString)
     assertCDCOpCnt(allVisibleCDCData, totalInsertedCnt, totalUpdatedCnt, totalDeletedCnt)
@@ -545,7 +577,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
   @ParameterizedTest
   @EnumSource(classOf[HoodieCDCSupplementalLoggingMode])
   def testCDCWithMultiBlocksAndLogFiles(loggingMode: HoodieCDCSupplementalLoggingMode): Unit = {
-    val (blockSize, logFileSize) = if (loggingMode == op_key_only) {
+    val (blockSize, logFileSize) = if (loggingMode == OP_KEY_ONLY) {
       // only op and key will be stored in cdc log file, we set the smaller values for the two configs.
       // so that it can also write out more than one cdc log file
       // and each of cdc log file has more that one data block as we expect.
@@ -602,5 +634,58 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val updatedCnt2 = 50 - insertedCnt2
     val cdcDataOnly2 = cdcDataFrame((commitTime2.toLong - 1).toString)
     assertCDCOpCnt(cdcDataOnly2, insertedCnt2, updatedCnt2, 0)
+  }
+
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieCDCSupplementalLoggingMode])
+  def testCDCWithAWSDMSPayload(loggingMode: HoodieCDCSupplementalLoggingMode): Unit = {
+    val options = Map(
+      "hoodie.table.name" -> "test",
+      "hoodie.datasource.write.recordkey.field" -> "id",
+      "hoodie.datasource.write.precombine.field" -> "replicadmstimestamp",
+      "hoodie.datasource.write.keygenerator.class" -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
+      "hoodie.datasource.write.partitionpath.field" -> "",
+      "hoodie.datasource.write.payload.class" -> "org.apache.hudi.common.model.AWSDmsAvroPayload",
+      "hoodie.table.cdc.enabled" -> "true",
+      "hoodie.table.cdc.supplemental.logging.mode" -> "data_before_after"
+    )
+
+    val data: Seq[(String, String, String, String)] = Seq(
+      ("1", "I", "2023-06-14 15:46:06.953746", "A"),
+      ("2", "I", "2023-06-14 15:46:07.953746", "B"),
+      ("3", "I", "2023-06-14 15:46:08.953746", "C")
+    )
+
+    val schema: StructType = StructType(Seq(
+      StructField("id", StringType),
+      StructField("Op", StringType),
+      StructField("replicadmstimestamp", StringType),
+      StructField("code", StringType)
+    ))
+
+    val df = spark.createDataFrame(data.map(Row.fromTuple), schema)
+    df.write
+      .format("org.apache.hudi")
+      .option("hoodie.datasource.write.operation", "upsert")
+      .options(options)
+      .mode("append")
+      .save(basePath)
+
+    assertEquals(spark.read.format("org.apache.hudi").load(basePath).count(), 3)
+
+    val newData: Seq[(String, String, String, String)] = Seq(
+      ("3", "D", "2023-06-14 15:47:09.953746", "B")
+    )
+
+    val newDf = spark.createDataFrame(newData.map(Row.fromTuple), schema)
+
+    newDf.write
+      .format("org.apache.hudi")
+      .option("hoodie.datasource.write.operation", "upsert")
+      .options(options)
+      .mode("append")
+      .save(basePath)
+
+    assertEquals(spark.read.format("org.apache.hudi").load(basePath).count(), 2)
   }
 }

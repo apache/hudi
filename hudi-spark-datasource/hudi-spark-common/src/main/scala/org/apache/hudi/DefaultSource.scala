@@ -22,15 +22,16 @@ import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION, STREAMING_CHECKPOINT_IDENTIFIER}
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieRecord, WriteConcurrencyMode}
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
+import org.apache.hudi.common.model.WriteConcurrencyMode
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.util.PathUtils
-import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
 import org.apache.spark.sql.hudi.streaming.{HoodieEarliestOffsetRangeLimit, HoodieLatestOffsetRangeLimit, HoodieSpecifiedOffsetRangeLimit, HoodieStreamSource}
@@ -38,6 +39,7 @@ import org.apache.spark.sql.sources._
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode, SparkSession}
+import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters._
@@ -65,7 +67,7 @@ class DefaultSource extends RelationProvider
     spark.sparkContext.hadoopConfiguration.set("fs.s3.metadata.cache.expiration.seconds", "0")
   }
 
-  private val log = LogManager.getLogger(classOf[DefaultSource])
+  private val log = LoggerFactory.getLogger(classOf[DefaultSource])
 
   override def createRelation(sqlContext: SQLContext,
                               parameters: Map[String, String]): BaseRelation = {
@@ -79,7 +81,7 @@ class DefaultSource extends RelationProvider
     val readPathsStr = optParams.get(DataSourceReadOptions.READ_PATHS.key)
 
     if (path.isEmpty && readPathsStr.isEmpty) {
-      throw new HoodieException(s"'path' or '$READ_PATHS' or both must be specified.")
+      throw new HoodieException(s"'path' or '${READ_PATHS.key()}' or both must be specified.")
     }
 
     val readPaths = readPathsStr.map(p => p.split(",").toSeq).getOrElse(Seq())
@@ -100,7 +102,7 @@ class DefaultSource extends RelationProvider
       )
     } else {
       Map()
-    }) ++ DataSourceOptionsHelper.parametersWithReadDefaults(optParams)
+    }) ++ DataSourceOptionsHelper.parametersWithReadDefaults(sqlContext.getAllConfs.filter(k => k._1.startsWith("hoodie.")) ++ optParams)
 
     // Get the table base path
     val tablePath = if (globPaths.nonEmpty) {
@@ -122,39 +124,37 @@ class DefaultSource extends RelationProvider
   }
 
   /**
-    * This DataSource API is used for writing the DataFrame at the destination. For now, we are returning a dummy
-    * relation here because Spark does not really make use of the relation returned, and just returns an empty
-    * dataset at [[org.apache.spark.sql.execution.datasources.SaveIntoDataSourceCommand.run()]]. This saves us the cost
-    * of creating and returning a parquet relation here.
-    *
-    * TODO: Revisit to return a concrete relation here when we support CREATE TABLE AS for Hudi with DataSource API.
-    *       That is the only case where Spark seems to actually need a relation to be returned here
-    *       [[org.apache.spark.sql.execution.datasources.DataSource.writeAndRead()]]
-    *
-    * @param sqlContext Spark SQL Context
-    * @param mode Mode for saving the DataFrame at the destination
-    * @param optParams Parameters passed as part of the DataFrame write operation
-    * @param df Spark DataFrame to be written
-    * @return Spark Relation
-    */
+   * This DataSource API is used for writing the DataFrame at the destination. For now, we are returning a dummy
+   * relation here because Spark does not really make use of the relation returned, and just returns an empty
+   * dataset at [[org.apache.spark.sql.execution.datasources.SaveIntoDataSourceCommand.run()]]. This saves us the cost
+   * of creating and returning a parquet relation here.
+   *
+   * TODO: Revisit to return a concrete relation here when we support CREATE TABLE AS for Hudi with DataSource API.
+   * That is the only case where Spark seems to actually need a relation to be returned here
+   * [[org.apache.spark.sql.execution.datasources.DataSource.writeAndRead()]]
+   *
+   * @param sqlContext Spark SQL Context
+   * @param mode       Mode for saving the DataFrame at the destination
+   * @param optParams  Parameters passed as part of the DataFrame write operation
+   * @param df         Spark DataFrame to be written
+   * @return Spark Relation
+   */
   override def createRelation(sqlContext: SQLContext,
                               mode: SaveMode,
                               optParams: Map[String, String],
                               df: DataFrame): BaseRelation = {
-    val dfWithoutMetaCols = df.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala:_*)
-
     if (optParams.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)) {
-      HoodieSparkSqlWriter.bootstrap(sqlContext, mode, optParams, dfWithoutMetaCols)
+      HoodieSparkSqlWriter.bootstrap(sqlContext, mode, optParams, df)
       HoodieSparkSqlWriter.cleanup()
     } else {
-      val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sqlContext, mode, optParams, dfWithoutMetaCols)
+      val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sqlContext, mode, optParams, df)
       HoodieSparkSqlWriter.cleanup()
       if (!success) {
         throw new HoodieException("Write to Hudi failed")
       }
     }
 
-    new HoodieEmptyRelation(sqlContext, dfWithoutMetaCols.schema)
+    new HoodieEmptyRelation(sqlContext, df.schema)
   }
 
   override def createSink(sqlContext: SQLContext,
@@ -170,7 +170,7 @@ class DefaultSource extends RelationProvider
   }
 
   def validateMultiWriterConfigs(options: Map[String, String]) : Unit = {
-    if (WriteConcurrencyMode.valueOf(options.getOrDefault(WRITE_CONCURRENCY_MODE.key(),
+    if (ConfigUtils.resolveEnum(classOf[WriteConcurrencyMode], options.getOrDefault(WRITE_CONCURRENCY_MODE.key(),
       WRITE_CONCURRENCY_MODE.defaultValue())) == WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL) {
       // ensure some valid value is set for identifier
       checkState(options.contains(STREAMING_CHECKPOINT_IDENTIFIER.key()), "For multi-writer scenarios, please set "
@@ -215,7 +215,7 @@ class DefaultSource extends RelationProvider
 
 object DefaultSource {
 
-  private val log = LogManager.getLogger(classOf[DefaultSource])
+  private val log = LoggerFactory.getLogger(classOf[DefaultSource])
 
   def createRelation(sqlContext: SQLContext,
                      metaClient: HoodieTableMetaClient,
@@ -245,6 +245,16 @@ object DefaultSource {
     } else if (isCdcQuery) {
       CDCRelation.getCDCRelation(sqlContext, metaClient, parameters)
     } else {
+      lazy val newHudiFileFormatUtils = if (parameters.getOrElse(USE_NEW_HUDI_PARQUET_FILE_FORMAT.key,
+        USE_NEW_HUDI_PARQUET_FILE_FORMAT.defaultValue).toBoolean && (globPaths == null || globPaths.isEmpty)
+        && parameters.getOrElse(REALTIME_MERGE.key(), REALTIME_MERGE.defaultValue())
+        .equalsIgnoreCase(REALTIME_PAYLOAD_COMBINE_OPT_VAL)) {
+        val formatUtils = new NewHoodieParquetFileFormatUtils(sqlContext, metaClient, parameters, userSchema)
+        if (formatUtils.hasSchemaOnRead) Option.empty else Some(formatUtils)
+      } else {
+        Option.empty
+      }
+
       (tableType, queryType, isBootstrappedTable) match {
         case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
              (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
@@ -255,18 +265,51 @@ object DefaultSource {
           new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
 
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
-          new MergeOnReadSnapshotRelation(sqlContext, parameters, metaClient, globPaths, userSchema)
+          if (newHudiFileFormatUtils.isEmpty) {
+            new MergeOnReadSnapshotRelation(sqlContext, parameters, metaClient, globPaths, userSchema)
+          } else {
+            newHudiFileFormatUtils.get.getHadoopFsRelation(isMOR = true, isBootstrap = false)
+          }
 
         case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
           new MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
 
+        case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, true) =>
+          if (newHudiFileFormatUtils.isEmpty) {
+            new HoodieBootstrapMORRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
+          } else {
+            newHudiFileFormatUtils.get.getHadoopFsRelation(isMOR = true, isBootstrap = true)
+          }
+
         case (_, _, true) =>
-          new HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
+          if (newHudiFileFormatUtils.isEmpty) {
+            resolveHoodieBootstrapRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
+          } else {
+            newHudiFileFormatUtils.get.getHadoopFsRelation(isMOR = false, isBootstrap = true)
+          }
 
         case (_, _, _) =>
           throw new HoodieException(s"Invalid query type : $queryType for tableType: $tableType," +
             s"isBootstrappedTable: $isBootstrappedTable ")
       }
+    }
+  }
+
+  private def resolveHoodieBootstrapRelation(sqlContext: SQLContext,
+                                             globPaths: Seq[Path],
+                                             userSchema: Option[StructType],
+                                             metaClient: HoodieTableMetaClient,
+                                             parameters: Map[String, String]): BaseRelation = {
+    val enableFileIndex = HoodieSparkConfUtils.getConfigValue(parameters, sqlContext.sparkSession.sessionState.conf,
+      ENABLE_HOODIE_FILE_INDEX.key, ENABLE_HOODIE_FILE_INDEX.defaultValue.toString).toBoolean
+    val isSchemaEvolutionEnabledOnRead = HoodieSparkConfUtils.getConfigValue(parameters,
+      sqlContext.sparkSession.sessionState.conf, DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
+      DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean
+    if (!enableFileIndex || isSchemaEvolutionEnabledOnRead
+      || globPaths.nonEmpty || !parameters.getOrElse(DATA_QUERIES_ONLY.key, DATA_QUERIES_ONLY.defaultValue).toBoolean) {
+      HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters + (DATA_QUERIES_ONLY.key() -> "false"))
+    } else {
+      HoodieBootstrapRelation(sqlContext, userSchema, globPaths, metaClient, parameters).toHadoopFsRelation
     }
   }
 

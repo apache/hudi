@@ -23,8 +23,8 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.lang.reflect.Modifier;
@@ -32,12 +32,14 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 
+import static org.apache.hudi.common.util.ConfigUtils.getRawValueWithAltKeys;
+
 /**
  * This class deals with {@link ConfigProperty} and provides get/set functionalities.
  */
 public class HoodieConfig implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieConfig.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieConfig.class);
 
   protected static final String CONFIG_VALUES_DELIMITER = ",";
 
@@ -49,6 +51,10 @@ public class HoodieConfig implements Serializable {
 
   public HoodieConfig(Properties props) {
     this.props = new TypedProperties(props);
+  }
+
+  public HoodieConfig(TypedProperties props) {
+    this.props = props;
   }
 
   public <T> void setValue(ConfigProperty<T> cfg, String val) {
@@ -109,18 +115,7 @@ public class HoodieConfig implements Serializable {
   }
 
   private <T> Option<Object> getRawValue(ConfigProperty<T> configProperty) {
-    if (props.containsKey(configProperty.key())) {
-      return Option.ofNullable(props.get(configProperty.key()));
-    }
-    for (String alternative : configProperty.getAlternatives()) {
-      if (props.containsKey(alternative)) {
-        LOG.warn(String.format("The configuration key '%s' has been deprecated "
-                + "and may be removed in the future. Please use the new key '%s' instead.",
-            alternative, configProperty.key()));
-        return Option.ofNullable(props.get(alternative));
-      }
-    }
-    return Option.empty();
+    return getRawValueWithAltKeys(props, configProperty);
   }
 
   protected void setDefaults(String configClassName) {

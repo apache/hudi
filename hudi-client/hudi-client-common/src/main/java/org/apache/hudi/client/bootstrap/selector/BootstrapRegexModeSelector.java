@@ -18,21 +18,26 @@
 
 package org.apache.hudi.client.bootstrap.selector;
 
-import java.util.List;
-import java.util.Map;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.List;
+import java.util.Map;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+/**
+ * A bootstrap selector which employs bootstrap mode by specified partitions.
+ */
 public class BootstrapRegexModeSelector extends BootstrapModeSelector {
 
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LogManager.getLogger(BootstrapRegexModeSelector.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BootstrapRegexModeSelector.class);
 
   private final Pattern pattern;
   private final BootstrapMode bootstrapModeOnMatch;

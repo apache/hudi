@@ -19,7 +19,7 @@
 package org.apache.hudi.internal;
 
 import org.apache.hudi.DataSourceWriteOptions;
-import org.apache.hudi.client.HoodieInternalWriteStatus;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -27,9 +27,9 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.keygen.SimpleKeyGenerator;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.SparkDatasetTestUtils;
+
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.AfterEach;
@@ -41,7 +41,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 
-import static org.apache.hudi.testutils.SparkDatasetTestUtils.getConfigBuilder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -51,7 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Base class for TestHoodieBulkInsertDataInternalWriter.
  */
-public class HoodieBulkInsertInternalWriterTestBase extends HoodieClientTestHarness {
+public class HoodieBulkInsertInternalWriterTestBase extends HoodieSparkClientTestHarness {
 
   protected static final Random RANDOM = new Random();
 
@@ -77,21 +76,20 @@ public class HoodieBulkInsertInternalWriterTestBase extends HoodieClientTestHarn
   protected HoodieWriteConfig getWriteConfig(boolean populateMetaFields, String hiveStylePartitioningValue) {
     Properties properties = new Properties();
     if (!populateMetaFields) {
-      properties.setProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(), SimpleKeyGenerator.class.getName());
       properties.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key(), SparkDatasetTestUtils.RECORD_KEY_FIELD_NAME);
       properties.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), SparkDatasetTestUtils.PARTITION_PATH_FIELD_NAME);
       properties.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
     }
     properties.setProperty(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING().key(), hiveStylePartitioningValue);
-    return getConfigBuilder(basePath, timelineServicePort).withProperties(properties).build();
+    return SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort).withProperties(properties).build();
   }
 
-  protected void assertWriteStatuses(List<HoodieInternalWriteStatus> writeStatuses, int batches, int size,
+  protected void assertWriteStatuses(List<WriteStatus> writeStatuses, int batches, int size,
                                      Option<List<String>> fileAbsPaths, Option<List<String>> fileNames) {
     assertWriteStatuses(writeStatuses, batches, size, false, fileAbsPaths, fileNames, false);
   }
 
-  protected void assertWriteStatuses(List<HoodieInternalWriteStatus> writeStatuses, int batches, int size, boolean areRecordsSorted,
+  protected void assertWriteStatuses(List<WriteStatus> writeStatuses, int batches, int size, boolean areRecordsSorted,
                                      Option<List<String>> fileAbsPaths, Option<List<String>> fileNames, boolean isHiveStylePartitioning) {
     if (areRecordsSorted) {
       assertEquals(batches, writeStatuses.size());
@@ -113,7 +111,7 @@ public class HoodieBulkInsertInternalWriterTestBase extends HoodieClientTestHarn
     }
 
     int counter = 0;
-    for (HoodieInternalWriteStatus writeStatus : writeStatuses) {
+    for (WriteStatus writeStatus : writeStatuses) {
       // verify write status
       String actualPartitionPathFormat = isHiveStylePartitioning ? SparkDatasetTestUtils.PARTITION_PATH_FIELD_NAME + "=%s" : "%s";
       assertEquals(String.format(actualPartitionPathFormat, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[counter % 3]), writeStatus.getPartitionPath());
@@ -123,7 +121,7 @@ public class HoodieBulkInsertInternalWriterTestBase extends HoodieClientTestHarn
         assertEquals(writeStatus.getTotalRecords(), sizeMap.get(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[counter % 3]));
       }
       assertNull(writeStatus.getGlobalError());
-      assertEquals(writeStatus.getFailedRowsSize(), 0);
+      assertEquals(writeStatus.getTotalErrorRecords(), 0);
       assertEquals(writeStatus.getTotalErrorRecords(), 0);
       assertFalse(writeStatus.hasErrors());
       assertNotNull(writeStatus.getFileId());

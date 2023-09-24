@@ -26,16 +26,16 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-import org.apache.hudi.sync.common.util.ConfigUtils;
 
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -62,11 +62,12 @@ import static org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIO
     description = "")
 public class HoodieSyncConfig extends HoodieConfig {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieSyncConfig.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieSyncConfig.class);
 
   public static final ConfigProperty<String> META_SYNC_BASE_PATH = ConfigProperty
       .key("hoodie.datasource.meta.sync.base.path")
       .defaultValue("")
+      .markAdvanced()
       .withDocumentation("Base path of the hoodie table to sync");
 
   public static final ConfigProperty<String> META_SYNC_ENABLED = ConfigProperty
@@ -79,6 +80,7 @@ public class HoodieSyncConfig extends HoodieConfig {
       .key("hoodie.datasource.hive_sync.database")
       .defaultValue("default")
       .withInferFunction(cfg -> Option.ofNullable(cfg.getString(DATABASE_NAME)))
+      .markAdvanced()
       .withDocumentation("The name of the destination database that we should sync the hudi table to.");
 
   public static final ConfigProperty<String> META_SYNC_TABLE_NAME = ConfigProperty
@@ -86,12 +88,14 @@ public class HoodieSyncConfig extends HoodieConfig {
       .defaultValue("unknown")
       .withInferFunction(cfg -> Option.ofNullable(cfg.getString(HOODIE_TABLE_NAME_KEY))
           .or(() -> Option.ofNullable(cfg.getString(HOODIE_WRITE_TABLE_NAME_KEY))))
+      .markAdvanced()
       .withDocumentation("The name of the destination table that we should sync the hudi table to.");
 
   public static final ConfigProperty<String> META_SYNC_BASE_FILE_FORMAT = ConfigProperty
       .key("hoodie.datasource.hive_sync.base_file_format")
       .defaultValue("PARQUET")
       .withInferFunction(cfg -> Option.ofNullable(cfg.getString(BASE_FILE_FORMAT)))
+      .markAdvanced()
       .withDocumentation("Base file format for the sync.");
 
   public static final ConfigProperty<String> META_SYNC_PARTITION_FIELDS = ConfigProperty
@@ -99,6 +103,7 @@ public class HoodieSyncConfig extends HoodieConfig {
       .defaultValue("")
       .withInferFunction(cfg -> Option.ofNullable(cfg.getString(HoodieTableConfig.PARTITION_FIELDS))
           .or(() -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME))))
+      .markAdvanced()
       .withDocumentation("Field in the table to use for determining hive partition columns.");
 
   public static final ConfigProperty<String> META_SYNC_PARTITION_EXTRACTOR_CLASS = ConfigProperty
@@ -132,6 +137,7 @@ public class HoodieSyncConfig extends HoodieConfig {
           return Option.of("org.apache.hudi.hive.NonPartitionedExtractor");
         }
       })
+      .markAdvanced()
       .withDocumentation("Class which implements PartitionValueExtractor to extract the partition values, "
           + "default 'org.apache.hudi.hive.MultiPartKeysValueExtractor'.");
 
@@ -139,29 +145,50 @@ public class HoodieSyncConfig extends HoodieConfig {
       .key("hoodie.datasource.hive_sync.assume_date_partitioning")
       .defaultValue(HoodieMetadataConfig.ASSUME_DATE_PARTITIONING.defaultValue())
       .withInferFunction(cfg -> Option.ofNullable(cfg.getString(HoodieMetadataConfig.ASSUME_DATE_PARTITIONING)))
+      .markAdvanced()
       .withDocumentation("Assume partitioning is yyyy/MM/dd");
 
   public static final ConfigProperty<Boolean> META_SYNC_DECODE_PARTITION = ConfigProperty
       .key("hoodie.meta.sync.decode_partition")
       .defaultValue(false)
       .withInferFunction(cfg -> Option.ofNullable(cfg.getBoolean(URL_ENCODE_PARTITIONING)))
+      .markAdvanced()
       .withDocumentation("If true, meta sync will url-decode the partition path, as it is deemed as url-encoded. Default to false.");
 
   public static final ConfigProperty<Boolean> META_SYNC_USE_FILE_LISTING_FROM_METADATA = ConfigProperty
       .key("hoodie.meta.sync.metadata_file_listing")
       .defaultValue(DEFAULT_METADATA_ENABLE_FOR_READERS)
       .withInferFunction(cfg -> Option.of(cfg.getBooleanOrDefault(HoodieMetadataConfig.ENABLE, DEFAULT_METADATA_ENABLE_FOR_READERS)))
+      .markAdvanced()
       .withDocumentation("Enable the internal metadata table for file listing for syncing with metastores");
 
   public static final ConfigProperty<String> META_SYNC_CONDITIONAL_SYNC = ConfigProperty
       .key("hoodie.datasource.meta_sync.condition.sync")
       .defaultValue("false")
+      .markAdvanced()
       .withDocumentation("If true, only sync on conditions like schema change or partition change.");
 
   public static final ConfigProperty<String> META_SYNC_SPARK_VERSION = ConfigProperty
       .key("hoodie.meta_sync.spark.version")
       .defaultValue("")
+      .markAdvanced()
       .withDocumentation("The spark version used when syncing with a metastore.");
+  public static final ConfigProperty<String> META_SYNC_SNAPSHOT_WITH_TABLE_NAME = ConfigProperty
+          .key("hoodie.meta.sync.sync_snapshot_with_table_name")
+          .defaultValue("false")
+          .markAdvanced()
+          .sinceVersion("0.14.0")
+          .withDocumentation("sync meta info to origin table if enable");
+
+  public static final ConfigProperty<Boolean> META_SYNC_INCREMENTAL = ConfigProperty
+      .key("hoodie.meta.sync.incremental")
+      .defaultValue(true)
+      .sinceVersion("0.14.0")
+      .markAdvanced()
+      .withDocumentation("Whether to incrementally sync the partitions to the metastore, i.e., "
+          + "only added, changed, and deleted partitions based on the commit metadata. If set to "
+          + "`false`, the meta sync executes a full partition sync operation when partitions are "
+          + "lost.");
 
   private Configuration hadoopConf;
 
@@ -226,6 +253,12 @@ public class HoodieSyncConfig extends HoodieConfig {
     public Boolean isConditionalSync;
     @Parameter(names = {"--spark-version"}, description = "The spark version")
     public String sparkVersion;
+    @Parameter(names = {"--sync-incremental"}, description =
+        "Whether to incrementally sync the partitions to the metastore, i.e., "
+            + "only added, changed, and deleted partitions based on the commit metadata. If set to "
+            + "`false`, the meta sync executes a full partition sync operation when partitions are "
+            + "lost.")
+    public Boolean syncIncremental;
 
     @Parameter(names = {"--help", "-h"}, help = true)
     public boolean help = false;
@@ -247,6 +280,7 @@ public class HoodieSyncConfig extends HoodieConfig {
       props.setPropertyIfNonNull(META_SYNC_USE_FILE_LISTING_FROM_METADATA.key(), useFileListingFromMetadata);
       props.setPropertyIfNonNull(META_SYNC_CONDITIONAL_SYNC.key(), isConditionalSync);
       props.setPropertyIfNonNull(META_SYNC_SPARK_VERSION.key(), sparkVersion);
+      props.setPropertyIfNonNull(META_SYNC_INCREMENTAL.key(), syncIncremental);
       return props;
     }
   }

@@ -30,8 +30,8 @@ import org.apache.hudi.timeline.service.handlers.MarkerHandler;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -42,7 +42,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
-  private static final Logger LOG = LogManager.getLogger(MarkerBasedEarlyConflictDetectionRunnable.class);
+  private static final Logger LOG = LoggerFactory.getLogger(MarkerBasedEarlyConflictDetectionRunnable.class);
 
   private MarkerHandler markerHandler;
   private String markerDir;

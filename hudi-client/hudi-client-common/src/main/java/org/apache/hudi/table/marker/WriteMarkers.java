@@ -28,8 +28,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -43,7 +43,7 @@ import java.util.Set;
  */
 public abstract class WriteMarkers implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(WriteMarkers.class);
+  private static final Logger LOG = LoggerFactory.getLogger(WriteMarkers.class);
 
   protected final String basePath;
   protected final transient Path markerDirPath;
@@ -105,6 +105,34 @@ public abstract class WriteMarkers implements Serializable {
    */
   public Option<Path> createIfNotExists(String partitionPath, String dataFileName, IOType type) {
     return create(partitionPath, dataFileName, type, true);
+  }
+
+  /**
+   * Creates a marker if the marker does not exist.
+   * This can invoke marker-based early conflict detection when enabled for multi-writers.
+   *
+   * @param partitionPath  partition path in the table
+   * @param fileName       file name
+   * @param type           write IO type
+   * @param writeConfig    Hudi write configs.
+   * @param fileId         File ID.
+   * @param activeTimeline Active timeline for the write operation.
+   * @return the marker path.
+   */
+  public Option<Path> createIfNotExists(String partitionPath, String fileName, IOType type, HoodieWriteConfig writeConfig,
+                             String fileId, HoodieActiveTimeline activeTimeline) {
+    if (writeConfig.isEarlyConflictDetectionEnable()
+        && writeConfig.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
+      HoodieTimeline pendingCompactionTimeline = activeTimeline.filterPendingCompactionTimeline();
+      HoodieTimeline pendingReplaceTimeline = activeTimeline.filterPendingReplaceTimeline();
+      // TODO If current is compact or clustering then create marker directly without early conflict detection.
+      // Need to support early conflict detection between table service and common writers.
+      if (pendingCompactionTimeline.containsInstant(instantTime) || pendingReplaceTimeline.containsInstant(instantTime)) {
+        return create(partitionPath, fileName, type, true);
+      }
+      return createWithEarlyConflictDetection(partitionPath, fileName, type, false, writeConfig, fileId, activeTimeline);
+    }
+    return create(partitionPath, fileName, type, true);
   }
 
   /**

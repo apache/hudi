@@ -28,8 +28,8 @@ import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.lib.CombineFileSplit;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.LinkedList;
@@ -40,7 +40,7 @@ import java.util.List;
  */
 public class HoodieCombineRealtimeRecordReader implements RecordReader<NullWritable, ArrayWritable> {
 
-  private static final transient Logger LOG = LogManager.getLogger(HoodieCombineRealtimeRecordReader.class);
+  private static final transient Logger LOG = LoggerFactory.getLogger(HoodieCombineRealtimeRecordReader.class);
   // RecordReaders for each split
   List<HoodieRealtimeRecordReader> recordReaders = new LinkedList<>();
   // Points to the currently iterating record reader

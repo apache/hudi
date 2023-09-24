@@ -23,8 +23,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metrics.MetricsReporter;
 
 import com.codahale.metrics.MetricRegistry;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.TimeUnit;
 
@@ -34,7 +34,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class CloudWatchMetricsReporter extends MetricsReporter {
 
-  private static final Logger LOG = LogManager.getLogger(CloudWatchMetricsReporter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(CloudWatchMetricsReporter.class);
 
   private final MetricRegistry registry;
   private final HoodieWriteConfig config;

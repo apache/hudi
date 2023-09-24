@@ -52,13 +52,13 @@ import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileScanner;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -69,6 +69,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.io.storage.HoodieAvroHFileReader.SCHEMA_KEY;
 
 /**
@@ -76,7 +77,7 @@ import static org.apache.hudi.io.storage.HoodieAvroHFileReader.SCHEMA_KEY;
  */
 public class HoodieClientTestUtils {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieClientTestUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieClientTestUtils.class);
 
   /**
    * Returns a Spark config for this test.
@@ -268,7 +269,7 @@ public class HoodieClientTestUtils {
         HFile.Reader reader =
             HoodieHFileUtils.createHFileReader(fs, new Path(path), cacheConfig, fs.getConf());
         if (schema == null) {
-          schema = new Schema.Parser().parse(new String(reader.getHFileInfo().get(SCHEMA_KEY.getBytes())));
+          schema = new Schema.Parser().parse(new String(reader.getHFileInfo().get(getUTF8Bytes(SCHEMA_KEY))));
         }
         HFileScanner scanner = reader.getScanner(false, false);
         if (!scanner.seekTo()) {

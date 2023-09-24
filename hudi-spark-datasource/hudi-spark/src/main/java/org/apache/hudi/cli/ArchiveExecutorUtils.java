@@ -18,8 +18,8 @@
 
 package org.apache.hudi.cli;
 
-import org.apache.hudi.client.HoodieTimelineArchiver;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
@@ -27,10 +27,10 @@ import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
-import org.apache.spark.api.java.JavaSparkContext;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -38,7 +38,7 @@ import java.io.IOException;
  * Archive Utils.
  */
 public final class ArchiveExecutorUtils {
-  private static final Logger LOG = LogManager.getLogger(ArchiveExecutorUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ArchiveExecutorUtils.class);
 
   private ArchiveExecutorUtils() {
   }
@@ -48,7 +48,7 @@ public final class ArchiveExecutorUtils {
        int maxCommits,
        int commitsRetained,
        boolean enableMetadata,
-       String basePath) {
+       String basePath) throws IOException {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(minCommits, maxCommits).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(commitsRetained).build())
@@ -62,7 +62,7 @@ public final class ArchiveExecutorUtils {
       archiver.archiveIfRequired(context, true);
     } catch (IOException ioe) {
       LOG.error("Failed to archive with IOException: " + ioe);
-      return -1;
+      throw ioe;
     }
     return 0;
   }

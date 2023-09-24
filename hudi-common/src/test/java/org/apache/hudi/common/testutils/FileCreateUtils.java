@@ -43,12 +43,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -62,18 +61,20 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCleanMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCleanerPlan;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCompactionPlan;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRequestedReplaceMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRestoreMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRollbackMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRollbackPlan;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Utils for creating dummy Hudi files in testing.
  */
 public class FileCreateUtils {
 
-  private static final Logger LOG = LogManager.getLogger(FileCreateUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FileCreateUtils.class);
 
   private static final String WRITE_TOKEN = "1-0-1";
   private static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
@@ -121,7 +122,7 @@ public class FileCreateUtils {
   }
 
   private static void createMetaFile(String basePath, String instantTime, String suffix) throws IOException {
-    createMetaFile(basePath, instantTime, suffix, "".getBytes());
+    createMetaFile(basePath, instantTime, suffix, getUTF8Bytes(""));
   }
 
   private static void createMetaFile(String basePath, String instantTime, String suffix, byte[] content) throws IOException {
@@ -159,8 +160,9 @@ public class FileCreateUtils {
 
   public static void createCommit(String basePath, String instantTime, Option<HoodieCommitMetadata> metadata) throws IOException {
     if (metadata.isPresent()) {
+      HoodieCommitMetadata commitMetadata = metadata.get();
       createMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION,
-          metadata.get().toJsonString().getBytes(StandardCharsets.UTF_8));
+          serializeCommitMetadata(commitMetadata).get());
     } else {
       createMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION);
     }
@@ -183,7 +185,7 @@ public class FileCreateUtils {
   }
 
   public static void createDeltaCommit(String basePath, String instantTime, HoodieCommitMetadata metadata) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION, metadata.toJsonString().getBytes(StandardCharsets.UTF_8));
+    createMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION, serializeCommitMetadata(metadata).get());
   }
 
   public static void createDeltaCommit(String basePath, String instantTime) throws IOException {
@@ -207,7 +209,7 @@ public class FileCreateUtils {
   }
 
   public static void createReplaceCommit(String basePath, String instantTime, HoodieReplaceCommitMetadata metadata) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.REPLACE_COMMIT_EXTENSION, metadata.toJsonString().getBytes(StandardCharsets.UTF_8));
+    createMetaFile(basePath, instantTime, HoodieTimeline.REPLACE_COMMIT_EXTENSION, serializeCommitMetadata(metadata).get());
   }
 
   public static void createRequestedReplaceCommit(String basePath, String instantTime, Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata) throws IOException {
@@ -220,7 +222,8 @@ public class FileCreateUtils {
 
   public static void createInflightReplaceCommit(String basePath, String instantTime, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws IOException {
     if (inflightReplaceMetadata.isPresent()) {
-      createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_REPLACE_COMMIT_EXTENSION, inflightReplaceMetadata.get().toJsonString().getBytes(StandardCharsets.UTF_8));
+      createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_REPLACE_COMMIT_EXTENSION,
+          serializeCommitMetadata(inflightReplaceMetadata.get()).get());
     } else {
       createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_REPLACE_COMMIT_EXTENSION);
     }
@@ -278,29 +281,16 @@ public class FileCreateUtils {
     createMetaFile(basePath, instantTime, HoodieTimeline.RESTORE_ACTION, serializeRestoreMetadata(hoodieRestoreMetadata).get());
   }
 
-  private static void createAuxiliaryMetaFile(String basePath, String instantTime, String suffix) throws IOException {
-    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.AUXILIARYFOLDER_NAME);
-    Files.createDirectories(parentPath);
-    Path metaFilePath = parentPath.resolve(instantTime + suffix);
-    if (Files.notExists(metaFilePath)) {
-      Files.createFile(metaFilePath);
-    }
-  }
-
   public static void createRequestedCompaction(String basePath, String instantTime) throws IOException {
-    createAuxiliaryMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_COMPACTION_EXTENSION);
+    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_COMPACTION_EXTENSION);
   }
 
   public static void createInflightCompaction(String basePath, String instantTime) throws IOException {
-    createAuxiliaryMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_COMPACTION_EXTENSION);
-  }
-
-  public static void createPendingInflightCompaction(String basePath, String instantTime) throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_COMPACTION_EXTENSION);
   }
 
   public static void createInflightSavepoint(String basePath, String instantTime) throws IOException {
-    createAuxiliaryMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_SAVEPOINT_EXTENSION);
+    createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_SAVEPOINT_EXTENSION);
   }
 
   public static void createPartitionMetaFile(String basePath, String partitionPath) throws IOException {
@@ -312,17 +302,17 @@ public class FileCreateUtils {
     }
   }
 
-  public static void createBaseFile(String basePath, String partitionPath, String instantTime, String fileId)
+  public static String createBaseFile(String basePath, String partitionPath, String instantTime, String fileId)
       throws Exception {
-    createBaseFile(basePath, partitionPath, instantTime, fileId, 1);
+    return createBaseFile(basePath, partitionPath, instantTime, fileId, 1);
   }
 
-  public static void createBaseFile(String basePath, String partitionPath, String instantTime, String fileId, long length)
+  public static String createBaseFile(String basePath, String partitionPath, String instantTime, String fileId, long length)
       throws Exception {
-    createBaseFile(basePath, partitionPath, instantTime, fileId, length, Instant.now().toEpochMilli());
+    return createBaseFile(basePath, partitionPath, instantTime, fileId, length, Instant.now().toEpochMilli());
   }
 
-  public static void createBaseFile(String basePath, String partitionPath, String instantTime, String fileId, long length, long lastModificationTimeMilli)
+  public static String createBaseFile(String basePath, String partitionPath, String instantTime, String fileId, long length, long lastModificationTimeMilli)
       throws Exception {
     Path parentPath = Paths.get(basePath, partitionPath);
     Files.createDirectories(parentPath);
@@ -330,10 +320,11 @@ public class FileCreateUtils {
     if (Files.notExists(baseFilePath)) {
       Files.createFile(baseFilePath);
     }
-    RandomAccessFile raf = new RandomAccessFile(baseFilePath.toFile(), "rw");
-    raf.setLength(length);
-    raf.close();
+    try (RandomAccessFile raf = new RandomAccessFile(baseFilePath.toFile(), "rw")) {
+      raf.setLength(length);
+    }
     Files.setLastModifiedTime(baseFilePath, FileTime.fromMillis(lastModificationTimeMilli));
+    return baseFilePath.toString();
   }
 
   public static Path getBaseFilePath(String basePath, String partitionPath, String instantTime, String fileId) {
@@ -341,12 +332,12 @@ public class FileCreateUtils {
     return parentPath.resolve(baseFileName(instantTime, fileId));
   }
 
-  public static void createLogFile(String basePath, String partitionPath, String instantTime, String fileId, int version)
+  public static String createLogFile(String basePath, String partitionPath, String instantTime, String fileId, int version)
       throws Exception {
-    createLogFile(basePath, partitionPath, instantTime, fileId, version, 0);
+    return createLogFile(basePath, partitionPath, instantTime, fileId, version, 0);
   }
 
-  public static void createLogFile(String basePath, String partitionPath, String instantTime, String fileId, int version, int length)
+  public static String createLogFile(String basePath, String partitionPath, String instantTime, String fileId, int version, int length)
       throws Exception {
     Path parentPath = Paths.get(basePath, partitionPath);
     Files.createDirectories(parentPath);
@@ -357,6 +348,7 @@ public class FileCreateUtils {
     RandomAccessFile raf = new RandomAccessFile(logFilePath.toFile(), "rw");
     raf.setLength(length);
     raf.close();
+    return logFilePath.toString();
   }
 
   public static String createMarkerFile(String basePath, String partitionPath, String instantTime, String fileId, IOType ioType)

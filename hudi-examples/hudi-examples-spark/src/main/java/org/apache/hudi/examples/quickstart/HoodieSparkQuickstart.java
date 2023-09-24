@@ -198,7 +198,7 @@ public final class HoodieSparkQuickstart {
   }
 
   /**
-   * Deleta data based in data information.
+   * Delete data based in data information.
    */
   public static Dataset<Row> delete(SparkSession spark, String tablePath, String tableName) {
 

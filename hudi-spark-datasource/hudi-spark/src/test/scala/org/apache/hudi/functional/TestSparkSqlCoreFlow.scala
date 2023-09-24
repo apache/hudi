@@ -19,16 +19,22 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_SNAPSHOT_OPT_VAL}
+import org.apache.hudi.HoodieDataSourceHelpers.{hasNewCommits, latestCommit, listCommitsSince}
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.WriteOperationType.{BULK_INSERT, INSERT, UPSERT}
+import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.TimelineUtils
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
-import org.apache.spark.sql
-import org.apache.spark.sql.{Dataset, Row}
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.keygen.NonpartitionedKeyGenerator
+import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils}
+import org.apache.spark.sql
+import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
+import org.apache.spark.sql.{Dataset, Row}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.scalatest.Inspectors.forAll
 
 import java.io.File
@@ -40,25 +46,23 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
 
   //params for core flow tests
   val params: List[String] = List(
-        "COPY_ON_WRITE|false|false|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
-        "COPY_ON_WRITE|true|false|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
-        "COPY_ON_WRITE|true|true|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
-        "COPY_ON_WRITE|false|false|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
-        "COPY_ON_WRITE|true|false|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
-        "COPY_ON_WRITE|true|true|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
-        "COPY_ON_WRITE|false|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM",
-        "COPY_ON_WRITE|true|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM",
-        "COPY_ON_WRITE|true|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM",
-        "MERGE_ON_READ|false|false|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
-        "MERGE_ON_READ|true|false|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
-        "MERGE_ON_READ|true|true|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
-        "MERGE_ON_READ|false|false|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
-        "MERGE_ON_READ|true|false|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
-        "MERGE_ON_READ|true|true|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
-        "MERGE_ON_READ|false|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM",
-        "MERGE_ON_READ|true|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM",
-        "MERGE_ON_READ|true|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM"
-      )
+    "COPY_ON_WRITE|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM",
+    "COPY_ON_WRITE|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM",
+    "COPY_ON_WRITE|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE",
+    "COPY_ON_WRITE|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE",
+    "COPY_ON_WRITE|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM",
+    "COPY_ON_WRITE|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM",
+    "COPY_ON_WRITE|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE",
+    "COPY_ON_WRITE|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE",
+    "MERGE_ON_READ|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM",
+    "MERGE_ON_READ|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM",
+    "MERGE_ON_READ|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE",
+    "MERGE_ON_READ|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE",
+    "MERGE_ON_READ|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM",
+    "MERGE_ON_READ|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM",
+    "MERGE_ON_READ|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE",
+    "MERGE_ON_READ|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE"
+  )
 
   //extracts the params and runs each core flow test
   forAll (params) { (paramStr: String) =>
@@ -67,79 +71,70 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
       withTempDir { basePath =>
         testCoreFlows(basePath,
           tableType = splits(0),
-          isMetadataEnabledOnWrite = splits(1).toBoolean,
-          isMetadataEnabledOnRead = splits(2).toBoolean,
-          keyGenClass = splits(3),
-          indexType = splits(4))
+          isMetadataEnabled = splits(1).toBoolean,
+          keyGenClass = splits(2),
+          indexType = splits(3))
       }
     }
   }
 
-  def testCoreFlows(basePath: File, tableType: String, isMetadataEnabledOnWrite: Boolean, isMetadataEnabledOnRead: Boolean, keyGenClass: String, indexType: String): Unit = {
+  def testCoreFlows(basePath: File, tableType: String, isMetadataEnabled: Boolean,
+                    keyGenClass: String, indexType: String): Unit = {
     //Create table and set up for testing
     val tableName = generateTableName
     val tableBasePath = basePath.getCanonicalPath + "/" + tableName
-    val writeOptions = getWriteOptions(tableName, tableType, isMetadataEnabledOnWrite, keyGenClass, indexType)
+    val writeOptions = getWriteOptions(tableName, tableType, keyGenClass, indexType)
     createTable(tableName, keyGenClass, writeOptions, tableBasePath)
     val fs = FSUtils.getFs(tableBasePath, spark.sparkContext.hadoopConfiguration)
     val dataGen = new HoodieTestDataGenerator(HoodieTestDataGenerator.TRIP_NESTED_EXAMPLE_SCHEMA, 0xDEED)
 
     //Bulk insert first set of records
-    val inputDf0 = generateInserts(dataGen, "000", 100)
-    inputDf0.cache()
-    insertInto(tableName, inputDf0, "bulk_insert", isMetadataEnabledOnWrite, keyGenClass)
-    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, tableBasePath, "000"))
+    val inputDf0 = generateInserts(dataGen, "000", 100).cache()
+    insertInto(tableName, tableBasePath, inputDf0, BULK_INSERT, isMetadataEnabled, 1)
+    assertTrue(hasNewCommits(fs, tableBasePath, "000"))
     //Verify bulk insert works correctly
-    val snapshotDf1 = doSnapshotRead(tableName, isMetadataEnabledOnRead)
-    snapshotDf1.cache()
+    val snapshotDf1 = doSnapshotRead(tableName, isMetadataEnabled).cache()
     assertEquals(100, snapshotDf1.count())
     compareEntireInputDfWithHudiDf(inputDf0, snapshotDf1)
+    snapshotDf1.unpersist(true)
 
     //Test updated records
-    val updateDf = generateUniqueUpdates(dataGen, "001", 50)
-    insertInto(tableName, updateDf, "upsert", isMetadataEnabledOnWrite, keyGenClass)
-    val commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, tableBasePath)
-    val snapshotDf2 = doSnapshotRead(tableName, isMetadataEnabledOnRead)
-    snapshotDf2.cache()
+    val updateDf = generateUniqueUpdates(dataGen, "001", 50).cache()
+    insertInto(tableName, tableBasePath, updateDf, UPSERT, isMetadataEnabled, 2)
+    val commitInstantTime2 = latestCommit(fs, tableBasePath)
+    val snapshotDf2 = doSnapshotRead(tableName, isMetadataEnabled).cache()
     assertEquals(100, snapshotDf2.count())
     compareUpdateDfWithHudiDf(updateDf, snapshotDf2, snapshotDf1)
+    snapshotDf2.unpersist(true)
 
-    val inputDf2 = generateUniqueUpdates(dataGen, "002", 60)
+    val inputDf2 = generateUniqueUpdates(dataGen, "002", 60).cache()
     val uniqueKeyCnt2 = inputDf2.select("_row_key").distinct().count()
-    insertInto(tableName, inputDf2, "upsert", isMetadataEnabledOnWrite, keyGenClass)
-    val commitInstantTime3 = HoodieDataSourceHelpers.latestCommit(fs, tableBasePath)
-    assertEquals(3, HoodieDataSourceHelpers.listCommitsSince(fs, tableBasePath, "000").size())
+    insertInto(tableName, tableBasePath, inputDf2, UPSERT, isMetadataEnabled, 3)
+    val commitInstantTime3 = latestCommit(fs, tableBasePath)
+    assertEquals(3, listCommitsSince(fs, tableBasePath, "000").size())
 
-    val snapshotDf3 = doSnapshotRead(tableName, isMetadataEnabledOnRead)
-    snapshotDf3.cache()
+    val snapshotDf3 = doSnapshotRead(tableName, isMetadataEnabled).cache()
     assertEquals(100, snapshotDf3.count())
     compareUpdateDfWithHudiDf(inputDf2, snapshotDf3, snapshotDf3)
+    snapshotDf3.unpersist(true)
 
-    // Read Incremental Query, need to use spark-ds because functionality does not exist for spark sql
+    // Read Incremental Query, uses hudi_table_changes() table valued function for spark sql
     // we have 2 commits, try pulling the first commit (which is not the latest)
     //HUDI-5266
-    val firstCommit = HoodieDataSourceHelpers.listCommitsSince(fs, tableBasePath, "000").get(0)
-    val hoodieIncViewDf1 = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
-      .option(DataSourceReadOptions.END_INSTANTTIME.key, firstCommit)
-      .load(tableBasePath)
-    //val hoodieIncViewDf1 = doIncRead(tableName, isMetadataEnabledOnRead, "000", firstCommit)
+    val firstCommit = listCommitsSince(fs, tableBasePath, "000").get(0)
+    val hoodieIncViewDf1 = spark.sql(s"select * from hudi_table_changes('$tableName', 'latest_state', 'earliest', '$firstCommit')")
+
     assertEquals(100, hoodieIncViewDf1.count()) // 100 initial inserts must be pulled
     var countsPerCommit = hoodieIncViewDf1.groupBy("_hoodie_commit_time").count().collect()
     assertEquals(1, countsPerCommit.length)
     assertEquals(firstCommit, countsPerCommit(0).get(0).toString)
 
-    val inputDf3 = generateUniqueUpdates(dataGen, "003", 80)
-    insertInto(tableName, inputDf3, "upsert", isMetadataEnabledOnWrite, keyGenClass)
+    val inputDf3 = generateUniqueUpdates(dataGen, "003", 80).cache()
+    insertInto(tableName, tableBasePath, inputDf3, UPSERT, isMetadataEnabled, 4)
 
     //another incremental query with commit2 and commit3
     //HUDI-5266
-    val hoodieIncViewDf2 = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commitInstantTime2)
-      .option(DataSourceReadOptions.END_INSTANTTIME.key(), commitInstantTime3)
-      .load(tableBasePath)
+    val hoodieIncViewDf2 = spark.sql(s"select * from hudi_table_changes('$tableName', 'latest_state', '$commitInstantTime2', '$commitInstantTime3')")
 
     assertEquals(uniqueKeyCnt2, hoodieIncViewDf2.count()) // 60 records must be pulled
     countsPerCommit = hoodieIncViewDf2.groupBy("_hoodie_commit_time").count().collect()
@@ -148,50 +143,67 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
 
 
     val timeTravelDf = if (HoodieSparkUtils.gteqSpark3_2_1) {
-      spark.sql(s"select * from $tableName timestamp as of '$commitInstantTime2'")
+      spark.sql(s"select * from $tableName timestamp as of '$commitInstantTime2'").cache()
     } else {
       //HUDI-5265
       spark.read.format("org.apache.hudi")
         .option("as.of.instant", commitInstantTime2)
-        .load(tableBasePath)
+        .load(tableBasePath).cache()
     }
     assertEquals(100, timeTravelDf.count())
     compareEntireInputDfWithHudiDf(snapshotDf2, timeTravelDf)
+    timeTravelDf.unpersist(true)
 
     if (tableType.equals("MERGE_ON_READ")) {
-      val readOptDf = doMORReadOptimizedQuery(isMetadataEnabledOnRead, tableBasePath)
+      val readOptDf = doMORReadOptimizedQuery(isMetadataEnabled, tableBasePath)
       compareEntireInputDfWithHudiDf(inputDf0, readOptDf)
 
-      val snapshotDf4 = doSnapshotRead(tableName, isMetadataEnabledOnRead)
-      snapshotDf4.cache()
+      val snapshotDf4 = doSnapshotRead(tableName, isMetadataEnabled)
 
       // trigger compaction and try out Read optimized query.
-      val inputDf4 = generateUniqueUpdates(dataGen, "004", 40)
-      doInlineCompact(tableName, inputDf4, "upsert", isMetadataEnabledOnWrite, "3", keyGenClass)
-      val snapshotDf5 = doSnapshotRead(tableName, isMetadataEnabledOnRead)
+      val inputDf4 = generateUniqueUpdates(dataGen, "004", 40).cache
+      //count is increased by 2 because inline compaction will add extra commit to the timeline
+      doInlineCompact(tableName, tableBasePath, inputDf4, UPSERT, isMetadataEnabled, "3", 6)
+      val snapshotDf5 = doSnapshotRead(tableName, isMetadataEnabled)
       snapshotDf5.cache()
       compareUpdateDfWithHudiDf(inputDf4, snapshotDf5, snapshotDf4)
+      inputDf4.unpersist(true)
+      snapshotDf5.unpersist(true)
 
       // compaction is expected to have completed. both RO and RT are expected to return same results.
-      compareROAndRT(isMetadataEnabledOnRead, tableName, tableBasePath)
+      compareROAndRT(isMetadataEnabled, tableName, tableBasePath)
     }
+
+    inputDf0.unpersist(true)
+    updateDf.unpersist(true)
+    inputDf2.unpersist(true)
+    inputDf3.unpersist(true)
   }
 
   def doSnapshotRead(tableName: String, isMetadataEnabledOnRead: Boolean): sql.DataFrame = {
-    spark.sql("set hoodie.datasource.query.type=\"snapshot\"")
-    spark.sql(s"set hoodie.metadata.enable=${String.valueOf(isMetadataEnabledOnRead)}")
-    spark.sql(s"select * from $tableName")
+    try {
+      spark.sql(s"set hoodie.datasource.query.type=$QUERY_TYPE_SNAPSHOT_OPT_VAL")
+      spark.sql(s"set hoodie.metadata.enable=$isMetadataEnabledOnRead")
+      spark.sql(s"select * from $tableName")
+    } finally {
+      spark.conf.unset("hoodie.datasource.query.type")
+      spark.conf.unset("hoodie.metadata.enable")
+    }
   }
 
-  def doInlineCompact(tableName: String, recDf: sql.DataFrame, writeOp: String, isMetadataEnabledOnWrite: Boolean, numDeltaCommits: String, keyGenClass: String): Unit = {
-    spark.sql("set hoodie.compact.inline=true")
-    spark.sql(s"set hoodie.compact.inline.max.delta.commits=$numDeltaCommits")
-    insertInto(tableName, recDf, writeOp, isMetadataEnabledOnWrite, keyGenClass)
-    spark.sql("set hoodie.compact.inline=false")
+  def doInlineCompact(tableName: String, tableBasePath: String, recDf: sql.DataFrame, writeOp: WriteOperationType,
+                      isMetadataEnabledOnWrite: Boolean, numDeltaCommits: String, count: Int): Unit = {
+    try {
+      spark.sql("set hoodie.compact.inline=true")
+      spark.sql(s"set hoodie.compact.inline.max.delta.commits=$numDeltaCommits")
+      insertInto(tableName, tableBasePath, recDf, writeOp, isMetadataEnabledOnWrite, count)
+    } finally {
+      spark.conf.unset("hoodie.compact.inline")
+      spark.conf.unset("hoodie.compact.inline.max.delta.commits")
+    }
   }
 
-  def getWriteOptions(tableName: String, tableType: String, isMetadataEnabledOnWrite: Boolean,
-                      keyGenClass: String, indexType: String): String = {
+  def getWriteOptions(tableName: String, tableType: String, keyGenClass: String, indexType: String): String = {
     val typeString = if (tableType.equals("COPY_ON_WRITE")) {
       "cow"
     } else if (tableType.equals("MERGE_ON_READ")) {
@@ -211,47 +223,62 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
        |  hoodie.delete.shuffle.parallelism = 2,
        |  hoodie.index.type = "$indexType",
        |  hoodie.insert.shuffle.parallelism = 4,
-       |  hoodie.metadata.enable = ${String.valueOf(isMetadataEnabledOnWrite)},
        |  hoodie.table.name = "$tableName",
        |  hoodie.upsert.shuffle.parallelism = 4
        | )""".stripMargin
   }
 
-  def insertInto(tableName: String, inputDf: sql.DataFrame, writeOp: String, isMetadataEnabledOnWrite: Boolean, keyGenClass: String): Unit = {
+  def assertOperation(basePath: String, count: Int, operationType: WriteOperationType): Boolean = {
+    val metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(spark.sessionState.newHadoopConf())
+      .build()
+    val timeline = metaClient.getActiveTimeline.getAllCommitsTimeline
+    assert(timeline.countInstants() == count)
+    val latestCommit = timeline.lastInstant()
+    assert(latestCommit.isPresent)
+    assert(latestCommit.get().isCompleted)
+    val metadata = TimelineUtils.getCommitMetadata(latestCommit.get(), timeline)
+    metadata.getOperationType.equals(operationType)
+  }
+  def insertInto(tableName: String, tableBasePath: String, inputDf: sql.DataFrame, writeOp: WriteOperationType,
+                 isMetadataEnabledOnWrite: Boolean, count: Int): Unit = {
     inputDf.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon", "end_lat", "end_lon", "fare",
       "_hoodie_is_deleted", "partition_path").createOrReplaceTempView("insert_temp_table")
-    spark.sql(s"set hoodie.metadata.enable=${String.valueOf(isMetadataEnabledOnWrite)}")
-    spark.sql(s"set hoodie.datasource.write.keygenerator.class=$keyGenClass")
-    if (writeOp.equals("upsert")) {
-      spark.sql(s"set hoodie.datasource.write.operation=$writeOp")
-      spark.sql("set hoodie.sql.bulk.insert.enable=false")
-      spark.sql("set hoodie.sql.insert.mode=upsert")
-      spark.sql(
-        s"""
-           | merge into $tableName as target
-           | using insert_temp_table as source
-           | on target._row_key = source._row_key and
-           | target.partition_path = source.partition_path
-           | when matched then update set *
-           | when not matched then insert *
-           | """.stripMargin)
-    } else if (writeOp.equals("bulk_insert")) {
-      //If HUDI-5257 is resolved, write operation should be bulk_insert, and this function can be more compact due to
-      //less repeated code
-      spark.sql("set hoodie.datasource.write.operation=insert")
-      spark.sql("set hoodie.sql.bulk.insert.enable=true")
-      spark.sql("set hoodie.sql.insert.mode=non-strict")
-      spark.sql(s"insert into $tableName select * from insert_temp_table")
-    } else if (writeOp.equals("insert")) {
-      spark.sql(s"set hoodie.datasource.write.operation=$writeOp")
-      spark.sql("set hoodie.sql.bulk.insert.enable=false")
-      spark.sql("set hoodie.sql.insert.mode=non-strict")
-      spark.sql(s"insert into $tableName select * from insert_temp_table")
+    try {
+      spark.sql(s"set hoodie.metadata.enable=${String.valueOf(isMetadataEnabledOnWrite)}")
+      if (writeOp.equals(UPSERT)) {
+        spark.sql("set hoodie.sql.bulk.insert.enable=false")
+        spark.sql("set hoodie.sql.insert.mode=upsert")
+        spark.sql(
+          s"""
+             | merge into $tableName as target
+             | using insert_temp_table as source
+             | on target._row_key = source._row_key and
+             | target.partition_path = source.partition_path
+             | when matched then update set *
+             | when not matched then insert *
+             | """.stripMargin)
+      } else if (writeOp.equals(BULK_INSERT)) {
+        spark.sql("set hoodie.sql.bulk.insert.enable=true")
+        spark.sql("set hoodie.sql.insert.mode=non-strict")
+        spark.sql(s"insert into $tableName select * from insert_temp_table")
+      } else if (writeOp.equals(INSERT)) {
+        spark.sql("set hoodie.sql.bulk.insert.enable=false")
+        spark.sql("set hoodie.sql.insert.mode=non-strict")
+        spark.sql(s"insert into $tableName select * from insert_temp_table")
+      }
+      assertOperation(tableBasePath, count, writeOp)
+    } finally {
+      spark.conf.unset("hoodie.metadata.enable")
+      spark.conf.unset("hoodie.datasource.write.keygenerator.class")
+      spark.conf.unset("hoodie.sql.bulk.insert.enable")
+      spark.conf.unset("hoodie.sql.insert.mode")
     }
   }
   def createTable(tableName: String, keyGenClass: String, writeOptions: String, tableBasePath: String): Unit = {
     //If you have partitioned by (partition_path) with nonpartitioned keygen, the partition_path will be empty in the table
-    val partitionedBy = if (!keyGenClass.equals("org.apache.hudi.keygen.NonpartitionedKeyGenerator")) {
+    val partitionedBy = if (!keyGenClass.equals(classOf[NonpartitionedKeyGenerator].getName)) {
       "partitioned by (partition_path)"
     } else {
       ""
@@ -315,7 +342,7 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
 
   def doMORReadOptimizedQuery(isMetadataEnabledOnRead: Boolean, basePath: String): sql.DataFrame = {
     spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
+      .option(DataSourceReadOptions.QUERY_TYPE.key, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
       .option(HoodieMetadataConfig.ENABLE.key(), isMetadataEnabledOnRead)
       .load(basePath)
   }
@@ -341,42 +368,38 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
 
   //params for immutable user flow
   val paramsForImmutable: List[String] = List(
-    "COPY_ON_WRITE|insert|false|false|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
-    "COPY_ON_WRITE|insert|true|false|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
-    "COPY_ON_WRITE|insert|true|true|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
-    "COPY_ON_WRITE|insert|false|false|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
-    "COPY_ON_WRITE|insert|true|false|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
-    "COPY_ON_WRITE|insert|true|true|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
-    "COPY_ON_WRITE|insert|false|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM",
-    "COPY_ON_WRITE|insert|true|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM",
-    "COPY_ON_WRITE|insert|true|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM",
-    "MERGE_ON_READ|insert|false|false|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
-    "MERGE_ON_READ|insert|true|false|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
-    "MERGE_ON_READ|insert|true|true|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
-    "MERGE_ON_READ|insert|false|false|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
-    "MERGE_ON_READ|insert|true|false|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
-    "MERGE_ON_READ|insert|true|true|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
-    "MERGE_ON_READ|insert|false|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM",
-    "MERGE_ON_READ|insert|true|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM",
-    "MERGE_ON_READ|insert|true|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM",
-    "COPY_ON_WRITE|bulk_insert|false|false|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
-    "COPY_ON_WRITE|bulk_insert|true|false|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
-    "COPY_ON_WRITE|bulk_insert|true|true|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
-    "COPY_ON_WRITE|bulk_insert|false|false|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
-    "COPY_ON_WRITE|bulk_insert|true|false|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
-    "COPY_ON_WRITE|bulk_insert|true|true|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
-    "COPY_ON_WRITE|bulk_insert|false|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM",
-    "COPY_ON_WRITE|bulk_insert|true|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM",
-    "COPY_ON_WRITE|bulk_insert|true|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM",
-    "MERGE_ON_READ|bulk_insert|false|false|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
-    "MERGE_ON_READ|bulk_insert|true|false|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
-    "MERGE_ON_READ|bulk_insert|true|true|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
-    "MERGE_ON_READ|bulk_insert|false|false|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
-    "MERGE_ON_READ|bulk_insert|true|false|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
-    "MERGE_ON_READ|bulk_insert|true|true|org.apache.hudi.keygen.SimpleKeyGenerator|SIMPLE",
-    "MERGE_ON_READ|bulk_insert|false|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM",
-    "MERGE_ON_READ|bulk_insert|true|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM",
-    "MERGE_ON_READ|bulk_insert|true|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|GLOBAL_BLOOM"
+    "COPY_ON_WRITE|insert|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM",
+    "COPY_ON_WRITE|insert|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM",
+    "COPY_ON_WRITE|insert|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE",
+    "COPY_ON_WRITE|insert|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE",
+    "COPY_ON_WRITE|insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM",
+    "COPY_ON_WRITE|insert|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM",
+    "COPY_ON_WRITE|insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE",
+    "COPY_ON_WRITE|insert|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE",
+    "MERGE_ON_READ|insert|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM",
+    "MERGE_ON_READ|insert|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM",
+    "MERGE_ON_READ|insert|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE",
+    "MERGE_ON_READ|insert|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE",
+    "MERGE_ON_READ|insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM",
+    "MERGE_ON_READ|insert|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM",
+    "MERGE_ON_READ|insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE",
+    "MERGE_ON_READ|insert|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE",
+    "COPY_ON_WRITE|bulk_insert|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM",
+    "COPY_ON_WRITE|bulk_insert|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM",
+    "COPY_ON_WRITE|bulk_insert|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE",
+    "COPY_ON_WRITE|bulk_insert|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE",
+    "COPY_ON_WRITE|bulk_insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM",
+    "COPY_ON_WRITE|bulk_insert|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM",
+    "COPY_ON_WRITE|bulk_insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE",
+    "COPY_ON_WRITE|bulk_insert|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE",
+    "MERGE_ON_READ|bulk_insert|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM",
+    "MERGE_ON_READ|bulk_insert|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM",
+    "MERGE_ON_READ|bulk_insert|false|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE",
+    "MERGE_ON_READ|bulk_insert|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_SIMPLE",
+    "MERGE_ON_READ|bulk_insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM",
+    "MERGE_ON_READ|bulk_insert|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM",
+    "MERGE_ON_READ|bulk_insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE",
+    "MERGE_ON_READ|bulk_insert|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE"
   )
 
   //extracts the params and runs each immutable user flow test
@@ -384,58 +407,67 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
     test(s"Immutable user flow with params: $paramStr") {
       val splits = paramStr.split('|')
       withTempDir { basePath =>
+        val writeOp = if (splits(1).equals("insert")) {
+          INSERT
+        } else if (splits(1).equals("bulk_insert")) {
+          BULK_INSERT
+        } else  {
+          throw new UnsupportedOperationException("This test is only meant for immutable operations.")
+        }
         testImmutableUserFlow(basePath,
           tableType = splits(0),
-          operation = splits(1),
-          isMetadataEnabledOnWrite = splits(2).toBoolean,
-          isMetadataEnabledOnRead = splits(3).toBoolean,
-          keyGenClass = splits(4),
-          indexType = splits(5))
+          writeOp = writeOp,
+          isMetadataEnabled = splits(2).toBoolean,
+          keyGenClass = splits(3),
+          indexType = splits(4))
       }
     }
   }
 
-  def testImmutableUserFlow(basePath: File, tableType: String, operation: String, isMetadataEnabledOnWrite: Boolean,
-                                isMetadataEnabledOnRead: Boolean, keyGenClass: String, indexType: String): Unit = {
+  def testImmutableUserFlow(basePath: File, tableType: String, writeOp: WriteOperationType,
+                            isMetadataEnabled: Boolean, keyGenClass: String,
+                            indexType: String): Unit = {
     val tableName = generateTableName
     val tableBasePath = basePath.getCanonicalPath + "/" + tableName
-    val writeOptions = getWriteOptions(tableName, tableType, isMetadataEnabledOnWrite, keyGenClass, indexType)
+    val writeOptions = getWriteOptions(tableName, tableType, keyGenClass, indexType)
     createTable(tableName, keyGenClass, writeOptions, tableBasePath)
     val fs = FSUtils.getFs(tableBasePath, spark.sparkContext.hadoopConfiguration)
 
     //Insert Operation
     val dataGen = new HoodieTestDataGenerator(HoodieTestDataGenerator.TRIP_NESTED_EXAMPLE_SCHEMA, 0xDEED)
-    val inputDf0 = generateInserts(dataGen, "000", 100)
-    insertInto(tableName, inputDf0, "bulk_insert", isMetadataEnabledOnWrite, keyGenClass)
+    val inputDf0 = generateInserts(dataGen, "000", 100).cache
+    insertInto(tableName, tableBasePath, inputDf0, BULK_INSERT, isMetadataEnabled, 1)
 
-    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, tableBasePath, "000"))
+    assertTrue(hasNewCommits(fs, tableBasePath, "000"))
 
     //Snapshot query
-    val snapshotDf1 = doSnapshotRead(tableName, isMetadataEnabledOnRead)
-    snapshotDf1.cache()
+    val snapshotDf1 = doSnapshotRead(tableName, isMetadataEnabled)
     assertEquals(100, snapshotDf1.count())
     compareEntireInputDfWithHudiDf(inputDf0, snapshotDf1)
 
-    val inputDf1 = generateInserts(dataGen, "001", 50)
-    insertInto(tableName, inputDf1, operation, isMetadataEnabledOnWrite, keyGenClass)
+    val inputDf1 = generateInserts(dataGen, "001", 50).cache
+    insertInto(tableName, tableBasePath, inputDf1, writeOp, isMetadataEnabled, 2)
 
-    val snapshotDf2 = doSnapshotRead(tableName, isMetadataEnabledOnRead)
-    snapshotDf2.cache()
+    val snapshotDf2 = doSnapshotRead(tableName, isMetadataEnabled).cache
     assertEquals(150, snapshotDf2.count())
-
     compareEntireInputDfWithHudiDf(inputDf1.union(inputDf0), snapshotDf2)
+    snapshotDf2.unpersist(true)
 
-    val inputDf2 = generateInserts(dataGen, "002", 60)
-    inputDf2.cache()
-    insertInto(tableName, inputDf2, operation, isMetadataEnabledOnWrite, keyGenClass)
 
-    assertEquals(3, HoodieDataSourceHelpers.listCommitsSince(fs, tableBasePath, "000").size())
+    val inputDf2 = generateInserts(dataGen, "002", 60).cache()
+    insertInto(tableName, tableBasePath, inputDf2, writeOp, isMetadataEnabled, 3)
+
+    assertEquals(3, listCommitsSince(fs, tableBasePath, "000").size())
 
     // Snapshot Query
-    val snapshotDf3 = doSnapshotRead(tableName, isMetadataEnabledOnRead)
-    snapshotDf3.cache()
+    val snapshotDf3 = doSnapshotRead(tableName, isMetadataEnabled).cache
     assertEquals(210, snapshotDf3.count())
     compareEntireInputDfWithHudiDf(inputDf1.union(inputDf0).union(inputDf2), snapshotDf3)
+    snapshotDf3.unpersist(true)
+
+    inputDf0.unpersist(true)
+    inputDf1.unpersist(true)
+    inputDf2.unpersist(true)
   }
 
 }

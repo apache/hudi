@@ -18,18 +18,16 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hadoop.fs.Path
-
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.hadoop.HoodieParquetInputFormat
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils
-import org.apache.hudi.sync.common.util.ConfigUtils
 import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
-
 import org.apache.spark.sql.catalyst.analysis.NoSuchDatabaseException
-import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable.needFilterProps
+import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.hive.HiveClientUtils
 import org.apache.spark.sql.hive.HiveExternalCatalog._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
@@ -39,6 +37,7 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.{SPARK_VERSION, SparkConf}
 
+import java.io.{PrintWriter, StringWriter}
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.util.control.NonFatal
@@ -83,7 +82,7 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
       CreateHoodieTableCommand.createTableInCatalog(sparkSession, hoodieCatalogTable, ignoreIfExists, queryAsProp)
     } catch {
       case NonFatal(e) =>
-        logWarning(s"Failed to create catalog table in metastore: ${e}")
+        logWarning("Failed to create catalog table in metastore", e)
     }
     Seq.empty[Row]
   }
@@ -163,7 +162,7 @@ object CreateHoodieTableCommand {
     // Create table in the catalog
     val enableHive = isUsingHiveCatalog(sparkSession)
     if (enableHive) {
-      createHiveDataSourceTable(sparkSession, newTable, ignoreIfExists)
+      createHiveDataSourceTable(sparkSession, newTable)
     } else {
       catalog.createTable(newTable, ignoreIfExists = false, validateLocation = false)
     }
@@ -177,8 +176,7 @@ object CreateHoodieTableCommand {
     * @param table
     * @param sparkSession
     */
-  private def createHiveDataSourceTable(sparkSession: SparkSession, table: CatalogTable,
-      ignoreIfExists: Boolean): Unit = {
+  private def createHiveDataSourceTable(sparkSession: SparkSession, table: CatalogTable): Unit = {
     val dbName = table.identifier.database.get
     // check database
     val dbExists = sparkSession.sessionState.catalog.databaseExists(dbName)

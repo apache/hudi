@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.catalog;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
@@ -123,6 +124,16 @@ public class HoodieCatalog extends AbstractCatalog {
       }
     } catch (IOException e) {
       throw new CatalogException(String.format("Checking catalog path %s exists exception.", catalogPathStr), e);
+    }
+
+    if (!databaseExists(getDefaultDatabase())) {
+      LOG.info("Creating database {} automatically because it does not exist.", getDefaultDatabase());
+      Path dbPath = new Path(catalogPath, getDefaultDatabase());
+      try {
+        fs.mkdirs(dbPath);
+      } catch (IOException e) {
+        throw new CatalogException(String.format("Creating database %s exception.", getDefaultDatabase()), e);
+      }
     }
   }
 
@@ -304,7 +315,9 @@ public class HoodieCatalog extends AbstractCatalog {
     if (!resolvedSchema.getPrimaryKey().isPresent()) {
       throw new CatalogException("Primary key definition is missing");
     }
-    final String avroSchema = AvroSchemaConverter.convertToSchema(resolvedSchema.toPhysicalRowDataType().getLogicalType()).toString();
+    final String avroSchema = AvroSchemaConverter.convertToSchema(
+        resolvedSchema.toPhysicalRowDataType().getLogicalType(),
+        AvroSchemaUtils.getAvroRecordQualifiedName(tablePath.getObjectName())).toString();
     conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA, avroSchema);
 
     // stores two copies of options:

@@ -30,7 +30,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.SparkDatasetTestUtils;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.metadata.FileMetaData;
@@ -54,7 +54,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Unit tests {@link HoodieInternalRowParquetWriter}.
  */
-public class TestHoodieInternalRowParquetWriter extends HoodieClientTestHarness {
+public class TestHoodieInternalRowParquetWriter extends HoodieSparkClientTestHarness {
 
   @BeforeEach
   public void setUp() throws Exception {

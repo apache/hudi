@@ -26,8 +26,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieClusteringUpdateException;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.List;
@@ -38,7 +38,7 @@ import java.util.Set;
  * if some file groups have update record, throw exception
  */
 public class SparkRejectUpdateStrategy<T> extends BaseSparkUpdateStrategy<T> {
-  private static final Logger LOG = LogManager.getLogger(SparkRejectUpdateStrategy.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SparkRejectUpdateStrategy.class);
 
   public SparkRejectUpdateStrategy(HoodieEngineContext engineContext, HoodieTable table, Set<HoodieFileGroupId> fileGroupsInPendingClustering) {
     super(engineContext, table, fileGroupsInPendingClustering);

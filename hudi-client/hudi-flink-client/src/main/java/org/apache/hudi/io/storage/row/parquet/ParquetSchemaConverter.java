@@ -600,9 +600,10 @@ public class ParquetSchemaConverter {
             .named(name);
       case TIMESTAMP_WITHOUT_TIME_ZONE:
         TimestampType timestampType = (TimestampType) type;
-        if (timestampType.getPrecision() == 3) {
+        if (timestampType.getPrecision() == 3 || timestampType.getPrecision() == 6) {
+          TimeUnit timeunit = timestampType.getPrecision() == 3 ? TimeUnit.MILLIS : TimeUnit.MICROS;
           return Types.primitive(PrimitiveType.PrimitiveTypeName.INT64, repetition)
-              .as(LogicalTypeAnnotation.timestampType(true, TimeUnit.MILLIS))
+              .as(LogicalTypeAnnotation.timestampType(true, timeunit))
               .named(name);
         } else {
           return Types.primitive(PrimitiveType.PrimitiveTypeName.INT96, repetition)
@@ -610,9 +611,10 @@ public class ParquetSchemaConverter {
         }
       case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
         LocalZonedTimestampType localZonedTimestampType = (LocalZonedTimestampType) type;
-        if (localZonedTimestampType.getPrecision() == 3) {
+        if (localZonedTimestampType.getPrecision() == 3 || localZonedTimestampType.getPrecision() == 6) {
+          TimeUnit timeunit = localZonedTimestampType.getPrecision() == 3 ? TimeUnit.MILLIS : TimeUnit.MICROS;
           return Types.primitive(PrimitiveType.PrimitiveTypeName.INT64, repetition)
-              .as(LogicalTypeAnnotation.timestampType(false, TimeUnit.MILLIS))
+              .as(LogicalTypeAnnotation.timestampType(false, timeunit))
               .named(name);
         } else {
           return Types.primitive(PrimitiveType.PrimitiveTypeName.INT96, repetition)
@@ -648,7 +650,7 @@ public class ParquetSchemaConverter {
             .addField(
                 Types
                     .repeatedGroup()
-                    .addField(convertToParquetType("key", keyType, repetition))
+                    .addField(convertToParquetType("key", keyType, Type.Repetition.REQUIRED))
                     .addField(convertToParquetType("value", valueType, repetition))
                     .named("key_value"))
             .named(name);

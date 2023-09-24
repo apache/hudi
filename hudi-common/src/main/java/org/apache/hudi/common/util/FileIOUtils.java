@@ -23,8 +23,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
@@ -40,6 +40,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -48,7 +50,7 @@ import java.util.stream.Collectors;
  * Bunch of utility methods for working with files and byte streams.
  */
 public class FileIOUtils {
-  public static final Logger LOG = LogManager.getLogger(FileIOUtils.class);
+  public static final Logger LOG = LoggerFactory.getLogger(FileIOUtils.class);
   public static final long KB = 1024;
 
   public static void deleteDirectory(File directory) throws IOException {
@@ -226,18 +228,29 @@ public class FileIOUtils {
 
   private static boolean isRunningInYarnContainer() {
     // These environment variables are set by YARN.
-    return System.getenv("CONTAINER_ID") != null;
+    return System.getenv("CONTAINER_ID") != null
+        && System.getenv("LOCAL_DIRS") != null;
   }
 
   /**
    * Get the Yarn approved local directories.
    */
   private static String getYarnLocalDirs() {
-    String localDirs = Option.of(System.getenv("LOCAL_DIRS")).orElse("");
+    String localDirs = System.getenv("LOCAL_DIRS");
 
-    if (localDirs.isEmpty()) {
+    if (localDirs == null) {
       throw new HoodieIOException("Yarn Local dirs can't be empty");
     }
     return localDirs;
+  }
+
+  public static String getDefaultSpillableMapBasePath() {
+    String[] localDirs = getConfiguredLocalDirs();
+    if (localDirs == null) {
+      return "/tmp/";
+    }
+    List<String> localDirLists = Arrays.asList(localDirs);
+    Collections.shuffle(localDirLists);
+    return !localDirLists.isEmpty() ? localDirLists.get(0) : "/tmp/";
   }
 }

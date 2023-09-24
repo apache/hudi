@@ -26,6 +26,8 @@ import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.bucket.BucketStreamWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
+import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 
 import org.apache.flink.api.common.ExecutionConfig;
@@ -45,6 +47,7 @@ import org.apache.flink.streaming.api.operators.collect.utils.MockOperatorEventG
 import org.apache.flink.streaming.util.MockStreamTask;
 import org.apache.flink.streaming.util.MockStreamTaskBuilder;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.types.logical.RowType;
 
 import java.util.List;
 import java.util.Map;
@@ -56,24 +59,24 @@ import java.util.concurrent.CompletableFuture;
  * @param <I> Input type
  */
 public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
-  private final Configuration conf;
+  protected final Configuration conf;
 
   private final IOManager ioManager;
-  private final StreamingRuntimeContext runtimeContext;
+  protected final StreamingRuntimeContext runtimeContext;
   private final MockOperatorEventGateway gateway;
   private final MockOperatorCoordinatorContext coordinatorContext;
-  private final StreamWriteOperatorCoordinator coordinator;
-  private final MockStateInitializationContext stateInitializationContext;
+  protected final StreamWriteOperatorCoordinator coordinator;
+  protected final MockStateInitializationContext stateInitializationContext;
 
   /**
    * Function that converts row data to HoodieRecord.
    */
-  private RowDataToHoodieFunction<RowData, HoodieRecord<?>> toHoodieFunction;
+  protected RowDataToHoodieFunction<RowData, HoodieRecord<?>> toHoodieFunction;
 
   /**
    * Stream write function.
    */
-  private StreamWriteFunction<HoodieRecord<?>> writeFunction;
+  protected StreamWriteFunction<HoodieRecord<?>> writeFunction;
 
   private CompactFunctionWrapper compactFunctionWrapper;
 
@@ -114,7 +117,8 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
   public void openFunction() throws Exception {
     this.coordinator.start();
     this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
-    toHoodieFunction = new RowDataToHoodieFunction<>(TestConfigurations.ROW_TYPE, conf);
+    RowType rowType = (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf)).getLogicalType();
+    toHoodieFunction = new RowDataToHoodieFunction<>(rowType, conf);
     toHoodieFunction.setRuntimeContext(runtimeContext);
     toHoodieFunction.open(conf);
 
@@ -165,15 +169,6 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
     }
   }
 
-  public void checkpointFails(long checkpointId) {
-    coordinator.notifyCheckpointAborted(checkpointId);
-  }
-
-  public void subTaskFails(int taskID) throws Exception {
-    coordinator.subtaskFailed(taskID, new RuntimeException("Dummy exception"));
-    setupWriteFunction();
-  }
-
   public void close() throws Exception {
     coordinator.close();
     ioManager.close();
@@ -200,7 +195,7 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
   // -------------------------------------------------------------------------
 
   private void setupWriteFunction() throws Exception {
-    writeFunction = new BucketStreamWriteFunction<>(conf);
+    writeFunction = createWriteFunction();
     writeFunction.setRuntimeContext(runtimeContext);
     writeFunction.setOperatorEventGateway(gateway);
     writeFunction.initializeState(this.stateInitializationContext);
@@ -208,5 +203,9 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
 
     // handle the bootstrap event
     coordinator.handleEventFromOperator(0, getNextEvent());
+  }
+
+  protected StreamWriteFunction<HoodieRecord<?>> createWriteFunction() {
+    return new BucketStreamWriteFunction<>(conf);
   }
 }

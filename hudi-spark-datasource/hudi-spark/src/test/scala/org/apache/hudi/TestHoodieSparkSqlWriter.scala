@@ -23,6 +23,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkUtils.gteqSpark3_0
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.model._
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieIndexConfig, HoodieWriteConfig}
@@ -42,15 +43,17 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, 
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
-import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, MethodSource, ValueSource}
+import org.junit.jupiter.params.provider._
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{spy, times, verify}
 import org.scalatest.Assertions.assertThrows
 import org.scalatest.Matchers.{be, convertToAnyShouldWrapper, intercept}
 
 import java.io.IOException
-import java.time.Instant
-import java.util.{Collections, Date, UUID}
+import java.time.format.DateTimeFormatterBuilder
+import java.time.temporal.ChronoField
+import java.time.{Instant, ZoneId}
+import java.util.{Collections, Date, TimeZone, UUID}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters
 
@@ -467,7 +470,7 @@ class TestHoodieSparkSqlWriter {
     val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
 
     // try write to Hudi
-    assertThrows[IOException] {
+    assertThrows[IllegalArgumentException] {
       HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, tableOpts - DataSourceWriteOptions.PARTITIONPATH_FIELD.key, df)
     }
   }
@@ -528,8 +531,7 @@ class TestHoodieSparkSqlWriter {
       DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-      HoodieTableConfig.POPULATE_META_FIELDS.key() -> String.valueOf(populateMetaFields),
-      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[SimpleKeyGenerator].getCanonicalName)
+      HoodieTableConfig.POPULATE_META_FIELDS.key() -> String.valueOf(populateMetaFields))
     val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
     // generate the inserts
     val schema = DataSourceTestUtils.getStructTypeExampleSchema
@@ -592,8 +594,8 @@ class TestHoodieSparkSqlWriter {
         HoodieBootstrapConfig.PARALLELISM_VALUE.key -> "4",
         DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL,
         DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-        HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getCanonicalName)
+        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
+        DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getCanonicalName)
       val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
       initializeMetaClientForBootstrap(fooTableParams, tableType, addBootstrapPath = true, initBasePath = false)
 
@@ -605,13 +607,13 @@ class TestHoodieSparkSqlWriter {
         mapAsJavaMap(fooTableParams)).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]])
 
       HoodieSparkSqlWriter.bootstrap(sqlContext, SaveMode.Append, fooTableModifier, spark.emptyDataFrame, Option.empty,
-        Option(client))
+        Option.empty, Option(client))
 
       // Verify that HoodieWriteClient is closed correctly
       verify(client, times(1)).close()
 
       val ignoreResult = HoodieSparkSqlWriter.bootstrap(sqlContext, SaveMode.Ignore, fooTableModifier, spark.emptyDataFrame, Option.empty,
-        Option(client))
+        Option.empty, Option(client))
       assertFalse(ignoreResult)
       verify(client, times(2)).close()
 
@@ -819,7 +821,7 @@ class TestHoodieSparkSqlWriter {
       spark.emptyDataFrame.write.format("hudi")
         .options(options)
         .option(HoodieBootstrapConfig.BASE_PATH.key, baseBootStrapPath)
-        .option(HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getCanonicalName)
+        .option(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getCanonicalName)
         .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL)
         .option(HoodieBootstrapConfig.PARALLELISM_VALUE.key, "4")
         .mode(SaveMode.Overwrite).save(tempBasePath)
@@ -958,6 +960,87 @@ class TestHoodieSparkSqlWriter {
   }
 
   /**
+   * Test upsert for CoW table without precombine field and combine before upsert disabled.
+   */
+  @Test
+  def testUpsertWithoutPrecombineFieldAndCombineBeforeUpsertDisabled(): Unit = {
+    val options = Map(DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.COPY_ON_WRITE.name(),
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "keyid",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      HoodieWriteConfig.COMBINE_BEFORE_UPSERT.key -> "false",
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.upsert.shuffle.parallelism" -> "1"
+    )
+
+    val df = spark.range(0, 10).toDF("keyid")
+      .withColumn("age", expr("keyid + 1000"))
+    df.write.format("hudi")
+      .options(options.updated(DataSourceWriteOptions.OPERATION.key, "insert"))
+      .mode(SaveMode.Overwrite).save(tempBasePath)
+
+    // upsert same records again, should work
+    val df_update = spark.range(0, 10).toDF("keyid")
+      .withColumn("age", expr("keyid + 2000"))
+    df_update.write.format("hudi")
+      .options(options.updated(DataSourceWriteOptions.OPERATION.key, "upsert"))
+      .mode(SaveMode.Append).save(tempBasePath)
+    val df_result_1 = spark.read.format("hudi").load(tempBasePath).selectExpr("keyid", "age")
+    assert(df_result_1.count() == 10)
+    assert(df_result_1.where("age >= 2000").count() == 10)
+
+    // insert duplicated rows (overwrite because of bug, non-strict mode does not work with append)
+    val df_with_duplicates = df.union(df)
+    df_with_duplicates.write.format("hudi")
+      .options(options.updated(DataSourceWriteOptions.OPERATION.key, "insert"))
+      .mode(SaveMode.Overwrite).save(tempBasePath)
+    val df_result_2 = spark.read.format("hudi").load(tempBasePath).selectExpr("keyid", "age")
+    assert(df_result_2.count() == 20)
+    assert(df_result_2.distinct().count() == 10)
+    assert(df_result_2.where("age >= 1000 and age < 2000").count() == 20)
+
+    // upsert with duplicates, should update but not deduplicate
+    val df_with_duplicates_update = df_with_duplicates.withColumn("age", expr("keyid + 3000"))
+    df_with_duplicates_update.write.format("hudi")
+      .options(options.updated(DataSourceWriteOptions.OPERATION.key, "upsert"))
+      .mode(SaveMode.Append).save(tempBasePath)
+    val df_result_3 = spark.read.format("hudi").load(tempBasePath).selectExpr("keyid", "age")
+    assert(df_result_3.distinct().count() == 10)
+    assert(df_result_3.count() == 20)
+    assert(df_result_3.where("age >= 3000").count() == 20)
+  }
+
+  /**
+   * Test upsert with combine before upsert disabled.
+   */
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testUpsertWithCombineBeforeUpsertDisabled(tableType: HoodieTableType): Unit = {
+    val options = Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name,
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "col3",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "keyid",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      HoodieWriteConfig.COMBINE_BEFORE_UPSERT.key -> "false",
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.upsert.shuffle.parallelism" -> "1")
+
+    val df = spark.range(0, 10).toDF("keyid")
+      .withColumn("col3", expr("keyid"))
+      .withColumn("age", expr("keyid + 1000"))
+    val df_with_duplicates = df.union(df)
+    df_with_duplicates.write.format("hudi")
+      .options(options.updated(DataSourceWriteOptions.OPERATION.key, "upsert"))
+      .mode(SaveMode.Overwrite).save(tempBasePath)
+    val result_df = spark.read.format("hudi").load(tempBasePath).selectExpr("keyid", "col3", "age")
+    assert(result_df.count() == 20)
+    assert(result_df.distinct().count() == 10)
+  }
+
+  /**
    * Test case for no need to specify hiveStylePartitioning/urlEncodePartitioning/KeyGenerator included in HoodieTableConfig except the first time write
    */
   @Test
@@ -1009,7 +1092,6 @@ class TestHoodieSparkSqlWriter {
       .options(options)
       .option(HoodieWriteConfig.TBL_NAME.key, tableName2)
       .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key, "true")
-      .option(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
       .mode(SaveMode.Overwrite).save(tablePath2)
     val tableConfig2 = HoodieTableMetaClient.builder()
       .setConf(spark.sparkContext.hadoopConfiguration)
@@ -1053,11 +1135,10 @@ class TestHoodieSparkSqlWriter {
     // case 1: When commit C1 specifies a key generator and commit C2 does not specify key generator
     val (tableName1, tablePath1) = ("hoodie_test_params_1", s"$tempBasePath" + "_1")
 
-    // the first write need to specify KEYGENERATOR_CLASS_NAME params
+    // NonpartitionedKeyGenerator is automatically inferred and used
     df.write.format("hudi")
       .options(options)
       .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
-      .option(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getName)
       .mode(SaveMode.Overwrite).save(tablePath1)
 
     val df2 = Seq((2, "a2", 20, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
@@ -1083,7 +1164,6 @@ class TestHoodieSparkSqlWriter {
     // case 1: When commit C1 does not specify key generator and commit C2 specifies a key generator
     val (tableName1, tablePath1) = ("hoodie_test_params_1", s"$tempBasePath" + "_1")
 
-    // the first write need to specify KEYGENERATOR_CLASS_NAME params
     df.write.format("hudi")
       .options(options)
       .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
@@ -1117,7 +1197,6 @@ class TestHoodieSparkSqlWriter {
     // case 1: When commit C1 specifies a key generator and commkt C2 does not specify key generator
     val (tableName1, tablePath1) = ("hoodie_test_params_1", s"$tempBasePath" + "_1")
 
-    // the first write need to specify KEYGENERATOR_CLASS_NAME params
     df.write.format("hudi")
       .options(options)
       .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
@@ -1199,7 +1278,6 @@ class TestHoodieSparkSqlWriter {
     val options = Map(
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
       DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
-      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt",
       HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key -> "CONSISTENT_HASHING",
       HoodieIndexConfig.INDEX_TYPE.key -> "BUCKET"
     )
@@ -1209,10 +1287,55 @@ class TestHoodieSparkSqlWriter {
       df.write.format("hudi")
         .options(options)
         .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
-        .option(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getName)
         .mode(SaveMode.Overwrite).save(tablePath1)
     }
     assert(exc.getMessage.contains("Consistent hashing bucket index does not work with COW table. Use simple bucket index or an MOR table."))
+  }
+
+  /*
+   * Test case for instant is generated with commit timezone when TIMELINE_TIMEZONE set to UTC
+   * related to HUDI-5978
+   */
+  @Test
+  def testInsertDatasetWithTimelineTimezoneUTC(): Unit = {
+    val defaultTimezone = TimeZone.getDefault
+    try {
+      val fooTableModifier = commonTableModifier.updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+        .updated(DataSourceWriteOptions.INSERT_DROP_DUPS.key, "false")
+        .updated(HoodieTableConfig.TIMELINE_TIMEZONE.key, "UTC") // utc timezone
+
+      // generate the inserts
+      val schema = DataSourceTestUtils.getStructTypeExampleSchema
+      val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+      val records = DataSourceTestUtils.generateRandomRows(100)
+      val recordsSeq = convertRowListToSeq(records)
+      val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
+
+      // get UTC instant before write
+      val beforeWriteInstant = Instant.now()
+
+      // set local timezone to America/Los_Angeles(UTC-7)
+      TimeZone.setDefault(TimeZone.getTimeZone("America/Los_Angeles"))
+
+      // write to Hudi
+      val (success, writeInstantTimeOpt, _, _, _, hoodieTableConfig) = HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, df)
+      assertTrue(success)
+      val hoodieTableTimelineTimezone = HoodieTimelineTimeZone.valueOf(hoodieTableConfig.getString(HoodieTableConfig.TIMELINE_TIMEZONE))
+      assertEquals(hoodieTableTimelineTimezone, HoodieTimelineTimeZone.UTC)
+
+      val utcFormatter = new DateTimeFormatterBuilder()
+        .appendPattern(HoodieInstantTimeGenerator.SECS_INSTANT_TIMESTAMP_FORMAT)
+        .appendValue(ChronoField.MILLI_OF_SECOND, 3)
+        .toFormatter
+        .withZone(ZoneId.of("UTC"))
+      // instant parsed by UTC timezone
+      val writeInstant = Instant.from(utcFormatter.parse(writeInstantTimeOpt.get()))
+
+      assertTrue(beforeWriteInstant.toEpochMilli < writeInstant.toEpochMilli,
+        s"writeInstant(${writeInstant.toEpochMilli}) must always be greater than beforeWriteInstant(${beforeWriteInstant.toEpochMilli}) if writeInstant was generated with UTC timezone")
+    } finally {
+      TimeZone.setDefault(defaultTimezone)
+    }
   }
 
   private def fetchActualSchema(): Schema = {

@@ -83,7 +83,7 @@ public abstract class BaseAvroPayload implements Serializable {
    * @param genericRecord instance of {@link GenericRecord} of interest.
    * @returns {@code true} if record represents a delete record. {@code false} otherwise.
    */
-  protected static boolean isDeleteRecord(GenericRecord genericRecord) {
+  protected boolean isDeleteRecord(GenericRecord genericRecord) {
     final String isDeleteKey = HoodieRecord.HOODIE_IS_DELETED_FIELD;
     // Modify to be compatible with new version Avro.
     // The new version Avro throws for GenericRecord.get if the field name

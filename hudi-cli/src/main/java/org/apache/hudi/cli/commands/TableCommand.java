@@ -18,8 +18,6 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
@@ -29,8 +27,11 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.exception.TableNotFoundException;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -51,6 +52,7 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * CLI command to display hudi table options.
@@ -58,7 +60,7 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME
 @ShellComponent
 public class TableCommand {
 
-  private static final Logger LOG = LogManager.getLogger(TableCommand.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TableCommand.class);
 
   static {
     System.out.println("Table command getting loaded");
@@ -200,7 +202,9 @@ public class TableCommand {
     Map<String, String> oldProps = client.getTableConfig().propsMap();
 
     Properties updatedProps = new Properties();
-    updatedProps.load(new FileInputStream(updatePropsFilePath));
+    try (FileInputStream fileInputStream = new FileInputStream(updatePropsFilePath)) {
+      updatedProps.load(fileInputStream);
+    }
     Path metaPathDir = new Path(client.getBasePath(), METAFOLDER_NAME);
     HoodieTableConfig.update(client.getFs(), metaPathDir, updatedProps);
 
@@ -258,7 +262,7 @@ public class TableCommand {
     OutputStream os = null;
     try {
       os = new FileOutputStream(outFile);
-      os.write(data.getBytes(), 0, data.length());
+      os.write(getUTF8Bytes(data), 0, data.length());
     } finally {
       os.close();
     }

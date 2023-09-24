@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieMetadataConfig}
+import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline.parseDateFromInstantTime
@@ -28,22 +28,20 @@ import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstan
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.{AvroConversionUtils, DataSourceOptionsHelper, DataSourceReadOptions, SparkAdapterSupport}
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, SparkAdapterSupport}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
-import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Cast, Expression, Literal}
-import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, SubqueryAlias}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, Cast, Expression, Literal}
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{AnalysisException, Column, DataFrame, SparkSession}
+import org.apache.spark.sql.{AnalysisException, SparkSession}
 
 import java.net.URI
 import java.text.SimpleDateFormat
-import java.util.{Locale, Properties}
+import java.util.Locale
 import scala.collection.JavaConverters._
-import scala.collection.immutable.Map
 import scala.util.Try
 
 object HoodieSqlCommonUtils extends SparkAdapterSupport {
@@ -67,8 +65,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
   def getAllPartitionPaths(spark: SparkSession, table: CatalogTable): Seq[String] = {
     val sparkEngine = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
     val metadataConfig = {
-      val properties = new Properties()
-      properties.putAll((spark.sessionState.conf.getAllConfs ++ table.storage.properties ++ table.properties).asJava)
+      val properties = TypedProperties.fromMap((spark.sessionState.conf.getAllConfs ++ table.storage.properties ++ table.properties).asJava)
       HoodieMetadataConfig.newBuilder.fromProperties(properties).build()
     }
     FSUtils.getAllPartitionPaths(sparkEngine, metadataConfig, getTableLocation(table, spark)).asScala
@@ -79,9 +76,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
                            partitionPaths: Seq[String]): Map[String, Array[FileStatus]] = {
     val sparkEngine = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
     val metadataConfig = {
-      val properties = new Properties()
-      properties.putAll((spark.sessionState.conf.getAllConfs ++ table.storage.properties ++
-        table.properties).asJava)
+      val properties = TypedProperties.fromMap((spark.sessionState.conf.getAllConfs ++ table.storage.properties ++ table.properties).asJava)
       HoodieMetadataConfig.newBuilder.fromProperties(properties).build()
     }
     FSUtils.getFilesInPartitions(sparkEngine, metadataConfig, getTableLocation(table, spark),
@@ -221,16 +216,6 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
   }
 
   /**
-   * Append the spark config and table options to the baseConfig.
-   */
-  def withSparkConf(spark: SparkSession, options: Map[String, String])
-                   (baseConfig: Map[String, String] = Map.empty): Map[String, String] = {
-    baseConfig ++ DFSPropertiesConfiguration.getGlobalProps.asScala ++ // Table options has the highest priority
-      (spark.sessionState.conf.getAllConfs ++ HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs(options))
-        .filterKeys(isHoodieConfigKey)
-  }
-
-  /**
    * Check if Sql options are Hoodie Config keys.
    *
    * TODO: standardize the key prefix so that we don't need this helper (HUDI-4935)
@@ -345,21 +330,34 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     val allPartitionPaths = hoodieCatalogTable.getPartitionPaths
     val enableHiveStylePartitioning = isHiveStyledPartitioning(allPartitionPaths, table)
     val enableEncodeUrl = isUrlEncodeEnabled(allPartitionPaths, table)
-    val partitionsToDrop = normalizedSpecs.map { spec =>
-      hoodieCatalogTable.partitionFields.map { partitionColumn =>
-        val encodedPartitionValue = if (enableEncodeUrl) {
-          PartitionPathEncodeUtils.escapePathName(spec(partitionColumn))
-        } else {
-          spec(partitionColumn)
-        }
-        if (enableHiveStylePartitioning) {
-          partitionColumn + "=" + encodedPartitionValue
-        } else {
-          encodedPartitionValue
-        }
-      }.mkString("/")
-    }.mkString(",")
+    val partitionFields = hoodieCatalogTable.partitionFields
+    val partitionsToDrop = normalizedSpecs.map(
+      makePartitionPath(partitionFields, _, enableEncodeUrl, enableHiveStylePartitioning)
+    ).mkString(",")
     partitionsToDrop
+  }
+
+  private def makePartitionPath(partitionFields: Seq[String],
+                                normalizedSpecs: Map[String, String],
+                                enableEncodeUrl: Boolean,
+                                enableHiveStylePartitioning: Boolean): String = {
+    partitionFields.map { partitionColumn =>
+      val encodedPartitionValue = if (enableEncodeUrl) {
+        PartitionPathEncodeUtils.escapePathName(normalizedSpecs(partitionColumn))
+      } else {
+        normalizedSpecs(partitionColumn)
+      }
+      if (enableHiveStylePartitioning) s"$partitionColumn=$encodedPartitionValue" else encodedPartitionValue
+    }.mkString("/")
+  }
+
+  def makePartitionPath(hoodieCatalogTable: HoodieCatalogTable,
+                        normalizedSpecs: Map[String, String]): String = {
+    val tableConfig = hoodieCatalogTable.tableConfig
+    val enableHiveStylePartitioning =  java.lang.Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable)
+    val enableEncodeUrl = java.lang.Boolean.parseBoolean(tableConfig.getUrlEncodePartitioning)
+
+    makePartitionPath(hoodieCatalogTable.partitionFields, normalizedSpecs, enableEncodeUrl, enableHiveStylePartitioning)
   }
 
   private def validateInstant(queryInstant: String): Unit = {

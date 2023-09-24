@@ -18,17 +18,17 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.{HoodieSparkRecordMerger, HoodieSparkUtils}
+import org.apache.hudi.HoodieSparkRecordMerger
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
-import org.apache.log4j.Level
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.checkMessageContains
@@ -42,7 +42,7 @@ import java.io.File
 import java.util.TimeZone
 
 class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
-  org.apache.log4j.Logger.getRootLogger.setLevel(Level.WARN)
+  org.apache.log4j.Logger.getRootLogger.setLevel(org.apache.log4j.Level.WARN)
 
   private lazy val sparkWareHouse = {
     val dir = Utils.createTempDir()
@@ -193,9 +193,18 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     }
   }
 
-  protected def withRecordType(recordConfig: Map[HoodieRecordType, Map[String, String]]=Map.empty)(f: => Unit) {
+  protected def withTable(tableName: String)(f: String => Unit): Unit = {
+    try {
+      f(tableName)
+    } finally {
+      spark.sql(s"drop table if exists $tableName")
+    }
+  }
+
+  protected def withRecordType(recordTypes: Seq[HoodieRecordType] = Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK),
+                               recordConfig: Map[HoodieRecordType, Map[String, String]]=Map.empty)(f: => Unit) {
     // TODO HUDI-5264 Test parquet log with avro record in spark sql test
-    Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK).foreach { recordType =>
+    recordTypes.foreach { recordType =>
       val (merger, format) = recordType match {
         case HoodieRecordType.SPARK => (classOf[HoodieSparkRecordMerger].getName, "parquet")
         case _ => (classOf[HoodieAvroRecordMerger].getName, "avro")
@@ -230,6 +239,17 @@ object HoodieSparkSqlTestBase {
       .build()
 
     metaClient.getActiveTimeline.getLastCommitMetadataWithValidData.get.getRight
+  }
+
+  def getLastCleanMetadata(spark: SparkSession, tablePath: String) = {
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(spark.sparkContext.hadoopConfiguration)
+      .setBasePath(tablePath)
+      .build()
+
+    val cleanInstant = metaClient.reloadActiveTimeline().getCleanerTimeline.filterCompletedInstants().lastInstant().get()
+    TimelineMetadataUtils.deserializeHoodieCleanMetadata(metaClient
+      .getActiveTimeline.getInstantDetails(cleanInstant).get)
   }
 
   private def checkMessageContains(e: Throwable, text: String): Boolean =

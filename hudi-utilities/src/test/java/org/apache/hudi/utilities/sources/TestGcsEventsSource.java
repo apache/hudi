@@ -18,15 +18,16 @@
 
 package org.apache.hudi.utilities.sources;
 
-import com.google.protobuf.ByteString;
-import com.google.pubsub.v1.PubsubMessage;
-import com.google.pubsub.v1.ReceivedMessage;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.gcs.PubsubMessagesFetcher;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
+
+import com.google.protobuf.ByteString;
+import com.google.pubsub.v1.PubsubMessage;
+import com.google.pubsub.v1.ReceivedMessage;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.BeforeAll;
@@ -34,14 +35,17 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import static org.apache.hudi.utilities.sources.helpers.gcs.GcsIngestionConfig.GOOGLE_PROJECT_ID;
-import static org.apache.hudi.utilities.sources.helpers.gcs.GcsIngestionConfig.PUBSUB_SUBSCRIPTION_ID;
+
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.utilities.config.GCSEventsSourceConfig.GOOGLE_PROJECT_ID;
+import static org.apache.hudi.utilities.config.GCSEventsSourceConfig.PUBSUB_SUBSCRIPTION_ID;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -63,12 +67,12 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
 
   @BeforeEach
   public void beforeEach() throws Exception {
-    schemaProvider = new FilebasedSchemaProvider(Helpers.setupSchemaOnDFS(), jsc);
+    schemaProvider = new FilebasedSchemaProvider(Helpers.setupSchemaOnDFS("streamer-config", "gcs-metadata.avsc"), jsc);
     MockitoAnnotations.initMocks(this);
 
     props = new TypedProperties();
-    props.put(GOOGLE_PROJECT_ID, "dummy-project");
-    props.put(PUBSUB_SUBSCRIPTION_ID, "dummy-subscription");
+    props.put(GOOGLE_PROJECT_ID.key(), "dummy-project");
+    props.put(PUBSUB_SUBSCRIPTION_ID.key(), "dummy-subscription");
   }
 
   @Test
@@ -86,12 +90,42 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
 
   @Test
   public void shouldReturnDataOnValidMessages() {
-    ReceivedMessage msg1 = fileCreateMessage("objectId-1", "{'data':{'bucket':'bucket-1'}}");
-    ReceivedMessage msg2 = fileCreateMessage("objectId-2", "{'data':{'bucket':'bucket-2'}}");
+    ReceivedMessage msg1 = fileCreateMessage("objectId-1", "{\n"
+        + "  \"kind\": \"storage#object\",\n"
+        + "  \"id\": \"bucket-name/object-name/1234567890123456\",\n"
+        + "  \"selfLink\": \"https://www.googleapis.com/storage/v1/b/bucket-name/o/object-name\",\n"
+        + "  \"name\": \"object-name-1\",\n"
+        + "  \"bucket\": \"bucket-1\",\n"
+        + "  \"generation\": \"1234567890123456\",\n"
+        + "  \"metageneration\": \"1\",\n"
+        + "  \"contentType\": \"application/octet-stream\",\n"
+        + "  \"timeCreated\": \"2023-07-09T10:15:30.000Z\",\n"
+        + "  \"updated\": \"2023-07-09T10:15:30.000Z\",\n"
+        + "  \"size\": \"1024\",\n"
+        + "  \"md5Hash\": \"e4e68fb326b0d21a1bc7a12bb6b1e642\",\n"
+        + "  \"crc32c\": \"AAAAAAAAAAA=\",\n"
+        + "  \"etag\": \"CO2j+pDxx-ACEAE=\"\n"
+        + "}");
+    ReceivedMessage msg2 = fileCreateMessage("objectId-2", "{\n"
+        + "  \"kind\": \"storage#object\",\n"
+        + "  \"id\": \"bucket-name/object-name/1234567890123456\",\n"
+        + "  \"selfLink\": \"https://www.googleapis.com/storage/v1/b/bucket-name/o/object-name\",\n"
+        + "  \"name\": \"object-name-2\",\n"
+        + "  \"bucket\": \"bucket-2\",\n"
+        + "  \"generation\": \"1234567890123456\",\n"
+        + "  \"metageneration\": \"1\",\n"
+        + "  \"contentType\": \"application/octet-stream\",\n"
+        + "  \"timeCreated\": \"2023-07-09T10:15:30.000Z\",\n"
+        + "  \"updated\": \"2023-07-09T10:15:30.000Z\",\n"
+        + "  \"size\": \"1024\",\n"
+        + "  \"md5Hash\": \"e4e68fb326b0d21a1bc7a12bb6b1e642\",\n"
+        + "  \"crc32c\": \"AAAAAAAAAAA=\",\n"
+        + "  \"etag\": \"CO2j+pDxx-ACEAE=\"\n"
+        + "}");
 
     when(pubsubMessagesFetcher.fetchMessages()).thenReturn(Arrays.asList(msg1, msg2));
 
-    GcsEventsSource source = new GcsEventsSource(props, jsc, sparkSession, null,
+    GcsEventsSource source = new GcsEventsSource(props, jsc, sparkSession, schemaProvider,
             pubsubMessagesFetcher);
     Pair<Option<Dataset<Row>>, String> dataAndCheckpoint = source.fetchNextBatch(Option.of("0"), 100);
     source.onCommit(dataAndCheckpoint.getRight());
@@ -101,8 +135,8 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
     Dataset<Row> resultDs = dataAndCheckpoint.getLeft().get();
     List<Row> result = resultDs.collectAsList();
 
-    assertBucket(result.get(0), "bucket-1");
-    assertBucket(result.get(1), "bucket-2");
+    assertEquals(result.get(0).getAs("bucket"), "bucket-1");
+    assertEquals(result.get(1).getAs("bucket"), "bucket-2");
 
     verify(pubsubMessagesFetcher).fetchMessages();
   }
@@ -163,7 +197,7 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
   }
 
   @Test
-  public void shouldGcsEventsSourceDoesNotDedupeInterally() {
+  public void shouldGcsEventsSourceDoesNotDedupeInternally() {
     ReceivedMessage dupe1 = fileCreateMessage("objectId-1", "{'data':{'bucket':'bucket-1'}}");
     ReceivedMessage dupe2 = fileCreateMessage("objectId-1", "{'data':{'bucket':'bucket-1'}}");
 
@@ -236,8 +270,8 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
 
   private PubsubMessage.Builder messageWithAttrs(Map<String, String> attrs, String dataMessage) {
     return PubsubMessage.newBuilder()
-            .putAllAttributes(new HashMap<>(attrs))
-            .setData(ByteString.copyFrom(dataMessage.getBytes()));
+        .putAllAttributes(new HashMap<>(attrs))
+        .setData(ByteString.copyFrom(getUTF8Bytes(dataMessage)));
   }
 
   private void assertBucket(Row row, String expectedBucketName) {

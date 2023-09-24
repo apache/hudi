@@ -19,11 +19,13 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieWriteConflictException;
@@ -34,6 +36,7 @@ import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -63,11 +66,16 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     setUp(conf);
   }
 
+  @AfterEach
+  public void after() {
+    conf = null;
+  }
+
   /**
    * Override to have custom configuration.
    */
   protected void setUp(Configuration conf) {
-    // for sub-class extension
+    // for subclass extension
   }
 
   @Test
@@ -109,12 +117,57 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
 
   @Test
   public void testSubtaskFails() throws Exception {
+    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
     // open the function and ingest data
     preparePipeline()
         .checkpoint(1)
         .assertEmptyEvent()
         .subTaskFails(0)
         .noCompleteInstant()
+        // write a commit and check the result
+        .consume(TestData.DATA_SET_INSERT)
+        .checkpoint(2)
+        .assertNextEvent()
+        .checkpointComplete(2)
+        .checkWrittenData(EXPECTED1)
+        // triggers task 0 failover, there is no pending instant that needs to recommit,
+        // the task sends an empty bootstrap event to trigger initialization of a new instant.
+        .subTaskFails(0, 0)
+        .assertEmptyEvent()
+        // rollback the last complete instant to inflight state, to simulate an instant commit failure
+        // while executing the post action of a checkpoint success notification event, the whole job should then
+        // trigger a failover.
+        .rollbackLastCompleteInstantToInflight()
+        .jobFailover()
+        .assertNextEvent()
+        .checkLastPendingInstantCompleted()
+        .end();
+  }
+
+  @Test
+  public void testPartialFailover() throws Exception {
+    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
+    conf.setString(FlinkOptions.OPERATION, "INSERT");
+    // open the function and ingest data
+    preparePipeline()
+        // triggers subtask failure for multiple times to simulate partial failover, for partial over,
+        // we allow the task to reuse the pending instant for data flushing, no metadata event should be sent
+        .subTaskFails(0, 1)
+        .assertNoEvent()
+        // the subtask reuses the pending instant
+        .checkpoint(3)
+        .assertNextEvent()
+        // if the write task can not fetch any pending instant when starts up(the coordinator restarts),
+        // it will send an event to the coordinator
+        .coordinatorFails()
+        .subTaskFails(0, 2)
+        // the subtask can not fetch the instant to write until a new instant is initialized
+        .checkpointThrows(4, "Timeout(1000ms) while waiting for instant initialize")
+        .assertEmptyEvent()
+        .subTaskFails(0, 3)
+        // the last checkpoint instant was rolled back by subTaskFails(0, 2)
+        // with EAGER cleaning strategy
+        .assertNoEvent()
         .end();
   }
 
@@ -342,6 +395,42 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .end();
   }
 
+  @Test
+  public void testCommitOnEmptyBatch() throws Exception {
+    // reset the config option
+    conf.setBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), true);
+
+    preparePipeline()
+        .consume(TestData.DATA_SET_INSERT)
+        .assertEmptyDataFiles()
+        .checkpoint(1)
+        .assertNextEvent()
+        .checkpointComplete(1)
+        .checkCompletedInstantCount(1)
+        // Do checkpoint without data consumption
+        .checkpoint(2)
+        .assertNextEvent()
+        .checkpointComplete(2)
+        // The instant is committed successfully
+        .checkCompletedInstantCount(2)
+        // Continue to consume data
+        .consume(TestData.DATA_SET_UPDATE_INSERT)
+        .checkWrittenData(EXPECTED1)
+        .checkpoint(3)
+        .assertNextEvent()
+        .checkpointComplete(3)
+        .checkCompletedInstantCount(3)
+        // Commit the data and check after an empty batch
+        .checkWrittenData(EXPECTED2)
+        // Do checkpoint without data consumption
+        .checkpoint(4)
+        .assertNextEvent()
+        .checkpointComplete(4)
+        .checkCompletedInstantCount(4)
+        .checkWrittenData(EXPECTED2)
+        .end();
+  }
+
   protected Map<String, String> getMiniBatchExpected() {
     Map<String, String> expected = new HashMap<>();
     // the last 2 lines are merged
@@ -432,7 +521,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   //              | ----- txn2 ----- |
   @Test
   public void testWriteMultiWriterInvolved() throws Exception {
-    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value());
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
     conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
     conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
 
@@ -461,7 +550,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   //                       | ----- txn2 ----- |
   @Test
   public void testWriteMultiWriterPartialOverlapping() throws Exception {
-    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.value());
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
     conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
     conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
 
@@ -503,6 +592,27 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     assertSame(writeClient.getConfig().getViewStorageConfig().getStorageType(), FileSystemViewStorageType.REMOTE_FIRST);
     assertEquals(viewStorageConfig.getRemoteViewServerPort(), writeClient.getConfig().getViewStorageConfig().getRemoteViewServerPort());
     assertEquals(viewStorageConfig.getRemoteTimelineClientTimeoutSecs(), 500);
+    writeClient.close();
+  }
+
+  @Test
+  public void testRollbackFailedWritesWithLazyCleanPolicy() throws Exception {
+    conf.setString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(), HoodieFailedWritesCleaningPolicy.LAZY.name());
+
+    preparePipeline()
+        .consume(TestData.DATA_SET_INSERT)
+        .checkpoint(1)
+        .assertNextEvent()
+        .checkpointComplete(1)
+        .subTaskFails(0, 0)
+        .assertEmptyEvent()
+        .rollbackLastCompleteInstantToInflight()
+        .jobFailover()
+        .subTaskFails(0, 1)
+        // the last checkpoint instant was not rolled back by subTaskFails(0, 1)
+        // with LAZY cleaning strategy because clean action could roll back failed writes.
+        .assertNextEvent()
+        .end();
   }
 
   // -------------------------------------------------------------------------

@@ -35,10 +35,10 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.jetbrains.annotations.TestOnly;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -50,10 +50,12 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightAndCompletedMetadataPartitions;
 import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
@@ -85,7 +87,7 @@ import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
  */
 public class HoodieIndexer {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieIndexer.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieIndexer.class);
   static final String DROP_INDEX = "dropindex";
 
   private final HoodieIndexer.Config cfg;
@@ -180,6 +182,9 @@ public class HoodieIndexer {
       }
       if (PARTITION_NAME_BLOOM_FILTERS.equals(p)) {
         props.setProperty(ENABLE_METADATA_INDEX_BLOOM_FILTER.key(), "true");
+      }
+      if (PARTITION_NAME_RECORD_INDEX.equals(p)) {
+        props.setProperty(RECORD_INDEX_ENABLE_PROP.key(), "true");
       }
     });
 
@@ -333,18 +338,7 @@ public class HoodieIndexer {
   List<MetadataPartitionType> getRequestedPartitionTypes(String indexTypes, Option<HoodieMetadataConfig> metadataConfig) {
     List<String> requestedIndexTypes = Arrays.asList(indexTypes.split(","));
     return requestedIndexTypes.stream()
-        .map(p -> {
-          MetadataPartitionType metadataPartitionType = MetadataPartitionType.valueOf(p.toUpperCase(Locale.ROOT));
-          if (metadataConfig.isPresent()) { // this is expected to be non-null during scheduling where file groups for a given partition are instantiated for the first time.
-            if (!metadataPartitionType.getPartitionPath().equals(MetadataPartitionType.FILES.toString())) {
-              if (metadataPartitionType.getPartitionPath().equals(MetadataPartitionType.COLUMN_STATS.getPartitionPath())) {
-                metadataPartitionType.setFileGroupCount(metadataConfig.get().getColumnStatsIndexFileGroupCount());
-              } else if (metadataPartitionType.getPartitionPath().equals(MetadataPartitionType.BLOOM_FILTERS.getPartitionPath())) {
-                metadataPartitionType.setFileGroupCount(metadataConfig.get().getBloomFilterIndexFileGroupCount());
-              }
-            }
-          }
-          return metadataPartitionType;
-        }).collect(Collectors.toList());
+        .map(p -> MetadataPartitionType.valueOf(p.toUpperCase(Locale.ROOT)))
+        .collect(Collectors.toList());
   }
 }

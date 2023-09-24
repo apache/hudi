@@ -22,6 +22,7 @@ import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.SparkAdapterSupport$;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -94,6 +95,22 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
       //       it to [[UnsafeRow]] holding just raw bytes
       UnsafeRow unsafeRow = projection.apply(data);
       return unsafeCast(new HoodieSparkRecord(unsafeRow));
+    });
+  }
+
+  @Override
+  public ClosableIterator<String> getRecordKeyIterator() throws IOException {
+    Schema schema = HoodieAvroUtils.getRecordKeySchema();
+    ClosableIterator<InternalRow> iterator = getInternalRowIterator(schema, schema);
+    StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
+    UnsafeProjection projection = HoodieInternalRowUtils.getCachedUnsafeProjection(structType, structType);
+
+    return new CloseableMappingIterator<>(iterator, data -> {
+      // NOTE: We have to do [[UnsafeProjection]] of incoming [[InternalRow]] to convert
+      //       it to [[UnsafeRow]] holding just raw bytes
+      UnsafeRow unsafeRow = projection.apply(data);
+      HoodieSparkRecord record = unsafeCast(new HoodieSparkRecord(unsafeRow));
+      return record.getRecordKey();
     });
   }
 

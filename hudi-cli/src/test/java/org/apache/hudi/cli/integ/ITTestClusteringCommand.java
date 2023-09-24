@@ -176,10 +176,10 @@ public class ITTestClusteringCommand extends HoodieCLIIntegrationTestBase {
         .withDeleteParallelism(2).forTable(tableName)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
 
-    SparkRDDWriteClient<HoodieAvroPayload> client = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jsc), cfg);
-
-    insert(jsc, client, dataGen, "001");
-    insert(jsc, client, dataGen, "002");
+    try (SparkRDDWriteClient<HoodieAvroPayload> client = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jsc), cfg)) {
+      insert(jsc, client, dataGen, "001");
+      insert(jsc, client, dataGen, "002");
+    }
   }
 
   private List<HoodieRecord> insert(JavaSparkContext jsc, SparkRDDWriteClient<HoodieAvroPayload> client,

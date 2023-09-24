@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.util.Properties;
 
 import static org.apache.parquet.column.ParquetProperties.DEFAULT_MAXIMUM_RECORD_COUNT_FOR_CHECK;
 import static org.apache.parquet.column.ParquetProperties.DEFAULT_MINIMUM_RECORD_COUNT_FOR_CHECK;
@@ -83,7 +84,7 @@ public class TestHoodieBaseParquetWriter {
 
     Schema schema = new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema),
-        schema, Option.of(filter));
+        schema, Option.of(filter), new Properties());
 
     long maxFileSize = 2 * 1024 * 1024;
     HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig =

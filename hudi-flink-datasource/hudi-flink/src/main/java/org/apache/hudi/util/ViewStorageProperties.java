@@ -47,8 +47,6 @@ public class ViewStorageProperties {
 
   private static final String FILE_NAME = "view_storage_conf";
 
-  private static final String FILE_SUFFIX = ".properties";
-
   /**
    * Initialize the {@link #FILE_NAME} meta file.
    */

@@ -18,17 +18,6 @@
 
 package org.apache.hudi.sink.bucket;
 
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-import org.apache.flink.configuration.Configuration;
-import org.apache.flink.table.api.EnvironmentSettings;
-import org.apache.flink.table.api.TableEnvironment;
-import org.apache.flink.table.api.internal.TableEnvironmentImpl;
-
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.IOType;
@@ -38,14 +27,17 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.HoodieIndex.IndexType;
-import org.apache.hudi.sink.clustering.FlinkClusteringConfig;
-import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.FlinkMiniCluster;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestSQL;
 
+import org.apache.flink.table.api.EnvironmentSettings;
+import org.apache.flink.table.api.TableEnvironment;
+import org.apache.flink.table.api.internal.TableEnvironmentImpl;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -59,6 +51,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Integration test cases for {@link BucketStreamWriteFunction}.
@@ -98,26 +92,8 @@ public class ITTestBucketStreamWrite {
   }
 
   private static void doDeleteCommit(String tablePath, boolean isCow) throws Exception {
-    // make configuration and setAvroSchema
-    FlinkClusteringConfig cfg = new FlinkClusteringConfig();
-    cfg.path = tablePath;
-    Configuration conf = FlinkClusteringConfig.toFlinkConfig(cfg);
-
     // create metaClient
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
-
-    conf.setString(FlinkOptions.TABLE_TYPE, metaClient.getTableType().name());
-
-    // set the table name
-    conf.setString(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
-
-    // set record key field
-    conf.setString(FlinkOptions.RECORD_KEY_FIELD, metaClient.getTableConfig().getRecordKeyFieldProp());
-    // set partition field
-    conf.setString(FlinkOptions.PARTITION_PATH_FIELD, metaClient.getTableConfig().getPartitionFieldProp());
-
-    // set table schema
-    CompactionUtil.setAvroSchema(conf, metaClient);
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tablePath, new org.apache.hadoop.conf.Configuration());
 
     // should only contain one instant
     HoodieTimeline activeCompletedTimeline = metaClient.getActiveTimeline().filterCompletedInstants();

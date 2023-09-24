@@ -163,9 +163,9 @@ public interface TableChange {
     protected abstract Integer findIdByFullName(String fullName);
 
     // Modify hudi meta columns is prohibited
-    protected void checkColModifyIsLegal(String colNeedToModfiy) {
-      if (HoodieRecord.HOODIE_META_COLUMNS.stream().anyMatch(f -> f.equalsIgnoreCase(colNeedToModfiy))) {
-        throw new IllegalArgumentException(String.format("cannot modify hudi meta col: %s", colNeedToModfiy));
+    protected void checkColModifyIsLegal(String colNeedToModify) {
+      if (HoodieRecord.HOODIE_META_COLUMNS.stream().anyMatch(f -> f.equalsIgnoreCase(colNeedToModify))) {
+        throw new IllegalArgumentException(String.format("cannot modify hudi meta col: %s", colNeedToModify));
       }
     }
 

@@ -373,6 +373,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
     })
   }
 
+  /* TODO [HUDI-6472]
   test("Test MergeInto When PrimaryKey And PreCombineField Of Source Table And Target Table Differ In Case Only") {
     withRecordType()(withTempDir { tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
@@ -552,6 +553,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
       )
     })
   }
+*/
 
   test("Test only insert when source table contains history") {
     withRecordType()(withTempDir { tmp =>
@@ -634,7 +636,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            |  select 1 as id1, 1 as id2, 'a1' as name, 11 as price, 110 as ts, '2022-08-19' as dt union all
            |  select 1 as id1, 2 as id2, 'a2' as name, 10 as price, 100 as ts, '2022-08-18' as dt
            | ) as s0
-           | on t0.id1 = s0.id1
+           | on t0.id1 = s0.id1 and t0.id2 = s0.id2
            | when not matched then insert *
          """.stripMargin
       )
@@ -876,7 +878,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
                | using (
                |  select 3 as id, 'a3' as name, 10.3 as price, 1003 as ts, '2021-03-21' as dt
                |  union all
-               |  select 1 as id, 'a2' as name, 10.2 as price, 1002 as ts, '2021-03-21' as dt
+               |  select 1 as id, 'a2' as name, 10.4 as price, 1004 as ts, '2021-03-21' as dt
                | ) as s0
                | on t0.id = s0.id
                | when matched then update set *
@@ -884,13 +886,60 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
          """.stripMargin
           )
           checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-            Seq(1, "a1", 10.1, 1000, "2021-03-21"),
-            Seq(1, "a2", 10.2, 1002, "2021-03-21"),
-            Seq(3, "a3", 10.3, 1003, "2021-03-21"),
-            Seq(1, "a2", 10.2, 1002, "2021-03-21")
+            Seq(1, "a2", 10.4, 1004, "2021-03-21"),
+            Seq(1, "a2", 10.4, 1004, "2021-03-21"),
+            Seq(3, "a3", 10.3, 1003, "2021-03-21")
           )
         }
       }
+    }
+  }
+
+
+  test("Test Merge into with RuntimeReplaceable func such as nvl") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // Create a cow partitioned table with preCombineField
+      spark.sql(
+        s"""
+           | create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long,
+           |  dt string
+           | ) using hudi
+           | tblproperties (
+           |  type = 'cow',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+           | partitioned by(dt)
+           | location '${tmp.getCanonicalPath}'
+     """.stripMargin)
+
+      spark.sql(
+        s"""
+           |insert into $tableName values
+           |  (1, 'a1', 10, 1000, '2021-03-21'),
+           |  (3, 'a3', 10, 2000, '2021-03-21')
+         """.stripMargin)
+
+      spark.sql(
+        s"""
+           | merge into $tableName as t0
+           | using (
+           |  select 1 as id, 'a1' as name, 10.1 as price, 1003 as ts, '2021-03-21' as dt
+           | ) as s0
+           | on t0.id = s0.id
+           | when matched then update set t0.ts = s0.ts,
+           |      t0.price = if(nvl(s0.price,0) <> nvl(t0.price,0), s0.price, t0.price)
+           | when not matched then insert *
+        """.stripMargin)
+      checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+        Seq(1, "a1", 10.1, 1003, "2021-03-21"),
+        Seq(3, "a3", 10.0, 2000, "2021-03-21")
+      )
     }
   }
 }

@@ -21,8 +21,8 @@ package org.apache.hudi.async;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.collection.Pair;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.concurrent.BlockingQueue;
@@ -40,7 +40,7 @@ import java.util.function.Function;
  */
 public abstract class HoodieAsyncService implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieAsyncService.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieAsyncService.class);
   private static final long POLLING_SECONDS = 10;
 
   // Flag indicating whether an error is incurred in the service
@@ -196,11 +196,11 @@ public abstract class HoodieAsyncService implements Serializable {
   }
 
   /**
-   * Enqueues new pending clustering instant.
+   * Enqueues new pending table service instant.
    * @param instant {@link HoodieInstant} to enqueue.
    */
   public void enqueuePendingAsyncServiceInstant(HoodieInstant instant) {
-    LOG.info("Enqueuing new pending clustering instant: " + instant.getTimestamp());
+    LOG.info("Enqueuing new pending table service instant: " + instant.getTimestamp());
     pendingInstants.add(instant);
   }
 

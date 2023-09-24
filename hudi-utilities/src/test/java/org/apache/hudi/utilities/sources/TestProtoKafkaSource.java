@@ -21,10 +21,11 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
+import org.apache.hudi.utilities.config.KafkaSourceConfig;
+import org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig;
 import org.apache.hudi.utilities.schema.ProtoClassBasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config;
+import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.test.proto.Nested;
 import org.apache.hudi.utilities.test.proto.Sample;
 import org.apache.hudi.utilities.test.proto.SampleEnum;
@@ -62,6 +63,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -78,9 +80,9 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
     props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
     props.setProperty("hoodie.deltastreamer.kafka.source.maxEvents",
         maxEventsToReadFromKafkaSource != null ? String.valueOf(maxEventsToReadFromKafkaSource) :
-            String.valueOf(Config.MAX_EVENTS_FROM_KAFKA_SOURCE_PROP.defaultValue()));
+            String.valueOf(KafkaSourceConfig.MAX_EVENTS_FROM_KAFKA_SOURCE.defaultValue()));
     props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, UUID.randomUUID().toString());
-    props.setProperty(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_CLASS_NAME.key(), Sample.class.getName());
+    props.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key(), Sample.class.getName());
     return props;
   }
 
@@ -98,7 +100,7 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
     final String topic = TEST_TOPIC_PREFIX + "testProtoKafkaSourceFlatten";
     testUtils.createTopic(topic, 2);
     TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
-    props.setProperty(ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS.key(), "true");
+    props.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS.key(), "true");
     SchemaProvider schemaProvider = new ProtoClassBasedSchemaProvider(props, jsc());
     Source protoKafkaSource = new ProtoKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(protoKafkaSource);
@@ -157,7 +159,7 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
           .setPrimitiveFixedSignedLong(RANDOM.nextLong())
           .setPrimitiveBoolean(RANDOM.nextBoolean())
           .setPrimitiveString(UUID.randomUUID().toString())
-          .setPrimitiveBytes(ByteString.copyFrom(UUID.randomUUID().toString().getBytes()));
+          .setPrimitiveBytes(ByteString.copyFrom(getUTF8Bytes(UUID.randomUUID().toString())));
 
       // randomly set nested messages, lists, and maps to test edge cases
       if (RANDOM.nextBoolean()) {
@@ -178,7 +180,7 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
             .setWrappedDouble(DoubleValue.of(RANDOM.nextDouble()))
             .setWrappedFloat(FloatValue.of(RANDOM.nextFloat()))
             .setWrappedBoolean(BoolValue.of(RANDOM.nextBoolean()))
-            .setWrappedBytes(BytesValue.of(ByteString.copyFrom(UUID.randomUUID().toString().getBytes())))
+            .setWrappedBytes(BytesValue.of(ByteString.copyFrom(getUTF8Bytes(UUID.randomUUID().toString()))))
             .setEnum(SampleEnum.SECOND)
             .setTimestamp(Timestamps.fromMillis(System.currentTimeMillis()));
       }

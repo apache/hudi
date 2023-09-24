@@ -21,10 +21,11 @@ package org.apache.hudi.integ.testsuite;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.utilities.deltastreamer.DeltaSync;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.streamer.StreamSync;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -76,13 +77,14 @@ public class HoodieDeltaStreamerWrapper extends HoodieDeltaStreamer {
   }
 
   public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchSource() throws Exception {
-    DeltaSync service = getDeltaSync();
+    StreamSync service = getDeltaSync();
     service.refreshTimeline();
-    return service.readFromSource(service.getCommitTimelineOpt());
+    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    return service.readFromSource(instantTime);
   }
 
-  public DeltaSync getDeltaSync() {
-    return ((DeltaSyncService) ingestionService.get()).getDeltaSync();
+  public StreamSync getDeltaSync() {
+    return ((StreamSyncService) ingestionService.get()).getStreamSync();
   }
 
 }

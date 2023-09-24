@@ -28,9 +28,9 @@ class CopyToTableProcedure extends BaseProcedure with ProcedureBuilder with Logg
 
 
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "query_type", DataTypes.StringType, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL),
-    ProcedureParameter.required(2, "new_table", DataTypes.StringType, None),
+    ProcedureParameter.required(2, "new_table", DataTypes.StringType),
     ProcedureParameter.optional(3, "begin_instance_time", DataTypes.StringType, ""),
     ProcedureParameter.optional(4, "end_instance_time", DataTypes.StringType, ""),
     ProcedureParameter.optional(5, "as_of_instant", DataTypes.StringType, ""),
@@ -121,8 +121,3 @@ object CopyToTableProcedure {
     override def get() = new CopyToTableProcedure()
   }
 }
-
-
-
-
-

@@ -19,8 +19,6 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, RECORDKEY_FIELD}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteOperationType}
@@ -28,8 +26,10 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.collection.Pair
-import org.apache.hudi.config.HoodieClusteringConfig
 import org.apache.hudi.{DataSourceReadOptions, HoodieCLIUtils, HoodieDataSourceHelpers, HoodieFileIndex}
+
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Literal}
 import org.apache.spark.sql.types.{DataTypes, Metadata, StringType, StructField, StructType}
 import org.apache.spark.sql.{Dataset, Row}
@@ -60,10 +60,15 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
              | partitioned by(ts)
              | location '$basePath'
        """.stripMargin)
+        // disable automatic inline compaction so that HoodieDataSourceHelpers.allCompletedCommitsCompactions
+        // does not count compaction instants
+        spark.sql("set hoodie.compact.inline=false")
+        spark.sql("set hoodie.compact.schedule.inline=false")
+
         spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
         spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
-        val client = HoodieCLIUtils.createHoodieClientFromPath(spark, basePath, Map.empty)
+        val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
         // Generate the first clustering plan
         val firstScheduleInstant = HoodieActiveTimeline.createNewInstantTime
         client.scheduleClusteringAtInstant(firstScheduleInstant, HOption.empty())
@@ -164,7 +169,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
         spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
         spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
-        val client = HoodieCLIUtils.createHoodieClientFromPath(spark, basePath, Map.empty)
+        val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
         // Generate the first clustering plan
         val firstScheduleInstant = HoodieActiveTimeline.createNewInstantTime
         client.scheduleClusteringAtInstant(firstScheduleInstant, HOption.empty())
@@ -393,6 +398,14 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
             Seq(10, "a10", 10.0, 1009)
           )
         }
+
+        // Test partition pruning with invalid predicates
+        {
+          val resultD = spark.sql(s"call run_clustering(table => '$tableName', predicate => 'ts > 1111L', order => 'ts', show_involved_partition => true)")
+            .collect()
+            .map(row => Seq(row.getString(0), row.getInt(1), row.getString(2), row.getString(3)))
+          assertResult(0)(resultD.length)
+        }
       }
     }
   }
@@ -579,7 +592,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
 
       metaClient.reloadActiveTimeline()
       val fileIndex1 = HoodieFileIndex(spark, metaClient, None, queryOpts)
-      val orderAllFiles = fileIndex1.allFiles.size
+      val orderAllFiles = fileIndex1.allBaseFiles.size
       val c2OrderFilterCount = fileIndex1.listFiles(Seq(), Seq(dataFilterC2)).head.files.size
       val c3OrderFilterCount = fileIndex1.listFiles(Seq(), Seq(dataFilterC3)).head.files.size
 
@@ -596,7 +609,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
 
       metaClient.reloadActiveTimeline()
       val fileIndex2 = HoodieFileIndex(spark, metaClient, None, queryOpts)
-      val ZOrderAllFiles = fileIndex2.allFiles.size
+      val ZOrderAllFiles = fileIndex2.allBaseFiles.size
       val c2ZOrderFilterCount = fileIndex2.listFiles(Seq(), Seq(dataFilterC2)).head.files.size
       val c3ZOrderFilterCount = fileIndex2.listFiles(Seq(), Seq(dataFilterC3)).head.files.size
 

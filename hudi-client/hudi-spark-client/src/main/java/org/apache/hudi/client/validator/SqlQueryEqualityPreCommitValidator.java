@@ -26,11 +26,11 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.table.HoodieSparkTable;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Validator to run sql query and compare table state 
@@ -41,7 +41,7 @@ import org.apache.spark.sql.SQLContext;
  */
 public class SqlQueryEqualityPreCommitValidator<T, I, K, O extends HoodieData<WriteStatus>> extends SqlQueryPreCommitValidator<T, I, K, O> {
 
-  private static final Logger LOG = LogManager.getLogger(SqlQueryEqualityPreCommitValidator.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SqlQueryEqualityPreCommitValidator.class);
 
   public SqlQueryEqualityPreCommitValidator(HoodieSparkTable<T> table, HoodieEngineContext engineContext, HoodieWriteConfig config) {
     super(table, engineContext, config);
@@ -54,12 +54,12 @@ public class SqlQueryEqualityPreCommitValidator<T, I, K, O extends HoodieData<Wr
 
   @Override
   protected void validateUsingQuery(String query, String prevTableSnapshot, String newTableSnapshot, SQLContext sqlContext) {
-    String queryWithPrevSnapshot = query.replaceAll(HoodiePreCommitValidatorConfig.VALIDATOR_TABLE_VARIABLE, prevTableSnapshot);
-    String queryWithNewSnapshot = query.replaceAll(HoodiePreCommitValidatorConfig.VALIDATOR_TABLE_VARIABLE, newTableSnapshot);
-    LOG.info("Running query on previous state: " + queryWithPrevSnapshot);
-    Dataset<Row> prevRows = sqlContext.sql(queryWithPrevSnapshot);
-    LOG.info("Running query on new state: " + queryWithNewSnapshot);
-    Dataset<Row> newRows  = sqlContext.sql(queryWithNewSnapshot);
+    Dataset<Row> prevRows = executeSqlQuery(
+        sqlContext, query, prevTableSnapshot, "previous state").cache();
+    LOG.info("Total rows in prevRows " + prevRows.count());
+    Dataset<Row> newRows = executeSqlQuery(
+        sqlContext, query, newTableSnapshot, "new state").cache();
+    LOG.info("Total rows in newRows " + newRows.count());
     printAllRowsIfDebugEnabled(prevRows);
     printAllRowsIfDebugEnabled(newRows);
     boolean areDatasetsEqual = prevRows.intersect(newRows).count() == prevRows.count();

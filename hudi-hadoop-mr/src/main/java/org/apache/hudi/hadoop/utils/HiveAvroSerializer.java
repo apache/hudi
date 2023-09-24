@@ -18,6 +18,9 @@
 
 package org.apache.hudi.hadoop.utils;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.exception.HoodieException;
+
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
@@ -31,7 +34,6 @@ import org.apache.hadoop.hive.common.type.HiveDecimal;
 import org.apache.hadoop.hive.common.type.HiveVarchar;
 import org.apache.hadoop.hive.serde2.avro.AvroSerdeUtils;
 import org.apache.hadoop.hive.serde2.avro.InstanceCache;
-import org.apache.hadoop.hive.serde2.io.DateWritable;
 import org.apache.hadoop.hive.serde2.objectinspector.ListObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.MapObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector;
@@ -39,22 +41,19 @@ import org.apache.hadoop.hive.serde2.objectinspector.PrimitiveObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.StructField;
 import org.apache.hadoop.hive.serde2.objectinspector.StructObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.UnionObjectInspector;
-import org.apache.hadoop.hive.serde2.objectinspector.primitive.DateObjectInspector;
-import org.apache.hadoop.hive.serde2.objectinspector.primitive.TimestampObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.primitive.WritableDateObjectInspector;
+import org.apache.hadoop.hive.serde2.objectinspector.primitive.WritableTimestampObjectInspector;
 import org.apache.hadoop.hive.serde2.typeinfo.ListTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.MapTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.StructTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.UnionTypeInfo;
 import org.apache.hadoop.io.ArrayWritable;
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -75,7 +74,7 @@ public class HiveAvroSerializer {
   private final List<TypeInfo> columnTypes;
   private final ObjectInspector objectInspector;
 
-  private static final Logger LOG = LogManager.getLogger(HiveAvroSerializer.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HiveAvroSerializer.class);
 
   public HiveAvroSerializer(ObjectInspector objectInspector, List<String> columnNames, List<TypeInfo> columnTypes) {
     this.columnNames = columnNames;
@@ -206,6 +205,7 @@ public class HiveAvroSerializer {
       assert fieldOI instanceof PrimitiveObjectInspector;
       return serializeEnum((PrimitiveObjectInspector) fieldOI, structFieldData, schema);
     }
+
     switch (typeInfo.getCategory()) {
       case PRIMITIVE:
         assert fieldOI instanceof PrimitiveObjectInspector;
@@ -231,11 +231,12 @@ public class HiveAvroSerializer {
     }
   }
 
-  /** private cache to avoid lots of EnumSymbol creation while serializing.
-   *  Two levels because the enum symbol is specific to a schema.
-   *  Object because we want to avoid the overhead of repeated toString calls while maintaining compatability.
-   *  Provided there are few enum types per record, and few symbols per enum, memory use should be moderate.
-   *  eg 20 types with 50 symbols each as length-10 Strings should be on the order of 100KB per AvroSerializer.
+  /**
+   * private cache to avoid lots of EnumSymbol creation while serializing.
+   * Two levels because the enum symbol is specific to a schema.
+   * Object because we want to avoid the overhead of repeated toString calls while maintaining compatibility.
+   * Provided there are few enum types per record, and few symbols per enum, memory use should be moderate.
+   * eg 20 types with 50 symbols each as length-10 Strings should be on the order of 100KB per AvroSerializer.
    */
   final InstanceCache<Schema, InstanceCache<Object, GenericEnumSymbol>> enums = new InstanceCache<Schema, InstanceCache<Object, GenericEnumSymbol>>() {
     @Override
@@ -299,14 +300,13 @@ public class HiveAvroSerializer {
         String string = (String)fieldOI.getPrimitiveJavaObject(structFieldData);
         return new Utf8(string);
       case DATE:
-        return DateWritable.dateToDays(((DateObjectInspector)fieldOI).getPrimitiveJavaObject(structFieldData));
+        return HoodieHiveUtils.getDays(structFieldData);
       case TIMESTAMP:
-        Timestamp timestamp =
-            ((TimestampObjectInspector) fieldOI).getPrimitiveJavaObject(structFieldData);
-        return timestamp.getTime();
+        Object timestamp = ((WritableTimestampObjectInspector) fieldOI).getPrimitiveJavaObject(structFieldData);
+        return HoodieHiveUtils.getMills(timestamp);
       case INT:
         if (schema.getLogicalType() != null && schema.getLogicalType().getName().equals("date")) {
-          return DateWritable.dateToDays(new WritableDateObjectInspector().getPrimitiveJavaObject(structFieldData));
+          return new WritableDateObjectInspector().getPrimitiveWritableObject(structFieldData).getDays();
         }
         return fieldOI.getPrimitiveJavaObject(structFieldData);
       case UNKNOWN:
@@ -337,8 +337,12 @@ public class HiveAvroSerializer {
     // NOTE: We have to resolve nullable schema, since Avro permits array elements
     //       to be null
     Schema arrayNestedType = resolveNullableSchema(schema.getElementType());
-    Schema elementType = arrayNestedType.getField("element") == null ? arrayNestedType : arrayNestedType.getField("element").schema();
-
+    Schema elementType;
+    if (listElementObjectInspector.getCategory() == ObjectInspector.Category.PRIMITIVE) {
+      elementType = arrayNestedType;
+    } else {
+      elementType = arrayNestedType.getField("element") == null ? arrayNestedType : arrayNestedType.getField("element").schema();
+    }
     for (int i = 0; i < list.size(); i++) {
       Object childFieldData = list.get(i);
       if (childFieldData instanceof ArrayWritable && ((ArrayWritable) childFieldData).get().length != ((StructTypeInfo) listElementTypeInfo).getAllStructFieldNames().size()) {

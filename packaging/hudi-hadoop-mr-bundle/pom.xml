@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.14.0-SNAPSHOT</version>
+    <version>1.0.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -74,6 +74,15 @@
                   <include>com.esotericsoftware:minlog</include>
                   <include>org.objenesis:objenesis</include>
 
+                  <!-- Jackson
+                       NOTE: Even though Hive bundles Jackson, it doesn't bundle JSR310 module (unlike Spark).
+                             Therefore, to make sure that JSR310 is compatible w/ the Jackson core used by Hudi, we bundle the core
+                             as well, while shading it -->
+                  <include>com.fasterxml.jackson.core:jackson-annotations</include>
+                  <include>com.fasterxml.jackson.core:jackson-core</include>
+                  <include>com.fasterxml.jackson.core:jackson-databind</include>
+                  <include>com.fasterxml.jackson.datatype:jackson-datatype-jsr310</include>
+
                   <include>org.apache.parquet:parquet-avro</include>
                   <include>org.apache.avro:avro</include>
                   <include>com.yammer.metrics:metrics-core</include>
@@ -120,6 +129,10 @@
                 <relocation>
                   <pattern>org.openjdk.jol.</pattern>
                   <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.fasterxml.jackson.</pattern>
+                  <shadedPattern>org.apache.hudi.com.fasterxml.jackson.</shadedPattern>
                 </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>

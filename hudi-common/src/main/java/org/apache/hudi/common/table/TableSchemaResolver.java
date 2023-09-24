@@ -51,13 +51,13 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.schema.MessageType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -78,7 +78,7 @@ import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 @ThreadSafe
 public class TableSchemaResolver {
 
-  private static final Logger LOG = LogManager.getLogger(TableSchemaResolver.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TableSchemaResolver.class);
 
   private final HoodieTableMetaClient metaClient;
 
@@ -327,8 +327,9 @@ public class TableSchemaResolver {
 
     FileSystem fs = metaClient.getRawFs();
     CacheConfig cacheConfig = new CacheConfig(fs.getConf());
-    HoodieAvroHFileReader hFileReader = new HoodieAvroHFileReader(fs.getConf(), hFilePath, cacheConfig);
-    return convertAvroSchemaToParquet(hFileReader.getSchema());
+    try (HoodieAvroHFileReader hFileReader = new HoodieAvroHFileReader(fs.getConf(), hFilePath, cacheConfig)) {
+      return convertAvroSchemaToParquet(hFileReader.getSchema());
+    }
   }
 
   private MessageType readSchemaFromORCBaseFile(Path orcFilePath) throws IOException {

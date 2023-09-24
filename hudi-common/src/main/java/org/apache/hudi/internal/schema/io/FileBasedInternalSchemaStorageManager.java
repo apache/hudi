@@ -34,8 +34,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -46,12 +46,13 @@ import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.SCHEMA_COMMIT_ACTION;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * {@link AbstractInternalSchemaStorageManager} implementation based on the schema files.
  */
 public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchemaStorageManager {
-  private static final Logger LOG = LogManager.getLogger(FileBasedInternalSchemaStorageManager.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FileBasedInternalSchemaStorageManager.class);
 
   public static final String SCHEMA_NAME = ".schema";
   private final Path baseSchemaPath;
@@ -85,7 +86,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
     HoodieActiveTimeline timeline = getMetaClient().getActiveTimeline();
     HoodieInstant hoodieInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, SCHEMA_COMMIT_ACTION, instantTime);
     timeline.createNewInstant(hoodieInstant);
-    byte[] writeContent = historySchemaStr.getBytes(StandardCharsets.UTF_8);
+    byte[] writeContent = getUTF8Bytes(historySchemaStr);
     timeline.transitionRequestedToInflight(hoodieInstant, Option.empty());
     timeline.saveAsComplete(new HoodieInstant(HoodieInstant.State.INFLIGHT, hoodieInstant.getAction(), hoodieInstant.getTimestamp()), Option.of(writeContent));
     LOG.info(String.format("persist history schema success on commit time: %s", instantTime));

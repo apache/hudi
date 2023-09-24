@@ -36,8 +36,8 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -53,7 +53,7 @@ import java.util.stream.Collectors;
  */
 public class JavaUpsertPartitioner<T> implements Partitioner  {
 
-  private static final Logger LOG = LogManager.getLogger(JavaUpsertPartitioner.class);
+  private static final Logger LOG = LoggerFactory.getLogger(JavaUpsertPartitioner.class);
 
   /**
    * List of all small files to be corrected.
@@ -253,9 +253,8 @@ public class JavaUpsertPartitioner<T> implements Partitioner  {
 
       for (HoodieBaseFile file : allFiles) {
         if (file.getFileSize() < config.getParquetSmallFileLimit()) {
-          String filename = file.getFileName();
           SmallFile sf = new SmallFile();
-          sf.location = new HoodieRecordLocation(FSUtils.getCommitTime(filename), FSUtils.getFileId(filename));
+          sf.location = new HoodieRecordLocation(file.getCommitTime(), file.getFileId());
           sf.sizeBytes = file.getFileSize();
           smallFileLocations.add(sf);
         }
@@ -336,5 +335,10 @@ public class JavaUpsertPartitioner<T> implements Partitioner  {
       LOG.error("Error trying to compute average bytes/record ", t);
     }
     return avgSize;
+  }
+
+  public List<String> getSmallFileIds() {
+    return smallFiles.stream().map(smallFile -> smallFile.location.getFileId())
+        .collect(Collectors.toList());
   }
 }

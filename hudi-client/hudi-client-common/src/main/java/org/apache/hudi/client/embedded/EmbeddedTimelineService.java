@@ -29,8 +29,8 @@ import org.apache.hudi.common.util.NetworkUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.timeline.service.TimelineService;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -39,7 +39,7 @@ import java.io.IOException;
  */
 public class EmbeddedTimelineService {
 
-  private static final Logger LOG = LogManager.getLogger(EmbeddedTimelineService.class);
+  private static final Logger LOG = LoggerFactory.getLogger(EmbeddedTimelineService.class);
 
   private int serverPort;
   private String hostAddr;
@@ -70,7 +70,7 @@ public class EmbeddedTimelineService {
       // Reset to default if set to Remote
       builder.withStorageType(FileSystemViewStorageType.MEMORY);
     }
-    return FileSystemViewManager.createViewManager(context, writeConfig.getMetadataConfig(), builder.build(), writeConfig.getCommonConfig(), basePath);
+    return FileSystemViewManager.createViewManagerWithTableMetadata(context, writeConfig.getMetadataConfig(), builder.build(), writeConfig.getCommonConfig());
   }
 
   public void startServer() throws IOException {

@@ -36,8 +36,8 @@ import org.apache.hudi.exception.HoodieRollbackException;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -56,7 +56,7 @@ import java.util.stream.Stream;
  */
 public class BaseRollbackHelper implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(BaseRollbackHelper.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BaseRollbackHelper.class);
   protected static final String EMPTY_STRING = "";
 
   protected final HoodieTableMetaClient metaClient;

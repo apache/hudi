@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -40,6 +41,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+
 /**
  * Avro schemas have restrictions (https://avro.apache.org/docs/current/spec.html#names) on field names
  * that other schema formats do not have. This class provides utilities to help with sanitizing
@@ -48,30 +52,25 @@ public class SanitizationUtils {
 
   private static final ObjectMapper OM = new ObjectMapper();
 
+  @Deprecated
   public static class Config {
+    @Deprecated
+    public static final ConfigProperty<Boolean> SANITIZE_SCHEMA_FIELD_NAMES =
+        HoodieStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES;
 
-    public static final ConfigProperty<Boolean> SANITIZE_SCHEMA_FIELD_NAMES = ConfigProperty
-        .key("hoodie.deltastreamer.source.sanitize.invalid.schema.field.names")
-        .defaultValue(false)
-        .withDocumentation("Sanitizes names of invalid schema fields both in the data read from source and also in the schema "
-            + "Replaces invalid characters with hoodie.deltastreamer.source.sanitize.invalid.char.mask. Invalid characters are by "
-            + "goes by avro naming convention (https://avro.apache.org/docs/current/spec.html#names).");
-
-    public static final ConfigProperty<String> SCHEMA_FIELD_NAME_INVALID_CHAR_MASK = ConfigProperty
-        .key("hoodie.deltastreamer.source.sanitize.invalid.char.mask")
-        .defaultValue("__")
-        .withDocumentation("Defines the character sequence that replaces invalid characters in schema field names if "
-          + "hoodie.deltastreamer.source.sanitize.invalid.schema.field.names is enabled.");
+    @Deprecated
+    public static final ConfigProperty<String> SCHEMA_FIELD_NAME_INVALID_CHAR_MASK =
+        HoodieStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK;
   }
 
   private static final String AVRO_FIELD_NAME_KEY = "name";
 
   public static boolean getShouldSanitize(TypedProperties props) {
-    return props.getBoolean(Config.SANITIZE_SCHEMA_FIELD_NAMES.key(),Config.SANITIZE_SCHEMA_FIELD_NAMES.defaultValue());
+    return getBooleanWithAltKeys(props, HoodieStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES);
   }
 
   public static String getInvalidCharMask(TypedProperties props) {
-    return props.getString(Config.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.key(),Config.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.defaultValue());
+    return getStringWithAltKeys(props, HoodieStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK, true);
   }
 
   private static DataType sanitizeDataTypeForAvro(DataType dataType, String invalidCharMask) {

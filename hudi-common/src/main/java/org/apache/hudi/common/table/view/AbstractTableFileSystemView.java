@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -43,8 +44,8 @@ import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -70,18 +71,23 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS;
 
 /**
- * Common thread-safe implementation for multiple TableFileSystemView Implementations. Provides uniform handling of (a)
- * Loading file-system views from underlying file-system (b) Pending compaction operations and changing file-system
- * views based on that (c) Thread-safety in loading and managing file system views for this table. (d) resetting
- * file-system views The actual mechanism of fetching file slices from different view storages is delegated to
- * sub-classes.
+ * Common thread-safe implementation for multiple TableFileSystemView Implementations.
+ * Provides uniform handling of:
+ * <ul>
+ *   <li>Loading file-system views from underlying file-system;</li>
+ *   <li>Pending compaction operations and changing file-system views based on that;</li>
+ *   <li>Thread-safety in loading and managing file system views for this table;</li>
+ *   <li>resetting file-system views.</li>
+ * </ul>
+ * The actual mechanism of fetching file slices from different view storages is delegated to sub-classes.
  */
 public abstract class AbstractTableFileSystemView implements SyncableFileSystemView, Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(AbstractTableFileSystemView.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AbstractTableFileSystemView.class);
 
   protected HoodieTableMetaClient metaClient;
 
@@ -243,7 +249,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         }
 
       } catch (IOException e) {
-        throw new HoodieIOException("error reading commit metadata for " + instant);
+        throw new HoodieIOException("error reading commit metadata for " + instant, e);
       }
     });
 
@@ -336,7 +342,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         long beginTs = System.currentTimeMillis();
         // Not loaded yet
         try {
-          LOG.info("Building file system view for partitions " + partitionSet);
+          LOG.debug("Building file system view for partitions: " + partitionSet);
 
           // Pairs of relative partition path and absolute partition path
           List<Pair<String, Path>> absolutePartitionPathList = partitionSet.stream()
@@ -369,7 +375,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     }
   }
 
-  /***
+  /**
    * @return A list of relative partition paths of all partitions.
    * @throws IOException upon error.
    */
@@ -473,15 +479,21 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param statuses List of File-Status
    */
   private Stream<HoodieBaseFile> convertFileStatusesToBaseFiles(FileStatus[] statuses) {
-    Predicate<FileStatus> roFilePredicate = fileStatus -> fileStatus.getPath().getName()
-        .contains(metaClient.getTableConfig().getBaseFileFormat().getFileExtension());
+    Predicate<FileStatus> roFilePredicate = fileStatus -> {
+      String pathName = fileStatus.getPath().getName();
+      // Filter base files if:
+      // 1. file extension equals to table configured file extension
+      // 2. file is not .hoodie_partition_metadata
+      return pathName.contains(metaClient.getTableConfig().getBaseFileFormat().getFileExtension())
+          && !pathName.startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX);
+    };
     return Arrays.stream(statuses).filter(roFilePredicate).map(HoodieBaseFile::new);
   }
 
   /**
    * Helper to convert file-status to log-files.
    *
-   * @param statuses List of FIle-Status
+   * @param statuses List of File-Status
    */
   private Stream<HoodieLogFile> convertFileStatusesToLogFiles(FileStatus[] statuses) {
     Predicate<FileStatus> rtFilePredicate = fileStatus ->  {
@@ -741,6 +753,17 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   @Override
+  public Void loadAllPartitions() {
+    try {
+      readLock.lock();
+      ensureAllPartitionsLoadedCorrectly();
+      return null;
+    } finally {
+      readLock.unlock();
+    }
+  }
+
+  @Override
   public final Stream<HoodieBaseFile> getAllBaseFiles(String partitionStr) {
     try {
       readLock.lock();
@@ -841,6 +864,25 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
                     .findFirst()))
             .filter(Option::isPresent).map(Option::get).map(this::addBootstrapBaseFileIfPresent);
       }
+    } finally {
+      readLock.unlock();
+    }
+  }
+
+  @Override
+  public final Map<String, Stream<FileSlice>> getAllLatestFileSlicesBeforeOrOn(String maxCommitTime) {
+    try {
+      readLock.lock();
+      List<String> formattedPartitionList = ensureAllPartitionsLoadedCorrectly();
+      return formattedPartitionList.stream().collect(Collectors.toMap(
+          Function.identity(),
+          partitionPath -> fetchAllStoredFileGroups(partitionPath)
+              .filter(slice -> !isFileGroupReplacedBeforeOrOn(slice.getFileGroupId(), maxCommitTime))
+              .map(fg -> fg.getAllFileSlicesBeforeOn(maxCommitTime))
+              .map(sliceStream -> sliceStream.flatMap(slice -> this.filterBaseFileAfterPendingCompaction(slice, false)))
+              .map(sliceStream -> Option.fromJavaOptional(sliceStream.findFirst())).filter(Option::isPresent).map(Option::get)
+              .map(this::addBootstrapBaseFileIfPresent)
+      ));
     } finally {
       readLock.unlock();
     }
@@ -952,6 +994,11 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   @Override
   public Stream<HoodieFileGroup> getReplacedFileGroupsBefore(String maxCommitTime, String partitionPath) {
     return getAllFileGroupsIncludingReplaced(partitionPath).filter(fg -> isFileGroupReplacedBefore(fg.getFileGroupId(), maxCommitTime));
+  }
+
+  @Override
+  public Stream<HoodieFileGroup> getReplacedFileGroupsAfterOrOn(String minCommitTime, String partitionPath) {
+    return getAllFileGroupsIncludingReplaced(partitionPath).filter(fg -> isFileGroupReplacedAfterOrOn(fg.getFileGroupId(), minCommitTime));
   }
 
   @Override
@@ -1301,6 +1348,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   /**
    * Returns the file slice with all the file slice log files merged.
+   * <p> CAUTION: the method requires that all the file slices must only contain log files.
    *
    * @param fileGroup File Group for which the file slice belongs to
    * @param maxInstantTime The max instant time
@@ -1378,6 +1426,15 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     }
 
     return HoodieTimeline.compareTimestamps(instant, GREATER_THAN_OR_EQUALS, hoodieInstantOption.get().getTimestamp());
+  }
+
+  private boolean isFileGroupReplacedAfterOrOn(HoodieFileGroupId fileGroupId, String instant) {
+    Option<HoodieInstant> hoodieInstantOption = getReplaceInstant(fileGroupId);
+    if (!hoodieInstantOption.isPresent()) {
+      return false;
+    }
+
+    return HoodieTimeline.compareTimestamps(instant, LESSER_THAN_OR_EQUALS, hoodieInstantOption.get().getTimestamp());
   }
 
   @Override

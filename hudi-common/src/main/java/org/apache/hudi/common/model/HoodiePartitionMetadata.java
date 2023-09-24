@@ -32,8 +32,6 @@ import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.orc.OrcFile;
 import org.apache.orc.Writer;
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -41,6 +39,8 @@ import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName;
 import org.apache.parquet.schema.Types;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -50,6 +50,8 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+
 /**
  * The metadata that goes into the meta file in each partition.
  */
@@ -58,7 +60,7 @@ public class HoodiePartitionMetadata {
   public static final String HOODIE_PARTITION_METAFILE_PREFIX = ".hoodie_partition_metadata";
   public static final String COMMIT_TIME_KEY = "commitTime";
   private static final String PARTITION_DEPTH_KEY = "partitionDepth";
-  private static final Logger LOG = LogManager.getLogger(HoodiePartitionMetadata.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodiePartitionMetadata.class);
 
   /**
    * Contents of the metadata.
@@ -121,7 +123,7 @@ public class HoodiePartitionMetadata {
         fs.rename(tmpMetaPath, metaPath);
       }
     } catch (IOException ioe) {
-      LOG.warn("Error trying to save partition metadata (this is okay, as long as atleast 1 of these succced), "
+      LOG.warn("Error trying to save partition metadata (this is okay, as long as at least 1 of these succeeded), "
           + partitionPath, ioe);
     } finally {
       if (!metafileExists) {
@@ -157,7 +159,7 @@ public class HoodiePartitionMetadata {
           // Since we are only interested in saving metadata to the footer, the schema, blocksizes and other
           // parameters are not important.
           MessageType type = Types.buildMessage().optional(PrimitiveTypeName.INT64).named("dummyint").named("dummy");
-          HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(type, schema, Option.empty());
+          HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(type, schema, Option.empty(), new Properties());
           try (ParquetWriter writer = new ParquetWriter(filePath, writeSupport, CompressionCodecName.UNCOMPRESSED, 1024, 1024)) {
             for (String key : props.stringPropertyNames()) {
               writeSupport.addFooterMetadata(key, props.getProperty(key));
@@ -171,7 +173,7 @@ public class HoodiePartitionMetadata {
               .setSchema(AvroOrcUtils.createOrcSchema(schema));
           try (Writer writer = OrcFile.createWriter(filePath, writerOptions)) {
             for (String key : props.stringPropertyNames()) {
-              writer.addUserMetadata(key, ByteBuffer.wrap(props.getProperty(key).getBytes()));
+              writer.addUserMetadata(key, ByteBuffer.wrap(getUTF8Bytes(props.getProperty(key))));
             }
           }
           break;

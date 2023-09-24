@@ -21,33 +21,30 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
+import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TIMEZONE_FORMAT, TIMESTAMP_TYPE_FIELD}
+import org.apache.hudi.common.config.{HoodieMemoryConfig, HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, HoodieRecordPayload, HoodieTableType, OverwriteWithLatestAvroPayload}
+import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.TestCOWDataSource.convertColumnsToNullable
-import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
 import org.apache.hudi.index.HoodieIndex.IndexType
-import org.apache.hudi.keygen.NonpartitionedKeyGenerator
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkRecordMerger, SparkDatasetMixin}
-import org.apache.log4j.LogManager
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
-import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.BooleanType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
+import org.slf4j.LoggerFactory
 
 import java.util.function.Consumer
 import scala.collection.JavaConversions.mapAsJavaMap
@@ -59,7 +56,7 @@ import scala.collection.JavaConverters._
 class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin {
 
   var spark: SparkSession = null
-  private val log = LogManager.getLogger(classOf[TestMORDataSource])
+  private val log = LoggerFactory.getLogger(classOf[TestMORDataSource])
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
     "hoodie.upsert.shuffle.parallelism" -> "4",
@@ -340,13 +337,16 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .save(basePath)
 
     // Make force spill
-    spark.sparkContext.hadoopConfiguration.set(HoodieRealtimeConfig.COMPACTION_MEMORY_FRACTION_PROP, "0.00001")
+    spark.sparkContext.hadoopConfiguration.set(
+      HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION.key, "0.00001")
     val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .load(basePath + "/*/*/*/*")
     assertEquals(100, hudiSnapshotDF1.count()) // still 100, since we only updated
-    spark.sparkContext.hadoopConfiguration.set(HoodieRealtimeConfig.COMPACTION_MEMORY_FRACTION_PROP, HoodieRealtimeConfig.DEFAULT_COMPACTION_MEMORY_FRACTION)
+    spark.sparkContext.hadoopConfiguration.set(
+      HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION.key,
+      HoodieMemoryConfig.DEFAULT_MR_COMPACTION_MEMORY_FRACTION)
   }
 
   @ParameterizedTest
@@ -517,7 +517,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     verifyShow(hudiIncDF2)
     verifyShow(hudiIncDF1Skipmerge)
 
-    val record3 = dataGen.generateUpdatesWithTS("003", hoodieRecords1, -1)
+    val record3 = dataGen.generateUpdatesWithTimestamp("003", hoodieRecords1, -1)
     val inputDF3 = toDataset(spark, record3)
     inputDF3.write.format("org.apache.hudi").options(opts)
       .mode(SaveMode.Append).save(basePath)
@@ -653,7 +653,6 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(RECORDKEY_FIELD.key, "id")
       .option(PRECOMBINE_FIELD.key, "version")
       .option(PARTITIONPATH_FIELD.key, "")
-      .option(KEYGENERATOR_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getName)
       .mode(SaveMode.Append)
       .save(basePath)
   }
@@ -1058,10 +1057,10 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       "hoodie.compact.inline" -> "false",
       DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.TimestampBasedKeyGenerator",
-      Config.TIMESTAMP_TYPE_FIELD_PROP -> "DATE_STRING",
-      Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP -> "yyyy/MM/dd",
-      Config.TIMESTAMP_TIMEZONE_FORMAT_PROP -> "GMT+8:00",
-      Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP -> "yyyy-MM-dd"
+      TIMESTAMP_TYPE_FIELD.key -> "DATE_STRING",
+      TIMESTAMP_OUTPUT_DATE_FORMAT.key -> "yyyy/MM/dd",
+      TIMESTAMP_TIMEZONE_FORMAT.key -> "GMT+8:00",
+      TIMESTAMP_INPUT_DATE_FORMAT.key -> "yyyy-MM-dd"
     ) ++ writeOpts
 
     val dataGen1 = new HoodieTestDataGenerator(Array("2022-01-01"))
@@ -1228,6 +1227,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
 
     thirdDf.write.format("hudi")
       .options(writeOpts)
+      // need to disable inline compaction for this test to avoid the compaction instant being completed
+      .option(HoodieCompactionConfig.INLINE_COMPACT.key, "false")
       .mode(SaveMode.Append).save(tablePath)
 
     // Read-optimized query on MOR

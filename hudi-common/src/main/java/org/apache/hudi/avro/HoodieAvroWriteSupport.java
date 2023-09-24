@@ -21,31 +21,35 @@ package org.apache.hudi.avro;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 
 import org.apache.avro.Schema;
 import org.apache.parquet.avro.AvroWriteSupport;
 import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.parquet.schema.MessageType;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 
 /**
  * Wrap AvroWriterSupport for plugging in the bloom filter.
  */
-public class HoodieAvroWriteSupport extends AvroWriteSupport {
+public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
 
   private final Option<HoodieBloomFilterWriteSupport<String>> bloomFilterWriteSupportOpt;
   private final Map<String, String> footerMetadata = new HashMap<>();
+  protected final Properties properties;
 
   public static final String OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY = "com.uber.hoodie.bloomfilter";
   public static final String HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY = "org.apache.hudi.bloomfilter";
 
-  public HoodieAvroWriteSupport(MessageType schema, Schema avroSchema, Option<BloomFilter> bloomFilterOpt) {
+  public HoodieAvroWriteSupport(MessageType schema, Schema avroSchema, Option<BloomFilter> bloomFilterOpt,
+                                Properties properties) {
     super(schema, avroSchema, ConvertingGenericData.INSTANCE);
     this.bloomFilterWriteSupportOpt = bloomFilterOpt.map(HoodieBloomFilterAvroWriteSupport::new);
+    this.properties = properties;
   }
 
   @Override
@@ -75,7 +79,7 @@ public class HoodieAvroWriteSupport extends AvroWriteSupport {
 
     @Override
     protected byte[] getUTF8Bytes(String key) {
-      return key.getBytes(StandardCharsets.UTF_8);
+      return StringUtils.getUTF8Bytes(key);
     }
   }
 }

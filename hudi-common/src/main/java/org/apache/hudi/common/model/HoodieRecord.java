@@ -29,6 +29,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 
+import javax.annotation.Nullable;
+
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Collections;
@@ -223,6 +225,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     return this;
   }
 
+  @Nullable
   public HoodieRecordLocation getCurrentLocation() {
     return currentLocation;
   }
@@ -230,15 +233,15 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   /**
    * Sets the new currentLocation of the record, after being written. This again should happen exactly-once.
    */
-  public HoodieRecord setNewLocation(HoodieRecordLocation location) {
+  public void setNewLocation(HoodieRecordLocation location) {
     checkState();
     assert newLocation == null;
     this.newLocation = location;
-    return this;
   }
 
-  public Option<HoodieRecordLocation> getNewLocation() {
-    return Option.ofNullable(this.newLocation);
+  @Nullable
+  public HoodieRecordLocation getNewLocation() {
+    return this.newLocation;
   }
 
   public boolean isCurrentLocationKnown() {
@@ -306,6 +309,16 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   protected abstract void writeRecordPayload(T payload, Kryo kryo, Output output);
 
   protected abstract T readRecordPayload(Kryo kryo, Input input);
+
+  /**
+   * Clears the new currentLocation of the record. 
+   *
+   * This is required in the delete path so that Index can track that this record was deleted.
+   */
+  public void clearNewLocation() {
+    checkState();
+    this.newLocation = null;
+  }
 
   /**
    * NOTE: This method is declared final to make sure there's no polymorphism and therefore

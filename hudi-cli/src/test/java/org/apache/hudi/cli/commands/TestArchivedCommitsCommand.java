@@ -25,7 +25,7 @@ import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.cli.testutils.HoodieTestCommitUtilities;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
-import org.apache.hudi.client.HoodieTimelineArchiver;
+import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -80,7 +80,7 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
     // Generate archive
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath)
         .withSchema(HoodieTestCommitMetadataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 3).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(4, 5).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
@@ -132,7 +132,7 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
 
     // Generate expected data
     final List<Comparable[]> rows = new ArrayList<>();
-    for (int i = 100; i < 104; i++) {
+    for (int i = 100; i < 102; i++) {
       String instant = String.valueOf(i);
       for (int j = 0; j < 3; j++) {
         Comparable[] defaultComp = new Comparable[] {"commit", instant,
@@ -169,21 +169,20 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
    */
   @Test
   public void testShowCommits() throws Exception {
-    Object cmdResult = shell.evaluate(() -> "show archived commits");
+    Object cmdResult = shell.evaluate(() -> "show archived commits --limit 5");
     assertTrue(ShellEvaluationResultUtil.isSuccess(cmdResult));
     final List<Comparable[]> rows = new ArrayList<>();
 
-    // Test default skipMetadata and limit 10
+    // Test default skipMetadata and limit 5
     TableHeader header = new TableHeader().addTableHeaderField("CommitTime").addTableHeaderField("CommitType");
-    for (int i = 100; i < 103; i++) {
-      String instant = String.valueOf(i);
-      Comparable[] result = new Comparable[] {instant, "commit"};
-      rows.add(result);
-      rows.add(result);
-      rows.add(result);
-    }
-    rows.add(new Comparable[] {"103", "commit"});
-    String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, 10, false, rows);
+    Comparable[] result1 = new Comparable[] {"100", "commit"};
+    Comparable[] result2 = new Comparable[] {"101", "commit"};
+    rows.add(result1);
+    rows.add(result1);
+    rows.add(result1);
+    rows.add(result2);
+    rows.add(result2);
+    String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, 5, false, rows);
     expected = removeNonWordAndStripSpace(expected);
     String got = removeNonWordAndStripSpace(cmdResult.toString());
     assertEquals(expected, got);
@@ -194,7 +193,7 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
 
     rows.clear();
 
-    for (int i = 100; i < 104; i++) {
+    for (int i = 100; i < 102; i++) {
       String instant = String.valueOf(i);
       // Since HoodiePrintHelper order data by default, need to order commitMetadata
       HoodieCommitMetadata metadata = HoodieTestCommitMetadataGenerator.generateCommitMetadata(tablePath, instant);
