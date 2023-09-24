@@ -40,15 +40,19 @@ Among them, following are the required arguments:
 ```
 Corresponding datasource options for the most commonly used hive sync configs are as follows:
 
+:::note 
+In the table below **(N/A)** means there is no default value set.
+:::
+
 | HiveSyncConfig | DataSourceWriteOption | Default Value | Description |
 | -----------   | ----------- | ----------- | ----------- |
 | --database       | hoodie.datasource.hive_sync.database  |  default   | Name of the target database in Hive       |
-| --table   | hoodie.datasource.hive_sync.table |       | Name of the target table in Hive. Inferred from the table name in Hudi table config if not specified.        |
+| --table   | hoodie.datasource.hive_sync.table |  (N/A)     | Name of the target table in Hive. Inferred from the table name in Hudi table config if not specified.        |
 | --user   | hoodie.datasource.hive_sync.username |   hive     | Username for hive metastore        | 
 | --pass   | hoodie.datasource.hive_sync.password  |  hive    | Password for hive metastore        | 
 | --jdbc-url   | hoodie.datasource.hive_sync.jdbcurl  |  jdbc:hive2://localhost:10000    | Hive server url if using `jdbc` mode to sync     |
-| --sync-mode   | hoodie.datasource.hive_sync.mode    |    | Mode to choose for Hive ops. Valid values are `hms`, `jdbc` and `hiveql`. More details in the following section.       |
-| --partitioned-by   | hoodie.datasource.hive_sync.partition_fields   |     | Comma-separated column names in the table to use for determining hive partition.        |
+| --sync-mode   | hoodie.datasource.hive_sync.mode    |  (N/A)  | Mode to choose for Hive ops. Valid values are `hms`, `jdbc` and `hiveql`. More details in the following section.       |
+| --partitioned-by   | hoodie.datasource.hive_sync.partition_fields   |  (N/A)   | Comma-separated column names in the table to use for determining hive partition.        |
 | --partition-value-extractor   | hoodie.datasource.hive_sync.partition_extractor_class   |  `org.apache.hudi.hive.MultiPartKeysValueExtractor`   | Class which implements `PartitionValueExtractor` to extract the partition values. Inferred automatically depending on the partition fields specified.        |
 
 
