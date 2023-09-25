@@ -1282,7 +1282,8 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              | (3, 'a3', 10, 1000)
        """.stripMargin)
 
-        assertEquals(0, LoggingTestUtils.getMatchingLogEvents(msg, appender).count())
+        assertEquals(0, LoggingTestUtils.getMatchingLogEvents(msg, appender).count(),
+          LoggingTestUtils.getLogs(appender))
         appender.clear()
 
         // First merge with a extra input field 'flag' (insert a new record)

@@ -70,4 +70,10 @@ public class LoggingTestUtils {
   public static Stream<LogEvent> getMatchingLogEvents(String msg, InMemoryLogAppender appender) {
     return appender.getLogEvents().stream().filter(e -> e.getMessage().getFormattedMessage().contains(msg));
   }
+
+  public static String getLogs(InMemoryLogAppender appender) {
+    StringBuilder builder = new StringBuilder();
+    appender.getLogEvents().forEach(logEvent -> builder.append(logEvent.getMessage().getFormattedMessage()).append("\n"));
+    return builder.toString();
+  }
 }
