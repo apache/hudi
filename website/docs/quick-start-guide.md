@@ -53,12 +53,12 @@ From the extracted directory run spark-shell with Hudi:
 
 ```shell
 # For Spark versions: 3.2 - 3.4
-export SPARK_VERSION=3.4 # Can be any of [3.2, 3.3, 3.4]
+export SPARK_VERSION=3.4
 spark-shell --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 ```shell
 # For Spark versions: 3.0 - 3.1
-export SPARK_VERSION=3.1 # Can be any of [3.0, 3.1]
+export SPARK_VERSION=3.1
 spark-shell --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 ```shell
@@ -74,13 +74,13 @@ From the extracted directory run pyspark with Hudi:
 ```shell
 # For Spark versions: 3.2 - 3.4
 export PYSPARK_PYTHON=$(which python3)
-export SPARK_VERSION=3.4 # Can be any of [3.2, 3.3, 3.4]
+export SPARK_VERSION=3.4
 pyspark --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 ```shell
 # For Spark versions: 3.0 - 3.1
 export PYSPARK_PYTHON=$(which python3)
-export SPARK_VERSION=3.1 # Can be any of [3.0, 3.1]
+export SPARK_VERSION=3.1
 pyspark --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 ```shell
@@ -97,12 +97,12 @@ From the extracted directory run Spark SQL with Hudi:
 
 ```shell
 # For Spark versions: 3.2 - 3.4
-export SPARK_VERSION=3.4 # Can be any of [3.2, 3.3, 3.4]
+export SPARK_VERSION=3.4
 spark-sql --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 ```shell
 # For Spark versions: 3.0 - 3.1
-export SPARK_VERSION=3.1 # Can be any of [3.0, 3.1]
+export SPARK_VERSION=3.1
 spark-sql --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:0.14.0 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
 ```
 ```shell
@@ -147,8 +147,8 @@ import org.apache.hudi.config.HoodieWriteConfig._
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions._
 import org.apache.hudi.common.model.HoodieRecord
 
-val tableName = "hudi_trips_cow"
-val basePath = "file:///tmp/hudi_trips_cow"
+val tableName = "hudi_table"
+val basePath = "file:///tmp/hudi_trips_table"
 val dataGen = new DataGenerator
 ```
 
@@ -157,8 +157,8 @@ val dataGen = new DataGenerator
 
 ```python
 # pyspark
-tableName = "hudi_trips_cow"
-basePath = "file:///tmp/hudi_trips_cow"
+tableName = "hudi_table"
+basePath = "file:///tmp/hudi_trips_table"
 dataGen = sc._jvm.org.apache.hudi.QuickstartUtils.DataGenerator()
 ```
 
@@ -211,13 +211,14 @@ Here is an example of creating a Hudi table.
 ```sql
 -- create a Hudi table that is partitioned.
 CREATE TABLE hudi_table (
-  id BIGINT,
-  name STRING,
-  ts BIGINT,
-  dt STRING,
-  hh STRING
+    ts BIGINT,
+    uuid STRING,
+    rider STRING,
+    driver STRING,
+    fare DOUBLE,
+    city STRING
 ) USING HUDI
-PARTITIONED BY dt;
+PARTITIONED BY (city);
 ```
 
 For more options for creating Hudi tables, please refer to [SQL DDL](/docs/sql_ddl) reference guide.  
@@ -299,8 +300,16 @@ the write operation, matching the out-of-behavior of Spark's Parquet Datasource.
 Users can use 'INSERT INTO' to insert data into a Hudi table. See [Insert Into](/docs/sql_dml#insert-into) for more advanced options.
 
 ```sql
-INSERT INTO hudi_cow_pt_tbl 
-SELECT 2, 'a2', '2021-12-02';
+INSERT INTO hudi_table
+VALUES
+(1695159649087,'334e26e9-8355-45cc-97c6-c31daf0df330','rider-A','driver-K',19.10,'san_francisco'),
+(1695091554788,'e96c4396-3fad-413a-a942-4cb36106d721','rider-C','driver-M',27.70 ,'san_francisco'),
+(1695046462179,'9909a8b1-2d15-4d3d-8ec9-efc48c536a00','rider-D','driver-L',33.90 ,'san_francisco'),
+(1695332066204,'1dced545-862b-4ceb-8b43-d2a568f6616b','rider-E','driver-O',93.50,'san_francisco'),
+(1695516137016,'e3cf430c-889d-4015-bc98-59bdce1e530c','rider-F','driver-P',34.15,'sao_paulo'    ),
+(1695376420876,'7a84095f-737f-40bc-b62f-6b69664712d2','rider-G','driver-Q',43.40 ,'sao_paulo'    ),
+(1695173887231,'3eeb61f7-c2b0-4636-99bd-5d7a5a1d2c04','rider-I','driver-S',41.06 ,'chennai'      ),
+(1695115999911,'c8abbe79-8d89-47ea-b4ce-4d224bae5bfa','rider-J','driver-T',17.85,'chennai');
 ```
 
 If you want to control the Hudi write operation used for the INSERT statement, you can set the following config before issuing 
@@ -355,7 +364,7 @@ spark.sql("SELECT _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_pat
 <TabItem value="sparksql">
 
 ```sql
- SELECT fare, begin_lon, begin_lat, ts FROM  hudi_trips_snapshot WHERE fare > 20.0
+ SELECT ts, fare, rider, driver, city FROM  hudi_table WHERE fare > 20.0;
 ```
 </TabItem>
 
@@ -405,7 +414,7 @@ Notice that the save mode is now `Append`. In general, always use append mode un
 Hudi table can be update using a regular UPDATE statement. See [Update](/docs/sql_dml#update) for more advanced options.
 
 ```sql
-UPDATE hudi_table SET name = 'a1_1' WHERE id = 1;
+UPDATE hudi_table SET fare = 25.0 WHERE rider = 'rider-D';
 ```
 
 </TabItem>
@@ -465,26 +474,29 @@ values={[
 
 ```sql
 -- source table using Hudi for testing merging into target Hudi table
-CREATE TABLE merge_source (id INT, name STRING, dt STRING) 
-USING HUDI
-TBLPROPERTIES (primaryKey = 'id', preCombineField = 'name');
-INSERT INTO merge_source VALUES 
-  (1, 'a1_new', 2021-12-05), 
-  (2, "a2_new", 2021-12-05), 
-  (3, "a3_new", 2021-12-05);
+CREATE TABLE fare_adjustment (ts BIGINT, uuid STRING, rider STRING, driver STRING, fare DOUBLE, city STRING) 
+USING HUDI;
+INSERT INTO fare_adjustment VALUES 
+(1695091554788,'e96c4396-3fad-413a-a942-4cb36106d721','rider-C','driver-M',-2.70 ,'san_francisco'),
+(1695530237068,'3f3d9565-7261-40e6-9b39-b8aa784f95e2','rider-K','driver-U',64.20 ,'san_francisco'),
+(1695241330902,'ea4c36ff-2069-4148-9927-ef8c1a5abd24','rider-H','driver-R',66.60 ,'sao_paulo'    ),
+(1695115999911,'c8abbe79-8d89-47ea-b4ce-4d224bae5bfa','rider-J','driver-T',1.85,'chennai'      );
 
-MERGE INTO hudi_cow_pt_tbl AS target
-USING merge_source AS source
-ON target.id = source.id
-WHEN MATCHED THEN UPDATE SET *
+
+MERGE INTO hudi_table AS target
+USING fare_adjustment AS source
+ON target.uuid = source.uuid
+WHEN MATCHED THEN UPDATE SET target.fare = target.fare + source.fare
 WHEN NOT MATCHED THEN INSERT *
 ;
 
 ```
 
 :::info Key requirements
-For a Hudi table with user defined primary record [keys](#keys), the join condition is expected to contain the primary keys of the table.
+1. For a Hudi table with user defined primary record [keys](#keys), the join condition is expected to contain the primary keys of the table.
 For a Hudi table with Hudi generated primary keys, the join condition can be on any arbitrary data columns.
+2. For Merge-On-Read tables, partial column updates are not yet supported, i.e. **all columns** need to be SET from a 
+MERGE statement either using `SET *` or using `SET column1 = expression1 [, column2 = expression2 ...]`. 
 :::
 </TabItem>
 </Tabs>
@@ -535,7 +547,7 @@ Notice that the save mode is again `Append`.
 <TabItem value="sparksql">
 
 ```sql
-DELETE FROM hudi_cow_pt_tbl WHERE id = 1;
+DELETE FROM hudi_table WHERE uuid = '3f3d9565-7261-40e6-9b39-b8aa784f95e2';
 ```
 
 </TabItem>
@@ -641,10 +653,10 @@ spark.read.format("hudi"). \
 ```sql
 
 -- time travel based on commit time, for eg: `20220307091628793`
-SELECT * FROM hudi_cow_pt_tbl TIMESTAMP AS OF '20220307091628793' WHERE id = 1;
+SELECT * FROM hudi_table TIMESTAMP AS OF '20220307091628793' WHERE id = 1;
 -- time travel based on different timestamp formats
-SELECT * FROM hudi_cow_pt_tbl TIMESTAMP AS OF '2022-03-07 09:16:28.100' WHERE id = 1;
-SELECT * FROM hudi_cow_pt_tbl TIMESTAMP AS OF '2022-03-08' WHERE id = 1;
+SELECT * FROM hudi_table TIMESTAMP AS OF '2022-03-07 09:16:28.100' WHERE id = 1;
+SELECT * FROM hudi_table TIMESTAMP AS OF '2022-03-08' WHERE id = 1;
 ```
 :::note
 Requires Spark 3.2+
@@ -842,8 +854,13 @@ values={[
 
 ```sql
 CREATE TABLE hudi_table (
-  ...
+    uuid STRING,
+    rider STRING,
+    driver STRING,
+    fare DOUBLE,
+    city STRING
 ) USING HUDI TBLPROPERTIES (type = 'mor')
+PARTITIONED BY (city);
 ```
 </TabItem
 >
@@ -890,8 +907,14 @@ values={[
 
 ```sql
 CREATE TABLE hudi_table (
-  ...
+    ts BIGINT,
+    uuid STRING,
+    rider STRING,
+    driver STRING,
+    fare DOUBLE,
+    city STRING
 ) USING HUDI TBLPROPERTIES (primaryKey = 'uuid')
+PARTITIONED BY (city);
 ```
 </TabItem
 >
@@ -946,8 +969,14 @@ updatesDf.write.format("hudi").
 
 ```sql
 CREATE TABLE hudi_table (
-  ...
+    ts BIGINT,
+    uuid STRING,
+    rider STRING,
+    driver STRING,
+    fare DOUBLE,
+    city STRING
 ) USING HUDI TBLPROPERTIES (preCombineField = 'ts')
+PARTITIONED BY (city);
 ```
 </TabItem
 >
