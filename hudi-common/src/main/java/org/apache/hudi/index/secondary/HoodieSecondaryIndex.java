@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.secondary.index;
+package org.apache.hudi.index.secondary;
 
 import org.apache.hudi.exception.HoodieSecondaryIndexException;
 

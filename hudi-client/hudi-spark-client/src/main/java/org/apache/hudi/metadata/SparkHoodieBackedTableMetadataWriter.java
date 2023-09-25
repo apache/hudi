@@ -21,30 +21,46 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieFunctionalIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.index.functional.HoodieFunctionalIndex;
+import org.apache.hudi.index.functional.HoodieSparkFunctionalIndex;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.metrics.MetricsReporterType;
 
+import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.sql.Column;
+import org.apache.spark.sql.SQLContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.client.utils.SparkMetadataWriterUtils.buildBloomFilterMetadata;
+import static org.apache.hudi.client.utils.SparkMetadataWriterUtils.buildColumnRangeMetadata;
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 
 public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>> {
@@ -139,6 +155,73 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     String actionType = CommitUtils.getCommitActionType(WriteOperationType.DELETE_PARTITION, HoodieTableType.MERGE_ON_READ);
     writeClient.startCommitWithTime(instantTime, actionType);
     writeClient.deletePartitions(partitionsToDrop, instantTime);
+  }
+
+  @Override
+  protected HoodieData<HoodieRecord> getFunctionalIndexRecords(List<Pair<String, FileSlice>> partitionFileSlicePairs,
+                                                               HoodieFunctionalIndexDefinition indexDefinition,
+                                                               HoodieTableMetaClient metaClient, int parallelism,
+                                                               Schema readerSchema, SerializableConfiguration hadoopConf) {
+    HoodieFunctionalIndex<Column, Column> functionalIndex = new HoodieSparkFunctionalIndex(
+        indexDefinition.getIndexName(),
+        indexDefinition.getIndexFunction(),
+        indexDefinition.getSourceFields(),
+        indexDefinition.getIndexOptions());
+    HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext) engineContext;
+    if (indexDefinition.getSourceFields().isEmpty()) {
+      // In case there are no columns to index, bail
+      return sparkEngineContext.emptyHoodieData();
+    }
+
+    // NOTE: We are assuming that the index expression is operating on a single column
+    //       HUDI-6994 will address this.
+    String columnToIndex = indexDefinition.getSourceFields().get(0);
+    SQLContext sqlContext = sparkEngineContext.getSqlContext();
+    String basePath = metaClient.getBasePathV2().toString();
+
+    return sparkEngineContext.parallelize(partitionFileSlicePairs, parallelism).flatMap(pair -> {
+      String partition = pair.getKey();
+      FileSlice fileSlice = pair.getValue();
+      // For functional index using column_stats
+      if (indexDefinition.getIndexType().equalsIgnoreCase(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS)) {
+        List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList = new ArrayList<>();
+        if (fileSlice.getBaseFile().isPresent()) {
+          HoodieBaseFile baseFile = fileSlice.getBaseFile().get();
+          String filename = baseFile.getFileName();
+          long fileSize = baseFile.getFileSize();
+          Path baseFilePath = new Path(basePath, partition + Path.SEPARATOR + filename);
+          buildColumnRangeMetadata(metaClient, readerSchema, functionalIndex, columnToIndex, sqlContext, columnRangeMetadataList, fileSize, baseFilePath);
+        }
+        // Handle log files
+        fileSlice.getLogFiles().forEach(logFile -> {
+          String fileName = logFile.getFileName();
+          Path logFilePath = new Path(basePath, partition + Path.SEPARATOR + fileName);
+          long fileSize = logFile.getFileSize();
+          buildColumnRangeMetadata(metaClient, readerSchema, functionalIndex, columnToIndex, sqlContext, columnRangeMetadataList, fileSize, logFilePath);
+        });
+        return HoodieMetadataPayload.createColumnStatsRecords(partition, columnRangeMetadataList, false).iterator();
+      }
+      // For functional index using bloom_filters
+      if (indexDefinition.getIndexType().equalsIgnoreCase(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS)) {
+        List<HoodieRecord> bloomFilterMetadataList = new ArrayList<>();
+        if (fileSlice.getBaseFile().isPresent()) {
+          HoodieBaseFile baseFile = fileSlice.getBaseFile().get();
+          String filename = baseFile.getFileName();
+          Path baseFilePath = new Path(basePath, partition + Path.SEPARATOR + filename);
+          buildBloomFilterMetadata(
+              metaClient, readerSchema, functionalIndex, columnToIndex, sqlContext, bloomFilterMetadataList, baseFilePath, metadataWriteConfig, partition, baseFile.getCommitTime());
+        }
+        // Handle log files
+        fileSlice.getLogFiles().forEach(logFile -> {
+          String fileName = logFile.getFileName();
+          Path logFilePath = new Path(basePath, partition + Path.SEPARATOR + fileName);
+          buildBloomFilterMetadata(
+              metaClient, readerSchema, functionalIndex, columnToIndex, sqlContext, bloomFilterMetadataList, logFilePath, metadataWriteConfig, partition, logFile.getDeltaCommitTime());
+        });
+        return bloomFilterMetadataList.iterator();
+      }
+      return Collections.emptyIterator();
+    });
   }
 
   @Override

@@ -27,6 +27,7 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieFunctionalIndexConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
@@ -773,7 +774,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   /**
    * An internal config referring to fileID encoding. 0 refers to UUID based encoding and 1 refers to raw string format(random string).
    */
-  public static final String WRITES_FILEID_ENCODING =  "_hoodie.writes.fileid.encoding";
+  public static final String WRITES_FILEID_ENCODING = "_hoodie.writes.fileid.encoding";
 
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;
@@ -789,6 +790,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   private HoodieCommonConfig commonConfig;
   private HoodieStorageConfig storageConfig;
   private HoodieTimeGeneratorConfig timeGeneratorConfig;
+  private HoodieFunctionalIndexConfig functionalIndexConfig;
   private EngineType engineType;
 
   /**
@@ -1185,6 +1187,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     this.storageConfig = HoodieStorageConfig.newBuilder().fromProperties(props).build();
     this.timeGeneratorConfig = HoodieTimeGeneratorConfig.newBuilder().fromProperties(props)
         .withDefaultLockProvider(!isLockRequired()).build();
+    this.functionalIndexConfig = HoodieFunctionalIndexConfig.newBuilder().fromProperties(props).build();
   }
 
   public static HoodieWriteConfig.Builder newBuilder() {
@@ -2378,6 +2381,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return timeGeneratorConfig;
   }
 
+  public HoodieFunctionalIndexConfig getFunctionalIndexConfig() {
+    return functionalIndexConfig;
+  }
+
   /**
    * Commit call back configs.
    */
@@ -2798,7 +2805,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
-    public  Builder withFailureOnInlineTableServiceException(boolean fail) {
+    public Builder withFailureOnInlineTableServiceException(boolean fail) {
       writeConfig.setValue(FAIL_ON_INLINE_TABLE_SERVICE_EXCEPTION, String.valueOf(fail));
       return this;
     }

@@ -39,6 +39,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -102,7 +103,7 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
       if (indexUptoInstant.isPresent()) {
         // for each partitionToIndex add that time to the plan
         List<HoodieIndexPartitionInfo> indexPartitionInfos = finalPartitionsToIndex.stream()
-            .map(p -> new HoodieIndexPartitionInfo(LATEST_INDEX_PLAN_VERSION, p.getPartitionPath(), indexUptoInstant.get().getTimestamp()))
+            .map(p -> buildIndexPartitionInfo(p, indexUptoInstant.get()))
             .collect(Collectors.toList());
         HoodieIndexPlan indexPlan = new HoodieIndexPlan(LATEST_INDEX_PLAN_VERSION, indexPartitionInfos);
         // update data timeline with requested instant
@@ -119,6 +120,12 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
     }
 
     return Option.empty();
+  }
+
+  private HoodieIndexPartitionInfo buildIndexPartitionInfo(MetadataPartitionType partitionType, HoodieInstant indexUptoInstant) {
+    // for functional index, we need to pass the index name as the partition name
+    String partitionName = MetadataPartitionType.FUNCTIONAL_INDEX.equals(partitionType) ? config.getFunctionalIndexConfig().getIndexName() : partitionType.getPartitionPath();
+    return new HoodieIndexPartitionInfo(LATEST_INDEX_PLAN_VERSION, partitionName, indexUptoInstant.getTimestamp(), Collections.emptyMap());
   }
 
   private void validateBeforeScheduling() {

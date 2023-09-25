@@ -135,6 +135,7 @@ public class HoodieTableMetadataUtil {
   public static final String PARTITION_NAME_COLUMN_STATS = "column_stats";
   public static final String PARTITION_NAME_BLOOM_FILTERS = "bloom_filters";
   public static final String PARTITION_NAME_RECORD_INDEX = "record_index";
+  public static final String PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX = "func_index_";
 
   // Suffix to use for various operations on MDT
   private enum OperationSuffix {

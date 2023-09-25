@@ -49,6 +49,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -170,7 +171,8 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
               .map(info -> new HoodieIndexPartitionInfo(
                   info.getVersion(),
                   info.getMetadataPartitionPath(),
-                  currentCaughtupInstant))
+                  currentCaughtupInstant,
+                  Collections.emptyMap()))
               .collect(Collectors.toList());
         } catch (Exception e) {
           throw new HoodieMetadataException("Failed to index partition " + Arrays.toString(indexPartitionInfos.stream()
@@ -187,7 +189,8 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
             .map(info -> new HoodieIndexPartitionInfo(
                 info.getVersion(),
                 info.getMetadataPartitionPath(),
-                indexUptoInstant))
+                indexUptoInstant,
+                Collections.emptyMap()))
             .collect(Collectors.toList());
       }
 
