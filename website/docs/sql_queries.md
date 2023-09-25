@@ -1,63 +1,23 @@
 ---
-title: Querying Data
-keywords: [ hudi, hive, spark, sql, presto]
-summary: In this page, we go over how to enable SQL queries on Hudi built tables.
+title: SQL Queries
+summary: "In this page, we go over querying Hudi tables using SQL"
 toc: true
-last_modified_at: 2019-12-30T15:59:57-04:00
+last_modified_at: 
 ---
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
 
-:::danger
-This page is no longer maintained. Please refer to [Hudi SQL](/docs/sql) for the latest documentation.
-:::
-
-
-Conceptually, Hudi stores data physically once on DFS, while providing 3 different ways of querying, as explained [before](/docs/concepts#query-types). 
+Conceptually, Hudi stores data physically once on DFS, while providing 3 different ways of querying, as explained [before](/docs/concepts#query-types).
 Once the table is synced to the Hive metastore, it provides external Hive tables backed by Hudi's custom inputformats. Once the proper hudi
 bundle has been installed, the table can be queried by popular query engines like Hive, Spark SQL, Spark Datasource API and PrestoDB.
 
-In sections, below we will discuss specific setup to access different query types from different query engines. 
+In this page, we will show how to issues different types of queries on Hudi tables, across a wide range of query engines. 
+We will also discuss specific setup to access different query types from different query engines.
 
-## Spark Datasource
 
-The Spark Datasource API is a popular way of authoring Spark ETL pipelines. Hudi tables can be queried via the Spark datasource with a simple `spark.read.parquet`.
-See the [Spark Quick Start](/docs/quick-start-guide) for more examples of Spark datasource reading queries. 
+## Spark SQL
 
-**Setup**
-
-If your Spark environment does not have the Hudi jars installed, add [hudi-spark-bundle](https://mvnrepository.com/artifact/org.apache.hudi/hudi-spark-bundle) jar to the
-classpath of drivers and executors using `--jars` option. Alternatively, hudi-spark-bundle can also fetched via the
---packages options (e.g: --packages org.apache.hudi:hudi-spark-bundle_2.11:0.13.0).
-
-### Snapshot query {#spark-snap-query}
-Retrieve the data table at the present point in time.
-
-```scala
-val hudiSnapshotQueryDF = spark
-     .read
-     .format("hudi")
-     .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL())
-     .load(tablePath) 
-```
-
-### Incremental query {#spark-incr-query}
-Of special interest to spark pipelines, is Hudi's ability to support incremental queries, like below. A sample incremental query, that will obtain all records written since `beginInstantTime`, looks like below.
-Thanks to Hudi's support for record level change streams, these incremental pipelines often offer 10x efficiency over batch counterparts by only processing the changed records.
-
-The following snippet shows how to obtain all records changed after `beginInstantTime` and run some SQL on them.
-
-```java
-Dataset<Row> hudiIncQueryDF = spark.read()
-     .format("org.apache.hudi")
-     .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
-     .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY(), <beginInstantTime>)
-     .option(DataSourceReadOptions.INCR_PATH_GLOB_OPT_KEY(), "/year=2020/month=*/day=*") // Optional, use glob pattern if querying certain partitions
-     .load(tablePath); // For incremental query, pass in the root/base path of table
-     
-hudiIncQueryDF.createOrReplaceTempView("hudi_trips_incremental")
-spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_trips_incremental where fare > 20.0").show()
-```
-
-For examples, refer to [Incremental Queries](/docs/quick-start-guide#incremental-query) in the Spark quickstart. 
+For examples, refer to [Incremental Queries](/docs/quick-start-guide#incremental-query) in the Spark quickstart.
 Please refer to [configurations](/docs/configurations#SPARK_DATASOURCE) section, to view all datasource options.
 
 Additionally, `HoodieReadClient` offers the following functionality using Hudi's implicit indexing.
@@ -68,10 +28,9 @@ Additionally, `HoodieReadClient` offers the following functionality using Hudi's
 | filterExists() | Filter out already existing records from the provided `RDD[HoodieRecord]`. Useful for de-duplication |
 | checkExists(keys) | Check if the provided keys exist in a Hudi table |
 
-### Spark SQL
 Once the Hudi tables have been registered to the Hive metastore, they can be queried using the Spark-Hive integration.
 By default, Spark SQL will try to use its own parquet reader instead of Hive SerDe when reading from Hive metastore parquet tables.
-The following are important settings to consider when querying COPY_ON_WRITE or MERGE_ON_READ tables. 
+The following are important settings to consider when querying COPY_ON_WRITE or MERGE_ON_READ tables.
 
 #### Copy On Write tables
 For COPY_ON_WRITE tables, Spark's default parquet reader can be used to retain Sparks built-in optimizations for reading parquet files like vectorized reading on Hudi Hive tables.
@@ -80,6 +39,10 @@ If using the default parquet reader, a path filter needs to be pushed into spark
 ```scala
 spark.sparkContext.hadoopConfiguration.setClass("mapreduce.input.pathFilter.class", classOf[org.apache.hudi.hadoop.HoodieROTablePathFilter], classOf[org.apache.hadoop.fs.PathFilter]);
 ```
+
+Thanks to Hudi's support for record level change streams, these incremental pipelines often offer 10x efficiency over batch counterparts by only processing the changed records.
+
+
 
 #### Merge On Read tables
 No special configurations are needed for querying MERGE_ON_READ tables with Hudi version 0.9.0+
@@ -152,23 +115,23 @@ value as `earliest` if you want to consume all the history data set.
 
 :::note
 When option `read.streaming.skip_compaction` is enabled and the streaming reader lags behind by commits of number
-`clean.retain_commits`, data loss may occur. 
+`clean.retain_commits`, data loss may occur.
 
-The compaction table service action preserves the original commit time for each row. When iterating through the parquet files, 
-the streaming reader will perform a check on whether the row's commit time falls within the specified instant range to 
-skip over rows that have been read before. 
+The compaction table service action preserves the original commit time for each row. When iterating through the parquet files,
+the streaming reader will perform a check on whether the row's commit time falls within the specified instant range to
+skip over rows that have been read before.
 
 For efficiency, option `read.streaming.skip_compaction` can be enabled to skip reading of parquet files entirely.
 :::
 
 :::note
-`read.streaming.skip_compaction` should only be enabled if the MOR table is compacted by Hudi with versions `< 0.11.0`. 
+`read.streaming.skip_compaction` should only be enabled if the MOR table is compacted by Hudi with versions `< 0.11.0`.
 
 This is so as the `hoodie.compaction.preserve.commit.metadata` feature is only introduced in Hudi versions `>=0.11.0`.
 Older versions will overwrite the original commit time for each row with the compaction plan's instant time.
 
-This will render Hudi-on-Flink's stream reader's row-level instant-range checks to not work properly. 
-When the original instant time is overwritten with a newer instant time, the stream reader will not be able to 
+This will render Hudi-on-Flink's stream reader's row-level instant-range checks to not work properly.
+When the original instant time is overwritten with a newer instant time, the stream reader will not be able to
 differentiate rows that have already been read before with actual new rows.
 :::
 
@@ -313,7 +276,7 @@ PrestoDB.
 To learn more about the usage of Hudi connector, please
 checkout [prestodb documentation](https://prestodb.io/docs/current/connector/hudi.html).
 
-:::note 
+:::note
 Incremental queries and point in time queries are not supported either through the Hive connector or Hudi
 connector. However, it is in our roadmap, and you can track the development
 under [HUDI-3210](https://issues.apache.org/jira/browse/HUDI-3210).
@@ -386,7 +349,7 @@ connector.
 
 ### Snapshot Query
 
-Impala is able to query Hudi Copy-on-write table as an [EXTERNAL TABLE](https://docs.cloudera.com/documentation/enterprise/6/6.3/topics/impala_tables.html#external_tables) on HDFS.  
+Impala is able to query Hudi Copy-on-write table as an [EXTERNAL TABLE](https://docs.cloudera.com/documentation/enterprise/6/6.3/topics/impala_tables.html#external_tables) on HDFS.
 
 To create a Hudi read optimized table on Impala:
 ```
@@ -417,7 +380,7 @@ REFRESH database.table_name
 Copy on Write Tables in Apache Hudi versions 0.5.2, 0.6.0, 0.7.0, 0.8.0, 0.9.0, 0.10.x and 0.11.x can be queried
 via Amazon Redshift Spectrum external tables. To be able to query Hudi versions 0.10.0 and above please try latest
 versions of Redshift.
-:::note 
+:::note
 Hudi tables are supported only when AWS Glue Data Catalog is used. It's not supported when you use an Apache
 Hive metastore as the external catalog.
 :::
@@ -433,24 +396,23 @@ Please refer
 to [Doris Hudi external table](https://doris.apache.org/docs/ecosystem/external-table/hudi-external-table/ )
 for more details on the setup.
 
-:::note 
+:::note
 The current default supported version of Hudi is 0.10.0 and has not been tested in other versions. More versions
 will be supported in the future.
 :::
 
 ## StarRocks
 
-[StarRocks](http://starrocks.io), a Linux Foundation project, is a next-generation sub-second MPP OLAP database for full analytics scenarios, including multi-dimensional analytics, real-time analytics, and ad-hoc queries.  StarRocks provides complete support for Copy On Write (COW) tables and Merge On Read (MOR) tables from Hudi.
-Please refer
-to [StarRocks Hudi external catalog](https://docs.starrocks.io/en-us/latest/data_source/catalog/hudi_catalog)
+Copy on Write tables in Apache Hudi 0.10.0 and above can be queried via StarRocks external tables from StarRocks version
+2.2.0. Only snapshot queries are supported currently. In future releases Merge on Read tables will also be supported.
+Please refer to [StarRocks Hudi external table](https://docs.starrocks.io/en-us/latest/using_starrocks/External_table#hudi-external-table)
 for more details on the setup.
 
 ## ClickHouse
 
 [ClickHouse](https://clickhouse.com/docs/en/intro) is a column-oriented database for online analytical processing. It
 provides a read-only integration with Copy on Write Hudi tables in Amazon S3. To query such Hudi tables, first we need
-to create a table in Clickhouse
-using `Hudi` [table function](https://clickhouse.com/docs/en/sql-reference/table-functions/hudi).
+to create a table in Clickhouse using `Hudi` [table function](https://clickhouse.com/docs/en/sql-reference/table-functions/hudi).
 
 ```
 CREATE TABLE hudi_table
@@ -470,32 +432,33 @@ Following tables show whether a given query is supported on specific query engin
 |-----------------------|--------|-----------|
 | **Hive**              |Y|Y|
 | **Spark SQL**         |Y|Y|
-| **Spark Datasource**  |Y|Y|
 | **Flink SQL**         |Y|N|
 | **PrestoDB**          |Y|N|
 | **Trino**             |Y|N|
+| **AWS Athena**        |Y|N|
+| **BigQuery**          |Y|N|
 | **Impala**            |Y|N|
 | **Redshift Spectrum** |Y|N|
 | **Doris**             |Y|N|
 | **StarRocks**         |Y|N|
-| **ClickHouse**         |Y|N|
-
-
-
-Note that `Read Optimized` queries are not applicable for COPY_ON_WRITE tables.
+| **ClickHouse**        |Y|N|
 
 ### Merge-On-Read tables
 
-|Query Engine|Snapshot Queries|Incremental Queries|Read Optimized Queries|
-|------------|--------|-----------|--------------|
-|**Hive**|Y|Y|Y|
-|**Spark SQL**|Y|Y|Y|
-|**Spark Datasource**|Y|Y|Y|
-|**Flink SQL**|Y|Y|Y|
-|**PrestoDB**|Y|N|Y|
-|**Trino**|N|N|Y|
-|**Impala**|N|N|Y|
+| Query Engine        |Snapshot Queries|Incremental Queries|Read Optimized Queries|
+|---------------------|--------|-----------|--------------|
+| **Hive**            |Y|Y|Y|
+| **Spark SQL**       |Y|Y|Y|
+| **Spark Datasource** |Y|Y|Y|
+| **Flink SQL**       |Y|Y|Y|
+| **PrestoDB**        |Y|N|Y|
+| **AWS Athena**      |Y|N|Y|
+| **Big Query**       |Y|N|Y|
+| **Trino**           |N|N|Y|
+| **Impala**          |N|N|Y|
 | **Redshift Spectrum** |N|N|N|
-| **Doris**             |N|N|N|
-| **StarRocks**         |N|N|N|
-| **ClickHouse**         |N|N|N|
+| **Doris**           |N|N|N|
+| **StarRocks**       |N|N|N|
+| **ClickHouse**      |N|N|N|
+
+

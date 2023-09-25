@@ -1,135 +1,109 @@
 ---
 title: SQL DML
-summary: "In this page, we go will cover details on how to modify data with Hudi tables"
+summary: "In this page, we go will cover details on how to use DML statements on Hudi tables."
 toc: true
 last_modified_at: 
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+## Spark SQL
 
-# Spark DML Operations
+SparkSQL provides several Data Manipulation Language (DML) actions for interacting with Hudi tables. These operations allow you to insert, update, merge and delete data 
+from your Hudi tables. Let's explore them one by one.
 
-The following are SparkSQL DML actions available:
+Please refer to [SQL DDL](/docs/sql_ddl) for creating Hudi tables using SQL.
 
-- Insert Into
-- Merge Into
-- Update
-- Delete
+### Insert Into
 
-You can ingest data, modify or delete data from a given hudi table using these operations. Lets go over them one by one. 
-
-Please refer to [SQL DDL](/docs/next/sql_ddl) for creating Hudi tables using Spark SQL. This page goes over ingesting and modifying data once the
-table is created. 
-
-## Insert Into
-
-Users can use 'INSERT INTO' to insert data into a hudi table using spark-sql.
+You can use the `INSERT INTO` statement to add data to a Hudi table using Spark SQL. Here are some examples:
 
 ```sql
-insert into hudi_cow_nonpcf_tbl select 1, 'a1', 20;
-insert into hudi_mor_tbl select 1, 'a1', 20, 1000;
-
--- insert static partition
-insert into hudi_cow_pt_tbl partition(dt = '2021-12-09', hh='11') select 2, 'a2', 1000;
-
--- insert dynamic partition
-insert into hudi_cow_pt_tbl partition (dt, hh)
-select 1 as id, 'a1' as name, 1000 as ts, '2021-12-09' as dt, '10' as hh;
-
+INSERT INTO <table> 
+SELECT <columns> FROM <source>;
 ```
 
-:::note
-- `hoodie.spark.sql.insert.into.operation` will determine how records ingested via spark-sql INSERT INTO will be treated. Possible values are:
-  - "bulk_insert": Here, Hudi writes incoming records as is without any automatic small file management.
-  - "insert": Here, Hudi inserts the new incoming records and also does small file management.
-  - "upsert": Here, Hudi takes upsert flow, where incoming batch will be de-duped before ingest and also merged with previous versions of the record in storage.
-    
-  For a table without any precombine key set, "insert" is chosen as the default value for this config. For a table with precombine key set,
-  "upsert" is chosen as the default value for this config.
-- From 0.14.0, `hoodie.sql.bulk.insert.enable` and `hoodie.sql.insert.mode` are depecrated. Users are expected to use `hoodie.spark.sql.insert.into.operation` instead.
-- When operation type is set to "insert", users can optionally enforce a dedup policy using `hoodie.datasource.insert.dup.policy`. 
-This policy will be employed when records being ingested already exists in storage. Default policy is none and no action will be taken. 
-Another option is to choose "drop", on which matching records from incoming will be dropped and the rest will be ingested. 
-Third option is "fail" which will fail the write operation when same records are re-ingested. In other words, a given record 
-as deduced by the key generation policy can be ingested only once to the target table of interest.
+:::note Deprecations
+From 0.14.0, `hoodie.sql.bulk.insert.enable` and `hoodie.sql.insert.mode` are deprecated. Users are expected to use `hoodie.spark.sql.insert.into.operation` instead.
+To manage duplicates with `INSERT INTO`, please check out [insert dup policy config](/docs/next/configurations#hoodiedatasourceinsertduppolicy).
 :::
 
-:::note
-- `hoodie.spark.sql.insert.into.operation` will determine how records ingested via spark-sql INSERT INTO will be treated. Possible values are:
-  - "bulk_insert": Here, Hudi writes incoming records as is without any automatic small file management.
-  - "insert": Here, Hudi inserts the new incoming records and also does small file management.
-  - "upsert": Here, Hudi takes upsert flow, where incoming batch will be de-duped before ingest and also merged with previous versions of the record in storage.
-
-  For a table without any preCombine key set, "insert" is chosen as the default value for this config. For a table with preCombine key set,
-  "upsert" is chosen as the default value for this config.
-- From 0.14.0, `hoodie.sql.bulk.insert.enable` and `hoodie.sql.insert.mode` are depecrated. Users are expected to use `hoodie.spark.sql.insert.into.operation` instead.
-- To manage duplicates with `INSERT INTO`, please do check out [insert dup policy config](/docs/next/configurations#hoodiedatasourceinsertduppolicy).
-  :::
-
-Here are examples to override the spark.sql.insert.into.operation.
+Examples: 
 
 ```sql
--- upserts using INSERT_INTO 
-set hoodie.spark.sql.insert.into.operation = 'upsert' 
+-- Insert into a copy-on-write (COW) Hudi table
+INSERT INTO hudi_cow_nonpcf_tbl SELECT 1, 'a1', 20;
 
-insert into hudi_mor_tbl select 1, 'a1_1', 20, 1001;
-select id, name, price, ts from hudi_mor_tbl;
-1	a1_1	20.0	1001
+-- Insert into a merge-on-read (MOR) Hudi table
+INSERT INTO hudi_mor_tbl SELECT 1, 'a1', 20, 1000;
 
--- bulk_insert using INSERT_INTO 
-set hoodie.spark.sql.insert.into.operation = 'bulk_insert' 
+-- Insert into a COW Hudi table with static partition
+INSERT INTO hudi_cow_pt_tbl PARTITION(dt = '2021-12-09', hh='11') SELECT 2, 'a2', 1000;
 
-insert into hudi_mor_tbl select 1, 'a1_2', 20, 1002;
-select id, name, price, ts from hudi_mor_tbl;
-1	a1_1	20.0	1001
-1	a1_2	20.0	1002
+-- Insert into a COW Hudi table with dynamic partition
+INSERT INTO hudi_cow_pt_tbl PARTITION(dt, hh) SELECT 1 AS id, 'a1' AS name, 1000 AS ts, '2021-12-09' AS dt, '10' AS hh;
 ```
 
-### Insert overwrite 
+:::note Mapping to write operations
+Hudi offers flexibility in choosing the underlying [write operation](/docs/write_operations) of a `INSERT INTO` statement using 
+the `hoodie.spark.sql.insert.into.operation` configuration. Possible options include *"bulk_insert"* (large inserts), *"insert"* (with small file management), 
+and *"upsert"* (with deduplication/merging). If a precombine field is not set, *"insert"* is chosen as the default. For a table with preCombine field set,
+*"upsert"* is chosen as the default operation.
+:::
 
-Users can execute `insert_overwrite` on a given hudi table. Matching partition records on storage will be overridden with those 
-incoming.
+
+### Insert Overwrite
+
+The `INSERT OVERWRITE` statement is used to replace existing data in a Hudi table. 
 
 ```sql
--- insert overwrite non-partitioned table
-insert overwrite hudi_mor_tbl select 99, 'a99', 20.0, 900;
-insert overwrite hudi_cow_nonpcf_tbl select 99, 'a99', 20.0;
-
--- insert overwrite partitioned table with dynamic partition
-insert overwrite table hudi_cow_pt_tbl select 10, 'a10', 1100, '2021-12-09', '10';
-
--- insert overwrite partitioned table with static partition
-insert overwrite hudi_cow_pt_tbl partition(dt = '2021-12-09', hh='12') select 13, 'a13', 1100;
-
+INSERT OVERWRITE <table> 
+SELECT <columns> FROM <source>;
 ```
 
-## Update data
+All existing partitions that are affected by the `INSERT OVERWRITE` statement will replaced with the source data.
+Here are some examples:
 
-Spark SQL supports two kinds of DML to update hudi table: Update and Merge-Into.
+```sql
+-- Overwrite non-partitioned table
+INSERT OVERWRITE hudi_mor_tbl SELECT 99, 'a99', 20.0, 900;
+INSERT OVERWRITE hudi_cow_nonpcf_tbl SELECT 99, 'a99', 20.0;
+
+-- Overwrite partitioned table with dynamic partition
+INSERT OVERWRITE TABLE hudi_cow_pt_tbl SELECT 10, 'a10', 1100, '2021-12-09', '10';
+
+-- Overwrite partitioned table with static partition
+INSERT OVERWRITE hudi_cow_pt_tbl PARTITION(dt = '2021-12-09', hh='12') SELECT 13, 'a13', 1100;
+```
 
 ### Update
+You can use the `UPDATE` statement to modify existing data in a Hudi table directly. 
 
-**Syntax**
 ```sql
 UPDATE tableIdentifier SET column = EXPRESSION(,column = EXPRESSION) [ WHERE boolExpression]
 ```
-**Case**
-```sql
-update hudi_mor_tbl set price = price * 2, ts = 1111 where id = 1;
 
-update hudi_cow_pt_tbl set name = 'a1_1', ts = 1001 where id = 1;
+Here's an example:
+
+```sql
+-- Update data in a Hudi table
+UPDATE hudi_mor_tbl SET price = price * 2, ts = 1111 WHERE id = 1;
+
+-- Update data in a partitioned Hudi table
+UPDATE hudi_cow_pt_tbl SET name = 'a1_1', ts = 1001 WHERE id = 1;
 
 -- update using non-PK field
 update hudi_cow_pt_tbl set ts = 1001 where name = 'a1';
 ```
-:::note
-`Update` operation requires `preCombineField` specified.
+
+:::info
+The `UPDATE` operation requires the specification of a `preCombineField`.
 :::
 
-### MergeInto
+### Merge Into
 
-**Syntax**
+The `MERGE INTO` statement allows you to perform more complex updates and merges against source data. The `MERGE INTO` statement 
+is similar to the `UPDATE` statement, but it allows you to specify different actions for matched and unmatched records.
 
 ```sql
 MERGE INTO tableIdentifier AS target_alias
@@ -148,7 +122,8 @@ ON <merge_condition>
   INSERT (column1 [, column2 ...]) VALUES (value1 [, value2 ...])
 ```
 
-**Example**
+Examples below
+
 ```sql
 -- source table using hudi for testing merging into non-partitioned table
 create table merge_source (id int, name string, price double, ts bigint) using hudi
@@ -180,24 +155,49 @@ when not matched then
 
 ```
 
-:::note
+:::note Key requirements
 For a Hudi table with user configured primary keys, the join condition in `Merge Into` is expected to contain the primary keys of the table.
 For a Table where Hudi auto generates primary keys, the join condition in MIT can be on any arbitrary data columns.
 :::
 
+### Delete Data
 
-## Delete data
+You can remove data from a Hudi table using the `DELETE FROM` statement.
 
-**Syntax**
 ```sql
-DELETE FROM tableIdentifier [ WHERE BOOL_EXPRESSION]
+DELETE FROM tableIdentifier [ WHERE boolExpression ]
 ```
-**Example**
+
+Examples below
+
 ```sql
-DELETE FROM hudi_cow_nonpcf_tbl where uuid = 1;
+-- Delete data from a Hudi table
+DELETE FROM hudi_cow_nonpcf_tbl WHERE uuid = 1;
 
-DELETE FROM hudi_mor_tbl where id % 2 = 0;
+-- Delete data from a MOR Hudi table based on a condition
+DELETE FROM hudi_mor_tbl WHERE id % 2 = 0;
 
--- delete using non-PK field
-DELETE FROM hudi_cow_pt_tbl where name = 'a1';
+-- Delete data using a non-primary key field
+DELETE FROM hudi_cow_pt_tbl WHERE name = 'a1';
 ```
+
+These DML operations give you powerful tools for managing your Hudi tables using Spark SQL. 
+You can control the behavior of these operations using various configuration options, as explained in the documentation.
+
+### Passing Options 
+
+You can pass options to the underlying Spark SQL operations using the `OPTIONS` clause. For example:
+
+```sql
+-- Passing in index configs??
+hoodie.metadata.index.column.stats.enable=true
+hoodie.metadata.record.index.enable = true
+
+-- passing in lock provider configs, for example??
+```
+
+## Flink 
+
+Flink SQL also provides several Data Manipulation Language (DML) actions for interacting with Hudi tables. These operations allow you to insert, update, merge and delete data
+
+
