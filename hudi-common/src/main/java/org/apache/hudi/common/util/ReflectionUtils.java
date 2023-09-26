@@ -53,11 +53,11 @@ public class ReflectionUtils {
         try {
           Class<?> clazz = Class.forName(clazzName);
           CLAZZ_CACHE.put(clazzName, clazz);
-          return CLAZZ_CACHE.get(clazzName);
         } catch (ClassNotFoundException e) {
           throw new HoodieException("Unable to load class", e);
         }
       }
+      return CLAZZ_CACHE.get(clazzName);
     }
   }
 
