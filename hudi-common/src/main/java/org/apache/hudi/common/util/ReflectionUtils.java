@@ -48,19 +48,13 @@ public class ReflectionUtils {
   private static final Map<String, Class<?>> CLAZZ_CACHE = new ConcurrentHashMap<>();
 
   public static Class<?> getClass(String clazzName) {
-    if (!CLAZZ_CACHE.containsKey(clazzName)) {
-      synchronized (CLAZZ_CACHE) {
-        if (!CLAZZ_CACHE.containsKey(clazzName)) {
-          try {
-            Class<?> clazz = Class.forName(clazzName);
-            CLAZZ_CACHE.put(clazzName, clazz);
-          } catch (ClassNotFoundException e) {
-            throw new HoodieException("Unable to load class", e);
-          }
-        }
+    return CLAZZ_CACHE.computeIfAbsent(clazzName, c -> {
+      try {
+        return Class.forName(c);
+      } catch (ClassNotFoundException e) {
+        throw new HoodieException("Unable to load class", e);
       }
-    }
-    return CLAZZ_CACHE.get(clazzName);
+    });
   }
 
   public static <T> T loadClass(String className) {
