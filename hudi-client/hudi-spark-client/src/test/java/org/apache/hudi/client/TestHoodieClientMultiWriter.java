@@ -448,6 +448,11 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       setUpMORTestTable();
     }
+
+    // Use RDD API to perform clustering (TODO: Fix row-writer API)
+    Properties properties = new Properties();
+    properties.put("hoodie.datasource.write.row.writer.enable", String.valueOf(false));
+
     // Disabling embedded timeline server, it doesn't work with multiwriter
     HoodieWriteConfig.Builder writeConfigBuilder = getConfigBuilder()
         .withCleanConfig(HoodieCleanConfig.newBuilder()
@@ -466,7 +471,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(providerClass)
             .withConflictResolutionStrategy(resolutionStrategy)
-            .build()).withAutoCommit(false).withProperties(lockProperties);
+            .build()).withAutoCommit(false).withProperties(lockProperties)
+        .withProperties(properties);
+
     Set<String> validInstants = new HashSet<>();
 
     // Create the first commit with inserts
@@ -719,7 +726,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         .build();
 
     // Create the first commit
-    createCommitWithInserts(cfg, getHoodieWriteClient(cfg), "000", "001", 200, true);
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+      createCommitWithInserts(cfg, client, "000", "001", 200, true);
+    }
     // Start another inflight commit
     String newCommitTime = "003";
     int numRecords = 100;
@@ -768,7 +777,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     HoodieWriteConfig cfg2 = writeConfigBuilder.build();
 
     // Create the first commit
-    createCommitWithInserts(cfg, getHoodieWriteClient(cfg), "000", "001", 5000, false);
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+      createCommitWithInserts(cfg, client, "000", "001", 5000, false);
+    }
     // Start another inflight commit
     String newCommitTime1 = "003";
     String newCommitTime2 = "004";
@@ -854,7 +865,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     HoodieWriteConfig cfg2 = writeConfigBuilder.build();
 
     // Create the first commit
-    createCommitWithInserts(cfg, getHoodieWriteClient(cfg), "000", "001", 200, false);
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+      createCommitWithInserts(cfg, client, "000", "001", 200, false);
+    }
     // Start another inflight commit
     String newCommitTime1 = "003";
     String newCommitTime2 = "004";

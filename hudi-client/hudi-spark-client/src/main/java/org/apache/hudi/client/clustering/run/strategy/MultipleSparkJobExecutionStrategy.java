@@ -26,6 +26,7 @@ import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.ConcatenatingIterator;
+import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -107,7 +108,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> performClustering(final HoodieClusteringPlan clusteringPlan, final Schema schema, final String instantTime) {
     JavaSparkContext engineContext = HoodieSparkEngineContext.getSparkContext(getEngineContext());
-    boolean shouldPreserveMetadata = Option.ofNullable(clusteringPlan.getPreserveHoodieMetadata()).orElse(false);
+    boolean shouldPreserveMetadata = Option.ofNullable(clusteringPlan.getPreserveHoodieMetadata()).orElse(true);
     ExecutorService clusteringExecutorService = Executors.newFixedThreadPool(
         Math.min(clusteringPlan.getInputGroups().size(), writeConfig.getClusteringMaxParallelism()),
         new CustomizedThreadFactory("clustering-job-group", true));
@@ -116,7 +117,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
       Stream<HoodieData<WriteStatus>> writeStatusesStream = FutureUtils.allOf(
               clusteringPlan.getInputGroups().stream()
                   .map(inputGroup -> {
-                    if (getWriteConfig().getBooleanOrDefault("hoodie.datasource.write.row.writer.enable", false)) {
+                    if (getWriteConfig().getBooleanOrDefault("hoodie.datasource.write.row.writer.enable", true)) {
                       return runClusteringForGroupAsyncAsRow(inputGroup,
                           clusteringPlan.getStrategy().getStrategyParams(),
                           shouldPreserveMetadata,
@@ -431,9 +432,10 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
 
     Path[] paths;
     if (hasLogFiles) {
-      String compactionFractor = Option.ofNullable(getWriteConfig().getString("compaction.memory.fraction"))
-          .orElse("0.75");
-      params.put("compaction.memory.fraction", compactionFractor);
+      String rawFractionConfig = getWriteConfig().getString(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION);
+      String compactionFractor = rawFractionConfig != null
+          ? rawFractionConfig : HoodieMemoryConfig.DEFAULT_MR_COMPACTION_MEMORY_FRACTION;
+      params.put(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION.key(), compactionFractor);
 
       Path[] deltaPaths = clusteringOps
           .stream()

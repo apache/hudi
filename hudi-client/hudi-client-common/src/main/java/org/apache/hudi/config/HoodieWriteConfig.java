@@ -27,8 +27,10 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.HoodieTableServiceManagerConfig;
 import org.apache.hudi.common.config.TypedProperties;
@@ -50,6 +52,7 @@ import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -568,7 +571,8 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> NUM_RETRIES_ON_CONFLICT_FAILURES = ConfigProperty
       .key("hoodie.write.num.retries.on.conflict.failures")
       .defaultValue(0)
-      .sinceVersion("0.13.0")
+      .markAdvanced()
+      .sinceVersion("0.14.0")
       .withDocumentation("Maximum number of times to retry a batch on conflict failure.");
 
   public static final ConfigProperty<String> WRITE_SCHEMA_OVERRIDE = ConfigProperty
@@ -709,6 +713,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.sensitive.config.keys")
       .defaultValue("ssl,tls,sasl,auth,credentials")
       .markAdvanced()
+      .sinceVersion("0.14.0")
       .withDocumentation("Comma separated list of filters for sensitive config keys. Hudi Streamer "
           + "will not print any configuration which contains the configured filter. For example with "
           + "a configured filter `ssl`, value for config `ssl.trustore.location` would be masked.");
@@ -1457,7 +1462,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean enableOptimizedLogBlocksScan() {
-    return getBoolean(HoodieCompactionConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN);
+    return getBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN);
   }
 
   public HoodieCleaningPolicy getCleanerPolicy() {
@@ -1589,11 +1594,11 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public Boolean getCompactionLazyBlockReadEnabled() {
-    return getBoolean(HoodieCompactionConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE);
+    return getBoolean(HoodieReaderConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE);
   }
 
   public Boolean getCompactionReverseLogReadEnabled() {
-    return getBoolean(HoodieCompactionConfig.COMPACTION_REVERSE_LOG_READ_ENABLE);
+    return getBoolean(HoodieReaderConfig.COMPACTION_REVERSE_LOG_READ_ENABLE);
   }
 
   public int getArchiveDeleteParallelism() {
@@ -1731,8 +1736,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public HoodieClusteringConfig.LayoutOptimizationStrategy getLayoutOptimizationStrategy() {
-    return HoodieClusteringConfig.LayoutOptimizationStrategy.fromValue(
-        getStringOrDefault(HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY));
+    return HoodieClusteringConfig.resolveLayoutOptimizationStrategy(getStringOrDefault(HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY));
   }
 
   public HoodieClusteringConfig.SpatialCurveCompositionStrategyType getLayoutOptimizationCurveBuildMethod() {
@@ -2259,7 +2263,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getSpillableMapBasePath() {
     return Option.ofNullable(getString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH))
-        .orElseGet(HoodieMemoryConfig::getDefaultSpillableMapBasePath);
+        .orElseGet(FileIOUtils::getDefaultSpillableMapBasePath);
   }
 
   public double getWriteStatusFailureFraction() {

@@ -201,6 +201,8 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
       setUpMORTestTable();
     }
     Properties properties = new Properties();
+    // Use RDD API to perform clustering (TODO: Fix row-writer API)
+    properties.put("hoodie.datasource.write.row.writer.enable", String.valueOf(false));
     properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
     HoodieWriteConfig cfg = getConfigBuilder()
         .withCleanConfig(HoodieCleanConfig.newBuilder().withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
