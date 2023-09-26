@@ -48,19 +48,17 @@ public class ReflectionUtils {
   private static final Map<String, Class<?>> CLAZZ_CACHE = new HashMap<>();
 
   public static Class<?> getClass(String clazzName) {
-    if (!CLAZZ_CACHE.containsKey(clazzName)) {
-      synchronized (CLAZZ_CACHE) {
-        if (!CLAZZ_CACHE.containsKey(clazzName)) {
-          try {
-            Class<?> clazz = Class.forName(clazzName);
-            CLAZZ_CACHE.put(clazzName, clazz);
-          } catch (ClassNotFoundException e) {
-            throw new HoodieException("Unable to load class", e);
-          }
+    synchronized (CLAZZ_CACHE) {
+      if (!CLAZZ_CACHE.containsKey(clazzName)) {
+        try {
+          Class<?> clazz = Class.forName(clazzName);
+          CLAZZ_CACHE.put(clazzName, clazz);
+          return CLAZZ_CACHE.get(clazzName);
+        } catch (ClassNotFoundException e) {
+          throw new HoodieException("Unable to load class", e);
         }
       }
     }
-    return CLAZZ_CACHE.get(clazzName);
   }
 
   public static <T> T loadClass(String className) {
