@@ -311,6 +311,7 @@ public class HiveTestUtil {
     Path partPath = new Path(basePath + "/" + partitionPath);
     fileSystem.makeQualified(partPath);
     fileSystem.mkdirs(partPath);
+    FileCreateUtils.createPartitionMetaFile(basePath, partitionPath);
     List<HoodieWriteStat> writeStats = new ArrayList<>();
     String fileId = UUID.randomUUID().toString();
     Path filePath = new Path(partPath.toString() + "/" + FSUtils.makeBaseFileName(instantTime, "1-0-1", fileId));
@@ -439,6 +440,7 @@ public class HiveTestUtil {
     Path partPath = new Path(basePath + "/" + partitionPath);
     fileSystem.makeQualified(partPath);
     fileSystem.mkdirs(partPath);
+    FileCreateUtils.createPartitionMetaFile(basePath, partitionPath);
     List<HoodieWriteStat> writeStats = createTestData(partPath, isParquetSchemaSimple, instantTime);
     writeStats.forEach(s -> commitMetadata.addWriteStat(partitionPath, s));
     addSchemaToCommitMetadata(commitMetadata, isParquetSchemaSimple, useSchemaFromCommitMetadata);
