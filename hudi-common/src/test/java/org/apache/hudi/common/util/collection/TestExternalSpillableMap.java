@@ -386,7 +386,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
 
   @ParameterizedTest
   @MethodSource("testArguments")
-  public void testDataCorrectnessWithUpsertToDiskMap(ExternalSpillableMap.DiskMapType diskMapType,
+  public void testDataCorrectnessWithRecordExistsInDiskMapAndThenUpsertToMem(ExternalSpillableMap.DiskMapType diskMapType,
                                                   boolean isCompressionEnabled) throws IOException, URISyntaxException {
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
 
