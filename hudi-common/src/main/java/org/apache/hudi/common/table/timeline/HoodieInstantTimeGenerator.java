@@ -57,7 +57,7 @@ public class HoodieInstantTimeGenerator {
   // when performing comparisons such as LESS_THAN_OR_EQUAL_TO
   public static final String DEFAULT_MILLIS_EXT = "999";
 
-  private static HoodieTimelineTimeZone commitTimeZone = HoodieTimelineTimeZone.LOCAL;
+  private static HoodieTimelineTimeZone commitTimeZone = HoodieTimelineTimeZone.UTC;
 
   /**
    * Returns next instant time that adds N milliseconds to the current time.
