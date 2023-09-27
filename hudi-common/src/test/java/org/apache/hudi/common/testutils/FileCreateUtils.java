@@ -296,16 +296,16 @@ public class FileCreateUtils {
   }
 
   public static void createPartitionMetaFile(String basePath, String partitionPath) throws IOException {
-    Path parentPath = Paths.get(basePath, partitionPath);
-    Files.createDirectories(parentPath);
     Path metaFilePath;
     try {
-      metaFilePath = Paths.get(new URI(parentPath.resolve(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX).toString()).getPath());
-    } catch (URISyntaxException e) {
+      Path parentPath = Paths.get(new URI(basePath).getPath(), partitionPath);
+      Files.createDirectories(parentPath);
       metaFilePath = parentPath.resolve(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX);
-    }
-    if (Files.notExists(metaFilePath)) {
-      Files.createFile(metaFilePath);
+      if (Files.notExists(metaFilePath)) {
+        Files.createFile(metaFilePath);
+      }
+    } catch (URISyntaxException e) {
+      throw new HoodieException("Error creating partition meta file", e);
     }
   }
 
