@@ -226,6 +226,10 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
      *    nothing was thrown when promoting "fare.amount" from double to float
      * MOR -  no cluster -  no compact -  no reconcile -  no row writer
      *    nothing was thrown when promoting "fare.amount" from double to float
+     * MOR - yes cluster -  no compact -  no reconcile -  no row writer
+     *    can't promote from primitive to string
+     * COW - yes cluster -  no compact -  no reconcile -  no row writer
+     *    can't promote from primitive to string
      */
     Stream.Builder<Arguments> b = Stream.builder();
     Boolean[] rwe = {true,false};
@@ -253,9 +257,12 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable,"distance_in_meters", DataTypes.IntegerType, DataTypes.LongType);
     testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "distance_in_meters", DataTypes.IntegerType, DataTypes.FloatType);
     testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "distance_in_meters", DataTypes.IntegerType, DataTypes.DoubleType);
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "distance_in_meters", DataTypes.IntegerType, DataTypes.StringType);
     testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "distance_in_meters", DataTypes.LongType, DataTypes.FloatType);
     testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "distance_in_meters", DataTypes.LongType, DataTypes.DoubleType);
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "distance_in_meters", DataTypes.LongType, DataTypes.StringType);
     testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "begin_lat", DataTypes.FloatType, DataTypes.DoubleType);
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "begin_lat", DataTypes.FloatType, DataTypes.StringType);
     testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "rider", DataTypes.StringType, DataTypes.BinaryType);
     testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "tip_history",
         DataTypes.createArrayType(DataTypes.IntegerType), DataTypes.createArrayType(DataTypes.LongType));
@@ -265,12 +272,16 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     //nested data type promotions
     testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable,
         "fare", createFareStruct(DataTypes.FloatType), createFareStruct(DataTypes.DoubleType));
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable,
+        "fare", createFareStruct(DataTypes.FloatType), createFareStruct(DataTypes.StringType));
 
     //complex data type promotion
     testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "tip_history",
         DataTypes.createArrayType(DataTypes.IntegerType), DataTypes.createArrayType(DataTypes.LongType));
     testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "tip_history",
         DataTypes.createArrayType(DataTypes.IntegerType), DataTypes.createArrayType(DataTypes.DoubleType));
+    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "tip_history",
+        DataTypes.createArrayType(DataTypes.IntegerType), DataTypes.createArrayType(DataTypes.StringType));
 
     //test illegal type promotions
     if (tableType.equals("COPY_ON_WRITE")) {
