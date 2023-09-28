@@ -289,6 +289,139 @@ insert overwrite table h_p1 select 2 as id, 'a2', '2021-01-03' as dt, '19' as hh
 </TabItem>
 </Tabs>
 
+## Update data
+
+This is similar to inserting new data, writing DataFrame into the hudi table.
+
+<Tabs
+groupId="programming-language"
+defaultValue="python"
+values={[
+{ label: 'Scala', value: 'scala', },
+{ label: 'Python', value: 'python', },
+{ label: 'Spark SQL', value: 'sparksql', },
+]}
+>
+
+<TabItem value="scala">
+
+```scala
+// spark-shell
+val updates = convertToStringList(dataGen.generateUpdates(10))
+val df = spark.read.json(spark.sparkContext.parallelize(updates, 2))
+df.write.format("hudi").
+  options(getQuickstartWriteConfigs).
+  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+  option(TABLE_NAME, tableName).
+  mode(Append).
+  save(basePath)
+```
+:::note
+Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
+[Querying](#query-data) the data again will now show updated trips. Each write operation generates a new [commit](/docs/concepts)
+denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `rider`, `driver` fields for the same `_hoodie_record_key`s in previous commit.
+:::
+</TabItem>
+<TabItem value="sparksql">
+
+Spark SQL supports two kinds of DML to update hudi table: Merge-Into and Update.
+
+### Update
+
+**Syntax**
+```sql
+UPDATE tableIdentifier SET column = EXPRESSION(,column = EXPRESSION) [ WHERE boolExpression]
+```
+**Case**
+```sql
+update hudi_mor_tbl set price = price * 2, ts = 1111 where id = 1;
+
+update hudi_cow_pt_tbl set name = 'a1_1', ts = 1001 where id = 1;
+
+-- update using non-PK field
+update hudi_cow_pt_tbl set ts = 1001 where name = 'a1';
+```
+:::note
+`Update` operation requires `preCombineField` specified.
+:::
+
+### MergeInto
+
+**Syntax**
+
+```sql
+MERGE INTO tableIdentifier AS target_alias
+USING (sub_query | tableIdentifier) AS source_alias
+ON <merge_condition>
+[ WHEN MATCHED [ AND <condition> ] THEN <matched_action> ]
+[ WHEN MATCHED [ AND <condition> ] THEN <matched_action> ]
+[ WHEN NOT MATCHED [ AND <condition> ]  THEN <not_matched_action> ]
+
+<merge_condition> =A equal bool condition 
+<matched_action>  =
+  DELETE  |
+  UPDATE SET *  |
+  UPDATE SET column1 = expression1 [, column2 = expression2 ...]
+<not_matched_action>  =
+  INSERT *  |
+  INSERT (column1 [, column2 ...]) VALUES (value1 [, value2 ...])
+```
+**Example**
+```sql
+-- source table using hudi for testing merging into non-partitioned table
+create table merge_source (id int, name string, price double, ts bigint) using hudi
+tblproperties (primaryKey = 'id', preCombineField = 'ts');
+insert into merge_source values (1, "old_a1", 22.22, 900), (2, "new_a2", 33.33, 2000), (3, "new_a3", 44.44, 2000);
+
+merge into hudi_mor_tbl as target
+using merge_source as source
+on target.id = source.id
+when matched then update set *
+when not matched then insert *
+;
+
+-- source table using parquet for testing merging into partitioned table
+create table merge_source2 (id int, name string, flag string, dt string, hh string) using parquet;
+insert into merge_source2 values (1, "new_a1", 'update', '2021-12-09', '10'), (2, "new_a2", 'delete', '2021-12-09', '11'), (3, "new_a3", 'insert', '2021-12-09', '12');
+
+merge into hudi_cow_pt_tbl as target
+using (
+  select id, name, '1000' as ts, flag, dt, hh from merge_source2
+) source
+on target.id = source.id
+when matched and flag != 'delete' then
+ update set id = source.id, name = source.name, ts = source.ts, dt = source.dt, hh = source.hh
+when matched and flag = 'delete' then delete
+when not matched then
+ insert (id, name, ts, dt, hh) values(source.id, source.name, source.ts, source.dt, source.hh)
+;
+
+```
+
+</TabItem>
+<TabItem value="python">
+
+```python
+# pyspark
+updates = sc._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(dataGen.generateUpdates(10))
+df = spark.read.json(spark.sparkContext.parallelize(updates, 2))
+df.write.format("hudi"). \
+  options(**hudi_options). \
+  mode("append"). \
+  save(basePath)
+```
+:::note
+Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
+[Querying](#query-data) the data again will now show updated trips. Each write operation generates a new [commit](/docs/concepts)
+denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `rider`, `driver` fields for the same `_hoodie_record_key`s in previous commit.
+:::
+
+</TabItem>
+
+</Tabs
+>
 ### Deletes
 
 Hudi supports implementing two types of deletes on data stored in Hudi tables, by enabling the user to specify a different record payload implementation.
