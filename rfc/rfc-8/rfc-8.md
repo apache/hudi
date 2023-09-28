@@ -122,7 +122,7 @@ Experiments have shown that with random UUID record keys and datestr partitions 
 size of 50 to 55 bytes per mapping saved in the record index. The size might even be lower for keys which may compress better.
 
 Below picture gives a pictorial representation of record index partition in metadata table.
-<img src="metadata_record_index.jpg" alt="Record Indec Partition" width="800"/>
+<img src="metadata_record_index.jpg" alt="Record Index Partition" width="800"/>
 
 
 ### Record Index initialization:
