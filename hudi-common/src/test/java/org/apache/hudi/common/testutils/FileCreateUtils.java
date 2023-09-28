@@ -48,6 +48,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -294,11 +296,16 @@ public class FileCreateUtils {
   }
 
   public static void createPartitionMetaFile(String basePath, String partitionPath) throws IOException {
-    Path parentPath = Paths.get(basePath, partitionPath);
-    Files.createDirectories(parentPath);
-    Path metaFilePath = parentPath.resolve(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX);
-    if (Files.notExists(metaFilePath)) {
-      Files.createFile(metaFilePath);
+    Path metaFilePath;
+    try {
+      Path parentPath = Paths.get(new URI(basePath).getPath(), partitionPath);
+      Files.createDirectories(parentPath);
+      metaFilePath = parentPath.resolve(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX);
+      if (Files.notExists(metaFilePath)) {
+        Files.createFile(metaFilePath);
+      }
+    } catch (URISyntaxException e) {
+      throw new HoodieException("Error creating partition meta file", e);
     }
   }
 

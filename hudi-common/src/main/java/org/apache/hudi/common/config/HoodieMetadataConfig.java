@@ -111,14 +111,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Directories matching this regex, will be filtered out when initializing metadata table from lake storage for the first time.");
 
-  public static final ConfigProperty<String> ASSUME_DATE_PARTITIONING = ConfigProperty
-      .key("hoodie.assume.date.partitioning")
-      .defaultValue("false")
-      .markAdvanced()
-      .sinceVersion("0.3.0")
-      .withDocumentation("Should HoodieWriteClient assume the data is partitioned by dates, i.e three levels from base path. "
-          + "This is a stop-gap to support tables created by versions < 0.3.1. Will be removed eventually");
-
   public static final ConfigProperty<Integer> FILE_LISTING_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.file.listing.parallelism")
       .defaultValue(200)
@@ -340,10 +332,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return Math.max(getInt(HoodieMetadataConfig.FILE_LISTING_PARALLELISM_VALUE), 1);
   }
 
-  public Boolean shouldAssumeDatePartitioning() {
-    return getBoolean(HoodieMetadataConfig.ASSUME_DATE_PARTITIONING);
-  }
-
   public boolean enabled() {
     return getBoolean(ENABLE);
   }
@@ -558,11 +546,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withAssumeDatePartitioning(boolean assumeDatePartitioning) {
-      metadataConfig.setValue(ASSUME_DATE_PARTITIONING, String.valueOf(assumeDatePartitioning));
-      return this;
-    }
-
     public Builder withDirectoryFilterRegex(String regex) {
       metadataConfig.setValue(DIR_FILTER_REGEX, regex);
       return this;
@@ -706,16 +689,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
    */
   @Deprecated
   public static final String DEFAULT_DIRECTORY_FILTER_REGEX = DIR_FILTER_REGEX.defaultValue();
-  /**
-   * @deprecated Use {@link #ASSUME_DATE_PARTITIONING} and its methods.
-   */
-  @Deprecated
-  public static final String HOODIE_ASSUME_DATE_PARTITIONING_PROP = ASSUME_DATE_PARTITIONING.key();
-  /**
-   * @deprecated Use {@link #ASSUME_DATE_PARTITIONING} and its methods.
-   */
-  @Deprecated
-  public static final String DEFAULT_ASSUME_DATE_PARTITIONING = ASSUME_DATE_PARTITIONING.defaultValue();
   /**
    * @deprecated Use {@link #FILE_LISTING_PARALLELISM_VALUE} and its methods.
    */

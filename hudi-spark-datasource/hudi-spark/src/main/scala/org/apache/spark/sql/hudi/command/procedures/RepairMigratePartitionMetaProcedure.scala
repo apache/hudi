@@ -61,7 +61,7 @@ class RepairMigratePartitionMetaProcedure extends BaseProcedure with ProcedureBu
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(tablePath).build
 
     val engineContext: HoodieLocalEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf)
-    val partitionPaths: util.List[String] = FSUtils.getAllPartitionPaths(engineContext, tablePath, false, false)
+    val partitionPaths: util.List[String] = FSUtils.getAllPartitionPaths(engineContext, tablePath, false)
     val basePath: Path = new Path(tablePath)
 
     val rows = new util.ArrayList[Row](partitionPaths.size)
