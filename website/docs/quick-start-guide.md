@@ -119,10 +119,8 @@ spark-sql --packages org.apache.hudi:hudi-spark2.4-bundle_2.11:0.14.0 --conf 'sp
 Use scala 2.12 builds with an additional config: --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog'
 :::
 
-### Data Generation
-
-The [DataGenerator](https://github.com/apache/hudi/blob/master/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L51) can generate sample inserts and updates based on the sample trip schema [here](https://github.com/apache/hudi/blob/master/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58).
-Below, we setup table name, base path and a data generator to generate records for this guide.
+### Setup project
+Below, we do imports and setup the table name and corresponding base path.
 
 <Tabs
 groupId="programming-language"
@@ -138,18 +136,18 @@ values={[
 
 ```scala
 // spark-shell
-import org.apache.hudi.QuickstartUtils._
 import scala.collection.JavaConversions._
 import org.apache.spark.sql.SaveMode._
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.common.table.HoodieTableConfig._
 import org.apache.hudi.config.HoodieWriteConfig._
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions._
 import org.apache.hudi.common.model.HoodieRecord
+import spark.implicits._
 
-val tableName = "hudi_table"
-val basePath = "file:///tmp/hudi_trips_table"
-val dataGen = new DataGenerator
+val tableName = "trips_table"
+val basePath = "file:///tmp/trips_table"
 ```
 
 </TabItem>
@@ -157,9 +155,10 @@ val dataGen = new DataGenerator
 
 ```python
 # pyspark
-tableName = "hudi_table"
-basePath = "file:///tmp/hudi_trips_table"
-dataGen = sc._jvm.org.apache.hudi.QuickstartUtils.DataGenerator()
+from pyspark.sql.functions import lit, col
+
+tableName = "trips_table"
+basePath = "file:///tmp/trips_table"
 ```
 
 </TabItem>
@@ -248,11 +247,17 @@ Since, this is the first write, it will also auto-create the table.
 
 ```scala
 // spark-shell
-val inserts = convertToStringList(dataGen.generateInserts(10))
-val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
-df.write.format("hudi").
-  options(getQuickstartWriteConfigs).
-  option(PARTITIONPATH_FIELD_NAME.key(), "partitionpath").
+val columns = Seq("ts","uuid","rider","driver","fare","city")
+val data =
+  Seq((1695159649087L,"334e26e9-8355-45cc-97c6-c31daf0df330","rider-A","driver-K",19.10,"san_francisco"),
+    (1695091554788L,"e96c4396-3fad-413a-a942-4cb36106d721","rider-C","driver-M",27.70 ,"san_francisco"),
+    (1695046462179L,"9909a8b1-2d15-4d3d-8ec9-efc48c536a00","rider-D","driver-L",33.90 ,"san_francisco"),
+    (1695516137016L,"e3cf430c-889d-4015-bc98-59bdce1e530c","rider-F","driver-P",34.15,"sao_paulo"    ),
+    (1695115999911L,"c8abbe79-8d89-47ea-b4ce-4d224bae5bfa","rider-J","driver-T",17.85,"chennai"));
+
+var inserts = spark.createDataFrame(data).toDF(columns:_*)
+inserts.write.format("hudi").
+  option(PARTITIONPATH_FIELD_NAME.key(), "city").
   option(TABLE_NAME, tableName).
   mode(Overwrite).
   save(basePath)
@@ -272,16 +277,20 @@ Since, this is the first write, it will also auto-create the table.
 
 ```python
 # pyspark
-inserts = sc._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(dataGen.generateInserts(10))
-df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
+columns = ["ts","uuid","rider","driver","fare","city"]
+data =[(1695159649087,"334e26e9-8355-45cc-97c6-c31daf0df330","rider-A","driver-K",19.10,"san_francisco"),
+       (1695091554788,"e96c4396-3fad-413a-a942-4cb36106d721","rider-C","driver-M",27.70 ,"san_francisco"),
+       (1695046462179,"9909a8b1-2d15-4d3d-8ec9-efc48c536a00","rider-D","driver-L",33.90 ,"san_francisco"),
+       (1695516137016,"e3cf430c-889d-4015-bc98-59bdce1e530c","rider-F","driver-P",34.15,"sao_paulo"),
+       (1695115999911,"c8abbe79-8d89-47ea-b4ce-4d224bae5bfa","rider-J","driver-T",17.85,"chennai")]inserts = spark.createDataFrame(data).toDF(*columns)
+inserts = spark.createDataFrame(data).toDF(*columns)
 
 hudi_options = {
     'hoodie.table.name': tableName,
-    'hoodie.datasource.write.partitionpath.field': 'partitionpath',
-    'hoodie.datasource.write.table.name': tableName
+    'hoodie.datasource.write.partitionpath.field': 'city'
 }
 
-df.write.format("hudi").
+inserts.write.format("hudi"). \
     options(**hudi_options). \
     mode("overwrite"). \
     save(basePath)
@@ -343,22 +352,22 @@ values={[
 
 ```scala
 // spark-shell
-val tripsSnapshotDF = spark.read.format("hudi").load(basePath)
-tripsSnapshotDF.createOrReplaceTempView("hudi_trips_snapshot")
+val tripsDF = spark.read.format("hudi").load(basePath)
+tripsDF.createOrReplaceTempView("trips_table")
 
-spark.sql("SELECT fare, begin_lon, begin_lat, ts FROM  hudi_trips_snapshot WHERE fare > 20.0").show()
-spark.sql("SELECT _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare FROM  hudi_trips_snapshot").show()
+spark.sql("SELECT uuid, fare, ts, rider, driver, city FROM  trips_table WHERE fare > 20.0").show()
+spark.sql("SELECT _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare FROM  trips_table").show()
 ```
 </TabItem>
 <TabItem value="python">
 
 ```python
 # pyspark
-tripsSnapshotDF = spark.read.format("hudi").load(basePath)
-tripsSnapshotDF.createOrReplaceTempView("hudi_trips_snapshot")
+tripsDF = spark.read.format("hudi").load(basePath)
+tripsDF.createOrReplaceTempView("trips_table")
 
-spark.sql("SELECT fare, begin_lon, begin_lat, ts FROM  hudi_trips_snapshot WHERE fare > 20.0").show()
-spark.sql("SELECT _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare FROM  hudi_trips_snapshot").show()
+spark.sql("SELECT uuid, fare, ts, rider, driver, city FROM  trips_table WHERE fare > 20.0").show()
+spark.sql("SELECT _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare FROM trips_table").show()
 ```
 </TabItem>
 <TabItem value="sparksql">
@@ -388,14 +397,12 @@ values={[
 <TabItem value="scala">
 
 ```scala
-// Lets read data from target Hudi table, modify fare column and update it. 
-val updatesDf = spark.read.format("hudi").load(basePath).withColumn("fare", col("fare") * 100)
+// Lets read data from target Hudi table, modify fare column for rider-D and update it. 
+val updatesDf = spark.read.format("hudi").load(basePath).filter($"rider" === "rider-D").withColumn("fare", col("fare") * 10)
 
 updatesDf.write.format("hudi").
-  options(getQuickstartWriteConfigs).
-  option(PRECOMBINE_FIELD_NAME.key(), "ts").
   option(OPERATION_OPT_KEY, "upsert").
-  option(PARTITIONPATH_FIELD_NAME.key(), "partitionpath").
+  option(PARTITIONPATH_FIELD_NAME.key(), "city").
   option(TABLE_NAME, tableName).
   mode(Append).
   save(basePath)
@@ -422,8 +429,8 @@ UPDATE hudi_table SET fare = 25.0 WHERE rider = 'rider-D';
 
 ```python
 # pyspark
-// Lets read data from target Hudi table, modify fare column and update it. 
-val updatesDf = spark.read.format("hudi").load(basePath).withColumn("fare",col("fare")*100)
+// Lets read data from target Hudi table, modify fare column for rider-D and update it.
+updatesDf = spark.read.format("hudi").load(basePath).filter("rider == 'rider-D'").withColumn("fare",col("fare")*10)
 
 updatesDf.write.format("hudi"). \
   options(**hudi_options). \
@@ -441,7 +448,7 @@ Notice that the save mode is now `Append`. In general, always use append mode un
 </Tabs
 >
 
-[Querying](#query-data) the data again will now show updated records. Each write operation generates a new [commit](/docs/next/concepts).
+[Querying](#querying) the data again will now show updated records. Each write operation generates a new [commit](/docs/next/concepts).
 Look for changes in `_hoodie_commit_time`, `fare` fields for the given `_hoodie_record_key` value from a previous commit.
 
 ## Merging Data {#merge}
@@ -456,17 +463,43 @@ values={[
 ]}
 >
 
+
 <TabItem value="scala">
 
 ```scala
-    // spark-shell
+// spark-shell
+// Check (https://gist.github.com/bhasudha/7ea07f2bb9abc5c6eb86dbd914eec4c6) for the custom payload class implementation used in below code
+// TODO: Replace gist link above with CustomMergeIntoConnector test implementation. Can be in examples folder.
+val updatesDf = spark.read.format("hudi").
+  load(basePath).limit(2).
+  withColumn("fare", col("fare") * 100).
+  withColumn("begin_lat",lit(-1.0)).
+  withColumn("begin_lon",lit(-1.0))
+updatesDf.write.format("hudi").
+option("hoodie.datasource.write.payload.class","com.payloads.CustomMergeIntoConnector").
+mode(Append).
+save(basePath)
+// Notice Fare column has been updated but biginLat and beginLon didn't.
+spark.read.format("hudi").load(basePath).show()
 ```
+
 </TabItem>
 
 <TabItem value="python">
 
-```scala
-    // spark-shell
+```python
+#pyspark
+# Check the Java Tab for definition of custom payload class used in below code
+updatesDf = spark.read.format("hudi").load(basePath). \
+    limit(2).withColumn("fare", col("fare") * 100). \
+    withColumn("begin_lat",lit(-1.0)). \
+    withColumn("begin_lon",lit(-1.0))
+updatesDf.write.format("hudi"). \
+option("hoodie.datasource.write.payload.class","com.payloads.CustomMergeIntoConnector"). \
+mode("append"). \
+save(basePath)
+# Notice Fare column has been updated but not beginLat and beginLon
+spark.read.format("hudi").load(basePath).show()
 ```
 </TabItem>
 
@@ -518,25 +551,21 @@ values={[
 
 <TabItem value="scala">
 
+
 ```scala
 // spark-shell
-val deletesDf = spark.read.format("hudi").load(basePath).limit(2)
+// Lets  delete rider: rider-D
+val deletesDF = spark.read.format("hudi").load(basePath).filter($"rider" === "rider-D")
 
-deletesDf.write.format("hudi").
-  options(getQuickstartWriteConfigs).
+deletesDF.write.format("hudi").
   option(OPERATION_OPT_KEY, "delete").
-  option(PARTITIONPATH_FIELD_NAME.key(), "partitionpath").
+  option(PARTITIONPATH_FIELD_NAME.key(), "city").
   option(TABLE_NAME, tableName).
   mode(Append).
   save(basePath)
 
-// run the same read query as above.
-val roAfterDeleteViewDF = spark.read.format("hudi").load(basePath)
-roAfterDeleteViewDF.registerTempTable("hudi_trips_snapshot")
-
-// fetch should return (total - 2) records
-spark.sql("SELECT uuid, partitionpath FROM hudi_trips_snapshot").count()
 ```
+[Querying](#querying) the data again will not show the deleted record.
 
 :::info Key requirements
 Deletes with spark-datasource is supported only when the source dataframe contains Hudi's meta fields or a [key field](#keys) is configured.
@@ -556,33 +585,22 @@ DELETE FROM hudi_table WHERE uuid = '3f3d9565-7261-40e6-9b39-b8aa784f95e2';
 
 ```python
 # pyspark
-val deletesDf = spark.read.format("hudi").load(basePath).limit(2)
+# Lets  delete rider: rider-D
+deletesDF = spark.read.format("hudi").load(basePath).filter("rider == 'rider-D'")
 
 # issue deletes
 hudi_hard_delete_options = {
   'hoodie.table.name': tableName,
-  'hoodie.datasource.write.partitionpath.field': 'partitionpath',
-  'hoodie.datasource.write.table.name': tableName,
+  'hoodie.datasource.write.partitionpath.field': 'city',
   'hoodie.datasource.write.operation': 'delete',
-  'hoodie.datasource.write.precombine.field': 'ts',
-  'hoodie.upsert.shuffle.parallelism': 2, 
-  'hoodie.insert.shuffle.parallelism': 2
 }
 
-from pyspark.sql.functions import lit
-
-val hard_delete_df = spark.read.format("hudi").load(basePath).limit(2)
-
-# run the same read query as above.
-roAfterDeleteViewDF = spark.read.format("hudi").load(basePath)
+deletesDf.write.format("hudi"). \
+options(**hudi_hard_delete_options). \
+mode("append"). \
+save(basePath)
 ```
-
-```python
-roAfterDeleteViewDF.createOrReplaceTempView("hudi_trips_snapshot") 
-
-# fetch should return (total - 2) records
-spark.sql("SELECT uuid, partitionpath FROM hudi_trips_snapshot").count()
-```
+[Querying](#querying) the data again will not show the deleted record.
 :::info Key requirements
 Deletes with spark-datasource is supported only when the source dataframe contains Hudi's meta fields or a [key field](#keys) is configured.
 Notice that the save mode is again `Append`.
@@ -690,22 +708,19 @@ values={[
 
 ```scala
 // spark-shell
-spark.read.format("hudi")
-  .load(basePath)
-  .createOrReplaceTempView("hudi_trips_snapshot")
+spark.read.format("hudi").load(basePath).createOrReplaceTempView("trips_table")
 
-val commits = spark.sql("SELECT DISTINCT(_hoodie_commit_time) AS commitTime FROM  hudi_trips_snapshot ORDER BY commitTime")
-  .map(k => k.getString(0)).take(50)
+val commits = spark.sql("SELECT DISTINCT(_hoodie_commit_time) AS commitTime FROM  trips_table ORDER BY commitTime").map(k => k.getString(0)).take(50)
 val beginTime = commits(commits.length - 2) // commit time we are interested in
 
 // incrementally query data
 val tripsIncrementalDF = spark.read.format("hudi").
   option(QUERY_TYPE.key(), QUERY_TYPE_INCREMENTAL_OPT_VAL).
-  option(BEGIN_INSTANTTIME.key(), beginTime).
+  option(BEGIN_INSTANTTIME.key(), 0).
   load(basePath)
-tripsIncrementalDF.createOrReplaceTempView("hudi_trips_incremental")
+tripsIncrementalDF.createOrReplaceTempView("trips_incremental")
 
-spark.sql("SELECT `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts FROM  hudi_trips_incremental WHERE fare > 20.0").show()
+spark.sql("SELECT `_hoodie_commit_time`, fare, rider, driver, uuid, ts FROM  trips_incremental WHERE fare > 20.0").show()
 ```
 
 </TabItem>
@@ -714,11 +729,9 @@ spark.sql("SELECT `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts FROM  hu
 ```python
 # pyspark
 # reload data
-spark.read.format("hudi"). \
-  load(basePath). \
-  createOrReplaceTempView("hudi_trips_snapshot")
+spark.read.format("hudi").load(basePath).createOrReplaceTempView("trips_table")
 
-commits = list(map(lambda row: row[0], spark.sql("SELECT DISTINCT(_hoodie_commit_time) AS commitTime FROM  hudi_trips_snapshot ORDER BY commitTime").limit(50).collect()))
+commits = list(map(lambda row: row[0], spark.sql("SELECT DISTINCT(_hoodie_commit_time) AS commitTime FROM  trips_table ORDER BY commitTime").limit(50).collect()))
 beginTime = commits[len(commits) - 2] # commit time we are interested in
 
 # incrementally query data
@@ -730,9 +743,9 @@ incremental_read_options = {
 tripsIncrementalDF = spark.read.format("hudi"). \
   options(**incremental_read_options). \
   load(basePath)
-tripsIncrementalDF.createOrReplaceTempView("hudi_trips_incremental")
+tripsIncrementalDF.createOrReplaceTempView("trips_incremental")
 
-spark.sql("SELECT `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts FROM hudi_trips_incremental WHERE fare > 20.0").show()
+spark.sql("SELECT `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts FROM trips_incremental WHERE fare > 20.0").show()
 ```
 
 </TabItem>
@@ -785,14 +798,86 @@ values={[
 <TabItem value="scala">
 
 ```scala
-    // spark-shell
+// spark-shell
+// Lets first insert data to a new table with cdc enabled.
+val columns = Seq("ts","uuid","rider","driver","fare","city")
+val data =
+  Seq((1695158649187L,"334e26e9-8355-45cc-97c6-c31daf0df330","rider-A","driver-K",19.10,"san_francisco"),
+    (1695091544288L,"e96c4396-3fad-413a-a942-4cb36106d721","rider-B","driver-L",27.70 ,"san_paulo"),
+    (1695046452379L,"9909a8b1-2d15-4d3d-8ec9-efc48c536a00","rider-C","driver-M",33.90 ,"san_francisco"),
+    (1695332056404L,"1dced545-862b-4ceb-8b43-d2a568f6616b","rider-D","driver-N",93.50,"chennai"));
+var df = spark.createDataFrame(data).toDF(columns:_*)
+
+// Insert data
+df.write.format("hudi").
+  option(PARTITIONPATH_FIELD_NAME.key(), "city").
+  option(CDC_ENABLED.key(), "true").
+  option(TABLE_NAME, tableName).
+  mode(Overwrite).
+  save(basePath)
+
+// Update fare for riders: rider-A and rider-B 
+val updatesDf = spark.read.format("hudi").load(basePath).filter($"rider" === "rider-A" || $"rider" === "rider-B").withColumn("fare", col("fare") * 10)
+
+updatesDf.write.format("hudi").
+  option(OPERATION_OPT_KEY, "upsert").
+  option(PARTITIONPATH_FIELD_NAME.key(), "city").
+  option(CDC_ENABLED.key(), "true").
+  option(TABLE_NAME, tableName).
+  mode(Append).
+  save(basePath)
+
+
+// Query CDC data
+spark.read.option(BEGIN_INSTANTTIME.key(), 0).
+  option(QUERY_TYPE.key(), QUERY_TYPE_INCREMENTAL_OPT_VAL).
+  option(INCREMENTAL_FORMAT.key(), "cdc").
+  format("hudi").load(basePath).show(false)
 ```
 </TabItem>
 
 <TabItem value="python">
 
-```scala
-    // spark-shell
+```python
+# pyspark
+# Lets first insert data to a new table with cdc enabled.
+columns = ["ts","uuid","rider","driver","fare","city"]
+data =[(1695159649087,"334e26e9-8355-45cc-97c6-c31daf0df330","rider-A","driver-K",19.10,"san_francisco"),
+       (1695091554788,"e96c4396-3fad-413a-a942-4cb36106d721","rider-B","driver-L",27.70 ,"san_francisco"),
+       (1695046462179,"9909a8b1-2d15-4d3d-8ec9-efc48c536a00","rider-C","driver-M",33.90 ,"san_francisco"),
+       (1695516137016,"e3cf430c-889d-4015-bc98-59bdce1e530c","rider-C","driver-N",34.15,"sao_paulo")]s
+       
+
+inserts = spark.createDataFrame(data).toDF(*columns)
+
+hudi_options = {
+    'hoodie.table.name': tableName,
+    'hoodie.datasource.write.partitionpath.field': 'city',
+    'hoodie.table.cdc.enabled': 'true'
+}
+# Insert data
+inserts.write.format("hudi"). \
+    options(**hudi_options). \
+    mode("overwrite"). \
+    save(basePath)
+
+
+#  Update fare for riders: rider-A and rider-B 
+updatesDf = spark.read.format("hudi").load(basePath).filter("rider == 'rider-A' or rider == 'rider-B'").withColumn("fare",col("fare")*10)
+
+updatesDf.write.format("hudi"). \
+  mode("append"). \
+  save(basePath)
+
+# Query CDC data
+cdc_read_options = {
+    'hoodie.datasource.query.incremental.format': 'cdc',
+    'hoodie.datasource.query.type': 'incremental',
+    'hoodie.datasource.read.begin.instanttime': 0
+}
+spark.read.format("hudi"). \
+    options(**cdc_read_options). \
+    load(basePath).show(10, False)
 ```
 </TabItem>
 
@@ -839,14 +924,27 @@ values={[
 <TabItem value="scala">
 
 ```scala
-    // spark-shell
+// spark-shell
+inserts.write.format("hudi").
+  ...
+  option(TABLE_TYPE.key(), "MERGE_ON_READ").
+  ...
 ```
 </TabItem>
 
 <TabItem value="python">
 
 ```scala
-    // spark-shell
+# pyspark
+hudi_options = {
+  ...
+  'hoodie.datasource.write.table.type': 'MERGE_ON_READ'
+}
+
+inserts.write.format("hudi"). \
+options(**hudi_options). \
+mode("overwrite"). \
+save(basePath)
 ```
 </TabItem>
 
@@ -889,7 +987,11 @@ values={[
 <TabItem value="scala">
 
 ```scala
-    // spark-shell
+// spark-shell
+inserts.write.format("hudi").
+...
+option(RECORDKEY_FIELD.key(), "city").
+...
 ```
 
 </TabItem>
@@ -897,7 +999,16 @@ values={[
 <TabItem value="python">
 
 ```scala
-    // spark-shell
+# pyspark
+hudi_options = {
+  ...
+  'hoodie.datasource.write.recordkey.field': 'city'
+}
+
+inserts.write.format("hudi"). \
+options(**hudi_options). \
+mode("overwrite"). \
+save(basePath)
 ```
 
 
@@ -959,7 +1070,16 @@ updatesDf.write.format("hudi").
 <TabItem value="python">
 
 ```python
-    // spark-shell
+# pyspark
+hudi_options = {
+...
+'hoodie.datasource.write.precombine.field': 'ts'
+}
+
+upsert.write.format("hudi").
+    options(**hudi_options).
+    mode("append").
+    save(basePath)
 ```
 
 
