@@ -250,4 +250,8 @@ public class SparkDatasetTestUtils {
       return (InternalRow) aboveSpark2method.invoke(serializer, row);
     }
   }
+
+  private static void doDummyStuff() {
+    System.out.println("Test is a dummy function to trigger GH and Azure CI tests");
+  }
 }
