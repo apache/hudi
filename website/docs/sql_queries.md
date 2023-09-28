@@ -19,19 +19,18 @@ Snapshot queries are the most common query type for Hudi tables. Spark SQL suppo
 Using session properties, you can specify various options around data skipping and indexing to optimize query performance, as shown below.
 
 ```sql
--- Turn on any relevant options for data skipping and indexing. 
+-- You can turn on any relevant options for data skipping and indexing. 
 -- for e.g. the following turns on data skipping based on column stats
 SET hoodie.enable.data.skipping=true;
 SET hoodie.metadata.column.stats.enable=true;
 SET hoodie.metadata.enable=true;
-
--- Show how to turn on record index on query path.
-
+SELECT * FROM hudi_table
+WHERE price > 1.0 and price < 10.0
 
 -- Turn on use of record level index, to perform point queries.
 SET hoodie.metadata.record.index.enable=true;
 SELECT * FROM hudi_table 
-WHERE uuid = 'c8abbe79-8d89-47ea-b4ce-4d224bae5bfa';
+WHERE uuid = 'c8abbe79-8d89-47ea-b4ce-4d224bae5bfa'
 ```
 
 :::note Integration with Spark
@@ -46,8 +45,9 @@ You can also query the table at a specific commit time using the `AS OF` syntax.
 machine learning pipelines where you want to train models on a specific point in time.
 
 ```sql
-
--- Syntax for time travel queries
+SELECT * FROM <table name> 
+TIMESTAMP AS OF '<timestamp in yyyy-MM-dd HH:mm:ss.SSS or yyyy-MM-dd or yyyyMMddHHmmssSSS>' 
+WHERE <filter conditions>
 ```
 
 ### Change Data Capture
@@ -57,7 +57,14 @@ of the changed records. Similar to many relational database counterparts, Hudi p
 by materializing more versus compute costs of computing the changes on the fly, using `hoodie.table.cdc.supplemental.logging.mode` configuration.
 
 ```sql 
--- Syntax for time travel queries
+-- Supported through the hudi_table_changes TVF 
+SELECT * 
+FROM hudi_table_changes(
+  <pathToTable | tableName>, 
+  'cdc', 
+  <'earliest' | <time to capture from>> 
+  [, <time to capture to>]
+)
 ```
 
 ### Incremental Query
@@ -67,7 +74,14 @@ orders of magnitude efficiency over batch counterparts by only processing the ch
 query efficiency by using incremental queries in this fashion. Hudi supports incremental queries on both COPY_ON_WRITE and MERGE_ON_READ tables.
 
 ```sql 
--- Syntax for incremental queries
+-- Supported through the hudi_table_changes TVF 
+SELECT * 
+FROM hudi_table_changes(
+  <pathToTable | tableName>, 
+  'latest_state', 
+  <'earliest' | <time to capture from>> 
+  [, <time to capture to>]
+)
 ```
 
 :::info Incremental vs CDC Queries

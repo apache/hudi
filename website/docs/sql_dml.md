@@ -141,7 +141,7 @@ when not matched then insert *
 create table merge_source2 (id int, name string, flag string, dt string, hh string) using parquet;
 insert into merge_source2 values (1, "new_a1", 'update', '2021-12-09', '10'), (2, "new_a2", 'delete', '2021-12-09', '11'), (3, "new_a3", 'insert', '2021-12-09', '12');
 
-merge into hudi_cow_pt_tbl as target
+MERGE into hudi_cow_pt_tbl as target
 using (
   select id, name, '1000' as ts, flag, dt, hh from merge_source2
 ) source
@@ -181,7 +181,7 @@ DELETE FROM hudi_mor_tbl WHERE id % 2 = 0;
 DELETE FROM hudi_cow_pt_tbl WHERE name = 'a1';
 ```
 
-### Enabling Data Skipping and Indexing 
+### Data Skipping and Indexing 
 
 DML operations can be sped up using column statistics for data skipping and using indexes to reduce the amount of data scanned.
 For e.g. the following helps speed up the `DELETE` operation on a Hudi table, by using the record level index.
