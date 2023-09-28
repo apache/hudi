@@ -142,7 +142,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
   protected boolean needUpdatingPersistedRecord(IndexedRecord currentValue,
                                                 IndexedRecord incomingRecord, Properties properties) {
     /*
-     * Combining strategy here returns currentValue on disk if incoming record is older.
+     * Combining strategy here returns currentValue on disk if incoming record is older or same age.
      * The incoming record can be either a delete (sent as an upsert with _hoodie_is_deleted set to true)
      * or an insert/update record. In any case, if it is older than the record in disk, the currentValue
      * in disk is returned (to be rewritten with new commit time).
@@ -163,7 +163,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     Comparable incomingOrderingVal = (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) incomingRecord,
         orderField,
         true, consistentLogicalTimestampEnabled);
-    return persistedOrderingVal == null || ((Comparable) persistedOrderingVal).compareTo(incomingOrderingVal) <= 0;
+    return persistedOrderingVal == null || ((Comparable) persistedOrderingVal).compareTo(incomingOrderingVal) < 0;
   }
 
 }
