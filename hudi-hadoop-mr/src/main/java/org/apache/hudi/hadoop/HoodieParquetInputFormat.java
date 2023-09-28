@@ -110,6 +110,9 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
       return createBootstrappingRecordReader(split, job, reporter);
     }
 
+    // add partition fields to hive job conf
+    HoodieRealtimeInputFormatUtils.addProjectionField(job, job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "").split("/"));
+
     // adapt schema evolution
     new SchemaEvolutionContext(split, job).doEvolutionForParquetFormat();
 
@@ -117,7 +120,6 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
       LOG.debug("EMPLOYING DEFAULT RECORD READER - " + split);
     }
 
-    HoodieRealtimeInputFormatUtils.addProjectionField(job, job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "").split("/"));
     return getRecordReaderInternal(split, job, reporter);
   }
 
