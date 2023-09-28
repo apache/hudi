@@ -29,7 +29,6 @@ import org.junit.jupiter.api.Test;
 import java.util.Properties;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DECODE_PARTITION;
@@ -147,14 +146,6 @@ class TestHoodieSyncConfig {
     HoodieSyncConfig config5 = new HoodieSyncConfig(props5, new Configuration());
     assertEquals("org.apache.hudi.hive.SinglePartPartitionValueExtractor",
         config5.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
-  }
-
-  @Test
-  void testInferAssumeDatePartition() {
-    Properties props1 = new Properties();
-    props1.setProperty(HoodieMetadataConfig.ASSUME_DATE_PARTITIONING.key(), "true");
-    HoodieSyncConfig config1 = new HoodieSyncConfig(props1, new Configuration());
-    assertEquals("true", config1.getString(META_SYNC_ASSUME_DATE_PARTITION));
   }
 
   @Test

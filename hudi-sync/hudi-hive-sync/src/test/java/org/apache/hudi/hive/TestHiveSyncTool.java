@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
+import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -335,6 +336,8 @@ public class TestHiveSyncTool {
     assertEquals(5, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
         "No new partition should be added");
     hiveClient.addPartitionsToTable(HiveTestUtil.TABLE_NAME, newPartition);
+    FileCreateUtils.createPartitionMetaFile(basePath, "2050/01/01");
+    FileCreateUtils.createPartitionMetaFile(basePath, "2040/02/01");
     assertEquals(7, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
         "New partition should be added");
 
@@ -964,7 +967,7 @@ public class TestHiveSyncTool {
         "Table " + HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE
             + " should not exist initially");
 
-    // Lets do the sync
+    // Let's do the sync
     reSyncHiveTable();
 
     assertTrue(hiveClient.tableExists(snapshotTableName),
@@ -1212,6 +1215,7 @@ public class TestHiveSyncTool {
     assertEquals(1, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
         "No new partition should be added");
     hiveClient.addPartitionsToTable(HiveTestUtil.TABLE_NAME, newPartition);
+    FileCreateUtils.createPartitionMetaFile(basePath, "2050/01/01");
     assertEquals(2, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
         "New partition should be added");
 
@@ -1238,7 +1242,7 @@ public class TestHiveSyncTool {
     reInitHiveSyncClient();
     assertFalse(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
         "Table " + HiveTestUtil.TABLE_NAME + " should not exist initially");
-    // Lets do the sync
+    // Let's do the sync
     reSyncHiveTable();
     assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
         "Table " + HiveTestUtil.TABLE_NAME + " should exist after sync completes");

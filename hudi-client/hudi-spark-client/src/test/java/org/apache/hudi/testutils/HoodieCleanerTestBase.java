@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CleanerUtils;
@@ -188,6 +189,7 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
     partToFileId.forEach((key, value) -> {
       try {
         List<String> files = new ArrayList<>();
+        FileCreateUtils.createPartitionMetaFile(basePath, key);
         if (addBaseFiles) {
           files.addAll(testTable.withBaseFilesInPartition(key, value.toArray(new String[0])).getValue());
         }

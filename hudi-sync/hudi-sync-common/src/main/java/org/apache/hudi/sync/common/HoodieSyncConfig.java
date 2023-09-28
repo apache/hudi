@@ -141,13 +141,6 @@ public class HoodieSyncConfig extends HoodieConfig {
       .withDocumentation("Class which implements PartitionValueExtractor to extract the partition values, "
           + "default 'org.apache.hudi.hive.MultiPartKeysValueExtractor'.");
 
-  public static final ConfigProperty<String> META_SYNC_ASSUME_DATE_PARTITION = ConfigProperty
-      .key("hoodie.datasource.hive_sync.assume_date_partitioning")
-      .defaultValue(HoodieMetadataConfig.ASSUME_DATE_PARTITIONING.defaultValue())
-      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(HoodieMetadataConfig.ASSUME_DATE_PARTITIONING)))
-      .markAdvanced()
-      .withDocumentation("Assume partitioning is yyyy/MM/dd");
-
   public static final ConfigProperty<Boolean> META_SYNC_DECODE_PARTITION = ConfigProperty
       .key("hoodie.meta.sync.decode_partition")
       .defaultValue(false)
@@ -242,9 +235,6 @@ public class HoodieSyncConfig extends HoodieConfig {
     @Parameter(names = "--partition-value-extractor", description = "Class which implements PartitionValueExtractor "
         + "to extract the partition values from HDFS path")
     public String partitionValueExtractorClass;
-    @Parameter(names = {"--assume-date-partitioning"}, description = "Assume standard yyyy/mm/dd partitioning, this"
-        + " exists to support backward compatibility. If you use hoodie 0.3.x, do not set this parameter")
-    public Boolean assumeDatePartitioning;
     @Parameter(names = {"--decode-partition"}, description = "Decode the partition value if the partition has encoded during writing")
     public Boolean decodePartition;
     @Parameter(names = {"--use-file-listing-from-metadata"}, description = "Fetch file listing from Hudi's metadata")
@@ -275,7 +265,6 @@ public class HoodieSyncConfig extends HoodieConfig {
       props.setPropertyIfNonNull(META_SYNC_BASE_FILE_FORMAT.key(), baseFileFormat);
       props.setPropertyIfNonNull(META_SYNC_PARTITION_FIELDS.key(), StringUtils.join(",", partitionFields));
       props.setPropertyIfNonNull(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), partitionValueExtractorClass);
-      props.setPropertyIfNonNull(META_SYNC_ASSUME_DATE_PARTITION.key(), assumeDatePartitioning);
       props.setPropertyIfNonNull(META_SYNC_DECODE_PARTITION.key(), decodePartition);
       props.setPropertyIfNonNull(META_SYNC_USE_FILE_LISTING_FROM_METADATA.key(), useFileListingFromMetadata);
       props.setPropertyIfNonNull(META_SYNC_CONDITIONAL_SYNC.key(), isConditionalSync);

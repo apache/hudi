@@ -2646,7 +2646,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // Partitions should match
     FileSystemBackedTableMetadata fsBackedTableMetadata = new FileSystemBackedTableMetadata(engineContext, metaClient.getTableConfig(),
-        new SerializableConfiguration(hadoopConf), config.getBasePath(), config.shouldAssumeDatePartitioning());
+        new SerializableConfiguration(hadoopConf), config.getBasePath());
     List<String> fsPartitions = fsBackedTableMetadata.getAllPartitionPaths();
     List<String> metadataPartitions = tableMetadata.getAllPartitionPaths();
 
@@ -2753,12 +2753,11 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       assertEquals(metadataMetaClient.getTableConfig().getBaseFileFormat(), HoodieFileFormat.HFILE,
           "Metadata Table base file format should be HFile");
 
-      // Metadata table has a fixed number of partitions
-      // Cannot use FSUtils.getAllFoldersWithPartitionMetaFile for this as that function filters all directory
-      // in the .hoodie folder.
-      List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, getMetadataTableBasePath(basePath),
-          false, false);
-      assertEquals(metadataWriter.getEnabledPartitionTypes().size(), metadataTablePartitions.size());
+    // Metadata table has a fixed number of partitions
+    // Cannot use FSUtils.getAllFoldersWithPartitionMetaFile for this as that function filters all directory
+    // in the .hoodie folder.
+    List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, getMetadataTableBasePath(basePath), false);
+    assertEquals(metadataWriter.getEnabledPartitionTypes().size(), metadataTablePartitions.size());
 
       final Map<String, MetadataPartitionType> metadataEnabledPartitionTypes = new HashMap<>();
       metadataWriter.getEnabledPartitionTypes().forEach(e -> metadataEnabledPartitionTypes.put(e.getPartitionPath(), e));
