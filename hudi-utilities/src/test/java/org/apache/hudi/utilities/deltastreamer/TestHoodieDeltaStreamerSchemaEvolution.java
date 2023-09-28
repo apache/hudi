@@ -72,7 +72,13 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     extraProps.setProperty("hoodie.datasource.write.table.type", tableType);
     extraProps.setProperty(HoodieCommonConfig.RECONCILE_SCHEMA.key(), reconcileSchema.toString());
     extraProps.setProperty("hoodie.datasource.write.row.writer.enable", rowWriterEnable.toString());
+
+    //we set to 0 so that we create new base files on insert instead of adding inserts to existing filegroups via small file handling
     extraProps.setProperty("hoodie.parquet.small.file.limit", "0");
+
+    //We only want compaction/clustering to kick in after the final commit. This is because after compaction/clustering we have base files again
+    //and adding to base files is already covered by the tests. This is important especially for mor, because we want to see how compaction/clustering
+    //behaves when schema evolution is happening in the log files
     int maxCommits = 2;
     if (addFilegroups) {
       maxCommits++;
@@ -101,18 +107,27 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     return cfg;
   }
 
+  /**
+   * see how many files are read from in the latest commit. This verification is for making sure the test scenarios
+   * are setup as expected, rather than testing schema evolution functionality
+   */
   private void assertFileNumber(int expected, boolean isCow) {
     if (isCow) {
       assertBaseFileOnlyNumber(expected);
     } else {
+      //we can't differentiate between _hoodie_file_name for log files, so we use commit time as the differentiator between them
       assertEquals(expected, sparkSession.read().format("hudi").load(tableBasePath).select("_hoodie_commit_time", "_hoodie_file_name").distinct().count());
     }
   }
 
+  /**
+   * Base files might have multiple different commit times in the same file. To ensure this is only used when there are only base files
+   * there is a check that every file ends with .parquet, as log files don't in _hoodie_file_name
+   */
   private void assertBaseFileOnlyNumber(int expected) {
     Dataset<Row> df = sparkSession.read().format("hudi").load(tableBasePath).select("_hoodie_file_name");
     df.createOrReplaceTempView("assertFileNumberPostCompactCluster");
-    assertEquals(df.count(), sparkSession.sql("select * from assertFileNumberPostCompactCluster where _hoodie_file_name  like '%.parquet'").count());
+    assertEquals(df.count(), sparkSession.sql("select * from assertFileNumberPostCompactCluster where _hoodie_file_name like '%.parquet'").count());
     assertEquals(expected, df.distinct().count());
   }
 
@@ -166,6 +181,9 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     deltaStreamer.sync();
   }
 
+  /**
+   * Main testing logic for non-type promotion tests
+   */
   private void testBase(String updateFile, String updateColumn, String condition, int count, Boolean nullable) throws Exception {
     boolean isCow = tableType.equals("COPY_ON_WRITE");
     PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + testNum++;
@@ -183,6 +201,9 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     //add extra log files
     if (multiLogFiles) {
       doDeltaWrite("extraLogFiles.json");
+      //this write contains updates for the 6 records from the first write, so
+      //although we have 2 files for each filegroup, we only see the log files
+      //represented in the read. So that is why numFiles is 3, not 6
       assertRecordCount(numRecords);
       assertFileNumber(numFiles, false);
     }
@@ -209,6 +230,10 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
       assertBaseFileOnlyNumber(numFiles);
     } else {
       numFiles += 2;
+      if (updateFile.equals("testAddColChangeOrderAllFiles.json")) {
+        //this test updates all 3 partitions instead of 2 like the rest of the tests
+        numFiles++;
+      }
       assertFileNumber(numFiles, false);
     }
     assertRecordCount(numRecords);
@@ -219,8 +244,8 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
 
   private static Stream<Arguments> testArgs() {
     Stream.Builder<Arguments> b = Stream.builder();
-    //b.add(Arguments.of("MERGE_ON_READ", false, false, false, true, false, true));
     for (Boolean reconcileSchema : new Boolean[]{false, true}) {
+      //only testing row-writer enabled for now
       for (Boolean rowWriterEnable : new Boolean[]{true}) {
         for (Boolean addFilegroups : new Boolean[]{false, true}) {
           for (Boolean multiLogFiles : new Boolean[]{false, true}) {
@@ -372,6 +397,9 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     //add extra log files
     if (multiLogFiles) {
       doDeltaWriteTypePromo("extraLogFilesTypePromo.json", colName, startType);
+      //this write contains updates for the 6 records from the first write, so
+      //although we have 2 files for each filegroup, we only see the log files
+      //represented in the read. So that is why numFiles is 3, not 6
       assertRecordCount(numRecords);
       assertFileNumber(numFiles, false);
     }
@@ -402,7 +430,7 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
   }
 
   /**
-   * Test type promotion for root level fields
+   * Test type promotion for fields
    */
   @ParameterizedTest
   @MethodSource("testArgs")
