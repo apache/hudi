@@ -54,13 +54,13 @@ public class HoodieCleaner {
   private TypedProperties props;
 
   public HoodieCleaner(Config cfg, JavaSparkContext jssc) {
+    this(cfg, jssc, UtilHelpers.buildProperties(jssc.hadoopConfiguration(), cfg.propsFilePath, cfg.configs));
+  }
+
+  public HoodieCleaner(Config cfg, JavaSparkContext jssc, TypedProperties props) {
     this.cfg = cfg;
     this.jssc = jssc;
-    /*
-     * Filesystem used.
-     */
-    this.props = cfg.propsFilePath == null ? UtilHelpers.buildProperties(cfg.configs)
-        : UtilHelpers.readConfig(jssc.hadoopConfiguration(), new Path(cfg.propsFilePath), cfg.configs).getProps(true);
+    this.props = props;
     LOG.info("Creating Cleaner with configs : " + props.toString());
   }
 
@@ -108,12 +108,23 @@ public class HoodieCleaner {
 
     String dirName = new Path(cfg.basePath).getName();
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("hoodie-cleaner-" + dirName, cfg.sparkMaster);
+    boolean success = true;
+
     try {
       new HoodieCleaner(cfg, jssc).run();
     } catch (Throwable throwable) {
-      LOG.error("Fail to run cleaning for " + cfg.basePath, throwable);
+      success = false;
+      LOG.error("Failed to run cleaning for " + cfg.basePath, throwable);
     } finally {
       jssc.stop();
     }
+
+    if (!success) {
+      // Return a non-zero exit code to properly notify any resource manager
+      // that cleaning was not successful
+      System.exit(1);
+    }
+
+    LOG.info("Cleaner ran successfully");
   }
 }

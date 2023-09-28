@@ -22,6 +22,7 @@ package org.apache.hudi.utilities.deltastreamer;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.utilities.sources.ParquetDFSSource;
+import org.apache.hudi.utilities.streamer.HoodieStreamer;
 import org.apache.hudi.utilities.transform.Transformer;
 
 import org.apache.spark.api.java.JavaSparkContext;
@@ -36,6 +37,7 @@ import java.util.List;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 public class TestTransformer extends HoodieDeltaStreamerTestBase {
 
@@ -57,14 +59,14 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
         PARQUET_SOURCE_ROOT, false, "partition_path", "");
     String tableBasePath = basePath + "/testMultipleTransformersWithIdentifiers" + testNum;
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
-        TestHoodieDeltaStreamer.TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
+        HoodieDeltaStreamerTestBase.TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
             transformerClassNames, PROPS_FILENAME_TEST_PARQUET, false,
             useSchemaProvider, 100000, false, null, null, "timestamp", null), jsc);
 
     // Set properties for multi transformer
     // timestamp.transformer.increment is a common config and varies between the transformers
     // timestamp.transformer.multiplier is also a common config but doesn't change between transformers
-    Properties properties = ((HoodieDeltaStreamer.DeltaSyncService) deltaStreamer.getIngestionService()).getProps();
+    Properties properties = ((HoodieStreamer.StreamSyncService) deltaStreamer.getIngestionService()).getProps();
     // timestamp value initially is set to 0
     // timestamp = 0 * 2 + 10; (transformation 1)
     // timestamp = 10 * 2 + 20 = 40 (transformation 2)
@@ -73,9 +75,10 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
     properties.setProperty("timestamp.transformer.increment.3", "30");
     properties.setProperty("timestamp.transformer.increment", "20");
     properties.setProperty("timestamp.transformer.multiplier", "2");
+    properties.setProperty("transformer.suffix", ".1,.2,.3");
     deltaStreamer.sync();
 
-    TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
+    assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
     assertEquals(0, sqlContext.read().format("org.apache.hudi").load(tableBasePath).where("timestamp != 110").count());
   }
 
@@ -87,6 +90,11 @@ public class TestTransformer extends HoodieDeltaStreamerTestBase {
     @Override
     public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
                               TypedProperties properties) {
+      String[] suffixes = ((String) properties.get("transformer.suffix")).split(",");
+      for (String suffix : suffixes) {
+        // verify no configs with suffix are in properties
+        properties.keySet().forEach(k -> assertFalse(((String) k).endsWith(suffix)));
+      }
       int multiplier = Integer.parseInt((String) properties.get("timestamp.transformer.multiplier"));
       int increment = Integer.parseInt((String) properties.get("timestamp.transformer.increment"));
       return rowDataset.withColumn("timestamp", functions.col("timestamp").multiply(multiplier).plus(increment));

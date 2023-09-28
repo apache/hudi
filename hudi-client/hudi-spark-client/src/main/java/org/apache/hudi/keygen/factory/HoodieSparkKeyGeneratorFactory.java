@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
 import org.apache.hudi.keygen.ComplexKeyGenerator;
@@ -44,7 +45,9 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Properties;
 
+import static org.apache.hudi.config.HoodieWriteConfig.SPARK_SQL_MERGE_INTO_PREPPED_KEY;
 import static org.apache.hudi.config.HoodieWriteConfig.KEYGENERATOR_TYPE;
 import static org.apache.hudi.keygen.KeyGenUtils.inferKeyGeneratorType;
 
@@ -76,7 +79,10 @@ public class HoodieSparkKeyGeneratorFactory {
 
   public static KeyGenerator createKeyGenerator(TypedProperties props) throws IOException {
     String keyGeneratorClass = getKeyGeneratorClassName(props);
-    boolean autoRecordKeyGen = KeyGenUtils.enableAutoGenerateRecordKeys(props);
+    boolean autoRecordKeyGen = KeyGenUtils.enableAutoGenerateRecordKeys(props)
+        //Need to prevent overwriting the keygen for spark sql merge into because we need to extract
+        //the recordkey from the meta cols if it exists. Sql keygen will use pkless keygen if needed.
+        && !props.getBoolean(SPARK_SQL_MERGE_INTO_PREPPED_KEY, false);
     try {
       KeyGenerator keyGenerator = (KeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, props);
       if (autoRecordKeyGen) {
@@ -110,6 +116,29 @@ public class HoodieSparkKeyGeneratorFactory {
         return GlobalDeleteKeyGenerator.class.getName();
       default:
         throw new HoodieKeyGeneratorException("Unsupported keyGenerator Type " + type);
+    }
+  }
+
+  /**
+   * Instantiate {@link BuiltinKeyGenerator}.
+   *
+   * @param properties properties map.
+   * @return the key generator thus instantiated.
+   */
+  public static Option<BuiltinKeyGenerator> getKeyGenerator(Properties properties) {
+    TypedProperties typedProperties = new TypedProperties();
+    typedProperties.putAll(properties);
+    if (Option.ofNullable(properties.get(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key()))
+        .map(v -> v.equals(NonpartitionedKeyGenerator.class.getName())).orElse(false)) {
+      return Option.empty(); // Do not instantiate NonPartitionKeyGen
+    } else {
+      try {
+        return Option.of((BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(typedProperties));
+      } catch (ClassCastException cce) {
+        throw new HoodieIOException("Only those key generators implementing BuiltInKeyGenerator interface is supported with virtual keys");
+      } catch (IOException e) {
+        throw new HoodieIOException("Key generator instantiation failed ", e);
+      }
     }
   }
 

@@ -19,6 +19,8 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.avro.MercifulJsonConverter;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import com.google.protobuf.Message;
 import com.twitter.bijection.Injection;
@@ -29,16 +31,18 @@ import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
 import java.io.Serializable;
+import java.util.Arrays;
 
 import scala.util.Either;
 import scala.util.Left;
 import scala.util.Right;
 
-import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES;
-import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK;
+import static org.apache.hudi.utilities.config.HoodieStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES;
+import static org.apache.hudi.utilities.config.HoodieStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_OFFSET_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_PARTITION_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_TIMESTAMP_COLUMN;
+import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_KEY_COLUMN;
 
 /**
  * Convert a variety of datum into Avro GenericRecords. Has a bunch of lazy fields to circumvent issues around
@@ -108,9 +112,17 @@ public class AvroConvertor implements Serializable {
   }
 
   public GenericRecord fromJson(String json) {
-    initSchema();
-    initJsonConvertor();
-    return jsonConverter.convert(json, schema);
+    try {
+      initSchema();
+      initJsonConvertor();
+      return jsonConverter.convert(json, schema);
+    } catch (Exception e) {
+      if (json != null) {
+        throw new HoodieSchemaException("Failed to convert schema from json to avro: " + json, e);
+      } else {
+        throw new HoodieSchemaException("Failed to convert schema from json to avro. Schema string was null.", e);
+      }
+    }
   }
 
   public Either<GenericRecord,String> fromJsonWithError(String json) {
@@ -124,18 +136,35 @@ public class AvroConvertor implements Serializable {
   }
 
   public Schema getSchema() {
-    return new Schema.Parser().parse(schemaStr);
+    try {
+      return new Schema.Parser().parse(schemaStr);
+    } catch (Exception e) {
+      throw new HoodieSchemaException("Failed to parse json schema: " + schemaStr, e);
+    }
   }
 
   public GenericRecord fromAvroBinary(byte[] avroBinary) {
-    initSchema();
-    initInjection();
-    return recordInjection.invert(avroBinary).get();
+    try {
+      initSchema();
+      initInjection();
+      return recordInjection.invert(avroBinary).get();
+    } catch (Exception e) {
+      if (avroBinary != null) {
+        throw new HoodieSchemaException("Failed to get avro schema from avro binary: " + Arrays.toString(avroBinary), e);
+      } else {
+        throw new HoodieSchemaException("Failed to get avro schema from avro binary. Binary is null", e);
+      }
+    }
+
   }
 
   public GenericRecord fromProtoMessage(Message message) {
-    initSchema();
-    return ProtoConversionUtil.convertToAvro(schema, message);
+    try {
+      initSchema();
+      return ProtoConversionUtil.convertToAvro(schema, message);
+    } catch (Exception e) {
+      throw new HoodieSchemaException("Failed to get avro schema from proto message", e);
+    }
   }
 
   /**
@@ -143,14 +172,16 @@ public class AvroConvertor implements Serializable {
    */
   public GenericRecord withKafkaFieldsAppended(ConsumerRecord consumerRecord) {
     initSchema();
-    GenericRecord record = (GenericRecord) consumerRecord.value();
+    GenericRecord recordValue = (GenericRecord) consumerRecord.value();
     GenericRecordBuilder recordBuilder = new GenericRecordBuilder(this.schema);
-    for (Schema.Field field :  record.getSchema().getFields()) {
-      recordBuilder.set(field, record.get(field.name()));
+    for (Schema.Field field :  recordValue.getSchema().getFields()) {
+      recordBuilder.set(field, recordValue.get(field.name()));
     }
+    String recordKey = StringUtils.objToString(consumerRecord.key());
     recordBuilder.set(KAFKA_SOURCE_OFFSET_COLUMN, consumerRecord.offset());
     recordBuilder.set(KAFKA_SOURCE_PARTITION_COLUMN, consumerRecord.partition());
     recordBuilder.set(KAFKA_SOURCE_TIMESTAMP_COLUMN, consumerRecord.timestamp());
+    recordBuilder.set(KAFKA_SOURCE_KEY_COLUMN, recordKey);
     return recordBuilder.build();
   }
 

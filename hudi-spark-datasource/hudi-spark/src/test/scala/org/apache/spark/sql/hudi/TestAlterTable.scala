@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -200,6 +201,13 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
         checkAnswer(s"select id, name, price, ts, dt from $tableName2")(
           Seq(1, "a1", 10.0, 1000, null)
         )
+
+        if (HoodieSparkUtils.gteqSpark3_1) {
+          withSQLConf("hoodie.schema.on.read.enable" -> "true") {
+            spark.sql(s"alter table $tableName2 add columns(hh string comment 'hour time')")
+            Seq(1, "a1", 10.0, 1000, null, null)
+          }
+        }
       }
     }
   }
@@ -368,6 +376,54 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
           Seq(1, "a1", 10.0, 1000, null),
           Seq(2, "a2", 12.0, 1000, "e0")
         )
+      }
+    }
+  }
+
+  test("Test Alter Table With Spark Sql Conf") {
+    withTempDir { tmp =>
+      Seq(true, false).foreach { cleanEnable =>
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | location '$tablePath'
+             | tblproperties (
+             |  type = 'cow',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts',
+             |  hoodie.clean.trigger.strategy = 'NUM_COMMITS',
+             |  hoodie.cleaner.commits.retained = '3'
+             | )
+       """.stripMargin)
+
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        spark.sql(s"update $tableName set name = 'a2' where id = 1")
+        spark.sql(s"update $tableName set name = 'a3' where id = 1")
+        spark.sql(s"update $tableName set name = 'a4' where id = 1")
+
+        withSQLConf("hoodie.clean.automatic" -> cleanEnable.toString) {
+          spark.sql(s"alter table $tableName add columns(ext0 string)")
+        }
+
+        val metaClient = HoodieTableMetaClient.builder
+          .setConf(spark.sqlContext.sessionState.newHadoopConf())
+          .setBasePath(tablePath)
+          .build
+
+        val cnt = metaClient.getActiveTimeline.countInstants()
+        if (cleanEnable) {
+          assertResult(6)(cnt)
+        } else {
+          assertResult(5)(cnt)
+        }
       }
     }
   }

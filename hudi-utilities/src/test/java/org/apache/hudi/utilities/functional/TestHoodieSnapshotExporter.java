@@ -93,13 +93,13 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
 
     // Prepare data as source Hudi dataset
     HoodieWriteConfig cfg = getHoodieWriteConfig(sourcePath);
-    SparkRDDWriteClient writeClient = getHoodieWriteClient(cfg);
-    writeClient.startCommitWithTime(COMMIT_TIME);
-    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(new String[] {PARTITION_PATH});
-    List<HoodieRecord> records = dataGen.generateInserts(COMMIT_TIME, NUM_RECORDS);
-    JavaRDD<HoodieRecord> recordsRDD = jsc().parallelize(records, 1);
-    writeClient.bulkInsert(recordsRDD, COMMIT_TIME);
-    writeClient.close();
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(cfg)) {
+      writeClient.startCommitWithTime(COMMIT_TIME);
+      HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(new String[] {PARTITION_PATH});
+      List<HoodieRecord> records = dataGen.generateInserts(COMMIT_TIME, NUM_RECORDS);
+      JavaRDD<HoodieRecord> recordsRDD = jsc().parallelize(records, 1);
+      writeClient.bulkInsert(recordsRDD, COMMIT_TIME);
+    }
     RemoteIterator<LocatedFileStatus> itr = lfs.listFiles(new Path(sourcePath), true);
     while (itr.hasNext()) {
       LOG.info(">>> Prepared test file: " + itr.next().getPath());

@@ -35,6 +35,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -101,12 +102,12 @@ public class TestRollbacksCommand extends CLIFunctionalTestHarness {
         .withRollbackUsingMarkers(false)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
     HoodieMetadataTestTable.of(metaClient, SparkHoodieBackedTableMetadataWriter.create(
-            metaClient.getHadoopConf(), config, context))
+            metaClient.getHadoopConf(), config, context), Option.of(context))
         .withPartitionMetaFiles(DEFAULT_PARTITION_PATHS)
         .addCommit("100")
-        .withBaseFilesInPartitions(partitionAndFileId)
+        .withBaseFilesInPartitions(partitionAndFileId).getLeft()
         .addCommit("101")
-        .withBaseFilesInPartitions(partitionAndFileId)
+        .withBaseFilesInPartitions(partitionAndFileId).getLeft()
         .addInflightCommit("102")
         .withBaseFilesInPartitions(partitionAndFileId);
 

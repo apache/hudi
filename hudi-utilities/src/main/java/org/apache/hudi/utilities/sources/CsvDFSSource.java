@@ -35,33 +35,37 @@ import org.apache.spark.sql.types.StructType;
 import java.util.Arrays;
 import java.util.List;
 
+import static org.apache.hudi.common.util.ConfigUtils.DELTA_STREAMER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
+
 /**
  * Reads data from CSV files on DFS as the data source.
- *
+ * <p>
  * Internally, we use Spark to read CSV files thus any limitation of Spark CSV also applies here
  * (e.g., limited support for nested schema).
- *
- * You can set the CSV-specific configs in the format of hoodie.deltastreamer.csv.*
+ * <p>
+ * You can set the CSV-specific configs in the format of hoodie.streamer.csv.*
  * that are Spark compatible to deal with CSV files in Hudi.  The supported options are:
- *
- *       "sep", "encoding", "quote", "escape", "charToEscapeQuoteEscaping", "comment",
- *       "header", "enforceSchema", "inferSchema", "samplingRatio", "ignoreLeadingWhiteSpace",
- *       "ignoreTrailingWhiteSpace", "nullValue", "emptyValue", "nanValue", "positiveInf",
- *       "negativeInf", "dateFormat", "timestampFormat", "maxColumns", "maxCharsPerColumn",
- *       "mode", "columnNameOfCorruptRecord", "multiLine"
- *
+ * <p>
+ * "sep", "encoding", "quote", "escape", "charToEscapeQuoteEscaping", "comment",
+ * "header", "enforceSchema", "inferSchema", "samplingRatio", "ignoreLeadingWhiteSpace",
+ * "ignoreTrailingWhiteSpace", "nullValue", "emptyValue", "nanValue", "positiveInf",
+ * "negativeInf", "dateFormat", "timestampFormat", "maxColumns", "maxCharsPerColumn",
+ * "mode", "columnNameOfCorruptRecord", "multiLine"
+ * <p>
  * Detailed information of these CSV options can be found at:
  * https://spark.apache.org/docs/latest/api/java/org/apache/spark/sql/DataFrameReader.html#csv-scala.collection.Seq-
- *
+ * <p>
  * If the source Avro schema is provided through the {@link org.apache.hudi.utilities.schema.FilebasedSchemaProvider}
- * using "hoodie.deltastreamer.schemaprovider.source.schema.file" config, the schema is
+ * using "hoodie.streamer.schemaprovider.source.schema.file" config, the schema is
  * passed to the CSV reader without inferring the schema from the CSV file.
  */
 public class CsvDFSSource extends RowSource {
 
   private static final long serialVersionUID = 1L;
   // CsvSource config prefix
-  protected static final String CSV_SRC_CONFIG_PREFIX = "hoodie.deltastreamer.csv.";
+  protected static final String CSV_SRC_CONFIG_PREFIX = STREAMER_CONFIG_PREFIX + "csv.";
+  protected static final String OLD_CSV_SRC_CONFIG_PREFIX = DELTA_STREAMER_CONFIG_PREFIX + "csv.";
   // CSV-specific configurations to pass in from Hudi to Spark
   protected static final List<String> CSV_CONFIG_KEYS = Arrays.asList(
       "sep", "encoding", "quote", "escape", "charToEscapeQuoteEscaping", "comment",
@@ -108,7 +112,8 @@ public class CsvDFSSource extends RowSource {
       DataFrameReader dataFrameReader = sparkSession.read().format("csv");
       CSV_CONFIG_KEYS.forEach(optionKey -> {
         String configPropName = CSV_SRC_CONFIG_PREFIX + optionKey;
-        String value  = props.getString(configPropName, null);
+        String oldConfigPropName = OLD_CSV_SRC_CONFIG_PREFIX + optionKey;
+        String value = props.getString(configPropName, props.getString(oldConfigPropName, null));
         // Pass down the Hudi CSV configs to Spark DataFrameReader
         if (value != null) {
           dataFrameReader.option(optionKey, value);

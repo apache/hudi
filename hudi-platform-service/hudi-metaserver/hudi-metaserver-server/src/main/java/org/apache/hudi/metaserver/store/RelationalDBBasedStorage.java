@@ -76,6 +76,13 @@ public class RelationalDBBasedStorage implements MetaserverStorage, Serializable
   }
 
   @Override
+  public boolean deleteDatabase(Long dbId) throws MetaserverStorageException {
+    Map<String, Object> params = new HashMap<>();
+    params.put("dbId", dbId);
+    return tableDao.deleteBySql("deleteDB", params) == 1;
+  }
+
+  @Override
   public boolean createTable(Long dbId, Table table) throws MetaserverStorageException {
     Map<String, Object> params = new HashMap<>();
     params.put("dbId", dbId);
@@ -102,6 +109,13 @@ public class RelationalDBBasedStorage implements MetaserverStorage, Serializable
     List<Long> ids = tableDao.queryForListBySql("selectTableId", params);
     validate(ids, "table " + db + "." + tb);
     return ids.isEmpty() ? null : ids.get(0);
+  }
+
+  @Override
+  public boolean deleteTable(Long tableId) throws MetaserverStorageException {
+    Map<String, Object> params = new HashMap<>();
+    params.put("tableId", tableId);
+    return tableDao.deleteBySql("deleteTable", params) == 1;
   }
 
   @Override
@@ -132,6 +146,13 @@ public class RelationalDBBasedStorage implements MetaserverStorage, Serializable
     List<String> timestamps = timelineDao.queryForListBySql("selectTimestampByTableId", tableId);
     validate(timestamps, "timestamp");
     return timestamps.isEmpty() ? null : timestamps.get(0);
+  }
+
+  @Override
+  public boolean deleteTableTimestamp(Long tableId) throws MetaserverStorageException {
+    Map<String, Object> params = new HashMap<>();
+    params.put("tableId", tableId);
+    return timelineDao.deleteBySql("deleteTimestamp", params) == 1;
   }
 
   @Override

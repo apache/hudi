@@ -45,7 +45,6 @@ import org.apache.orc.TypeDescription;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -57,6 +56,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.avro.JsonProperties.NULL_VALUE;
 import static org.apache.hudi.common.util.BinaryUtil.toBytes;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Methods including addToVector, addUnionValue, createOrcSchema are originally from
@@ -142,12 +142,12 @@ public class AvroOrcUtils {
         byte[] bytes = null;
 
         if (value instanceof String) {
-          bytes = ((String) value).getBytes(StandardCharsets.UTF_8);
+          bytes = getUTF8Bytes((String) value);
         } else if (value instanceof Utf8) {
           final Utf8 utf8 = (Utf8) value;
           bytes = utf8.getBytes();
         } else if (value instanceof GenericData.EnumSymbol) {
-          bytes = ((GenericData.EnumSymbol) value).toString().getBytes(StandardCharsets.UTF_8);
+          bytes = getUTF8Bytes(((GenericData.EnumSymbol) value).toString());
         } else {
           throw new IllegalStateException(String.format(
               "Unrecognized type for Avro %s field value, which has type %s, value %s",
@@ -400,7 +400,7 @@ public class AvroOrcUtils {
         case CHAR:
           if (value instanceof String) {
             matches = true;
-            matchValue = ((String) value).getBytes(StandardCharsets.UTF_8);
+            matchValue = getUTF8Bytes((String) value);
           } else if (value instanceof Utf8) {
             matches = true;
             matchValue = ((Utf8) value).getBytes();

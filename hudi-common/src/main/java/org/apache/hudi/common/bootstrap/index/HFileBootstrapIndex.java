@@ -64,6 +64,8 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+
 /**
  * Maintains mapping from skeleton file id to external bootstrap file.
  * It maintains 2 physical indices.
@@ -182,12 +184,8 @@ public class HFileBootstrapIndex extends BootstrapIndex {
    * @param fileSystem File System
    */
   private static HFile.Reader createReader(String hFilePath, Configuration conf, FileSystem fileSystem) {
-    try {
-      LOG.info("Opening HFile for reading :" + hFilePath);
-      return HoodieHFileUtils.createHFileReader(fileSystem, new HFilePathForReader(hFilePath), new CacheConfig(conf), conf);
-    } catch (IOException ioe) {
-      throw new HoodieIOException(ioe.getMessage(), ioe);
-    }
+    LOG.info("Opening HFile for reading :" + hFilePath);
+    return HoodieHFileUtils.createHFileReader(fileSystem, new HFilePathForReader(hFilePath), new CacheConfig(conf), conf);
   }
 
   @Override
@@ -473,7 +471,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
         srcFilePartitionInfo.setPartitionPath(mapping.getPartitionPath());
         srcFilePartitionInfo.setBootstrapPartitionPath(mapping.getBootstrapPartitionPath());
         srcFilePartitionInfo.setBootstrapFileStatus(mapping.getBootstrapFileStatus());
-        KeyValue kv = new KeyValue(getFileGroupKey(mapping.getFileGroupId()).getBytes(), new byte[0], new byte[0],
+        KeyValue kv = new KeyValue(getUTF8Bytes(getFileGroupKey(mapping.getFileGroupId())), new byte[0], new byte[0],
             HConstants.LATEST_TIMESTAMP, KeyValue.Type.Put,
             TimelineMetadataUtils.serializeAvroMetadata(srcFilePartitionInfo,
                 HoodieBootstrapFilePartitionInfo.class).get());

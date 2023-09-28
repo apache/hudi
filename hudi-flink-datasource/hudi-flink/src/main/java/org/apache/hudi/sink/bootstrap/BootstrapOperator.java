@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.bootstrap;
 
+import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -68,6 +69,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import static java.util.stream.Collectors.toList;
+import static org.apache.hudi.source.FileIndex.metadataConfig;
 import static org.apache.hudi.util.StreamerUtil.isValidFile;
 
 /**
@@ -106,7 +108,9 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
   @Override
   public void snapshotState(StateSnapshotContext context) throws Exception {
     lastInstantTime = this.ckpMetadata.lastPendingInstant();
-    instantState.update(Collections.singletonList(lastInstantTime));
+    if (null != lastInstantTime) {
+      instantState.update(Collections.singletonList(lastInstantTime));
+    }
   }
 
   @Override
@@ -140,7 +144,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
     String basePath = hoodieTable.getMetaClient().getBasePath();
     int taskID = getRuntimeContext().getIndexOfThisSubtask();
     LOG.info("Start loading records in table {} into the index state, taskId = {}", basePath, taskID);
-    for (String partitionPath : FSUtils.getAllFoldersWithPartitionMetaFile(FSUtils.getFs(basePath, hadoopConf), basePath)) {
+    for (String partitionPath : FSUtils.getAllPartitionPaths(new HoodieFlinkEngineContext(hadoopConf), metadataConfig(conf), basePath)) {
       if (pattern.matcher(partitionPath).matches()) {
         loadRecords(partitionPath);
       }

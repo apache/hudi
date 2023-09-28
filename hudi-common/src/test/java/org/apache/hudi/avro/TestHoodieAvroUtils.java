@@ -18,6 +18,16 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.avro.model.BooleanWrapper;
+import org.apache.hudi.avro.model.BytesWrapper;
+import org.apache.hudi.avro.model.DateWrapper;
+import org.apache.hudi.avro.model.DecimalWrapper;
+import org.apache.hudi.avro.model.DoubleWrapper;
+import org.apache.hudi.avro.model.FloatWrapper;
+import org.apache.hudi.avro.model.IntWrapper;
+import org.apache.hudi.avro.model.LongWrapper;
+import org.apache.hudi.avro.model.StringWrapper;
+import org.apache.hudi.avro.model.TimestampMicrosWrapper;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.exception.HoodieException;
@@ -27,22 +37,43 @@ import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.io.BinaryDecoder;
+import org.apache.avro.io.BinaryEncoder;
+import org.apache.avro.io.DecoderFactory;
+import org.apache.avro.io.EncoderFactory;
+import org.apache.avro.util.Utf8;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.sql.Date;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.sanitizeName;
+import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
+import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -109,6 +140,25 @@ public class TestHoodieAvroUtils {
       + "{\"name\":\"ln\",\"type\":\"string\"},"
       + "{\"name\":\"ss\",\"type\":{\"name\":\"ss\",\"type\":\"record\",\"fields\":["
       + "{\"name\":\"fn\",\"type\":[\"null\" ,\"string\"],\"default\": null},{\"name\":\"ln\",\"type\":[\"null\" ,\"string\"],\"default\": null}]}}]}";
+
+  private static String SCHEMA_WITH_AVRO_TYPES = "{\"name\":\"TestRecordAvroTypes\",\"type\":\"record\",\"fields\":["
+      // Primitive types
+      + "{\"name\":\"booleanField\",\"type\":\"boolean\"},"
+      + "{\"name\":\"intField\",\"type\":\"int\"},"
+      + "{\"name\":\"longField\",\"type\":\"long\"},"
+      + "{\"name\":\"floatField\",\"type\":\"float\"},"
+      + "{\"name\":\"doubleField\",\"type\":\"double\"},"
+      + "{\"name\":\"bytesField\",\"type\":\"bytes\"},"
+      + "{\"name\":\"stringField\",\"type\":\"string\"},"
+      // Logical types
+      + "{\"name\":\"decimalField\",\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":20,\"scale\":5},"
+      + "{\"name\":\"timeMillisField\",\"type\":\"int\",\"logicalType\":\"time-millis\"},"
+      + "{\"name\":\"timeMicrosField\",\"type\":\"long\",\"logicalType\":\"time-micros\"},"
+      + "{\"name\":\"timestampMillisField\",\"type\":\"long\",\"logicalType\":\"timestamp-millis\"},"
+      + "{\"name\":\"timestampMicrosField\",\"type\":\"long\",\"logicalType\":\"timestamp-micros\"},"
+      + "{\"name\":\"localTimestampMillisField\",\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"},"
+      + "{\"name\":\"localTimestampMicrosField\",\"type\":\"long\",\"logicalType\":\"local-timestamp-micros\"}"
+      + "]}";
 
   @Test
   public void testPropsPresent() {
@@ -436,5 +486,122 @@ public class TestHoodieAvroUtils {
     assertEquals("a*bc", sanitizeName("a.bc", "*"));
     assertEquals("abcdef___", sanitizeName("abcdef_."));
     assertEquals("__ab__cd__", sanitizeName("1ab*cd?"));
+  }
+
+  @Test
+  public void testGenerateProjectionSchema() {
+    Schema originalSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(EXAMPLE_SCHEMA));
+
+    Schema schema1 = HoodieAvroUtils.generateProjectionSchema(originalSchema, Arrays.asList("_row_key", "timestamp"));
+    assertEquals(2, schema1.getFields().size());
+    List<String> fieldNames1 = schema1.getFields().stream().map(Schema.Field::name).collect(Collectors.toList());
+    assertTrue(fieldNames1.contains("_row_key"));
+    assertTrue(fieldNames1.contains("timestamp"));
+
+    assertTrue(assertThrows(HoodieException.class, () ->
+        HoodieAvroUtils.generateProjectionSchema(originalSchema, Arrays.asList("_row_key", "timestamp", "fake_field")))
+        .getMessage().contains("Field fake_field not found in log schema. Query cannot proceed!"));
+  }
+
+  @Test
+  public void testWrapAndUnwrapAvroValues() throws IOException {
+    Schema schema = new Schema.Parser().parse(SCHEMA_WITH_AVRO_TYPES);
+    GenericRecord record = new GenericData.Record(schema);
+    Map<String, Class> expectedWrapperClass = new HashMap<>();
+
+    record.put("booleanField", true);
+    expectedWrapperClass.put("booleanField", BooleanWrapper.class);
+    record.put("intField", 698);
+    expectedWrapperClass.put("intField", IntWrapper.class);
+    record.put("longField", 192485030493L);
+    expectedWrapperClass.put("longField", LongWrapper.class);
+    record.put("floatField", 18.125f);
+    expectedWrapperClass.put("floatField", FloatWrapper.class);
+    record.put("doubleField", 94385932.342104);
+    expectedWrapperClass.put("doubleField", DoubleWrapper.class);
+    record.put("bytesField", ByteBuffer.wrap(new byte[] {1, 20, 0, 60, 2, 108}));
+    expectedWrapperClass.put("bytesField", BytesWrapper.class);
+    record.put("stringField", "abcdefghijk");
+    expectedWrapperClass.put("stringField", StringWrapper.class);
+    record.put("decimalField", ByteBuffer.wrap(getUTF8Bytes("9213032.4966")));
+    expectedWrapperClass.put("decimalField", BytesWrapper.class);
+    record.put("timeMillisField", 57996136);
+    expectedWrapperClass.put("timeMillisField", IntWrapper.class);
+    record.put("timeMicrosField", 57996136930L);
+    expectedWrapperClass.put("timeMicrosField", LongWrapper.class);
+    record.put("timestampMillisField", 1690828731156L);
+    expectedWrapperClass.put("timestampMillisField", LongWrapper.class);
+    record.put("timestampMicrosField", 1690828731156982L);
+    expectedWrapperClass.put("timestampMicrosField", LongWrapper.class);
+    record.put("localTimestampMillisField", 1690828731156L);
+    expectedWrapperClass.put("localTimestampMillisField", LongWrapper.class);
+    record.put("localTimestampMicrosField", 1690828731156982L);
+    expectedWrapperClass.put("localTimestampMicrosField", LongWrapper.class);
+
+    GenericDatumWriter<GenericRecord> writer = new GenericDatumWriter<>(schema);
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(baos, null);
+    writer.write(record, encoder);
+    encoder.flush();
+    byte[] data = baos.toByteArray();
+
+    GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>(schema);
+    BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(data, 0, data.length, null);
+    GenericRecord deserializedRecord = reader.read(null, decoder);
+    Map<String, Object> fieldValueMapping = deserializedRecord.getSchema().getFields().stream()
+        .collect(Collectors.toMap(
+            Schema.Field::name,
+            field -> deserializedRecord.get(field.name())
+        ));
+
+    for (String fieldName : fieldValueMapping.keySet()) {
+      Object value = fieldValueMapping.get(fieldName);
+      Object wrapperValue = wrapValueIntoAvro((Comparable) value);
+      assertTrue(expectedWrapperClass.get(fieldName).isInstance(wrapperValue));
+      if (value instanceof Utf8) {
+        assertEquals(value.toString(), ((GenericRecord) wrapperValue).get(0));
+        assertEquals(value.toString(), unwrapAvroValueWrapper(wrapperValue));
+      } else {
+        assertEquals(value, ((GenericRecord) wrapperValue).get(0));
+        assertEquals(value, unwrapAvroValueWrapper(wrapperValue));
+      }
+    }
+  }
+
+  public static Stream<Arguments> javaValueParams() {
+    Object[][] data =
+        new Object[][] {
+            {new Timestamp(1690766971000L), TimestampMicrosWrapper.class},
+            {new Date(1672560000000L), DateWrapper.class},
+            {LocalDate.of(2023, 1, 1), DateWrapper.class},
+            {new BigDecimal("12345678901234.2948"), DecimalWrapper.class}
+        };
+    return Stream.of(data).map(Arguments::of);
+  }
+
+  @ParameterizedTest
+  @MethodSource("javaValueParams")
+  public void testWrapAndUnwrapJavaValues(Comparable value, Class expectedWrapper) {
+    Object wrapperValue = wrapValueIntoAvro(value);
+    assertTrue(expectedWrapper.isInstance(wrapperValue));
+    if (value instanceof Timestamp) {
+      assertEquals(((Timestamp) value).getTime() * 1000L,
+          ((GenericRecord) wrapperValue).get(0));
+      assertEquals(((Timestamp) value).getTime(),
+          ((Instant) unwrapAvroValueWrapper(wrapperValue)).toEpochMilli());
+    } else if (value instanceof Date) {
+      assertEquals((int) ChronoUnit.DAYS.between(
+              LocalDate.ofEpochDay(0), ((Date) value).toLocalDate()),
+          ((GenericRecord) wrapperValue).get(0));
+      assertEquals(((Date) value).toLocalDate(), unwrapAvroValueWrapper(wrapperValue));
+    } else if (value instanceof LocalDate) {
+      assertEquals((int) ChronoUnit.DAYS.between(LocalDate.ofEpochDay(0), (LocalDate) value),
+          ((GenericRecord) wrapperValue).get(0));
+      assertEquals(value, unwrapAvroValueWrapper(wrapperValue));
+    } else {
+      assertEquals("0.000000000000000",
+          ((BigDecimal) value)
+              .subtract((BigDecimal) unwrapAvroValueWrapper(wrapperValue)).toPlainString());
+    }
   }
 }

@@ -37,11 +37,12 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.data.HoodieSparkLongAccumulator;
 import org.apache.hudi.exception.HoodieException;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
 import org.apache.spark.sql.SQLContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -63,7 +64,6 @@ import scala.Tuple2;
 @ThreadSafe
 public class HoodieSparkEngineContext extends HoodieEngineContext {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkEngineContext.class);
   private final JavaSparkContext javaSparkContext;
   private final SQLContext sqlContext;
   private final Map<HoodieDataCacheKey, List<Integer>> cachedRddIds = new HashMap<>();
@@ -79,6 +79,10 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   }
 
   public JavaSparkContext getJavaSparkContext() {
+    return javaSparkContext;
+  }
+
+  public JavaSparkContext jsc() {
     return javaSparkContext;
   }
 
@@ -168,9 +172,9 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
 
   @Override
   public void setProperty(EngineProperty key, String value) {
-    if (key == EngineProperty.COMPACTION_POOL_NAME) {
-      javaSparkContext.setLocalProperty("spark.scheduler.pool", value);
-    } else if (key == EngineProperty.CLUSTERING_POOL_NAME) {
+    if (key.equals(EngineProperty.COMPACTION_POOL_NAME)
+        || key.equals(EngineProperty.CLUSTERING_POOL_NAME)
+        || key.equals(EngineProperty.DELTASYNC_POOL_NAME)) {
       javaSparkContext.setLocalProperty("spark.scheduler.pool", value);
     } else {
       throw new HoodieException("Unknown engine property :" + key);
@@ -213,5 +217,27 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
       List<Integer> removed = cachedRddIds.remove(cacheKey);
       return removed == null ? Collections.emptyList() : removed;
     }
+  }
+
+  @Override
+  public void cancelJob(String groupId) {
+    javaSparkContext.cancelJobGroup(groupId);
+  }
+
+  @Override
+  public void cancelAllJobs() {
+    javaSparkContext.cancelAllJobs();
+  }
+
+  public SparkConf getConf() {
+    return javaSparkContext.getConf();
+  }
+
+  public Configuration hadoopConfiguration() {
+    return javaSparkContext.hadoopConfiguration();
+  }
+
+  public <T> JavaRDD<T> emptyRDD() {
+    return javaSparkContext.emptyRDD();
   }
 }

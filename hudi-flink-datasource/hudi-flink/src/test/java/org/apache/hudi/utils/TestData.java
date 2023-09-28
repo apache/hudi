@@ -24,24 +24,22 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
-import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.utils.BucketStreamWriteFunctionWrapper;
+import org.apache.hudi.sink.utils.ConsistentBucketStreamWriteFunctionWrapper;
 import org.apache.hudi.sink.utils.InsertFunctionWrapper;
 import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
 import org.apache.hudi.sink.utils.TestFunctionWrapper;
 import org.apache.hudi.table.HoodieFlinkTable;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -289,6 +287,22 @@ public class TestData {
           TimestampData.fromEpochMillis(8000), StringData.fromString("par4"))
   );
 
+  // data set of test_source.data with partition 'par1' and 'par2' overwrite
+  public static List<RowData> DATA_SET_SOURCE_INSERT_OVERWRITE_DYNAMIC_PARTITION = Arrays.asList(
+      insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 24,
+          TimestampData.fromEpochMillis(1000), StringData.fromString("par1")),
+      insertRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 34,
+          TimestampData.fromEpochMillis(2000), StringData.fromString("par2")),
+      insertRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
+          TimestampData.fromEpochMillis(5000), StringData.fromString("par3")),
+      insertRow(StringData.fromString("id6"), StringData.fromString("Emma"), 20,
+          TimestampData.fromEpochMillis(6000), StringData.fromString("par3")),
+      insertRow(StringData.fromString("id7"), StringData.fromString("Bob"), 44,
+          TimestampData.fromEpochMillis(7000), StringData.fromString("par4")),
+      insertRow(StringData.fromString("id8"), StringData.fromString("Han"), 56,
+          TimestampData.fromEpochMillis(8000), StringData.fromString("par4"))
+  );
+
   public static List<RowData> DATA_SET_UPDATE_DELETE = Arrays.asList(
       // this is update
       insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 24,
@@ -331,6 +345,10 @@ public class TestData {
       insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
           TimestampData.fromEpochMillis(1), StringData.fromString("par1")));
 
+  public static List<RowData> DATA_SET_SINGLE_DELETE = Collections.singletonList(
+      deleteRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+          TimestampData.fromEpochMillis(5), StringData.fromString("par1")));
+
   public static List<RowData> DATA_SET_DISORDER_INSERT = Arrays.asList(
       insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
           TimestampData.fromEpochMillis(3), StringData.fromString("par1")),
@@ -339,6 +357,17 @@ public class TestData {
       insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
           TimestampData.fromEpochMillis(2), StringData.fromString("par1")),
       insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+          TimestampData.fromEpochMillis(1), StringData.fromString("par1"))
+  );
+
+  public static List<RowData> DATA_SET_DISORDER_INSERT_DELETE = Arrays.asList(
+      insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+          TimestampData.fromEpochMillis(3), StringData.fromString("par1")),
+      insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 22,
+          TimestampData.fromEpochMillis(4), StringData.fromString("par1")),
+      insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+          TimestampData.fromEpochMillis(2), StringData.fromString("par1")),
+      deleteRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
           TimestampData.fromEpochMillis(1), StringData.fromString("par1"))
   );
 
@@ -389,6 +418,38 @@ public class TestData {
               TimestampData.fromEpochMillis(i), StringData.fromString("par1")));
     });
     return inserts;
+  }
+
+  /**
+   * Updates the rows with given value {@code val} at field index {@code idx}.
+   * All the target rows specified with range {@code targets} would be updated.
+   *
+   * <p>NOTE: only INT type is supported.
+   *
+   * @param dataset The rows to update
+   * @param idx     The target field index
+   * @param val     The new value
+   * @param targets The target row numbers to update, the number starts from 0
+   *
+   * @return Copied rows with new values setup.
+   */
+  public static List<RowData> update(List<RowData> dataset, int idx, int val, int... targets) {
+    List<RowData> copied = dataset.stream().map(TestConfigurations.SERIALIZER::copy).collect(Collectors.toList());
+    Arrays.stream(targets).forEach(target -> {
+      BinaryRowData rowData = (BinaryRowData) copied.get(target);
+      rowData.setInt(idx, val);
+    });
+    return copied;
+  }
+
+  /**
+   * Returns a copy of the given rows excluding the rows at indices {@code targets}.
+   */
+  public static List<RowData> delete(List<RowData> dataset, int... targets) {
+    Set<Integer> exclude = Arrays.stream(targets).boxed().collect(Collectors.toSet());
+    return IntStream.range(0, dataset.size())
+        .filter(i -> !exclude.contains(i))
+        .mapToObj(i -> TestConfigurations.SERIALIZER.copy(dataset.get(i))).collect(Collectors.toList());
   }
 
   public static List<RowData> filterOddRows(List<RowData> rows) {
@@ -495,7 +556,11 @@ public class TestData {
     if (OptionsResolver.isAppendMode(conf)) {
       return new InsertFunctionWrapper<>(basePath, conf);
     } else if (OptionsResolver.isBucketIndexType(conf)) {
-      return new BucketStreamWriteFunctionWrapper<>(basePath, conf);
+      if (OptionsResolver.isConsistentHashingBucketIndexType(conf)) {
+        return new ConsistentBucketStreamWriteFunctionWrapper<>(basePath, conf);
+      } else {
+        return new BucketStreamWriteFunctionWrapper<>(basePath, conf);
+      }
     } else {
       return new StreamWriteFunctionWrapper<>(basePath, conf);
     }
@@ -743,7 +808,7 @@ public class TestData {
       Function<GenericRecord, String> extractor) throws IOException {
 
     // 1. init flink table
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath.toURI().toString());
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(basePath.toURI().toString(), new org.apache.hadoop.conf.Configuration());
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath.toURI().toString()).build();
     HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, HoodieFlinkEngineContext.DEFAULT, metaClient);
 
@@ -799,7 +864,7 @@ public class TestData {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .fromFile(hoodiePropertiesFile)
         .withPath(basePath).build();
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ, config.getProps());
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(basePath, new org.apache.hadoop.conf.Configuration());
     HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, HoodieFlinkEngineContext.DEFAULT, metaClient);
     Schema schema = new TableSchemaResolver(metaClient).getTableAvroSchema();
 
@@ -891,7 +956,6 @@ public class TestData {
         .withSpillableMapBasePath("/tmp/")
         .withDiskMapType(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue())
         .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue())
-        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
   }
 

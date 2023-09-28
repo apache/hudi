@@ -31,6 +31,7 @@ import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -57,6 +58,13 @@ public class HoodieOfflineJobTestBase extends UtilitiesTestBase {
   @BeforeEach
   public void setup() {
     dataGen = new HoodieTestDataGenerator();
+  }
+
+  @AfterEach
+  public void teardown() {
+    if (client != null) {
+      client.close();
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -88,7 +96,7 @@ public class HoodieOfflineJobTestBase extends UtilitiesTestBase {
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatuses);
     if (doCommit) {
       List<HoodieWriteStat> writeStats = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
-      boolean committed = client.commitStats(instant, writeStats, Option.empty(), metaClient.getCommitActionType());
+      boolean committed = client.commitStats(instant, context.parallelize(writeStatuses, 1), writeStats, Option.empty(), metaClient.getCommitActionType());
       Assertions.assertTrue(committed);
     }
     metaClient = HoodieTableMetaClient.reload(metaClient);

@@ -21,7 +21,7 @@
     <parent>
         <artifactId>hudi</artifactId>
         <groupId>org.apache.hudi</groupId>
-        <version>0.14.0-SNAPSHOT</version>
+        <version>1.0.0-SNAPSHOT</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
     <modelVersion>4.0.0</modelVersion>
@@ -54,6 +54,10 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
         </dependency>
 
         <dependency>
@@ -183,6 +187,7 @@
                       <include>com.fasterxml.jackson.core:jackson-annotations</include>
                       <include>com.fasterxml.jackson.core:jackson-core</include>
                       <include>com.fasterxml.jackson.core:jackson-databind</include>
+                      <include>com.fasterxml.jackson.datatype:jackson-datatype-jsr310</include>
                       <include>commons-io:commons-io</include>
                       <include>log4j:log4j</include>
                       <include>org.openjdk.jol:jol-core</include>
@@ -196,6 +201,10 @@
                     <relocation>
                         <pattern>org.openjdk.jol.</pattern>
                         <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
+                    </relocation>
+                    <relocation>
+                        <pattern>com.fasterxml.jackson.</pattern>
+                        <shadedPattern>org.apache.hudi.com.fasterxml.jackson.</shadedPattern>
                     </relocation>
                 </relocations>
             </configuration>

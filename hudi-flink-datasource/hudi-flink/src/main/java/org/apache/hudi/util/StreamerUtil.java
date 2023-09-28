@@ -50,7 +50,6 @@ import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.avro.Schema;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.util.Preconditions;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -74,7 +73,6 @@ import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
-import static org.apache.hudi.common.table.HoodieTableMetaClient.AUXILIARYFOLDER_NAME;
 
 /**
  * Utilities for Flink stream read and write.
@@ -97,6 +95,16 @@ public class StreamerUtil {
     return readConfig(
         HadoopConfigurations.getHadoopConf(cfg),
         new Path(cfg.propsFilePath), cfg.configs).getProps();
+  }
+
+  public static TypedProperties buildProperties(List<String> props) {
+    TypedProperties properties = DFSPropertiesConfiguration.getGlobalProps();
+    props.forEach(x -> {
+      String[] kv = x.split("=");
+      ValidationUtils.checkArgument(kv.length == 2);
+      properties.setProperty(kv[0], kv[1]);
+    });
+    return properties;
   }
 
   public static Schema getSourceSchema(org.apache.flink.configuration.Configuration conf) {
@@ -150,6 +158,7 @@ public class StreamerUtil {
         .withBucketNum(String.valueOf(conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS)))
         .withRecordKeyField(conf.getString(FlinkOptions.RECORD_KEY_FIELD))
         .withIndexKeyField(OptionsResolver.getIndexKeyField(conf))
+        .withBucketIndexEngineType(OptionsResolver.getBucketEngineType(conf))
         .withEngineType(EngineType.FLINK)
         .build();
   }
@@ -173,11 +182,6 @@ public class StreamerUtil {
       }
     }
     return new TypedProperties(properties);
-  }
-
-  public static void checkRequiredProperties(TypedProperties props, List<String> checkPropNames) {
-    checkPropNames.forEach(prop ->
-        Preconditions.checkState(props.containsKey(prop), "Required property " + prop + " is missing"));
   }
 
   /**
@@ -308,7 +312,7 @@ public class StreamerUtil {
     FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
     Path metaPath = new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
     try {
-      if (fs.exists(metaPath)) {
+      if (fs.exists(new Path(metaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE))) {
         return Option.of(new HoodieTableConfig(fs, metaPath.toString(), null, null));
       }
     } catch (IOException e) {
@@ -460,12 +464,5 @@ public class StreamerUtil {
     return tableType == HoodieTableType.MERGE_ON_READ
         ? !instant.getAction().equals(HoodieTimeline.COMMIT_ACTION) // not a compaction
         : !ClusteringUtil.isClusteringInstant(instant, timeline);   // not a clustering
-  }
-
-  /**
-   * Returns the auxiliary path.
-   */
-  public static String getAuxiliaryPath(Configuration conf) {
-    return conf.getString(FlinkOptions.PATH) + Path.SEPARATOR + AUXILIARYFOLDER_NAME;
   }
 }

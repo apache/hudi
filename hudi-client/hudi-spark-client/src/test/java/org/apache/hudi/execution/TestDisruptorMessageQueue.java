@@ -35,7 +35,7 @@ import org.apache.hudi.common.util.queue.IteratorBasedQueueProducer;
 import org.apache.hudi.common.util.queue.WaitStrategyFactory;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.spark.TaskContext;
 import org.apache.spark.TaskContext$;
 import org.junit.jupiter.api.AfterEach;
@@ -57,12 +57,12 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.hudi.exception.ExceptionUtil.getRootCause;
-import static org.apache.hudi.execution.HoodieLazyInsertIterable.getTransformer;
+import static org.apache.hudi.execution.HoodieLazyInsertIterable.getTransformerInternal;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
+public class TestDisruptorMessageQueue extends HoodieSparkClientTestHarness {
 
   private final String instantTime = HoodieActiveTimeline.createNewInstantTime();
 
@@ -140,7 +140,7 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
 
     try {
       exec = new DisruptorExecutor(writeConfig.getWriteExecutorDisruptorWriteBufferLimitBytes(), hoodieRecords.iterator(), consumer,
-          getTransformer(HoodieTestDataGenerator.AVRO_SCHEMA, writeConfig), WaitStrategyFactory.DEFAULT_STRATEGY, getPreExecuteRunnable());
+          getTransformerInternal(HoodieTestDataGenerator.AVRO_SCHEMA, writeConfig), WaitStrategyFactory.DEFAULT_STRATEGY, getPreExecuteRunnable());
       int result = exec.execute();
       // It should buffer and write 100 records
       assertEquals(100, result);
@@ -169,7 +169,7 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
     final List<List<HoodieRecord>> recs = new ArrayList<>();
 
     final DisruptorMessageQueue<HoodieRecord, HoodieLazyInsertIterable.HoodieInsertValueGenResult> queue =
-        new DisruptorMessageQueue(1024, getTransformer(HoodieTestDataGenerator.AVRO_SCHEMA, writeConfig),
+        new DisruptorMessageQueue(1024, getTransformerInternal(HoodieTestDataGenerator.AVRO_SCHEMA, writeConfig),
             "BLOCKING_WAIT", numProducers, new Runnable() {
               @Override
           public void run() {
@@ -281,16 +281,6 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
   @Timeout(value = 60)
   public void testException() throws Exception {
     final int numRecords = 1000;
-    final int numProducers = 40;
-
-    final DisruptorMessageQueue<HoodieRecord, HoodieLazyInsertIterable.HoodieInsertValueGenResult> queue =
-        new DisruptorMessageQueue(1024, getTransformer(HoodieTestDataGenerator.AVRO_SCHEMA, writeConfig),
-            "BLOCKING_WAIT", numProducers, new Runnable() {
-              @Override
-          public void run() {
-              // do nothing.
-              }
-            });
 
     List<HoodieRecord> pRecs = dataGen.generateInserts(instantTime, numRecords);
 
@@ -307,8 +297,7 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
         }));
       }
     }
-
-
+    
     HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
         new HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
 
@@ -327,7 +316,7 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
     };
 
     DisruptorExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> exec = new DisruptorExecutor(1024,
-        producers, consumer, getTransformer(HoodieTestDataGenerator.AVRO_SCHEMA, writeConfig),
+        producers, consumer, getTransformerInternal(HoodieTestDataGenerator.AVRO_SCHEMA, writeConfig),
         WaitStrategyFactory.DEFAULT_STRATEGY, getPreExecuteRunnable());
 
     final Throwable thrown = assertThrows(HoodieException.class, exec::execute,

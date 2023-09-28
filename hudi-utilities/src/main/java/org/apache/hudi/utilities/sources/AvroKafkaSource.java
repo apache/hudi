@@ -18,12 +18,10 @@
 
 package org.apache.hudi.utilities.sources;
 
-import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.deser.KafkaAvroSchemaDeserializer;
+import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
@@ -42,6 +40,12 @@ import org.apache.spark.streaming.kafka010.OffsetRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.hudi.common.util.ConfigUtils.DELTA_STREAMER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_AVRO_VALUE_DESERIALIZER_CLASS;
+import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_VALUE_DESERIALIZER_SCHEMA;
+
 /**
  * Reads avro serialized Kafka data, based on the confluent schema-registry.
  */
@@ -49,8 +53,14 @@ public class AvroKafkaSource extends KafkaSource<GenericRecord> {
 
   private static final Logger LOG = LoggerFactory.getLogger(AvroKafkaSource.class);
   // These are settings used to pass things to KafkaAvroDeserializer
-  public static final String KAFKA_AVRO_VALUE_DESERIALIZER_PROPERTY_PREFIX = "hoodie.deltastreamer.source.kafka.value.deserializer.";
-  public static final String KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA = KAFKA_AVRO_VALUE_DESERIALIZER_PROPERTY_PREFIX + "schema";
+  public static final String KAFKA_AVRO_VALUE_DESERIALIZER_PROPERTY_PREFIX =
+      STREAMER_CONFIG_PREFIX + "source.kafka.value.deserializer.";
+  @Deprecated
+  public static final String OLD_KAFKA_AVRO_VALUE_DESERIALIZER_PROPERTY_PREFIX =
+      DELTA_STREAMER_CONFIG_PREFIX + "source.kafka.value.deserializer.";
+  @Deprecated
+  public static final String KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA =
+      OLD_KAFKA_AVRO_VALUE_DESERIALIZER_PROPERTY_PREFIX + "schema";
   private final String deserializerClassName;
 
   //other schema provider may have kafka offsets
@@ -64,21 +74,20 @@ public class AvroKafkaSource extends KafkaSource<GenericRecord> {
     this.originalSchemaProvider = schemaProvider;
 
     props.put(NATIVE_KAFKA_KEY_DESERIALIZER_PROP, StringDeserializer.class.getName());
-    deserializerClassName = props.getString(DataSourceWriteOptions.KAFKA_AVRO_VALUE_DESERIALIZER_CLASS().key(),
-        DataSourceWriteOptions.KAFKA_AVRO_VALUE_DESERIALIZER_CLASS().defaultValue());
+    deserializerClassName = getStringWithAltKeys(props, KAFKA_AVRO_VALUE_DESERIALIZER_CLASS, true);
 
     try {
       props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, Class.forName(deserializerClassName).getName());
       if (deserializerClassName.equals(KafkaAvroSchemaDeserializer.class.getName())) {
         if (schemaProvider == null) {
-          throw new HoodieIOException("SchemaProvider has to be set to use KafkaAvroSchemaDeserializer");
+          throw new HoodieReadFromSourceException("SchemaProvider has to be set to use KafkaAvroSchemaDeserializer");
         }
-        props.put(KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA, schemaProvider.getSourceSchema().toString());
+        props.put(KAFKA_VALUE_DESERIALIZER_SCHEMA.key(), schemaProvider.getSourceSchema().toString());
       }
     } catch (ClassNotFoundException e) {
       String error = "Could not load custom avro kafka deserializer: " + deserializerClassName;
       LOG.error(error);
-      throw new HoodieException(error, e);
+      throw new HoodieReadFromSourceException(error, e);
     }
     this.offsetGen = new KafkaOffsetGen(props);
   }
@@ -88,7 +97,7 @@ public class AvroKafkaSource extends KafkaSource<GenericRecord> {
     JavaRDD<ConsumerRecord<Object, Object>> kafkaRDD;
     if (deserializerClassName.equals(ByteArrayDeserializer.class.getName())) {
       if (schemaProvider == null) {
-        throw new HoodieException("Please provide a valid schema provider class when use ByteArrayDeserializer!");
+        throw new HoodieReadFromSourceException("Please provide a valid schema provider class when use ByteArrayDeserializer!");
       }
 
       //Don't want kafka offsets here so we use originalSchemaProvider

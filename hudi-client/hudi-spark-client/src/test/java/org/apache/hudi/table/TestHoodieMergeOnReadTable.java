@@ -23,6 +23,7 @@ import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -67,6 +68,7 @@ import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -80,7 +82,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
-import static org.apache.hudi.testutils.HoodieClientTestHarness.buildProfile;
+import static org.apache.hudi.testutils.HoodieSparkClientTestHarness.buildProfile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -309,19 +311,25 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {true})
-  public void testLogBlocksCountsAfterLogCompaction(boolean populateMetaFields) throws Exception {
+  @CsvSource({"true,avro", "true,parquet", "false,avro", "false,parquet"})
+  public void testLogBlocksCountsAfterLogCompaction(boolean populateMetaFields, String logFileFormat) throws Exception {
 
     HoodieCompactionConfig compactionConfig = HoodieCompactionConfig.newBuilder()
-        .withInlineCompaction(false)
-        .withLogCompactionBlocksThreshold("1")
+        .withMaxNumDeltaCommitsBeforeCompaction(1)
+        .withLogCompactionBlocksThreshold(1)
         .build();
-    // insert 100 recordsx
+    // insert 100 records
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
         .withCompactionConfig(compactionConfig);
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
-    HoodieWriteConfig config = cfgBuilder.build();
+    HoodieWriteConfig config = cfgBuilder
+        .withStorageConfig(HoodieStorageConfig.newBuilder()
+            .hfileMaxFileSize(1024 * 1024 * 1024)
+            .parquetMaxFileSize(1024 * 1024 * 1024)
+            .logFileDataBlockFormat(logFileFormat)
+            .build())
+        .build();
     setUp(config.getProps());
 
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {

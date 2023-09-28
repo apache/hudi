@@ -101,4 +101,8 @@ public abstract class HoodieEngineContext {
   public abstract List<Integer> getCachedDataIds(HoodieDataCacheKey cacheKey);
 
   public abstract List<Integer> removeCachedDataIds(HoodieDataCacheKey cacheKey);
+
+  public abstract void cancelJob(String jobId);
+
+  public abstract void cancelAllJobs();
 }

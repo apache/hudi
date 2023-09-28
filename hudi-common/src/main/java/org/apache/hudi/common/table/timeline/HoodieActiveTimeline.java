@@ -31,6 +31,7 @@ import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,7 +76,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       REQUESTED_INDEX_COMMIT_EXTENSION, INFLIGHT_INDEX_COMMIT_EXTENSION, INDEX_COMMIT_EXTENSION,
       REQUESTED_SAVE_SCHEMA_ACTION_EXTENSION, INFLIGHT_SAVE_SCHEMA_ACTION_EXTENSION, SAVE_SCHEMA_ACTION_EXTENSION));
 
-  private static final Set<String> NOT_PARSABLE_TIMESTAMPS = new HashSet<String>(3) {{
+  public static final Set<String> NOT_PARSABLE_TIMESTAMPS = new HashSet<String>(3) {{
       add(HoodieTimeline.INIT_INSTANT_TS);
       add(HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS);
       add(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS);
@@ -365,7 +366,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   public Option<byte[]> readRestoreInfoAsBytes(HoodieInstant instant) {
     // Rollback metadata are always stored only in timeline .hoodie
-    return readDataFromPath(new Path(metaClient.getMetaPath(), instant.getFileName()));
+    return readDataFromPath(getInstantFileNamePath(instant.getFileName()));
   }
 
   //-----------------------------------------------------------------
@@ -479,7 +480,6 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     transitionState(inflightInstant, commitInstant, data);
     return commitInstant;
   }
-
 
   //-----------------------------------------------------------------
   //      END - COMPACTION RELATED META-DATA MANAGEMENT
@@ -599,7 +599,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   protected void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data,
        boolean allowRedundantTransitions) {
-    ValidationUtils.checkArgument(fromInstant.getTimestamp().equals(toInstant.getTimestamp()));
+    ValidationUtils.checkArgument(fromInstant.getTimestamp().equals(toInstant.getTimestamp()), String.format("%s and %s are not consistent when transition state.", fromInstant, toInstant));
     try {
       if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
         // Re-create the .inflight file by opening a new file and write the commit metadata in
@@ -806,5 +806,18 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   public HoodieActiveTimeline reload() {
     return new HoodieActiveTimeline(metaClient);
+  }
+
+  public void copyInstant(HoodieInstant instant, Path dstDir) {
+    Path srcPath = new Path(metaClient.getMetaPath(), instant.getFileName());
+    Path dstPath = new Path(dstDir, instant.getFileName());
+    try {
+      FileSystem srcFs = srcPath.getFileSystem(metaClient.getHadoopConf());
+      FileSystem dstFs = dstPath.getFileSystem(metaClient.getHadoopConf());
+      dstFs.mkdirs(dstDir);
+      FileUtil.copy(srcFs, srcPath, dstFs, dstPath, false, true, srcFs.getConf());
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not copy instant from " + srcPath + " to " + dstPath, e);
+    }
   }
 }

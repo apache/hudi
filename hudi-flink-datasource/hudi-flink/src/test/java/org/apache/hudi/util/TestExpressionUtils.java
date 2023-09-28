@@ -30,7 +30,6 @@ import org.apache.flink.table.types.logical.RowType;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -40,6 +39,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -117,7 +117,7 @@ class TestExpressionUtils {
     dataList.add(new Double(6.0)); // f_double
     dataList.add(new Boolean(true)); // f_boolean
     dataList.add(new BigDecimal(3.0)); // f_decimal
-    dataList.add("hudi".getBytes(StandardCharsets.UTF_8)); // f_bytes
+    dataList.add(getUTF8Bytes("hudi")); // f_bytes
     dataList.add("hudi ok"); // f_string
     dataList.add(LocalTime.of(1, 11, 11)); // f_time
     dataList.add(LocalDate.of(2023, 1, 2)); // f_date

@@ -20,8 +20,9 @@ package org.apache.hudi.utilities.transform;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.config.SqlTransformerConfig;
+import org.apache.hudi.utilities.exception.HoodieTransformException;
+import org.apache.hudi.utilities.exception.HoodieTransformExecutionException;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -36,6 +37,8 @@ import java.io.IOException;
 import java.util.Scanner;
 import java.util.UUID;
 
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+
 /**
  * A transformer that allows a sql template file be used to transform the source before writing to
  * Hudi data-set.
@@ -45,7 +48,7 @@ import java.util.UUID;
  * <p>The final sql statement result is used as the write payload.
  *
  * <p>The SQL file is configured with this hoodie property:
- * hoodie.deltastreamer.transformer.sql.file
+ * hoodie.streamer.transformer.sql.file
  *
  * <p>Example Spark SQL Query:
  *
@@ -68,9 +71,9 @@ public class SqlFileBasedTransformer implements Transformer {
       final Dataset<Row> rowDataset,
       final TypedProperties props) {
 
-    final String sqlFile = props.getString(SqlTransformerConfig.TRANSFORMER_SQL_FILE.key());
+    final String sqlFile = getStringWithAltKeys(props, SqlTransformerConfig.TRANSFORMER_SQL_FILE);
     if (null == sqlFile) {
-      throw new IllegalArgumentException(
+      throw new HoodieTransformException(
           "Missing required configuration : (" + SqlTransformerConfig.TRANSFORMER_SQL_FILE.key() + ")");
     }
 
@@ -96,7 +99,7 @@ public class SqlFileBasedTransformer implements Transformer {
       }
       return rows;
     } catch (final IOException ioe) {
-      throw new HoodieIOException("Error reading transformer SQL file.", ioe);
+      throw new HoodieTransformExecutionException("Error reading transformer SQL file.", ioe);
     } finally {
       sparkSession.catalog().dropTempView(tmpTable);
     }

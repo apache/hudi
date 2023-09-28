@@ -17,16 +17,29 @@
 
 package org.apache.spark.sql
 
+import org.apache.hudi.SparkHoodieTableFileIndex
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer
-import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression, Like}
+import org.apache.spark.sql.catalyst.catalog.CatalogStorageFormat
+import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.optimizer.SimplifyCasts
+import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.JoinType
-import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoTable, Join, LogicalPlan}
+import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoTable, Join, LogicalPlan, MergeIntoTable, Project}
 import org.apache.spark.sql.execution.command.{AlterTableRecoverPartitionsCommand, ExplainCommand}
+import org.apache.spark.sql.execution.datasources.parquet.NewHoodieParquetFileFormat
+import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.internal.SQLConf
 
 object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
+
+  override def unapplyMergeIntoTable(plan: LogicalPlan): Option[(LogicalPlan, LogicalPlan, Expression)] = {
+    plan match {
+      case MergeIntoTable(targetTable, sourceTable, mergeCondition, _, _) =>
+        Some((targetTable, sourceTable, mergeCondition))
+      case _ => None
+    }
+  }
 
   def resolveOutputColumns(tableName: String,
                            expected: Seq[Attribute],
@@ -56,6 +69,14 @@ object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
     }
   }
 
+  /**
+   * Don't support CreateTableLike in spark2, since spark2 doesn't support passing
+   * provider, whereas HUDI can't identify whether the targetTable is a HUDI table or not.
+   */
+  override def unapplyCreateTableLikeCommand(plan: LogicalPlan): Option[(TableIdentifier, TableIdentifier, CatalogStorageFormat, Option[String], Map[String, String], Boolean)] = {
+    None
+  }
+
   def rebaseInsertIntoStatement(iis: LogicalPlan, targetTable: LogicalPlan, query: LogicalPlan): LogicalPlan =
     iis.asInstanceOf[InsertIntoTable].copy(table = targetTable, query = query)
 
@@ -70,6 +91,20 @@ object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
       // AlterTableRecoverPartitionsCommand's behavior
       case c: AlterTableRecoverPartitionsCommand =>
         Some((c.tableName, true, false, c.cmd))
+    }
+  }
+
+  override def createMITJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType, condition: Option[Expression], hint: String): LogicalPlan = {
+    Join(left, right, joinType, condition)
+  }
+
+  override def applyNewHoodieParquetFileFormatProjection(plan: LogicalPlan): LogicalPlan = {
+    plan match {
+      case p@PhysicalOperation(_, _,
+      l@LogicalRelation(fs: HadoopFsRelation, _, _, _)) if fs.fileFormat.isInstanceOf[NewHoodieParquetFileFormat] && !fs.fileFormat.asInstanceOf[NewHoodieParquetFileFormat].isProjected =>
+        fs.fileFormat.asInstanceOf[NewHoodieParquetFileFormat].isProjected = true
+        Project(l.resolve(fs.location.asInstanceOf[SparkHoodieTableFileIndex].schema, fs.sparkSession.sessionState.analyzer.resolver), p)
+      case _ => plan
     }
   }
 }

@@ -26,7 +26,7 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.model.BootstrapIndexType;
 
 import java.io.File;
 import java.io.FileReader;
@@ -66,6 +66,13 @@ public class HoodieBootstrapConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Selects the mode in which each file/partition in the bootstrapped dataset gets bootstrapped");
+
+  public static final ConfigProperty<String> DATA_QUERIES_ONLY = ConfigProperty
+      .key("hoodie.bootstrap.data.queries.only")
+      .defaultValue("false")
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("Improves query performance, but queries cannot use hudi metadata fields");
 
   public static final ConfigProperty<String> FULL_BOOTSTRAP_INPUT_PROVIDER_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.full.input.provider")
@@ -243,8 +250,7 @@ public class HoodieBootstrapConfig extends HoodieConfig {
 
     public HoodieBootstrapConfig build() {
       // TODO: use infer function instead
-      bootstrapConfig.setDefaultValue(INDEX_CLASS_NAME, HoodieTableConfig.getDefaultBootstrapIndexClass(
-          bootstrapConfig.getProps()));
+      bootstrapConfig.setDefaultValue(INDEX_CLASS_NAME, BootstrapIndexType.getDefaultBootstrapIndexClassName(bootstrapConfig));
       bootstrapConfig.setDefaults(HoodieBootstrapConfig.class.getName());
       return bootstrapConfig;
     }

@@ -18,15 +18,12 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hudi.client.HoodieInternalWriteStatus;
-import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.row.HoodieRowCreateHandle;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
-import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieTable;
@@ -44,7 +41,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Properties;
 import java.util.UUID;
 
 /**
@@ -54,30 +50,30 @@ public class BulkInsertDataInternalWriterHelper {
 
   private static final Logger LOG = LoggerFactory.getLogger(BulkInsertDataInternalWriterHelper.class);
 
-  private final String instantTime;
-  private final int taskPartitionId;
-  private final long taskId;
-  private final long taskEpochId;
-  private final HoodieTable hoodieTable;
-  private final HoodieWriteConfig writeConfig;
-  private final StructType structType;
-  private final Boolean arePartitionRecordsSorted;
-  private final List<HoodieInternalWriteStatus> writeStatusList = new ArrayList<>();
-  private final String fileIdPrefix;
-  private final Map<String, HoodieRowCreateHandle> handles = new HashMap<>();
-  private final boolean populateMetaFields;
-  private final boolean shouldPreserveHoodieMetadata;
-  private final Option<BuiltinKeyGenerator> keyGeneratorOpt;
-  private final boolean simpleKeyGen;
-  private final int simplePartitionFieldIndex;
-  private final DataType simplePartitionFieldDataType;
+  protected final String instantTime;
+  protected final int taskPartitionId;
+  protected final long taskId;
+  protected final long taskEpochId;
+  protected final HoodieTable hoodieTable;
+  protected final HoodieWriteConfig writeConfig;
+  protected final StructType structType;
+  protected final Boolean arePartitionRecordsSorted;
+  protected final List<WriteStatus> writeStatusList = new ArrayList<>();
+  protected final String fileIdPrefix;
+  protected final Map<String, HoodieRowCreateHandle> handles = new HashMap<>();
+  protected final boolean populateMetaFields;
+  protected final boolean shouldPreserveHoodieMetadata;
+  protected final Option<BuiltinKeyGenerator> keyGeneratorOpt;
+  protected final boolean simpleKeyGen;
+  protected final int simplePartitionFieldIndex;
+  protected final DataType simplePartitionFieldDataType;
   /**
    * NOTE: This is stored as Catalyst's internal {@link UTF8String} to avoid
    *       conversion (deserialization) b/w {@link UTF8String} and {@link String}
    */
-  private UTF8String lastKnownPartitionPath = null;
-  private HoodieRowCreateHandle handle;
-  private int numFilesWritten = 0;
+  protected UTF8String lastKnownPartitionPath = null;
+  protected HoodieRowCreateHandle handle;
+  protected int numFilesWritten = 0;
 
   public BulkInsertDataInternalWriterHelper(HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
                                             String instantTime, int taskPartitionId, long taskId, long taskEpochId, StructType structType,
@@ -102,7 +98,7 @@ public class BulkInsertDataInternalWriterHelper {
     this.fileIdPrefix = UUID.randomUUID().toString();
 
     if (!populateMetaFields) {
-      this.keyGeneratorOpt = getKeyGenerator(writeConfig.getProps());
+      this.keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.getKeyGenerator(writeConfig.getProps());
     } else {
       this.keyGeneratorOpt = Option.empty();
     }
@@ -115,29 +111,6 @@ public class BulkInsertDataInternalWriterHelper {
       this.simpleKeyGen = false;
       this.simplePartitionFieldIndex = -1;
       this.simplePartitionFieldDataType = null;
-    }
-  }
-
-  /**
-   * Instantiate {@link BuiltinKeyGenerator}.
-   *
-   * @param properties properties map.
-   * @return the key generator thus instantiated.
-   */
-  private Option<BuiltinKeyGenerator> getKeyGenerator(Properties properties) {
-    TypedProperties typedProperties = new TypedProperties();
-    typedProperties.putAll(properties);
-    if (Option.ofNullable(properties.get(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key()))
-        .map(v -> v.equals(NonpartitionedKeyGenerator.class.getName())).orElse(false)) {
-      return Option.empty(); // Do not instantiate NonPartitionKeyGen
-    } else {
-      try {
-        return Option.of((BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(typedProperties));
-      } catch (ClassCastException cce) {
-        throw new HoodieIOException("Only those key generators implementing BuiltInKeyGenerator interface is supported with virtual keys");
-      } catch (IOException e) {
-        throw new HoodieIOException("Key generator instantiation failed ", e);
-      }
     }
   }
 
@@ -158,7 +131,7 @@ public class BulkInsertDataInternalWriterHelper {
     }
   }
 
-  public List<HoodieInternalWriteStatus> getWriteStatuses() throws IOException {
+  public List<WriteStatus> getWriteStatuses() throws IOException {
     close();
     return writeStatusList;
   }
@@ -174,7 +147,7 @@ public class BulkInsertDataInternalWriterHelper {
     handle = null;
   }
 
-  private UTF8String extractPartitionPath(InternalRow row) {
+  protected UTF8String extractPartitionPath(InternalRow row) {
     if (populateMetaFields) {
       // In case meta-fields are materialized w/in the table itself, we can just simply extract
       // partition path from there
@@ -215,7 +188,7 @@ public class BulkInsertDataInternalWriterHelper {
         instantTime, taskPartitionId, taskId, taskEpochId, structType, shouldPreserveHoodieMetadata);
   }
 
-  private String getNextFileId() {
+  protected String getNextFileId() {
     return String.format("%s-%d", fileIdPrefix, numFilesWritten++);
   }
 }

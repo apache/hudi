@@ -18,11 +18,10 @@
 
 package org.apache.hudi.utilities.sources;
 
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig;
+import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
@@ -42,6 +41,9 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Collections;
 
+import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+
 /**
  * Reads protobuf serialized Kafka data, based on a provided class name.
  */
@@ -52,14 +54,14 @@ public class ProtoKafkaSource extends KafkaSource<Message> {
   public ProtoKafkaSource(TypedProperties props, JavaSparkContext sparkContext,
                           SparkSession sparkSession, SchemaProvider schemaProvider, HoodieIngestionMetrics metrics) {
     super(props, sparkContext, sparkSession, schemaProvider, SourceType.PROTO, metrics);
-    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(
-        ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key()));
+    checkRequiredConfigProperties(props, Collections.singletonList(
+        ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME));
     props.put(NATIVE_KAFKA_KEY_DESERIALIZER_PROP, StringDeserializer.class);
     props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, ByteArrayDeserializer.class);
-    className = props.getString(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key());
+    className = getStringWithAltKeys(props, ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME);
     this.offsetGen = new KafkaOffsetGen(props);
     if (this.shouldAddOffsets) {
-      throw new HoodieException("Appending kafka offsets to ProtoKafkaSource is not supported");
+      throw new HoodieReadFromSourceException("Appending kafka offsets to ProtoKafkaSource is not supported");
     }
   }
 
@@ -83,7 +85,7 @@ public class ProtoKafkaSource extends KafkaSource<Message> {
       try {
         return (Message) getParseMethod().invoke(getClass(), bytes);
       } catch (IllegalAccessException | InvocationTargetException ex) {
-        throw new HoodieException("Failed to parse proto message from kafka", ex);
+        throw new HoodieReadFromSourceException("Failed to parse proto message from kafka", ex);
       }
     }
 
@@ -99,7 +101,7 @@ public class ProtoKafkaSource extends KafkaSource<Message> {
         try {
           parseMethod = getProtoClass().getMethod("parseFrom", byte[].class);
         } catch (NoSuchMethodException ex) {
-          throw new HoodieException("Unable to get proto parsing method from specified class: " + className, ex);
+          throw new HoodieReadFromSourceException("Unable to get proto parsing method from specified class: " + className, ex);
         }
       }
       return parseMethod;

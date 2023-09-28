@@ -26,20 +26,24 @@ import org.apache.hudi.common.config.HoodieConfig;
 
 import javax.annotation.concurrent.Immutable;
 
+import static org.apache.hudi.common.util.ConfigUtils.DELTA_STREAMER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
+
 /**
  * Hive Incremental Pulling Source Configs
  */
 @Immutable
 @ConfigClassProperty(name = "Hive Incremental Pulling Source Configs",
-    groupName = ConfigGroups.Names.DELTA_STREAMER,
+    groupName = ConfigGroups.Names.HUDI_STREAMER,
     subGroupName = ConfigGroups.SubGroupNames.DELTA_STREAMER_SOURCE,
     description = "Configurations controlling the behavior of incremental pulling from a Hive "
-        + "table as a source in Deltastreamer.")
+        + "table as a source in Hudi Streamer.")
 public class HiveIncrPullSourceConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> ROOT_INPUT_PATH = ConfigProperty
-      .key("hoodie.deltastreamer.source.incrpull.root")
+      .key(STREAMER_CONFIG_PREFIX + "source.incrpull.root")
       .noDefaultValue()
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.incrpull.root")
       .markAdvanced()
       .withDocumentation("The root path of Hive incremental pulling source.");
 }

@@ -39,6 +39,7 @@ import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.sink.overwrite.PartitionOverwriteMode;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.util.ClientIds;
 
@@ -188,7 +189,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Boolean> METADATA_ENABLED = ConfigOptions
       .key("metadata.enabled")
       .booleanType()
-      .defaultValue(true)
+      .defaultValue(false)
       .withFallbackKeys(HoodieMetadataConfig.ENABLE.key())
       .withDescription("Enable the internal metadata table which serves table metadata like level file listings, default disabled");
 
@@ -426,6 +427,13 @@ public class FlinkOptions extends HoodieConfig {
           + "the dot notation eg: `a.b.c`");
 
   @AdvancedConfig
+  public static final ConfigOption<String> BUCKET_INDEX_ENGINE_TYPE = ConfigOptions
+      .key(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key())
+      .stringType()
+      .defaultValue("SIMPLE")
+      .withDescription("Type of bucket index engine. Available options: [SIMPLE | CONSISTENT_HASHING]");
+
+  @AdvancedConfig
   public static final ConfigOption<Integer> BUCKET_INDEX_NUM_BUCKETS = ConfigOptions
       .key(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key())
       .intType()
@@ -605,6 +613,16 @@ public class FlinkOptions extends HoodieConfig {
       .intType()
       .defaultValue(128)
       .withDescription("Sort memory in MB, default 128MB");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> WRITE_PARTITION_OVERWRITE_MODE = ConfigOptions
+      .key("write.partition.overwrite.mode")
+      .stringType()
+      .defaultValue(PartitionOverwriteMode.STATIC.name())
+      .withDescription("When INSERT OVERWRITE a partitioned data source table, we currently support 2 modes: static and dynamic. "
+          + "Static mode deletes all the partitions that match the partition specification(e.g. PARTITION(a=1,b)) in the INSERT statement, before overwriting. "
+          + "Dynamic mode doesn't delete partitions ahead, and only overwrite those partitions that have data written into it at runtime. "
+          + "By default we use static mode to keep the same behavior of previous version.");
 
   // this is only for internal use
   @AdvancedConfig

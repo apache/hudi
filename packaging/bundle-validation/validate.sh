@@ -55,7 +55,7 @@ change_java_runtime_version () {
 # Function to change Java runtime version to default Java 8
 ##
 use_default_java_runtime () {
-  echo "Use default java runtime under ${DEFAULT_JAVA_HOME}"
+  echo "::warning:: Use default java runtime under ${DEFAULT_JAVA_HOME}"
   export JAVA_HOME=${DEFAULT_JAVA_HOME}
 }
 
@@ -89,6 +89,7 @@ test_spark_hadoop_mr_bundles () {
     fi
     echo "::warning::validate.sh Query and validate the results using HiveQL"
     use_default_java_runtime
+    if [[ $HIVE_HOME =~ 'hive-2' ]]; then return; fi # skipping hive2 for HiveQL query due to setup issue
     # save HiveQL query results
     hiveqlresultsdir=/tmp/hadoop-mr-bundle/hiveql/trips/results
     mkdir -p $hiveqlresultsdir
@@ -187,7 +188,6 @@ test_flink_bundle() {
     fi
     echo "::warning::validate.sh done validating Flink bundle validation was successful."
 }
-
 
 ##
 # Function to test the kafka-connect bundle.

@@ -24,10 +24,8 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -85,8 +83,6 @@ public class FSUtils {
       Pattern.compile("^\\.(.+)_(.*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?");
   public static final Pattern PREFIX_BY_FILE_ID_PATTERN = Pattern.compile("^(.+)-(\\d+)");
   private static final int MAX_ATTEMPTS_RECOVER_LEASE = 10;
-  private static final long MIN_CLEAN_TO_KEEP = 10;
-  private static final long MIN_ROLLBACK_TO_KEEP = 10;
   private static final String HOODIE_ENV_PROPS_PREFIX = "HOODIE_ENV_";
 
   private static final PathFilter ALLOW_ALL_FILTER = file -> true;
@@ -195,10 +191,14 @@ public class FSUtils {
   }
 
   public static String getCommitTime(String fullFileName) {
-    if (isLogFile(fullFileName)) {
-      return fullFileName.split("_")[1].split("\\.")[0];
+    try {
+      if (isLogFile(fullFileName)) {
+        return fullFileName.split("_")[1].split("\\.", 2)[0];
+      }
+      return fullFileName.split("_")[2].split("\\.", 2)[0];
+    } catch (ArrayIndexOutOfBoundsException e) {
+      throw new HoodieException("Failed to get commit time from filename: " + fullFileName, e);
     }
-    return fullFileName.split("_")[2].split("\\.")[0];
   }
 
   public static long getFileSize(FileSystem fs, Path path) throws IOException {
@@ -206,11 +206,12 @@ public class FSUtils {
   }
 
   public static String getFileId(String fullFileName) {
-    return fullFileName.split("_")[0];
+    return fullFileName.split("_", 2)[0];
   }
 
   /**
    * Gets all partition paths assuming date partitioning (year, month, day) three levels down.
+   * TODO: (Lin) Delete this function after we remove the assume.date.partitioning config completely.
    */
   public static List<String> getAllPartitionFoldersThreeLevelsDown(FileSystem fs, String basePath) throws IOException {
     List<String> datePartitions = new ArrayList<>();
@@ -247,32 +248,6 @@ public class FSUtils {
   }
 
   /**
-   * Obtain all the partition paths, that are present in this table, denoted by presence of
-   * {@link HoodiePartitionMetadata#HOODIE_PARTITION_METAFILE_PREFIX}.
-   *
-   * If the basePathStr is a subdirectory of .hoodie folder then we assume that the partitions of an internal
-   * table (a hoodie table within the .hoodie directory) are to be obtained.
-   *
-   * @param fs FileSystem instance
-   * @param basePathStr base directory
-   */
-  public static List<String> getAllFoldersWithPartitionMetaFile(FileSystem fs, String basePathStr) throws IOException {
-    // If the basePathStr is a folder within the .hoodie directory then we are listing partitions within an
-    // internal table.
-    final boolean isMetadataTable = HoodieTableMetadata.isMetadataTable(basePathStr);
-    final Path basePath = new Path(basePathStr);
-    final List<String> partitions = new ArrayList<>();
-    processFiles(fs, basePathStr, (locatedFileStatus) -> {
-      Path filePath = locatedFileStatus.getPath();
-      if (filePath.getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)) {
-        partitions.add(getRelativePartitionPath(basePath, filePath.getParent()));
-      }
-      return true;
-    }, !isMetadataTable);
-    return partitions;
-  }
-
-  /**
    * Recursively processes all files in the base-path. If excludeMetaFolder is set, the meta-folder and all its subdirs
    * are skipped
    *
@@ -306,14 +281,11 @@ public class FSUtils {
   }
 
   public static List<String> getAllPartitionPaths(HoodieEngineContext engineContext, String basePathStr,
-                                                  boolean useFileListingFromMetadata,
-                                                  boolean assumeDatePartitioning) {
+                                                  boolean useFileListingFromMetadata) {
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(useFileListingFromMetadata)
-        .withAssumeDatePartitioning(assumeDatePartitioning)
         .build();
-    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr,
-        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue())) {
+    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr)) {
       return tableMetadata.getAllPartitionPaths();
     } catch (Exception e) {
       throw new HoodieException("Error fetching partition paths from metadata table", e);
@@ -322,8 +294,7 @@ public class FSUtils {
 
   public static List<String> getAllPartitionPaths(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
                                                   String basePathStr) {
-    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr,
-        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue())) {
+    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr)) {
       return tableMetadata.getAllPartitionPaths();
     } catch (Exception e) {
       throw new HoodieException("Error fetching partition paths from metadata table", e);
@@ -334,8 +305,7 @@ public class FSUtils {
                                                                HoodieMetadataConfig metadataConfig,
                                                                String basePathStr,
                                                                String[] partitionPaths) {
-    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr,
-        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue(), true)) {
+    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr)) {
       return tableMetadata.getAllFilesInPartitions(Arrays.asList(partitionPaths));
     } catch (Exception ex) {
       throw new HoodieException("Error get files in partitions: " + String.join(",", partitionPaths), ex);
@@ -483,15 +453,6 @@ public class FSUtils {
     return Integer.parseInt(matcher.group(4));
   }
 
-  public static String getSuffixFromLogPath(Path path) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.find()) {
-      throw new InvalidHoodiePathException(path, "LogFile");
-    }
-    String val = matcher.group(10);
-    return val == null ? "" : val;
-  }
-
   public static String makeLogFileName(String fileId, String logFileExtension, String baseCommitTime, int version,
       String writeToken) {
     String suffix = (writeToken == null)
@@ -511,7 +472,7 @@ public class FSUtils {
 
   public static boolean isLogFile(String fileName) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(fileName);
-    return matcher.find() && fileName.contains(".log");
+    return fileName.contains(".log") && matcher.find();
   }
 
   /**
@@ -576,7 +537,7 @@ public class FSUtils {
         getLatestLogFile(getAllLogFiles(fs, partitionPath, fileId, logFileExtension, baseCommitTime));
     if (latestLogFile.isPresent()) {
       return Option
-          .of(Pair.of(latestLogFile.get().getLogVersion(), getWriteTokenFromLogPath(latestLogFile.get().getPath())));
+          .of(Pair.of(latestLogFile.get().getLogVersion(), latestLogFile.get().getLogWriteToken()));
     }
     return Option.empty();
   }
@@ -873,6 +834,35 @@ public class FSUtils {
       }
     }
     return result;
+  }
+
+  public static Map<String, Boolean> deleteFilesParallelize(
+      HoodieTableMetaClient metaClient,
+      List<String> paths,
+      HoodieEngineContext context,
+      int parallelism,
+      boolean ignoreFailed) {
+    return FSUtils.parallelizeFilesProcess(context,
+        metaClient.getFs(),
+        parallelism,
+        pairOfSubPathAndConf -> {
+          Path file = new Path(pairOfSubPathAndConf.getKey());
+          try {
+            FileSystem fs = metaClient.getFs();
+            if (fs.exists(file)) {
+              return fs.delete(file, false);
+            }
+            return true;
+          } catch (IOException e) {
+            if (!ignoreFailed) {
+              throw new HoodieIOException("Failed to delete : " + file, e);
+            } else {
+              LOG.warn("Ignore failed deleting : " + file);
+              return true;
+            }
+          }
+        },
+        paths);
   }
 
   /**

@@ -20,11 +20,14 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
+import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -105,6 +108,25 @@ public class UpgradeDowngrade {
    * @param instantTime current instant time that should not be touched.
    */
   public void run(HoodieTableVersion toVersion, String instantTime) {
+    // Change metadata table version automatically
+    if (toVersion.versionCode() >= HoodieTableVersion.FOUR.versionCode()) {
+      String metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(
+          metaClient.getBasePathV2().toString());
+      try {
+        if (metaClient.getFs().exists(new Path(metadataTablePath))) {
+          HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
+              .setConf(metaClient.getHadoopConf()).setBasePath(metadataTablePath).build();
+          HoodieWriteConfig mdtWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(
+              config, HoodieFailedWritesCleaningPolicy.EAGER);
+          new UpgradeDowngrade(mdtMetaClient, mdtWriteConfig, context, upgradeDowngradeHelper)
+              .run(toVersion, instantTime);
+        }
+      } catch (Exception e) {
+        LOG.warn("Unable to upgrade or downgrade the metadata table to version " + toVersion
+            + ", ignoring the error and continue.", e);
+      }
+    }
+
     // Fetch version from property file and current version
     HoodieTableVersion fromVersion = metaClient.getTableConfig().getTableVersion();
     if (!needsUpgradeOrDowngrade(toVersion)) {
@@ -129,7 +151,8 @@ public class UpgradeDowngrade {
         fromVersion = prevVersion;
       }
     }
-
+    // Reload the meta client to get the latest table config (which could have been updated due to metadata table)
+    metaClient = HoodieTableMetaClient.reload(metaClient);
     // Write out the current version in hoodie.properties.updated file
     for (Map.Entry<ConfigProperty, String> entry : tableProps.entrySet()) {
       metaClient.getTableConfig().setValue(entry.getKey(), entry.getValue());

@@ -21,14 +21,13 @@ package org.apache.hudi.common.bloom;
 import org.apache.hudi.common.util.Base64CodecUtil;
 import org.apache.hudi.exception.HoodieIndexException;
 
-import org.apache.hadoop.util.bloom.Key;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Hoodie's dynamic bloom bounded bloom filter. This is based largely on Hadoop's DynamicBloomFilter, but with a bound
@@ -45,7 +44,7 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
    *
    * @param numEntries The total number of entries.
    * @param errorRate  maximum allowable error rate.
-   * @param hashType   type of the hashing function (see {@link org.apache.hadoop.util.hash.Hash}).
+   * @param hashType   type of the hashing function (see {@link org.apache.hudi.common.util.hash.Hash}).
    * @return the {@link HoodieDynamicBoundedBloomFilter} thus created
    */
   HoodieDynamicBoundedBloomFilter(int numEntries, double errorRate, int hashType, int maxNoOfEntries) {
@@ -77,7 +76,7 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
 
   @Override
   public void add(String key) {
-    add(key.getBytes(StandardCharsets.UTF_8));
+    add(getUTF8Bytes(key));
   }
 
   @Override
@@ -87,7 +86,7 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
 
   @Override
   public boolean mightContain(String key) {
-    return internalDynamicBloomFilter.membershipTest(new Key(key.getBytes(StandardCharsets.UTF_8)));
+    return internalDynamicBloomFilter.membershipTest(new Key(getUTF8Bytes(key)));
   }
 
   @Override

@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -29,6 +30,7 @@ import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -76,7 +78,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMergedLogRecordScanner.class);
   // A timer for calculating elapsed time in millis
-  public final HoodieTimer timer = new HoodieTimer();
+  public final HoodieTimer timer = HoodieTimer.create();
   // Map of compacted/merged records
   private final ExternalSpillableMap<String, HoodieRecord> records;
   // Set of already scanned prefixes allowing us to avoid scanning same prefixes again
@@ -205,7 +207,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     LOG.info("MaxMemoryInBytes allowed for compaction => " + maxMemorySizeInBytes);
     LOG.info("Number of entries in MemoryBasedMap in ExternalSpillableMap => " + records.getInMemoryMapNumEntries());
     LOG.info("Total size in bytes of MemoryBasedMap in ExternalSpillableMap => " + records.getCurrentInMemoryMapSize());
-    LOG.info("Number of entries in BitCaskDiskMap in ExternalSpillableMap => " + records.getDiskBasedMapNumEntries());
+    LOG.info("Number of entries in DiskBasedMap in ExternalSpillableMap => " + records.getDiskBasedMapNumEntries());
     LOG.info("Size of file spilled to disk => " + records.getSizeOfFileOnDiskInBytes());
   }
 
@@ -234,7 +236,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   }
 
   @Override
-  protected <T> void processNextRecord(HoodieRecord<T> newRecord) throws IOException {
+  public <T> void processNextRecord(HoodieRecord<T> newRecord) throws IOException {
     String key = newRecord.getRecordKey();
     HoodieRecord<T> prevRecord = records.get(key);
     if (prevRecord != null) {
@@ -332,9 +334,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     private String keyFieldOverride;
     // By default, we're doing a full-scan
     private boolean forceFullScan = true;
-    // Use scanV2 method.
     private boolean enableOptimizedLogBlocksScan = false;
-    private HoodieRecordMerger recordMerger;
+    private HoodieRecordMerger recordMerger = HoodiePreCombineAvroRecordMerger.INSTANCE;
 
     @Override
     public Builder withFileSystem(FileSystem fs) {
@@ -437,7 +438,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
     @Override
     public Builder withRecordMerger(HoodieRecordMerger recordMerger) {
-      this.recordMerger = recordMerger;
+      this.recordMerger = HoodieRecordUtils.mergerToPreCombineMode(recordMerger);
       return this;
     }
 

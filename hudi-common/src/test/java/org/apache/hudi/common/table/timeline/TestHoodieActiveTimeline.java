@@ -35,7 +35,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -56,6 +55,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_0;
 import static org.apache.hudi.common.testutils.Assertions.assertStreamEquals;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -171,6 +171,10 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         timeline.getCommitTimeline().filterCompletedInstants().findInstantsInRange("04", "11")
             .getInstantsAsStream().map(HoodieInstant::getTimestamp),
         "findInstantsInRange should return 4 instants");
+    assertStreamEquals(Stream.of("03", "05", "07", "09", "11"),
+        timeline.getCommitTimeline().filterCompletedInstants().findInstantsInClosedRange("03", "11")
+            .getInstantsAsStream().map(HoodieInstant::getTimestamp),
+        "findInstantsInClosedRange should return 5 instants");
     assertStreamEquals(Stream.of("09", "11"),
         timeline.getCommitTimeline().filterCompletedInstants().findInstantsAfter("07", 2)
             .getInstantsAsStream().map(HoodieInstant::getTimestamp),
@@ -211,7 +215,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
       HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
       timeline.createNewInstant(instant1);
 
-      byte[] data = "commit".getBytes(StandardCharsets.UTF_8);
+      byte[] data = getUTF8Bytes("commit");
       timeline.saveAsComplete(new HoodieInstant(true, instant1.getAction(),
           instant1.getTimestamp()), Option.of(data));
 
@@ -592,6 +596,14 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     for (Future f : futures) {
       f.get();
     }
+  }
+
+  @Test
+  public void testParseDateFromInstantTime() throws ParseException {
+    // default second granularity instant ID
+    String secondGranularityInstant = "20210101120101123";
+    Date defaultSecsGranularityDate = HoodieActiveTimeline.parseDateFromInstantTime(secondGranularityInstant);
+    System.out.println(defaultSecsGranularityDate.getTime());
   }
 
   @Test

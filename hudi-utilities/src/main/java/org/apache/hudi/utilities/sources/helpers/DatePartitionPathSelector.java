@@ -42,6 +42,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.DFSPathSelectorConfig.ROOT_INPUT_PATH;
 import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.DATE_FORMAT;
 import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.DATE_PARTITION_DEPTH;
@@ -62,7 +64,7 @@ import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.P
  * `<basepath>/<<date-based-partition>/`.
  *
  * <p>The date based partition format can be configured via this property
- * hoodie.deltastreamer.source.dfs.datepartitioned.date.format
+ * hoodie.streamer.source.dfs.datepartitioned.date.format
  */
 public class DatePartitionPathSelector extends DFSPathSelector {
 
@@ -101,10 +103,10 @@ public class DatePartitionPathSelector extends DFSPathSelector {
      * datePartitionDepth = 0 is same as basepath and there is no partition. In which case
      * this path selector would be a no-op and lists all paths under the table basepath.
      */
-    dateFormat = props.getString(DATE_FORMAT.key(), DATE_FORMAT.defaultValue());
-    datePartitionDepth = props.getInteger(DATE_PARTITION_DEPTH.key(), DATE_PARTITION_DEPTH.defaultValue());
-    numPrevDaysToList = props.getInteger(LOOKBACK_DAYS.key(), LOOKBACK_DAYS.defaultValue());
-    partitionsListParallelism = props.getInteger(PARTITIONS_LIST_PARALLELISM.key(), PARTITIONS_LIST_PARALLELISM.defaultValue());
+    dateFormat = getStringWithAltKeys(props, DATE_FORMAT, true);
+    datePartitionDepth = getIntWithAltKeys(props, DATE_PARTITION_DEPTH);
+    numPrevDaysToList = getIntWithAltKeys(props, LOOKBACK_DAYS);
+    partitionsListParallelism = getIntWithAltKeys(props, PARTITIONS_LIST_PARALLELISM);
   }
 
   @Override
@@ -112,12 +114,13 @@ public class DatePartitionPathSelector extends DFSPathSelector {
                                                                              Option<String> lastCheckpointStr,
                                                                              long sourceLimit) {
     // If not specified the current date is assumed by default.
-    LocalDate currentDate = LocalDate.parse(props.getString(DatePartitionPathSelectorConfig.CURRENT_DATE.key(), LocalDate.now().toString()));
+    LocalDate currentDate = LocalDate.parse(
+        getStringWithAltKeys(props, DatePartitionPathSelectorConfig.CURRENT_DATE, LocalDate.now().toString()));
 
     // obtain all eligible files under root folder.
     LOG.info(
         "Root path => "
-            + props.getString(ROOT_INPUT_PATH.key())
+            + getStringWithAltKeys(props, ROOT_INPUT_PATH)
             + " source limit => "
             + sourceLimit
             + " depth of day partition => "
@@ -129,7 +132,8 @@ public class DatePartitionPathSelector extends DFSPathSelector {
     long lastCheckpointTime = lastCheckpointStr.map(Long::parseLong).orElse(Long.MIN_VALUE);
     HoodieSparkEngineContext context = new HoodieSparkEngineContext(sparkContext);
     SerializableConfiguration serializedConf = new SerializableConfiguration(fs.getConf());
-    List<String> prunedPartitionPaths = pruneDatePartitionPaths(context, fs, props.getString(ROOT_INPUT_PATH.key()), currentDate);
+    List<String> prunedPartitionPaths = pruneDatePartitionPaths(
+        context, fs, getStringWithAltKeys(props, ROOT_INPUT_PATH), currentDate);
 
     List<FileStatus> eligibleFiles = context.flatMap(prunedPartitionPaths,
         path -> {

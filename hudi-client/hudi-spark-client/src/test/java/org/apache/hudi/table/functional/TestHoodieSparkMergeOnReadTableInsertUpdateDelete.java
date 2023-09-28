@@ -19,7 +19,6 @@
 
 package org.apache.hudi.table.functional;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.FileSlice;
@@ -50,6 +49,7 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Tag;
@@ -226,13 +226,14 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       FileCreateUtils.deleteRollbackCommit(metaClient.getBasePath().substring(metaClient.getBasePath().indexOf(":") + 1),
           rollbackInstant.getTimestamp());
       metaClient.reloadActiveTimeline();
-      SparkRDDWriteClient client1 = getHoodieWriteClient(cfg);
-      // trigger compaction again.
-      client1.compact(compactionInstant.get());
-      metaClient.reloadActiveTimeline();
-      // verify that there is no new rollback instant generated
-      HoodieInstant newRollbackInstant = metaClient.getActiveTimeline().getRollbackTimeline().lastInstant().get();
-      assertEquals(rollbackInstant.getTimestamp(), newRollbackInstant.getTimestamp());
+      try (SparkRDDWriteClient client1 = getHoodieWriteClient(cfg)) {
+        // trigger compaction again.
+        client1.compact(compactionInstant.get());
+        metaClient.reloadActiveTimeline();
+        // verify that there is no new rollback instant generated
+        HoodieInstant newRollbackInstant = metaClient.getActiveTimeline().getRollbackTimeline().lastInstant().get();
+        assertEquals(rollbackInstant.getTimestamp(), newRollbackInstant.getTimestamp());
+      }
     }
   }
 

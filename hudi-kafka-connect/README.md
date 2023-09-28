@@ -352,7 +352,7 @@ Sample `clusteringjob.properties`:
 ```
 hoodie.datasource.write.recordkey.field=volume
 hoodie.datasource.write.partitionpath.field=date
-hoodie.deltastreamer.schemaprovider.registry.url=http://localhost:8081/subjects/hudi-test-topic/versions/latest
+hoodie.streamer.schemaprovider.registry.url=http://localhost:8081/subjects/hudi-test-topic/versions/latest
 
 hoodie.clustering.plan.strategy.target.file.max.bytes=1073741824
 hoodie.clustering.plan.strategy.small.file.limit=629145600

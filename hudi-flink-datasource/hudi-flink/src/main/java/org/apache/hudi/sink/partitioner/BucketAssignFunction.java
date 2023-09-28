@@ -173,35 +173,37 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     final String partitionPath = hoodieKey.getPartitionPath();
     final HoodieRecordLocation location;
 
-    // Only changing records need looking up the index for the location,
-    // append only records are always recognized as INSERT.
-    HoodieRecordGlobalLocation oldLoc = indexState.value();
-    if (isChangingRecords && oldLoc != null) {
-      // Set up the instant time as "U" to mark the bucket as an update bucket.
-      if (!Objects.equals(oldLoc.getPartitionPath(), partitionPath)) {
-        if (globalIndex) {
-          // if partition path changes, emit a delete record for old partition path,
-          // then update the index state using location with new partition path.
-          HoodieRecord<?> deleteRecord = new HoodieAvroRecord<>(new HoodieKey(recordKey, oldLoc.getPartitionPath()),
-              payloadCreation.createDeletePayload((BaseAvroPayload) record.getData()));
+    if (isChangingRecords) {
+      // Only changing records need looking up the index for the location,
+      // append only records are always recognized as INSERT.
+      HoodieRecordGlobalLocation oldLoc = indexState.value();
+      if (oldLoc != null) {
+        // Set up the instant time as "U" to mark the bucket as an update bucket.
+        if (!Objects.equals(oldLoc.getPartitionPath(), partitionPath)) {
+          if (globalIndex) {
+            // if partition path changes, emit a delete record for old partition path,
+            // then update the index state using location with new partition path.
+            HoodieRecord<?> deleteRecord = new HoodieAvroRecord<>(new HoodieKey(recordKey, oldLoc.getPartitionPath()),
+                payloadCreation.createDeletePayload((BaseAvroPayload) record.getData()));
 
-          deleteRecord.unseal();
-          deleteRecord.setCurrentLocation(oldLoc.toLocal("U"));
-          deleteRecord.seal();
+            deleteRecord.unseal();
+            deleteRecord.setCurrentLocation(oldLoc.toLocal("U"));
+            deleteRecord.seal();
 
-          out.collect((O) deleteRecord);
+            out.collect((O) deleteRecord);
+          }
+          location = getNewRecordLocation(partitionPath);
+        } else {
+          location = oldLoc.toLocal("U");
+          this.bucketAssigner.addUpdate(partitionPath, location.getFileId());
         }
-        location = getNewRecordLocation(partitionPath);
       } else {
-        location = oldLoc.toLocal("U");
-        this.bucketAssigner.addUpdate(partitionPath, location.getFileId());
+        location = getNewRecordLocation(partitionPath);
       }
+      // always refresh the index
+      updateIndexState(partitionPath, location);
     } else {
       location = getNewRecordLocation(partitionPath);
-    }
-    // always refresh the index
-    if (isChangingRecords) {
-      updateIndexState(partitionPath, location);
     }
 
     record.unseal();

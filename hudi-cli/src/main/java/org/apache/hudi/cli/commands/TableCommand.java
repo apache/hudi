@@ -52,6 +52,7 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * CLI command to display hudi table options.
@@ -261,7 +262,7 @@ public class TableCommand {
     OutputStream os = null;
     try {
       os = new FileOutputStream(outFile);
-      os.write(data.getBytes(), 0, data.length());
+      os.write(getUTF8Bytes(data), 0, data.length());
     } finally {
       os.close();
     }

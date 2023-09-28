@@ -74,6 +74,13 @@ public class ClusteringUtils {
   }
 
   /**
+   * Checks if the replacecommit is clustering commit.
+   */
+  public static boolean isClusteringCommit(HoodieTableMetaClient metaClient, HoodieInstant pendingReplaceInstant) {
+    return getClusteringPlan(metaClient, pendingReplaceInstant).isPresent();
+  }
+
+  /**
    * Get requested replace metadata from timeline.
    * @param metaClient
    * @param pendingReplaceInstant
@@ -229,14 +236,14 @@ public class ClusteringUtils {
   }
 
   /**
-   * Returns the oldest instant to retain.
-   * Make sure the clustering instant won't be archived before cleaned, and the oldest inflight clustering instant has a previous commit.
+   * Returns the earliest instant to retain.
+   * Make sure the clustering instant won't be archived before cleaned, and the earliest inflight clustering instant has a previous commit.
    *
    * @param activeTimeline The active timeline
    * @param metaClient     The meta client
-   * @return the oldest instant to retain for clustering
+   * @return the earliest instant to retain for clustering
    */
-  public static Option<HoodieInstant> getOldestInstantToRetainForClustering(
+  public static Option<HoodieInstant> getEarliestInstantToRetainForClustering(
       HoodieActiveTimeline activeTimeline, HoodieTableMetaClient metaClient) throws IOException {
     Option<HoodieInstant> oldestInstantToRetain = Option.empty();
     HoodieTimeline replaceTimeline = activeTimeline.getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.REPLACE_COMMIT_ACTION));
@@ -256,7 +263,12 @@ public class ClusteringUtils {
           retainLowerBound = earliestInstantToRetain.getTimestamp();
         } else {
           // no earliestInstantToRetain, indicate KEEP_LATEST_FILE_VERSIONS clean policy,
-          // retain first instant after clean instant
+          // retain first instant after clean instant.
+          // For KEEP_LATEST_FILE_VERSIONS cleaner policy, file versions are only maintained for active file groups
+          // not for replaced file groups. So, last clean instant can be considered as a lower bound, since
+          // the cleaner would have removed all the file groups until then. But there is a catch to this logic,
+          // while cleaner is running if there is a pending replacecommit then those files are not cleaned.
+          // TODO: This case has to be handled. HUDI-6352
           retainLowerBound = cleanInstant.getTimestamp();
         }
 
@@ -268,19 +280,6 @@ public class ClusteringUtils {
             .firstInstant();
       } else {
         oldestInstantToRetain = replaceTimeline.firstInstant();
-      }
-
-      Option<HoodieInstant> pendingInstantOpt = replaceTimeline.filterInflights().firstInstant();
-      if (pendingInstantOpt.isPresent()) {
-        // Get the previous commit before the first inflight clustering instant.
-        Option<HoodieInstant> beforePendingInstant = activeTimeline.getCommitsTimeline()
-            .filterCompletedInstants()
-            .findInstantsBefore(pendingInstantOpt.get().getTimestamp())
-            .lastInstant();
-        if (beforePendingInstant.isPresent()
-            && oldestInstantToRetain.map(instant -> instant.compareTo(beforePendingInstant.get()) > 0).orElse(true)) {
-          oldestInstantToRetain = beforePendingInstant;
-        }
       }
     }
     return oldestInstantToRetain;

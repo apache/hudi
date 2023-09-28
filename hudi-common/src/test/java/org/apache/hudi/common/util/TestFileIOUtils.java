@@ -25,11 +25,13 @@ import org.junit.jupiter.api.Test;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -61,17 +63,62 @@ public class TestFileIOUtils extends HoodieCommonTestHarness {
   @Test
   public void testInputStreamReads() throws IOException {
     String msg = "hudi rocks!";
-    ByteArrayInputStream inputStream = new ByteArrayInputStream(msg.getBytes(StandardCharsets.UTF_8));
+    ByteArrayInputStream inputStream = new ByteArrayInputStream(getUTF8Bytes(msg));
     assertEquals(msg, FileIOUtils.readAsUTFString(inputStream));
-    inputStream = new ByteArrayInputStream(msg.getBytes(StandardCharsets.UTF_8));
+    inputStream = new ByteArrayInputStream(getUTF8Bytes(msg));
     assertEquals(msg.length(), FileIOUtils.readAsByteArray(inputStream).length);
   }
 
   @Test
   public void testReadAsUTFStringLines() {
     String content = "a\nb\nc";
-    List<String> expectedLines = Arrays.stream(new String[]{"a", "b", "c"}).collect(Collectors.toList());
-    ByteArrayInputStream inputStream = new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));
+    List<String> expectedLines = Arrays.stream(new String[] {"a", "b", "c"}).collect(Collectors.toList());
+    ByteArrayInputStream inputStream = new ByteArrayInputStream(getUTF8Bytes(content));
     assertEquals(expectedLines, FileIOUtils.readAsUTFStringLines(inputStream));
+  }
+  
+  @Test
+  public void testGetConfiguredLocalDirs() {
+    Map<String, String> env = System.getenv();
+    Class<?> clazz = env.getClass();
+    Map<String, String> envMaps = null;
+    try {
+      Field field = clazz.getDeclaredField("m");
+      field.setAccessible(true);
+      envMaps = (Map<String, String>) field.get(env);
+      envMaps.put("CONTAINER_ID", "xxxxx");
+    } catch (NoSuchFieldException | IllegalAccessException e) {
+      throw new IllegalArgumentException(e);
+    }
+    assertEquals(String.join("", FileIOUtils.getConfiguredLocalDirs()),
+            System.getProperty("java.io.tmpdir"));
+    envMaps.put("LOCAL_DIRS", "/xxx");
+    assertEquals(String.join("", FileIOUtils.getConfiguredLocalDirs()),
+            envMaps.get("LOCAL_DIRS"));
+  }
+
+  @Test
+  public void testGetDefaultSpillableMapBasePath() {
+    // Store the original value of the system property, so we can reset it after the test
+    String originalTmpDir = System.getProperty("java.io.tmpdir");
+
+    // Case when local dirs provided
+    System.setProperty("java.io.tmpdir", "dir1,dir2,dir3");
+    String result = FileIOUtils.getDefaultSpillableMapBasePath();
+    assertTrue(result.equals("dir1") || result.equals("dir2") || result.equals("dir3"));
+
+    // Clear the property for the next case
+    System.clearProperty("java.io.tmpdir");
+
+    // Case when local dirs not provided
+    result = FileIOUtils.getDefaultSpillableMapBasePath();
+    assertEquals("/tmp/", result);
+
+    // Reset the original value
+    if (originalTmpDir != null) {
+      System.setProperty("java.io.tmpdir", originalTmpDir);
+    } else {
+      System.clearProperty("java.io.tmpdir");
+    }
   }
 }

@@ -17,155 +17,168 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils, ScalaAssertionSupport}
+import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils, ScalaAssertionSupport}
 import org.apache.spark.sql.internal.SQLConf
 
 class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
 
   test("Test MergeInto Basic") {
-    withRecordType()(withTempDir { tmp =>
-      spark.sql("set hoodie.payload.combined.schema.validate = true")
-      val tableName = generateTableName
-      // Create table
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  name string,
-           |  price double,
-           |  ts long
-           |) using hudi
-           | location '${tmp.getCanonicalPath}'
-           | tblproperties (
-           |  primaryKey ='id',
-           |  preCombineField = 'ts'
-           | )
+    Seq(true, false).foreach { sparkSqlOptimizedWrites =>
+      withRecordType()(withTempDir { tmp =>
+        spark.sql("set hoodie.payload.combined.schema.validate = false")
+        val tableName = generateTableName
+        // Create table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | location '${tmp.getCanonicalPath}'
+             | tblproperties (
+             |  primaryKey ='id',
+             |  preCombineField = 'ts'
+             | )
        """.stripMargin)
 
-      // First merge with a extra input field 'flag' (insert a new record)
-      spark.sql(
-        s"""
-           | merge into $tableName
-           | using (
-           |  select 1 as id, 'a1' as name, 10 as price, 1000 as ts, '1' as flag
-           | ) s0
-           | on s0.id = $tableName.id
-           | when matched and flag = '1' then update set
-           | id = s0.id, name = s0.name, price = s0.price, ts = s0.ts
-           | when not matched and flag = '1' then insert *
-       """.stripMargin)
-      checkAnswer(s"select id, name, price, ts from $tableName")(
-        Seq(1, "a1", 10.0, 1000)
-      )
+        // test with optimized sql merge enabled / disabled.
+        spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=$sparkSqlOptimizedWrites")
 
-      // Second merge (update the record)
-      spark.sql(
-        s"""
-           | merge into $tableName
-           | using (
-           |  select 1 as id, 'a1' as name, 10 as price, 1001 as ts
-           | ) s0
-           | on s0.id = $tableName.id
-           | when matched then update set
-           | id = s0.id, name = s0.name, price = s0.price + $tableName.price, ts = s0.ts
-           | when not matched then insert *
+        // First merge with a extra input field 'flag' (insert a new record)
+        spark.sql(
+          s"""
+             | merge into $tableName
+             | using (
+             |  select 1 as id, 'a1' as name, 10 as price, 1000 as ts, '1' as flag
+             | ) s0
+             | on s0.id = $tableName.id
+             | when matched and flag = '1' then update set
+             | id = s0.id, name = s0.name, price = s0.price, ts = s0.ts
+             | when not matched and flag = '1' then insert *
        """.stripMargin)
-      checkAnswer(s"select id, name, price, ts from $tableName")(
-        Seq(1, "a1", 20.0, 1001)
-      )
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 10.0, 1000)
+        )
 
-      // the third time merge (update & insert the record)
-      spark.sql(
-        s"""
-           | merge into $tableName
-           | using (
-           |  select * from (
-           |  select 1 as id, 'a1' as name, 10 as price, 1002 as ts
-           |  union all
-           |  select 2 as id, 'a2' as name, 12 as price, 1001 as ts
-           |  )
-           | ) s0
-           | on s0.id = $tableName.id
-           | when matched then update set
-           | id = s0.id, name = s0.name, price = s0.price + $tableName.price, ts = s0.ts
-           | when not matched and s0.id % 2 = 0 then insert *
+        // Second merge (update the record)
+        spark.sql(
+          s"""
+             | merge into $tableName
+             | using (
+             |  select 1 as id, 'a1' as name, 10 as price, 1001 as ts
+             | ) s0
+             | on s0.id = $tableName.id
+             | when matched then update set
+             | id = s0.id, name = s0.name, price = s0.price + $tableName.price, ts = s0.ts
+             | when not matched then insert *
        """.stripMargin)
-      checkAnswer(s"select id, name, price, ts from $tableName")(
-        Seq(1, "a1", 30.0, 1002),
-        Seq(2, "a2", 12.0, 1001)
-      )
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 20.0, 1001)
+        )
 
-      // the fourth merge (delete the record)
-      spark.sql(
-        s"""
-           | merge into $tableName
-           | using (
-           |  select 1 as id, 'a1' as name, 12 as price, 1003 as ts
-           | ) s0
-           | on s0.id = $tableName.id
-           | when matched and s0.id != 1 then update set
-           |    id = s0.id, name = s0.name, price = s0.price, ts = s0.ts
-           | when matched and s0.id = 1 then delete
-           | when not matched then insert *
+        // the third time merge (update & insert the record)
+        spark.sql(
+          s"""
+             | merge into $tableName
+             | using (
+             |  select * from (
+             |  select 1 as id, 'a1' as name, 10 as price, 1002 as ts
+             |  union all
+             |  select 2 as id, 'a2' as name, 12 as price, 1001 as ts
+             |  )
+             | ) s0
+             | on s0.id = $tableName.id
+             | when matched then update set
+             | id = s0.id, name = s0.name, price = s0.price + $tableName.price, ts = s0.ts
+             | when not matched and s0.id % 2 = 0 then insert *
        """.stripMargin)
-      val cnt = spark.sql(s"select * from $tableName where id = 1").count()
-      assertResult(0)(cnt)
-    })
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 30.0, 1002),
+          Seq(2, "a2", 12.0, 1001)
+        )
+
+        // the fourth merge (delete the record)
+        spark.sql(
+          s"""
+             | merge into $tableName
+             | using (
+             |  select 1 as id, 'a1' as name, 12 as price, 1003 as ts
+             | ) s0
+             | on s0.id = $tableName.id
+             | when matched and s0.id != 1 then update set
+             |    id = s0.id, name = s0.name, price = s0.price, ts = s0.ts
+             | when matched and s0.id = 1 then delete
+             | when not matched then insert *
+       """.stripMargin)
+        val cnt = spark.sql(s"select * from $tableName where id = 1").count()
+        assertResult(0)(cnt)
+      })
+    }
   }
 
-  test("Test MergeInto with more than once update actions") {
-    withRecordType()(withTempDir {tmp =>
-      val targetTable = generateTableName
-      spark.sql(
-        s"""
-           |create table ${targetTable} (
-           |  id int,
-           |  name string,
-           |  data int,
-           |  country string,
-           |  ts bigint
-           |) using hudi
-           |tblproperties (
-           |  type = 'cow',
-           |  primaryKey = 'id',
-           |  preCombineField = 'ts'
-           | )
-           |partitioned by (country)
-           |location '${tmp.getCanonicalPath}/$targetTable'
-           |""".stripMargin)
-      spark.sql(
-        s"""
-           |merge into ${targetTable} as target
-           |using (
-           |select 1 as id, 'lb' as name, 6 as data, 'shu' as country, 1646643193 as ts
-           |) source
-           |on source.id = target.id
-           |when matched then
-           |update set *
-           |when not matched then
-           |insert *
-           |""".stripMargin)
-      spark.sql(
-        s"""
-           |merge into ${targetTable} as target
-           |using (
-           |select 1 as id, 'lb' as name, 5 as data, 'shu' as country, 1646643196 as ts
-           |) source
-           |on source.id = target.id
-           |when matched and source.data > target.data then
-           |update set target.data = source.data, target.ts = source.ts
-           |when matched and source.data = 5 then
-           |update set target.data = source.data, target.ts = source.ts
-           |when not matched then
-           |insert *
-           |""".stripMargin)
+  /**
+   * In Spark 3.0.x, UPDATE and DELETE can appear at most once in MATCHED clauses in a MERGE INTO statement.
+   * Refer to: `org.apache.spark.sql.catalyst.parser.AstBuilder#visitMergeIntoTable`
+   *
+   */
+  test("Test MergeInto with more than once update actions for spark >= 3.1.x") {
 
-      checkAnswer(s"select id, name, data, country, ts from $targetTable")(
-        Seq(1, "lb", 5, "shu", 1646643196L)
-      )
+    if (HoodieSparkUtils.gteqSpark3_1) {
+      withRecordType()(withTempDir { tmp =>
+        val targetTable = generateTableName
+        spark.sql(
+          s"""
+             |create table ${targetTable} (
+             |  id int,
+             |  name string,
+             |  data int,
+             |  country string,
+             |  ts bigint
+             |) using hudi
+             |tblproperties (
+             |  type = 'cow',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
+             |partitioned by (country)
+             |location '${tmp.getCanonicalPath}/$targetTable'
+             |""".stripMargin)
+        spark.sql(
+          s"""
+             |merge into ${targetTable} as target
+             |using (
+             |select 1 as id, 'lb' as name, 6 as data, 'shu' as country, 1646643193 as ts
+             |) source
+             |on source.id = target.id
+             |when matched then
+             |update set *
+             |when not matched then
+             |insert *
+             |""".stripMargin)
+        spark.sql(
+          s"""
+             |merge into ${targetTable} as target
+             |using (
+             |select 1 as id, 'lb' as name, 5 as data, 'shu' as country, 1646643196 as ts
+             |) source
+             |on source.id = target.id
+             |when matched and source.data > target.data then
+             |update set target.data = source.data, target.ts = source.ts
+             |when matched and source.data = 5 then
+             |update set target.data = source.data, target.ts = source.ts
+             |when not matched then
+             |insert *
+             |""".stripMargin)
 
-    })
+        checkAnswer(s"select id, name, data, country, ts from $targetTable")(
+          Seq(1, "lb", 5, "shu", 1646643196L)
+        )
+      })
+    }
   }
 
   test("Test MergeInto with ignored record") {
@@ -345,11 +358,11 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
 
       // Delete with condition expression.
       val errorMessage = if (HoodieSparkUtils.gteqSpark3_2) {
-        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key column. Found `t0.id = (s0.s_id + 1)`"
+        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key and partition path column. Found `t0.id = (s0.s_id + 1)`"
       } else if (HoodieSparkUtils.gteqSpark3_1) {
-        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key column. Found `t0.`id` = (s0.`s_id` + 1)`"
+        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key and partition path column. Found `t0.`id` = (s0.`s_id` + 1)`"
       } else {
-        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key column. Found `t0.`id` = (s0.`s_id` + 1)`;"
+        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key and partition path column. Found `t0.`id` = (s0.`s_id` + 1)`;"
       }
 
       checkException(
@@ -621,11 +634,11 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
       // 1) set source column name to be same as target column
       //
       val complexConditionsErrorMessage = if (HoodieSparkUtils.gteqSpark3_2) {
-        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key column. Found `t0.id = (s0.id + 1)`"
+        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key and partition path column. Found `t0.id = (s0.id + 1)`"
       } else if (HoodieSparkUtils.gteqSpark3_1) {
-        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key column. Found `t0.`id` = (s0.`id` + 1)`"
+        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key and partition path column. Found `t0.`id` = (s0.`id` + 1)`"
       } else {
-        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key column. Found `t0.`id` = (s0.`id` + 1)`;"
+        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key and partition path column. Found `t0.`id` = (s0.`id` + 1)`;"
       }
 
       checkException(
@@ -1180,41 +1193,47 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
   }
 
   test("Test MergeInto with partial insert") {
-    withRecordType()(withTempDir {tmp =>
-      spark.sql("set hoodie.payload.combined.schema.validate = true")
-      // Create a partitioned mor table
-      val tableName = generateTableName
-      spark.sql(
-        s"""
-           | create table $tableName (
-           |  id bigint,
-           |  name string,
-           |  price double,
-           |  dt string
-           | ) using hudi
-           | tblproperties (
-           |  type = 'mor',
-           |  primaryKey = 'id'
-           | )
-           | partitioned by(dt)
-           | location '${tmp.getCanonicalPath}'
+    Seq(true, false).foreach { sparkSqlOptimizedWrites =>
+      withRecordType()(withTempDir { tmp =>
+        spark.sql("set hoodie.payload.combined.schema.validate = true")
+        // Create a partitioned mor table
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |  id bigint,
+             |  name string,
+             |  price double,
+             |  dt string
+             | ) using hudi
+             | tblproperties (
+             |  type = 'mor',
+             |  primaryKey = 'id'
+             | )
+             | partitioned by(dt)
+             | location '${tmp.getCanonicalPath}'
          """.stripMargin)
 
-      spark.sql(s"insert into $tableName select 1, 'a1', 10, '2021-03-21'")
-      spark.sql(
-        s"""
-           | merge into $tableName as t0
-           | using (
-           |  select 2 as id, 'a2' as name, 10 as price, '2021-03-20' as dt
-           | ) s0
-           | on s0.id = t0.id
-           | when not matched and s0.id % 2 = 0 then insert (id, name, dt)
-           | values(s0.id, s0.name, s0.dt)
+        spark.sql(s"insert into $tableName select 1, 'a1', 10, '2021-03-21'")
+
+        // test with optimized sql merge enabled / disabled.
+        spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=$sparkSqlOptimizedWrites")
+
+        spark.sql(
+          s"""
+             | merge into $tableName as t0
+             | using (
+             |  select 2 as id, 'a2' as name, 10 as price, '2021-03-20' as dt
+             | ) s0
+             | on s0.id = t0.id
+             | when not matched and s0.id % 2 = 0 then insert (id, name, dt)
+             | values(s0.id, s0.name, s0.dt)
          """.stripMargin)
-      checkAnswer(s"select id, name, price, dt from $tableName order by id")(
-        Seq(1, "a1", 10, "2021-03-21"),
-        Seq(2, "a2", null, "2021-03-20")
-      )
-    })
+        checkAnswer(s"select id, name, price, dt from $tableName order by id")(
+          Seq(1, "a1", 10, "2021-03-21"),
+          Seq(2, "a2", null, "2021-03-20")
+        )
+      })
+    }
   }
 }

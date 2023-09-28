@@ -56,7 +56,9 @@ import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
@@ -68,6 +70,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
@@ -952,6 +955,36 @@ public class TestInputFormat {
     assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
     final String baseMergeLogFileResult = TestData.rowDataToString(readData(inputFormat));
     assertThat(baseMergeLogFileResult, is(expected));
+
+    // write another commit with delete messages
+    TestData.writeData(TestData.DATA_SET_SINGLE_DELETE, conf);
+    this.tableSource.reset();
+    inputFormat = this.tableSource.getInputFormat();
+    assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
+    final String baseMergeLogFileResult2 = TestData.rowDataToString(readData(inputFormat));
+    assertThat(baseMergeLogFileResult2, is("[]"));
+  }
+
+  /**
+   * This test check 2 cases of records preCombining.
+   * When the preCombine is true, the writer does an in-memory combing for incoming records,
+   * when the preCombine is false, the merged log reader does the combining while reading.
+   * With disorder deletes, we can check whether the '_hoodie_operation' is correctly set up.
+   */
+  @ParameterizedTest
+  @MethodSource("preCombiningAndChangelogModeParams")
+  void testMergeOnReadDisorderDeleteMerging(boolean preCombine, boolean changelogMode) throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.PRE_COMBINE.key(), preCombine + "");
+    options.put(FlinkOptions.CHANGELOG_ENABLED.key(), changelogMode + "");
+    beforeEach(HoodieTableType.MERGE_ON_READ, options);
+
+    // write log file with disorder deletes
+    TestData.writeData(TestData.DATA_SET_DISORDER_INSERT_DELETE, conf);
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    final String baseResult = TestData.rowDataToString(readData(inputFormat));
+    String expected = "[+I[id1, Danny, 22, 1970-01-01T00:00:00.004, par1]]";
+    assertThat(baseResult, is(expected));
   }
 
   @Test
@@ -1031,6 +1064,7 @@ public class TestInputFormat {
     List<RowData> actual4 = readData(inputFormat4);
     // final List<RowData> expected4 = TestData.dataSetInsert(3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14);
     TestData.assertRowDataEquals(actual4, Collections.emptyList());
+    writeClient.close();
   }
 
   @ParameterizedTest
@@ -1076,6 +1110,19 @@ public class TestInputFormat {
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
+
+  /**
+   * Return test params => (preCombining, changelog mode).
+   */
+  private static Stream<Arguments> preCombiningAndChangelogModeParams() {
+    Object[][] data =
+        new Object[][] {
+            {true, true},
+            {true, false},
+            {false, true},
+            {false, false}};
+    return Stream.of(data).map(Arguments::of);
+  }
 
   private HoodieTableSource getTableSource(Configuration conf) {
     return new HoodieTableSource(

@@ -18,18 +18,17 @@
 
 package org.apache.hudi.io.storage.row;
 
-import org.apache.hudi.client.HoodieInternalWriteStatus;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.SparkDatasetTestUtils;
 
 import org.apache.spark.sql.Dataset;
@@ -57,7 +56,7 @@ import static org.junit.jupiter.api.Assertions.fail;
  * Unit tests {@link HoodieRowCreateHandle}.
  */
 @SuppressWarnings("checkstyle:LineLength")
-public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
+public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
 
   private static final Random RANDOM = new Random();
 
@@ -109,7 +108,7 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
       }
 
       // issue writes
-      HoodieInternalWriteStatus writeStatus = writeAndGetWriteStatus(inputRows, handle);
+      WriteStatus writeStatus = writeAndGetWriteStatus(inputRows, handle);
 
       fileAbsPaths.add(basePath + "/" + writeStatus.getStat().getPath());
       fileNames.add(handle.getFileName());
@@ -161,7 +160,7 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
       // expected
     }
     // close the create handle
-    HoodieInternalWriteStatus writeStatus = handle.close();
+    WriteStatus writeStatus = handle.close();
 
     List<String> fileNames = new ArrayList<>();
     fileNames.add(handle.getFileName());
@@ -190,20 +189,12 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
       HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
       new HoodieRowCreateHandle(table, cfg, " def", UUID.randomUUID().toString(), "001", RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE);
       fail("Should have thrown exception");
-    } catch (HoodieInsertException ioe) {
-      // expected without metadata table
-      if (enableMetadataTable) {
-        fail("Should have thrown TableNotFoundException");
-      }
     } catch (TableNotFoundException e) {
-      // expected with metadata table
-      if (!enableMetadataTable) {
-        fail("Should have thrown HoodieInsertException");
-      }
+      // expected throw failure
     }
   }
 
-  private HoodieInternalWriteStatus writeAndGetWriteStatus(Dataset<Row> inputRows, HoodieRowCreateHandle handle)
+  private WriteStatus writeAndGetWriteStatus(Dataset<Row> inputRows, HoodieRowCreateHandle handle)
       throws Exception {
     List<InternalRow> internalRows = SparkDatasetTestUtils.toInternalRows(inputRows, SparkDatasetTestUtils.ENCODER);
     // issue writes
@@ -214,11 +205,11 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
     return handle.close();
   }
 
-  private void assertOutput(HoodieInternalWriteStatus writeStatus, int size, String fileId, String partitionPath,
+  private void assertOutput(WriteStatus writeStatus, int size, String fileId, String partitionPath,
                             String instantTime, Dataset<Row> inputRows, List<String> filenames, List<String> fileAbsPaths, boolean populateMetaFields) {
     assertEquals(writeStatus.getPartitionPath(), partitionPath);
     assertEquals(writeStatus.getTotalRecords(), size);
-    assertEquals(writeStatus.getFailedRowsSize(), 0);
+    assertEquals(writeStatus.getTotalErrorRecords(), 0);
     assertEquals(writeStatus.getTotalErrorRecords(), 0);
     assertFalse(writeStatus.hasErrors());
     assertNull(writeStatus.getGlobalError());

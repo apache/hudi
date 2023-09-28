@@ -20,6 +20,8 @@ package org.apache.hudi.utilities.transform;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.config.SqlTransformerConfig;
+import org.apache.hudi.utilities.exception.HoodieTransformException;
+import org.apache.hudi.utilities.exception.HoodieTransformExecutionException;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -29,6 +31,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.UUID;
+
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * A transformer that allows a sql-query template be used to transform the source before writing to Hudi data-set.
@@ -45,19 +49,23 @@ public class SqlQueryBasedTransformer implements Transformer {
   @Override
   public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
       TypedProperties properties) {
-    String transformerSQL = properties.getString(SqlTransformerConfig.TRANSFORMER_SQL.key());
+    String transformerSQL = getStringWithAltKeys(properties, SqlTransformerConfig.TRANSFORMER_SQL);
     if (null == transformerSQL) {
-      throw new IllegalArgumentException("Missing configuration : (" + SqlTransformerConfig.TRANSFORMER_SQL.key() + ")");
+      throw new HoodieTransformException("Missing configuration : (" + SqlTransformerConfig.TRANSFORMER_SQL.key() + ")");
     }
 
-    // tmp table name doesn't like dashes
-    String tmpTable = TMP_TABLE.concat(UUID.randomUUID().toString().replace("-", "_"));
-    LOG.info("Registering tmp table : " + tmpTable);
-    rowDataset.createOrReplaceTempView(tmpTable);
-    String sqlStr = transformerSQL.replaceAll(SRC_PATTERN, tmpTable);
-    LOG.debug("SQL Query for transformation : (" + sqlStr + ")");
-    Dataset<Row> transformed = sparkSession.sql(sqlStr);
-    sparkSession.catalog().dropTempView(tmpTable);
-    return transformed;
+    try {
+      // tmp table name doesn't like dashes
+      String tmpTable = TMP_TABLE.concat(UUID.randomUUID().toString().replace("-", "_"));
+      LOG.info("Registering tmp table : " + tmpTable);
+      rowDataset.createOrReplaceTempView(tmpTable);
+      String sqlStr = transformerSQL.replaceAll(SRC_PATTERN, tmpTable);
+      LOG.debug("SQL Query for transformation : (" + sqlStr + ")");
+      Dataset<Row> transformed = sparkSession.sql(sqlStr);
+      sparkSession.catalog().dropTempView(tmpTable);
+      return transformed;
+    } catch (Exception e) {
+      throw new HoodieTransformExecutionException("Failed to apply sql query based transformer", e);
+    }
   }
 }

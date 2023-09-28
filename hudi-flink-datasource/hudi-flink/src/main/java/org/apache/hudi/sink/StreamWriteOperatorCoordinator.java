@@ -256,16 +256,8 @@ public class StreamWriteOperatorCoordinator
           // the stream write task snapshot and flush the data buffer synchronously in sequence,
           // so a successful checkpoint subsumes the old one(follows the checkpoint subsuming contract)
           final boolean committed = commitInstant(this.instant, checkpointId);
-
-          if (tableState.scheduleCompaction) {
-            // if async compaction is on, schedule the compaction
-            CompactionUtil.scheduleCompaction(metaClient, writeClient, tableState.isDeltaTimeCompaction, committed);
-          }
-
-          if (tableState.scheduleClustering) {
-            // if async clustering is on, schedule the clustering
-            ClusteringUtil.scheduleClustering(conf, writeClient, committed);
-          }
+          // schedules the compaction or clustering if it is enabled in stream execution mode
+          scheduleTableServices(committed);
 
           if (committed) {
             // start new instant.
@@ -398,6 +390,7 @@ public class StreamWriteOperatorCoordinator
     // because the instant request from write task is asynchronous.
     this.instant = this.writeClient.startCommit(tableState.commitAction, this.metaClient);
     this.metaClient.getActiveTimeline().transitionRequestedToInflight(tableState.commitAction, this.instant);
+    this.writeClient.setWriteTimer(tableState.commitAction);
     this.ckpMetadata.startInstant(this.instant);
     LOG.info("Create instant [{}] for table [{}] with type [{}]", this.instant,
         this.conf.getString(FlinkOptions.TABLE_NAME), conf.getString(FlinkOptions.TABLE_TYPE));
@@ -420,6 +413,10 @@ public class StreamWriteOperatorCoordinator
         reset();
       } else {
         LOG.info("Recommit instant {}", instant);
+        // Recommit should start heartbeat for lazy failed writes clean policy to avoid aborting for heartbeat expired.
+        if (writeClient.getConfig().getFailedWritesCleanPolicy().isLazy()) {
+          writeClient.getHeartbeatClient().start(instant);
+        }
         commitInstant(instant);
       }
       // starts a new instant
@@ -452,12 +449,20 @@ public class StreamWriteOperatorCoordinator
         Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
         // sync Hive synchronously if it is enabled in batch mode.
         syncHive();
-        // schedules the compaction plan in batch execution mode
-        if (tableState.scheduleCompaction) {
-          // if async compaction is on, schedule the compaction
-          CompactionUtil.scheduleCompaction(metaClient, writeClient, tableState.isDeltaTimeCompaction, true);
-        }
+        // schedules the compaction or clustering if it is enabled in batch execution mode
+        scheduleTableServices(true);
       }
+    }
+  }
+
+  private void scheduleTableServices(Boolean committed) {
+    // if compaction is on, schedule the compaction
+    if (tableState.scheduleCompaction) {
+      CompactionUtil.scheduleCompaction(metaClient, writeClient, tableState.isDeltaTimeCompaction, committed);
+    }
+    // if clustering is on, schedule the clustering
+    if (tableState.scheduleClustering) {
+      ClusteringUtil.scheduleClustering(conf, writeClient, committed);
     }
   }
 
@@ -528,7 +533,9 @@ public class StreamWriteOperatorCoordinator
       // Send commit ack event to the write function to unblock the flushing
       // If this checkpoint has no inputs while the next checkpoint has inputs,
       // the 'isConfirming' flag should be switched with the ack event.
-      sendCommitAckEvents(checkpointId);
+      if (checkpointId != -1) {
+        sendCommitAckEvents(checkpointId);
+      }
       return false;
     }
     doCommit(instant, writeResults);
@@ -593,6 +600,11 @@ public class StreamWriteOperatorCoordinator
   @VisibleForTesting
   public Context getContext() {
     return context;
+  }
+
+  @VisibleForTesting
+  public HoodieFlinkWriteClient getWriteClient() {
+    return writeClient;
   }
 
   @VisibleForTesting

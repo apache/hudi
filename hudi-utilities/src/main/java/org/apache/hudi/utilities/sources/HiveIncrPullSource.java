@@ -18,13 +18,12 @@
 
 package org.apache.hudi.utilities.sources;
 
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.HiveIncrementalPuller;
 import org.apache.hudi.utilities.config.HiveIncrPullSourceConfig;
+import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import org.apache.avro.generic.GenericRecord;
@@ -47,6 +46,9 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * Source to read deltas produced by {@link HiveIncrementalPuller}, commit by commit and apply to the target table
@@ -79,8 +81,8 @@ public class HiveIncrPullSource extends AvroSource {
   public HiveIncrPullSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
-    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(HiveIncrPullSourceConfig.ROOT_INPUT_PATH.key()));
-    this.incrPullRootPath = props.getString(HiveIncrPullSourceConfig.ROOT_INPUT_PATH.key());
+    checkRequiredConfigProperties(props, Collections.singletonList(HiveIncrPullSourceConfig.ROOT_INPUT_PATH));
+    this.incrPullRootPath = getStringWithAltKeys(props, HiveIncrPullSourceConfig.ROOT_INPUT_PATH);
     this.fs = FSUtils.getFs(incrPullRootPath, sparkContext.hadoopConfiguration());
   }
 
@@ -132,8 +134,8 @@ public class HiveIncrPullSource extends AvroSource {
       sparkContext.setJobGroup(this.getClass().getSimpleName(), "Fetch new data");
       return new InputBatch<>(Option.of(avroRDD.keys().map(r -> ((GenericRecord) r.datum()))),
           String.valueOf(commitToPull.get()));
-    } catch (IOException ioe) {
-      throw new HoodieIOException("Unable to read from source from checkpoint: " + lastCheckpointStr, ioe);
+    } catch (Exception e) {
+      throw new HoodieReadFromSourceException("Unable to read from source from checkpoint: " + lastCheckpointStr, e);
     }
   }
 }

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.JsonUtils;
 
@@ -31,11 +30,13 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
+import java.util.UUID;
+
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * All the metadata that is used for consistent hashing bucket index
@@ -83,14 +84,33 @@ public class HoodieConsistentHashingMetadata implements Serializable {
    * Construct default metadata with all bucket's file group uuid initialized
    */
   public HoodieConsistentHashingMetadata(String partitionPath, int numBuckets) {
-    this((short) 0, partitionPath, HoodieTimeline.INIT_INSTANT_TS, numBuckets, 0, constructDefaultHashingNodes(numBuckets));
+    this((short) 0, partitionPath, HoodieTimeline.INIT_INSTANT_TS, numBuckets, 0, constructDefaultHashingNodes(partitionPath, numBuckets));
     this.firstCreated = true;
   }
 
-  private static List<ConsistentHashingNode> constructDefaultHashingNodes(int numBuckets) {
+  private static List<ConsistentHashingNode> constructDefaultHashingNodes(String partitionPath, int numBuckets) {
     long step = ((long) HASH_VALUE_MASK + numBuckets - 1) / numBuckets;
-    return IntStream.range(1, numBuckets + 1)
-        .mapToObj(i -> new ConsistentHashingNode((int) Math.min(step * i, HASH_VALUE_MASK), FSUtils.createNewFileIdPfx())).collect(Collectors.toList());
+    long bucketStart = 0;
+    List<ConsistentHashingNode> nodes = new ArrayList<>(numBuckets);
+    for (int idx = 1; idx < numBuckets + 1; idx++) {
+      long bucketEnd = Math.min(step * idx, HASH_VALUE_MASK);
+      String fileId = generateUUID(partitionPath, bucketStart, bucketEnd);
+      nodes.add(new ConsistentHashingNode((int) bucketEnd, fileId));
+      bucketStart = bucketEnd;
+    }
+    return nodes;
+  }
+
+  private static String generateUUID(String partitionPath, long bucketStart, long bucketEnd) {
+    ByteBuffer byteBuffer = ByteBuffer.allocate(16);
+    byteBuffer.putLong(bucketStart);
+    byteBuffer.putLong(bucketEnd);
+    byte[] longBytes = byteBuffer.array();
+    byte[] partitionPathBytes = getUTF8Bytes(partitionPath);
+    byte[] combinedBytes = new byte[longBytes.length + partitionPathBytes.length];
+    System.arraycopy(longBytes, 0, combinedBytes, 0, longBytes.length);
+    System.arraycopy(partitionPathBytes, 0, combinedBytes, longBytes.length, partitionPathBytes.length);
+    return UUID.nameUUIDFromBytes(combinedBytes).toString();
   }
 
   public short getVersion() {
@@ -134,7 +154,7 @@ public class HoodieConsistentHashingMetadata implements Serializable {
   }
 
   public byte[] toBytes() throws IOException {
-    return toJsonString().getBytes(StandardCharsets.UTF_8);
+    return getUTF8Bytes(toJsonString());
   }
 
   public static HoodieConsistentHashingMetadata fromBytes(byte[] bytes) throws IOException {

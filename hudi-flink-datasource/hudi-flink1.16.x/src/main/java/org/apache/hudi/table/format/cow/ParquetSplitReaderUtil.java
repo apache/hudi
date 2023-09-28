@@ -72,6 +72,8 @@ import org.apache.parquet.ParquetRuntimeException;
 import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.column.page.PageReadStore;
 import org.apache.parquet.column.page.PageReader;
+import org.apache.parquet.filter.UnboundRecordFilter;
+import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.InvalidSchemaException;
 import org.apache.parquet.schema.OriginalType;
@@ -80,7 +82,6 @@ import org.apache.parquet.schema.Type;
 
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -91,6 +92,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.table.utils.DateTimeUtils.toInternal;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.parquet.Preconditions.checkArgument;
 
 /**
@@ -115,7 +117,9 @@ public class ParquetSplitReaderUtil {
       int batchSize,
       Path path,
       long splitStart,
-      long splitLength) throws IOException {
+      long splitLength,
+      FilterPredicate filterPredicate,
+      UnboundRecordFilter recordFilter) throws IOException {
     List<String> selNonPartNames = Arrays.stream(selectedFields)
         .mapToObj(i -> fullFieldNames[i])
         .filter(n -> !partitionSpec.containsKey(n))
@@ -148,7 +152,9 @@ public class ParquetSplitReaderUtil {
         batchSize,
         new org.apache.hadoop.fs.Path(path.toUri()),
         splitStart,
-        splitLength);
+        splitLength,
+        filterPredicate,
+        recordFilter);
   }
 
   private static ColumnVector createVector(
@@ -184,7 +190,7 @@ public class ParquetSplitReaderUtil {
         } else {
           bsv.fill(value instanceof byte[]
               ? (byte[]) value
-              : value.toString().getBytes(StandardCharsets.UTF_8));
+              : getUTF8Bytes(value.toString()));
         }
         return bsv;
       case BOOLEAN:
@@ -271,6 +277,30 @@ public class ParquetSplitReaderUtil {
           tv.fill(TimestampData.fromLocalDateTime((LocalDateTime) value));
         }
         return tv;
+      case ARRAY:
+        HeapArrayVector arrayVector = new HeapArrayVector(batchSize);
+        if (value == null) {
+          arrayVector.fillWithNulls();
+          return arrayVector;
+        } else {
+          throw new UnsupportedOperationException("Unsupported create array with default value.");
+        }
+      case MAP:
+        HeapMapColumnVector mapVector = new HeapMapColumnVector(batchSize, null, null);
+        if (value == null) {
+          mapVector.fillWithNulls();
+          return mapVector;
+        } else {
+          throw new UnsupportedOperationException("Unsupported create map with default value.");
+        }
+      case ROW:
+        HeapRowColumnVector rowVector = new HeapRowColumnVector(batchSize);
+        if (value == null) {
+          rowVector.fillWithNulls();
+          return rowVector;
+        } else {
+          throw new UnsupportedOperationException("Unsupported create row with default value.");
+        }
       default:
         throw new UnsupportedOperationException("Unsupported type: " + type);
     }
@@ -393,7 +423,7 @@ public class ParquetSplitReaderUtil {
           if (fieldIndex < 0) {
             fieldReaders.add(new EmptyColumnReader());
           } else {
-            fieldReaders.add(i,
+            fieldReaders.add(
                 createColumnReader(
                     utcTimestamp,
                     rowType.getTypeAt(i),

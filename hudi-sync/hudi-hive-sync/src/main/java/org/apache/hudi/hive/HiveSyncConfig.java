@@ -98,8 +98,9 @@ public class HiveSyncConfig extends HoodieSyncConfig {
 
   public HiveSyncConfig(Properties props, Configuration hadoopConf) {
     super(props, hadoopConf);
-    HiveConf hiveConf = hadoopConf instanceof HiveConf
-        ? (HiveConf) hadoopConf : new HiveConf(hadoopConf, HiveConf.class);
+    HiveConf hiveConf = new HiveConf();
+    // HiveConf needs to load Hadoop conf to allow instantiation via AWSGlueClientFactory
+    hiveConf.addResource(hadoopConf);
     setHadoopConf(hiveConf);
     validateParameters();
   }
@@ -166,8 +167,8 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     @Parameter(names = {"--sync-comment"}, description = "synchronize table comments to hive")
     public Boolean syncComment;
 
-    @Parameter(names = {"--sync-strategy"}, description = "Hive table synchronization strategy. Available option: ONLY_RO, ONLY_RT, ALL")
-    public Boolean syncStrategy;
+    @Parameter(names = {"--sync-strategy"}, description = "Hive table synchronization strategy. Available option: RO, RT, ALL")
+    public String syncStrategy;
 
     public boolean isHelp() {
       return hoodieSyncConfigParams.isHelp();

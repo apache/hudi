@@ -38,12 +38,12 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.keygen.KeyGenUtils;
+import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.RecordIterators;
 import org.apache.hudi.util.AvroToRowDataConverters;
-import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.RowDataProjection;
 import org.apache.hudi.util.RowDataToAvroConverters;
 import org.apache.hudi.util.StreamerUtil;
@@ -73,7 +73,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Properties;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.IntStream;
@@ -125,6 +124,9 @@ public class MergeOnReadInputFormat
    */
   private final int[] requiredPos;
 
+  // for predicate push down
+  private final List<Predicate> predicates;
+
   // for limit push down
   /**
    * Limit for the reader, -1 when the reading is not limited.
@@ -154,6 +156,7 @@ public class MergeOnReadInputFormat
       MergeOnReadTableState tableState,
       List<DataType> fieldTypes,
       String defaultPartName,
+      List<Predicate> predicates,
       long limit,
       boolean emitDelete,
       InternalSchemaManager internalSchemaManager) {
@@ -165,6 +168,7 @@ public class MergeOnReadInputFormat
     // Needs improvement: this requiredPos is only suitable for parquet reader,
     // because we need to
     this.requiredPos = tableState.getRequiredPositions();
+    this.predicates = predicates;
     this.limit = limit;
     this.emitDelete = emitDelete;
     this.internalSchemaManager = internalSchemaManager;
@@ -317,26 +321,14 @@ public class MergeOnReadInputFormat
   }
 
   private ClosableIterator<RowData> getBaseFileIterator(String path, int[] requiredPos) throws IOException {
-    // generate partition specs.
-    LinkedHashMap<String, String> partSpec = FilePathUtils.extractPartitionKeyValues(
-        new org.apache.hadoop.fs.Path(path).getParent(),
-        this.conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING),
-        FilePathUtils.extractPartitionKeys(this.conf));
-    LinkedHashMap<String, Object> partObjects = new LinkedHashMap<>();
-    partSpec.forEach((k, v) -> {
-      final int idx = fieldNames.indexOf(k);
-      if (idx == -1) {
-        // for any rare cases that the partition field does not exist in schema,
-        // fallback to file read
-        return;
-      }
-      DataType fieldType = fieldTypes.get(idx);
-      if (!DataTypeUtils.isDatetimeType(fieldType)) {
-        // date time type partition field is formatted specifically,
-        // read directly from the data file to avoid format mismatch or precision loss
-        partObjects.put(k, DataTypeUtils.resolvePartition(defaultPartName.equals(v) ? null : v, fieldType));
-      }
-    });
+    LinkedHashMap<String, Object> partObjects = FilePathUtils.generatePartitionSpecs(
+        path,
+        fieldNames,
+        fieldTypes,
+        conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME),
+        conf.getString(FlinkOptions.PARTITION_PATH_FIELD),
+        conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING)
+    );
 
     return RecordIterators.getParquetRecordIterator(
         internalSchemaManager,
@@ -350,7 +342,8 @@ public class MergeOnReadInputFormat
         2048,
         new org.apache.flink.core.fs.Path(path),
         0,
-        Long.MAX_VALUE); // read the whole file
+        Long.MAX_VALUE, // read the whole file
+        predicates);
   }
 
   private ClosableIterator<RowData> getLogFileIterator(MergeOnReadInputSplit split) {
@@ -767,7 +760,7 @@ public class MergeOnReadInputFormat
         final String curKey = currentRecord.getString(HOODIE_RECORD_KEY_COL_POS).toString();
         if (scanner.getRecords().containsKey(curKey)) {
           keyToSkip.add(curKey);
-          Option<HoodieAvroIndexedRecord> mergedAvroRecord = mergeRowWithLog(currentRecord, curKey);
+          Option<HoodieRecord<IndexedRecord>> mergedAvroRecord = mergeRowWithLog(currentRecord, curKey);
           if (!mergedAvroRecord.isPresent()) {
             // deleted
             continue;
@@ -838,13 +831,13 @@ public class MergeOnReadInputFormat
       }
     }
 
-    private Option<HoodieAvroIndexedRecord> mergeRowWithLog(RowData curRow, String curKey) {
-      final HoodieAvroRecord<?> record = (HoodieAvroRecord) scanner.getRecords().get(curKey);
+    @SuppressWarnings("unchecked")
+    private Option<HoodieRecord<IndexedRecord>> mergeRowWithLog(RowData curRow, String curKey) {
+      final HoodieRecord<?> record = scanner.getRecords().get(curKey);
       GenericRecord historyAvroRecord = (GenericRecord) rowDataToAvroConverter.convert(tableSchema, curRow);
       HoodieAvroIndexedRecord hoodieAvroIndexedRecord = new HoodieAvroIndexedRecord(historyAvroRecord);
       try {
-        Option<HoodieRecord> resultRecord = recordMerger.merge(hoodieAvroIndexedRecord, tableSchema, record, tableSchema, payloadProps).map(Pair::getLeft);
-        return resultRecord.get().toIndexedRecord(tableSchema, new Properties());
+        return recordMerger.merge(hoodieAvroIndexedRecord, tableSchema, record, tableSchema, payloadProps).map(Pair::getLeft);
       } catch (IOException e) {
         throw new HoodieIOException("Merge base and delta payloads exception", e);
       }
@@ -859,6 +852,7 @@ public class MergeOnReadInputFormat
     protected MergeOnReadTableState tableState;
     protected List<DataType> fieldTypes;
     protected String defaultPartName;
+    protected List<Predicate> predicates;
     protected long limit = -1;
     protected boolean emitDelete = false;
     protected InternalSchemaManager internalSchemaManager = InternalSchemaManager.DISABLED;
@@ -883,6 +877,11 @@ public class MergeOnReadInputFormat
       return this;
     }
 
+    public Builder predicates(List<Predicate> predicates) {
+      this.predicates = predicates;
+      return this;
+    }
+
     public Builder limit(long limit) {
       this.limit = limit;
       return this;
@@ -900,7 +899,7 @@ public class MergeOnReadInputFormat
 
     public MergeOnReadInputFormat build() {
       return new MergeOnReadInputFormat(conf, tableState, fieldTypes,
-          defaultPartName, limit, emitDelete, internalSchemaManager);
+          defaultPartName, predicates, limit, emitDelete, internalSchemaManager);
     }
   }
 

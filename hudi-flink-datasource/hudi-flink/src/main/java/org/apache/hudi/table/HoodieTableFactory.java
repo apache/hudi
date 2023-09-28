@@ -134,6 +134,10 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
               && !conf.contains(FlinkOptions.PAYLOAD_CLASS_NAME)) {
             conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, tableConfig.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME));
           }
+          if (tableConfig.contains(HoodieTableConfig.PAYLOAD_TYPE)
+              && !conf.contains(FlinkOptions.PAYLOAD_CLASS_NAME)) {
+            conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, tableConfig.getPayloadClass());
+          }
         });
   }
 
@@ -196,8 +200,9 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       if (recordKeys.length == 1
           && FlinkOptions.RECORD_KEY_FIELD.defaultValue().equals(recordKeys[0])
           && !fields.contains(recordKeys[0])) {
-        throw new HoodieValidationException("Primary key definition is required, use either PRIMARY KEY syntax "
-            + "or option '" + FlinkOptions.RECORD_KEY_FIELD.key() + "' to specify.");
+        throw new HoodieValidationException("Primary key definition is required, the default primary key field "
+            + "'" + FlinkOptions.RECORD_KEY_FIELD.defaultValue() + "' does not exist in the table schema, "
+            + "use either PRIMARY KEY syntax or option '" + FlinkOptions.RECORD_KEY_FIELD.key() + "' to speciy.");
       }
 
       Arrays.stream(recordKeys)
@@ -245,6 +250,8 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       ResolvedSchema schema) {
     // table name
     conf.setString(FlinkOptions.TABLE_NAME.key(), tablePath.getObjectName());
+    // database name
+    conf.setString(FlinkOptions.DATABASE_NAME.key(), tablePath.getDatabaseName());
     // hoodie key about options
     setupHoodieKeyOptions(conf, table);
     // compaction options

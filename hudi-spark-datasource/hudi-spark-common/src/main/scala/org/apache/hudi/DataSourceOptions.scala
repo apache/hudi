@@ -23,6 +23,8 @@ import org.apache.hudi.common.config._
 import org.apache.hudi.common.fs.ConsistencyGuardConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling
+import org.apache.hudi.common.util.ConfigUtils.{DELTA_STREAMER_CONFIG_PREFIX, IS_QUERY_AS_RO_TABLE, STREAMER_CONFIG_PREFIX}
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
@@ -32,7 +34,6 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.{getKeyGeneratorClassNameFromType, inferKeyGeneratorTypeFromWriteConfig}
 import org.apache.hudi.keygen.{CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
-import org.apache.hudi.sync.common.util.ConfigUtils
 import org.apache.hudi.util.JFunction
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
 import org.slf4j.LoggerFactory
@@ -46,10 +47,9 @@ import scala.language.implicitConversions
  */
 
 /**
-  * Options supported for reading hoodie tables.
-  */
+ * Options supported for reading hoodie tables.
+ */
 object DataSourceReadOptions {
-  import DataSourceOptionsHelper._
 
   val QUERY_TYPE_SNAPSHOT_OPT_VAL = "snapshot"
   val QUERY_TYPE_READ_OPTIMIZED_OPT_VAL = "read_optimized"
@@ -59,8 +59,8 @@ object DataSourceReadOptions {
     .defaultValue(QUERY_TYPE_SNAPSHOT_OPT_VAL)
     .withAlternatives("hoodie.datasource.view.type")
     .withValidValues(QUERY_TYPE_SNAPSHOT_OPT_VAL, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_INCREMENTAL_OPT_VAL)
-    .withDocumentation("Whether data needs to be read, in incremental mode (new data since an instantTime) " +
-      "(or) Read Optimized mode (obtain latest view, based on base files) (or) Snapshot mode " +
+    .withDocumentation("Whether data needs to be read, in `" + QUERY_TYPE_INCREMENTAL_OPT_VAL + "` mode (new data since an instantTime) " +
+      "(or) `" + QUERY_TYPE_READ_OPTIMIZED_OPT_VAL + "` mode (obtain latest view, based on base files) (or) `" + QUERY_TYPE_SNAPSHOT_OPT_VAL + "` mode " +
       "(obtain latest view, by merging base and (if any) log files)")
 
   val INCREMENTAL_FORMAT_LATEST_STATE_VAL = "latest_state"
@@ -85,6 +85,15 @@ object DataSourceReadOptions {
     .withDocumentation("For Snapshot query on merge on read table, control whether we invoke the record " +
       s"payload implementation to merge (${REALTIME_PAYLOAD_COMBINE_OPT_VAL}) or skip merging altogether" +
       s"${REALTIME_SKIP_MERGE_OPT_VAL}")
+
+  val USE_NEW_HUDI_PARQUET_FILE_FORMAT: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.use.new.parquet.file.format")
+    .defaultValue("false")
+    .markAdvanced()
+    .sinceVersion("0.14.0")
+    .withDocumentation("Read using the new Hudi parquet file format. The new Hudi parquet file format is " +
+      "introduced as an experimental feature in 0.14.0. Currently, the new Hudi parquet file format only applies " +
+      "to bootstrap and MOR queries. Schema evolution is also not supported by the new file format.")
 
   val READ_PATHS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.paths")
@@ -113,18 +122,22 @@ object DataSourceReadOptions {
   val BEGIN_INSTANTTIME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.begin.instanttime")
     .noDefaultValue()
-    .withDocumentation("Instant time to start incrementally pulling data from. The instanttime here need not necessarily " +
-      "correspond to an instant on the timeline. New data written with an instant_time > BEGIN_INSTANTTIME are fetched out. " +
-      "For e.g: ‘20170901080000’ will get all new data written after Sep 1, 2017 08:00AM. Note that if `"
-      + HoodieCommonConfig.READ_BY_STATE_TRANSITION_TIME.key() + "` enabled, will use instant's "
+    .withDocumentation("Required when `" + QUERY_TYPE.key() + "` is set to `" + QUERY_TYPE_INCREMENTAL_OPT_VAL + "`. Represents the instant time to start incrementally pulling data from. The instanttime here need not necessarily "
+      + "correspond to an instant on the timeline. New data written with an instant_time > BEGIN_INSTANTTIME are fetched out. "
+      + "For e.g: ‘20170901080000’ will get all new data written after Sep 1, 2017 08:00AM. Note that if `"
+      + HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key() + "` set to "
+      + HollowCommitHandling.USE_TRANSITION_TIME + ", will use instant's "
       + "`stateTransitionTime` to perform comparison.")
 
   val END_INSTANTTIME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.end.instanttime")
     .noDefaultValue()
-    .withDocumentation("Instant time to limit incrementally fetched data to. " +
-      "New data written with an instant_time <= END_INSTANTTIME are fetched out. Note that if `"
-      + HoodieCommonConfig.READ_BY_STATE_TRANSITION_TIME.key() + "` enabled, will use instant's "
+    .withDocumentation("Used when `" + QUERY_TYPE.key() + "` is set to `" + QUERY_TYPE_INCREMENTAL_OPT_VAL +
+      "`. Represents the instant time to limit incrementally fetched data to. When not specified latest commit time from " +
+      "timeline is assumed by default. When specified, new data written with an instant_time <= END_INSTANTTIME are fetched out. " +
+      "Point in time type queries make more sense with begin and end instant times specified. Note that if `"
+      + HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key() + "` set to `"
+      + HollowCommitHandling.USE_TRANSITION_TIME + "`, will use instant's "
       + "`stateTransitionTime` to perform comparison.")
 
   val INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME: ConfigProperty[String] = ConfigProperty
@@ -204,8 +217,7 @@ object DataSourceReadOptions {
 
   val SCHEMA_EVOLUTION_ENABLED: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE
 
-  val READ_BY_STATE_TRANSITION_TIME: ConfigProperty[Boolean] = HoodieCommonConfig.READ_BY_STATE_TRANSITION_TIME
-
+  val INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT: ConfigProperty[String] = HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT
 
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
   @Deprecated
@@ -260,8 +272,8 @@ object DataSourceReadOptions {
 }
 
 /**
-  * Options supported for writing hoodie tables.
-  */
+ * Options supported for writing hoodie tables.
+ */
 object DataSourceWriteOptions {
 
   val BULK_INSERT_OPERATION_OPT_VAL = WriteOperationType.BULK_INSERT.value
@@ -283,6 +295,7 @@ object DataSourceWriteOptions {
       WriteOperationType.BULK_INSERT.value,
       WriteOperationType.BULK_INSERT_PREPPED.value,
       WriteOperationType.DELETE.value,
+      WriteOperationType.DELETE_PREPPED.value,
       WriteOperationType.BOOTSTRAP.value,
       WriteOperationType.INSERT_OVERWRITE.value,
       WriteOperationType.CLUSTER.value,
@@ -306,11 +319,17 @@ object DataSourceWriteOptions {
     .withDocumentation("The table type for the underlying data, for this write. This can’t change between writes.")
 
   /**
-    * May be derive partition path from incoming df if not explicitly set.
-    *
-    * @param optParams Parameters to be translated
-    * @return Parameters after translation
-    */
+   * Config key with boolean value that indicates whether record being written during UPDATE or DELETE Spark SQL
+   * operations are already prepped.
+   */
+  val SPARK_SQL_WRITES_PREPPED_KEY = "_hoodie.spark.sql.writes.prepped";
+
+  /**
+   * May be derive partition path from incoming df if not explicitly set.
+   *
+   * @param optParams Parameters to be translated
+   * @return Parameters after translation
+   */
   def mayBeDerivePartitionPath(optParams: Map[String, String]): Map[String, String] = {
     var translatedOptParams = optParams
     // translate the api partitionBy of spark DataFrameWriter to PARTITIONPATH_FIELD
@@ -364,6 +383,8 @@ object DataSourceWriteOptions {
    * This will render any value set for `PRECOMBINE_FIELD_OPT_VAL` in-effective
    */
   val PAYLOAD_CLASS_NAME = HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME
+
+  val PAYLOAD_TYPE = HoodieWriteConfig.WRITE_PAYLOAD_TYPE
 
   /**
    * HoodieMerger will replace the payload to process the merge of data
@@ -423,19 +444,26 @@ object DataSourceWriteOptions {
   /**
    * Enable the bulk insert for sql insert statement.
    */
+  @Deprecated
   val SQL_ENABLE_BULK_INSERT: ConfigProperty[String] = ConfigProperty
     .key("hoodie.sql.bulk.insert.enable")
     .defaultValue("false")
     .markAdvanced()
-    .withDocumentation("When set to true, the sql insert statement will use bulk insert.")
+    .deprecatedAfter("0.14.0")
+    .withDocumentation("When set to true, the sql insert statement will use bulk insert. " +
+      "This config is deprecated as of 0.14.0. Please use hoodie.spark.sql.insert.into.operation instead.")
 
+  @Deprecated
   val SQL_INSERT_MODE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.sql.insert.mode")
     .defaultValue("upsert")
+    .markAdvanced()
+    .deprecatedAfter("0.14.0")
     .withDocumentation("Insert mode when insert data to pk-table. The optional modes are: upsert, strict and non-strict." +
       "For upsert mode, insert statement do the upsert operation for the pk-table which will update the duplicate record." +
       "For strict mode, insert statement will keep the primary key uniqueness constraint which do not allow duplicate record." +
-      "While for non-strict mode, hudi just do the insert operation for the pk-table.")
+      "While for non-strict mode, hudi just do the insert operation for the pk-table. This config is deprecated as of 0.14.0. Please use " +
+      "hoodie.spark.sql.insert.into.operation and hoodie.datasource.insert.dup.policy as you see fit.")
 
   val COMMIT_METADATA_KEYPREFIX: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.commitmeta.key.prefix")
@@ -444,11 +472,13 @@ object DataSourceWriteOptions {
     .withDocumentation("Option keys beginning with this prefix, are automatically added to the commit/deltacommit metadata. " +
       "This is useful to store checkpointing information, in a consistent way with the hudi timeline")
 
+  @Deprecated
   val INSERT_DROP_DUPS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.insert.drop.duplicates")
     .defaultValue("false")
     .markAdvanced()
-    .withDocumentation("If set to true, filters out all duplicate records from incoming dataframe, during insert operations.")
+    .withDocumentation("If set to true, records from the incoming dataframe will not overwrite existing records with the same key during the write operation. " +
+      "This config is deprecated as of 0.14.0. Please use hoodie.datasource.insert.dup.policy instead.");
 
   val PARTITIONS_TO_DELETE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.partitions.to.delete")
@@ -490,6 +520,16 @@ object DataSourceWriteOptions {
       + "This could introduce the potential issue that the job is restart(`batch id` is lost) while spark checkpoint write fails, "
       + "causing spark will retry and rewrite the data.")
 
+  val STREAMING_DISABLE_COMPACTION: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.write.streaming.disable.compaction")
+    .defaultValue("false")
+    .markAdvanced()
+    .sinceVersion("0.14.0")
+    .withDocumentation("By default for MOR table, async compaction is enabled with spark streaming sink. "
+      + "By setting this config to true, we can disable it and the expectation is that, users will schedule and execute "
+      + "compaction in a different process/job altogether. Some users may wish to run it separately to manage resources "
+      + "across table services and regular ingestion pipeline and so this could be preferred on such cases.")
+
   val META_SYNC_CLIENT_TOOL_CLASS_NAME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.meta.sync.client.tool.class")
     .defaultValue(classOf[HiveSyncTool].getName)
@@ -497,6 +537,37 @@ object DataSourceWriteOptions {
     .withDocumentation("Sync tool class name used to sync to metastore. Defaults to Hive.")
 
   val RECONCILE_SCHEMA: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.RECONCILE_SCHEMA
+
+  val MAKE_NEW_COLUMNS_NULLABLE: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.MAKE_NEW_COLUMNS_NULLABLE
+
+  val SPARK_SQL_INSERT_INTO_OPERATION: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.spark.sql.insert.into.operation")
+    .defaultValue(WriteOperationType.INSERT.value())
+    .withValidValues(WriteOperationType.BULK_INSERT.value(), WriteOperationType.INSERT.value(), WriteOperationType.UPSERT.value())
+    .markAdvanced()
+    .sinceVersion("0.14.0")
+    .withDocumentation("Sql write operation to use with INSERT_INTO spark sql command. This comes with 3 possible values, bulk_insert, " +
+      "insert and upsert. bulk_insert is generally meant for initial loads and is known to be performant compared to insert. But bulk_insert may not " +
+      "do small file management. If you prefer hudi to automatically manage small files, then you can go with \"insert\". There is no precombine " +
+      "(if there are duplicates within the same batch being ingested, same dups will be ingested) with bulk_insert and insert and there is no index " +
+      "look up as well. If you may use INSERT_INTO for mutable dataset, then you may have to set this config value to \"upsert\". With upsert, you will " +
+      "get both precombine and updates to existing records on storage is also honored. If not, you may see duplicates. ")
+
+  val NONE_INSERT_DUP_POLICY = "none"
+  val DROP_INSERT_DUP_POLICY = "drop"
+  val FAIL_INSERT_DUP_POLICY = "fail"
+
+  val INSERT_DUP_POLICY: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.insert.dup.policy")
+    .defaultValue(NONE_INSERT_DUP_POLICY)
+    .withValidValues(NONE_INSERT_DUP_POLICY, DROP_INSERT_DUP_POLICY, FAIL_INSERT_DUP_POLICY)
+    .markAdvanced()
+    .sinceVersion("0.14.0")
+    .withDocumentation("When operation type is set to \"insert\", users can optionally enforce a dedup policy. This policy will be employed "
+      + " when records being ingested already exists in storage. Default policy is none and no action will be taken. Another option is to choose " +
+      " \"drop\", on which matching records from incoming will be dropped and the rest will be ingested. Third option is \"fail\" which will " +
+      "fail the write operation when same records are re-ingested. In other words, a given record as deduced by the key generation policy " +
+      "can be ingested only once to the target table of interest.")
 
   // HIVE SYNC SPECIFIC CONFIGS
   // NOTE: DO NOT USE uppercase for the keys as they are internally lower-cased. Using upper-cases causes
@@ -526,8 +597,6 @@ object DataSourceWriteOptions {
   val HIVE_PARTITION_FIELDS: ConfigProperty[String] = HoodieSyncConfig.META_SYNC_PARTITION_FIELDS
   @Deprecated
   val HIVE_PARTITION_EXTRACTOR_CLASS: ConfigProperty[String] = HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS
-  @Deprecated
-  val HIVE_ASSUME_DATE_PARTITION: ConfigProperty[String] = HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION
   @Deprecated
   val HIVE_USE_PRE_APACHE_INPUT_FORMAT: ConfigProperty[String] = HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT
 
@@ -581,17 +650,31 @@ object DataSourceWriteOptions {
   val ASYNC_CLUSTERING_ENABLE = HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE
 
   val KAFKA_AVRO_VALUE_DESERIALIZER_CLASS: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.deltastreamer.source.kafka.value.deserializer.class")
+    .key(STREAMER_CONFIG_PREFIX + "source.kafka.value.deserializer.class")
     .defaultValue("io.confluent.kafka.serializers.KafkaAvroDeserializer")
+    .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.kafka.value.deserializer.class")
     .markAdvanced()
     .sinceVersion("0.9.0")
     .withDocumentation("This class is used by kafka client to deserialize the records")
 
   val DROP_PARTITION_COLUMNS: ConfigProperty[java.lang.Boolean] = HoodieTableConfig.DROP_PARTITION_COLUMNS
 
-  /** @deprecated Use {@link HIVE_ASSUME_DATE_PARTITION} and its methods instead */
-  @Deprecated
-  val HIVE_ASSUME_DATE_PARTITION_OPT_KEY = HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION.key()
+  val SPARK_SQL_OPTIMIZED_WRITES: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.spark.sql.optimized.writes.enable")
+    .defaultValue("true")
+    .markAdvanced()
+    .sinceVersion("0.14.0")
+    .withDocumentation("Controls whether spark sql prepped update, delete, and merge are enabled.")
+
+  val OVERWRITE_MODE: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.overwrite.mode")
+    .noDefaultValue()
+    .withValidValues("STATIC", "DYNAMIC")
+    .markAdvanced()
+    .sinceVersion("0.14.0")
+    .withDocumentation("Controls whether overwrite use dynamic or static mode, if not configured, " +
+      "respect spark.sql.sources.partitionOverwriteMode")
+
   /** @deprecated Use {@link HIVE_USE_PRE_APACHE_INPUT_FORMAT} and its methods instead */
   @Deprecated
   val HIVE_USE_PRE_APACHE_INPUT_FORMAT_OPT_KEY = HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT.key()
@@ -780,9 +863,6 @@ object DataSourceWriteOptions {
   /** @deprecated Use {@link HIVE_PARTITION_EXTRACTOR_CLASS} and its methods instead */
   @Deprecated
   val DEFAULT_HIVE_PARTITION_EXTRACTOR_CLASS_OPT_VAL = HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.defaultValue()
-  /** @deprecated Use {@link HIVE_ASSUME_DATE_PARTITION} and its methods instead */
-  @Deprecated
-  val DEFAULT_HIVE_ASSUME_DATE_PARTITION_OPT_VAL = HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION.defaultValue()
   @Deprecated
   val DEFAULT_USE_PRE_APACHE_INPUT_FORMAT_OPT_VAL = "false"
   /** @deprecated Use {@link HIVE_USE_JDBC} and its methods instead */
@@ -816,7 +896,7 @@ object DataSourceWriteOptions {
   @Deprecated
   val KAFKA_AVRO_VALUE_DESERIALIZER = KAFKA_AVRO_VALUE_DESERIALIZER_CLASS.key()
   @Deprecated
-  val SCHEMA_PROVIDER_CLASS_PROP = "hoodie.deltastreamer.schemaprovider.class"
+  val SCHEMA_PROVIDER_CLASS_PROP = STREAMER_CONFIG_PREFIX + "schemaprovider.class"
 }
 
 object DataSourceOptionsHelper {
@@ -824,7 +904,7 @@ object DataSourceOptionsHelper {
   private val log = LoggerFactory.getLogger(DataSourceOptionsHelper.getClass)
 
   // put all the configs with alternatives here
-  val allConfigsWithAlternatives = List(
+  private val allConfigsWithAlternatives = List(
     DataSourceReadOptions.QUERY_TYPE,
     DataSourceWriteOptions.TABLE_TYPE,
     HoodieTableConfig.BASE_FILE_FORMAT,
@@ -891,6 +971,9 @@ object DataSourceOptionsHelper {
     if (!params.contains(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key()) && tableConfig.getPayloadClass != null) {
       missingWriteConfigs ++= Map(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> tableConfig.getPayloadClass)
     }
+    if (!params.contains(DataSourceWriteOptions.TABLE_TYPE.key())) {
+      missingWriteConfigs ++= Map(DataSourceWriteOptions.TABLE_TYPE.key() -> tableConfig.getTableType.name())
+    }
     missingWriteConfigs.toMap
   }
 
@@ -898,7 +981,7 @@ object DataSourceOptionsHelper {
     // First check if the ConfigUtils.IS_QUERY_AS_RO_TABLE has set by HiveSyncTool,
     // or else use query type from QUERY_TYPE.
     val paramsWithGlobalProps = DFSPropertiesConfiguration.getGlobalProps.asScala.toMap ++ parameters
-    val queryType = paramsWithGlobalProps.get(ConfigUtils.IS_QUERY_AS_RO_TABLE)
+    val queryType = paramsWithGlobalProps.get(IS_QUERY_AS_RO_TABLE)
       .map(is => if (is.toBoolean) QUERY_TYPE_READ_OPTIMIZED_OPT_VAL else QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .getOrElse(paramsWithGlobalProps.getOrElse(QUERY_TYPE.key, QUERY_TYPE.defaultValue()))
 

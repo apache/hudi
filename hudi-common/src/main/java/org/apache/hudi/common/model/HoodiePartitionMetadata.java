@@ -50,6 +50,8 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+
 /**
  * The metadata that goes into the meta file in each partition.
  */
@@ -157,7 +159,7 @@ public class HoodiePartitionMetadata {
           // Since we are only interested in saving metadata to the footer, the schema, blocksizes and other
           // parameters are not important.
           MessageType type = Types.buildMessage().optional(PrimitiveTypeName.INT64).named("dummyint").named("dummy");
-          HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(type, schema, Option.empty());
+          HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(type, schema, Option.empty(), new Properties());
           try (ParquetWriter writer = new ParquetWriter(filePath, writeSupport, CompressionCodecName.UNCOMPRESSED, 1024, 1024)) {
             for (String key : props.stringPropertyNames()) {
               writeSupport.addFooterMetadata(key, props.getProperty(key));
@@ -171,7 +173,7 @@ public class HoodiePartitionMetadata {
               .setSchema(AvroOrcUtils.createOrcSchema(schema));
           try (Writer writer = OrcFile.createWriter(filePath, writerOptions)) {
             for (String key : props.stringPropertyNames()) {
-              writer.addUserMetadata(key, ByteBuffer.wrap(props.getProperty(key).getBytes()));
+              writer.addUserMetadata(key, ByteBuffer.wrap(getUTF8Bytes(props.getProperty(key))));
             }
           }
           break;

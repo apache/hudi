@@ -32,8 +32,6 @@ import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
-import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.MetadataValues;
@@ -55,20 +53,20 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -129,6 +127,11 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private boolean useWriterSchema = false;
 
   private Properties recordProperties = new Properties();
+  // Block Sequence number will be used to detect duplicate log blocks(by log reader) added due to spark task retries.
+  // It should always start with 0 for a given file slice. for roll overs and delete blocks, we increment by 1.
+  private int blockSequenceNumber = 0;
+  // On task failures, a given task could be retried. So, this attempt number will track the number of attempts.
+  private int attemptNumber = 0;
 
   /**
    * This is used by log compaction only.
@@ -140,6 +143,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     this.useWriterSchema = true;
     this.isLogCompaction = true;
     this.header.putAll(header);
+    this.attemptNumber = taskContextSupplier.getAttemptNumberSupplier().get();
   }
 
   public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
@@ -150,6 +154,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     this.sizeEstimator = new DefaultSizeEstimator();
     this.statuses = new ArrayList<>();
     this.recordProperties.putAll(config.getProps());
+    this.attemptNumber = taskContextSupplier.getAttemptNumberSupplier().get();
   }
 
   public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
@@ -264,6 +269,10 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         recordsWritten++;
       } else {
         finalRecordOpt = Option.empty();
+        // Clear the new location as the record was deleted
+        hoodieRecord.unseal();
+        hoodieRecord.clearNewLocation();
+        hoodieRecord.seal();
         recordsDeleted++;
       }
 
@@ -311,7 +320,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     stat.setLogFiles(new ArrayList<>(prevStat.getLogFiles()));
 
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
-        !hoodieTable.getIndex().isImplicitWithStorage(), config.getWriteStatusFailureFraction());
+        hoodieTable.shouldTrackSuccessRecords(), config.getWriteStatusFailureFraction());
     this.writeStatus.setFileId(fileId);
     this.writeStatus.setPartitionPath(partitionPath);
     this.writeStatus.setStat(stat);
@@ -394,9 +403,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       updateWriteStatus(stat, result);
     }
 
-    // TODO MetadataColumnStatsIndex for spark record
-    // https://issues.apache.org/jira/browse/HUDI-5249
-    if (config.isMetadataColumnStatsIndexEnabled() && recordMerger.getRecordType() == HoodieRecordType.AVRO) {
+    if (config.isMetadataColumnStatsIndexEnabled()) {
       final List<Schema.Field> fieldsToIndex;
       // If column stats index is enabled but columns not configured then we assume that
       // all columns should be indexed
@@ -410,15 +417,13 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             .collect(Collectors.toList());
       }
 
-      List<IndexedRecord> indexedRecords = new LinkedList<>();
-      for (HoodieRecord hoodieRecord : recordList) {
-        indexedRecords.add(hoodieRecord.toIndexedRecord(writeSchema, config.getProps()).get().getData());
+      try {
+        Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
+            collectColumnRangeMetadata(recordList, fieldsToIndex, stat.getPath(), writeSchemaWithMetaFields);
+        stat.putRecordsStats(columnRangeMetadataMap);
+      } catch (HoodieException e) {
+        throw new HoodieAppendException("Failed to extract append result", e);
       }
-
-      Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangesMetadataMap =
-          collectColumnRangeMetadata(indexedRecords, fieldsToIndex, stat.getPath());
-
-      stat.putRecordsStats(columnRangesMetadataMap);
     }
 
     resetWriteCounts();
@@ -454,11 +459,13 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             ? HoodieRecord.RECORD_KEY_METADATA_FIELD
             : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
 
-        blocks.add(getBlock(config, pickLogDataBlockFormat(), recordList, header, keyField));
+        blocks.add(getBlock(config, pickLogDataBlockFormat(), recordList, getUpdatedHeader(header, blockSequenceNumber++, attemptNumber, config,
+            addBlockIdentifier()), keyField));
       }
 
       if (appendDeleteBlocks && recordsToDelete.size() > 0) {
-        blocks.add(new HoodieDeleteBlock(recordsToDelete.toArray(new DeleteRecord[0]), header));
+        blocks.add(new HoodieDeleteBlock(recordsToDelete.toArray(new DeleteRecord[0]), getUpdatedHeader(header, blockSequenceNumber++, attemptNumber, config,
+            addBlockIdentifier())));
       }
 
       if (blocks.size() > 0) {
@@ -498,21 +505,26 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   @Override
   public List<WriteStatus> close() {
     try {
+      if (isClosed()) {
+        // Handle has already been closed
+        return Collections.emptyList();
+      }
+
+      markClosed();
       // flush any remaining records to disk
       appendDataAndDeleteBlocks(header, true);
       recordItr = null;
-      if (writer != null) {
-        writer.close();
-        writer = null;
 
-        // update final size, once for all log files
-        // TODO we can actually deduce file size purely from AppendResult (based on offset and size
-        //      of the appended block)
-        for (WriteStatus status : statuses) {
-          long logFileSize = FSUtils.getFileSize(fs, new Path(config.getBasePath(), status.getStat().getPath()));
-          status.getStat().setFileSizeInBytes(logFileSize);
-        }
+      writer.close();
+
+      // update final size, once for all log files
+      // TODO we can actually deduce file size purely from AppendResult (based on offset and size
+      //      of the appended block)
+      for (WriteStatus status : statuses) {
+        long logFileSize = FSUtils.getFileSize(fs, new Path(config.getBasePath(), status.getStat().getPath()));
+        status.getStat().setFileSizeInBytes(logFileSize);
       }
+
       return statuses;
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to close UpdateHandle", e);
@@ -550,6 +562,10 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     return true;
   }
 
+  protected boolean addBlockIdentifier() {
+    return true;
+  }
+
   private void writeToBuffer(HoodieRecord<T> record) {
     if (!partitionPath.equals(record.getPartitionPath())) {
       HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
@@ -561,7 +577,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     // update the new location of the record, so we know where to find it next
     if (needsUpdateLocation()) {
       record.unseal();
-      record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
+      record.setNewLocation(newRecordLocation);
       record.seal();
     }
     // fetch the ordering val first in case the record was deflated.
@@ -621,6 +637,16 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         throw new HoodieException("Base file format " + hoodieTable.getBaseFileFormat()
             + " does not have associated log block type");
     }
+  }
+
+  private static Map<HeaderMetadataType, String> getUpdatedHeader(Map<HeaderMetadataType, String> header, int blockSequenceNumber, long attemptNumber,
+                                                                  HoodieWriteConfig config, boolean addBlockIdentifier) {
+    Map<HeaderMetadataType, String> updatedHeader = new HashMap<>();
+    updatedHeader.putAll(header);
+    if (addBlockIdentifier && !HoodieTableMetadata.isMetadataTable(config.getBasePath())) { // add block sequence numbers only for data table.
+      updatedHeader.put(HeaderMetadataType.BLOCK_IDENTIFIER, String.valueOf(attemptNumber) + "," + String.valueOf(blockSequenceNumber));
+    }
+    return updatedHeader;
   }
 
   private static HoodieLogBlock getBlock(HoodieWriteConfig writeConfig,

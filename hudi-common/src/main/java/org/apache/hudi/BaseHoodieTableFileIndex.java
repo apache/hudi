@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -37,7 +36,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.expression.Expression;
 import org.apache.hudi.hadoop.CachingPath;
+import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 
@@ -60,6 +61,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
+import static org.apache.hudi.common.table.timeline.TimelineUtils.validateTimestampAsOf;
 import static org.apache.hudi.common.util.CollectionUtils.combine;
 import static org.apache.hudi.hadoop.CachingPath.createRelativePathUnsafe;
 
@@ -85,6 +87,14 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
   private final boolean shouldIncludePendingCommits;
   private final boolean shouldValidateInstant;
+
+  // The `shouldListLazily` variable controls how we initialize/refresh the TableFileIndex:
+  //  - non-lazy/eager listing (shouldListLazily=false):  all partitions and file slices will be loaded eagerly during initialization.
+  //  - lazy listing (shouldListLazily=true): partitions listing will be done lazily with the knowledge from query predicate on partition
+  //        columns. And file slices fetching only happens for partitions satisfying the given filter.
+  //
+  // In SparkSQL, `shouldListLazily` is controlled by option `REFRESH_PARTITION_AND_FILES_IN_INITIALIZATION`.
+  // In lazy listing case, if no predicate on partition is provided, all partitions will still be loaded.
   private final boolean shouldListLazily;
 
   private final Path basePath;
@@ -145,18 +155,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     this.engineContext = engineContext;
     this.fileStatusCache = fileStatusCache;
 
-    // The `shouldListLazily` variable controls how we initialize the TableFileIndex:
-    //  - non-lazy/eager listing (shouldListLazily=false):  all partitions and file slices will be loaded eagerly during initialization.
-    //  - lazy listing (shouldListLazily=true): partitions listing will be done lazily with the knowledge from query predicate on partition
-    //        columns. And file slices fetching only happens for partitions satisfying the given filter.
-    //
-    // In SparkSQL, `shouldListLazily` is controlled by option `REFRESH_PARTITION_AND_FILES_IN_INITIALIZATION`.
-    // In lazy listing case, if no predicate on partition is provided, all partitions will still be loaded.
-    if (shouldListLazily) {
-      this.tableMetadata = createMetadataTable(engineContext, metadataConfig, basePath);
-    } else {
-      doRefresh();
-    }
+    doRefresh();
   }
 
   protected abstract Object[] doParsePartitionColumnValues(String[] partitionColumns, String partitionPath);
@@ -245,6 +244,10 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
       return Collections.emptyMap();
     }
 
+    if (specifiedQueryInstant.isPresent() && !shouldIncludePendingCommits) {
+      validateTimestampAsOf(metaClient, specifiedQueryInstant.get());
+    }
+
     FileStatus[] allFiles = listPartitionPathFiles(partitions);
     HoodieTimeline activeTimeline = getActiveTimeline();
     Option<HoodieInstant> latestInstant = activeTimeline.lastInstant();
@@ -272,6 +275,26 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
                     .orElse(fileSystemView.getLatestFileSlices(partitionPath.path))
                     .collect(Collectors.toList())
         ));
+  }
+
+  protected List<PartitionPath> listPartitionPaths(List<String> relativePartitionPaths,
+                                                   Types.RecordType partitionFields,
+                                                   Expression partitionColumnPredicates) {
+    List<String> matchedPartitionPaths;
+    try {
+      matchedPartitionPaths = tableMetadata.getPartitionPathWithPathPrefixUsingFilterExpression(relativePartitionPaths,
+          partitionFields, partitionColumnPredicates);
+    } catch (IOException e) {
+      throw new HoodieIOException("Error fetching partition paths", e);
+    }
+
+    // Convert partition's path into partition descriptor
+    return matchedPartitionPaths.stream()
+        .map(partitionPath -> {
+          Object[] partitionColumnValues = parsePartitionColumnValues(partitionColumns, partitionPath);
+          return new PartitionPath(partitionPath, partitionColumnValues);
+        })
+        .collect(Collectors.toList());
   }
 
   protected List<PartitionPath> listPartitionPaths(List<String> relativePartitionPaths) {
@@ -379,7 +402,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
     // Reset it to null to trigger re-loading of all partition path
     this.cachedAllPartitionPaths = null;
-    ensurePreloadedPartitions(getAllQueryPartitionPaths());
+    if (!shouldListLazily) {
+      ensurePreloadedPartitions(getAllQueryPartitionPaths());
+    }
 
     LOG.info(String.format("Refresh table %s, spent: %d ms", metaClient.getTableConfig().getTableName(), timer.endTimer()));
   }
@@ -450,8 +475,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
       HoodieMetadataConfig metadataConfig,
       Path basePath
   ) {
-    HoodieTableMetadata newTableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePath.toString(),
-        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue(), true);
+    HoodieTableMetadata newTableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePath.toString(), true);
     return newTableMetadata;
   }
 

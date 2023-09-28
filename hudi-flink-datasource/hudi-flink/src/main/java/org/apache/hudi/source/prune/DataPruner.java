@@ -116,6 +116,7 @@ public class DataPruner implements Serializable {
         return indexRow.getTimestamp(pos, tsType.getPrecision()).getMillisecond();
       case TIME_WITHOUT_TIME_ZONE:
       case DATE:
+      case BIGINT:
         return indexRow.getLong(pos);
       // NOTE: All integral types of size less than Int are encoded as Ints in MT
       case BOOLEAN:

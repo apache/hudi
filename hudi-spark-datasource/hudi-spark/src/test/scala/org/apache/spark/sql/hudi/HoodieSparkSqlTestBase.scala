@@ -18,8 +18,7 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.avro.model.HoodieCleanMetadata
-import org.apache.hudi.{HoodieSparkRecordMerger, HoodieSparkUtils}
+import org.apache.hudi.HoodieSparkRecordMerger
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
@@ -194,9 +193,18 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     }
   }
 
-  protected def withRecordType(recordConfig: Map[HoodieRecordType, Map[String, String]]=Map.empty)(f: => Unit) {
+  protected def withTable(tableName: String)(f: String => Unit): Unit = {
+    try {
+      f(tableName)
+    } finally {
+      spark.sql(s"drop table if exists $tableName")
+    }
+  }
+
+  protected def withRecordType(recordTypes: Seq[HoodieRecordType] = Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK),
+                               recordConfig: Map[HoodieRecordType, Map[String, String]]=Map.empty)(f: => Unit) {
     // TODO HUDI-5264 Test parquet log with avro record in spark sql test
-    Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK).foreach { recordType =>
+    recordTypes.foreach { recordType =>
       val (merger, format) = recordType match {
         case HoodieRecordType.SPARK => (classOf[HoodieSparkRecordMerger].getName, "parquet")
         case _ => (classOf[HoodieAvroRecordMerger].getName, "avro")

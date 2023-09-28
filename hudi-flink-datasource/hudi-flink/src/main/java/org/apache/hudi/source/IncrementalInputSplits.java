@@ -544,13 +544,13 @@ public class IncrementalInputSplits implements Serializable {
 
   private HoodieTimeline getReadTimeline(HoodieTableMetaClient metaClient) {
     HoodieTimeline timeline = metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants();
-    return filterInstantsByCondition(timeline);
+    return filterInstantsAsPerUserConfigs(timeline);
   }
 
   private HoodieTimeline getArchivedReadTimeline(HoodieTableMetaClient metaClient, String startInstant) {
     HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline(startInstant, false);
     HoodieTimeline archivedCompleteTimeline = archivedTimeline.getCommitsTimeline().filterCompletedInstants();
-    return filterInstantsByCondition(archivedCompleteTimeline);
+    return filterInstantsAsPerUserConfigs(archivedCompleteTimeline);
   }
 
   /**
@@ -594,16 +594,16 @@ public class IncrementalInputSplits implements Serializable {
   }
 
   /**
-   * Filters out the unnecessary instants by user specified condition.
+   * Filters out the unnecessary instants as per user specified configs.
    *
    * @param timeline The timeline
    *
    * @return the filtered timeline
    */
   @VisibleForTesting
-  public HoodieTimeline filterInstantsByCondition(HoodieTimeline timeline) {
+  public HoodieTimeline filterInstantsAsPerUserConfigs(HoodieTimeline timeline) {
     final HoodieTimeline oriTimeline = timeline;
-    if (this.skipCompaction) {
+    if (OptionsResolver.isMorTable(this.conf) & this.skipCompaction) {
       // the compaction commit uses 'commit' as action which is tricky
       timeline = timeline.filter(instant -> !instant.getAction().equals(HoodieTimeline.COMMIT_ACTION));
     }

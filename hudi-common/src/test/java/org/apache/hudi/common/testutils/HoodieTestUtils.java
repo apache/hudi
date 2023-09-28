@@ -33,6 +33,8 @@ import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.serializers.JavaSerializer;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.junit.jupiter.api.Assumptions;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -217,5 +219,32 @@ public class HoodieTestUtils {
     String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
     HoodieTestUtils.init(hadoopConf, metadataTableBasePath, HoodieTableType.MERGE_ON_READ);
     HoodieTestDataGenerator.createCommitFile(metadataTableBasePath, instantTime + "001", wrapperFs.getConf());
+  }
+
+  public static int getJavaVersion() {
+    String version = System.getProperty("java.version");
+    if (version.startsWith("1.")) {
+      version = version.substring(2, 3);
+    } else {
+      int dot = version.indexOf(".");
+      if (dot != -1) {
+        version = version.substring(0, dot);
+      }
+    }
+    return Integer.parseInt(version);
+  }
+
+  public static boolean shouldUseExternalHdfs() {
+    return getJavaVersion() == 11 || getJavaVersion() == 17;
+  }
+
+  public static DistributedFileSystem useExternalHdfs() throws IOException {
+    // For Java 17, this unit test has to run in Docker
+    // Need to set -Duse.external.hdfs=true in mvn command to run this test
+    Assumptions.assumeTrue(Boolean.valueOf(System.getProperty("use.external.hdfs", "false")));
+    Configuration conf = new Configuration();
+    conf.set("fs.defaultFS", "hdfs://localhost:9000");
+    conf.set("dfs.replication", "3");
+    return (DistributedFileSystem) DistributedFileSystem.get(conf);
   }
 }

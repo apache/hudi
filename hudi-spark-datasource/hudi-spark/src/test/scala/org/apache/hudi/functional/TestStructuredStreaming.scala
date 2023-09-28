@@ -19,10 +19,10 @@ package org.apache.hudi.functional
 
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.DataSourceWriteOptions.STREAMING_CHECKPOINT_IDENTIFIER
+import org.apache.hudi.HoodieStreamingSink.SINK_CHECKPOINT_KEY
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType, WriteConcurrencyMode}
-import org.apache.hudi.HoodieStreamingSink.SINK_CHECKPOINT_KEY
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
@@ -329,6 +329,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       .start(destPath)
 
     query3.processAllAvailable()
+    query3.stop()
     metaClient = HoodieTableMetaClient.builder
       .setConf(fs.getConf).setBasePath(destPath).setLoadActiveTimelineOnLoad(true).build
 
@@ -470,5 +471,41 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       .filterCompletedInstants
       .lastInstant
       .get.getTimestamp
+  }
+
+  private def streamingWrite(schema: StructType, sourcePath: String, destPath: String, hudiOptions: Map[String, String], checkpoint: String): Unit = {
+    val query = spark.readStream
+      .schema(schema)
+      .json(sourcePath)
+      .writeStream
+      .format("org.apache.hudi")
+      .options(hudiOptions)
+      .trigger(Trigger.Once())
+      .option("checkpointLocation", basePath + "/checkpoint" + checkpoint)
+      .outputMode(OutputMode.Append)
+      .start(destPath)
+    query.processAllAvailable()
+    query.stop()
+  }
+
+  @Test
+  def testStructuredStreamingWithDisabledCompaction(): Unit = {
+    val (sourcePath, destPath) = initStreamingSourceAndDestPath("source", "dest")
+    // First chunk of data
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 10)).toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
+    val opts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name()) + (DataSourceWriteOptions.STREAMING_DISABLE_COMPACTION.key -> "true")
+    streamingWrite(inputDF1.schema, sourcePath, destPath, opts, "000")
+    for (i <- 1 to 24) {
+      val id = String.format("%03d", new Integer(i))
+      val records = recordsToStrings(dataGen.generateUpdates(id, 10)).toList
+      val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+      inputDF.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
+      streamingWrite(inputDF.schema, sourcePath, destPath, opts, id)
+    }
+    val metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(destPath)
+      .setLoadActiveTimelineOnLoad(true).build()
+    assertTrue(metaClient.getActiveTimeline.getCommitTimeline.empty())
   }
 }

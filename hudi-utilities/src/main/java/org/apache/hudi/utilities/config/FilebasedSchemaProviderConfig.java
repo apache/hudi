@@ -26,24 +26,27 @@ import org.apache.hudi.common.config.HoodieConfig;
 
 import javax.annotation.concurrent.Immutable;
 
-import static org.apache.hudi.utilities.config.HoodieSchemaProviderConfig.SCHEMAPROVIDER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.ConfigUtils.OLD_SCHEMAPROVIDER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.ConfigUtils.SCHEMAPROVIDER_CONFIG_PREFIX;
 
 /**
  * File-based Schema Provider Configs.
  */
 @Immutable
 @ConfigClassProperty(name = "File-based Schema Provider Configs",
-    groupName = ConfigGroups.Names.DELTA_STREAMER,
+    groupName = ConfigGroups.Names.HUDI_STREAMER,
     subGroupName = ConfigGroups.SubGroupNames.SCHEMA_PROVIDER,
     description = "Configurations for file-based schema provider.")
 public class FilebasedSchemaProviderConfig extends HoodieConfig {
   public static final ConfigProperty<String> SOURCE_SCHEMA_FILE = ConfigProperty
       .key(SCHEMAPROVIDER_CONFIG_PREFIX + "source.schema.file")
       .noDefaultValue()
+      .withAlternatives(OLD_SCHEMAPROVIDER_CONFIG_PREFIX + "source.schema.file")
       .withDocumentation("The schema of the source you are reading from");
 
   public static final ConfigProperty<String> TARGET_SCHEMA_FILE = ConfigProperty
       .key(SCHEMAPROVIDER_CONFIG_PREFIX + "target.schema.file")
       .noDefaultValue()
+      .withAlternatives(OLD_SCHEMAPROVIDER_CONFIG_PREFIX + "target.schema.file")
       .withDocumentation("The schema of the target you are writing to");
 }

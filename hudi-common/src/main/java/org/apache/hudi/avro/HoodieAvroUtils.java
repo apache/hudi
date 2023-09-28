@@ -18,9 +18,17 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.avro.model.BooleanWrapper;
+import org.apache.hudi.avro.model.BytesWrapper;
+import org.apache.hudi.avro.model.DateWrapper;
+import org.apache.hudi.avro.model.DecimalWrapper;
+import org.apache.hudi.avro.model.DoubleWrapper;
+import org.apache.hudi.avro.model.FloatWrapper;
+import org.apache.hudi.avro.model.IntWrapper;
+import org.apache.hudi.avro.model.LongWrapper;
+import org.apache.hudi.avro.model.StringWrapper;
+import org.apache.hudi.avro.model.TimestampMicrosWrapper;
 import org.apache.hudi.common.config.SerializableSchema;
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
@@ -31,6 +39,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
+import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Conversions;
@@ -55,6 +64,7 @@ import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonDecoder;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.specific.SpecificRecordBase;
+import org.apache.avro.util.Utf8;
 import org.apache.hadoop.util.VersionUtil;
 
 import java.io.ByteArrayInputStream;
@@ -64,9 +74,9 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -91,7 +101,11 @@ import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.isNullable;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveUnionSchema;
+import static org.apache.hudi.common.util.DateTimeUtils.instantToMicros;
+import static org.apache.hudi.common.util.DateTimeUtils.microsToInstant;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.tryUpcastDecimal;
 
 /**
  * Helper class to do common stuff across Avro.
@@ -101,6 +115,33 @@ public class HoodieAvroUtils {
   public static final String AVRO_VERSION = Schema.class.getPackage().getImplementationVersion();
   private static final ThreadLocal<BinaryEncoder> BINARY_ENCODER = ThreadLocal.withInitial(() -> null);
   private static final ThreadLocal<BinaryDecoder> BINARY_DECODER = ThreadLocal.withInitial(() -> null);
+
+  private static final Conversions.DecimalConversion AVRO_DECIMAL_CONVERSION = new Conversions.DecimalConversion();
+  /**
+   * NOTE: PLEASE READ CAREFULLY
+   * <p>
+   * In Avro 1.10 generated builders rely on {@code SpecificData.getForSchema} invocation that in turn
+   * does use reflection to load the code-gen'd class corresponding to the Avro record model. This has
+   * serious adverse effects in terms of performance when gets executed on the hot-path (both, in terms
+   * of runtime and efficiency).
+   * <p>
+   * To work this around instead of using default code-gen'd builder invoking {@code SpecificData.getForSchema},
+   * we instead rely on overloaded ctor accepting another instance of the builder: {@code Builder(Builder)},
+   * which bypasses such invocation. Following corresponding builder's stubs are statically initialized
+   * to be used exactly for that purpose.
+   * <p>
+   * You can find more details in HUDI-3834.
+   */
+  private static final Lazy<StringWrapper.Builder> STRING_WRAPPER_BUILDER_STUB = Lazy.lazily(StringWrapper::newBuilder);
+  private static final Lazy<BytesWrapper.Builder> BYTES_WRAPPER_BUILDER_STUB = Lazy.lazily(BytesWrapper::newBuilder);
+  private static final Lazy<DoubleWrapper.Builder> DOUBLE_WRAPPER_BUILDER_STUB = Lazy.lazily(DoubleWrapper::newBuilder);
+  private static final Lazy<FloatWrapper.Builder> FLOAT_WRAPPER_BUILDER_STUB = Lazy.lazily(FloatWrapper::newBuilder);
+  private static final Lazy<LongWrapper.Builder> LONG_WRAPPER_BUILDER_STUB = Lazy.lazily(LongWrapper::newBuilder);
+  private static final Lazy<IntWrapper.Builder> INT_WRAPPER_BUILDER_STUB = Lazy.lazily(IntWrapper::newBuilder);
+  private static final Lazy<BooleanWrapper.Builder> BOOLEAN_WRAPPER_BUILDER_STUB = Lazy.lazily(BooleanWrapper::newBuilder);
+  private static final Lazy<TimestampMicrosWrapper.Builder> TIMESTAMP_MICROS_WRAPPER_BUILDER_STUB = Lazy.lazily(TimestampMicrosWrapper::newBuilder);
+  private static final Lazy<DecimalWrapper.Builder> DECIMAL_WRAPPER_BUILDER_STUB = Lazy.lazily(DecimalWrapper::newBuilder);
+  private static final Lazy<DateWrapper.Builder> DATE_WRAPPER_BUILDER_STUB = Lazy.lazily(DateWrapper::newBuilder);
 
   private static final long MILLIS_PER_DAY = 86400000L;
 
@@ -749,12 +790,12 @@ public class HoodieAvroUtils {
    * @param schema  {@link Schema} instance.
    * @return Column value.
    */
-  public static Object[] getRecordColumnValues(HoodieAvroRecord record,
+  public static Object[] getRecordColumnValues(HoodieRecord record,
                                                String[] columns,
                                                Schema schema,
                                                boolean consistentLogicalTimestampEnabled) {
     try {
-      GenericRecord genericRecord = (GenericRecord) ((HoodieAvroIndexedRecord) record.toIndexedRecord(schema, new Properties()).get()).getData();
+      GenericRecord genericRecord = (GenericRecord) (record.toIndexedRecord(schema, new Properties()).get()).getData();
       List<Object> list = new ArrayList<>();
       for (String col : columns) {
         list.add(HoodieAvroUtils.getNestedFieldVal(genericRecord, col, true, consistentLogicalTimestampEnabled));
@@ -773,7 +814,7 @@ public class HoodieAvroUtils {
    * @param schema  {@link SerializableSchema} instance.
    * @return Column value if a single column, or concatenated String values by comma.
    */
-  public static Object getRecordColumnValues(HoodieAvroRecord record,
+  public static Object getRecordColumnValues(HoodieRecord record,
                                              String[] columns,
                                              SerializableSchema schema, boolean consistentLogicalTimestampEnabled) {
     return getRecordColumnValues(record, columns, schema.get(), consistentLogicalTimestampEnabled);
@@ -869,9 +910,17 @@ public class HoodieAvroUtils {
           fieldNames.pop();
         }
         return newRecord;
+      case ENUM:
+        ValidationUtils.checkArgument(
+            oldSchema.getType() == Schema.Type.STRING || oldSchema.getType() == Schema.Type.ENUM,
+            "Only ENUM or STRING type can be converted ENUM type");
+        if (oldSchema.getType() == Schema.Type.STRING) {
+          return new GenericData.EnumSymbol(newSchema, oldRecord);
+        }
+        return oldRecord;
       case ARRAY:
         ValidationUtils.checkArgument(oldRecord instanceof Collection, "cannot rewrite record with different type");
-        Collection array = (Collection)oldRecord;
+        Collection array = (Collection) oldRecord;
         List<Object> newArray = new ArrayList();
         fieldNames.push("element");
         for (Object element : array) {
@@ -984,7 +1033,7 @@ public class HoodieAvroUtils {
         break;
       case BYTES:
         if (oldSchema.getType() == Schema.Type.STRING) {
-          return (oldValue.toString()).getBytes(StandardCharsets.UTF_8);
+          return getUTF8Bytes(oldValue.toString());
         }
         break;
       case STRING:
@@ -1016,10 +1065,10 @@ public class HoodieAvroUtils {
         if (newSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
           // TODO: support more types
           if (oldSchema.getType() == Schema.Type.STRING
-                  || oldSchema.getType() == Schema.Type.DOUBLE
-                  || oldSchema.getType() == Schema.Type.INT
-                  || oldSchema.getType() == Schema.Type.LONG
-                  || oldSchema.getType() == Schema.Type.FLOAT) {
+              || oldSchema.getType() == Schema.Type.DOUBLE
+              || oldSchema.getType() == Schema.Type.INT
+              || oldSchema.getType() == Schema.Type.LONG
+              || oldSchema.getType() == Schema.Type.FLOAT) {
             LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) newSchema.getLogicalType();
             // due to Java, there will be precision problems in direct conversion, we should use string instead of use double
             BigDecimal bigDecimal = new java.math.BigDecimal(oldValue.toString()).setScale(decimal.getScale(), RoundingMode.HALF_UP);
@@ -1149,4 +1198,98 @@ public class HoodieAvroUtils {
   public static boolean gteqAvro1_10() {
     return VersionUtil.compareVersions(AVRO_VERSION, "1.10") >= 0;
   }
+
+  /**
+   * Wraps a value into Avro type wrapper.
+   *
+   * @param value Java value.
+   * @return A wrapped value with Avro type wrapper.
+   */
+  public static Object wrapValueIntoAvro(Comparable<?> value) {
+    if (value == null) {
+      return null;
+    } else if (value instanceof Date || value instanceof LocalDate) {
+      // NOTE: Due to breaking changes in code-gen b/w Avro 1.8.2 and 1.10, we can't
+      //       rely on logical types to do proper encoding of the native Java types,
+      //       and hereby have to encode value manually
+      LocalDate localDate = value instanceof LocalDate
+          ? (LocalDate) value
+          : ((Date) value).toLocalDate();
+      return DateWrapper.newBuilder(DATE_WRAPPER_BUILDER_STUB.get())
+          .setValue((int) localDate.toEpochDay())
+          .build();
+    } else if (value instanceof BigDecimal) {
+      Schema valueSchema = DecimalWrapper.SCHEMA$.getField("value").schema();
+      BigDecimal upcastDecimal = tryUpcastDecimal((BigDecimal) value, (LogicalTypes.Decimal) valueSchema.getLogicalType());
+      return DecimalWrapper.newBuilder(DECIMAL_WRAPPER_BUILDER_STUB.get())
+          .setValue(AVRO_DECIMAL_CONVERSION.toBytes(upcastDecimal, valueSchema, valueSchema.getLogicalType()))
+          .build();
+    } else if (value instanceof Timestamp) {
+      // NOTE: Due to breaking changes in code-gen b/w Avro 1.8.2 and 1.10, we can't
+      //       rely on logical types to do proper encoding of the native Java types,
+      //       and hereby have to encode value manually
+      Instant instant = ((Timestamp) value).toInstant();
+      return TimestampMicrosWrapper.newBuilder(TIMESTAMP_MICROS_WRAPPER_BUILDER_STUB.get())
+          .setValue(instantToMicros(instant))
+          .build();
+    } else if (value instanceof Boolean) {
+      return BooleanWrapper.newBuilder(BOOLEAN_WRAPPER_BUILDER_STUB.get()).setValue((Boolean) value).build();
+    } else if (value instanceof Integer) {
+      return IntWrapper.newBuilder(INT_WRAPPER_BUILDER_STUB.get()).setValue((Integer) value).build();
+    } else if (value instanceof Long) {
+      return LongWrapper.newBuilder(LONG_WRAPPER_BUILDER_STUB.get()).setValue((Long) value).build();
+    } else if (value instanceof Float) {
+      return FloatWrapper.newBuilder(FLOAT_WRAPPER_BUILDER_STUB.get()).setValue((Float) value).build();
+    } else if (value instanceof Double) {
+      return DoubleWrapper.newBuilder(DOUBLE_WRAPPER_BUILDER_STUB.get()).setValue((Double) value).build();
+    } else if (value instanceof ByteBuffer) {
+      return BytesWrapper.newBuilder(BYTES_WRAPPER_BUILDER_STUB.get()).setValue((ByteBuffer) value).build();
+    } else if (value instanceof String || value instanceof Utf8) {
+      return StringWrapper.newBuilder(STRING_WRAPPER_BUILDER_STUB.get()).setValue(value.toString()).build();
+    } else {
+      throw new UnsupportedOperationException(String.format("Unsupported type of the value (%s)", value.getClass()));
+    }
+  }
+
+  /**
+   * Unwraps Avro value wrapper into Java value.
+   *
+   * @param avroValueWrapper A wrapped value with Avro type wrapper.
+   * @return Java value.
+   */
+  public static Comparable<?> unwrapAvroValueWrapper(Object avroValueWrapper) {
+    if (avroValueWrapper == null) {
+      return null;
+    } else if (avroValueWrapper instanceof DateWrapper) {
+      return LocalDate.ofEpochDay(((DateWrapper) avroValueWrapper).getValue());
+    } else if (avroValueWrapper instanceof DecimalWrapper) {
+      Schema valueSchema = DecimalWrapper.SCHEMA$.getField("value").schema();
+      return AVRO_DECIMAL_CONVERSION.fromBytes(((DecimalWrapper) avroValueWrapper).getValue(), valueSchema, valueSchema.getLogicalType());
+    } else if (avroValueWrapper instanceof TimestampMicrosWrapper) {
+      return microsToInstant(((TimestampMicrosWrapper) avroValueWrapper).getValue());
+    } else if (avroValueWrapper instanceof BooleanWrapper) {
+      return ((BooleanWrapper) avroValueWrapper).getValue();
+    } else if (avroValueWrapper instanceof IntWrapper) {
+      return ((IntWrapper) avroValueWrapper).getValue();
+    } else if (avroValueWrapper instanceof LongWrapper) {
+      return ((LongWrapper) avroValueWrapper).getValue();
+    } else if (avroValueWrapper instanceof FloatWrapper) {
+      return ((FloatWrapper) avroValueWrapper).getValue();
+    } else if (avroValueWrapper instanceof DoubleWrapper) {
+      return ((DoubleWrapper) avroValueWrapper).getValue();
+    } else if (avroValueWrapper instanceof BytesWrapper) {
+      return ((BytesWrapper) avroValueWrapper).getValue();
+    } else if (avroValueWrapper instanceof StringWrapper) {
+      return ((StringWrapper) avroValueWrapper).getValue();
+    } else if (avroValueWrapper instanceof GenericRecord) {
+      // NOTE: This branch could be hit b/c Avro records could be reconstructed
+      //       as {@code GenericRecord)
+      // TODO add logical type decoding
+      GenericRecord record = (GenericRecord) avroValueWrapper;
+      return (Comparable<?>) record.get("value");
+    } else {
+      throw new UnsupportedOperationException(String.format("Unsupported type of the value (%s)", avroValueWrapper.getClass()));
+    }
+  }
+
 }
