@@ -181,23 +181,25 @@ DELETE FROM hudi_mor_tbl WHERE id % 2 = 0;
 DELETE FROM hudi_cow_pt_tbl WHERE name = 'a1';
 ```
 
-These DML operations give you powerful tools for managing your Hudi tables using Spark SQL. 
-You can control the behavior of these operations using various configuration options, as explained in the documentation.
+### Enabling Data Skipping and Indexing 
 
-### Passing Options 
-
-You can pass options to the underlying Spark SQL operations using the `OPTIONS` clause. For example:
+DML operations can be sped up using column statistics for data skipping and using indexes to reduce the amount of data scanned.
+For e.g. the following helps speed up the `DELETE` operation on a Hudi table, by using the record level index.
 
 ```sql
--- Passing in index configs??
-hoodie.metadata.index.column.stats.enable=true
-hoodie.metadata.record.index.enable = true
+SET hoodie.enable.data.skipping=true;
+SET hoodie.metadata.record.index.enable=true;
+SET hoodie.metadata.enable=true;
 
--- passing in lock provider configs, for example??
+DELETE from hudi_table where uuid = 'c8abbe79-8d89-47ea-b4ce-4d224bae5bfa';
 ```
+
+These DML operations give you powerful tools for managing your tables using Spark SQL. 
+You can control the behavior of these operations using various configuration options, as explained in the documentation.
 
 ## Flink 
 
-Flink SQL also provides several Data Manipulation Language (DML) actions for interacting with Hudi tables. These operations allow you to insert, update, merge and delete data
+Flink SQL also provides several Data Manipulation Language (DML) actions for interacting with Hudi tables. All these operations are already 
+showcased in the [Flink Quickstart](/docs/flink-quick-start-guide.md).
 
 

@@ -7,63 +7,81 @@ last_modified_at:
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-Hudi stores and organizes data once on storage while providing different ways of [querying](/docs/concepts#query-types), across a wide range of query engines. 
-This page will show how to issue different queries and discuss specific instructions for each query engine.
 
-## Open 
-
-- Once the proper hudi bundle has been installed, the table can be queried by popular query engines like Hive, Spark SQL, Spark Datasource API and PrestoDB.
-- Thanks to Hudi's support for record level change streams, these incremental pipelines often offer 10x efficiency over batch counterparts by only processing the changed records.
-
+Hudi stores and organizes data on storage while providing different ways of [querying](/docs/concepts#query-types), across a wide range of query engines.
+This page will show how to issue different queries and discuss any specific instructions for each query engine.
 
 ## Spark SQL
-
 The Spark [quickstart](/docs/quick-start-guide) provides a good overview of how to use Spark SQL to query Hudi tables. This section will go into more advanced configurations and functionalities.
 
-### Snapshot Query 
+### Snapshot Query
 Snapshot queries are the most common query type for Hudi tables. Spark SQL supports snapshot queries on both COPY_ON_WRITE and MERGE_ON_READ tables.
 Using session properties, you can specify various options around data skipping and indexing to optimize query performance, as shown below.
 
 ```sql
--- Show how to turn on data skipping
+-- Turn on any relevant options for data skipping and indexing. 
+-- for e.g. the following turns on data skipping based on column stats
+SET hoodie.enable.data.skipping=true;
+SET hoodie.metadata.column.stats.enable=true;
+SET hoodie.metadata.enable=true;
 
 -- Show how to turn on record index on query path.
 
+
+-- Turn on use of record level index, to perform point queries.
+SET hoodie.metadata.record.index.enable=true;
+SELECT * FROM hudi_table 
+WHERE uuid = 'c8abbe79-8d89-47ea-b4ce-4d224bae5bfa';
 ```
+
+:::note Integration with Spark
+Users are encouraged to migrate to Hudi versions > 0.12.x, for the best spark experience and discouraged from using any older approaches
+using path filters. We expect that native integration with Spark's optimized table readers along with Hudi's automatic table
+management will yield great performance benefits in those versions.
+:::
 
 ### Time Travel Query
 
-TODO: Document behavior with concurrent writers. and how it's tied to cleaning/retention. 
+You can also query the table at a specific commit time using the `AS OF` syntax. This is useful for debugging and auditing purposes, as well as for
+machine learning pipelines where you want to train models on a specific point in time.
+
+```sql
+
+-- Syntax for time travel queries
+```
+
+### Change Data Capture
+
+Change Data Capture (CDC) queries are useful when you want to obtain all changes to a Hudi table within a given time window, along with before/after images and change operation
+of the changed records. Similar to many relational database counterparts, Hudi provides flexible ways of controlling supplemental logging levels, to balance storage/logging costs
+by materializing more versus compute costs of computing the changes on the fly, using `hoodie.table.cdc.supplemental.logging.mode` configuration.
 
 ```sql 
--- Syntax for incremental queries
-
+-- Syntax for time travel queries
 ```
 
 ### Incremental Query
 
-Incremental queries are useful when you want to process only the changed records since the last time you processed the table.
+Incremental queries are useful when you want to obtain the latest values for all records that have changed after a given commit time. They help author incremental data pipelines with
+orders of magnitude efficiency over batch counterparts by only processing the changed records. Hudi users have realized [large gains](https://www.uber.com/blog/ubers-lakehouse-architecture/) in
+query efficiency by using incremental queries in this fashion. Hudi supports incremental queries on both COPY_ON_WRITE and MERGE_ON_READ tables.
 
 ```sql 
 -- Syntax for incremental queries
-
 ```
 
-TODO: Document how they provide efficiency by amortizing the costs of compactions, how Hudi is the only system that can support this today, 
-due to 
-
-
-:::note Integration with Spark 
-Users are encouraged to migrate to Hudi versions > 0.12.x, for the best spark experience and discouraged from using any older approaches
-using path filters. We expect that native integration with Spark's optimized table readers along with Hudi's automatic table 
-management will yield great performance benefits in those versions.
+:::info Incremental vs CDC Queries
+Incremental queries offer even better query efficiency than even the CDC queries above, since they amortize the cost of compactions across your data lake.
+For e.g the table has received 10 million modifications across 1 million records over a time window, incremental queries can fetch the latest value for
+1 million records using Hudi's record level metadata. On the other hand, the CDC queries will process 10 million records and useful in cases, where you want to
+see all changes in a given time window and not just the latest values.
 :::
 
 Please refer to [configurations](/docs/basic_configurations) section for the important configuration options.
 
 ## Flink SQL
 Once the Flink Hudi tables have been registered to the Flink catalog, they can be queried using the Flink SQL. It supports all query types across both Hudi table types,
-relying on the custom Hudi input formats like Hive. Typically notebook users and Flink SQL CLI users leverage flink sql for querying Hudi tables. Please add hudi-flink-bundle as described in the [Flink Quickstart](/docs/flink-quick-start-guide).
+relying on the custom Hudi input formats like Hive. Typically, notebook users and Flink SQL CLI users leverage flink sql for querying Hudi tables. Please add hudi-flink-bundle as described in the [Flink Quickstart](/docs/flink-quick-start-guide).
 
 
 ### Snapshot Query 
@@ -145,11 +163,11 @@ WITH (
 
 [Hive](https://hive.apache.org/) has support for snapshot and incremental queries (with limitations) on Hudi tables.
 
-In order for Hive to recognize Hudi tables and query correctly, the `hudi-hadoop-mr-bundle-<hudi.version>.jar` needs to be 
-provided to Hive2Server [aux jars path](https://www.cloudera.com/documentation/enterprise/5-6-x/topics/cm_mc_hive_udf.html#concept_nc3_mms_lr), as well as 
-additionally, the bundle needs to be put on the hadoop/hive installation across the cluster. In addition to setup above, for beeline cli access, 
-the `hive.input.format` variable needs to be set to the fully qualified path name of the inputformat `org.apache.hudi.hadoop.HoodieParquetInputFormat`. 
-For Tez, additionally, the `hive.tez.input.format` needs to be set to `org.apache.hadoop.hive.ql.io.HiveInputFormat`. 
+In order for Hive to recognize Hudi tables and query correctly, the `hudi-hadoop-mr-bundle-<hudi.version>.jar` needs to be
+provided to Hive2Server [aux jars path](https://www.cloudera.com/documentation/enterprise/5-6-x/topics/cm_mc_hive_udf.html#concept_nc3_mms_lr), as well as
+additionally, the bundle needs to be put on the hadoop/hive installation across the cluster. In addition to setup above, for beeline cli access,
+the `hive.input.format` variable needs to be set to the fully qualified path name of the inputformat `org.apache.hudi.hadoop.HoodieParquetInputFormat`.
+For Tez, additionally, the `hive.tez.input.format` needs to be set to `org.apache.hadoop.hive.ql.io.HiveInputFormat`.
 
 Then users should be able to issue snapshot queries against the table like any other Hive table.
 
@@ -174,8 +192,8 @@ separated) and calls InputFormat.listStatus() only once with all those partition
 via two connectors - Hive connector and Hudi connector (Presto version 0.275 onwards). Both connectors currently support snapshot queries on
 COPY_ON_WRITE tables and snapshot and read optimized queries on MERGE_ON_READ Hudi tables.
 
-Since PrestoDB-Hudi integration has evolved over time, the installation instructions for PrestoDB would vary based on versions. 
-Please check the below table for query types supported and installation instructions. 
+Since Presto-Hudi integration has evolved over time, the installation instructions for PrestoDB would vary based on versions.
+Please check the below table for query types supported and installation instructions.
 
 | **PrestoDB Version** | **Installation description** | **Query types supported** |
 |----------------------|------------------------------|---------------------------|
@@ -205,9 +223,9 @@ To learn more about the usage of Hudi connector, please read [prestodb documenta
 
 ## Trino
 
-Similar to PrestoDB, Trino allows querying Hudi tables via either the [Hive](https://trino.io/docs/current/connector/hive.html) connector or 
-the native [Hudi](https://trino.io/docs/current/connector/hudi.html) connector (introduced in version 398). For Trino version 411 or newer, 
-the Hive connector redirects to the Hudi catalog for Hudi table reads. Ensure you configure the necessary settings for 
+Similar to PrestoDB, Trino allows querying Hudi tables via either the [Hive](https://trino.io/docs/current/connector/hive.html) connector or
+the native [Hudi](https://trino.io/docs/current/connector/hudi.html) connector (introduced in version 398). For Trino version 411 or newer,
+the Hive connector redirects to the Hudi catalog for Hudi table reads. Ensure you configure the necessary settings for
 table redirection when using the Hive connector on these versions.
 
 ```properties
@@ -227,9 +245,8 @@ summarizes how the support for Hudi is achieved across different versions of Tri
 | > = 411           | NA | Snapshot querying on COW tables. Read optimized querying on MOR tables. Hudi tables can be **only** queried by [table redirection](https://trino.io/docs/current/connector/hive.html#table-redirection). |
 :::
 
-
-For details on the Hudi connector, see the [connector documentation](https://trino.io/docs/current/connector/hudi.html). 
-Both connectors offer 'Snapshot' queries for COW tables and 'Read Optimized' queries for MOR tables. 
+For details on the Hudi connector, see the [connector documentation](https://trino.io/docs/current/connector/hudi.html).
+Both connectors offer 'Snapshot' queries for COW tables and 'Read Optimized' queries for MOR tables.
 Support for [MOR table snapshot queries](https://github.com/trinodb/trino/pull/14786) is anticipated shortly.
 
 ## Impala 
@@ -248,7 +265,7 @@ Impala is able to take advantage of the partition pruning to improve the query p
 To create a partitioned table, the folder should follow the naming convention like `year=2020/month=1`.
 
 To create a partitioned Hudi table on Impala:
-```
+```sql
 CREATE EXTERNAL TABLE database.table_name
 LIKE PARQUET '/path/to/load/xxx.parquet'
 PARTITION BY (year int, month int, day int)
@@ -257,7 +274,7 @@ LOCATION '/path/to/load';
 ALTER TABLE database.table_name RECOVER PARTITIONS;
 ```
 After Hudi made a new commit, refresh the Impala table to get the latest snapshot exposed to queries.
-```
+```sql
 REFRESH database.table_name
 ```
 
@@ -300,7 +317,7 @@ for more details on the setup.
 provides a read-only integration with Copy on Write Hudi tables. To query such Hudi tables, first we need
 to create a table in Clickhouse using `Hudi` [table function](https://clickhouse.com/docs/en/sql-reference/table-functions/hudi).
 
-```
+```sql
 CREATE TABLE hudi_table
     ENGINE = Hudi(s3_base_path, [aws_access_key_id, aws_secret_access_key,])
 ```
