@@ -282,7 +282,7 @@ data =[(1695159649087,"334e26e9-8355-45cc-97c6-c31daf0df330","rider-A","driver-K
        (1695091554788,"e96c4396-3fad-413a-a942-4cb36106d721","rider-C","driver-M",27.70 ,"san_francisco"),
        (1695046462179,"9909a8b1-2d15-4d3d-8ec9-efc48c536a00","rider-D","driver-L",33.90 ,"san_francisco"),
        (1695516137016,"e3cf430c-889d-4015-bc98-59bdce1e530c","rider-F","driver-P",34.15,"sao_paulo"),
-       (1695115999911,"c8abbe79-8d89-47ea-b4ce-4d224bae5bfa","rider-J","driver-T",17.85,"chennai")]inserts = spark.createDataFrame(data).toDF(*columns)
+       (1695115999911,"c8abbe79-8d89-47ea-b4ce-4d224bae5bfa","rider-J","driver-T",17.85,"chennai")]
 inserts = spark.createDataFrame(data).toDF(*columns)
 
 hudi_options = {
@@ -429,7 +429,7 @@ UPDATE hudi_table SET fare = 25.0 WHERE rider = 'rider-D';
 
 ```python
 # pyspark
-// Lets read data from target Hudi table, modify fare column for rider-D and update it.
+# Lets read data from target Hudi table, modify fare column for rider-D and update it.
 updatesDf = spark.read.format("hudi").load(basePath).filter("rider == 'rider-D'").withColumn("fare",col("fare")*10)
 
 updatesDf.write.format("hudi"). \
@@ -488,7 +488,7 @@ spark.read.format("hudi").load(basePath).show()
 <TabItem value="python">
 
 ```python
-#pyspark
+# pyspark
 # Check the Java Tab for definition of custom payload class used in below code
 updatesDf = spark.read.format("hudi").load(basePath). \
     limit(2).withColumn("fare", col("fare") * 100). \
@@ -595,7 +595,7 @@ hudi_hard_delete_options = {
   'hoodie.datasource.write.operation': 'delete',
 }
 
-deletesDf.write.format("hudi"). \
+deletesDF.write.format("hudi"). \
 options(**hudi_hard_delete_options). \
 mode("append"). \
 save(basePath)
@@ -648,7 +648,7 @@ spark.read.format("hudi").
 <TabItem value="python">
 
 ```python
-#pyspark
+# pyspark
 spark.read.format("hudi"). \
   option("as.of.instant", "20210728141108100"). \
   load(basePath)
@@ -845,7 +845,7 @@ columns = ["ts","uuid","rider","driver","fare","city"]
 data =[(1695159649087,"334e26e9-8355-45cc-97c6-c31daf0df330","rider-A","driver-K",19.10,"san_francisco"),
        (1695091554788,"e96c4396-3fad-413a-a942-4cb36106d721","rider-B","driver-L",27.70 ,"san_francisco"),
        (1695046462179,"9909a8b1-2d15-4d3d-8ec9-efc48c536a00","rider-C","driver-M",33.90 ,"san_francisco"),
-       (1695516137016,"e3cf430c-889d-4015-bc98-59bdce1e530c","rider-C","driver-N",34.15,"sao_paulo")]s
+       (1695516137016,"e3cf430c-889d-4015-bc98-59bdce1e530c","rider-C","driver-N",34.15,"sao_paulo")]
        
 
 inserts = spark.createDataFrame(data).toDF(*columns)
@@ -934,7 +934,7 @@ inserts.write.format("hudi").
 
 <TabItem value="python">
 
-```scala
+```python
 # pyspark
 hudi_options = {
   ...
@@ -998,7 +998,7 @@ option(RECORDKEY_FIELD.key(), "city").
 
 <TabItem value="python">
 
-```scala
+```python
 # pyspark
 hudi_options = {
   ...
