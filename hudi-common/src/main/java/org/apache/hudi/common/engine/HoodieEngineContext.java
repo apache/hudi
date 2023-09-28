@@ -67,7 +67,11 @@ public abstract class HoodieEngineContext {
   public abstract <T> HoodieData<T> emptyHoodieData();
 
   public <T> HoodieData<T> parallelize(List<T> data) {
-    return parallelize(data, data.size());
+    if (data.isEmpty()) {
+      return emptyHoodieData();
+    } else {
+      return parallelize(data, data.size());
+    }
   }
 
   public abstract <T> HoodieData<T> parallelize(List<T> data, int parallelism);

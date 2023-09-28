@@ -835,6 +835,103 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test bulk insert with empty dataset") {
+    withSQLConf(SPARK_SQL_INSERT_INTO_OPERATION.key -> WriteOperationType.BULK_INSERT.value()) {
+      withRecordType()(withTempDir { tmp =>
+        Seq("cow", "mor").foreach { tableType =>
+          withTable(generateTableName) { inputTable =>
+            spark.sql(
+              s"""
+                 |create table $inputTable (
+                 |  id int,
+                 |  name string,
+                 |  price double,
+                 |  dt string
+                 |) using hudi
+                 | tblproperties (
+                 |  type = '$tableType',
+                 |  primaryKey = 'id'
+                 | )
+                 | partitioned by (dt)
+                 | location '${tmp.getCanonicalPath}/$inputTable'
+         """.stripMargin)
+
+            // insert empty dataset into target table
+            withTable(generateTableName) { target =>
+              spark.sql(
+                s"""
+                   |create table $target
+                   |using hudi
+                   |tblproperties(
+                   | type = '$tableType',
+                   | primaryKey = 'id'
+                   |)
+                   | location '${tmp.getCanonicalPath}/$target'
+                   | as
+                   | select * from $inputTable where id = 2
+                   |""".stripMargin)
+              // check the target table is empty
+              checkAnswer(s"select id, name, price, dt from $target order by id")(Seq.empty: _*)
+            }
+          }
+        }
+      })
+    }
+  }
+
+  test("Test insert overwrite partitions with empty dataset") {
+    withSQLConf(SPARK_SQL_INSERT_INTO_OPERATION.key -> WriteOperationType.BULK_INSERT.value()) {
+      withRecordType()(withTempDir { tmp =>
+        Seq("cow", "mor").foreach { tableType =>
+          withTable(generateTableName) { inputTable =>
+            spark.sql(
+              s"""
+                 |create table $inputTable (
+                 |  id int,
+                 |  name string,
+                 |  price double,
+                 |  dt string
+                 |) using hudi
+                 | tblproperties (
+                 |  type = '$tableType',
+                 |  primaryKey = 'id'
+                 | )
+                 | partitioned by (dt)
+                 | location '${tmp.getCanonicalPath}/$inputTable'
+              """.stripMargin)
+
+            withTable(generateTableName) { target =>
+              spark.sql(
+                s"""
+                   |create table $target (
+                   |  id int,
+                   |  name string,
+                   |  price double,
+                   |  dt string
+                   |) using hudi
+                   | tblproperties (
+                   |  type = '$tableType',
+                   |  primaryKey = 'id'
+                   | )
+                   | partitioned by (dt)
+                   | location '${tmp.getCanonicalPath}/$target'
+              """.stripMargin)
+              spark.sql(s"insert into $target values(3, 'c1', 13, '2021-07-17')")
+              spark.sql(s"insert into $target values(1, 'a1', 10, '2021-07-18')")
+
+              // Insert overwrite a partition with empty record
+              spark.sql(s"insert overwrite table $target partition(dt='2021-07-17') select id, name, price from $inputTable")
+              // TODO enable result check after fix https://issues.apache.org/jira/browse/HUDI-6828
+              //  checkAnswer(s"select id, name, price, dt from $target order by id")(
+              //    Seq(1, "a1", 10.0, "2021-07-18")
+              //  )
+            }
+          }
+        }
+      })
+    }
+  }
+
   test("Test bulk insert with insert overwrite table") {
     withSQLConf(SPARK_SQL_INSERT_INTO_OPERATION.key -> WriteOperationType.BULK_INSERT.value()) {
       withRecordType()(withTempDir { tmp =>
