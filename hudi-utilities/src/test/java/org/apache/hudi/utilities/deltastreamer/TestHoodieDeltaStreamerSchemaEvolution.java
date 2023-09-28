@@ -27,7 +27,6 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.utilities.sources.ParquetDFSSource;
-import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
 import org.apache.parquet.io.ParquetDecodingException;
 import org.apache.spark.SparkException;
@@ -58,20 +57,22 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerTestBase {
 
+  private String tableType;
   private String tableBasePath;
+  private Boolean shouldCluster;
+  private Boolean shouldCompact;
+  private Boolean reconcileSchema;
+  private Boolean rowWriterEnable;
+  private Boolean addFilegroups;
+  private Boolean multiLogFiles;
 
-  private HoodieDeltaStreamer.Config setupDeltaStreamer(String tableType,
-                                                        String tableBasePath,
-                                                        Boolean shouldCluster,
-                                                        Boolean shouldCompact,
-                                                        Boolean reconcileSchema,
-                                                        Boolean rowWriterEnabled,
-                                                        Boolean addFilegroups,
-                                                        Boolean multiLogFiles) throws IOException {
+  private HoodieDeltaStreamer deltaStreamer;
+
+  private HoodieDeltaStreamer.Config getDeltaStreamerConfig() throws IOException {
     TypedProperties extraProps = new TypedProperties();
     extraProps.setProperty("hoodie.datasource.write.table.type", tableType);
     extraProps.setProperty(HoodieCommonConfig.RECONCILE_SCHEMA.key(), reconcileSchema.toString());
-    extraProps.setProperty("hoodie.datasource.write.row.writer.enable", rowWriterEnabled.toString());
+    extraProps.setProperty("hoodie.datasource.write.row.writer.enable", rowWriterEnable.toString());
     extraProps.setProperty("hoodie.parquet.small.file.limit", "0");
 
     extraProps.setProperty(HoodieCompactionConfig.INLINE_COMPACT.key(), shouldCompact.toString());
@@ -120,25 +121,43 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(expected, tableBasePath, sqlContext);
   }
 
-  private void testBase(String tableType, Boolean shouldCluster, Boolean shouldCompact, Boolean reconcileSchema,
-                        Boolean rowWriterEnable, Boolean addFilegroups,  Boolean multiLogFiles, String updateFile, String updateColumn, String condition, int count) throws Exception {
-    testBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, addFilegroups, multiLogFiles, updateFile, updateColumn, condition, count, true);
+  private void testBase(String updateFile, String updateColumn, String condition, int count) throws Exception {
+    testBase(updateFile, updateColumn, condition, count, true);
 
     //adding non-nullable cols should fail, but instead it is adding nullable cols
     //assertThrows(Exception.class, () -> testBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, updateFile, updateColumn, condition, count, false));
   }
 
-  private void testBase(String tableType, Boolean shouldCluster, Boolean shouldCompact, Boolean reconcileSchema, Boolean rowWriterEnable, Boolean addFilegroups,
-                        Boolean multiLogFiles, String updateFile, String updateColumn, String condition, int count, Boolean nullable) throws Exception {
+  private void doFirstDeltaWrite() throws Exception {
+    doDeltaWrite("start.json", true, null);
+  }
+
+  private void doNonNullableDeltaWrite(String resourceString, String preventNullCol) throws Exception {
+    doDeltaWrite(resourceString, false, preventNullCol);
+  }
+
+  private void doDeltaWrite(String resourceString) throws Exception {
+    doDeltaWrite(resourceString, false, null);
+  }
+
+  private void doDeltaWrite(String resourceString, Boolean isFirst, String preventNullCol) throws Exception {
+    String datapath = String.class.getResource("/data/schema-evolution/" + resourceString).getPath();
+    Dataset<Row> df = sparkSession.read().json(datapath);
+    if (preventNullCol != null) {
+      df = TestHoodieSparkUtils.setColumnNotNullable(df, preventNullCol);
+    }
+    df.write().format("parquet").mode(isFirst ? SaveMode.Overwrite : SaveMode.Append).save(PARQUET_SOURCE_ROOT);
+    deltaStreamer.sync();
+  }
+
+  private void testBase(String updateFile, String updateColumn, String condition, int count, Boolean nullable) throws Exception {
     boolean isCow = tableType.equals("COPY_ON_WRITE");
     PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + testNum++;
     tableBasePath = basePath + "test_parquet_table" + testNum;
-    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(setupDeltaStreamer(tableType, tableBasePath, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, addFilegroups, multiLogFiles), jsc);
+    this.deltaStreamer = new HoodieDeltaStreamer(getDeltaStreamerConfig(), jsc);
 
     //first write
-    String datapath = String.class.getResource("/data/schema-evolution/start.json").getPath();
-    sparkSession.read().json(datapath).write().format("parquet").save(PARQUET_SOURCE_ROOT);
-    deltaStreamer.sync();
+    doFirstDeltaWrite();
     int numRecords = 6;
     int numFiles = 3;
     assertRecordCount(numRecords);
@@ -147,18 +166,14 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
 
     //add extra log files
     if (multiLogFiles) {
-      datapath = String.class.getResource("/data/schema-evolution/extraLogFiles.json").getPath();
-      sparkSession.read().json(datapath).write().format("parquet").mode(SaveMode.Append).save(PARQUET_SOURCE_ROOT);
-      deltaStreamer.sync();
+      doDeltaWrite("extraLogFiles.json");
       assertRecordCount(numRecords);
       assertFileNumber(numFiles, false);
     }
 
     //make other filegroups
     if (addFilegroups) {
-      datapath = String.class.getResource("/data/schema-evolution/newFileGroups.json").getPath();
-      sparkSession.read().json(datapath).write().format("parquet").mode(SaveMode.Append).save(PARQUET_SOURCE_ROOT);
-      deltaStreamer.sync();
+      doDeltaWrite("newFileGroups.json");
       numRecords += 3;
       numFiles += 3;
       assertRecordCount(numRecords);
@@ -166,13 +181,11 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     }
 
     //write updates
-    datapath = String.class.getResource("/data/schema-evolution/" + updateFile).getPath();
-    Dataset<Row> df = sparkSession.read().json(datapath);
     if (!nullable) {
-      df = TestHoodieSparkUtils.setColumnNotNullable(df, updateColumn);
+      doNonNullableDeltaWrite(updateFile, updateColumn);
+    } else {
+      doDeltaWrite(updateFile);
     }
-    df.write().format("parquet").mode(SaveMode.Append).save(PARQUET_SOURCE_ROOT);
-    deltaStreamer.sync();
     if (shouldCluster) {
       //everything combines into 1 file per partition
       assertBaseFileOnlyNumber(3);
@@ -216,7 +229,14 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
   @ParameterizedTest
   @MethodSource("testArgs")
   public void testAddColRoot(String tableType, Boolean shouldCluster, Boolean shouldCompact, Boolean reconcileSchema, Boolean rowWriterEnable, Boolean addFilegroups, Boolean multiLogFiles) throws Exception {
-    testBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, addFilegroups, multiLogFiles, "testAddColRoot.json", "zextra_col", "zextra_col = 'yes'", 2);
+    this.tableType = tableType;
+    this.shouldCluster = shouldCluster;
+    this.shouldCompact = shouldCompact;
+    this.reconcileSchema = reconcileSchema;
+    this.rowWriterEnable = rowWriterEnable;
+    this.addFilegroups = addFilegroups;
+    this.multiLogFiles = multiLogFiles;
+    testBase("testAddColRoot.json", "zextra_col", "zextra_col = 'yes'", 2);
   }
 
   /**
@@ -225,7 +245,14 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
   @ParameterizedTest
   @MethodSource("testArgs")
   public void testAddMetaCol(String tableType, Boolean shouldCluster, Boolean shouldCompact, Boolean reconcileSchema, Boolean rowWriterEnable, Boolean addFilegroups, Boolean multiLogFiles) throws Exception {
-    testBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, addFilegroups, multiLogFiles, "testAddMetaCol.json", "_extra_col", "_extra_col = 'yes'", 2);
+    this.tableType = tableType;
+    this.shouldCluster = shouldCluster;
+    this.shouldCompact = shouldCompact;
+    this.reconcileSchema = reconcileSchema;
+    this.rowWriterEnable = rowWriterEnable;
+    this.addFilegroups = addFilegroups;
+    this.multiLogFiles = multiLogFiles;
+    testBase("testAddMetaCol.json", "_extra_col", "_extra_col = 'yes'", 2);
   }
 
   /**
@@ -234,8 +261,14 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
   @ParameterizedTest
   @MethodSource("testArgs")
   public void testAddColStruct(String tableType, Boolean shouldCluster, Boolean shouldCompact, Boolean reconcileSchema, Boolean rowWriterEnable, Boolean addFilegroups, Boolean multiLogFiles) throws Exception {
-    testBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, addFilegroups, multiLogFiles,
-        "testAddColStruct.json", "tip_history.zextra_col", "tip_history[0].zextra_col = 'yes'", 2);
+    this.tableType = tableType;
+    this.shouldCluster = shouldCluster;
+    this.shouldCompact = shouldCompact;
+    this.reconcileSchema = reconcileSchema;
+    this.rowWriterEnable = rowWriterEnable;
+    this.addFilegroups = addFilegroups;
+    this.multiLogFiles = multiLogFiles;
+    testBase("testAddColStruct.json", "tip_history.zextra_col", "tip_history[0].zextra_col = 'yes'", 2);
   }
 
   /**
@@ -244,8 +277,14 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
   @ParameterizedTest
   @MethodSource("testArgs")
   public void testAddComplexField(String tableType, Boolean shouldCluster, Boolean shouldCompact, Boolean reconcileSchema, Boolean rowWriterEnable, Boolean addFilegroups, Boolean multiLogFiles) throws Exception {
-    testBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, addFilegroups, multiLogFiles,
-        "testAddComplexField.json", "zcomplex_array", "size(zcomplex_array) > 0", 2);
+    this.tableType = tableType;
+    this.shouldCluster = shouldCluster;
+    this.shouldCompact = shouldCompact;
+    this.reconcileSchema = reconcileSchema;
+    this.rowWriterEnable = rowWriterEnable;
+    this.addFilegroups = addFilegroups;
+    this.multiLogFiles = multiLogFiles;
+    testBase("testAddComplexField.json", "zcomplex_array", "size(zcomplex_array) > 0", 2);
   }
 
   /**
@@ -254,17 +293,27 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
   @ParameterizedTest
   @MethodSource("testArgs")
   public void testAddColChangeOrder(String tableType, Boolean shouldCluster, Boolean shouldCompact, Boolean reconcileSchema, Boolean rowWriterEnable, Boolean addFilegroups, Boolean multiLogFiles) throws Exception {
-    testBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, addFilegroups, multiLogFiles,
-        "testAddColChangeOrderAllFiles.json", "extra_col", "extra_col = 'yes'", 2);
+    this.tableType = tableType;
+    this.shouldCluster = shouldCluster;
+    this.shouldCompact = shouldCompact;
+    this.reconcileSchema = reconcileSchema;
+    this.rowWriterEnable = rowWriterEnable;
+    this.addFilegroups = addFilegroups;
+    this.multiLogFiles = multiLogFiles;
+    testBase("testAddColChangeOrderAllFiles.json", "extra_col", "extra_col = 'yes'", 2);
     //according to the docs, this should fail. But it doesn't
-    //assertThrows(Exception.class, () -> testBase(tableType, shouldCluster, shouldCompact, "testAddColChangeOrderSomeFiles.json", "extra_col", "extra_col = 'yes'", 1));
+    //assertThrows(Exception.class, () -> testBase("testAddColChangeOrderSomeFiles.json", "extra_col", "extra_col = 'yes'", 1));
   }
 
-  private void testTypePromotionBase(String tableType, Boolean shouldCluster, Boolean shouldCompact, Boolean reconcileSchema, Boolean rowWriterEnable,
-                                     String colName, DataType startType, DataType endType) throws Exception {
+  private void assertDataType(String colName, DataType expectedType) {
+    assertEquals(expectedType, sparkSession.read().format("hudi").load(tableBasePath).select(colName).schema().fields()[0].dataType());
+  }
+
+  private void testTypePromotionBase(String colName, DataType startType, DataType endType) throws Exception {
+    boolean isCow = tableType.equals("COPY_ON_WRITE");
     PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + testNum++;
     String tableBasePath = basePath + "test_parquet_table" + testNum;
-    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(setupDeltaStreamer(tableType, tableBasePath, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, false, false), jsc);
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(getDeltaStreamerConfig(), jsc);
 
     //first write
     String datapath = String.class.getResource("/data/schema-evolution/startTypePromotion.json").getPath();
@@ -273,8 +322,11 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     df = df.withColumn(colName, col.cast(startType));
     df.write().format("parquet").save(PARQUET_SOURCE_ROOT);
     deltaStreamer.sync();
-    TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(10, tableBasePath, sqlContext);
-    assertEquals(startType, sparkSession.read().format("hudi").load(tableBasePath).select(colName).schema().fields()[0].dataType());
+    int numRecords = 6;
+    int numFiles = 3;
+    assertRecordCount(numRecords);
+    assertFileNumber(numFiles, isCow);
+    assertDataType(colName, startType);
 
     //second write
     datapath = Objects.requireNonNull(String.class.getResource("/data/schema-evolution/endTypePromotion.json")).getPath();
@@ -323,79 +375,71 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
    */
   @ParameterizedTest
   @MethodSource("testTypePromotionArgs")
-  public void testTypePromotion(String tableType, Boolean shouldCluster, Boolean shouldCompact, Boolean reconcileSchema, Boolean rowWriterEnable) throws Exception {
+  public void testTypePromotion(String tableType, Boolean shouldCluster, Boolean shouldCompact, Boolean reconcileSchema, Boolean rowWriterEnable,
+                                Boolean addFilegroups, Boolean multiLogFiles) throws Exception {
+    this.tableType = tableType;
+    this.shouldCluster = shouldCluster;
+    this.shouldCompact = shouldCompact;
+    this.reconcileSchema = reconcileSchema;
+    this.rowWriterEnable = rowWriterEnable;
+    this.addFilegroups = addFilegroups;
+    this.multiLogFiles = multiLogFiles;
     //root data type promotions
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable,"distance_in_meters", DataTypes.IntegerType, DataTypes.LongType);
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "distance_in_meters", DataTypes.IntegerType, DataTypes.FloatType);
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "distance_in_meters", DataTypes.IntegerType, DataTypes.DoubleType);
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "distance_in_meters", DataTypes.IntegerType, DataTypes.StringType);
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "distance_in_meters", DataTypes.LongType, DataTypes.FloatType);
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "distance_in_meters", DataTypes.LongType, DataTypes.DoubleType);
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "distance_in_meters", DataTypes.LongType, DataTypes.StringType);
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "begin_lat", DataTypes.FloatType, DataTypes.DoubleType);
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "begin_lat", DataTypes.FloatType, DataTypes.StringType);
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "rider", DataTypes.StringType, DataTypes.BinaryType);
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "tip_history",
-        DataTypes.createArrayType(DataTypes.IntegerType), DataTypes.createArrayType(DataTypes.LongType));
+    testTypePromotionBase("distance_in_meters", DataTypes.IntegerType, DataTypes.LongType);
+    testTypePromotionBase("distance_in_meters", DataTypes.IntegerType, DataTypes.FloatType);
+    testTypePromotionBase("distance_in_meters", DataTypes.IntegerType, DataTypes.DoubleType);
+    testTypePromotionBase("distance_in_meters", DataTypes.IntegerType, DataTypes.StringType);
+    testTypePromotionBase("distance_in_meters", DataTypes.LongType, DataTypes.FloatType);
+    testTypePromotionBase("distance_in_meters", DataTypes.LongType, DataTypes.DoubleType);
+    testTypePromotionBase("distance_in_meters", DataTypes.LongType, DataTypes.StringType);
+    testTypePromotionBase("begin_lat", DataTypes.FloatType, DataTypes.DoubleType);
+    testTypePromotionBase("begin_lat", DataTypes.FloatType, DataTypes.StringType);
+    testTypePromotionBase("rider", DataTypes.StringType, DataTypes.BinaryType);
+    testTypePromotionBase("tip_history", DataTypes.createArrayType(DataTypes.IntegerType), DataTypes.createArrayType(DataTypes.LongType));
     //Seems to be supported for datasource. See org.apache.hudi.TestAvroSchemaResolutionSupport.testDataTypePromotions
-    //testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, "rider", DataTypes.BinaryType, DataTypes.StringType);
+    //testTypePromotionBase("rider", DataTypes.BinaryType, DataTypes.StringType);
 
     //nested data type promotions
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable,
-        "fare", createFareStruct(DataTypes.FloatType), createFareStruct(DataTypes.DoubleType));
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable,
-        "fare", createFareStruct(DataTypes.FloatType), createFareStruct(DataTypes.StringType));
+    testTypePromotionBase("fare", createFareStruct(DataTypes.FloatType), createFareStruct(DataTypes.DoubleType));
+    testTypePromotionBase("fare", createFareStruct(DataTypes.FloatType), createFareStruct(DataTypes.StringType));
 
     //complex data type promotion
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "tip_history",
-        DataTypes.createArrayType(DataTypes.IntegerType), DataTypes.createArrayType(DataTypes.LongType));
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "tip_history",
-        DataTypes.createArrayType(DataTypes.IntegerType), DataTypes.createArrayType(DataTypes.DoubleType));
-    testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "tip_history",
-        DataTypes.createArrayType(DataTypes.IntegerType), DataTypes.createArrayType(DataTypes.StringType));
+    testTypePromotionBase("tip_history", DataTypes.createArrayType(DataTypes.IntegerType), DataTypes.createArrayType(DataTypes.LongType));
+    testTypePromotionBase("tip_history", DataTypes.createArrayType(DataTypes.IntegerType), DataTypes.createArrayType(DataTypes.DoubleType));
+    testTypePromotionBase("tip_history", DataTypes.createArrayType(DataTypes.IntegerType), DataTypes.createArrayType(DataTypes.StringType));
 
     //test illegal type promotions
     if (tableType.equals("COPY_ON_WRITE")) {
       //illegal root data type promotion
-      SparkException e = assertThrows(SparkException.class,
-          () -> testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "distance_in_meters", DataTypes.LongType, DataTypes.IntegerType));
+      SparkException e = assertThrows(SparkException.class, () -> testTypePromotionBase("distance_in_meters", DataTypes.LongType, DataTypes.IntegerType));
       assertTrue(e.getCause().getCause().getMessage().contains("cannot support rewrite value for schema type: \"int\" since the old schema type is: \"long\""));
       //illegal nested data type promotion
-      e = assertThrows(SparkException.class, () -> testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable,
-          "fare", createFareStruct(DataTypes.DoubleType), createFareStruct(DataTypes.FloatType)));
+      e = assertThrows(SparkException.class, () -> testTypePromotionBase("fare", createFareStruct(DataTypes.DoubleType), createFareStruct(DataTypes.FloatType)));
       assertTrue(e.getCause().getCause().getMessage().contains("cannot support rewrite value for schema type: \"float\" since the old schema type is: \"double\""));
       //illegal complex data type promotion
-      e = assertThrows(SparkException.class,
-          () -> testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "tip_history",
-              DataTypes.createArrayType(DataTypes.LongType), DataTypes.createArrayType(DataTypes.IntegerType)));
+      e = assertThrows(SparkException.class, () -> testTypePromotionBase("tip_history", DataTypes.createArrayType(DataTypes.LongType), DataTypes.createArrayType(DataTypes.IntegerType)));
       assertTrue(e.getCause().getCause().getMessage().contains("cannot support rewrite value for schema type: \"int\" since the old schema type is: \"long\""));
     } else {
       //illegal root data type promotion
       if (shouldCompact) {
         assertThrows(HoodieCompactionException.class,
-            () -> testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "distance_in_meters", DataTypes.LongType, DataTypes.IntegerType));
-        assertThrows(HoodieCompactionException.class, () -> testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable,
-            "fare", createFareStruct(DataTypes.DoubleType), createFareStruct(DataTypes.FloatType)));
-        assertThrows(HoodieCompactionException.class, () -> testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable,
-            "tip_history", DataTypes.createArrayType(DataTypes.LongType), DataTypes.createArrayType(DataTypes.IntegerType)));
-        assertThrows(HoodieCompactionException.class, () -> testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable,
-            "fare", createFareStruct(DataTypes.DoubleType), createFareStruct(DataTypes.FloatType)));
-        assertThrows(HoodieCompactionException.class, () -> testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable,
-            "tip_history", DataTypes.createArrayType(DataTypes.LongType), DataTypes.createArrayType(DataTypes.IntegerType)));
+            () -> testTypePromotionBase("distance_in_meters", DataTypes.LongType, DataTypes.IntegerType));
+        assertThrows(HoodieCompactionException.class, () -> testTypePromotionBase("fare", createFareStruct(DataTypes.DoubleType), createFareStruct(DataTypes.FloatType)));
+        assertThrows(HoodieCompactionException.class, () -> testTypePromotionBase("tip_history", DataTypes.createArrayType(DataTypes.LongType), DataTypes.createArrayType(DataTypes.IntegerType)));
+        assertThrows(HoodieCompactionException.class, () -> testTypePromotionBase("fare", createFareStruct(DataTypes.DoubleType), createFareStruct(DataTypes.FloatType)));
+        assertThrows(HoodieCompactionException.class, () -> testTypePromotionBase("tip_history", DataTypes.createArrayType(DataTypes.LongType), DataTypes.createArrayType(DataTypes.IntegerType)));
       } else {
         SparkException e = assertThrows(SparkException.class,
-            () -> testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "distance_in_meters", DataTypes.LongType, DataTypes.IntegerType));
+            () -> testTypePromotionBase("distance_in_meters", DataTypes.LongType, DataTypes.IntegerType));
         if (shouldCluster) {
           assertTrue(e.getCause().getCause() instanceof ParquetDecodingException);
         } else {
           assertTrue(e.getCause() instanceof NullPointerException);
         }
 
-        e = assertThrows(SparkException.class, () -> testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable,
-            "fare", createFareStruct(DataTypes.DoubleType), createFareStruct(DataTypes.FloatType)));
+        e = assertThrows(SparkException.class, () -> testTypePromotionBase("fare", createFareStruct(DataTypes.DoubleType), createFareStruct(DataTypes.FloatType)));
         assertTrue(e.getCause().getCause() instanceof ParquetDecodingException);
-        e = assertThrows(SparkException.class, () -> testTypePromotionBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "tip_history",
-            DataTypes.createArrayType(DataTypes.LongType), DataTypes.createArrayType(DataTypes.IntegerType)));
+        e = assertThrows(SparkException.class, () -> testTypePromotionBase("tip_history", DataTypes.createArrayType(DataTypes.LongType), DataTypes.createArrayType(DataTypes.IntegerType)));
         assertTrue(e.getCause().getCause() instanceof ParquetDecodingException);
       }
     }
