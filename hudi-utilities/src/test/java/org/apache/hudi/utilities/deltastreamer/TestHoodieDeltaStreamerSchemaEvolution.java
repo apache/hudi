@@ -27,6 +27,7 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.utilities.sources.ParquetDFSSource;
+import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
 import org.apache.parquet.io.ParquetDecodingException;
 import org.apache.spark.SparkException;
@@ -57,56 +58,114 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerTestBase {
 
+  private String tableBasePath;
+
   private HoodieDeltaStreamer.Config setupDeltaStreamer(String tableType,
                                                         String tableBasePath,
                                                         Boolean shouldCluster,
                                                         Boolean shouldCompact,
                                                         Boolean reconcileSchema,
-                                                        Boolean rowWriterEnabled) throws IOException {
+                                                        Boolean rowWriterEnabled,
+                                                        Boolean addFilegroups,
+                                                        Boolean multiLogFiles) throws IOException {
     TypedProperties extraProps = new TypedProperties();
     extraProps.setProperty("hoodie.datasource.write.table.type", tableType);
     extraProps.setProperty(HoodieCommonConfig.RECONCILE_SCHEMA.key(), reconcileSchema.toString());
     extraProps.setProperty("hoodie.datasource.write.row.writer.enable", rowWriterEnabled.toString());
+    extraProps.setProperty("hoodie.parquet.small.file.limit", "0");
 
+    extraProps.setProperty(HoodieCompactionConfig.INLINE_COMPACT.key(), shouldCompact.toString());
     if (shouldCompact) {
-      extraProps.setProperty(HoodieCompactionConfig.INLINE_COMPACT.key(), "true");
       extraProps.setProperty(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1");
     }
 
     if (shouldCluster) {
+      int maxCommits = 2;
+      if (addFilegroups) {
+        maxCommits++;
+      }
+      if (multiLogFiles) {
+        maxCommits++;
+      }
       extraProps.setProperty(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true");
-      extraProps.setProperty(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "2");
+      extraProps.setProperty(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), Integer.toString(maxCommits));
       extraProps.setProperty(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key(), "_row_key");
     }
 
     prepareParquetDFSSource(false, false, "", "", PROPS_FILENAME_TEST_PARQUET,
         PARQUET_SOURCE_ROOT, false, "partition_path", "", extraProps);
-    return TestHoodieDeltaStreamer.TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, ParquetDFSSource.class.getName(),
+    HoodieDeltaStreamer.Config cfg = TestHoodieDeltaStreamer.TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, ParquetDFSSource.class.getName(),
         null, PROPS_FILENAME_TEST_PARQUET, false,
         false, 100000, false, null, tableType, "timestamp", null);
+    cfg.forceDisableCompaction = !shouldCompact;
+    return cfg;
+  }
+
+  private void assertFileNumber(int expected, boolean isCow) {
+    if (isCow) {
+      assertBaseFileOnlyNumber(expected);
+    } else {
+      assertEquals(expected, sparkSession.read().format("hudi").load(tableBasePath).select("_hoodie_commit_time", "_hoodie_file_name").distinct().count());
+    }
+  }
+
+  private void assertBaseFileOnlyNumber(int expected) {
+    Dataset<Row> df = sparkSession.read().format("hudi").load(tableBasePath).select("_hoodie_file_name");
+    df.createOrReplaceTempView("assertFileNumberPostCompactCluster");
+    assertEquals(df.count(), sparkSession.sql("select * from assertFileNumberPostCompactCluster where _hoodie_file_name  like '%.parquet'").count());
+    assertEquals(expected, df.distinct().count());
+  }
+
+  private void assertRecordCount(int expected) {
+    TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(expected, tableBasePath, sqlContext);
   }
 
   private void testBase(String tableType, Boolean shouldCluster, Boolean shouldCompact, Boolean reconcileSchema,
-                        Boolean rowWriterEnable, String updateFile, String updateColumn, String condition, int count) throws Exception {
-    testBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, updateFile, updateColumn, condition, count, true);
+                        Boolean rowWriterEnable, Boolean addFilegroups,  Boolean multiLogFiles, String updateFile, String updateColumn, String condition, int count) throws Exception {
+    testBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, addFilegroups, multiLogFiles, updateFile, updateColumn, condition, count, true);
 
     //adding non-nullable cols should fail, but instead it is adding nullable cols
     //assertThrows(Exception.class, () -> testBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, updateFile, updateColumn, condition, count, false));
   }
 
-  private void testBase(String tableType, Boolean shouldCluster, Boolean shouldCompact, Boolean reconcileSchema, Boolean rowWriterEnable, String updateFile, String updateColumn,
-                        String condition, int count, Boolean nullable) throws Exception {
+  private void testBase(String tableType, Boolean shouldCluster, Boolean shouldCompact, Boolean reconcileSchema, Boolean rowWriterEnable, Boolean addFilegroups,
+                        Boolean multiLogFiles, String updateFile, String updateColumn, String condition, int count, Boolean nullable) throws Exception {
+    boolean isCow = tableType.equals("COPY_ON_WRITE");
     PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + testNum++;
-    String tableBasePath = basePath + "test_parquet_table" + testNum;
-    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(setupDeltaStreamer(tableType, tableBasePath, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable), jsc);
+    tableBasePath = basePath + "test_parquet_table" + testNum;
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(setupDeltaStreamer(tableType, tableBasePath, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, addFilegroups, multiLogFiles), jsc);
 
     //first write
     String datapath = String.class.getResource("/data/schema-evolution/start.json").getPath();
     sparkSession.read().json(datapath).write().format("parquet").save(PARQUET_SOURCE_ROOT);
     deltaStreamer.sync();
-    TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(10, tableBasePath, sqlContext);
+    int numRecords = 6;
+    int numFiles = 3;
+    assertRecordCount(numRecords);
+    assertFileNumber(numFiles, isCow);
 
-    //second write
+
+    //add extra log files
+    if (multiLogFiles) {
+      datapath = String.class.getResource("/data/schema-evolution/extraLogFiles.json").getPath();
+      sparkSession.read().json(datapath).write().format("parquet").mode(SaveMode.Append).save(PARQUET_SOURCE_ROOT);
+      deltaStreamer.sync();
+      assertRecordCount(numRecords);
+      assertFileNumber(numFiles, false);
+    }
+
+    //make other filegroups
+    if (addFilegroups) {
+      datapath = String.class.getResource("/data/schema-evolution/newFileGroups.json").getPath();
+      sparkSession.read().json(datapath).write().format("parquet").mode(SaveMode.Append).save(PARQUET_SOURCE_ROOT);
+      deltaStreamer.sync();
+      numRecords += 3;
+      numFiles += 3;
+      assertRecordCount(numRecords);
+      assertFileNumber(numFiles, isCow);
+    }
+
+    //write updates
     datapath = String.class.getResource("/data/schema-evolution/" + updateFile).getPath();
     Dataset<Row> df = sparkSession.read().json(datapath);
     if (!nullable) {
@@ -114,26 +173,38 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     }
     df.write().format("parquet").mode(SaveMode.Append).save(PARQUET_SOURCE_ROOT);
     deltaStreamer.sync();
-    TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(10, tableBasePath, sqlContext);
-    sparkSession.read().format("hudi").load(tableBasePath).select(updateColumn).show(10);
+    if (shouldCluster) {
+      //everything combines into 1 file per partition
+      assertBaseFileOnlyNumber(3);
+    } else if (shouldCompact || isCow) {
+      assertBaseFileOnlyNumber(numFiles);
+    } else {
+      numFiles += 2;
+      assertFileNumber(numFiles, false);
+    }
+    assertRecordCount(numRecords);
+
+    sparkSession.read().format("hudi").load(tableBasePath).select(updateColumn).show(9);
     assertEquals(count, sparkSession.read().format("hudi").load(tableBasePath).filter(condition).count());
   }
 
   private static Stream<Arguments> testArgs() {
     Stream.Builder<Arguments> b = Stream.builder();
-    Boolean[] rs = {true,false};
-    Boolean[] rwe = {true,false};
-    Boolean[] sc = {true,false};
-    String[] tt = {"COPY_ON_WRITE", "MERGE_ON_READ"};
-
-    for (Boolean reconcileSchema : rs) {
-      for (Boolean rowWriterEnable : rwe) {
-        for (Boolean shouldCluster : sc) {
-          for (String tableType : tt) {
-            b.add(Arguments.of(tableType, shouldCluster, false, reconcileSchema, rowWriterEnable));
+    //b.add(Arguments.of("MERGE_ON_READ", false, false, false, true, false, true));
+    for (Boolean reconcileSchema : new Boolean[]{false, true}) {
+      for (Boolean rowWriterEnable : new Boolean[]{true}) {
+        for (Boolean addFilegroups : new Boolean[]{false, true}) {
+          for (Boolean multiLogFiles : new Boolean[]{false, true}) {
+            for (Boolean shouldCluster : new Boolean[]{false, true}) {
+              for (String tableType : new String[]{"COPY_ON_WRITE", "MERGE_ON_READ"}) {
+                if (!multiLogFiles || tableType.equals("MERGE_ON_READ")) {
+                  b.add(Arguments.of(tableType, shouldCluster, false, reconcileSchema, rowWriterEnable, addFilegroups, multiLogFiles));
+                }
+              }
+            }
+            b.add(Arguments.of("MERGE_ON_READ", false, true, reconcileSchema, rowWriterEnable, addFilegroups, multiLogFiles));
           }
         }
-        b.add(Arguments.of("MERGE_ON_READ", false, true, reconcileSchema, rowWriterEnable));
       }
     }
     return b.build();
@@ -144,8 +215,8 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
    */
   @ParameterizedTest
   @MethodSource("testArgs")
-  public void testAddColRoot(String tableType, Boolean shouldCluster, Boolean shouldCompact, Boolean reconcileSchema, Boolean rowWriterEnable) throws Exception {
-    testBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "testAddColRoot.json", "zextra_col", "zextra_col = 'yes'", 2);
+  public void testAddColRoot(String tableType, Boolean shouldCluster, Boolean shouldCompact, Boolean reconcileSchema, Boolean rowWriterEnable, Boolean addFilegroups, Boolean multiLogFiles) throws Exception {
+    testBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, addFilegroups, multiLogFiles, "testAddColRoot.json", "zextra_col", "zextra_col = 'yes'", 2);
   }
 
   /**
@@ -153,8 +224,8 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
    */
   @ParameterizedTest
   @MethodSource("testArgs")
-  public void testAddMetaCol(String tableType, Boolean shouldCluster, Boolean shouldCompact, Boolean reconcileSchema, Boolean rowWriterEnable) throws Exception {
-    testBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, "testAddMetaCol.json", "_extra_col", "_extra_col = 'yes'", 2);
+  public void testAddMetaCol(String tableType, Boolean shouldCluster, Boolean shouldCompact, Boolean reconcileSchema, Boolean rowWriterEnable, Boolean addFilegroups, Boolean multiLogFiles) throws Exception {
+    testBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, addFilegroups, multiLogFiles, "testAddMetaCol.json", "_extra_col", "_extra_col = 'yes'", 2);
   }
 
   /**
@@ -162,8 +233,8 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
    */
   @ParameterizedTest
   @MethodSource("testArgs")
-  public void testAddColStruct(String tableType, Boolean shouldCluster, Boolean shouldCompact, Boolean reconcileSchema, Boolean rowWriterEnable) throws Exception {
-    testBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable,
+  public void testAddColStruct(String tableType, Boolean shouldCluster, Boolean shouldCompact, Boolean reconcileSchema, Boolean rowWriterEnable, Boolean addFilegroups, Boolean multiLogFiles) throws Exception {
+    testBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, addFilegroups, multiLogFiles,
         "testAddColStruct.json", "tip_history.zextra_col", "tip_history[0].zextra_col = 'yes'", 2);
   }
 
@@ -172,8 +243,8 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
    */
   @ParameterizedTest
   @MethodSource("testArgs")
-  public void testAddComplexField(String tableType, Boolean shouldCluster, Boolean shouldCompact, Boolean reconcileSchema, Boolean rowWriterEnable) throws Exception {
-    testBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable,
+  public void testAddComplexField(String tableType, Boolean shouldCluster, Boolean shouldCompact, Boolean reconcileSchema, Boolean rowWriterEnable, Boolean addFilegroups, Boolean multiLogFiles) throws Exception {
+    testBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, addFilegroups, multiLogFiles,
         "testAddComplexField.json", "zcomplex_array", "size(zcomplex_array) > 0", 2);
   }
 
@@ -182,8 +253,8 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
    */
   @ParameterizedTest
   @MethodSource("testArgs")
-  public void testAddColChangeOrder(String tableType, Boolean shouldCluster, Boolean shouldCompact, Boolean reconcileSchema, Boolean rowWriterEnable) throws Exception {
-    testBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable,
+  public void testAddColChangeOrder(String tableType, Boolean shouldCluster, Boolean shouldCompact, Boolean reconcileSchema, Boolean rowWriterEnable, Boolean addFilegroups, Boolean multiLogFiles) throws Exception {
+    testBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, addFilegroups, multiLogFiles,
         "testAddColChangeOrderAllFiles.json", "extra_col", "extra_col = 'yes'", 2);
     //according to the docs, this should fail. But it doesn't
     //assertThrows(Exception.class, () -> testBase(tableType, shouldCluster, shouldCompact, "testAddColChangeOrderSomeFiles.json", "extra_col", "extra_col = 'yes'", 1));
@@ -193,7 +264,7 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
                                      String colName, DataType startType, DataType endType) throws Exception {
     PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + testNum++;
     String tableBasePath = basePath + "test_parquet_table" + testNum;
-    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(setupDeltaStreamer(tableType, tableBasePath, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable), jsc);
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(setupDeltaStreamer(tableType, tableBasePath, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, false, false), jsc);
 
     //first write
     String datapath = String.class.getResource("/data/schema-evolution/startTypePromotion.json").getPath();
