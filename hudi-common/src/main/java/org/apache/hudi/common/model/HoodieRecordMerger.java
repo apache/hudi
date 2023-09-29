@@ -46,6 +46,22 @@ public interface HoodieRecordMerger extends Serializable {
    */
   Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException;
 
+
+  /**
+   * In some cases a business logic does some checks before flushing a merged record to the disk.
+   * This method does the check, and when false is returned, it means the merged record should not
+   * be flushed.
+   *
+   * @param record the merged record.
+   * @param schema the schema of the merged record.
+   * @return a boolean variable to indicate if the merged record should be returned or not.
+   *
+   * <p> This interface is experimental and might be evolved in the future.
+   **/
+  default boolean shouldFlush(HoodieRecord record, Schema schema, TypedProperties props) throws IOException {
+    return true;
+  }
+
   /**
    * The record type handled by the current merger.
    * SPARK, AVRO, FLINK
