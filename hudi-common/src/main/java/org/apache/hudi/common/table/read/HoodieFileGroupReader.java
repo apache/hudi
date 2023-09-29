@@ -73,13 +73,13 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private final long start;
   // Length of bytes to read from the base file
   private final long length;
+  // Key to record and metadata mapping from log files
+  private final Map<String, Pair<Option<T>, Map<String, Object>>> logFileRecordMapping = new HashMap<>();
+  private final FileGroupReaderState readerState = new FileGroupReaderState();
   private ClosableIterator<T> baseFileIterator;
   // This is only initialized and used after all records from the base file are iterated
   private Iterator<Pair<Option<T>, Map<String, Object>>> logRecordIterator;
   private HoodieRecordMerger recordMerger;
-  // Key to record and metadata mapping from log files
-  private final Map<String, Pair<Option<T>, Map<String, Object>>> logFileRecordMapping = new HashMap<>();
-  private final FileGroupReaderState readerState = new FileGroupReaderState();
 
   T nextRecord;
 
