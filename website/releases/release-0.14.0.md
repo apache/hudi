@@ -13,8 +13,8 @@ These include the introduction of Record Level Index, automatic generation of re
 function for incremental reads, and more. Notably, this release also incorporates support for Spark 3.4. On the Flink 
 front, version 0.14.0 brings several exciting features such as consistent hashing index support, Flink 1.17 support, and U
 pdate and Delete statement support. Additionally, this release upgrades the Hudi table version, prompting users to consult
-the Migration Guide provided below. We encourage users to review the release highlights(TODO Add link),
-[breaking changes](#migration-guide-breaking-changes), and [behavior changes](#migration-guide-behavior-changes) before 
+the Migration Guide provided below. We encourage users to review the [release highlights](#release-highlights),
+[breaking changes](#breaking-changes), and [behavior changes](#behavior-changes) before 
 adopting the 0.14.0 release.
 
 
@@ -26,8 +26,8 @@ with version 0.14.0 on a table with an older table version, an automatic upgrade
 up to version `6`. This upgrade is a one-time occurrence for each Hudi table, as the `hoodie.table.version` is updated in
 the property file upon completion of the upgrade. Additionally, a command-line tool for downgrading has been included, 
 allowing users to move from table version `6` to `5`, or revert from Hudi 0.14.0 to a version prior to 0.14.0. To use this 
-tool, execute it from a 0.14.0 environment (TODO Check what is this tool). For more details, refer to the 
-[hudi-cli](#/docs/cli/#upgrade-and-downgrade-table).
+tool, execute it from a 0.14.0 environment. For more details, refer to the 
+[hudi-cli](/docs/cli/#upgrade-and-downgrade-table).
 
 :::caution
 If migrating from an older release (pre 0.14.0), please also check the upgrade instructions from each older release in
@@ -37,13 +37,15 @@ sequence.
 ### Bundle Updates
 
 #### New Spark Bundles
-In this release, we've expanded our support to include bundles for both Spark 3.4 (hudi-spark3.4-bundle_2.12) (TODO Add 
-link) and Spark 3.0 (hudi-spark3.0-bundle_2.12) (TODO Add link). Please note that, the support for Spark 3.0 had been 
-discontinued after Hudi version 0.10.1, but due to strong community interest, it has been reinstated in this release.
+In this release, we've expanded our support to include bundles for both Spark 3.4 
+([hudi-spark3.4-bundle_2.12](https://mvnrepository.com/artifact/org.apache.hudi/hudi-spark3.4-bundle_2.12)) 
+and Spark 3.0 ([hudi-spark3.0-bundle_2.12](https://mvnrepository.com/artifact/org.apache.hudi/hudi-spark3.0-bundle_2.12)).
+Please note that, the support for Spark 3.0 had been discontinued after Hudi version 0.10.1, but due to strong community 
+interest, it has been reinstated in this release.
 
 ### Breaking Changes
 
-#### INSERT INTO behavior with spark-sql
+#### INSERT INTO behavior with Spark SQL
 Before version 0.14.0, data ingested through `INSERT INTO` in Spark SQL followed the upsert flow, where multiple versions 
 of records would be merged into one version. However, starting from 0.14.0, we've altered the default behavior of 
 `INSERT INTO` to utilize the `insert` flow internally. This change significantly enhances write performance as it 
@@ -61,9 +63,9 @@ Additionally, in version 0.14.0, we have **deprecated** two related older config
 
 ### Behavior changes
 
-#### Simplified duplicates handling with Inserts
-In cases where the operation type is configured as `insert`, users now have the option to enforce a duplicate policy 
-using the configuration setting 
+#### Simplified duplicates handling with Inserts in Spark SQL
+In cases where the operation type is configured as `insert` for the Spark SQL `INSERT INTO` flow, users now have the 
+option to enforce a duplicate policy using the configuration setting 
 [`hoodie.datasource.insert.dup.policy`](https://hudi.apache.org/docs/configurations#hoodiedatasourceinsertduppolicy). 
 This policy determines the action taken when incoming records being ingested already exist in storage. The available 
 values for this configuration are as follows:
@@ -77,7 +79,7 @@ With this addition, an older related configuration setting,
 [`hoodie.datasource.write.insert.drop.duplicates`](https://hudi.apache.org/docs/configurations#hoodiedatasourcewriteinsertdropduplicates), 
 is now deprecated. The newer configuration will take precedence over the old one when both are specified. If no specific 
 configurations are provided, the default value for the newer configuration will be assumed. Users are strongly encouraged 
-to migrate to the use of these newer configurations. (TODO: Verify this behavior)
+to migrate to the use of these newer configurations. 
 
 
 #### Compaction with MOR table
@@ -97,7 +99,7 @@ releases, support for Deltastreamer might be discontinued. Hence, we strongly ad
 HoodieStreamer instead.
 
 
-#### Merge Into Join condition 
+#### MERGE INTO JOIN condition 
 Starting from version 0.14.0, Hudi has the capability to automatically generate primary record keys when users do not 
 provide explicit specifications. This enhancement enables the `MERGE INTO JOIN` clause to reference any data column for 
 the join condition in Hudi tables where the primary keys are generated by Hudi itself. However, in cases where users 
@@ -106,20 +108,35 @@ configure the primary record key, the join condition still expects the primary k
 
 ## Release Highlights
 
-### Record Level Index 
-TODO REVISIT THIS
-Hudi 0.14.0, introduces Record Level Index a new index implementation which significantly enhance write performance. 
-This index stores a mapping of per-record locations and efficiently retrieves them during index lookup operations. 
-It can serve as a replacement for other [Global indices](https://hudi.apache.org/docs/next/indexing#global-and-non-global-indexes) 
-such as Global_bloom, Global_Simple, or Hbase used in Hudi. Adopting the Record Level Index can potentially boost index 
-lookup performance by 4 to 10 times, depending on the workload, even for extremely large-scale datasets (e.g., 1TB). 
-With the Record Level Index, substantial performance improvements can be observed for large datasets, as latency is 
+### Record Level Index
+Hudi version 0.14.0, introduces a new index implementation -  
+[Record Level Index](https://github.com/apache/hudi/blob/master/rfc/rfc-8/rfc-8.md#rfc-8-metadata-based-record-index). 
+The Record level Index significantly enhances write performance for large tables by efficiently storing per-record 
+locations and enabling swift retrieval during index lookup operations. It can effectively replace other 
+[Global indices](https://hudi.apache.org/docs/next/indexing#global-and-non-global-indexes) like Global_bloom, 
+Global_Simple, or Hbase, commonly used in Hudi.
+
+Bloom and Simple Indexes exhibit slower performance for large datasets due to the high costs associated with gathering 
+index data from various data files during lookup. Moreover, these indexes do not preserve a one-to-one record-key to 
+record file path mapping; instead, they deduce the mapping through an optimized search at lookup time. The per-file 
+overhead required by these indexes makes them less effective for datasets with a larger number of files or records.
+
+On the other hand, the Hbase Index saves a one-to-one mapping for each record key, resulting in fast performance that 
+scales with the dataset size. However, it necessitates a separate HBase cluster for maintenance, which is operationally 
+challenging and resource-intensive, requiring specialized expertise.
+
+The Record Index combines the speed and scalability of the HBase Index without its limitations and overhead. Being a 
+part of the HUDI Metadata Table, any future performance enhancements in writes and queries will automatically translate 
+into improved performance for the Record Index. Adopting the Record Level Index has the potential to boost index lookup 
+performance by 4 to 10 times, depending on the workload, even for extremely large-scale datasets (e.g., 1TB).
+
+With the Record Level Index, significant performance improvements can be observed for large datasets, as latency is 
 directly proportional to the amount of data being ingested. This is in contrast to other Global indices where index 
-lookup time increases linearly with the table size. The Record Level Index is designed to efficiently handle lookups 
-for such large-scale data without a linear increase in lookup times as the table size grows. To leverage this blazing 
-fast index, users need to enable two configurations:
-- [`hoodie.metadata.record.index.enable`](https://hudi.apache.org/docs/next/configurations#hoodiemetadatarecordindexenable)
-  must be enabled to write the Record Level Index to the metadata table.
+lookup time increases linearly with the table size. The Record Level Index is specifically designed to efficiently 
+handle lookups for such large-scale data without a linear increase in lookup times as the table size grows.
+
+To harness the benefits of this lightning-fast index, users need to enable two configurations:
+- [`hoodie.metadata.record.index.enable`](https://hudi.apache.org/docs/next/configurations#hoodiemetadatarecordindexenable) must be enabled to write the Record Level Index to the metadata table.
 - `hoodie.index.type` needs to be set to `RECORD_INDEX` for the index lookup to utilize the Record Level Index.
 
 
@@ -134,10 +151,9 @@ Hudi will **automatically generate the primary keys** in such cases. This featur
 cannot be altered for existing ones.
 
 
-(TODO CHECK THIS SUPPORT)
-This functionality is available in all spark writers. Inserts and 
+This functionality is available in all spark writers with certain limitations. For append only type of use cases, Inserts and 
 bulk_inserts are allowed with all four writers - Spark Datasource, Spark SQL, Spark Streaming, Hoodie Streamer. Updates and 
-Deletes are supported using spark-sql `MERGE INTO` , `UPDATE` and `DELETE` statements. With Spark Datasource, `UPDATE` 
+Deletes are supported only using spark-sql `MERGE INTO` , `UPDATE` and `DELETE` statements. With Spark Datasource, `UPDATE` 
 and `DELETE` are supported only when the source dataframe contains Hudi's meta fields. Please check out our 
 [quick start guide](https://hudi.apache.org/docs/quick-start-guide) for code snippets on Hudi table CRUD operations where 
 keys are autogenerated.
@@ -234,7 +250,7 @@ SELECT * FROM hudi_table_changes('table', 'latest_state', 'earliest', '202305160
 SELECT * FROM hudi_table_changes('path/to/table', 'cdc', 'earliest');
 ```
 
-Checkout the [quickstart](https://hudi.apache.org/docs/quick-start-guide#incremental-query) (TODO fix link) for more examples.
+Checkout the [quickstart](/docs/quick-start-guide#incremental-query) for more examples.
 
 #### New MOR file format reader in Spark:
 Based on a proposal from [RFC-72](https://github.com/apache/hudi/pull/9235) aimed at redesigning Hudi-Spark integration,
@@ -312,8 +328,12 @@ DELETE FROM hudi_table WHERE age > 23;
 Lot of write operations have been extended to support Java engine to bring it to parity with other engines. For eg, 
 compaction, clustering, and metadata table support has been added to Java Engine with 0.14.0.
 
+## Known Regressions
+In Hudi 0.14.0, when querying a table that uses ComplexKeyGenerator or CustomKeyGenerator, partition values are returned
+as string. Note that there is no type change on the storage i.e. partition fields are written in the user-defined type 
+on storage. However, this is a breaking change for the aforementioned key generators and will be fixed in 0.14.1 -
+[HUDI-6914](https://issues.apache.org/jira/browse/HUDI-6914)
 
 ## Raw Release Notes
 
-The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12352101).
-(TODO FIX LINK)
+The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12352700).
