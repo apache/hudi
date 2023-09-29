@@ -18,58 +18,38 @@
 
 package org.apache.hudi.sink.meta;
 
-import org.apache.hudi.client.HoodieFlinkWriteClient;
-import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 
-import org.apache.flink.configuration.Configuration;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.stream.IntStream;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
- * Test cases for {@link CkpMetadata}.
+ * Test cases for {@link CkpMetadata} when timeline based enabled.
  */
-public class TestCkpMetadata {
+public class TestTimelineBasedCkpMetadata extends TestCkpMetadata {
 
-  @TempDir
-  File tempFile;
-
-  protected Configuration conf;
-
-  protected HoodieFlinkWriteClient writeClient;
-
-  @BeforeEach
-  public void beforeEach() throws Exception {
-    setup();
-  }
-
-  protected void setup() throws IOException {
+  @Override
+  public void setup() throws IOException {
     String basePath = tempFile.getAbsolutePath();
     this.conf = TestConfigurations.getDefaultConf(basePath);
+    conf.setString(HoodieWriteConfig.INSTANT_STATE_TIMELINE_SERVER_BASED.key(), "true");
     StreamerUtil.initTableIfNotExists(conf);
     this.writeClient = FlinkWriteClients.createWriteClient(conf);
   }
 
   @ParameterizedTest
   @ValueSource(strings = {"", "1"})
-  void testWriteAndReadMessage(String uniqueId) {
+  public void testFailOver(String uniqueId) {
     CkpMetadata metadata = getCkpMetadata(uniqueId);
     // write and read 5 committed checkpoints
     IntStream.range(0, 3).forEach(i -> metadata.startInstant(i + ""));
@@ -78,6 +58,10 @@ public class TestCkpMetadata {
     metadata.commitInstant("2");
     assertThat(metadata.lastPendingInstant(), equalTo(null));
 
+    // Close write client and timeline server
+    cleanup();
+
+    // When timeline server is not responding, we can still read ckp metadata from file system directly
     // test cleaning
     IntStream.range(3, 6).forEach(i -> metadata.startInstant(i + ""));
     assertThat(metadata.getMessages().size(), is(3));
@@ -87,34 +71,47 @@ public class TestCkpMetadata {
     assertThat(metadata.getMessages().size(), is(5));
   }
 
-  @Test
-  void testBootstrap() throws Exception {
-    CkpMetadata metadata = getCkpMetadata("");
-    // write 4 instants to the ckp_meta
-    IntStream.range(0, 4).forEach(i -> metadata.startInstant(i + ""));
-    assertThat("The first instant should be removed from the instant cache",
-        metadata.getInstantCache(), is(Arrays.asList("1", "2", "3")));
+  @ParameterizedTest
+  @ValueSource(strings = {"", "1"})
+  public void testRefreshEveryNCommits(String uniqueId) {
+    // File system based writing
+    writeClient.getConfig().setValue(HoodieWriteConfig.INSTANT_STATE_TIMELINE_SERVER_BASED.key(), "false");
+    CkpMetadata writeMetadata = getCkpMetadata(uniqueId);
 
-    // simulate the reboot of coordinator
-    CkpMetadata metadata1 = getCkpMetadata("");
-    metadata1.bootstrap();
-    assertNull(metadata1.getInstantCache(), "The instant cache should be recovered from bootstrap");
+    // Timeline-based reading
+    writeClient.getConfig().setValue(HoodieWriteConfig.INSTANT_STATE_TIMELINE_SERVER_BASED.key(), "true");
+    CkpMetadata readOnlyMetadata = getCkpMetadata(uniqueId);
 
-    metadata1.startInstant("4");
-    assertThat("The first instant should be removed from the instant cache",
-        metadata1.getInstantCache(), is(Collections.singletonList("4")));
+    // write and read 5 committed checkpoints
+    IntStream.range(0, 3).forEach(i -> writeMetadata.startInstant(i + ""));
+    assertThat(readOnlyMetadata.lastPendingInstant(), is("2"));
+    writeMetadata.commitInstant("2");
+    // Send 10 requests to server
+    readCkpMessagesNTimes(readOnlyMetadata, 10);
+    assertThat(readOnlyMetadata.lastPendingInstant(), equalTo("2"));
+    // Send 100 requests to server, will trigger refresh
+    readCkpMessagesNTimes(readOnlyMetadata, 100);
+    assertThat(readOnlyMetadata.lastPendingInstant(), equalTo(null));
+
+    IntStream.range(3, 6).forEach(i -> writeMetadata.startInstant(i + ""));
+    readCkpMessagesNTimes(readOnlyMetadata, 200);
+    assertThat(readOnlyMetadata.getMessages().size(), is(3));
+
+    writeMetadata.commitInstant("6");
+    writeMetadata.abortInstant("7");
+    readCkpMessagesNTimes(readOnlyMetadata, 200);
+    assertThat(readOnlyMetadata.getMessages().size(), is(5));
   }
 
-  protected CkpMetadata getCkpMetadata(String uniqueId) {
-    conf.set(FlinkOptions.WRITE_CLIENT_ID, uniqueId);
-    return CkpMetadataFactory.getCkpMetadata(writeClient.getConfig(), conf);
-  }
-
-  @AfterEach
-  public void cleanup() {
-    if (writeClient != null) {
-      writeClient.close();
-      writeClient = null;
+  /**
+   * Send read requests to server to trigger checkpoint metadata refreshing.
+   */
+  private void readCkpMessagesNTimes(CkpMetadata metadata, int maxRetry) {
+    int retry = 0;
+    while (retry < maxRetry) {
+      metadata.getMessages();
+      retry++;
     }
   }
+
 }
