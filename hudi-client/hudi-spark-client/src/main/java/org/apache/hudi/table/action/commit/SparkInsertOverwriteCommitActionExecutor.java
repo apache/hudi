@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieInternalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.table.HoodieTable;
@@ -34,6 +35,7 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.apache.spark.Partitioner;
 
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -78,8 +80,17 @@ public class SparkInsertOverwriteCommitActionExecutor<T>
 
   @Override
   protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata) {
-    return HoodieJavaPairRDD.getJavaPairRDD(writeMetadata.getWriteStatuses().map(status -> status.getStat().getPartitionPath()).distinct().mapToPair(partitionPath ->
-        Pair.of(partitionPath, getAllExistingFileIds(partitionPath)))).collectAsMap();
+    if (writeMetadata.getWriteStatuses().isEmpty()) {
+      String staticOverwritePartition = config.getStringOrDefault(HoodieInternalConfig.STATIC_OVERWRITE_PARTITION_PATHS);
+      if (staticOverwritePartition == null || staticOverwritePartition.isEmpty()) {
+        return Collections.emptyMap();
+      } else {
+        return Collections.singletonMap(staticOverwritePartition, getAllExistingFileIds(staticOverwritePartition));
+      }
+    } else {
+      return HoodieJavaPairRDD.getJavaPairRDD(writeMetadata.getWriteStatuses().map(status -> status.getStat().getPartitionPath()).distinct().mapToPair(partitionPath ->
+          Pair.of(partitionPath, getAllExistingFileIds(partitionPath)))).collectAsMap();
+    }
   }
 
   protected List<String> getAllExistingFileIds(String partitionPath) {

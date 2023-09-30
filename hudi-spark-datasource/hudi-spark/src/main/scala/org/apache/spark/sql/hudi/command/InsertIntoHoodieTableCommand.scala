@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.command
 
+import org.apache.hudi.config.HoodieInternalConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.{HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.spark.internal.Logging
@@ -100,9 +101,13 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
         isOverWritePartition = true
       }
     }
-
-    val config = buildHoodieInsertConfig(catalogTable, sparkSession, isOverWritePartition, isOverWriteTable, partitionSpec, extraOptions)
-
+    var config = buildHoodieInsertConfig(catalogTable, sparkSession, isOverWritePartition, isOverWriteTable, partitionSpec, extraOptions)
+    val staticOverwritePartitionPathOpt = getStaticOverwritePartitionPath(catalogTable, partitionSpec, isOverWritePartition)
+    staticOverwritePartitionPathOpt match {
+      case Some(staticOverwritePartitionPath) =>
+        config = config ++ Map(HoodieInternalConfig.STATIC_OVERWRITE_PARTITION_PATHS.key() -> staticOverwritePartitionPath)
+      case _ =>
+    }
     val alignedQuery = alignQueryOutput(query, catalogTable, partitionSpec, sparkSession.sessionState.conf)
 
     val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, mode, config, Dataset.ofRows(sparkSession, alignedQuery))
@@ -116,6 +121,22 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     }
 
     success
+  }
+
+  private def getStaticOverwritePartitionPath(hoodieCatalogTable: HoodieCatalogTable,
+                                              partitionsSpec: Map[String, Option[String]],
+                                              isOverWritePartition: Boolean): Option[String] = {
+    if (isOverWritePartition) {
+      val staticPartitionValues = filterStaticPartitionValues(partitionsSpec)
+      val isStaticOverwritePartition = staticPartitionValues.keys.size == hoodieCatalogTable.partitionFields.length
+      if (isStaticOverwritePartition) {
+        Option.apply(makePartitionPath(hoodieCatalogTable, staticPartitionValues))
+      } else {
+        Option.empty
+      }
+    } else {
+      Option.empty
+    }
   }
 
   /**
