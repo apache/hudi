@@ -18,6 +18,8 @@
 
 package org.apache.hudi.io.storage;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
 import java.io.IOException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -37,6 +39,8 @@ public class HoodieSparkParquetStreamWriter implements HoodieSparkFileWriter, Au
   private final ParquetWriter<InternalRow> writer;
   private final HoodieRowParquetWriteSupport writeSupport;
 
+  private BufferedWriter writer1;
+
   public HoodieSparkParquetStreamWriter(FSDataOutputStream outputStream,
       HoodieRowParquetConfig parquetConfig) throws IOException {
     this.writeSupport = parquetConfig.getWriteSupport();
@@ -50,6 +54,7 @@ public class HoodieSparkParquetStreamWriter implements HoodieSparkFileWriter, Au
         .withWriterVersion(ParquetWriter.DEFAULT_WRITER_VERSION)
         .withConf(parquetConfig.getHadoopConf())
         .build();
+    writer1 = new BufferedWriter(new FileWriter("/Users/linliu/projects/hudi/log/stream.txt", true));
   }
 
   @Override
@@ -61,6 +66,9 @@ public class HoodieSparkParquetStreamWriter implements HoodieSparkFileWriter, Au
   public void writeRow(String key, InternalRow record) throws IOException {
     writer.write(record);
     writeSupport.add(UTF8String.fromString(key));
+    writer1.write("Using SparkParquetStreamWriter for: " + key);
+    writer1.newLine();
+    writer1.flush();
   }
 
   @Override
@@ -72,6 +80,7 @@ public class HoodieSparkParquetStreamWriter implements HoodieSparkFileWriter, Au
   @Override
   public void close() throws IOException {
     writer.close();
+    writer1.close();
   }
 
   private static class Builder<T> extends ParquetWriter.Builder<T, Builder<T>> {

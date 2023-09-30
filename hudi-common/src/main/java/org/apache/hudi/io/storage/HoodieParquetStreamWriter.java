@@ -31,6 +31,8 @@ import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.parquet.io.OutputFile;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
 import java.io.IOException;
 
 /**
@@ -42,6 +44,7 @@ public class HoodieParquetStreamWriter implements HoodieAvroFileWriter, AutoClos
 
   private final ParquetWriter<IndexedRecord> writer;
   private final HoodieAvroWriteSupport writeSupport;
+  private BufferedWriter writer1;
 
   public HoodieParquetStreamWriter(FSDataOutputStream outputStream,
                                    HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig) throws IOException {
@@ -56,6 +59,7 @@ public class HoodieParquetStreamWriter implements HoodieAvroFileWriter, AutoClos
         .withWriterVersion(ParquetWriter.DEFAULT_WRITER_VERSION)
         .withConf(parquetConfig.getHadoopConf())
         .build();
+    writer1 = new BufferedWriter(new FileWriter("/Users/linliu/projects/hudi/log/avrostream.txt", true));
   }
 
   @Override
@@ -67,6 +71,9 @@ public class HoodieParquetStreamWriter implements HoodieAvroFileWriter, AutoClos
   public void writeAvro(String key, IndexedRecord record) throws IOException {
     writer.write(record);
     writeSupport.add(key);
+    writer1.write("Using AvroParquetStreamWriter for: " + key);
+    writer1.newLine();
+    writer1.flush();
   }
 
   @Override

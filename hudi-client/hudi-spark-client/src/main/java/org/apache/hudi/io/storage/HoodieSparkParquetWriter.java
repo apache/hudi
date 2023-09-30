@@ -27,6 +27,8 @@ import org.apache.hudi.io.storage.row.HoodieRowParquetWriteSupport;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.unsafe.types.UTF8String;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.function.Function;
 
@@ -46,6 +48,7 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
   private final HoodieRowParquetWriteSupport writeSupport;
 
   private final Function<Long, String> seqIdGenerator;
+  private BufferedWriter writer;
 
   public HoodieSparkParquetWriter(Path file,
                                   HoodieRowParquetConfig parquetConfig,
@@ -61,6 +64,7 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
       Integer partitionId = taskContextSupplier.getPartitionIdSupplier().get();
       return HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);
     };
+    writer = new BufferedWriter(new FileWriter("/Users/linliu/projects/hudi/log/parquet.txt", true));
   }
 
   @Override
@@ -71,14 +75,22 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
 
       super.write(row);
       writeSupport.add(recordKey);
+      writer.write("Using SparkParquetWriter for: " + recordKey);
+      writer.newLine();
+      writer.flush();
     } else {
       super.write(row);
+      writer.write("Using SparkParquetWriter for: " + key.toString());
+      writer.newLine();
+      writer.flush();
     }
   }
 
   @Override
   public void writeRow(String recordKey, InternalRow row) throws IOException {
     super.write(row);
+    writer.write("Using SparkParquetWriter for: " + recordKey);
+    writer.newLine();
     if (populateMetaFields) {
       writeSupport.add(UTF8String.fromString(recordKey));
     }
@@ -86,6 +98,7 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
 
   @Override
   public void close() throws IOException {
+    writer.close();
     super.close();
   }
 

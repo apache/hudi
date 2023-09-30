@@ -26,6 +26,8 @@ import org.apache.hudi.common.model.HoodieKey;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
 import java.io.IOException;
 
 /**
@@ -44,6 +46,7 @@ public class HoodieAvroParquetWriter
   private final TaskContextSupplier taskContextSupplier;
   private final boolean populateMetaFields;
   private final HoodieAvroWriteSupport writeSupport;
+  private BufferedWriter writer;
 
   @SuppressWarnings({"unchecked", "rawtypes"})
   public HoodieAvroParquetWriter(Path file,
@@ -57,6 +60,7 @@ public class HoodieAvroParquetWriter
     this.instantTime = instantTime;
     this.taskContextSupplier = taskContextSupplier;
     this.populateMetaFields = populateMetaFields;
+    writer = new BufferedWriter(new FileWriter("/Users/linliu/projects/hudi/log/avroparquet.txt", true));
   }
 
   @Override
@@ -66,14 +70,23 @@ public class HoodieAvroParquetWriter
           taskContextSupplier.getPartitionIdSupplier().get(), getWrittenRecordCount(), fileName);
       super.write(avroRecord);
       writeSupport.add(key.getRecordKey());
+      writer.write("Using AvroParquetWriter for: " + key);
+      writer.newLine();
+      writer.flush();
     } else {
       super.write(avroRecord);
+      writer.write("Using AvroParquetWriter for: " + key);
+      writer.newLine();
+      writer.flush();
     }
   }
 
   @Override
   public void writeAvro(String key, IndexedRecord object) throws IOException {
     super.write(object);
+    writer.write("Using AvroParquetWriter for: " + key);
+    writer.newLine();
+    writer.flush();
     if (populateMetaFields) {
       writeSupport.add(key);
     }
@@ -82,5 +95,6 @@ public class HoodieAvroParquetWriter
   @Override
   public void close() throws IOException {
     super.close();
+    writer.close();
   }
 }

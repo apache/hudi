@@ -24,31 +24,41 @@ import org.apache.hudi.io.storage.HoodieBaseParquetWriter;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.unsafe.types.UTF8String;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
 import java.io.IOException;
 
 /**
  * Parquet's impl of {@link HoodieInternalRowFileWriter} to write {@link InternalRow}s.
  */
-public class HoodieInternalRowParquetWriter extends HoodieBaseParquetWriter<InternalRow>
+  public class HoodieInternalRowParquetWriter extends HoodieBaseParquetWriter<InternalRow>
     implements HoodieInternalRowFileWriter {
 
   private final HoodieRowParquetWriteSupport writeSupport;
+  private BufferedWriter writer;
 
   public HoodieInternalRowParquetWriter(Path file, HoodieParquetConfig<HoodieRowParquetWriteSupport> parquetConfig)
       throws IOException {
     super(file, parquetConfig);
 
     this.writeSupport = parquetConfig.getWriteSupport();
+    writer = new BufferedWriter(new FileWriter("/Users/linliu/projects/hudi/log/row.txt", true));
   }
 
   @Override
   public void writeRow(UTF8String key, InternalRow row) throws IOException {
     super.write(row);
     writeSupport.add(key);
+    writer.write("Using InternalRowParquetWriter for: " + key);
+    writer.newLine();
+    writer.flush();
   }
 
   @Override
   public void writeRow(InternalRow row) throws IOException {
     super.write(row);
+    writer.write("Using InternalRowParquetWriter for: " + row.getString(2));
+    writer.newLine();
+    writer.flush();
   }
 }

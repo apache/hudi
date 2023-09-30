@@ -74,6 +74,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -316,6 +317,43 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
 
     Option<HoodieInstant> commit = reloadedMetaClient.getActiveTimeline().getCommitTimeline().firstInstant();
     assertFalse(commit.isPresent());
+  }
+
+  protected void deleteRecordsFromMORTable(HoodieTableMetaClient metaClient, List<HoodieKey> keys, SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime,
+                                           boolean doExplicitCommit) throws IOException {
+    HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(metaClient);
+    JavaRDD<WriteStatus> statusesRdd = client.delete(jsc().parallelize(keys, 1), commitTime);
+    List<WriteStatus> statuses = statusesRdd.collect();
+    assertNoWriteErrors(statuses);
+    if (doExplicitCommit) {
+      client.commit(commitTime, statusesRdd);
+    }
+    assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(reloadedMetaClient.getFs(), new Path(reloadedMetaClient.getBasePath(), status.getStat().getPath())));
+
+    Option<HoodieInstant> deltaCommit = reloadedMetaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
+    assertTrue(deltaCommit.isPresent());
+    assertEquals(commitTime, deltaCommit.get().getTimestamp(),
+        "Latest Delta commit should match specified time");
+
+    Option<HoodieInstant> commit = reloadedMetaClient.getActiveTimeline().getCommitTimeline().firstInstant();
+    assertFalse(commit.isPresent());
+  }
+
+  protected List<FileStatus> listAllFilesInPartition(HoodieTable table, String partitionPath) throws IOException {
+    return Arrays.asList(HoodieTestTable.of(table.getMetaClient()).listAllFilesInPartition(partitionPath));
+  }
+
+  protected List<FileStatus> listAllBaseFilesInPartition(HoodieTable table, String partitionPath) throws IOException {
+    String baseFileExtension = table.getBaseFileExtension();
+    return listAllFilesInPartition(table, partitionPath).stream()
+        .filter(status -> status.getPath().getName().endsWith(baseFileExtension))
+        .collect(Collectors.toList());
+  }
+
+  protected List<FileStatus> listAllLogFilesInPartition(HoodieTable table, String partitionPath) throws IOException {
+    String logFileExtension = table.getLogFileFormat().getFileExtension();
+    return listAllFilesInPartition(table, partitionPath).stream()
+        .filter(status -> status.getPath().getName().endsWith(logFileExtension)).collect(Collectors.toList());
   }
 
   protected FileStatus[] listAllBaseFilesInPath(HoodieTable table) throws IOException {
