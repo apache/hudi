@@ -137,7 +137,8 @@ public class HoodieMergeOnReadSnapshotReader extends AbstractRealtimeRecordReade
         }
       }
     }
-    LOG.debug("Time taken to merge base file and log file records: {}", timer.endTimer());
+    long executionTime = timer.endTimer();
+    LOG.debug("Time taken to merge base file and log file records: {}", executionTime);
     this.recordsIterator = mergedRecordsByKey.values().iterator();
   }
 
