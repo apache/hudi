@@ -1033,7 +1033,7 @@ public class HoodieAvroUtils {
         break;
       case BYTES:
         if (oldSchema.getType() == Schema.Type.STRING) {
-          return (oldValue.toString()).getBytes(StandardCharsets.UTF_8);
+          return ByteBuffer.wrap((oldValue.toString()).getBytes(StandardCharsets.UTF_8));
         }
         break;
       case STRING:
@@ -1041,7 +1041,7 @@ public class HoodieAvroUtils {
           return String.valueOf(oldValue);
         }
         if (oldSchema.getType() == Schema.Type.BYTES) {
-          return String.valueOf(((byte[]) oldValue));
+          return String.valueOf(((ByteBuffer) oldValue));
         }
         if (oldSchema.getLogicalType() == LogicalTypes.date()) {
           return toJavaDate((Integer) oldValue).toString();
