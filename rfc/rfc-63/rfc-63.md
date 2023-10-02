@@ -37,8 +37,8 @@ JIRA: [HUDI-512](https://issues.apache.org/jira/browse/HUDI-512)
 
 In this RFC, we propose **Functional Indexes**, a new capability to
 Hudi's [multi-modal indexing](https://hudi.apache.org/blog/2022/05/17/Introducing-Multi-Modal-Index-for-the-Lakehouse-in-Apache-Hudi)
-subsystem that offers a compelling vision to support not only accelerating queries but also reshape partitions as
-another layer of the indexing system, abstracting them from the traditional fixed notion, while providing flexibility
+subsystem that offers a compelling vision to support not only accelerating queries but also reshape partitioning as
+another layer of the indexing system, abstracting them from the traditional notions, while providing flexibility
 and performance.
 
 ## Background
@@ -47,7 +47,7 @@ Hudi employs multi-modal indexing to optimize query performance. These indexes, 
 record-level indexing, cater to a diverse set of use cases, enabling efficient point lookups and reducing the data
 scanned during queries. This is usually done in two ways:
 
-- **Partition pruning**:  The partition pruning relies on a table with physical partitioning, such as Hive partitioning.
+- **Partition pruning**:  The partition pruning relies on a table with physical partitioning, such as Hive-style partitioning.
   A partitioned table uses a chosen column such as the date of a `timestamp` column and stores the rows with the same
   date to the files under the same folder or physical partition, such as `date=2022-10-01/`. When the predicate in a
   query references the partition column of the physical partitioning, the files in the partitions not matching the
@@ -55,7 +55,6 @@ scanned during queries. This is usually done in two ways:
   predicate `date between '2022-10-01' and '2022-10-02'`, the partition pruning only returns the files from two
   partitions, `2022-10-01` and `2022-10-02`, for further processing. The granularity of the pruning is at the partition
   level.
-
 
 - **Data Skipping**:  Skipping data at the file level, with the help of column stats or record-level index. For example,
   with column stats index containing minimum and maximum values of a column for each file, the files falling out of the
@@ -99,9 +98,9 @@ transforming the `ts` to the hour of day is not order-preserving, thus the file 
 the file-level column stats of the original column of `ts`. In this case, Hudi has to scan all the files for a
 day and push the predicate down when reading parquet files, increasing the amount of data to be scanned.
 
-### Use Case 2: Support for different storage layouts and view partition as index
+### Use Case 2: Support for different storage layouts and view partitioning as index
 
-Today, partitions are mainly viewed as a query optimization technique and partition pruning certainly helps to improve 
+Today, partitioning is mainly viewed as a query optimization technique and partition pruning certainly helps to improve 
 query performance. However, if we think about it, partitions are really a storage optimization technique. Partitions
 help you organize the data for your convenience, while balancing cloud storage scaling issues (e.g. throttling or having
 too many files/objects under one path). From a query optimization perspective, partitions are really just a coarse index. 
@@ -115,8 +114,8 @@ from how the data is queried. There can be different layouts:
    random-prefix1>path/to/table/partition1=abc`, `s3://<random_prefix2>path/to/table/partition1=xyz`.
 3. Files are stored across different buckets completely scattered on cloud storage e.g. `s3://a/b/c/f1`, `s3://x/y/f2`.
 4. Partitions can evolve. For instance, you have an old Hive table which is horribly partitioned, can we ensure that the
-   new data is not only partitioned well but queries able to efficiently skip data without rewriting the old data with
-   the new partition spec.
+   new data is not only partitioned well but queries able to efficiently skip data without rewriting the old data
+   (although rewriting the data might ultimately be needed for even acceptable query performance on old data).
 
 Consider a case where event logs are a stream of events from microservices and ingested into a raw event table. Each 
 event log contains `ts`, a timestamp column, and an associated organization ID (`org_id`). Most queries on the table are
@@ -203,8 +202,7 @@ ANSI-compliant and also present in [spark-sql](https://spark.apache.org/docs/lat
 
 ```sql
 -- PROPOSED SYNTAX WITH FUNCTION KEYWORD --
-CREATE
-[FUNCTION] INDEX index_name ON table_name [ USING index_type ] ( { column_name | expression } );
+CREATE [FUNCTION] INDEX index_name ON table_name [ USING index_type ] ( { column_name | expression } );
 -- Examples --
 CREATE FUNCTION INDEX last_name_idx ON employees (UPPER(last_name)); -- functional index using column stats for UPPER(last_name)
 CREATE FUNCTION INDEX datestr ON hudi_table (DATE_FORMAT(ts, '%Y-%m-%d')); -- functional index using column stats for DATE_FORMAT(ts, '%Y-%m-%d')
@@ -217,8 +215,8 @@ DROP INDEX last_name_idx;
 
 `index_name` - Required, should be validated by parser. The name will be used for the partition name in MT.
 
-`index_type` - Optional, `column_stats` if none provided and there are no functions and expressions in the command. Valid
-options could be BITMAP, COLUMN_STATS, LUCENE, etc. If `index_type` is not provided, and there are functions or
+`index_type` - Optional, `column_stats` (default) if omitted and there are no functions and expressions in the command. Valid
+options could be BLOOM_FILTER, RECORD_INDEX, BITMAP, COLUMN_STATS, LUCENE, etc. If `index_type` is not provided, and there are functions or
 expressions in the command then a functional index using column stats will be created.
 
 `expression` - simple scalar expressions or sql functions.
@@ -239,7 +237,7 @@ index in the table config). It can store the following metadata for each index.
 * Any other configuration or properties
 
 As mentioned above, the path to index definition will be added to `hoodie.properties` as a new config
-called `hoodie.table.index_defs.path`.
+called `hoodie.table.index.defs.path`.
 
 #### APIs
 
@@ -312,6 +310,7 @@ On receiving a query:
 
 1. Parse the query and index metadata (in `.index_defs`) to determine the relevant functional index is available or not.
 2. Lookup (point/range) index to determine:
+    * Which storage partitions to scan (using aggregated values from functional index)
     * Which files match functional index predicates
     * Where these files are physically located (irrespective of their storage layout)
 3. Use the physical paths derived from metadata to access and read the relevant data.
@@ -326,7 +325,6 @@ When the functional index is created using `column_stats` then the index will be
 are the hash of storage partition and file paths and values are the stats of the value after evaluating the expression.
 In this case, the reader will look up the `files` index first to prune partitions and then look up the functional index
 to skip files.
-
 
 Below are the concrete steps on how Hudi will intercept predicate in the query and use functional index whenever it can.
 
