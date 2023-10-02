@@ -341,6 +341,7 @@ SHOW PARTITIONS hudi_table;
 
 --Drop partition：
 ALTER TABLE hudi_table DROP PARTITION (dt='2021-12-09', hh='10');
+```
 
 ### Caveats 
 

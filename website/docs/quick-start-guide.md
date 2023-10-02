@@ -468,20 +468,18 @@ values={[
 
 ```scala
 // spark-shell
-// Check (https://gist.github.com/bhasudha/7ea07f2bb9abc5c6eb86dbd914eec4c6) for the custom payload class implementation used in below code
-// TODO: Replace gist link above with CustomMergeIntoConnector test implementation. Can be in examples folder.
-val updatesDf = spark.read.format("hudi").
+val adjustedFareDF = spark.read.format("hudi").
   load(basePath).limit(2).
-  withColumn("fare", col("fare") * 100).
-  withColumn("begin_lat",lit(-1.0)).
-  withColumn("begin_lon",lit(-1.0))
-updatesDf.write.format("hudi").
+  withColumn("fare", col("fare") * 10)
+adjustedFareDF.write.format("hudi").
 option("hoodie.datasource.write.payload.class","com.payloads.CustomMergeIntoConnector").
 mode(Append).
 save(basePath)
-// Notice Fare column has been updated but biginLat and beginLon didn't.
+// Notice Fare column has been updated but all other columns remain intact.
 spark.read.format("hudi").load(basePath).show()
 ```
+The `com.payloads.CustomMergeIntoConnector` adds adjusted fare values to the original table and preserves all other fields. 
+Refer [here](https://gist.github.com/bhasudha/7ea07f2bb9abc5c6eb86dbd914eec4c6) for sample implementation of `com.payloads.CustomMergeIntoConnector`.
 
 </TabItem>
 
@@ -489,18 +487,19 @@ spark.read.format("hudi").load(basePath).show()
 
 ```python
 # pyspark
-# Check the Java Tab for definition of custom payload class used in below code
-updatesDf = spark.read.format("hudi").load(basePath). \
-    limit(2).withColumn("fare", col("fare") * 100). \
-    withColumn("begin_lat",lit(-1.0)). \
-    withColumn("begin_lon",lit(-1.0))
-updatesDf.write.format("hudi"). \
+adjustedFareDF = spark.read.format("hudi").load(basePath). \
+    limit(2).withColumn("fare", col("fare") * 100)
+adjustedFareDF.write.format("hudi"). \
 option("hoodie.datasource.write.payload.class","com.payloads.CustomMergeIntoConnector"). \
 mode("append"). \
 save(basePath)
-# Notice Fare column has been updated but not beginLat and beginLon
+# Notice Fare column has been updated but all other columns remain intact.
 spark.read.format("hudi").load(basePath).show()
 ```
+
+The `com.payloads.CustomMergeIntoConnector` adds adjusted fare values to the original table and preserves all other fields.
+Refer [here](https://gist.github.com/bhasudha/7ea07f2bb9abc5c6eb86dbd914eec4c6) for sample implementation of `com.payloads.CustomMergeIntoConnector`.
+
 </TabItem>
 
 <TabItem value="sparksql">
@@ -555,7 +554,7 @@ values={[
 ```scala
 // spark-shell
 // Lets  delete rider: rider-D
-val deletesDF = spark.read.format("hudi").load(basePath).filter($"rider" === "rider-D")
+val deletesDF = spark.read.format("hudi").load(basePath).filter($"rider" === "rider-F")
 
 deletesDF.write.format("hudi").
   option(OPERATION_OPT_KEY, "delete").
@@ -586,7 +585,7 @@ DELETE FROM hudi_table WHERE uuid = '3f3d9565-7261-40e6-9b39-b8aa784f95e2';
 ```python
 # pyspark
 # Lets  delete rider: rider-D
-deletesDF = spark.read.format("hudi").load(basePath).filter("rider == 'rider-D'")
+deletesDF = spark.read.format("hudi").load(basePath).filter("rider == 'rider-F'")
 
 # issue deletes
 hudi_hard_delete_options = {
@@ -745,7 +744,7 @@ tripsIncrementalDF = spark.read.format("hudi"). \
   load(basePath)
 tripsIncrementalDF.createOrReplaceTempView("trips_incremental")
 
-spark.sql("SELECT `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts FROM trips_incremental WHERE fare > 20.0").show()
+spark.sql("SELECT `_hoodie_commit_time`, fare, rider, driver, uuid, ts FROM trips_incremental WHERE fare > 20.0").show()
 ```
 
 </TabItem>
@@ -990,7 +989,7 @@ values={[
 // spark-shell
 inserts.write.format("hudi").
 ...
-option(RECORDKEY_FIELD.key(), "city").
+option(RECORDKEY_FIELD.key(), "uuid").
 ...
 ```
 
@@ -1002,7 +1001,7 @@ option(RECORDKEY_FIELD.key(), "city").
 # pyspark
 hudi_options = {
   ...
-  'hoodie.datasource.write.recordkey.field': 'city'
+  'hoodie.datasource.write.recordkey.field': 'uuid'
 }
 
 inserts.write.format("hudi"). \
