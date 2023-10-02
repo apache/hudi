@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.SizeAwareDataInputStream;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -142,6 +143,13 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     // TODO AvroSparkReader need
     RecordIterator iterator = RecordIterator.getInstance(this, content);
     return new CloseableMappingIterator<>(iterator, data -> (HoodieRecord<T>) new HoodieAvroIndexedRecord(data));
+  }
+
+  @Override
+  protected <T> ClosableIterator<T> deserializeRecords(HoodieReaderContext<T> readerContext, byte[] content) throws IOException {
+    checkState(this.readerSchema != null, "Reader's schema has to be non-null");
+    RecordIterator iterator = RecordIterator.getInstance(this, content);
+    return new CloseableMappingIterator<>(iterator, data -> (T) data);
   }
 
   private static class RecordIterator implements ClosableIterator<IndexedRecord> {

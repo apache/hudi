@@ -18,14 +18,15 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
-import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hudi.common.model.HoodieRecord;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -35,6 +36,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -164,6 +166,52 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     return FilteringIterator.getInstance(allRecords, keySet, fullKey, this::getRecordKey);
   }
 
+  /**
+   * Returns all the records in the type of engine-specific record representation contained
+   * within this block in an iterator.
+   *
+   * @param readerContext {@link HoodieReaderContext} instance with type T.
+   * @param <T>           The type of engine-specific record representation to return.
+   * @return An iterator containing all records in specified type.
+   */
+  public final <T> ClosableIterator<T> getEngineRecordIterator(HoodieReaderContext<T> readerContext) {
+    if (records.isPresent()) {
+      return list2Iterator(unsafeCast(
+          records.get().stream().map(hoodieRecord -> (T) hoodieRecord.getData())
+              .collect(Collectors.toList())));
+    }
+    try {
+      return readRecordsFromBlockPayload(readerContext);
+    } catch (IOException io) {
+      throw new HoodieIOException("Unable to convert content bytes to records", io);
+    }
+  }
+
+  /**
+   * Batch get of keys of interest. Implementation can choose to either do full scan and return matched entries or
+   * do a seek based parsing and return matched entries.
+   *
+   * @param readerContext {@link HoodieReaderContext} instance with type T.
+   * @param keys          Keys of interest.
+   * @param fullKey       Whether the key is full or not.
+   * @param <T>           The type of engine-specific record representation to return.
+   * @return An iterator containing the records of interest in specified type.
+   */
+  public final <T> ClosableIterator<T> getEngineRecordIterator(HoodieReaderContext<T> readerContext, List<String> keys, boolean fullKey) {
+    boolean fullScan = keys.isEmpty();
+
+    // Otherwise, we fetch all the records and filter out all the records, but the
+    // ones requested
+    ClosableIterator<T> allRecords = getEngineRecordIterator(readerContext);
+    if (fullScan) {
+      return allRecords;
+    }
+
+    HashSet<String> keySet = new HashSet<>(keys);
+    return FilteringEngineRecordIterator.getInstance(allRecords, keySet, fullKey, record ->
+        Option.of(readerContext.getValue(record, readerSchema, keyFieldName).toString()));
+  }
+
   protected <T> ClosableIterator<HoodieRecord<T>> readRecordsFromBlockPayload(HoodieRecordType type) throws IOException {
     if (readBlockLazily && !getContent().isPresent()) {
       // read log block contents from disk
@@ -172,6 +220,20 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
     try {
       return deserializeRecords(getContent().get(), type);
+    } finally {
+      // Free up content to be GC'd by deflating the block
+      deflate();
+    }
+  }
+
+  protected <T> ClosableIterator<T> readRecordsFromBlockPayload(HoodieReaderContext<T> readerContext) throws IOException {
+    if (readBlockLazily && !getContent().isPresent()) {
+      // read log block contents from disk
+      inflate();
+    }
+
+    try {
+      return deserializeRecords(readerContext, getContent().get());
     } finally {
       // Free up content to be GC'd by deflating the block
       deflate();
@@ -187,6 +249,17 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   protected abstract byte[] serializeRecords(List<HoodieRecord> records) throws IOException;
 
   protected abstract <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(byte[] content, HoodieRecordType type) throws IOException;
+
+  /**
+   * Deserializes the content bytes of the data block to the records in engine-specific representation.
+   *
+   * @param readerContext Hudi reader context with engine-specific implementation.
+   * @param content       Content in byte array.
+   * @param <T>           Record type of engine-specific representation.
+   * @return {@link ClosableIterator} of records in engine-specific representation.
+   * @throws IOException upon deserialization error.
+   */
+  protected abstract <T> ClosableIterator<T> deserializeRecords(HoodieReaderContext<T> readerContext, byte[] content) throws IOException;
 
   public abstract HoodieLogBlockType getBlockType();
 
@@ -284,6 +357,68 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
     @Override
     public HoodieRecord<T> next() {
+      return this.next;
+    }
+  }
+
+  /**
+   * A {@link ClosableIterator} that supports filtering strategy with given keys on records
+   * of engine-specific type.
+   * User should supply the key extraction function for fetching string format keys.
+   *
+   * @param <T> The type of engine-specific record representation.
+   */
+  private static class FilteringEngineRecordIterator<T> implements ClosableIterator<T> {
+    private final ClosableIterator<T> nested; // nested iterator
+
+    private final Set<String> keys; // the filtering keys
+    private final boolean fullKey;
+
+    private final Function<T, Option<String>> keyExtract; // function to extract the key
+
+    private T next;
+
+    private FilteringEngineRecordIterator(ClosableIterator<T> nested,
+                                          Set<String> keys, boolean fullKey,
+                                          Function<T, Option<String>> keyExtract) {
+      this.nested = nested;
+      this.keys = keys;
+      this.fullKey = fullKey;
+      this.keyExtract = keyExtract;
+    }
+
+    public static <T> FilteringEngineRecordIterator<T> getInstance(
+        ClosableIterator<T> nested,
+        Set<String> keys,
+        boolean fullKey,
+        Function<T, Option<String>> keyExtract) {
+      return new FilteringEngineRecordIterator<>(nested, keys, fullKey, keyExtract);
+    }
+
+    @Override
+    public void close() {
+      this.nested.close();
+    }
+
+    @Override
+    public boolean hasNext() {
+      while (this.nested.hasNext()) {
+        this.next = this.nested.next();
+        String key = keyExtract.apply(this.next)
+            .orElseGet(() -> {
+              throw new IllegalStateException(String.format("Record without a key (%s)", this.next));
+            });
+
+        if (fullKey && keys.contains(key)
+            || !fullKey && keys.stream().anyMatch(key::startsWith)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    @Override
+    public T next() {
       return this.next;
     }
   }
