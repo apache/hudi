@@ -1120,7 +1120,7 @@ public class HoodieTableMetaClient implements Serializable {
 
       tableConfig.setAll(others);
 
-      if (!StringUtils.isNullOrEmpty(databaseName)) {
+      if (databaseName != null) {
         tableConfig.setValue(HoodieTableConfig.DATABASE_NAME, databaseName);
       }
       tableConfig.setValue(HoodieTableConfig.NAME, tableName);
