@@ -148,7 +148,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
 
   private static class RecordIterator implements ClosableIterator<IndexedRecord> {
 
-    private final Boolean whichImplementation = true;
+    private final Boolean whichImplementation = false;
     private byte[] content;
     private final SizeAwareDataInputStream dis;
     private final GenericDatumReader<IndexedRecord> reader;

@@ -58,6 +58,17 @@ public class SchemaChangeUtils {
     if (src.equals(dsr)) {
       return true;
     }
+    return isTypeUpdateAllowInternal(src, dsr);
+  }
+
+  public static boolean shouldPromoteType(Type src, Type dsr) {
+    if (src.equals(dsr) || src.isNestedType() || dsr.isNestedType()) {
+      return false;
+    }
+    return isTypeUpdateAllowInternal(src, dsr);
+  }
+
+  private static boolean isTypeUpdateAllowInternal(Type src, Type dsr) {
     switch (src.typeId()) {
       case INT:
         return dsr == Types.LongType.get() || dsr == Types.FloatType.get()

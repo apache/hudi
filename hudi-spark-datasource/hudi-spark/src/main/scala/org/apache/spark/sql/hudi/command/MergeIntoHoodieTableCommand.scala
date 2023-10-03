@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi.command
 import org.apache.avro.Schema
 import org.apache.hudi.AvroConversionUtils.convertStructTypeToAvroSchema
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.HoodieSparkSqlWriter.CANONICALIZE_NULLABLE
+import org.apache.hudi.HoodieSparkSqlWriter.CANONICALIZE_SCHEMA
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.common.util.StringUtils
@@ -655,7 +655,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       //       target table, ie partially updating)
       AVRO_SCHEMA_VALIDATE_ENABLE.key -> "false",
       RECONCILE_SCHEMA.key -> "false",
-      CANONICALIZE_NULLABLE.key -> "false",
+      CANONICALIZE_SCHEMA.key -> "false",
       SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> "true",
       HoodieSparkSqlWriter.SQL_MERGE_INTO_WRITES.key -> "true",
       HoodieWriteConfig.SPARK_SQL_MERGE_INTO_PREPPED_KEY -> enableOptimizedMerge,

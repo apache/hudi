@@ -52,7 +52,7 @@ import org.apache.hudi.exception.{HoodieException, HoodieWriteConflictException,
 import org.apache.hudi.hive.{HiveSyncConfigHolder, HiveSyncTool}
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
-import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils.reconcileNullability
+import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils.reconcileSchemaRequirements
 import org.apache.hudi.internal.schema.utils.{AvroSchemaEvolutionUtils, SerDeHelper}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName
@@ -90,10 +90,12 @@ object HoodieSparkSqlWriter {
    * null records from the table (for updating, for ex). Note, that this config has only effect when
    * 'hoodie.datasource.write.reconcile.schema' is set to false
    *
+   * Also does type promotion to to the tables schema if possible.
+   *
    * NOTE: This is an internal config that is not exposed to the public
    */
-  val CANONICALIZE_NULLABLE: ConfigProperty[Boolean] =
-    ConfigProperty.key("hoodie.internal.write.schema.canonicalize.nullable")
+  val CANONICALIZE_SCHEMA: ConfigProperty[Boolean] =
+    ConfigProperty.key("hoodie.internal.write.schema.canonicalize")
       .defaultValue(true)
 
   /**
@@ -506,12 +508,13 @@ object HoodieSparkSqlWriter {
         // relative to the table's one, by doing a (minor) reconciliation of the nullability constraints:
         // for ex, if in incoming schema column A is designated as non-null, but it's designated as nullable
         // in the table's one we want to proceed aligning nullability constraints w/ the table's schema
-        val shouldCanonicalizeNullable = opts.getOrDefault(CANONICALIZE_NULLABLE.key,
-          CANONICALIZE_NULLABLE.defaultValue.toString).toBoolean
+        // Also, we promote types to the latest table schema if possible.
+        val shouldCanonicalizeSchema = opts.getOrDefault(CANONICALIZE_SCHEMA.key,
+          CANONICALIZE_SCHEMA.defaultValue.toString).toBoolean
         val mergeIntoWrites = opts.getOrDefault(SQL_MERGE_INTO_WRITES.key(),
           SQL_MERGE_INTO_WRITES.defaultValue.toString).toBoolean
 
-        val canonicalizedSourceSchema = if (shouldCanonicalizeNullable) {
+        val canonicalizedSourceSchema = if (shouldCanonicalizeSchema) {
           canonicalizeSchema(sourceSchema, latestTableSchema, opts)
         } else {
           sourceSchema
@@ -698,12 +701,14 @@ object HoodieSparkSqlWriter {
    * <ol>
    *  <li>Nullability: making sure that nullability of the fields in the source schema is matching
    *  that of the latest table's ones</li>
+   *  <li>Type Promotion: if the source schema field has a different data type, but is able to be promoted, the promotion
+   *   will be applied</li>
    * </ol>
    *
    * TODO support casing reconciliation
    */
   private def canonicalizeSchema(sourceSchema: Schema, latestTableSchema: Schema, opts : Map[String, String]): Schema = {
-    reconcileNullability(sourceSchema, latestTableSchema, opts)
+    reconcileSchemaRequirements(sourceSchema, latestTableSchema, opts)
   }
 
   private def registerAvroSchemasWithKryo(sparkContext: SparkContext, targetAvroSchemas: Schema*): Unit = {

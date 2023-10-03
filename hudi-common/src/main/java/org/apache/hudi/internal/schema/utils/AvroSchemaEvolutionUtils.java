@@ -112,16 +112,16 @@ public class AvroSchemaEvolutionUtils {
   }
 
   /**
-   * Reconciles nullability requirements b/w {@code source} and {@code target} schemas,
+   * Reconciles nullability and datatype requirements b/w {@code source} and {@code target} schemas,
    * by adjusting these of the {@code source} schema to be in-line with the ones of the
    * {@code target} one
    *
    * @param sourceSchema source schema that needs reconciliation
    * @param targetSchema target schema that source schema will be reconciled against
    * @param opts config options
-   * @return schema (based off {@code source} one) that has nullability constraints reconciled
+   * @return schema (based off {@code source} one) that has nullability constraints and datatypes reconciled
    */
-  public static Schema reconcileNullability(Schema sourceSchema, Schema targetSchema, Map<String, String> opts) {
+  public static Schema reconcileSchemaRequirements(Schema sourceSchema, Schema targetSchema, Map<String, String> opts) {
     if (sourceSchema.getFields().isEmpty() || targetSchema.getFields().isEmpty()) {
       return sourceSchema;
     }
@@ -131,20 +131,32 @@ public class AvroSchemaEvolutionUtils {
 
     List<String> colNamesSourceSchema = sourceInternalSchema.getAllColsFullName();
     List<String> colNamesTargetSchema = targetInternalSchema.getAllColsFullName();
-    List<String> candidateUpdateCols = colNamesSourceSchema.stream()
+    List<String> nullableUpdateCols = colNamesSourceSchema.stream()
         .filter(f -> (("true".equals(opts.get(MAKE_NEW_COLUMNS_NULLABLE.key())) && !colNamesTargetSchema.contains(f))
                 || colNamesTargetSchema.contains(f) && sourceInternalSchema.findField(f).isOptional() != targetInternalSchema.findField(f).isOptional()
             )
         ).collect(Collectors.toList());
+    List<String> typeUpdateCols = colNamesSourceSchema.stream()
+        .filter(f -> (colNamesTargetSchema.contains(f) && SchemaChangeUtils.shouldPromoteType(sourceInternalSchema.findType(f), targetInternalSchema.findType(f)))
+        ).collect(Collectors.toList());
 
-    if (candidateUpdateCols.isEmpty()) {
+    if (nullableUpdateCols.isEmpty() && typeUpdateCols.isEmpty()) {
       return sourceSchema;
     }
 
     // Reconcile nullability constraints (by executing phony schema change)
-    TableChanges.ColumnUpdateChange schemaChange =
-        reduce(candidateUpdateCols, TableChanges.ColumnUpdateChange.get(sourceInternalSchema),
+    TableChanges.ColumnUpdateChange schemaChange = TableChanges.ColumnUpdateChange.get(sourceInternalSchema);
+    if (!nullableUpdateCols.isEmpty()) {
+      schemaChange = reduce(nullableUpdateCols, schemaChange,
           (change, field) -> change.updateColumnNullability(field, true));
+    }
+
+    // Reconcile type promotions
+    if (!typeUpdateCols.isEmpty()) {
+      schemaChange = reduce(typeUpdateCols, schemaChange,
+          (change, field) -> change.updateColumnType(field, targetInternalSchema.findType(field)));
+    }
+
 
     return convert(SchemaChangeUtils.applyTableChanges2Schema(sourceInternalSchema, schemaChange), sourceSchema.getFullName());
   }
