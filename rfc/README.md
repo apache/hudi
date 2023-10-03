@@ -34,7 +34,6 @@ The list of all RFCs can be found here.
 
 > Older RFC content is still [here](https://cwiki.apache.org/confluence/display/HUDI/RFC+Process).
 
-<<<<<<< HEAD
 | RFC Number | Title                                                                                                                                                                                                            | Status         |
 |------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------|
 | 1          | [CSV Source Support for Delta Streamer](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+01+%3A+CSV+Source+Support+for+Delta+Streamer)                                                                     | `COMPLETED`    |
