@@ -68,7 +68,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   private final boolean enablePointLookups;
 
   protected Schema readerSchema;
-  protected final boolean writeRecordPositions;
+  protected final boolean shouldWriteRecordPositions;
 
   //  Map of string schema to parsed schema.
   private static ConcurrentHashMap<String, Schema> schemaMap = new ConcurrentHashMap<>();
@@ -77,12 +77,12 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
    * NOTE: This ctor is used on the write-path (ie when records ought to be written into the log)
    */
   public HoodieDataBlock(List<HoodieRecord> records,
-                         boolean writeRecordPositions,
+                         boolean shouldWriteRecordPositions,
                          Map<HeaderMetadataType, String> header,
                          Map<HeaderMetadataType, String> footer,
                          String keyFieldName) {
     super(header, footer, Option.empty(), Option.empty(), null, false);
-    if (writeRecordPositions) {
+    if (shouldWriteRecordPositions) {
       records.sort((o1, o2) -> {
         long v1 = o1.getCurrentPosition();
         long v2 = o2.getCurrentPosition();
@@ -101,7 +101,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     this.keyFieldName = keyFieldName;
     // If no reader-schema has been provided assume writer-schema as one
     this.readerSchema = getWriterSchema(super.getLogBlockHeader());
-    this.writeRecordPositions = writeRecordPositions;
+    this.shouldWriteRecordPositions = shouldWriteRecordPositions;
     this.enablePointLookups = false;
   }
 
@@ -118,8 +118,8 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
                             String keyFieldName,
                             boolean enablePointLookups) {
     super(headers, footer, blockContentLocation, content, inputStream, readBlockLazily);
-    // Setting `writeRecordPositions` to false as this constructor is only used by the reader
-    this.writeRecordPositions = false;
+    // Setting `shouldWriteRecordPositions` to false as this constructor is only used by the reader
+    this.shouldWriteRecordPositions = false;
     this.records = Option.empty();
     this.keyFieldName = keyFieldName;
     // If no reader-schema has been provided assume writer-schema as one

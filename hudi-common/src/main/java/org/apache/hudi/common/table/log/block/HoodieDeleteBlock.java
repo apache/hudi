@@ -70,15 +70,15 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
   private static final Lazy<HoodieDeleteRecord.Builder> HOODIE_DELETE_RECORD_BUILDER_STUB =
       Lazy.lazily(HoodieDeleteRecord::newBuilder);
 
-  private final boolean writeRecordPositions;
+  private final boolean shouldWriteRecordPositions;
   // Records to delete, sorted based on the record position if writing record position to the log block header
   private DeleteRecord[] recordsToDelete;
 
   public HoodieDeleteBlock(List<Pair<DeleteRecord, Long>> recordsToDelete,
-                           boolean writeRecordPositions,
+                           boolean shouldWriteRecordPositions,
                            Map<HeaderMetadataType, String> header) {
-    this(Option.empty(), null, false, Option.empty(), header, new HashMap<>(), writeRecordPositions);
-    if (writeRecordPositions && !recordsToDelete.isEmpty()) {
+    this(Option.empty(), null, false, Option.empty(), header, new HashMap<>(), shouldWriteRecordPositions);
+    if (shouldWriteRecordPositions && !recordsToDelete.isEmpty()) {
       recordsToDelete.sort((o1, o2) -> {
         long v1 = o1.getRight();
         long v2 = o2.getRight();
@@ -99,15 +99,15 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
   public HoodieDeleteBlock(Option<byte[]> content, FSDataInputStream inputStream, boolean readBlockLazily,
                            Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
                            Map<HeaderMetadataType, String> footer) {
-    // Setting `writeRecordPositions` to false as this constructor is only used by the reader
+    // Setting `shouldWriteRecordPositions` to false as this constructor is only used by the reader
     this(content, inputStream, readBlockLazily, blockContentLocation, header, footer, false);
   }
 
   HoodieDeleteBlock(Option<byte[]> content, FSDataInputStream inputStream, boolean readBlockLazily,
                     Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
-                    Map<HeaderMetadataType, String> footer, boolean writeRecordPositions) {
+                    Map<HeaderMetadataType, String> footer, boolean shouldWriteRecordPositions) {
     super(header, footer, blockContentLocation, content, inputStream, readBlockLazily);
-    this.writeRecordPositions = writeRecordPositions;
+    this.shouldWriteRecordPositions = shouldWriteRecordPositions;
   }
 
   @Override

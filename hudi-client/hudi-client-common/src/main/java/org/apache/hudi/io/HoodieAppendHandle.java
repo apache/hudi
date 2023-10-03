@@ -658,19 +658,19 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private static HoodieLogBlock getBlock(HoodieWriteConfig writeConfig,
                                          HoodieLogBlock.HoodieLogBlockType logDataBlockFormat,
                                          List<HoodieRecord> records,
-                                         boolean writeRecordPositions,
+                                         boolean shouldWriteRecordPositions,
                                          Map<HeaderMetadataType, String> header,
                                          String keyField) {
     switch (logDataBlockFormat) {
       case AVRO_DATA_BLOCK:
-        return new HoodieAvroDataBlock(records, writeRecordPositions, header, keyField);
+        return new HoodieAvroDataBlock(records, shouldWriteRecordPositions, header, keyField);
       case HFILE_DATA_BLOCK:
         return new HoodieHFileDataBlock(
             records, header, writeConfig.getHFileCompressionAlgorithm(), new Path(writeConfig.getBasePath()));
       case PARQUET_DATA_BLOCK:
         return new HoodieParquetDataBlock(
             records,
-            writeRecordPositions,
+            shouldWriteRecordPositions,
             header,
             keyField,
             writeConfig.getParquetCompressionCodec(),
