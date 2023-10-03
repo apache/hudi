@@ -3102,8 +3102,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder writeRecordPositions(boolean writeRecordPositions) {
-      writeConfig.setValue(WRITE_RECORD_POSITIONS, String.valueOf(writeRecordPositions));
+    public Builder withWriteRecordPositionsEnabled(boolean shouldWriteRecordPositions) {
+      writeConfig.setValue(WRITE_RECORD_POSITIONS, String.valueOf(shouldWriteRecordPositions));
       return this;
     }
 

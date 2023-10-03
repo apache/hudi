@@ -84,11 +84,11 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
   }
 
   public HoodieAvroDataBlock(@Nonnull List<HoodieRecord> records,
-                             boolean writeRecordPositions,
+                             boolean shouldWriteRecordPositions,
                              @Nonnull Map<HeaderMetadataType, String> header,
                              @Nonnull String keyField
   ) {
-    super(records, writeRecordPositions, header, new HashMap<>(), keyField);
+    super(records, shouldWriteRecordPositions, header, new HashMap<>(), keyField);
   }
 
   @Override
