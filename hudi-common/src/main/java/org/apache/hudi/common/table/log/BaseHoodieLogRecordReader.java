@@ -44,6 +44,7 @@ import org.apache.hudi.internal.schema.InternalSchema;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
+import org.roaringbitmap.longlong.Roaring64NavigableMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -139,6 +140,8 @@ public abstract class BaseHoodieLogRecordReader<T> {
   // Use scanV2 method.
   private final boolean enableOptimizedLogBlocksScan;
 
+  private final boolean shouldUseRecordPositions;
+
   protected BaseHoodieLogRecordReader(HoodieReaderContext readerContext,
                                       FileSystem fs, String basePath, List<String> logFilePaths,
                                       Schema readerSchema, String latestInstantTime, boolean readBlocksLazily,
@@ -148,6 +151,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
                                       InternalSchema internalSchema,
                                       Option<String> keyFieldOverride,
                                       boolean enableOptimizedLogBlocksScan,
+                                      boolean shouldUseRecordPositions,
                                       HoodieRecordMerger recordMerger) {
     this.readerContext = readerContext;
     this.readerSchema = readerSchema;
@@ -174,6 +178,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
     this.forceFullScan = forceFullScan;
     this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
     this.enableOptimizedLogBlocksScan = enableOptimizedLogBlocksScan;
+    this.shouldUseRecordPositions = shouldUseRecordPositions;
 
     if (keyFieldOverride.isPresent()) {
       // NOTE: This branch specifically is leveraged handling Metadata Table
@@ -765,12 +770,16 @@ public abstract class BaseHoodieLogRecordReader<T> {
    */
   public abstract void processNextRecord(T record, Map<String, Object> metadata) throws Exception;
 
+  public abstract void processNextRecord(T record, Map<String, Object> metadata, Option<Long> position) throws Exception;
+
   /**
    * Process next deleted record.
    *
    * @param deleteRecord Deleted record(hoodie key and ordering value)
    */
   protected abstract void processNextDeletedRecord(DeleteRecord deleteRecord);
+
+  protected abstract void processNextDeletePosition(long position);
 
   /**
    * Process the set of log blocks belonging to the last instant which is read fully.
@@ -788,7 +797,18 @@ public abstract class BaseHoodieLogRecordReader<T> {
           processDataBlock((HoodieDataBlock) lastBlock, keySpecOpt);
           break;
         case DELETE_BLOCK:
-          Arrays.stream(((HoodieDeleteBlock) lastBlock).getRecordsToDelete()).forEach(this::processNextDeletedRecord);
+          HoodieDeleteBlock deleteBlock = (HoodieDeleteBlock) lastBlock;
+          if (shouldUseRecordPositions) {
+            Roaring64NavigableMap recordPositions = deleteBlock.getRecordPositions();
+            if (recordPositions != null && !recordPositions.isEmpty()) {
+              recordPositions.iterator().forEachRemaining(this::processNextDeletePosition);
+            } else {
+              // fallback to old behavior
+              Arrays.stream(deleteBlock.getRecordsToDelete()).forEach(this::processNextDeletedRecord);
+            }
+          } else {
+            Arrays.stream(deleteBlock.getRecordsToDelete()).forEach(this::processNextDeletedRecord);
+          }
           break;
         case CORRUPT_BLOCK:
           LOG.warn("Found a corrupt block which was not rolled back");
