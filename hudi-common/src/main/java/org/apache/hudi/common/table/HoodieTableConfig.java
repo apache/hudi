@@ -91,7 +91,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> DATABASE_NAME = ConfigProperty
       .key("hoodie.database.name")
-      .noDefaultValue()
+      .defaultValue("default")
       .withDocumentation("Database name that will be used for incremental query.If different databases have the same table name during incremental query, "
           + "we can set it to limit the table name under a specific database");
 
@@ -528,7 +528,7 @@ public class HoodieTableConfig extends HoodieConfig {
       throw new IllegalArgumentException(NAME.key() + " property needs to be specified");
     }
     String table = props.getProperty(NAME.key());
-    String database = props.getProperty(DATABASE_NAME.key(), "");
+    String database = props.getProperty(DATABASE_NAME.key(), DATABASE_NAME.defaultValue());
     return BinaryUtil.generateChecksum(getUTF8Bytes(String.format(TABLE_CHECKSUM_FORMAT, database, table)));
   }
 
@@ -663,7 +663,7 @@ public class HoodieTableConfig extends HoodieConfig {
    * Read the database name.
    */
   public String getDatabaseName() {
-    return getString(DATABASE_NAME);
+    return getStringOrDefault(DATABASE_NAME);
   }
 
   /**
