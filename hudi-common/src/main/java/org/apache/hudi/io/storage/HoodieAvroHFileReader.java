@@ -60,13 +60,13 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
-import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
  * NOTE: PLEASE READ DOCS & COMMENTS CAREFULLY BEFORE MAKING CHANGES
@@ -193,8 +193,8 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
    */
   @Override
   public Set<Pair<String, Long>> filterRowKeys(Set<String> candidateRowKeys) {
-    checkState(candidateRowKeys instanceof TreeSet,
-        String.format("HFile reader expects a TreeSet as iterating over ordered keys is more performant, got (%s)", candidateRowKeys.getClass().getSimpleName()));
+    // candidateRowKeys must be sorted
+    SortedSet<String> sortedCandidateRowKeys = new TreeSet<>(candidateRowKeys);
 
     synchronized (sharedLock) {
       if (!sharedScanner.isPresent()) {
@@ -202,7 +202,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
         // by default, to minimize amount of traffic to the underlying storage
         sharedScanner = Option.of(getHFileScanner(getSharedHFileReader(), true));
       }
-      return candidateRowKeys.stream()
+      return sortedCandidateRowKeys.stream()
           .filter(k -> {
             try {
               return isKeyAvailable(k, sharedScanner.get());

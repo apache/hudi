@@ -108,15 +108,6 @@ public class HoodieStorageConfig extends HoodieConfig {
           + "to be appended to a log file. This helps to make sure the data appended to the log file is broken up "
           + "into sizable blocks to prevent from OOM errors. This size should be greater than the JVM memory.");
 
-  public static final ConfigProperty<Boolean> LOGFILE_WRITE_RECORD_POSITIONS = ConfigProperty
-      .key("hoodie.logfile.write.record.positions")
-      .defaultValue(false)
-      .markAdvanced()
-      .sinceVersion("1.0.0")
-      .withDocumentation("Whether to write record positions to the log block header for data "
-          + "blocks containing updates and delete blocks. The record positions can be used to "
-          + "improve the performance merging records from base and log files.");
-
   public static final ConfigProperty<String> PARQUET_COMPRESSION_RATIO_FRACTION = ConfigProperty
       .key("hoodie.parquet.compression.ratio")
       .defaultValue(String.valueOf(0.1))
@@ -401,11 +392,6 @@ public class HoodieStorageConfig extends HoodieConfig {
 
     public Builder logFileMaxSize(long logFileSize) {
       storageConfig.setValue(LOGFILE_MAX_SIZE, String.valueOf(logFileSize));
-      return this;
-    }
-
-    public Builder logFileWriteRecordPositions(boolean writeRecordPositions) {
-      storageConfig.setValue(LOGFILE_WRITE_RECORD_POSITIONS, String.valueOf(writeRecordPositions));
       return this;
     }
 

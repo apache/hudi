@@ -88,11 +88,11 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private static final int NUMBER_OF_RECORDS_TO_ESTIMATE_RECORD_SIZE = 100;
 
   protected final String fileId;
-  private final boolean writeRecordPositions;
+  private final boolean shouldWriteRecordPositions;
   // Buffer for holding records in memory before they are flushed to disk
   private final List<HoodieRecord> recordList = new ArrayList<>();
-  // Buffer for holding records (to be deleted) in memory before they are flushed to disk
-  private final List<Pair<DeleteRecord, Long>> recordsToDelete = new ArrayList<>();
+  // Buffer for holding records (to be deleted), along with their position in log block, in memory before they are flushed to disk
+  private final List<Pair<DeleteRecord, Long>> recordsToDeleteWithPositions = new ArrayList<>();
   // Incoming records to be written to logs.
   protected Iterator<HoodieRecord<T>> recordItr;
   // Writer to log into the file group's latest slice.
@@ -157,7 +157,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     this.statuses = new ArrayList<>();
     this.recordProperties.putAll(config.getProps());
     this.attemptNumber = taskContextSupplier.getAttemptNumberSupplier().get();
-    this.writeRecordPositions = config.shouldLogFileWriteRecordPositions();
+    this.shouldWriteRecordPositions = config.shouldWriteRecordPositions();
   }
 
   public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
@@ -462,13 +462,13 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             ? HoodieRecord.RECORD_KEY_METADATA_FIELD
             : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
 
-        blocks.add(getBlock(config, pickLogDataBlockFormat(), recordList, writeRecordPositions,
+        blocks.add(getBlock(config, pickLogDataBlockFormat(), recordList, shouldWriteRecordPositions,
             getUpdatedHeader(header, blockSequenceNumber++, attemptNumber, config,
             addBlockIdentifier()), keyField));
       }
 
-      if (appendDeleteBlocks && recordsToDelete.size() > 0) {
-        blocks.add(new HoodieDeleteBlock(recordsToDelete, writeRecordPositions,
+      if (appendDeleteBlocks && recordsToDeleteWithPositions.size() > 0) {
+        blocks.add(new HoodieDeleteBlock(recordsToDeleteWithPositions, shouldWriteRecordPositions,
             getUpdatedHeader(header, blockSequenceNumber++, attemptNumber, config,
             addBlockIdentifier())));
       }
@@ -478,7 +478,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         processAppendResult(appendResult, recordList);
         recordList.clear();
         if (appendDeleteBlocks) {
-          recordsToDelete.clear();
+          recordsToDeleteWithPositions.clear();
         }
       }
     } catch (Exception e) {
@@ -599,8 +599,8 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         LOG.error("Error writing record  " + indexedRecord.get(), e);
       }
     } else {
-      long position = writeRecordPositions ? record.getCurrentPosition() : -1L;
-      recordsToDelete.add(Pair.of(DeleteRecord.create(record.getKey(), orderingVal), position));
+      long position = shouldWriteRecordPositions ? record.getCurrentPosition() : -1L;
+      recordsToDeleteWithPositions.add(Pair.of(DeleteRecord.create(record.getKey(), orderingVal), position));
     }
     numberOfRecords++;
   }

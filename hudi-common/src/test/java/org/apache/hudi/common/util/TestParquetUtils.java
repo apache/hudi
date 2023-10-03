@@ -149,7 +149,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
 
     // Read and verify
     List<Pair<HoodieKey, Long>> fetchedRows =
-        parquetUtils.fetchHoodieKeysAndPositions(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath));
+        parquetUtils.fetchRecordKeysWithPositions(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath));
     assertEquals(rowKeys.size(), fetchedRows.size(), "Total count does not match");
 
     for (Pair<HoodieKey, Long> entry : fetchedRows) {
@@ -175,7 +175,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
 
     // Read and verify
     List<Pair<HoodieKey, Long>> fetchedRows =
-        parquetUtils.fetchHoodieKeysAndPositions(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath),
+        parquetUtils.fetchRecordKeysWithPositions(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath),
             Option.of(new TestBaseKeyGen("abc", "def")));
     assertEquals(rowKeys.size(), fetchedRows.size(), "Total count does not match");
 
