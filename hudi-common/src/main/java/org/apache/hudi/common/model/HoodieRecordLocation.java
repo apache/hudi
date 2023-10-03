@@ -96,7 +96,7 @@ public class HoodieRecordLocation implements Serializable, KryoSerializable {
     this.fileId = fileId;
   }
 
-  public boolean isPositionValid() {
+  public static boolean isPositionValid(long position) {
     return position > INVALID_POSITION;
   }
 

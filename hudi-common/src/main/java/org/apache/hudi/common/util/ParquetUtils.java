@@ -148,8 +148,8 @@ public class ParquetUtils extends BaseFileUtils {
    * @return {@link List} of pairs of {@link HoodieKey} and row position fetched from the parquet file
    */
   @Override
-  public List<Pair<HoodieKey, Long>> fetchHoodieKeysAndPositions(Configuration configuration, Path filePath) {
-    return fetchHoodieKeysAndPositions(configuration, filePath, Option.empty());
+  public List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(Configuration configuration, Path filePath) {
+    return fetchRecordKeysWithPositions(configuration, filePath, Option.empty());
   }
 
   @Override
@@ -196,7 +196,7 @@ public class ParquetUtils extends BaseFileUtils {
    * @return {@link List} of pairs of {@link HoodieKey} and row position fetched from the parquet file
    */
   @Override
-  public List<Pair<HoodieKey, Long>> fetchHoodieKeysAndPositions(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
     List<Pair<HoodieKey, Long>> hoodieKeysAndPositions = new ArrayList<>();
     long position = 0;
     try (ClosableIterator<HoodieKey> iterator = getHoodieKeyIterator(configuration, filePath, keyGeneratorOpt)) {

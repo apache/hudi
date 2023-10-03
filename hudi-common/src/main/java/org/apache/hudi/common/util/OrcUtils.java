@@ -108,7 +108,7 @@ public class OrcUtils extends BaseFileUtils {
    * @return {@link List} of {@link HoodieKey}s fetched from the ORC file
    */
   @Override
-  public List<Pair<HoodieKey, Long>> fetchHoodieKeysAndPositions(Configuration configuration, Path filePath) {
+  public List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(Configuration configuration, Path filePath) {
     try {
       if (!filePath.getFileSystem(configuration).exists(filePath)) {
         return Collections.emptyList();
@@ -128,7 +128,7 @@ public class OrcUtils extends BaseFileUtils {
   }
 
   @Override
-  public List<Pair<HoodieKey, Long>> fetchHoodieKeysAndPositions(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
     throw new UnsupportedOperationException("Custom key generator is not supported yet");
   }
 

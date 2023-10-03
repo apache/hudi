@@ -40,6 +40,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.model.HoodieRecordLocation.isPositionValid;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -87,7 +88,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
         long v2 = o2.getCurrentPosition();
         return Long.compare(v1, v2);
       });
-      if (records.get(0).getCurrentPosition() > -1L) {
+      if (isPositionValid(records.get(0).getCurrentPosition())) {
         addRecordPositionsToHeader(
             records.stream().map(HoodieRecord::getCurrentPosition).collect(Collectors.toSet()),
             records.size());

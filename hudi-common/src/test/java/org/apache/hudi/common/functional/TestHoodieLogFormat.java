@@ -2839,7 +2839,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       String content = LogReaderUtils.encodePositions(positions);
       header.put(HeaderMetadataType.RECORD_POSITIONS, content);
     }
-    HoodieLogBlock logBlock = new HoodieDeleteBlock(Collections.emptyList(), false, header);
+    HoodieLogBlock logBlock = new HoodieDeleteBlock(Collections.emptyList(), addRecordPositionsHeader, header);
     if (addRecordPositionsHeader) {
       TestLogReaderUtils.assertPositionEquals(positions, logBlock.getRecordPositions());
     }

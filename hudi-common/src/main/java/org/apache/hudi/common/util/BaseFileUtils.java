@@ -182,7 +182,7 @@ public abstract class BaseFileUtils {
    * @param filePath      The data file path
    * @return {@link List} of pairs of {@link HoodieKey} and position fetched from the data file
    */
-  public abstract List<Pair<HoodieKey, Long>> fetchHoodieKeysAndPositions(Configuration configuration, Path filePath);
+  public abstract List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(Configuration configuration, Path filePath);
 
   /**
    * Provides a closable iterator for reading the given data file.
@@ -209,7 +209,7 @@ public abstract class BaseFileUtils {
    * @param keyGeneratorOpt instance of KeyGenerator.
    * @return {@link List} of pairs of {@link HoodieKey} and position fetched from the data file
    */
-  public abstract List<Pair<HoodieKey, Long>> fetchHoodieKeysAndPositions(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt);
+  public abstract List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt);
 
   /**
    * Read the Avro schema of the data file.

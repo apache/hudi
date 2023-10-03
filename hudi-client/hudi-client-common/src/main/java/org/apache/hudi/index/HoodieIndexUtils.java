@@ -61,7 +61,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.TreeSet;
 
 import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.table.action.commit.HoodieDeleteHelper.createDeleteRecord;
@@ -184,7 +183,7 @@ public class HoodieIndexUtils {
       // Load all rowKeys from the file, to double-confirm
       if (!candidateRecordKeys.isEmpty()) {
         HoodieTimer timer = HoodieTimer.start();
-        Set<Pair<String, Long>> fileRowKeys = fileReader.filterRowKeys(new TreeSet<>(candidateRecordKeys));
+        Set<Pair<String, Long>> fileRowKeys = fileReader.filterRowKeys(Collections.singleton(candidateRecordKeys));
         foundRecordKeys.addAll(fileRowKeys);
         LOG.info(String.format("Checked keys against file %s, in %d ms. #candidates (%d) #found (%d)", filePath,
             timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size()));
