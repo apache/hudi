@@ -64,7 +64,7 @@ You can follow the instructions on this [page](https://github.com/apache/hudi/bl
 
 This is the first step in building your data lake and there are many choices here to load the data into our open lakehouse. I’m going to go with one of the Hudi’s native tools called Delta Streamer since all the ingestion features are pre-built and battle-tested in production at scale.
 
-Hudi’s [DeltaStreamer](https://hudi.apache.org/docs/hoodie_deltastreamer) does the EL in ELT (Extract, Load, Transform) processes – it’s extremely good at extracting, loading, and optionally [transforming data](https://hudi.apache.org/docs/transforms) that’s already loaded into your lakehouse.
+Hudi’s [DeltaStreamer](https://hudi.apache.org/docs/hoodie_streaming_ingestion) does the EL in ELT (Extract, Load, Transform) processes – it’s extremely good at extracting, loading, and optionally [transforming data](https://hudi.apache.org/docs/transforms) that’s already loaded into your lakehouse.
 
 ## Step 2: How to configure hudi with the dbt project?
 

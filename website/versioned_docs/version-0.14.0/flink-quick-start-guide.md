@@ -10,10 +10,10 @@ This page introduces Flink-Hudi integration. We can feel the unique charm of how
 This guide helps you quickly start using Flink on Hudi, and learn different modes for reading/writing Hudi by Flink:
 
 - **Quick Start** : Read [Quick Start](#quick-start) to get started quickly Flink sql client to write to(read from) Hudi.
-- **Configuration** : For [Global Configuration](/docs/next/flink_tuning#global-configurations), sets up through `$FLINK_HOME/conf/flink-conf.yaml`. For per job configuration, sets up through [Table Option](/docs/next/flink_tuning#table-options).
-- **Writing Data** : Flink supports different modes for writing, such as [CDC Ingestion](/docs/hoodie_deltastreamer#cdc-ingestion), [Bulk Insert](/docs/hoodie_deltastreamer#bulk-insert), [Index Bootstrap](/docs/hoodie_deltastreamer#index-bootstrap), [Changelog Mode](/docs/hoodie_deltastreamer#changelog-mode) and [Append Mode](/docs/hoodie_deltastreamer#append-mode).
+- **Configuration** : For [Global Configuration](/docs/flink_tuning#global-configurations), sets up through `$FLINK_HOME/conf/flink-conf.yaml`. For per job configuration, sets up through [Table Option](/docs/flink_tuning#table-options).
+- **Writing Data** : Flink supports different modes for writing, such as [CDC Ingestion](/docs/hoodie_streaming_ingestion#cdc-ingestion), [Bulk Insert](/docs/hoodie_streaming_ingestion#bulk-insert), [Index Bootstrap](/docs/hoodie_streaming_ingestion#index-bootstrap), [Changelog Mode](/docs/hoodie_streaming_ingestion#changelog-mode) and [Append Mode](/docs/hoodie_streaming_ingestion#append-mode).
 - **Querying Data** : Flink supports different modes for reading, such as [Streaming Query](/docs/querying_data#streaming-query) and [Incremental Query](/docs/querying_data#incremental-query).
-- **Tuning** : For write/read tasks, this guide gives some tuning suggestions, such as [Memory Optimization](/docs/next/flink_tuning#memory-optimization) and [Write Rate Limit](/docs/next/flink_tuning#write-rate-limit).
+- **Tuning** : For write/read tasks, this guide gives some tuning suggestions, such as [Memory Optimization](/docs/flink_tuning#memory-optimization) and [Write Rate Limit](/docs/flink_tuning#write-rate-limit).
 - **Optimization**: Offline compaction is supported [Offline Compaction](/docs/compaction#flink-offline-compaction).
 - **Query Engines**: Besides Flink, many other engines are integrated: [Hive Query](/docs/syncing_metastore#flink-setup), [Presto Query](/docs/querying_data#prestodb).
 - **Catalog**: A Hudi specific catalog is supported: [Hudi Catalog](/docs/querying_data/#hudi-catalog).
@@ -51,7 +51,7 @@ Start a standalone Flink cluster within hadoop environment.
 Before you start up the cluster, we suggest to config the cluster as follows:
 
 - in `$FLINK_HOME/conf/flink-conf.yaml`, add config option `taskmanager.numberOfTaskSlots: 4`
-- in `$FLINK_HOME/conf/flink-conf.yaml`, [add other global configurations according to the characteristics of your task](/docs/next/flink_tuning#global-configurations)
+- in `$FLINK_HOME/conf/flink-conf.yaml`, [add other global configurations according to the characteristics of your task](/docs/flink_tuning#global-configurations)
 - in `$FLINK_HOME/conf/workers`, add item `localhost` as 4 lines so that there are 4 workers on the local cluster
 
 Now starts the cluster:
@@ -370,7 +370,7 @@ Only **batch** queries on Hudi table with primary key work correctly.
 :::
 
 ## Where To Go From Here?
-Check out the [Flink Setup](/docs/next/flink_tuning) how-to page for deeper dive into configuration settings. 
+Check out the [Flink Setup](/docs/flink_tuning) how-to page for deeper dive into configuration settings. 
 
 If you are relatively new to Apache Hudi, it is important to be familiar with a few core concepts:
   - [Hudi Timeline](/docs/next/timeline) – How Hudi manages transactions and other table services
