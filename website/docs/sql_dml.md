@@ -12,7 +12,7 @@ import TabItem from '@theme/TabItem';
 SparkSQL provides several Data Manipulation Language (DML) actions for interacting with Hudi tables. These operations allow you to insert, update, merge and delete data 
 from your Hudi tables. Let's explore them one by one.
 
-Please refer to [SQL DDL](/docs/sql_ddl) for creating Hudi tables using SQL.
+Please refer to [SQL DDL](/docs/next/sql_ddl) for creating Hudi tables using SQL.
 
 ### Insert Into
 

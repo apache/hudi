@@ -220,7 +220,7 @@ CREATE TABLE hudi_table (
 PARTITIONED BY (city);
 ```
 
-For more options for creating Hudi tables, please refer to [SQL DDL](/docs/sql_ddl) reference guide.  
+For more options for creating Hudi tables, please refer to [SQL DDL](/docs/next/sql_ddl) reference guide.  
 
 </TabItem>
 
@@ -1116,7 +1116,7 @@ For alter table commands, check out [this](/docs/next/sql_ddl#spark-alter-table)
 
 Hudi provides industry-leading performance and functionality for streaming data. 
 
-**Hudi Streamer** - Hudi provides an incremental ingestion/ETL tool - [HoodieStreamer](/docs/hoodie_streaming_ingestion#hudi-streamer), to assist with ingesting data into Hudi 
+**Hudi Streamer** - Hudi provides an incremental ingestion/ETL tool - [HoodieStreamer](/docs/next/hoodie_streaming_ingestion#hudi-streamer), to assist with ingesting data into Hudi 
 from various different sources in a streaming manner, with powerful built-in capabilities like auto checkpointing, schema enforcement via schema provider, 
 transformation support, automatic table services and so on.
 
