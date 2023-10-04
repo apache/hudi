@@ -280,10 +280,10 @@ Interested users can implement `org.apache.hudi.utilities.deltastreamer.Configur
 A new source - [SqlFileBasedSource](https://github.com/apache/hudi/blob/30146d61f5544f06e2100234b9bf9c5e4bc2a97f/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/SqlFileBasedSource.java), 
 has been added to HoodieStreamer designed to facilitate one-time backfill scenarios.
 
-## Flink Enhancements
+### Flink Enhancements
 Below are the Flink Engine based enhancements in the 0.14.0 release.
 
-### Consistent hashing index support
+#### Consistent hashing index support
 In comparison to the static hashing index (BUCKET index), the consistent hashing index offers dynamic scalability of 
 data buckets for the writer. To utilize this feature, configure the option `index.type` as `BUCKET` and set 
 `hoodie.index.bucket.engine` to `CONSISTENT_HASHING`.
@@ -293,21 +293,21 @@ The clustering plan should be executed through an offline job. During this proce
 for both the old and new data buckets while the clustering is pending. Although the dual write does not impact correctness, 
 it is strongly recommended to execute clustering as quickly as possible.
 
-### Dynamic partition pruning for streaming read
+#### Dynamic partition pruning for streaming read
 Before 0.14.0, the Flink streaming reader can not prune the datetime partitions correctly when the queries have 
 predicates with constant datetime filtering. Since this release, the Flink streaming queries have been fixed to support 
 any pattern of filtering predicates, including but not limited to the datetime filtering.
 
-### Simple bucket index table query speed up (with index fields)
+#### Simple bucket index table query speed up (with index fields)
 For a simple bucket index table, if the query takes equality filtering predicates on index key fields, Flink engine 
 would optimize the planning to only include the source data files from a very specific data bucket; such queries expect 
 to have nearly `hoodie.bucket.index.num.buckets` times performance improvement in average.
 
-### Flink 1.17 support
+#### Flink 1.17 support
 Flink 1.17 is supported with a new compile maven profile `flink1.17`, adding profile `-Pflink1.17` in the compile cmd of
 Flink Hudi bundle jar to enable the integration with Flink 1.17.
 
-### Update deletes statement for Flink
+#### Update deletes statement for Flink
 `UPDATE` and `DELETE` statements have been integrated since this release for batch queries. Current only table that 
 defines primary keys can handle the statement correctly.
 
@@ -324,7 +324,7 @@ DELETE FROM hudi_table WHERE age > 23;
 
 
 
-## Java Enhancements
+### Java Enhancements
 Lot of write operations have been extended to support Java engine to bring it to parity with other engines. For eg, 
 compaction, clustering, and metadata table support has been added to Java Engine with 0.14.0.
 
