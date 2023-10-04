@@ -259,6 +259,12 @@ module.exports = {
           className: 'header-youtube-link',
           'aria-label': 'Hudi YouTube Channel',
         },
+        {
+          href: 'https://www.linkedin.com/company/apache-hudi/?viewAsMember=true',
+          position: 'right',
+          className: 'header-linkedin-link',
+          'aria-label': 'Hudi Linkedin Page',
+        },
       ],
     },
     footer: {
@@ -377,6 +383,10 @@ module.exports = {
             {
               label: 'YouTube',
               href:  'https://www.youtube.com/channel/UCs7AhE0BWaEPZSChrBR-Muw',
+            },
+            {
+              label: 'Linkedin',
+              href: 'https://www.linkedin.com/company/apache-hudi/?viewAsMember=true',
             },
             {
               label: 'Mailing List',

@@ -58,7 +58,7 @@ html[data-theme='dark'] .docusaurus-highlight-code-line {
 }
 
 @media (max-width: 767px) {
-  .hero__img, .header-github-link, .header-slack-link, .header-twitter-link, .header-youtube-link {
+  .hero__img, .header-github-link, .header-slack-link, .header-twitter-link, .header-youtube-link, .header-linkedin-link {
     display: none;
   }
   .hero__title {
@@ -115,6 +115,14 @@ html[data-theme='dark'] .docusaurus-highlight-code-line {
 
 .header-youtube-link:before {
   background: url(/assets/images/youtube.png) no-repeat;
+  content: "";
+  display: flex;
+  height: 30px;
+  width: 30px;
+}
+
+.header-linkedin-link:before {
+  background: url(/assets/images/linkedin.png) no-repeat;
   content: "";
   display: flex;
   height: 30px;
