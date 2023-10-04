@@ -320,7 +320,7 @@ it can then applies the UPDATE and DELETE by per-row level. You can then sync a 
 of RDBMS.
 
 ## Where To Go From Here?
-Check out the [Flink Setup](/docs/flink_configuration) how-to page for deeper dive into configuration settings. 
+Check out the [Flink Setup](/docs/0.12.1/flink_configuration) how-to page for deeper dive into configuration settings. 
 
 If you are relatively new to Apache Hudi, it is important to be familiar with a few core concepts:
   - [Hudi Timeline](/docs/next/timeline) – How Hudi manages transactions and other table services

@@ -9,7 +9,7 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 In this section, we will cover ways to ingest new changes from external sources or even other Hudi tables.
-The two main tools available are the [DeltaStreamer](/docs/hoodie_deltastreamer#deltastreamer) tool, as well as the [Spark Hudi datasource](#spark-datasource-writer).
+The two main tools available are the [DeltaStreamer](/docs/0.12.0/hoodie_deltastreamer#deltastreamer) tool, as well as the [Spark Hudi datasource](#spark-datasource-writer).
 
 ## Spark Datasource Writer
 

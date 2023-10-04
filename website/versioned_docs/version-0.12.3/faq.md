@@ -111,7 +111,7 @@ for even more flexibility and get away from Hive-style partition evol route.
 
 ### What are some ways to write a Hudi dataset?
 
-Typically, you obtain a set of partial updates/inserts from your source and issue [write operations](https://hudi.apache.org/docs/write_operations/) against a Hudi dataset.  If you ingesting data from any of the standard sources like Kafka, or tailing DFS, the [delta streamer](https://hudi.apache.org/docs/hoodie_deltastreamer#deltastreamer) tool is invaluable and provides an easy, self-managed solution to getting data written into Hudi. You can also write your own code to capture data from a custom source using the Spark datasource API and use a [Hudi datasource](https://hudi.apache.org/docs/writing_data/#spark-datasource-writer) to write into Hudi. 
+Typically, you obtain a set of partial updates/inserts from your source and issue [write operations](https://hudi.apache.org/docs/write_operations/) against a Hudi dataset.  If you ingesting data from any of the standard sources like Kafka, or tailing DFS, the [delta streamer](https://hudi.apache.org/docs/0.12.3/hoodie_deltastreamer#deltastreamer) tool is invaluable and provides an easy, self-managed solution to getting data written into Hudi. You can also write your own code to capture data from a custom source using the Spark datasource API and use a [Hudi datasource](https://hudi.apache.org/docs/writing_data/#spark-datasource-writer) to write into Hudi. 
 
 ### How is a Hudi job deployed?
 
