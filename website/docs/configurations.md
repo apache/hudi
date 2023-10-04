@@ -11,13 +11,11 @@ last_modified_at: 2023-09-22T14:14:21.68
 
 This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels.
 
-- [**Environment Config**](#ENVIRONMENT_CONFIG): Hudi supports passing configurations via a configuration file `hudi-default.conf` in which each line consists of a key and a value separated by whitespace or = sign. For example:
-```
-hoodie.datasource.hive_sync.mode               jdbc
-hoodie.datasource.hive_sync.jdbcurl            jdbc:hive2://localhost:10000
-hoodie.datasource.hive_sync.support_timestamp  false
-```
-It helps to have a central configuration file for your common cross job configurations/tunings, so all the jobs on your cluster can utilize it. It also works with Spark SQL DML/DDL, and helps avoid having to pass configs inside the SQL statements.
+:::tip
+With [externalized config file](/docs/next/configurations#externalized-config-file),
+instead of directly passing configuration settings to every Hudi job,
+you can also centrally set them in a configuration file `hudi-default.conf`.
+:::
 
 By default, Hudi would load the configuration file under `/etc/hudi/conf` directory. You can specify a different configuration directory location by setting the `HUDI_CONF_DIR` environment variable.
 - [**Spark Datasource Configs**](#SPARK_DATASOURCE): These configs control the Hudi Spark Datasource, providing ability to define keys/partitioning, pick out the write operation, specify how to merge records or choosing query type to read.
@@ -39,6 +37,15 @@ Instead of directly passing configuration settings to every Hudi job, you can al
 file `hudi-default.conf`. By default, Hudi would load the configuration file under `/etc/hudi/conf` directory. You can
 specify a different configuration directory location by setting the `HUDI_CONF_DIR` environment variable. This can be
 useful for uniformly enforcing repeated configs (like Hive sync or write/index tuning), across your entire data lake.
+
+Each line in the configuration file consists of a key and a value separated by whitespace or = sign. For example:
+```
+hoodie.datasource.hive_sync.mode               jdbc
+hoodie.datasource.hive_sync.jdbcurl            jdbc:hive2://localhost:10000
+hoodie.datasource.hive_sync.support_timestamp  false
+```
+It helps to have a central configuration file for your common cross job configurations/tunings, so all the jobs on your cluster can utilize it. 
+It also works with Spark SQL DML/DDL, and helps avoid having to pass configs inside the SQL statements.
 
 ## Spark Datasource Configs {#SPARK_DATASOURCE}
 These configs control the Hudi Spark Datasource, providing ability to define keys/partitioning, pick out the write operation, specify how to merge records or choosing query type to read.
