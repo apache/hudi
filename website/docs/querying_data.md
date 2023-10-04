@@ -7,7 +7,7 @@ last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
 :::danger
-This page is no longer maintained. Please refer to [Hudi SQL](/docs/sql) for the latest documentation.
+This page is no longer maintained. Please refer to Hudi [SQL DDL](/docs/next/sql_ddl), [SQL DML](/docs/next/sql_dml), [SQL Queries](/docs/next/sql_queries) and [Procedures](/docs/next/procedures) for the latest documentation.
 :::
 
 Conceptually, Hudi stores data physically once on DFS, while providing 3 different ways of querying, as explained [before](/docs/concepts#query-types). 

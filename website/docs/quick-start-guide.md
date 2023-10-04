@@ -306,7 +306,7 @@ the write operation, matching the out-of-behavior of Spark's Parquet Datasource.
 
 <TabItem value="sparksql">
 
-Users can use 'INSERT INTO' to insert data into a Hudi table. See [Insert Into](/docs/sql_dml#insert-into) for more advanced options.
+Users can use 'INSERT INTO' to insert data into a Hudi table. See [Insert Into](/docs/next/sql_dml#insert-into) for more advanced options.
 
 ```sql
 INSERT INTO hudi_table
@@ -418,7 +418,7 @@ Notice that the save mode is now `Append`. In general, always use append mode un
 </TabItem>
 <TabItem value="sparksql">
 
-Hudi table can be update using a regular UPDATE statement. See [Update](/docs/sql_dml#update) for more advanced options.
+Hudi table can be update using a regular UPDATE statement. See [Update](/docs/next/sql_dml#update) for more advanced options.
 
 ```sql
 UPDATE hudi_table SET fare = 25.0 WHERE rider = 'rider-D';
