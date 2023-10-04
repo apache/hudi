@@ -11,8 +11,8 @@ import TabItem from '@theme/TabItem';
 Apache Hudi 0.14.0 marks a significant milestone with a range of new functionalities and enhancements. 
 These include the introduction of Record Level Index, automatic generation of record keys, the `hudi_table_changes` 
 function for incremental reads, and more. Notably, this release also incorporates support for Spark 3.4. On the Flink 
-front, version 0.14.0 brings several exciting features such as consistent hashing index support, Flink 1.17 support, and U
-pdate and Delete statement support. Additionally, this release upgrades the Hudi table version, prompting users to consult
+front, version 0.14.0 brings several exciting features such as consistent hashing index support, Flink 1.17 support, and 
+Update and Delete statement support. Additionally, this release upgrades the Hudi table version, prompting users to consult
 the Migration Guide provided below. We encourage users to review the [release highlights](#release-highlights),
 [breaking changes](#breaking-changes), and [behavior changes](#behavior-changes) before 
 adopting the 0.14.0 release.
