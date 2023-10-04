@@ -372,7 +372,8 @@ public class AvroSchemaCompatibility {
             return (writer.getType() == Type.STRING) ? result : result.mergedWith(typeMismatch(reader, writer, locations));
           }
           case STRING: {
-            return (writer.getType() == Type.BYTES) ? result : result.mergedWith(typeMismatch(reader, writer, locations));
+            return ((writer.getType() == Type.BYTES) || (writer.getType() == Type.INT) || (writer.getType() == Type.LONG)
+                || (writer.getType() == Type.FLOAT) || (writer.getType() == Type.DOUBLE)) ? result : result.mergedWith(typeMismatch(reader, writer, locations));
           }
 
           case ARRAY:

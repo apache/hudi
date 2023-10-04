@@ -34,6 +34,7 @@ import org.apache.hudi.avro.HoodieAvroUtils.removeMetadataFields
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
 import org.apache.hudi.commit.{DatasetBulkInsertCommitActionExecutor, DatasetBulkInsertOverwriteCommitActionExecutor, DatasetBulkInsertOverwriteTableCommitActionExecutor}
+import org.apache.hudi.common.config.HoodieCommonConfig.MAKE_NEW_COLUMNS_NULLABLE
 import org.apache.hudi.common.config._
 import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.fs.FSUtils
@@ -490,6 +491,7 @@ object HoodieSparkSqlWriter {
                          latestTableSchemaOpt: Option[Schema],
                          internalSchemaOpt: Option[InternalSchema],
                          opts: Map[String, String]): Schema = {
+    val addNullForDeletedColumns = opts(DataSourceWriteOptions.ADD_NULL_FOR_DELETED_COLUMNS.key()).toBoolean
     val shouldReconcileSchema = opts(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
     val shouldValidateSchemasCompatibility = opts.getOrDefault(HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key,
       HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.defaultValue).toBoolean
@@ -571,7 +573,12 @@ object HoodieSparkSqlWriter {
             if (!shouldValidateSchemasCompatibility) {
               // if no validation is enabled, check for col drop
               // if col drop is allowed, go ahead. if not, check for projection, so that we do not allow dropping cols
-              if (allowAutoEvolutionColumnDrop || canProject(latestTableSchema, canonicalizedSourceSchema)) {
+              //Convert to internalschema and back because  Union[int, null] will change to Union[null, int]
+              if (addNullForDeletedColumns
+                && isCompatibleProjectionOf(AvroInternalSchemaConverter.convert(
+                AvroInternalSchemaConverter.convert(latestTableSchema), latestTableSchema.getFullName), canonicalizedSourceSchema)) {
+                canonicalizeSchema(latestTableSchema, canonicalizedSourceSchema, Map(MAKE_NEW_COLUMNS_NULLABLE.key -> "true"))
+              } else if (allowAutoEvolutionColumnDrop || canProject(latestTableSchema, canonicalizedSourceSchema)) {
                 canonicalizedSourceSchema
               } else {
                 log.error(

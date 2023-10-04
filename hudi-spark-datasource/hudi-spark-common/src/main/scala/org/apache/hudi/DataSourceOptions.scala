@@ -534,6 +534,8 @@ object DataSourceWriteOptions {
 
   val RECONCILE_SCHEMA: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.RECONCILE_SCHEMA
 
+  val ADD_NULL_FOR_DELETED_COLUMNS: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.ADD_NULL_FOR_DELETED_COLUMNS
+
   val MAKE_NEW_COLUMNS_NULLABLE: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.MAKE_NEW_COLUMNS_NULLABLE
 
   val SPARK_SQL_INSERT_INTO_OPERATION: ConfigProperty[String] = ConfigProperty

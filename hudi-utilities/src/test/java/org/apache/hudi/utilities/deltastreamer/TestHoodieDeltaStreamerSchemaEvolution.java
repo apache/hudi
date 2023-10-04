@@ -35,6 +35,7 @@ import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -59,6 +60,18 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
   private Boolean rowWriterEnable;
   private Boolean addFilegroups;
   private Boolean multiLogFiles;
+  private Boolean useSchemaProvider;
+  private Boolean hasTransformer;
+  private String sourceSchemaFile;
+  private String targetSchemaFile;
+
+  @BeforeEach
+  public void resetTest() {
+    useSchemaProvider = false;
+    hasTransformer = false;
+    sourceSchemaFile = "";
+    targetSchemaFile = "";
+  }
 
   private HoodieDeltaStreamer deltaStreamer;
 
@@ -67,6 +80,7 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     extraProps.setProperty("hoodie.datasource.write.table.type", tableType);
     extraProps.setProperty("hoodie.datasource.write.row.writer.enable", rowWriterEnable.toString());
     extraProps.setProperty("hoodie.metadata.enable", "false");
+    extraProps.setProperty("hoodie.datasource.add.null.for.deleted.columns", "true");
     //extraProps.setProperty("hoodie.logfile.data.block.format", "parquet");
 
     //we set to 0 so that we create new base files on insert instead of adding inserts to existing filegroups via small file handling
@@ -94,11 +108,11 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
       extraProps.setProperty(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key(), "_row_key");
     }
 
-    prepareParquetDFSSource(false, false, "", "", PROPS_FILENAME_TEST_PARQUET,
+    prepareParquetDFSSource(useSchemaProvider, hasTransformer, sourceSchemaFile, targetSchemaFile, PROPS_FILENAME_TEST_PARQUET,
         PARQUET_SOURCE_ROOT, false, "partition_path", "", extraProps);
     HoodieDeltaStreamer.Config cfg = TestHoodieDeltaStreamer.TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, ParquetDFSSource.class.getName(),
         null, PROPS_FILENAME_TEST_PARQUET, false,
-        false, 100000, false, null, tableType, "timestamp", null);
+        useSchemaProvider, 100000, false, null, tableType, "timestamp", null);
     cfg.forceDisableCompaction = !shouldCompact;
     return cfg;
   }
@@ -279,6 +293,26 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
   }
 
   /**
+   * Drop a root column
+   */
+  @ParameterizedTest
+  @MethodSource("testArgs")
+  public void testDropColRoot(String tableType,
+                             Boolean shouldCluster,
+                             Boolean shouldCompact,
+                             Boolean rowWriterEnable,
+                             Boolean addFilegroups,
+                             Boolean multiLogFiles) throws Exception {
+    this.tableType = tableType;
+    this.shouldCluster = shouldCluster;
+    this.shouldCompact = shouldCompact;
+    this.rowWriterEnable = rowWriterEnable;
+    this.addFilegroups = addFilegroups;
+    this.multiLogFiles = multiLogFiles;
+    testBase("testDropColRoot.json", "trip_type", "trip_type is NULL", 2);
+  }
+
+  /**
    * Add a custom Hudi meta column
    */
   @ParameterizedTest
@@ -316,6 +350,26 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     this.addFilegroups = addFilegroups;
     this.multiLogFiles = multiLogFiles;
     testBase("testAddColStruct.json", "tip_history.zextra_col", "tip_history[0].zextra_col = 'yes'", 2);
+  }
+
+  /**
+   * Drop a root column
+   */
+  @ParameterizedTest
+  @MethodSource("testArgs")
+  public void testDropColStruct(String tableType,
+                              Boolean shouldCluster,
+                              Boolean shouldCompact,
+                              Boolean rowWriterEnable,
+                              Boolean addFilegroups,
+                              Boolean multiLogFiles) throws Exception {
+    this.tableType = tableType;
+    this.shouldCluster = shouldCluster;
+    this.shouldCompact = shouldCompact;
+    this.rowWriterEnable = rowWriterEnable;
+    this.addFilegroups = addFilegroups;
+    this.multiLogFiles = multiLogFiles;
+    testBase("testDropColStruct.json", "tip_history.currency", "tip_history[0].currency is NULL", 2);
   }
 
   /**
@@ -360,19 +414,21 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     //assertThrows(Exception.class, () -> testBase("testAddColChangeOrderSomeFiles.json", "extra_col", "extra_col = 'yes'", 1));
   }
 
+  private String typePromoUpdates;
+
   private void assertDataType(String colName, DataType expectedType) {
     assertEquals(expectedType, sparkSession.read().format("hudi").load(tableBasePath).select(colName).schema().fields()[0].dataType());
   }
 
-  private void testTypePromotionBase(String colName, DataType startType, DataType endType) throws Exception {
-    testTypePromotionBase(colName, startType, endType, false);
+  private void testTypePromotionBase(String colName, DataType startType, DataType updateType) throws Exception {
+    testTypePromotionBase(colName, startType, updateType, updateType);
   }
 
-  private void testTypeDemotionBase(String colName, DataType startType, DataType endType) throws Exception {
-    testTypePromotionBase(colName, startType, endType, true);
+  private void testTypeDemotionBase(String colName, DataType startType, DataType updateType) throws Exception {
+    testTypePromotionBase(colName, startType, updateType,  startType);
   }
 
-  private void testTypePromotionBase(String colName, DataType startType, DataType endType, Boolean demoteType) throws Exception {
+  private void testTypePromotionBase(String colName, DataType startType, DataType updateType, DataType endType) throws Exception {
     boolean isCow = tableType.equals("COPY_ON_WRITE");
     PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + testNum++;
     tableBasePath = basePath + "test_parquet_table" + testNum;
@@ -406,7 +462,7 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     }
 
     //write updates
-    doDeltaWriteTypePromo("endTypePromotion.json", colName, endType);
+    doDeltaWriteTypePromo(typePromoUpdates, colName, updateType);
     if (shouldCluster) {
       //everything combines into 1 file per partition
       assertBaseFileOnlyNumber(3);
@@ -418,7 +474,7 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     }
     assertRecordCount(numRecords);
     sparkSession.read().format("hudi").load(tableBasePath).select(colName).show(9);
-    assertDataType(colName, demoteType ? startType : endType);
+    assertDataType(colName, endType);
   }
 
   /**
@@ -432,12 +488,43 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
                                 Boolean rowWriterEnable,
                                 Boolean addFilegroups,
                                 Boolean multiLogFiles) throws Exception {
+    testTypePromotion(tableType, shouldCluster, shouldCompact, rowWriterEnable, addFilegroups, multiLogFiles, false);
+  }
+
+
+  /**
+   * Test type promotion for fields
+   */
+  @ParameterizedTest
+  @MethodSource("testArgs")
+  public void testTypePromotionDropCols(String tableType,
+                                Boolean shouldCluster,
+                                Boolean shouldCompact,
+                                Boolean rowWriterEnable,
+                                Boolean addFilegroups,
+                                Boolean multiLogFiles) throws Exception {
+    testTypePromotion(tableType, shouldCluster, shouldCompact, rowWriterEnable, addFilegroups, multiLogFiles, true);
+  }
+  
+  public void testTypePromotion(String tableType,
+                                Boolean shouldCluster,
+                                Boolean shouldCompact,
+                                Boolean rowWriterEnable,
+                                Boolean addFilegroups,
+                                Boolean multiLogFiles,
+                                Boolean dropCols) throws Exception {
     this.tableType = tableType;
     this.shouldCluster = shouldCluster;
     this.shouldCompact = shouldCompact;
     this.rowWriterEnable = rowWriterEnable;
     this.addFilegroups = addFilegroups;
     this.multiLogFiles = multiLogFiles;
+    if (dropCols) {
+      this.typePromoUpdates = "endTypePromotionDropCols.json";
+    } else {
+      this.typePromoUpdates = "endTypePromotion.json";
+    }
+
 
     //root data type promotions
     testTypePromotionBase("distance_in_meters", DataTypes.IntegerType, DataTypes.LongType);
@@ -449,13 +536,14 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     testTypePromotionBase("distance_in_meters", DataTypes.LongType, DataTypes.StringType);
     testTypePromotionBase("begin_lat", DataTypes.FloatType, DataTypes.DoubleType);
     testTypePromotionBase("begin_lat", DataTypes.FloatType, DataTypes.StringType);
-    testTypePromotionBase("rider", DataTypes.StringType, DataTypes.BinaryType);
-    testTypePromotionBase("tip_history", DataTypes.createArrayType(DataTypes.IntegerType), DataTypes.createArrayType(DataTypes.LongType));
-    testTypePromotionBase("rider", DataTypes.BinaryType, DataTypes.StringType);
+    testTypePromotionBase("begin_lat", DataTypes.DoubleType, DataTypes.StringType);
+    //should stay with the original
+    testTypeDemotionBase("rider", DataTypes.StringType, DataTypes.BinaryType);
+    testTypeDemotionBase("rider", DataTypes.BinaryType, DataTypes.StringType);
 
     //nested data type promotions
-    testTypePromotionBase("fare", createFareStruct(DataTypes.FloatType), createFareStruct(DataTypes.DoubleType));
-    testTypePromotionBase("fare", createFareStruct(DataTypes.FloatType), createFareStruct(DataTypes.StringType));
+    testTypePromotionBase("fare", createFareStruct(DataTypes.FloatType), createFareStruct(DataTypes.DoubleType, dropCols), createFareStruct(DataTypes.DoubleType));
+    testTypePromotionBase("fare", createFareStruct(DataTypes.FloatType), createFareStruct(DataTypes.StringType, dropCols), createFareStruct(DataTypes.StringType));
 
     //complex data type promotion
     testTypePromotionBase("tip_history", DataTypes.createArrayType(DataTypes.IntegerType), DataTypes.createArrayType(DataTypes.LongType));
@@ -467,14 +555,21 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     testTypeDemotionBase("distance_in_meters", DataTypes.LongType, DataTypes.IntegerType);
     testTypeDemotionBase("distance_in_meters", DataTypes.StringType, DataTypes.LongType);
     //nested data type demotion
-    testTypeDemotionBase("fare", createFareStruct(DataTypes.DoubleType), createFareStruct(DataTypes.FloatType));
-    testTypeDemotionBase("fare", createFareStruct(DataTypes.StringType), createFareStruct(DataTypes.DoubleType));
+    testTypePromotionBase("fare", createFareStruct(DataTypes.DoubleType), createFareStruct(DataTypes.FloatType, dropCols), createFareStruct(DataTypes.DoubleType));
+    testTypePromotionBase("fare", createFareStruct(DataTypes.StringType), createFareStruct(DataTypes.DoubleType, dropCols), createFareStruct(DataTypes.StringType));
     //complex data type demotion
     testTypeDemotionBase("tip_history", DataTypes.createArrayType(DataTypes.LongType), DataTypes.createArrayType(DataTypes.IntegerType));
     testTypeDemotionBase("tip_history", DataTypes.createArrayType(DataTypes.StringType), DataTypes.createArrayType(DataTypes.LongType));
   }
 
   private StructType createFareStruct(DataType amountType) {
+    return createFareStruct(amountType, false);
+  }
+
+  private StructType createFareStruct(DataType amountType, Boolean dropCols) {
+    if (dropCols) {
+      return DataTypes.createStructType(new StructField[]{new StructField("amount", amountType, true, Metadata.empty())});
+    }
     return DataTypes.createStructType(new StructField[]{new StructField("amount", amountType, true, Metadata.empty()),
         new StructField("currency", DataTypes.StringType, true, Metadata.empty())});
   }

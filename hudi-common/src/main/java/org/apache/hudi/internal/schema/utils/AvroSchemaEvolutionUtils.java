@@ -141,11 +141,13 @@ public class AvroSchemaEvolutionUtils {
         ).collect(Collectors.toList());
 
     if (nullableUpdateCols.isEmpty() && typeUpdateCols.isEmpty()) {
-      return sourceSchema;
+      //standardize order of unions
+      return convert(sourceInternalSchema, sourceSchema.getFullName());
     }
 
-    // Reconcile nullability constraints (by executing phony schema change)
     TableChanges.ColumnUpdateChange schemaChange = TableChanges.ColumnUpdateChange.get(sourceInternalSchema);
+
+    // Reconcile nullability constraints (by executing phony schema change)
     if (!nullableUpdateCols.isEmpty()) {
       schemaChange = reduce(nullableUpdateCols, schemaChange,
           (change, field) -> change.updateColumnNullability(field, true));
