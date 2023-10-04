@@ -189,7 +189,16 @@ Then users should be able to issue snapshot queries against the table like any o
 ### Incremental Query 
 
 ```sql
- -- Show example from docker demo.
+# set hive session properties for incremental querying like below
+# type of query on the table
+set hoodie.<table_name>.consume.mode=INCREMENTAL;
+# Specify start timestamp to fetch first commit after this timestamp.
+set hoodie.<table_name>.consume.start.timestamp=20180924064621;
+# Max number of commits to consume from the start commit. Set this to -1 to get all commits after the starting commit.
+set hoodie.<table_name>.consume.max.commits=3;
+
+# usual hive query on hoodie table
+select `_hoodie_commit_time`, col_1, col_2, col_4  from hudi_table where  col_1 = 'XYZ' and `_hoodie_commit_time` > '20180924064621';
 ```
 
 :::note Hive incremental queries that are executed using Fetch task
