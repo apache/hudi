@@ -200,6 +200,6 @@ You can control the behavior of these operations using various configuration opt
 ## Flink 
 
 Flink SQL also provides several Data Manipulation Language (DML) actions for interacting with Hudi tables. All these operations are already 
-showcased in the [Flink Quickstart](/docs/flink-quick-start-guide.md).
+showcased in the [Flink Quickstart](/docs/flink-quick-start-guide).
 
 
