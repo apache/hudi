@@ -1033,7 +1033,7 @@ public class HoodieAvroUtils {
         break;
       case BYTES:
         if (oldSchema.getType() == Schema.Type.STRING) {
-          return getUTF8Bytes(oldValue.toString());
+          return ByteBuffer.wrap(getUTF8Bytes(oldValue.toString()));
         }
         break;
       case STRING:

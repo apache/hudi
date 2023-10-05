@@ -144,7 +144,9 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
   }
 
   private void assertRecordCount(int expected) {
-    TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(expected, tableBasePath, sqlContext);
+    sqlContext.clearCache();
+    long recordCount = sqlContext.read().format("org.apache.hudi").load(tableBasePath).count();
+    assertEquals(expected, recordCount);
   }
 
   private void testBase(String updateFile, String updateColumn, String condition, int count) throws Exception {

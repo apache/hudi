@@ -27,7 +27,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -231,7 +230,7 @@ public class AvroCastingGenericRecord implements GenericRecord {
         }
       case BYTES:
         if (oldSchema.getType() == STRING) {
-          return s -> getUTF8Bytes(s.toString());
+          return s -> ByteBuffer.wrap(getUTF8Bytes(s.toString()));
         }
         return null;
       default:
