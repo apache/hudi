@@ -21,8 +21,9 @@ import org.apache.avro.Schema
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteOperationType}
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant}
-import org.apache.hudi.common.util.{CommitUtils, Option}
+import org.apache.hudi.common.util.CommitUtils
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.{AvroConversionUtils, DataSourceUtils, HoodieWriterUtils, SparkAdapterSupport}
 import org.apache.spark.api.java.JavaSparkContext
@@ -32,7 +33,6 @@ import org.apache.spark.sql.hudi.HoodieOptionConfig
 import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 
-import java.nio.charset.StandardCharsets
 import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
 
@@ -108,7 +108,8 @@ object AlterHoodieTableAddColumnsCommand extends SparkAdapterSupport {
       writeSchema.toString,
       hoodieCatalogTable.tableLocation,
       hoodieCatalogTable.tableName,
-      HoodieWriterUtils.parametersWithWriteDefaults(HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs(hoodieCatalogTable.catalogProperties)).asJava
+      HoodieWriterUtils.parametersWithWriteDefaults(HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs(
+        hoodieCatalogTable.catalogProperties) ++ sparkSession.sqlContext.conf.getAllConfs).asJava
     )
 
     val commitActionType = CommitUtils.getCommitActionType(WriteOperationType.ALTER_SCHEMA, hoodieCatalogTable.tableType)
@@ -122,7 +123,7 @@ object AlterHoodieTableAddColumnsCommand extends SparkAdapterSupport {
     val requested = new HoodieInstant(State.REQUESTED, commitActionType, instantTime)
     val metadata = new HoodieCommitMetadata
     metadata.setOperationType(WriteOperationType.ALTER_SCHEMA)
-    timeLine.transitionRequestedToInflight(requested, Option.of(metadata.toJsonString.getBytes(StandardCharsets.UTF_8)))
+    timeLine.transitionRequestedToInflight(requested, serializeCommitMetadata(metadata))
 
     client.commit(instantTime, jsc.emptyRDD)
   }

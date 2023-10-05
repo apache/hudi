@@ -26,6 +26,8 @@ import org.apache.hudi.common.config.HoodieConfig;
 
 import javax.annotation.concurrent.Immutable;
 
+import static org.apache.hudi.common.util.ConfigUtils.DELTA_STREAMER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
 import static org.apache.hudi.utilities.sources.processor.maxwell.PreCombineFieldType.DATE_STRING;
 
 /**
@@ -33,40 +35,45 @@ import static org.apache.hudi.utilities.sources.processor.maxwell.PreCombineFiel
  */
 @Immutable
 @ConfigClassProperty(name = "Json Kafka Post Processor Configs",
-    groupName = ConfigGroups.Names.DELTA_STREAMER,
+    groupName = ConfigGroups.Names.HUDI_STREAMER,
     subGroupName = ConfigGroups.SubGroupNames.DELTA_STREAMER_SOURCE,
-    description = "Configurations controlling the post processor of Json Kafka Source in Deltastreamer.")
+    description = "Configurations controlling the post processor of Json Kafka Source in Hudi Streamer.")
 public class JsonKafkaPostProcessorConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> JSON_KAFKA_PROCESSOR_CLASS = ConfigProperty
-      .key("hoodie.deltastreamer.source.json.kafka.processor.class")
+      .key(STREAMER_CONFIG_PREFIX + "source.json.kafka.processor.class")
       .noDefaultValue()
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.json.kafka.processor.class")
       .markAdvanced()
       .withDocumentation("Json kafka source post processor class name, post process data after consuming from"
-          + "source and before giving it to deltastreamer.");
+          + "source and before giving it to Hudi Streamer.");
 
   public static final ConfigProperty<String> DATABASE_NAME_REGEX = ConfigProperty
-      .key("hoodie.deltastreamer.source.json.kafka.post.processor.maxwell.database.regex")
+      .key(STREAMER_CONFIG_PREFIX + "source.json.kafka.post.processor.maxwell.database.regex")
       .noDefaultValue()
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.json.kafka.post.processor.maxwell.database.regex")
       .markAdvanced()
       .withDocumentation("Database name regex");
 
   public static final ConfigProperty<String> TABLE_NAME_REGEX = ConfigProperty
-      .key("hoodie.deltastreamer.source.json.kafka.post.processor.maxwell.table.regex")
+      .key(STREAMER_CONFIG_PREFIX + "source.json.kafka.post.processor.maxwell.table.regex")
       .noDefaultValue()
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.json.kafka.post.processor.maxwell.table.regex")
       .markAdvanced()
       .withDocumentation("Table name regex");
 
   public static final ConfigProperty<String> PRECOMBINE_FIELD_TYPE = ConfigProperty
-      .key("hoodie.deltastreamer.source.json.kafka.post.processor.maxwell.precombine.field.type")
+      .key(STREAMER_CONFIG_PREFIX + "source.json.kafka.post.processor.maxwell.precombine.field.type")
       .defaultValue(DATE_STRING.toString())
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.json.kafka.post.processor.maxwell.precombine.field.type")
       .markAdvanced()
       .withDocumentation("Data type of the preCombine field. could be NON_TIMESTAMP, DATE_STRING,"
           + "UNIX_TIMESTAMP or EPOCHMILLISECONDS. DATE_STRING by default");
 
   public static final ConfigProperty<String> PRECOMBINE_FIELD_FORMAT = ConfigProperty
-      .key("hoodie.deltastreamer.source.json.kafka.post.processor.maxwell.precombine.field.format")
+      .key(STREAMER_CONFIG_PREFIX + "source.json.kafka.post.processor.maxwell.precombine.field.format")
       .defaultValue("yyyy-MM-dd HH:mm:ss")
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.json.kafka.post.processor.maxwell.precombine.field.format")
       .markAdvanced()
       .withDocumentation("When the preCombine filed is in DATE_STRING format, use should tell hoodie"
           + "what format it is. 'yyyy-MM-dd HH:mm:ss' by default");

@@ -305,11 +305,12 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
         .withDeleteParallelism(2).forTable(tableName)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
 
-    SparkRDDWriteClient<HoodieAvroPayload> client = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jsc), cfg);
+    try (SparkRDDWriteClient<HoodieAvroPayload> client = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jsc), cfg)) {
 
-    List<HoodieRecord> records = insert(jsc, client, dataGen);
-    upsert(jsc, client, dataGen, records);
-    delete(jsc, client, records);
+      List<HoodieRecord> records = insert(jsc, client, dataGen);
+      upsert(jsc, client, dataGen, records);
+      delete(jsc, client, records);
+    }
   }
 
   private List<HoodieRecord> insert(JavaSparkContext jsc, SparkRDDWriteClient<HoodieAvroPayload> client,

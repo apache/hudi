@@ -73,12 +73,16 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
  * Utilities to generate all kinds of sub-pipelines.
  */
 public class Pipelines {
+
+  // The counter of operators, avoiding duplicate uids caused by the same operator
+  private static final ConcurrentHashMap<String,Integer> OPERATOR_COUNTERS = new ConcurrentHashMap<>();
 
   /**
    * Bulk insert the input dataset at once.
@@ -109,7 +113,7 @@ public class Pipelines {
     WriteOperatorFactory<RowData> operatorFactory = BulkInsertWriteOperator.getFactory(conf, rowType);
     if (OptionsResolver.isBucketIndexType(conf)) {
       // TODO support bulk insert for consistent bucket index
-      if (OptionsResolver.getBucketEngineType(conf) == HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING) {
+      if (OptionsResolver.isConsistentHashingBucketIndexType(conf)) {
         throw new HoodieException(
             "Consistent hashing bucket index does not work with bulk insert using FLINK engine. Use simple bucket index or Spark engine.");
       }
@@ -202,19 +206,12 @@ public class Pipelines {
    * @param conf       The configuration
    * @param rowType    The input row type
    * @param dataStream The input data stream
-   * @param bounded    Whether the input stream is bounded
    * @return the appending data stream sink
    */
   public static DataStream<Object> append(
       Configuration conf,
       RowType rowType,
-      DataStream<RowData> dataStream,
-      boolean bounded) {
-    if (!bounded) {
-      // In principle, the config should be immutable, but the boundedness
-      // is only visible when creating the sink pipeline.
-      conf.setBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT, false);
-    }
+      DataStream<RowData> dataStream) {
     WriteOperatorFactory<RowData> operatorFactory = AppendWriteOperator.getFactory(conf, rowType);
 
     return dataStream
@@ -366,7 +363,7 @@ public class Pipelines {
               .transform(
                   opName("consistent_bucket_write", conf),
                   TypeInformation.of(Object.class),
-                  StreamWriteOperator.getFactory(conf))
+                  BucketStreamWriteOperator.getFactory(conf))
               .uid(opUID("consistent_bucket_write", conf))
               .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
         default:
@@ -469,7 +466,7 @@ public class Pipelines {
     }
     return clusteringStream.addSink(new ClusteringCommitSink(conf))
         .name("clustering_commit")
-        .setParallelism(1); // compaction commit should be singleton
+        .setParallelism(1); // clustering commit should be singleton
   }
 
   public static DataStreamSink<Object> clean(Configuration conf, DataStream<Object> dataStream) {
@@ -489,7 +486,8 @@ public class Pipelines {
   }
 
   public static String opUID(String operatorN, Configuration conf) {
-    return "uid_" + operatorN + "_" + getTablePath(conf);
+    Integer operatorCount = OPERATOR_COUNTERS.merge(operatorN, 1, (oldValue, value) -> oldValue + value);
+    return "uid_" + operatorN + (operatorCount == 1 ? "" : "_" + (operatorCount - 1)) + "_" + getTablePath(conf);
   }
 
   public static String getTablePath(Configuration conf) {

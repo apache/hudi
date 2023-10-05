@@ -21,9 +21,11 @@ package org.apache.hudi.sink.bucket;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsInference;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.util.AvroSchemaConverter;
@@ -86,8 +88,25 @@ public class ITTestConsistentBucketStreamWrite extends TestLogger {
     conf.setString(FlinkOptions.INDEX_TYPE, "BUCKET");
     conf.setString(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE, "CONSISTENT_HASHING");
     conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 4);
-    conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
     conf.setString(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    testWriteToHoodie(conf, "mor_write", 1, EXPECTED);
+  }
+
+  @Test
+  public void testWriteMORWithResizePlan() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
+    conf.setString(FlinkOptions.INDEX_TYPE, "BUCKET");
+    conf.setString(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE, "CONSISTENT_HASHING");
+    conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 4);
+    conf.setString(HoodieIndexConfig.BUCKET_INDEX_MAX_NUM_BUCKETS.key(), "8");
+    conf.setString(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    // Enable inline resize scheduling
+    conf.setBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, true);
+    // Manually set the max commits to trigger clustering quickly
+    conf.setString(HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMITS.key(), "1");
+    // Manually set the split threshold to trigger split in the clustering
+    conf.set(FlinkOptions.WRITE_PARQUET_MAX_FILE_SIZE, 1);
+    conf.setString(HoodieIndexConfig.BUCKET_SPLIT_THRESHOLD.key(), String.valueOf(1 / 1024.0 / 1024.0));
     testWriteToHoodie(conf, "mor_write", 1, EXPECTED);
   }
 
@@ -97,7 +116,6 @@ public class ITTestConsistentBucketStreamWrite extends TestLogger {
     conf.setString(FlinkOptions.INDEX_TYPE, "BUCKET");
     conf.setString(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE, "CONSISTENT_HASHING");
     conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 4);
-    conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
     conf.setString(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
     conf.setString(FlinkOptions.OPERATION, "bulk_insert");
 
@@ -113,7 +131,6 @@ public class ITTestConsistentBucketStreamWrite extends TestLogger {
     conf.setString(FlinkOptions.INDEX_TYPE, "BUCKET");
     conf.setString(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE, "CONSISTENT_HASHING");
     conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 4);
-    conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
     conf.setString(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
     conf.setString(FlinkOptions.OPERATION, "INSERT_OVERWRITE");
 
@@ -170,8 +187,7 @@ public class ITTestConsistentBucketStreamWrite extends TestLogger {
     OptionsInference.setupSinkTasks(conf, execEnv.getParallelism());
     DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream);
     // bulk_insert mode
-    final String writeOperation = conf.get(FlinkOptions.OPERATION);
-    if (WriteOperationType.fromValue(writeOperation) == WriteOperationType.BULK_INSERT) {
+    if (OptionsResolver.isBulkInsertOperation(conf)) {
       Pipelines.bulkInsert(conf, rowType, dataStream);
     } else {
       DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, hoodieRecordDataStream);

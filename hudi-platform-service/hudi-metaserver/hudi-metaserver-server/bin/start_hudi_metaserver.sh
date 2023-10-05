@@ -16,11 +16,4 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-#
-# Usage: ./scripts/checkout_pr.sh
-#
-# Checkout a PR given the PR number into a local branch. PR branches are named
-# using the convention "pull/<PR_NUMBER>", to enable pr_push_command.sh to work
-# in tandem.
-#
 java -jar hudi-metaserver-*.jar

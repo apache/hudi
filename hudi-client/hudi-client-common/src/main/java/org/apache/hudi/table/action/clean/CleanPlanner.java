@@ -171,7 +171,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
                   .deserializeHoodieCleanMetadata(hoodieTable.getActiveTimeline().getInstantDetails(lastClean.get()).get());
           if ((cleanMetadata.getEarliestCommitToRetain() != null)
                   && (cleanMetadata.getEarliestCommitToRetain().length() > 0)
-                  && !hoodieTable.getActiveTimeline().isBeforeTimelineStarts(cleanMetadata.getEarliestCommitToRetain())) {
+                  && !hoodieTable.getActiveTimeline().getCommitsTimeline().isBeforeTimelineStarts(cleanMetadata.getEarliestCommitToRetain())) {
             return getPartitionPathsForIncrementalCleaning(cleanMetadata, instantToRetain);
           }
         }
@@ -291,8 +291,8 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     return Pair.of(toDeletePartition, deletePaths);
   }
 
-  private Pair<Boolean, List<CleanFileInfo>> getFilesToCleanKeepingLatestCommits(String partitionPath) {
-    return getFilesToCleanKeepingLatestCommits(partitionPath, config.getCleanerCommitsRetained(), HoodieCleaningPolicy.KEEP_LATEST_COMMITS);
+  private Pair<Boolean, List<CleanFileInfo>> getFilesToCleanKeepingLatestCommits(String partitionPath, Option<HoodieInstant> earliestCommitToRetain) {
+    return getFilesToCleanKeepingLatestCommits(partitionPath, config.getCleanerCommitsRetained(), earliestCommitToRetain, HoodieCleaningPolicy.KEEP_LATEST_COMMITS);
   }
 
   /**
@@ -312,7 +312,8 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    * @return A {@link Pair} whose left is boolean indicating whether partition itself needs to be deleted,
    *         and right is a list of {@link CleanFileInfo} about the files in the partition that needs to be deleted.
    */
-  private Pair<Boolean, List<CleanFileInfo>> getFilesToCleanKeepingLatestCommits(String partitionPath, int commitsRetained, HoodieCleaningPolicy policy) {
+  private Pair<Boolean, List<CleanFileInfo>> getFilesToCleanKeepingLatestCommits(String partitionPath,
+      int commitsRetained, Option<HoodieInstant> earliestCommitToRetain, HoodieCleaningPolicy policy) {
     LOG.info("Cleaning " + partitionPath + ", retaining latest " + commitsRetained + " commits. ");
     List<CleanFileInfo> deletePaths = new ArrayList<>();
 
@@ -324,10 +325,9 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     // determine if we have enough commits, to start cleaning.
     boolean toDeletePartition = false;
     if (commitTimeline.countInstants() > commitsRetained) {
-      Option<HoodieInstant> earliestCommitToRetainOption = getEarliestCommitToRetain();
-      HoodieInstant earliestCommitToRetain = earliestCommitToRetainOption.get();
+      HoodieInstant earliestInstant = earliestCommitToRetain.get();
       // all replaced file groups before earliestCommitToRetain are eligible to clean
-      deletePaths.addAll(getReplacedFilesEligibleToClean(savepointedFiles, partitionPath, earliestCommitToRetainOption));
+      deletePaths.addAll(getReplacedFilesEligibleToClean(savepointedFiles, partitionPath, earliestCommitToRetain));
       // add active files
       List<HoodieFileGroup> fileGroups = fileSystemView.getAllFileGroups(partitionPath).collect(Collectors.toList());
       for (HoodieFileGroup fileGroup : fileGroups) {
@@ -339,7 +339,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
 
         String lastVersion = fileSliceList.get(0).getBaseInstantTime();
         String lastVersionBeforeEarliestCommitToRetain =
-            getLatestVersionBeforeCommit(fileSliceList, earliestCommitToRetain);
+            getLatestVersionBeforeCommit(fileSliceList, earliestInstant);
 
         // Ensure there are more than 1 version of the file (we only clean old files from updates)
         // i.e., always spare the last commit.
@@ -372,7 +372,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
 
           // Always keep the last commit
           if (!isFileSliceNeededForPendingMajorOrMinorCompaction(aSlice) && HoodieTimeline
-              .compareTimestamps(earliestCommitToRetain.getTimestamp(), HoodieTimeline.GREATER_THAN, fileCommitTime)) {
+              .compareTimestamps(earliestInstant.getTimestamp(), HoodieTimeline.GREATER_THAN, fileCommitTime)) {
             // this is a commit, that should be cleaned.
             aFile.ifPresent(hoodieDataFile -> {
               deletePaths.add(new CleanFileInfo(hoodieDataFile.getPath(), false));
@@ -393,7 +393,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       // mark it to be deleted
       if (fileGroups.isEmpty()
           && !hasPendingFiles(partitionPath)
-          && noSubsequentReplaceCommit(earliestCommitToRetain.getTimestamp(), partitionPath)) {
+          && noSubsequentReplaceCommit(earliestInstant.getTimestamp(), partitionPath)) {
         toDeletePartition = true;
       }
     }
@@ -428,10 +428,11 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    * This policy gives much more flexibility to users for retaining data for running incremental queries as compared to
    * KEEP_LATEST_COMMITS cleaning policy. The default number of hours is 5.
    * @param partitionPath partition path to check
+   * @param earliestCommitToRetain earliest commit to retain
    * @return list of files to clean
    */
-  private Pair<Boolean, List<CleanFileInfo>> getFilesToCleanKeepingLatestHours(String partitionPath) {
-    return getFilesToCleanKeepingLatestCommits(partitionPath, 0, HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS);
+  private Pair<Boolean, List<CleanFileInfo>> getFilesToCleanKeepingLatestHours(String partitionPath, Option<HoodieInstant> earliestCommitToRetain) {
+    return getFilesToCleanKeepingLatestCommits(partitionPath, 0, earliestCommitToRetain, HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS);
   }
 
   private List<CleanFileInfo> getReplacedFilesEligibleToClean(List<String> savepointedFiles, String partitionPath, Option<HoodieInstant> earliestCommitToRetain) {
@@ -485,15 +486,15 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   /**
    * Returns files to be cleaned for the given partitionPath based on cleaning policy.
    */
-  public Pair<Boolean, List<CleanFileInfo>> getDeletePaths(String partitionPath) {
+  public Pair<Boolean, List<CleanFileInfo>> getDeletePaths(String partitionPath, Option<HoodieInstant> earliestCommitToRetain) {
     HoodieCleaningPolicy policy = config.getCleanerPolicy();
     Pair<Boolean, List<CleanFileInfo>> deletePaths;
     if (policy == HoodieCleaningPolicy.KEEP_LATEST_COMMITS) {
-      deletePaths = getFilesToCleanKeepingLatestCommits(partitionPath);
+      deletePaths = getFilesToCleanKeepingLatestCommits(partitionPath, earliestCommitToRetain);
     } else if (policy == HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS) {
       deletePaths = getFilesToCleanKeepingLatestVersions(partitionPath);
     } else if (policy == HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS) {
-      deletePaths = getFilesToCleanKeepingLatestHours(partitionPath);
+      deletePaths = getFilesToCleanKeepingLatestHours(partitionPath, earliestCommitToRetain);
     } else {
       throw new IllegalArgumentException("Unknown cleaning policy : " + policy.name());
     }
@@ -505,11 +506,11 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   }
 
   /**
-   * Returns earliest commit to retain based on cleaning policy.
+   * Returns the earliest commit to retain based on cleaning policy.
    */
   public Option<HoodieInstant> getEarliestCommitToRetain() {
     return CleanerUtils.getEarliestCommitToRetain(
-        hoodieTable.getMetaClient().getActiveTimeline().getCommitsTimeline(),
+        hoodieTable.getMetaClient().getActiveTimeline().getCommitsAndCompactionTimeline(),
         config.getCleanerPolicy(),
         config.getCleanerCommitsRetained(),
         Instant.now(),

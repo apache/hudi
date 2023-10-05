@@ -66,10 +66,10 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.io.storage.HoodieAvroHFileReader.SCHEMA_KEY;
 
 /**
@@ -269,7 +269,7 @@ public class HoodieClientTestUtils {
         HFile.Reader reader =
             HoodieHFileUtils.createHFileReader(fs, new Path(path), cacheConfig, fs.getConf());
         if (schema == null) {
-          schema = new Schema.Parser().parse(new String(reader.getHFileInfo().get(SCHEMA_KEY.getBytes())));
+          schema = new Schema.Parser().parse(new String(reader.getHFileInfo().get(getUTF8Bytes(SCHEMA_KEY))));
         }
         HFileScanner scanner = reader.getScanner(false, false);
         if (!scanner.seekTo()) {
@@ -326,20 +326,6 @@ public class HoodieClientTestUtils {
     } else {
       return Option.empty();
     }
-  }
-
-  public static Properties getPropertiesForKeyGen() {
-    return getPropertiesForKeyGen(false);
-  }
-
-  public static Properties getPropertiesForKeyGen(boolean populateMetaFields) {
-    Properties properties = new Properties();
-    properties.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), String.valueOf(populateMetaFields));
-    properties.put("hoodie.datasource.write.recordkey.field", "_row_key");
-    properties.put("hoodie.datasource.write.partitionpath.field", "partition_path");
-    properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
-    properties.put(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
-    return properties;
   }
 
   private static Option<HoodieCommitMetadata> getCommitMetadataForInstant(HoodieTableMetaClient metaClient, HoodieInstant instant) {

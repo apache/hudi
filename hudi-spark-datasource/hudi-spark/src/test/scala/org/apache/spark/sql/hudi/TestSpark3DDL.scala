@@ -18,11 +18,12 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY, TABLE_NAME}
+import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY, SPARK_SQL_INSERT_INTO_OPERATION, TABLE_NAME}
 import org.apache.hudi.QuickstartUtils.{DataGenerator, convertToStringList, getQuickstartWriteConfigs}
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, RawTripTestPayload}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.DataSourceTestUtils
@@ -71,71 +72,71 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   test("Test alter column types") {
     withRecordType()(withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
-          val tableName = generateTableName
-          val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
-          if (HoodieSparkUtils.gteqSpark3_1) {
-            spark.sql("set hoodie.schema.on.read.enable=true")
-            // NOTE: This is required since as this tests use type coercions which were only permitted in Spark 2.x
-            //       and are disallowed now by default in Spark 3.x
-            spark.sql("set spark.sql.storeAssignmentPolicy=legacy")
-            createAndPreparePartitionTable(spark, tableName, tablePath, tableType)
-            // date -> string -> date
-            spark.sql(s"alter table $tableName alter column col6 type String")
-            checkAnswer(spark.sql(s"select col6 from $tableName where id = 1").collect())(
-              Seq("2021-12-25")
-            )
-            spark.sql(
-              s"""
-                 | insert into $tableName values
-                 | (1,1,13.0,100001,101.01,1001.0001,100001.0001,'a000001','2021-12-26','2021-12-25 12:01:01',true,'a01','2021-12-25')
-                 |""".stripMargin)
-            spark.sql(s"alter table $tableName alter column col6 type date")
-            checkAnswer(spark.sql(s"select col6 from $tableName where id = 1 or id = 5 order by id").collect())(
-              Seq(java.sql.Date.valueOf("2021-12-26")), // value from new file
-              Seq(java.sql.Date.valueOf("2021-12-26")) // value from old file
-            )
-            // int -> double -> decimal
-            spark.sql(s"alter table $tableName alter column col0 type double")
-            spark.sql(
-              s"""
-                 | insert into $tableName values
-                 | (1,1,13.0,100001,101.01,1001.0001,100001.0001,'a000001','2021-12-25','2021-12-25 12:01:01',true,'a01','2021-12-25'),
-                 | (6,1,14.0,100001,101.01,1001.0001,100001.0001,'a000001','2021-12-25','2021-12-25 12:01:01',true,'a01','2021-12-25')
-                 |""".stripMargin)
-            spark.sql(s"alter table $tableName alter column col0 type decimal(16, 4)")
-            checkAnswer(spark.sql(s"select col0 from $tableName where id = 1 or id = 6 order by id").collect())(
-              Seq(new java.math.BigDecimal("13.0000")),
-              Seq(new java.math.BigDecimal("14.0000"))
-            )
-            // float -> double -> decimal
-            spark.sql(s"alter table $tableName alter column col2 type double")
-            spark.sql(
-              s"""
-                 | insert into $tableName values
-                 | (1,1,13.0,100001,901.01,1001.0001,100001.0001,'a000001','2021-12-25','2021-12-25 12:01:01',true,'a01','2021-12-25'),
-                 | (6,1,14.0,100001,601.01,1001.0001,100001.0001,'a000001','2021-12-25','2021-12-25 12:01:01',true,'a01','2021-12-25')
-                 |""".stripMargin)
-            spark.sql(s"alter table $tableName alter column col2 type decimal(16, 4)")
-            checkAnswer(spark.sql(s"select col0, col2 from $tableName where id = 1 or id = 6 order by id").collect())(
-              Seq(new java.math.BigDecimal("13.0000"), new java.math.BigDecimal("901.0100")),
-              Seq(new java.math.BigDecimal("14.0000"), new java.math.BigDecimal("601.0100"))
-            )
-            // long -> double -> decimal
-            spark.sql(s"alter table $tableName alter column col1 type double")
-            spark.sql(
-              s"""
-                 | insert into $tableName values
-                 | (1,1,13.0,700001.0,901.01,1001.0001,100001.0001,'a000001','2021-12-25','2021-12-25 12:01:01',true,'a01','2021-12-25')
-                 |""".stripMargin)
-            spark.sql(s"alter table $tableName alter column col1 type decimal(16, 4)")
-            checkAnswer(spark.sql(s"select col0, col2, col1 from $tableName where id = 1 or id = 6 order by id").collect())(
-              Seq(new java.math.BigDecimal("13.0000"), new java.math.BigDecimal("901.0100"), new java.math.BigDecimal("700001.0000")),
-              Seq(new java.math.BigDecimal("14.0000"), new java.math.BigDecimal("601.0100"), new java.math.BigDecimal("100001.0000"))
-            )
-            spark.sessionState.catalog.dropTable(TableIdentifier(tableName), true, true)
-            spark.sessionState.catalog.refreshTable(TableIdentifier(tableName))
-          }
+        val tableName = generateTableName
+        val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
+        if (HoodieSparkUtils.gteqSpark3_1) {
+          spark.sql("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
+          spark.sql("set hoodie.schema.on.read.enable=true")
+          // NOTE: This is required since as this tests use type coercions which were only permitted in Spark 2.x
+          //       and are disallowed now by default in Spark 3.x
+          spark.sql("set spark.sql.storeAssignmentPolicy=legacy")
+          createAndPreparePartitionTable(spark, tableName, tablePath, tableType)
+          // date -> string -> date
+          spark.sql(s"alter table $tableName alter column col6 type String")
+          checkAnswer(spark.sql(s"select col6 from $tableName where id = 1").collect())(
+            Seq("2021-12-25")
+          )
+          spark.sql(
+            s"""
+               | insert into $tableName values
+               | (1,1,13.0,100001,101.01,1001.0001,100001.0001,'a000001','2021-12-26','2021-12-25 12:01:01',true,'a01','2021-12-25')
+               |""".stripMargin)
+          spark.sql(s"alter table $tableName alter column col6 type date")
+          checkAnswer(spark.sql(s"select col6 from $tableName where id = 1 or id = 5 order by id").collect())(
+            Seq(java.sql.Date.valueOf("2021-12-26")), // value from new file
+            Seq(java.sql.Date.valueOf("2021-12-26"))  // value from old file
+          )
+          // int -> double -> decimal
+          spark.sql(s"alter table $tableName alter column col0 type double")
+          spark.sql(
+            s"""
+               | insert into $tableName values
+               | (1,1,13.0,100001,101.01,1001.0001,100001.0001,'a000001','2021-12-25','2021-12-25 12:01:01',true,'a01','2021-12-25'),
+               | (6,1,14.0,100001,101.01,1001.0001,100001.0001,'a000001','2021-12-25','2021-12-25 12:01:01',true,'a01','2021-12-25')
+               |""".stripMargin)
+          spark.sql(s"alter table $tableName alter column col0 type decimal(16, 4)")
+          checkAnswer(spark.sql(s"select col0 from $tableName where id = 1 or id = 6 order by id").collect())(
+            Seq(new java.math.BigDecimal("13.0000")),
+            Seq(new java.math.BigDecimal("14.0000"))
+          )
+          // float -> double -> decimal
+          spark.sql(s"alter table $tableName alter column col2 type double")
+          spark.sql(
+            s"""
+               | insert into $tableName values
+               | (1,1,13.0,100001,901.01,1001.0001,100001.0001,'a000001','2021-12-25','2021-12-25 12:01:01',true,'a01','2021-12-25'),
+               | (6,1,14.0,100001,601.01,1001.0001,100001.0001,'a000001','2021-12-25','2021-12-25 12:01:01',true,'a01','2021-12-25')
+               |""".stripMargin)
+          spark.sql(s"alter table $tableName alter column col2 type decimal(16, 4)")
+          checkAnswer(spark.sql(s"select col0, col2 from $tableName where id = 1 or id = 6 order by id").collect())(
+            Seq(new java.math.BigDecimal("13.0000"), new java.math.BigDecimal("901.0100")),
+            Seq(new java.math.BigDecimal("14.0000"), new java.math.BigDecimal("601.0100"))
+          )
+          // long -> double -> decimal
+          spark.sql(s"alter table $tableName alter column col1 type double")
+          spark.sql(
+            s"""
+               | insert into $tableName values
+               | (1,1,13.0,700001.0,901.01,1001.0001,100001.0001,'a000001','2021-12-25','2021-12-25 12:01:01',true,'a01','2021-12-25')
+               |""".stripMargin)
+          spark.sql(s"alter table $tableName alter column col1 type decimal(16, 4)")
+          checkAnswer(spark.sql(s"select col0, col2, col1 from $tableName where id = 1 or id = 6 order by id").collect())(
+            Seq(new java.math.BigDecimal("13.0000"), new java.math.BigDecimal("901.0100"), new java.math.BigDecimal("700001.0000")),
+            Seq(new java.math.BigDecimal("14.0000"), new java.math.BigDecimal("601.0100"), new java.math.BigDecimal("100001.0000"))
+          )
+          spark.sessionState.catalog.dropTable(TableIdentifier(tableName), true, true)
+          spark.sessionState.catalog.refreshTable(TableIdentifier(tableName))
+          spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
         }
       }
     })
@@ -233,156 +234,160 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   test("Test alter table properties and add rename drop column") {
     withRecordType()(withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
-          val tableName = generateTableName
-          val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
-          if (HoodieSparkUtils.gteqSpark3_1) {
-            spark.sql("set hoodie.schema.on.read.enable=true")
-            // NOTE: This is required since as this tests use type coercions which were only permitted in Spark 2.x
-            //       and are disallowed now by default in Spark 3.x
-            spark.sql("set spark.sql.storeAssignmentPolicy=legacy")
-            createAndPreparePartitionTable(spark, tableName, tablePath, tableType)
+        val tableName = generateTableName
+        val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
+        // disable automatic inline compaction
+        spark.sql("set hoodie.compact.inline=false")
+        spark.sql("set hoodie.compact.schedule.inline=false")
 
-            // test set properties
-            spark.sql(s"alter table $tableName set tblproperties(comment='it is a hudi table', 'key1'='value1', 'key2'='value2')")
-            val meta = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
-            assert(meta.comment.get.equals("it is a hudi table"))
-            assert(Seq("key1", "key2").filter(meta.properties.contains(_)).size == 2)
-            // test unset properties
-            spark.sql(s"alter table $tableName unset tblproperties(comment, 'key1', 'key2')")
-            val unsetMeta = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
-            assert(Seq("key1", "key2").filter(unsetMeta.properties.contains(_)).size == 0)
-            assert(unsetMeta.comment.isEmpty)
-            // test forbidden operation.
-            checkException(s"Alter table $tableName add columns(col_new1 int first)")("forbid adjust top-level columns position by using through first syntax")
-            HoodieRecord.HOODIE_META_COLUMNS.subList(0, HoodieRecord.HOODIE_META_COLUMNS.size - 2).asScala.foreach { f =>
-              checkException(s"Alter table $tableName add columns(col_new1 int after $f)")("forbid adjust the position of ordinary columns between meta columns")
-            }
-            Seq("id", "comb", "par").foreach { col =>
-              checkException(s"alter table $tableName drop column $col")("cannot support apply changes for primaryKey/CombineKey/partitionKey")
-              checkException(s"alter table $tableName rename column $col to ${col + col}")("cannot support apply changes for primaryKey/CombineKey/partitionKey")
-            }
-            // check duplicate add or rename
-            // keep consistent with hive, column names insensitive
-            checkExceptions(s"alter table $tableName rename column col0 to col9")(Seq("cannot rename column: col0 to a existing name",
-              "Cannot rename column, because col9 already exists in root"))
-            checkExceptions(s"alter table $tableName rename column col0 to COL9")(Seq("cannot rename column: col0 to a existing name", "Cannot rename column, because COL9 already exists in root"))
-            checkExceptions(s"alter table $tableName add columns(col9 int first)")(Seq("cannot add column: col9 which already exist", "Cannot add column, because col9 already exists in root"))
-            checkExceptions(s"alter table $tableName add columns(COL9 int first)")(Seq("cannot add column: COL9 which already exist", "Cannot add column, because COL9 already exists in root"))
-            // test add comment for columns / alter columns comment
-            spark.sql(s"alter table $tableName add columns(col1_new int comment 'add new columns col1_new after id' after id)")
-            spark.sql(s"alter table $tableName alter column col9 comment 'col9 desc'")
-            val schema = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName)).schema
-            assert(schema.filter(p => p.name.equals("col1_new")).get(0).getComment().get == "add new columns col1_new after id")
-            assert(schema.filter(p => p.name.equals("col9")).get(0).getComment().get == "col9 desc")
-            // test change column type float to double
-            spark.sql(s"alter table $tableName alter column col2 type double")
-            spark.sql(s"select id, col1_new, col2 from $tableName where id = 1 or id = 2 order by id").show(false)
-            spark.sql(
-              s"""
-                 | insert into $tableName values
-                 | (1,3,1,11,100001,101.01,1001.0001,100001.0001,'a000001','2021-12-25','2021-12-25 12:01:01',true,'a01','2021-12-25'),
-                 | (6,6,5,15,100005,105.05,1005.0005,100005.0005,'a000005','2021-12-26','2021-12-26 12:05:05',false,'a05','2021-12-26')
-                 |""".stripMargin)
+        if (HoodieSparkUtils.gteqSpark3_1) {
+          spark.sql("set hoodie.schema.on.read.enable=true")
+          spark.sql("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
+          // NOTE: This is required since as this tests use type coercions which were only permitted in Spark 2.x
+          //       and are disallowed now by default in Spark 3.x
+          spark.sql("set spark.sql.storeAssignmentPolicy=legacy")
+          createAndPreparePartitionTable(spark, tableName, tablePath, tableType)
 
-            spark.sql(s"select id, col1_new, col2 from $tableName where id = 1 or id = 6 or id = 2 order by id").show(false)
-            // try schedule compact
-            if (tableType == "mor") spark.sql(s"schedule compaction  on $tableName")
-            // test change column type decimal(10,4) 为decimal(18,8)
-            spark.sql(s"alter table $tableName alter column col4 type decimal(18, 8)")
-            spark.sql(s"select id, col1_new, col2 from $tableName where id = 1 or id = 2 order by id").show(false)
-            spark.sql(
-              s"""
-                 | insert into $tableName values
-                 | (5,6,5,15,100005,105.05,1005.0005,100005.0005,'a000005','2021-12-26','2021-12-26 12:05:05',false,'a05','2021-12-26')
-                 |""".stripMargin)
-
-            spark.sql(s"select id, col1_new, col4 from $tableName where id = 1 or id = 6 or id = 2 order by id").show(false)
-            // test change column type float to double
-            spark.sql(s"alter table $tableName alter column col2 type string")
-            spark.sql(s"select id, col1_new, col2 from $tableName where id = 1 or id = 2 order by id").show(false)
-            spark.sql(
-              s"""
-                 | insert into $tableName values
-                 | (1,3,1,11,100001,'101.01',1001.0001,100001.0001,'a000001','2021-12-25','2021-12-25 12:01:01',true,'a01','2021-12-25'),
-                 | (6,6,5,15,100005,'105.05',1005.0005,100005.0005,'a000005','2021-12-26','2021-12-26 12:05:05',false,'a05','2021-12-26')
-                 |""".stripMargin)
-
-            spark.sql(s"select id, col1_new, col2 from $tableName where id = 1 or id = 6 or id = 2 order by id").show(false)
-            // try schedule compact
-            if (tableType == "mor") spark.sql(s"schedule compaction  on $tableName")
-            // if tableType is mor, check compaction
-            if (tableType == "mor") {
-              val compactionRows = spark.sql(s"show compaction on $tableName limit 10").collect()
-              val timestamps = compactionRows.map(_.getString(0))
-              assertResult(2)(timestamps.length)
-              spark.sql(s"run compaction on $tableName at ${timestamps(1)}")
-              spark.sql(s"run compaction on $tableName at ${timestamps(0)}")
-            }
-            spark.sql(
-              s"""
-                 | insert into $tableName values
-                 | (1,3,1,11,100001,'101.01',1001.0001,100009.0001,'a000008','2021-12-25','2021-12-25 12:01:01',true,'a01','2021-12-25'),
-                 | (11,3,1,11,100001,'101.01',1001.0001,100011.0001,'a000008','2021-12-25','2021-12-25 12:01:01',true,'a01','2021-12-25'),
-                 | (6,6,5,15,100005,'105.05',1005.0005,100007.0005,'a000009','2021-12-26','2021-12-26 12:05:05',false,'a05','2021-12-26')
-                 |""".stripMargin)
-
-            spark.sql(s"select id, col1_new, col2 from $tableName where id = 1 or id = 6 or id = 2 or id = 11 order by id").show(false)
+          // test set properties
+          spark.sql(s"alter table $tableName set tblproperties(comment='it is a hudi table', 'key1'='value1', 'key2'='value2')")
+          val meta = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
+          assert(meta.comment.get.equals("it is a hudi table"))
+          assert(Seq("key1", "key2").filter(meta.properties.contains(_)).size == 2)
+          // test unset properties
+          spark.sql(s"alter table $tableName unset tblproperties(comment, 'key1', 'key2')")
+          val unsetMeta = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
+          assert(Seq("key1", "key2").filter(unsetMeta.properties.contains(_)).size == 0)
+          assert(unsetMeta.comment.isEmpty)
+          // test forbidden operation.
+          checkException(s"Alter table $tableName add columns(col_new1 int first)")("forbid adjust top-level columns position by using through first syntax")
+          HoodieRecord.HOODIE_META_COLUMNS.subList(0, HoodieRecord.HOODIE_META_COLUMNS.size - 2).asScala.foreach {f =>
+            checkException(s"Alter table $tableName add columns(col_new1 int after $f)")("forbid adjust the position of ordinary columns between meta columns")
           }
+          Seq("id", "comb", "par").foreach { col =>
+            checkException(s"alter table $tableName drop column $col")("cannot support apply changes for primaryKey/CombineKey/partitionKey")
+            checkException(s"alter table $tableName rename column $col to ${col + col}")("cannot support apply changes for primaryKey/CombineKey/partitionKey")
+          }
+          // check duplicate add or rename
+          // keep consistent with hive, column names insensitive
+          checkExceptions(s"alter table $tableName rename column col0 to col9")(Seq("cannot rename column: col0 to a existing name",
+            "Cannot rename column, because col9 already exists in root"))
+          checkExceptions(s"alter table $tableName rename column col0 to COL9")(Seq("cannot rename column: col0 to a existing name", "Cannot rename column, because COL9 already exists in root"))
+          checkExceptions(s"alter table $tableName add columns(col9 int first)")(Seq("cannot add column: col9 which already exist", "Cannot add column, because col9 already exists in root"))
+          checkExceptions(s"alter table $tableName add columns(COL9 int first)")(Seq("cannot add column: COL9 which already exist", "Cannot add column, because COL9 already exists in root"))
+          // test add comment for columns / alter columns comment
+          spark.sql(s"alter table $tableName add columns(col1_new int comment 'add new columns col1_new after id' after id)")
+          spark.sql(s"alter table $tableName alter column col9 comment 'col9 desc'")
+          val schema = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName)).schema
+          assert(schema.filter(p => p.name.equals("col1_new")).get(0).getComment().get == "add new columns col1_new after id")
+          assert(schema.filter(p => p.name.equals("col9")).get(0).getComment().get == "col9 desc")
+          // test change column type float to double
+          spark.sql(s"alter table $tableName alter column col2 type double")
+          spark.sql(s"select id, col1_new, col2 from $tableName where id = 1 or id = 2 order by id").show(false)
+          spark.sql(
+            s"""
+               | insert into $tableName values
+               | (1,3,1,11,100001,101.01,1001.0001,100001.0001,'a000001','2021-12-25','2021-12-25 12:01:01',true,'a01','2021-12-25'),
+               | (6,6,5,15,100005,105.05,1005.0005,100005.0005,'a000005','2021-12-26','2021-12-26 12:05:05',false,'a05','2021-12-26')
+               |""".stripMargin)
+
+          spark.sql(s"select id, col1_new, col2 from $tableName where id = 1 or id = 6 or id = 2 order by id").show(false)
+          // try schedule compact
+          if (tableType == "mor") spark.sql(s"schedule compaction  on $tableName")
+          // test change column type decimal(10,4) 为decimal(18,8)
+          spark.sql(s"alter table $tableName alter column col4 type decimal(18, 8)")
+          spark.sql(s"select id, col1_new, col2 from $tableName where id = 1 or id = 2 order by id").show(false)
+          spark.sql(
+            s"""
+               | insert into $tableName values
+               | (5,6,5,15,100005,105.05,1005.0005,100005.0005,'a000005','2021-12-26','2021-12-26 12:05:05',false,'a05','2021-12-26')
+               |""".stripMargin)
+
+          spark.sql(s"select id, col1_new, col4 from $tableName where id = 1 or id = 6 or id = 2 order by id").show(false)
+          // test change column type float to double
+          spark.sql(s"alter table $tableName alter column col2 type string")
+          spark.sql(s"select id, col1_new, col2 from $tableName where id = 1 or id = 2 order by id").show(false)
+          spark.sql(
+            s"""
+               | insert into $tableName values
+               | (1,3,1,11,100001,'101.01',1001.0001,100001.0001,'a000001','2021-12-25','2021-12-25 12:01:01',true,'a01','2021-12-25'),
+               | (6,6,5,15,100005,'105.05',1005.0005,100005.0005,'a000005','2021-12-26','2021-12-26 12:05:05',false,'a05','2021-12-26')
+               |""".stripMargin)
+
+          spark.sql(s"select id, col1_new, col2 from $tableName where id = 1 or id = 6 or id = 2 order by id").show(false)
+          // try schedule compact
+          if (tableType == "mor") spark.sql(s"schedule compaction  on $tableName")
+          // if tableType is mor, check compaction
+          if (tableType == "mor") {
+            val compactionRows = spark.sql(s"show compaction on $tableName limit 10").collect()
+            val timestamps = compactionRows.map(_.getString(0))
+            assertResult(2)(timestamps.length)
+            spark.sql(s"run compaction on $tableName at ${timestamps(1)}")
+            spark.sql(s"run compaction on $tableName at ${timestamps(0)}")
+          }
+          spark.sql(
+            s"""
+               | insert into $tableName values
+               | (1,3,1,11,100001,'101.01',1001.0001,100009.0001,'a000008','2021-12-25','2021-12-25 12:01:01',true,'a01','2021-12-25'),
+               | (11,3,1,11,100001,'101.01',1001.0001,100011.0001,'a000008','2021-12-25','2021-12-25 12:01:01',true,'a01','2021-12-25'),
+               | (6,6,5,15,100005,'105.05',1005.0005,100007.0005,'a000009','2021-12-26','2021-12-26 12:05:05',false,'a05','2021-12-26')
+               |""".stripMargin)
+
+          spark.sql(s"select id, col1_new, col2 from $tableName where id = 1 or id = 6 or id = 2 or id = 11 order by id").show(false)
         }
       }
+      spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
     })
   }
 
   test("Test Chinese table ") {
     withRecordType()(withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
-          val tableName = generateTableName
-          val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
-          if (HoodieSparkUtils.gteqSpark3_1) {
-            spark.sql("set hoodie.schema.on.read.enable=true")
-            spark.sql(
-              s"""
-                 |create table $tableName (
-                 |  id int, comb int, `名字` string, col9 string, `成绩` int, `身高` float, `体重` double, `上次更新时间` date, par date
-                 |) using hudi
-                 | location '$tablePath'
-                 | options (
-                 |  type = '$tableType',
-                 |  primaryKey = 'id',
-                 |  preCombineField = 'comb'
-                 | )
-                 | partitioned by (par)
+        val tableName = generateTableName
+        val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
+        if (HoodieSparkUtils.gteqSpark3_1) {
+          spark.sql("set hoodie.schema.on.read.enable=true")
+          spark.sql("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int, comb int, `名字` string, col9 string, `成绩` int, `身高` float, `体重` double, `上次更新时间` date, par date
+               |) using hudi
+               | location '$tablePath'
+               | options (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'comb'
+               | )
+               | partitioned by (par)
              """.stripMargin)
-            spark.sql(
-              s"""
-                 | insert into $tableName values
-                 | (1,3,'李明', '读书', 100,180.0001,99.0001,'2021-12-25', '2021-12-26')
-                 |""".stripMargin)
-            spark.sql(s"alter table $tableName rename column col9 to `爱好_Best`")
+          spark.sql(
+            s"""
+               | insert into $tableName values
+               | (1,3,'李明', '读书', 100,180.0001,99.0001,DATE'2021-12-25', DATE'2021-12-26')
+               |""".stripMargin)
+          spark.sql(s"alter table $tableName rename column col9 to `爱好_Best`")
 
-            // update current table to produce log files for mor
-            spark.sql(
-              s"""
-                 | insert into $tableName values
-                 | (1,3,'李明', '读书', 100,180.0001,99.0001,'2021-12-26', '2021-12-26')
-                 |""".stripMargin)
+          // update current table to produce log files for mor
+          spark.sql(
+            s"""
+               | insert into $tableName values
+               | (1,3,'李明', '读书', 100,180.0001,99.0001,DATE'2021-12-26', DATE'2021-12-26')
+               |""".stripMargin)
 
-            // alter date to string
-            spark.sql(s"alter table $tableName alter column `上次更新时间` type string ")
-            checkAnswer(spark.sql(s"select `上次更新时间` from $tableName").collect())(
-              Seq("2021-12-26")
-            )
-            // alter string to date
-            spark.sql(s"alter table $tableName alter column `上次更新时间` type date ")
-            spark.sql(s"select `上次更新时间` from $tableName").collect()
-            checkAnswer(spark.sql(s"select `上次更新时间` from $tableName").collect())(
-              Seq(java.sql.Date.valueOf("2021-12-26"))
-            )
-          }
+          // alter date to string
+          spark.sql(s"alter table $tableName alter column `上次更新时间` type string ")
+          checkAnswer(spark.sql(s"select `上次更新时间` from $tableName").collect())(
+            Seq("2021-12-26")
+          )
+          // alter string to date
+          spark.sql(s"alter table $tableName alter column `上次更新时间` type date ")
+          spark.sql(s"select `上次更新时间` from $tableName").collect()
+          checkAnswer(spark.sql(s"select `上次更新时间` from $tableName").collect())(
+            Seq(java.sql.Date.valueOf("2021-12-26"))
+          )
         }
       }
+      spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
     })
   }
 
@@ -432,20 +437,42 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           checkAnswer(createTestResult(tableName))(
             Seq(1, "jack", "haha", 1.9, 1000), Seq(2, "jack","exx1", 0.9, 1000)
           )
+          var maxColumnId = getMaxColumnId(tablePath)
           // drop column newprice
-
           spark.sql(s"alter table ${tableName} drop column newprice")
           checkAnswer(createTestResult(tableName))(
             Seq(1, "jack", "haha", 1000), Seq(2, "jack","exx1", 1000)
           )
+          validateInternalSchema(tablePath, isDropColumn = true, currentMaxColumnId = maxColumnId)
+          maxColumnId = getMaxColumnId(tablePath)
           // add newprice back
           spark.sql(s"alter table ${tableName} add columns(newprice string comment 'add newprice back' after ext1)")
           checkAnswer(createTestResult(tableName))(
             Seq(1, "jack", "haha", null, 1000), Seq(2, "jack","exx1", null, 1000)
           )
+          validateInternalSchema(tablePath, isDropColumn = false, currentMaxColumnId = maxColumnId)
         }
       }
     })
+  }
+
+  private def validateInternalSchema(basePath: String, isDropColumn: Boolean, currentMaxColumnId: Int): Unit = {
+    val hadoopConf = spark.sessionState.newHadoopConf()
+    val metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(hadoopConf).build()
+    val schema = new TableSchemaResolver(metaClient).getTableInternalSchemaFromCommitMetadata.get()
+    val lastInstant = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get()
+    assert(schema.schemaId() == lastInstant.getTimestamp.toLong)
+    if (isDropColumn) {
+      assert(schema.getMaxColumnId == currentMaxColumnId)
+    } else {
+      assert(schema.getMaxColumnId == currentMaxColumnId + 1)
+    }
+  }
+
+  private def getMaxColumnId(basePath: String): Int = {
+    val hadoopConf = spark.sessionState.newHadoopConf()
+    val metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(hadoopConf).build()
+    new TableSchemaResolver(metaClient).getTableInternalSchemaFromCommitMetadata.get.getMaxColumnId
   }
 
   test("Test alter column nullability") {
@@ -518,90 +545,90 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   test("Test alter column with complex schema") {
     withRecordType()(withTempDir { tmp =>
       Seq("mor").foreach { tableType =>
-        withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
-          val tableName = generateTableName
-          val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
-          if (HoodieSparkUtils.gteqSpark3_1) {
-            spark.sql("set hoodie.schema.on.read.enable=true")
-            spark.sql(
-              s"""
-                 |create table $tableName (
-                 |  id int,
-                 |  name string,
-                 |  members map<String, struct<n:string, a:int>>,
-                 |  user struct<name:string, age:int, score: int>,
-                 |  ts long
-                 |) using hudi
-                 | location '$tablePath'
-                 | options (
-                 |  type = '$tableType',
-                 |  primaryKey = 'id',
-                 |  preCombineField = 'ts'
-                 | )
+        val tableName = generateTableName
+        val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
+        if (HoodieSparkUtils.gteqSpark3_1) {
+          spark.sql("set hoodie.schema.on.read.enable=true")
+          spark.sql("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  members map<String, struct<n:string, a:int>>,
+               |  user struct<name:string, age:int, score: int>,
+               |  ts long
+               |) using hudi
+               | location '$tablePath'
+               | options (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts'
+               | )
              """.stripMargin)
 
-            spark.sql(s"alter table $tableName alter column members.value.a first")
+          spark.sql(s"alter table $tableName alter column members.value.a first")
 
-            spark.sql(s"insert into ${tableName} values(1, 'jack', map('k1', struct(100, 'v1'), 'k2', struct(200, 'v2')), struct('jackStruct', 29, 100), 1000)")
+          spark.sql(s"insert into ${tableName} values(1, 'jack', map('k1', struct(100, 'v1'), 'k2', struct(200, 'v2')), struct('jackStruct', 29, 100), 1000)")
 
-            // rename column
-            spark.sql(s"alter table ${tableName} rename column user to userx")
+          // rename column
+          spark.sql(s"alter table ${tableName} rename column user to userx")
 
-            checkAnswer(spark.sql(s"select ts, userx.score, id, userx.age, name from ${tableName}").collect())(
-              Seq(1000, 100, 1, 29, "jack")
-            )
+          checkAnswer(spark.sql(s"select ts, userx.score, id, userx.age, name from ${tableName}").collect())(
+            Seq(1000, 100, 1, 29, "jack")
+          )
 
-            // drop column
-            spark.sql(s"alter table ${tableName} drop columns(name, userx.name, userx.score)")
+          // drop column
+          spark.sql(s"alter table ${tableName} drop columns(name, userx.name, userx.score)")
 
-            spark.sql(s"select * from ${tableName}").show(false)
+          spark.sql(s"select * from ${tableName}").show(false)
 
-            // add cols back, and adjust cols position
-            spark.sql(s"alter table ${tableName} add columns(name string comment 'add name back' after userx," +
-              s" userx.name string comment 'add userx.name back' first, userx.score int comment 'add userx.score back' after age)")
+          // add cols back, and adjust cols position
+          spark.sql(s"alter table ${tableName} add columns(name string comment 'add name back' after userx," +
+            s" userx.name string comment 'add userx.name back' first, userx.score int comment 'add userx.score back' after age)")
 
-            // query new columns: name, userx.name, userx.score, those field should not be read.
-            checkAnswer(spark.sql(s"select name, userx.name, userx.score from ${tableName}").collect())(Seq(null, null, null))
+          // query new columns: name, userx.name, userx.score, those field should not be read.
+          checkAnswer(spark.sql(s"select name, userx.name, userx.score from ${tableName}").collect())(Seq(null, null, null))
 
-            // insert again
-            spark.sql(s"insert into ${tableName} values(2 , map('k1', struct(100, 'v1'), 'k2', struct(200, 'v2')), struct('jackStructNew', 291 , 101), 'jacknew', 1000)")
+          // insert again
+          spark.sql(s"insert into ${tableName} values(2 , map('k1', struct(100, 'v1'), 'k2', struct(200, 'v2')), struct('jackStructNew', 291 , 101), 'jacknew', 1000)")
 
-            // check again
-            checkAnswer(spark.sql(s"select name, userx.name as uxname, userx.score as uxs from ${tableName} order by id").collect())(
-              Seq(null, null, null),
-              Seq("jacknew", "jackStructNew", 101))
+          // check again
+          checkAnswer(spark.sql(s"select name, userx.name as uxname, userx.score as uxs from ${tableName} order by id").collect())(
+            Seq(null, null, null),
+            Seq("jacknew", "jackStructNew", 101))
 
 
-            spark.sql(s"alter table ${tableName} alter column userx.age type long")
+          spark.sql(s"alter table ${tableName} alter column userx.age type long")
 
-            spark.sql(s"select userx.age, id, name from ${tableName}")
-            checkAnswer(spark.sql(s"select userx.age, id, name from ${tableName} order by id").collect())(
-              Seq(29, 1, null),
-              Seq(291, 2, "jacknew"))
-            // test map value type change
-            spark.sql(s"alter table ${tableName} add columns(mxp map<String, int>)")
-            spark.sql(s"insert into ${tableName} values(2, map('k1', struct(100, 'v1'), 'k2', struct(200, 'v2')), struct('jackStructNew', 291 , 101), 'jacknew', 1000, map('t1', 9))")
-            spark.sql(s"alter table ${tableName} alter column mxp.value type double")
-            spark.sql(s"insert into ${tableName} values(2, map('k1', struct(100, 'v1'), 'k2', struct(200, 'v2')), struct('jackStructNew', 291 , 101), 'jacknew', 1000, map('t1', 10))")
-            spark.sql(s"select * from $tableName").show(false)
-            checkAnswer(spark.sql(s"select mxp from ${tableName} order by id").collect())(
-              Seq(null),
-              Seq(Map("t1" -> 10.0d))
-            )
-            spark.sql(s"alter table ${tableName} rename column members to mem")
-            spark.sql(s"alter table ${tableName} rename column mem.value.n to nn")
-            spark.sql(s"alter table ${tableName} rename column userx to us")
-            spark.sql(s"alter table ${tableName} rename column us.age to age1")
+          spark.sql(s"select userx.age, id, name from ${tableName}")
+          checkAnswer(spark.sql(s"select userx.age, id, name from ${tableName} order by id").collect())(
+            Seq(29, 1, null),
+            Seq(291, 2, "jacknew"))
+          // test map value type change
+          spark.sql(s"alter table ${tableName} add columns(mxp map<String, int>)")
+          spark.sql(s"insert into ${tableName} values(2, map('k1', struct(100, 'v1'), 'k2', struct(200, 'v2')), struct('jackStructNew', 291 , 101), 'jacknew', 1000, map('t1', 9))")
+          spark.sql(s"alter table ${tableName} alter column mxp.value type double")
+          spark.sql(s"insert into ${tableName} values(2, map('k1', struct(100, 'v1'), 'k2', struct(200, 'v2')), struct('jackStructNew', 291 , 101), 'jacknew', 1000, map('t1', 10))")
+          spark.sql(s"select * from $tableName").show(false)
+          checkAnswer(spark.sql(s"select mxp from ${tableName} order by id").collect())(
+            Seq(null),
+            Seq(Map("t1" -> 10.0d))
+          )
+          spark.sql(s"alter table ${tableName} rename column members to mem")
+          spark.sql(s"alter table ${tableName} rename column mem.value.n to nn")
+          spark.sql(s"alter table ${tableName} rename column userx to us")
+          spark.sql(s"alter table ${tableName} rename column us.age to age1")
 
-            spark.sql(s"insert into ${tableName} values(2, map('k1', struct(100, 'v1'), 'k2', struct(200, 'v2')), struct('jackStructNew', 291 , 101), 'jacknew', 1000, map('t1', 10))")
-            spark.sql(s"select mem.value.nn, us.age1 from $tableName order by id").show()
-            checkAnswer(spark.sql(s"select mem.value.nn, us.age1 from $tableName order by id").collect())(
-              Seq(null, 29),
-              Seq(null, 291)
-            )
-          }
+          spark.sql(s"insert into ${tableName} values(2, map('k1', struct(100, 'v1'), 'k2', struct(200, 'v2')), struct('jackStructNew', 291 , 101), 'jacknew', 1000, map('t1', 10))")
+          spark.sql(s"select mem.value.nn, us.age1 from $tableName order by id").show()
+          checkAnswer(spark.sql(s"select mem.value.nn, us.age1 from $tableName order by id").collect())(
+            Seq(null, 29),
+            Seq(null, 291)
+          )
         }
       }
+      spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
     })
   }
 
@@ -825,37 +852,35 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   test("Test FLOAT to DECIMAL schema evolution (lost in scale)") {
     Seq("cow", "mor").foreach { tableType =>
       withTempDir { tmp =>
-        withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
-          // Using INMEMORY index for mor table so that log files will be created instead of parquet
-          val tableName = generateTableName
-          if (HoodieSparkUtils.gteqSpark3_1) {
-            spark.sql(
-              s"""
-                 |create table $tableName (
-                 |  id int,
-                 |  name string,
-                 |  price float,
-                 |  ts long
-                 |) using hudi
-                 | location '${tmp.getCanonicalPath}'
-                 | tblproperties (
-                 |  primaryKey = 'id',
-                 |  type = '$tableType',
-                 |  preCombineField = 'ts'
-                 |  ${if (tableType.equals("mor")) ", hoodie.index.type = 'INMEMORY'" else ""}
-                 | )
+        // Using INMEMORY index for mor table so that log files will be created instead of parquet
+        val tableName = generateTableName
+        if (HoodieSparkUtils.gteqSpark3_1) {
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price float,
+               |  ts long
+               |) using hudi
+               | location '${tmp.getCanonicalPath}'
+               | tblproperties (
+               |  primaryKey = 'id',
+               |  type = '$tableType',
+               |  preCombineField = 'ts'
+               |  ${if (tableType.equals("mor")) ", hoodie.index.type = 'INMEMORY'" else ""}
+               | )
            """.stripMargin)
 
-            spark.sql(s"insert into $tableName values (1, 'a1', 10.024, 1000)")
+          spark.sql(s"insert into $tableName values (1, 'a1', 10.024, 1000)")
 
-            assertResult(tableType.equals("mor"))(DataSourceTestUtils.isLogFileOnly(tmp.getCanonicalPath))
+          assertResult(tableType.equals("mor"))(DataSourceTestUtils.isLogFileOnly(tmp.getCanonicalPath))
 
-            spark.sql("set hoodie.schema.on.read.enable=true")
-            spark.sql(s"alter table $tableName alter column price type decimal(4, 2)")
+          spark.sql("set hoodie.schema.on.read.enable=true")
+          spark.sql(s"alter table $tableName alter column price type decimal(4, 2)")
 
-            // Not checking answer as this is an unsafe casting operation, just need to make sure that error is not thrown
-            spark.sql(s"select id, name, cast(price as string), ts from $tableName")
-          }
+          // Not checking answer as this is an unsafe casting operation, just need to make sure that error is not thrown
+          spark.sql(s"select id, name, cast(price as string), ts from $tableName")
         }
       }
     }
@@ -864,65 +889,63 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   test("Test DOUBLE to DECIMAL schema evolution (lost in scale)") {
     Seq("cow", "mor").foreach { tableType =>
       withTempDir { tmp =>
-        withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
-          // Using INMEMORY index for mor table so that log files will be created instead of parquet
-          val tableName = generateTableName
-          if (HoodieSparkUtils.gteqSpark3_1) {
-            spark.sql(
-              s"""
-                 |create table $tableName (
-                 |  id int,
-                 |  name string,
-                 |  price double,
-                 |  ts long
-                 |) using hudi
-                 | location '${tmp.getCanonicalPath}'
-                 | tblproperties (
-                 |  primaryKey = 'id',
-                 |  type = '$tableType',
-                 |  preCombineField = 'ts'
-                 |  ${if (tableType.equals("mor")) ", hoodie.index.type = 'INMEMORY'" else ""}
-                 | )
+        // Using INMEMORY index for mor table so that log files will be created instead of parquet
+        val tableName = generateTableName
+        if (HoodieSparkUtils.gteqSpark3_1) {
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | location '${tmp.getCanonicalPath}'
+               | tblproperties (
+               |  primaryKey = 'id',
+               |  type = '$tableType',
+               |  preCombineField = 'ts'
+               |  ${if (tableType.equals("mor")) ", hoodie.index.type = 'INMEMORY'" else ""}
+               | )
            """.stripMargin)
 
-            spark.sql(s"insert into $tableName values " +
-              // testing the rounding behaviour to ensure that HALF_UP is used for positive values
-              "(1, 'a1', 10.024, 1000)," +
-              "(2, 'a2', 10.025, 1000)," +
-              "(3, 'a3', 10.026, 1000)," +
-              // testing the rounding behaviour to ensure that HALF_UP is used for negative values
-              "(4, 'a4', -10.024, 1000)," +
-              "(5, 'a5', -10.025, 1000)," +
-              "(6, 'a6', -10.026, 1000)," +
-              // testing the GENERAL rounding behaviour (HALF_UP and HALF_EVEN will retain the same result)
-              "(7, 'a7', 10.034, 1000)," +
-              "(8, 'a8', 10.035, 1000)," +
-              "(9, 'a9', 10.036, 1000)," +
-              // testing the GENERAL rounding behaviour (HALF_UP and HALF_EVEN will retain the same result)
-              "(10, 'a10', -10.034, 1000)," +
-              "(11, 'a11', -10.035, 1000)," +
-              "(12, 'a12', -10.036, 1000)")
+          spark.sql(s"insert into $tableName values " +
+            // testing the rounding behaviour to ensure that HALF_UP is used for positive values
+            "(1, 'a1', 10.024, 1000)," +
+            "(2, 'a2', 10.025, 1000)," +
+            "(3, 'a3', 10.026, 1000)," +
+            // testing the rounding behaviour to ensure that HALF_UP is used for negative values
+            "(4, 'a4', -10.024, 1000)," +
+            "(5, 'a5', -10.025, 1000)," +
+            "(6, 'a6', -10.026, 1000)," +
+            // testing the GENERAL rounding behaviour (HALF_UP and HALF_EVEN will retain the same result)
+            "(7, 'a7', 10.034, 1000)," +
+            "(8, 'a8', 10.035, 1000)," +
+            "(9, 'a9', 10.036, 1000)," +
+            // testing the GENERAL rounding behaviour (HALF_UP and HALF_EVEN will retain the same result)
+            "(10, 'a10', -10.034, 1000)," +
+            "(11, 'a11', -10.035, 1000)," +
+            "(12, 'a12', -10.036, 1000)")
 
-            assertResult(tableType.equals("mor"))(DataSourceTestUtils.isLogFileOnly(tmp.getCanonicalPath))
+          assertResult(tableType.equals("mor"))(DataSourceTestUtils.isLogFileOnly(tmp.getCanonicalPath))
 
-            spark.sql("set hoodie.schema.on.read.enable=true")
-            spark.sql(s"alter table $tableName alter column price type decimal(4, 2)")
+          spark.sql("set hoodie.schema.on.read.enable=true")
+          spark.sql(s"alter table $tableName alter column price type decimal(4, 2)")
 
-            checkAnswer(s"select id, name, cast(price as string), ts from $tableName order by id")(
-              Seq(1, "a1", "10.02", 1000),
-              Seq(2, "a2", "10.03", 1000),
-              Seq(3, "a3", "10.03", 1000),
-              Seq(4, "a4", "-10.02", 1000),
-              Seq(5, "a5", "-10.03", 1000),
-              Seq(6, "a6", "-10.03", 1000),
-              Seq(7, "a7", "10.03", 1000),
-              Seq(8, "a8", "10.04", 1000),
-              Seq(9, "a9", "10.04", 1000),
-              Seq(10, "a10", "-10.03", 1000),
-              Seq(11, "a11", "-10.04", 1000),
-              Seq(12, "a12", "-10.04", 1000)
-            )
-          }
+          checkAnswer(s"select id, name, cast(price as string), ts from $tableName order by id")(
+            Seq(1, "a1", "10.02", 1000),
+            Seq(2, "a2", "10.03", 1000),
+            Seq(3, "a3", "10.03", 1000),
+            Seq(4, "a4", "-10.02", 1000),
+            Seq(5, "a5", "-10.03", 1000),
+            Seq(6, "a6", "-10.03", 1000),
+            Seq(7, "a7", "10.03", 1000),
+            Seq(8, "a8", "10.04", 1000),
+            Seq(9, "a9", "10.04", 1000),
+            Seq(10, "a10", "-10.03", 1000),
+            Seq(11, "a11", "-10.04", 1000),
+            Seq(12, "a12", "-10.04", 1000)
+          )
         }
       }
     }
@@ -931,65 +954,63 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   test("Test STRING to DECIMAL schema evolution (lost in scale)") {
     Seq("cow", "mor").foreach { tableType =>
       withTempDir { tmp =>
-        withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
-          // Using INMEMORY index for mor table so that log files will be created instead of parquet
-          val tableName = generateTableName
-          if (HoodieSparkUtils.gteqSpark3_1) {
-            spark.sql(
-              s"""
-                 |create table $tableName (
-                 |  id int,
-                 |  name string,
-                 |  price string,
-                 |  ts long
-                 |) using hudi
-                 | location '${tmp.getCanonicalPath}'
-                 | tblproperties (
-                 |  primaryKey = 'id',
-                 |  type = '$tableType',
-                 |  preCombineField = 'ts'
-                 |  ${if (tableType.equals("mor")) ", hoodie.index.type = 'INMEMORY'" else ""}
-                 | )
+        // Using INMEMORY index for mor table so that log files will be created instead of parquet
+        val tableName = generateTableName
+        if (HoodieSparkUtils.gteqSpark3_1) {
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price string,
+               |  ts long
+               |) using hudi
+               | location '${tmp.getCanonicalPath}'
+               | tblproperties (
+               |  primaryKey = 'id',
+               |  type = '$tableType',
+               |  preCombineField = 'ts'
+               |  ${if (tableType.equals("mor")) ", hoodie.index.type = 'INMEMORY'" else ""}
+               | )
            """.stripMargin)
 
-            spark.sql(s"insert into $tableName values " +
-              // testing the rounding behaviour to ensure that HALF_UP is used for positive values
-              "(1, 'a1', '10.024', 1000)," +
-              "(2, 'a2', '10.025', 1000)," +
-              "(3, 'a3', '10.026', 1000)," +
-              // testing the rounding behaviour to ensure that HALF_UP is used for negative values
-              "(4, 'a4', '-10.024', 1000)," +
-              "(5, 'a5', '-10.025', 1000)," +
-              "(6, 'a6', '-10.026', 1000)," +
-              // testing the GENERAL rounding behaviour (HALF_UP and HALF_EVEN will retain the same result)
-              "(7, 'a7', '10.034', 1000)," +
-              "(8, 'a8', '10.035', 1000)," +
-              "(9, 'a9', '10.036', 1000)," +
-              // testing the GENERAL rounding behaviour (HALF_UP and HALF_EVEN will retain the same result)
-              "(10, 'a10', '-10.034', 1000)," +
-              "(11, 'a11', '-10.035', 1000)," +
-              "(12, 'a12', '-10.036', 1000)")
+          spark.sql(s"insert into $tableName values " +
+            // testing the rounding behaviour to ensure that HALF_UP is used for positive values
+            "(1, 'a1', '10.024', 1000)," +
+            "(2, 'a2', '10.025', 1000)," +
+            "(3, 'a3', '10.026', 1000)," +
+            // testing the rounding behaviour to ensure that HALF_UP is used for negative values
+            "(4, 'a4', '-10.024', 1000)," +
+            "(5, 'a5', '-10.025', 1000)," +
+            "(6, 'a6', '-10.026', 1000)," +
+            // testing the GENERAL rounding behaviour (HALF_UP and HALF_EVEN will retain the same result)
+            "(7, 'a7', '10.034', 1000)," +
+            "(8, 'a8', '10.035', 1000)," +
+            "(9, 'a9', '10.036', 1000)," +
+            // testing the GENERAL rounding behaviour (HALF_UP and HALF_EVEN will retain the same result)
+            "(10, 'a10', '-10.034', 1000)," +
+            "(11, 'a11', '-10.035', 1000)," +
+            "(12, 'a12', '-10.036', 1000)")
 
-            assertResult(tableType.equals("mor"))(DataSourceTestUtils.isLogFileOnly(tmp.getCanonicalPath))
+          assertResult(tableType.equals("mor"))(DataSourceTestUtils.isLogFileOnly(tmp.getCanonicalPath))
 
-            spark.sql("set hoodie.schema.on.read.enable=true")
-            spark.sql(s"alter table $tableName alter column price type decimal(4, 2)")
+          spark.sql("set hoodie.schema.on.read.enable=true")
+          spark.sql(s"alter table $tableName alter column price type decimal(4, 2)")
 
-            checkAnswer(s"select id, name, cast(price as string), ts from $tableName order by id")(
-              Seq(1, "a1", "10.02", 1000),
-              Seq(2, "a2", "10.03", 1000),
-              Seq(3, "a3", "10.03", 1000),
-              Seq(4, "a4", "-10.02", 1000),
-              Seq(5, "a5", "-10.03", 1000),
-              Seq(6, "a6", "-10.03", 1000),
-              Seq(7, "a7", "10.03", 1000),
-              Seq(8, "a8", "10.04", 1000),
-              Seq(9, "a9", "10.04", 1000),
-              Seq(10, "a10", "-10.03", 1000),
-              Seq(11, "a11", "-10.04", 1000),
-              Seq(12, "a12", "-10.04", 1000)
-            )
-          }
+          checkAnswer(s"select id, name, cast(price as string), ts from $tableName order by id")(
+            Seq(1, "a1", "10.02", 1000),
+            Seq(2, "a2", "10.03", 1000),
+            Seq(3, "a3", "10.03", 1000),
+            Seq(4, "a4", "-10.02", 1000),
+            Seq(5, "a5", "-10.03", 1000),
+            Seq(6, "a6", "-10.03", 1000),
+            Seq(7, "a7", "10.03", 1000),
+            Seq(8, "a8", "10.04", 1000),
+            Seq(9, "a9", "10.04", 1000),
+            Seq(10, "a10", "-10.03", 1000),
+            Seq(11, "a11", "-10.04", 1000),
+            Seq(12, "a12", "-10.04", 1000)
+          )
         }
       }
     }

@@ -124,7 +124,9 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
       String writeToken = FSUtils.makeWriteToken(TaskContext.getPartitionId(), TaskContext.get().stageId(),
           TaskContext.get().taskAttemptId());
       HoodieCreateHandle io = new HoodieCreateHandle(config, instantTime, table, partitionPath, fileName, supplier);
-      return Pair.of(io.makeNewPath(record.getPartitionPath()), writeToken);
+      Pair<Path, String> result = Pair.of(io.makeNewPath(record.getPartitionPath()), writeToken);
+      io.close();
+      return result;
     }).collect().get(0);
 
     assertEquals(newPathWithWriteToken.getKey().toString(), Paths.get(this.basePath, partitionPath,
@@ -450,8 +452,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
 
   @Test
   public void testInsertUpsertWithHoodieAvroPayload() throws Exception {
-    Schema schema = getSchemaFromResource(TestCopyOnWriteActionExecutor.class, "/testDataGeneratorSchema.txt");
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schema.toString())
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA)
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder()

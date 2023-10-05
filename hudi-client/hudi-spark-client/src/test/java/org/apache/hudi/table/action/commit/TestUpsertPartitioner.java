@@ -53,7 +53,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -64,6 +63,7 @@ import java.util.Map;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.generateFakeHoodieWriteStat;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
@@ -150,17 +150,17 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
   private static LinkedList<Option<byte[]>> generateCommitMetadataList() throws IOException {
     LinkedList<Option<byte[]>> commits = new LinkedList<>();
     // First commit with non zero records and bytes
-    commits.push(Option.of(generateCommitMetadataWith(2000, 10000).toJsonString().getBytes(StandardCharsets.UTF_8)));
+    commits.push(serializeCommitMetadata(generateCommitMetadataWith(2000, 10000)));
     // Second commit with non zero records and bytes
-    commits.push(Option.of(generateCommitMetadataWith(1500, 7500).toJsonString().getBytes(StandardCharsets.UTF_8)));
+    commits.push(serializeCommitMetadata(generateCommitMetadataWith(1500, 7500)));
     // Third commit with a small file
-    commits.push(Option.of(generateCommitMetadataWith(100, 500).toJsonString().getBytes(StandardCharsets.UTF_8)));
+    commits.push(serializeCommitMetadata(generateCommitMetadataWith(100, 500)));
     // Fourth commit with both zero records and zero bytes
-    commits.push(Option.of(generateCommitMetadataWith(0, 0).toJsonString().getBytes(StandardCharsets.UTF_8)));
+    commits.push(serializeCommitMetadata(generateCommitMetadataWith(0, 0)));
     // Fifth commit with zero records
-    commits.push(Option.of(generateCommitMetadataWith(0, 1500).toJsonString().getBytes(StandardCharsets.UTF_8)));
+    commits.push(serializeCommitMetadata(generateCommitMetadataWith(0, 1500)));
     // Sixth commit with zero bytes
-    commits.push(Option.of(generateCommitMetadataWith(2500, 0).toJsonString().getBytes(StandardCharsets.UTF_8)));
+    commits.push(serializeCommitMetadata(generateCommitMetadataWith(2500, 0)));
     return commits;
   }
 

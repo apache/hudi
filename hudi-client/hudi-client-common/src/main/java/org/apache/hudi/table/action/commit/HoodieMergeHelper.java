@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hudi.client.utils.ClosableMergingIterator;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -109,11 +108,6 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
 
     try {
       ClosableIterator<HoodieRecord> recordIterator;
-
-      // In case writer's schema is simply a projection of the reader's one we can read
-      // the records in the projected schema directly
-      ClosableIterator<HoodieRecord> baseFileRecordIterator =
-          baseFileReader.getRecordIterator(isPureProjection ? writerSchema : readerSchema);
       Schema recordSchema;
       if (baseFile.getBootstrapBaseFile().isPresent()) {
         Path bootstrapFilePath = new Path(baseFile.getBootstrapBaseFile().get().getPath());
@@ -124,13 +118,12 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
             mergeHandle.getPartitionFields(),
             mergeHandle.getPartitionValues());
         recordSchema = mergeHandle.getWriterSchemaWithMetaFields();
-        recordIterator = new ClosableMergingIterator<>(
-            baseFileRecordIterator,
-            (ClosableIterator<HoodieRecord>) bootstrapFileReader.getRecordIterator(recordSchema),
-            (left, right) -> left.joinWith(right, recordSchema));
+        recordIterator = (ClosableIterator<HoodieRecord>) bootstrapFileReader.getRecordIterator(recordSchema);
       } else {
-        recordIterator = baseFileRecordIterator;
+        // In case writer's schema is simply a projection of the reader's one we can read
+        // the records in the projected schema directly
         recordSchema = isPureProjection ? writerSchema : readerSchema;
+        recordIterator = (ClosableIterator<HoodieRecord>) baseFileReader.getRecordIterator(recordSchema);
       }
 
       boolean isBufferingRecords = ExecutorFactory.isBufferingRecords(writeConfig);
@@ -162,6 +155,9 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
         executor.awaitTermination();
       } else {
         baseFileReader.close();
+        if (bootstrapFileReader != null) {
+          bootstrapFileReader.close();
+        }
         mergeHandle.close();
       }
     }

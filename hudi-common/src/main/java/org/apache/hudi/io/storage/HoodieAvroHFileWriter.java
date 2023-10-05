@@ -25,7 +25,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieDuplicateKeyException;
 
 import org.apache.avro.Schema;
@@ -48,13 +47,16 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+
 /**
  * HoodieHFileWriter writes IndexedRecords into an HFile. The record's key is used as the key and the
  * AVRO encoded record bytes are saved as the value.
- *
+ * <p>
  * Limitations (compared to columnar formats like Parquet or ORC):
- *  1. Records should be added in order of keys
- *  2. There are no column stats
+ * 1. Records should be added in order of keys
+ * 2. There are no column stats
  */
 public class HoodieAvroHFileWriter
     implements HoodieAvroFileWriter {
@@ -110,7 +112,7 @@ public class HoodieAvroHFileWriter
         .withFileContext(context)
         .create();
 
-    writer.appendFileInfo(HoodieAvroHFileReader.SCHEMA_KEY.getBytes(), schema.toString().getBytes());
+    writer.appendFileInfo(getUTF8Bytes(HoodieAvroHFileReader.SCHEMA_KEY), getUTF8Bytes(schema.toString()));
     this.prevRecordKey = "";
   }
 
@@ -144,7 +146,7 @@ public class HoodieAvroHFileWriter
       boolean isKeyAvailable = (record.get(keyFieldPos) != null && !(record.get(keyFieldPos).toString().isEmpty()));
       if (isKeyAvailable) {
         Object originalKey = keyExcludedRecord.get(keyFieldPos);
-        keyExcludedRecord.put(keyFieldPos, StringUtils.EMPTY_STRING);
+        keyExcludedRecord.put(keyFieldPos, EMPTY_STRING);
         value = HoodieAvroUtils.avroToBytes(keyExcludedRecord);
         keyExcludedRecord.put(keyFieldPos, originalKey);
         isRecordSerialized = true;
@@ -154,7 +156,7 @@ public class HoodieAvroHFileWriter
       value = HoodieAvroUtils.avroToBytes((GenericRecord) record);
     }
 
-    KeyValue kv = new KeyValue(recordKey.getBytes(), null, null, value);
+    KeyValue kv = new KeyValue(getUTF8Bytes(recordKey), null, null, value);
     writer.append(kv);
 
     if (hfileConfig.useBloomFilter()) {
@@ -177,14 +179,14 @@ public class HoodieAvroHFileWriter
       if (maxRecordKey == null) {
         maxRecordKey = "";
       }
-      writer.appendFileInfo(HoodieAvroHFileReader.KEY_MIN_RECORD.getBytes(), minRecordKey.getBytes());
-      writer.appendFileInfo(HoodieAvroHFileReader.KEY_MAX_RECORD.getBytes(), maxRecordKey.getBytes());
-      writer.appendFileInfo(HoodieAvroHFileReader.KEY_BLOOM_FILTER_TYPE_CODE.getBytes(),
-          bloomFilter.getBloomFilterTypeCode().toString().getBytes());
+      writer.appendFileInfo(getUTF8Bytes(HoodieAvroHFileReader.KEY_MIN_RECORD), getUTF8Bytes(minRecordKey));
+      writer.appendFileInfo(getUTF8Bytes(HoodieAvroHFileReader.KEY_MAX_RECORD), getUTF8Bytes(maxRecordKey));
+      writer.appendFileInfo(getUTF8Bytes(HoodieAvroHFileReader.KEY_BLOOM_FILTER_TYPE_CODE),
+          getUTF8Bytes(bloomFilter.getBloomFilterTypeCode().toString()));
       writer.appendMetaBlock(HoodieAvroHFileReader.KEY_BLOOM_FILTER_META_BLOCK, new Writable() {
         @Override
         public void write(DataOutput out) throws IOException {
-          out.write(bloomFilter.serializeToString().getBytes());
+          out.write(getUTF8Bytes(bloomFilter.serializeToString()));
         }
 
         @Override

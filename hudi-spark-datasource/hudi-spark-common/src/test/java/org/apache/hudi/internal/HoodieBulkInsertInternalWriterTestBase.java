@@ -27,7 +27,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.SparkDatasetTestUtils;
 
 import org.apache.spark.sql.Dataset;
@@ -41,7 +41,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 
-import static org.apache.hudi.testutils.SparkDatasetTestUtils.getConfigBuilder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -51,7 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Base class for TestHoodieBulkInsertDataInternalWriter.
  */
-public class HoodieBulkInsertInternalWriterTestBase extends HoodieClientTestHarness {
+public class HoodieBulkInsertInternalWriterTestBase extends HoodieSparkClientTestHarness {
 
   protected static final Random RANDOM = new Random();
 
@@ -82,7 +81,7 @@ public class HoodieBulkInsertInternalWriterTestBase extends HoodieClientTestHarn
       properties.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
     }
     properties.setProperty(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING().key(), hiveStylePartitioningValue);
-    return getConfigBuilder(basePath, timelineServicePort).withProperties(properties).build();
+    return SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort).withProperties(properties).build();
   }
 
   protected void assertWriteStatuses(List<WriteStatus> writeStatuses, int batches, int size,

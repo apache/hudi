@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceReadOptions._
+import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.{DATA_BEFORE, DATA_BEFORE_AFTER, OP_KEY_ONLY}
 import org.apache.spark.sql.DataFrame
@@ -102,6 +103,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
         withTempDir { tmp =>
           val tableName = generateTableName
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
+          spark.sql("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
           val otherTableProperties = if (tableType == "mor") {
             "'hoodie.compact.inline'='true', 'hoodie.compact.inline.max.delta.commits'='2',"
           } else {
@@ -132,14 +134,12 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
             .build()
 
           spark.sql(s"insert into $tableName values (1, 'a1', 11, 1000), (2, 'a2', 12, 1000), (3, 'a3', 13, 1000)")
-
           val commitTime1 = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
           val cdcDataOnly1 = cdcDataFrame(basePath, commitTime1.toLong - 1)
           cdcDataOnly1.show(false)
           assertCDCOpCnt(cdcDataOnly1, 3, 0, 0)
-          withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
-            spark.sql(s"insert into $tableName values (1, 'a1_v2', 11, 1100)")
-          }
+
+          spark.sql(s"insert into $tableName values (1, 'a1_v2', 11, 1100)")
           val commitTime2 = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
           // here we use `commitTime1` to query the change data in commit 2.
           // because `commitTime2` is maybe the ts of the compaction operation, not the write operation.
@@ -217,6 +217,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
         }
       }
     }
+    spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
   }
 
   /**

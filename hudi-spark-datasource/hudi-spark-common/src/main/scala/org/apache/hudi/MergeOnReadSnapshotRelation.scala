@@ -49,8 +49,12 @@ case class MergeOnReadSnapshotRelation(override val sqlContext: SQLContext,
 
   override type Relation = MergeOnReadSnapshotRelation
 
-  override def updatePrunedDataSchema(prunedSchema: StructType): MergeOnReadSnapshotRelation =
+  override def updatePrunedDataSchema(prunedSchema: StructType): Relation =
     this.copy(prunedDataSchema = Some(prunedSchema))
+
+  override protected def shouldIncludeLogFiles(): Boolean = {
+    true
+  }
 
 }
 
@@ -100,11 +104,6 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
    */
   override def canPruneRelationSchema: Boolean =
     super.canPruneRelationSchema && isProjectionCompatible(tableState)
-
-  override def imbueConfigs(sqlContext: SQLContext): Unit = {
-    super.imbueConfigs(sqlContext)
-    sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "true")
-  }
 
   protected override def composeRDD(fileSplits: Seq[HoodieMergeOnReadFileSplit],
                                     tableSchema: HoodieTableSchema,
@@ -220,8 +219,8 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
       HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilters)
 
     if (globPaths.isEmpty) {
-      val fileSlices = fileIndex.listFileSlices(convertedPartitionFilters)
-      buildSplits(fileSlices.values.flatten.toSeq)
+      val fileSlices = fileIndex.filterFileSlices(dataFilters, convertedPartitionFilters).flatMap(s => s._2)
+      buildSplits(fileSlices)
     } else {
       val fileSlices = listLatestFileSlices(globPaths, partitionFilters, dataFilters)
       buildSplits(fileSlices)

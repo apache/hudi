@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.avro.MercifulJsonConverter;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import com.google.protobuf.Message;
@@ -36,11 +37,12 @@ import scala.util.Either;
 import scala.util.Left;
 import scala.util.Right;
 
-import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES;
-import static org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK;
+import static org.apache.hudi.utilities.config.HoodieStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES;
+import static org.apache.hudi.utilities.config.HoodieStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_OFFSET_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_PARTITION_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_TIMESTAMP_COLUMN;
+import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_KEY_COLUMN;
 
 /**
  * Convert a variety of datum into Avro GenericRecords. Has a bunch of lazy fields to circumvent issues around
@@ -170,14 +172,16 @@ public class AvroConvertor implements Serializable {
    */
   public GenericRecord withKafkaFieldsAppended(ConsumerRecord consumerRecord) {
     initSchema();
-    GenericRecord record = (GenericRecord) consumerRecord.value();
+    GenericRecord recordValue = (GenericRecord) consumerRecord.value();
     GenericRecordBuilder recordBuilder = new GenericRecordBuilder(this.schema);
-    for (Schema.Field field :  record.getSchema().getFields()) {
-      recordBuilder.set(field, record.get(field.name()));
+    for (Schema.Field field :  recordValue.getSchema().getFields()) {
+      recordBuilder.set(field, recordValue.get(field.name()));
     }
+    String recordKey = StringUtils.objToString(consumerRecord.key());
     recordBuilder.set(KAFKA_SOURCE_OFFSET_COLUMN, consumerRecord.offset());
     recordBuilder.set(KAFKA_SOURCE_PARTITION_COLUMN, consumerRecord.partition());
     recordBuilder.set(KAFKA_SOURCE_TIMESTAMP_COLUMN, consumerRecord.timestamp());
+    recordBuilder.set(KAFKA_SOURCE_KEY_COLUMN, recordKey);
     return recordBuilder.build();
   }
 

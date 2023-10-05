@@ -329,6 +329,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       .start(destPath)
 
     query3.processAllAvailable()
+    query3.stop()
     metaClient = HoodieTableMetaClient.builder
       .setConf(fs.getConf).setBasePath(destPath).setLoadActiveTimelineOnLoad(true).build
 
@@ -473,7 +474,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
   }
 
   private def streamingWrite(schema: StructType, sourcePath: String, destPath: String, hudiOptions: Map[String, String], checkpoint: String): Unit = {
-    spark.readStream
+    val query = spark.readStream
       .schema(schema)
       .json(sourcePath)
       .writeStream
@@ -483,7 +484,8 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       .option("checkpointLocation", basePath + "/checkpoint" + checkpoint)
       .outputMode(OutputMode.Append)
       .start(destPath)
-      .processAllAvailable()
+    query.processAllAvailable()
+    query.stop()
   }
 
   @Test

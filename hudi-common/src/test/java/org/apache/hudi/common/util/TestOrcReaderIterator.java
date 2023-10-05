@@ -36,10 +36,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
-import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -70,9 +70,9 @@ public class TestOrcReaderIterator {
     BytesColumnVector colorColumns = (BytesColumnVector) batch.cols[2];
     for (int r = 0; r < 5; ++r) {
       int row = batch.size++;
-      byte[] name = ("name" + r).getBytes(StandardCharsets.UTF_8);
+      byte[] name = getUTF8Bytes("name" + r);
       nameColumns.setVal(row, name);
-      byte[] color = ("color" + r).getBytes(StandardCharsets.UTF_8);
+      byte[] color = getUTF8Bytes("color" + r);
       colorColumns.setVal(row, color);
       numberColumns.vector[row] = r;
     }

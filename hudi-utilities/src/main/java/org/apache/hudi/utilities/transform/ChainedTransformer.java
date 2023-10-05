@@ -23,8 +23,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.exception.HoodieTransformPlanException;
+import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -62,7 +62,7 @@ public class ChainedTransformer implements Transformer {
   }
 
   /**
-   * Creates a chained transformer using the input transformer class names. Refer {@link HoodieDeltaStreamer.Config#transformerClassNames}
+   * Creates a chained transformer using the input transformer class names. Refer {@link HoodieStreamer.Config#transformerClassNames}
    * for more information on how the transformers can be configured.
    *
    * @param sourceSchemaOpt                   Schema from the dataset the transform is applied to
@@ -171,8 +171,8 @@ public class ChainedTransformer implements Transformer {
       TypedProperties transformerProps = properties;
       if (idOpt.isPresent()) {
         // Transformer specific property keys end with the id associated with the transformer.
-        // Ex. For id tr1, key `hoodie.deltastreamer.transformer.sql.tr1` would be converted to
-        // `hoodie.deltastreamer.transformer.sql` and then passed to the transformer.
+        // Ex. For id tr1, key `hoodie.streamer.transformer.sql.tr1` would be converted to
+        // `hoodie.streamer.transformer.sql` and then passed to the transformer.
         String id = idOpt.get();
         transformerProps = new TypedProperties(properties);
         Map<String, Object> overrideKeysMap = new HashMap<>();

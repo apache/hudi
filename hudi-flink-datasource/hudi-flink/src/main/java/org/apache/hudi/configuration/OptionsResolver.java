@@ -18,21 +18,24 @@
 
 package org.apache.hudi.configuration;
 
+import org.apache.hudi.client.clustering.plan.strategy.FlinkConsistentBucketClusteringPlanStrategy;
 import org.apache.hudi.client.transaction.BucketIndexConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.sink.overwrite.PartitionOverwriteMode;
 import org.apache.hudi.table.format.FilePathUtils;
 
 import org.apache.flink.configuration.ConfigOption;
@@ -72,6 +75,14 @@ public class OptionsResolver {
   public static boolean isInsertOperation(Configuration conf) {
     WriteOperationType operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
     return operationType == WriteOperationType.INSERT;
+  }
+
+  /**
+   * Returns whether the table operation is 'bulk_insert'.
+   */
+  public static boolean isBulkInsertOperation(Configuration conf) {
+    WriteOperationType operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
+    return operationType == WriteOperationType.BULK_INSERT;
   }
 
   /**
@@ -141,6 +152,21 @@ public class OptionsResolver {
   }
 
   /**
+   * Returns whether the table index is consistent bucket index.
+   */
+  public static boolean isConsistentHashingBucketIndexType(Configuration conf) {
+    return isBucketIndexType(conf) && getBucketEngineType(conf).equals(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING);
+  }
+
+  /**
+   * Returns the default plan strategy class.
+   */
+  public static String getDefaultPlanStrategyClassName(Configuration conf) {
+    return OptionsResolver.isConsistentHashingBucketIndexType(conf) ? FlinkConsistentBucketClusteringPlanStrategy.class.getName() :
+        FlinkOptions.CLUSTERING_PLAN_STRATEGY_CLASS.defaultValue();
+  }
+
+  /**
    * Returns whether the source should emit changelog.
    *
    * @return true if the source is read as streaming with changelog mode enabled
@@ -186,7 +212,19 @@ public class OptionsResolver {
    * @param conf The flink configuration.
    */
   public static boolean needsScheduleClustering(Configuration conf) {
-    return isInsertOperation(conf) && conf.getBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED);
+    if (!conf.getBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED)) {
+      return false;
+    }
+    WriteOperationType operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
+    if (OptionsResolver.isConsistentHashingBucketIndexType(conf)) {
+      // Write pipelines for table with consistent bucket index would detect whether clustering service occurs,
+      // and automatically adjust the partitioner and write function if clustering service happens.
+      // So it could handle UPSERT.
+      // But it could not handle INSERT case, because insert write would not take index into consideration currently.
+      return operationType == WriteOperationType.UPSERT;
+    } else {
+      return operationType == WriteOperationType.INSERT;
+    }
   }
 
   /**
@@ -202,6 +240,14 @@ public class OptionsResolver {
   public static boolean isInsertOverwrite(Configuration conf) {
     return conf.getString(FlinkOptions.OPERATION).equalsIgnoreCase(WriteOperationType.INSERT_OVERWRITE_TABLE.value())
         || conf.getString(FlinkOptions.OPERATION).equalsIgnoreCase(WriteOperationType.INSERT_OVERWRITE.value());
+  }
+
+  /**
+   * Returns whether the operation is INSERT OVERWRITE dynamic partition.
+   */
+  public static boolean overwriteDynamicPartition(Configuration conf) {
+    return conf.getString(FlinkOptions.OPERATION).equalsIgnoreCase(WriteOperationType.INSERT_OVERWRITE.value())
+        || conf.getString(FlinkOptions.WRITE_PARTITION_OVERWRITE_MODE).equalsIgnoreCase(PartitionOverwriteMode.DYNAMIC.name());
   }
 
   /**
@@ -253,11 +299,7 @@ public class OptionsResolver {
    * Returns whether the writer txn should be guarded by lock.
    */
   public static boolean isLockRequired(Configuration conf) {
-    return conf.getBoolean(FlinkOptions.METADATA_ENABLED)
-        || ConfigUtils.resolveEnum(WriteConcurrencyMode.class, conf.getString(
-        HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(),
-        HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()))
-        == WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL;
+    return conf.getBoolean(FlinkOptions.METADATA_ENABLED) || isOptimisticConcurrencyControl(conf);
   }
 
   /**
@@ -278,7 +320,7 @@ public class OptionsResolver {
   public static boolean isReadByTxnCompletionTime(Configuration conf) {
     HollowCommitHandling handlingMode = HollowCommitHandling.valueOf(conf
         .getString(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key(), INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.defaultValue()));
-    return handlingMode == HollowCommitHandling.USE_STATE_TRANSITION_TIME;
+    return handlingMode == HollowCommitHandling.USE_TRANSITION_TIME;
   }
 
   /**
@@ -316,6 +358,11 @@ public class OptionsResolver {
    */
   public static boolean allowCommitOnEmptyBatch(Configuration conf) {
     return conf.getBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false);
+  }
+
+  public static boolean isLazyFailedWritesCleanPolicy(Configuration conf) {
+    return conf.getString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(), HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.defaultValue())
+        .equalsIgnoreCase(HoodieFailedWritesCleaningPolicy.LAZY.name());
   }
 
   // -------------------------------------------------------------------------

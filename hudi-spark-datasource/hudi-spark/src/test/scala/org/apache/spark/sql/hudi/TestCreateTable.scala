@@ -24,7 +24,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.escapePathName
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
-import org.apache.hudi.keygen.SimpleKeyGenerator
+import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}
@@ -143,7 +143,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     assertResult("dt")(tableConfig(HoodieTableConfig.PARTITION_FIELDS.key))
     assertResult("id")(tableConfig(HoodieTableConfig.RECORDKEY_FIELDS.key))
     assertResult("ts")(tableConfig(HoodieTableConfig.PRECOMBINE_FIELD.key))
-    assertResult(classOf[SimpleKeyGenerator].getCanonicalName)(tableConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key))
+    assertResult(KeyGeneratorType.SIMPLE.name())(tableConfig(HoodieTableConfig.KEY_GENERATOR_TYPE.key))
     assertResult("default")(tableConfig(HoodieTableConfig.DATABASE_NAME.key()))
     assertResult(tableName)(tableConfig(HoodieTableConfig.NAME.key()))
     assertFalse(tableConfig.contains(OPERATION.key()))
@@ -405,10 +405,238 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test create table like") {
+    if (HoodieSparkUtils.gteqSpark3_1) {
+      // 1. Test create table from an existing HUDI table
+      withTempDir { tmp =>
+        Seq("cow", "mor").foreach { tableType =>
+          withTable(generateTableName) { sourceTable =>
+            spark.sql(
+              s"""
+                 |create table $sourceTable (
+                 |  id int,
+                 |  name string,
+                 |  price double,
+                 |  ts long
+                 |) using hudi
+                 | tblproperties (
+                 |  primaryKey = 'id,name',
+                 |  type = '$tableType'
+                 | )
+                 | location '${tmp.getCanonicalPath}/$sourceTable'""".stripMargin)
+
+            // 1.1 Test Managed table
+            withTable(generateTableName) { targetTable =>
+              spark.sql(
+                s"""
+                   |create table $targetTable
+                   |like $sourceTable
+                   |using hudi""".stripMargin)
+
+              val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(targetTable))
+
+              assertResult(targetTable)(table.identifier.table)
+              assertResult("hudi")(table.provider.get)
+              assertResult(CatalogTableType.MANAGED)(table.tableType)
+              assertResult(
+                HoodieRecord.HOODIE_META_COLUMNS.asScala.map(StructField(_, StringType))
+                  ++ Seq(
+                  StructField("id", IntegerType),
+                  StructField("name", StringType),
+                  StructField("price", DoubleType),
+                  StructField("ts", LongType))
+              )(table.schema.fields)
+              assertResult(tableType)(table.properties("type"))
+              assertResult("id,name")(table.properties("primaryKey"))
+
+              // target table already exist
+              assertThrows[IllegalArgumentException] {
+                spark.sql(
+                  s"""
+                     |create table $targetTable
+                     |like $sourceTable
+                     |using hudi""".stripMargin)
+              }
+
+              // should ignore if the table already exist
+              spark.sql(
+                s"""
+                   |create table if not exists $targetTable
+                   |like $sourceTable
+                   |using hudi""".stripMargin)
+            }
+
+            // 1.2 Test External table
+            withTable(generateTableName) { targetTable =>
+              spark.sql(
+                s"""
+                   |create table $targetTable
+                   |like $sourceTable
+                   |using hudi
+                   |location '${tmp.getCanonicalPath}/$targetTable'""".stripMargin)
+              val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(targetTable))
+              assertResult(CatalogTableType.EXTERNAL)(table.tableType)
+            }
+
+
+            // 1.3 New target table options should override source table's
+            withTable(generateTableName) { targetTable =>
+              spark.sql(
+                s"""
+                   |create table $targetTable
+                   |like $sourceTable
+                   |using hudi
+                   |tblproperties (primaryKey = 'id')""".stripMargin)
+              val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(targetTable))
+              assertResult("id")(table.properties("primaryKey"))
+            }
+          }
+        }
+      }
+
+      // 2. Test create table from an existing non-HUDI table
+      withTempDir { tmp =>
+        withTable(generateTableName) { sourceTable =>
+          spark.sql(
+            s"""
+               |create table $sourceTable (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using parquet
+               | tblproperties (
+               |  non.hoodie.property='value'
+               | )
+               | location '${tmp.getCanonicalPath}/$sourceTable'""".stripMargin)
+
+          withTable(generateTableName) { targetTable =>
+            spark.sql(
+              s"""
+                 |create table $targetTable
+                 |like $sourceTable
+                 |using hudi
+                 |tblproperties (
+                 | primaryKey = 'id,name',
+                 | type = 'cow'
+                 |)""".stripMargin)
+            val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(targetTable))
+
+            assertResult(targetTable)(table.identifier.table)
+            assertResult("hudi")(table.provider.get)
+            assertResult(CatalogTableType.MANAGED)(table.tableType)
+            assertResult(
+              HoodieRecord.HOODIE_META_COLUMNS.asScala.map(StructField(_, StringType))
+                ++ Seq(
+                StructField("id", IntegerType),
+                StructField("name", StringType),
+                StructField("price", DoubleType),
+                StructField("ts", LongType))
+            )(table.schema.fields)
+
+            // Should not include non.hoodie.property
+            assertResult(2)(table.properties.size)
+            assertResult("cow")(table.properties("type"))
+            assertResult("id,name")(table.properties("primaryKey"))
+          }
+        }
+      }
+    }
+  }
+
+  test("Test Create Table As Select With Auto record key gen") {
+    withTempDir { tmp =>
+      // Create Non-Partitioned table
+      val tableName1 = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName1 using hudi
+           | tblproperties(
+           |    type = 'cow'
+           | )
+           | location '${tmp.getCanonicalPath}/$tableName1'
+           | AS
+           | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
+       """.stripMargin)
+
+      assertResult(WriteOperationType.BULK_INSERT) {
+        getLastCommitMetadata(spark, s"${tmp.getCanonicalPath}/$tableName1").getOperationType
+      }
+      checkAnswer(s"select id, name, price, ts from $tableName1")(
+        Seq(1, "a1", 10.0, 1000)
+      )
+
+      // Create Partitioned table
+      val tableName2 = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName2 using hudi
+           | partitioned by (dt)
+           | tblproperties(
+           |    type = 'cow'
+           | )
+           | location '${tmp.getCanonicalPath}/$tableName2'
+           | AS
+           | select 1 as id, 'a1' as name, 10 as price, '2021-04-01' as dt
+         """.stripMargin
+      )
+
+      assertResult(WriteOperationType.BULK_INSERT) {
+        getLastCommitMetadata(spark, s"${tmp.getCanonicalPath}/$tableName2").getOperationType
+      }
+      checkAnswer(s"select id, name, price, dt from $tableName2")(
+        Seq(1, "a1", 10, "2021-04-01")
+      )
+    }
+  }
+
+  test("Test Create Table As Select For existing table path") {
+    val tableName1 = generateTableName
+    spark.sql(
+      s"""
+         |create table $tableName1 (
+         |  id int,
+         |  name string,
+         |  ts long
+         |) using hudi
+         | tblproperties (
+         |  primaryKey = 'id',
+         |  preCombineField = 'ts'
+         |)
+         |""".stripMargin)
+    val tableLocation = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName1)).location
+    spark.sql(s"drop table $tableName1")
+
+    val tableName2 = generateTableName
+    spark.sql(
+      s"""
+         |create table $tableName2 (
+         |  id int,
+         |  name string,
+         |  ts long
+         |) using hudi
+         | tblproperties (
+         |  primaryKey = 'id',
+         |  preCombineField = 'ts'
+         |)
+         |location '$tableLocation'
+     """.stripMargin)
+
+    checkExceptionContain(
+      s"""
+         |create table $tableName1
+         |using hudi
+         |as select * from $tableName2
+         |""".stripMargin
+    )("Can not create the managed table")
+    assertResult(true)(existsPath(tableLocation.toString))
+  }
+
   test("Test Create ro/rt Table In The Right Way") {
     withTempDir { tmp =>
       val parentPath = tmp.getCanonicalPath
       val tableName1 = generateTableName
+      spark.sql("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
       spark.sql(
         s"""
            |create table $tableName1 (
@@ -424,9 +652,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
            | location '$parentPath/$tableName1'
        """.stripMargin)
       spark.sql(s"insert into $tableName1 values (1, 'a1', 1000)")
-      withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
-        spark.sql(s"insert into $tableName1 values (1, 'a2', 1100)")
-      }
+      spark.sql(s"insert into $tableName1 values (1, 'a2', 1100)")
 
       // drop ro and rt table, and recreate them
       val roTableName1 = tableName1 + "_ro"
@@ -469,6 +695,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         Seq(1, "a2", 1100)
       )
     }
+    spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
   }
 
   test("Test Create ro/rt Table In The Wrong Way") {
@@ -492,9 +719,8 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
            | location '$parentPath/$tableName1'
      """.stripMargin)
       spark.sql(s"insert into $tableName1 values (1, 'a1', 1000)")
-      withSQLConf("hoodie.sql.insert.mode" -> "upsert") {
-        spark.sql(s"insert into $tableName1 values (1, 'a2', 1100)")
-      }
+      spark.sql(s"insert into $tableName1 values (1, 'a2', 1100)")
+
       val roTableName1 = tableName1 + "_ro"
       checkExceptionContain(
         s"""
@@ -978,8 +1204,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         .setBasePath(tablePath)
         .setConf(spark.sessionState.newHadoopConf())
         .build()
-      val realKeyGenerator =
-        metaClient.getTableConfig.getProps.asScala.toMap.get(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key).get
+      val realKeyGenerator = metaClient.getTableConfig.getKeyGeneratorClassName
       assertResult(targetGenerator)(realKeyGenerator)
     }
 
@@ -1105,5 +1330,83 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     val hoodieCatalogTable = new HoodieCatalogTable(spark, table)
     val hoodieSchema = HoodieSqlCommonUtils.getTableSqlSchema(hoodieCatalogTable.metaClient, true)
     assertResult(hoodieSchema.get)(table.schema)
+  }
+
+  test("Test Create Hoodie Table With Options in different case") {
+    val tableName = generateTableName
+    spark.sql(
+      s"""
+         | create table $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  ts long,
+         |  dt string
+         | ) using hudi
+         | partitioned by (dt)
+         | options (
+         |   hoodie.database.name = "databaseName",
+         |   hoodie.table.name = "tableName",
+         |   PRIMARYKEY = 'id',
+         |   precombineField = 'ts',
+         |   hoodie.datasource.write.operation = 'upsert'
+         | )
+       """.stripMargin)
+    val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
+    assertResult(table.properties("type"))("cow")
+    assertResult(table.properties("primaryKey"))("id")
+    assertResult(table.properties("preCombineField"))("ts")
+  }
+
+  test("Test Create Hoodie Table with existing hoodie.properties") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}"
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey ='id',
+           |  type = 'cow',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      // drop the table without purging hdfs directory
+      spark.sql(s"drop table $tableName".stripMargin)
+
+      val tableSchemaAfterCreate1 = HoodieTableMetaClient.builder()
+        .setConf(spark.sparkContext.hadoopConfiguration)
+        .setBasePath(tablePath).build().getTableConfig.getTableCreateSchema
+
+      // avro schema name and namespace should not change should not change
+      spark.newSession().sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey ='id',
+           |  type = 'cow',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      val tableSchemaAfterCreate2 = HoodieTableMetaClient.builder()
+        .setConf(spark.sparkContext.hadoopConfiguration)
+        .setBasePath(tablePath).build().getTableConfig.getTableCreateSchema
+
+      assertResult(tableSchemaAfterCreate1.get)(tableSchemaAfterCreate2.get)
+    }
   }
 }

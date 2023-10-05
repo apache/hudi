@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.14.0-SNAPSHOT</version>
+    <version>1.0.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -70,10 +70,9 @@
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
                   <include>org.apache.hudi:hudi-sync-common</include>
                   <include>org.apache.hudi:hudi-hive-sync</include>
-
-                  <!-- NOTE: Only Jackson module we're bundling here is JSR310, which we need to bundle only
-                             for Spark 2.x -->
-                  <include>com.fasterxml.jackson.datatype:${fasterxml.jackson.datatype.jsr310.module}</include>
+                  <!-- Bundle Jackson JSR310 library since it is not present in spark 2.x. For spark 3.x this will
+                       bundle the same JSR310 version that is included in spark runtime -->
+                  <include>com.fasterxml.jackson.datatype:jackson-datatype-jsr310</include>
                   <include>com.beust:jcommander</include>
                   <include>org.apache.avro:avro</include>
                   <include>org.apache.parquet:parquet-avro</include>

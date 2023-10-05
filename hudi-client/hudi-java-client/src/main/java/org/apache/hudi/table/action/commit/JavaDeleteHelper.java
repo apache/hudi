@@ -123,5 +123,4 @@ public class JavaDeleteHelper<R> extends
       throw new HoodieUpsertException("Failed to delete for commit time " + instantTime, e);
     }
   }
-
 }

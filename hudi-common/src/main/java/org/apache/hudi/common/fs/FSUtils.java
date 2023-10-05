@@ -191,10 +191,14 @@ public class FSUtils {
   }
 
   public static String getCommitTime(String fullFileName) {
-    if (isLogFile(fullFileName)) {
-      return fullFileName.split("_")[1].split("\\.")[0];
+    try {
+      if (isLogFile(fullFileName)) {
+        return fullFileName.split("_")[1].split("\\.", 2)[0];
+      }
+      return fullFileName.split("_")[2].split("\\.", 2)[0];
+    } catch (ArrayIndexOutOfBoundsException e) {
+      throw new HoodieException("Failed to get commit time from filename: " + fullFileName, e);
     }
-    return fullFileName.split("_")[2].split("\\.")[0];
   }
 
   public static long getFileSize(FileSystem fs, Path path) throws IOException {
@@ -202,11 +206,12 @@ public class FSUtils {
   }
 
   public static String getFileId(String fullFileName) {
-    return fullFileName.split("_")[0];
+    return fullFileName.split("_", 2)[0];
   }
 
   /**
    * Gets all partition paths assuming date partitioning (year, month, day) three levels down.
+   * TODO: (Lin) Delete this function after we remove the assume.date.partitioning config completely.
    */
   public static List<String> getAllPartitionFoldersThreeLevelsDown(FileSystem fs, String basePath) throws IOException {
     List<String> datePartitions = new ArrayList<>();
@@ -276,11 +281,9 @@ public class FSUtils {
   }
 
   public static List<String> getAllPartitionPaths(HoodieEngineContext engineContext, String basePathStr,
-                                                  boolean useFileListingFromMetadata,
-                                                  boolean assumeDatePartitioning) {
+                                                  boolean useFileListingFromMetadata) {
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(useFileListingFromMetadata)
-        .withAssumeDatePartitioning(assumeDatePartitioning)
         .build();
     try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr)) {
       return tableMetadata.getAllPartitionPaths();
@@ -302,7 +305,7 @@ public class FSUtils {
                                                                HoodieMetadataConfig metadataConfig,
                                                                String basePathStr,
                                                                String[] partitionPaths) {
-    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr, true)) {
+    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr)) {
       return tableMetadata.getAllFilesInPartitions(Arrays.asList(partitionPaths));
     } catch (Exception ex) {
       throw new HoodieException("Error get files in partitions: " + String.join(",", partitionPaths), ex);
@@ -450,15 +453,6 @@ public class FSUtils {
     return Integer.parseInt(matcher.group(4));
   }
 
-  public static String getSuffixFromLogPath(Path path) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.find()) {
-      throw new InvalidHoodiePathException(path, "LogFile");
-    }
-    String val = matcher.group(10);
-    return val == null ? "" : val;
-  }
-
   public static String makeLogFileName(String fileId, String logFileExtension, String baseCommitTime, int version,
       String writeToken) {
     String suffix = (writeToken == null)
@@ -478,7 +472,7 @@ public class FSUtils {
 
   public static boolean isLogFile(String fileName) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(fileName);
-    return matcher.find() && fileName.contains(".log");
+    return fileName.contains(".log") && matcher.find();
   }
 
   /**
@@ -543,7 +537,7 @@ public class FSUtils {
         getLatestLogFile(getAllLogFiles(fs, partitionPath, fileId, logFileExtension, baseCommitTime));
     if (latestLogFile.isPresent()) {
       return Option
-          .of(Pair.of(latestLogFile.get().getLogVersion(), getWriteTokenFromLogPath(latestLogFile.get().getPath())));
+          .of(Pair.of(latestLogFile.get().getLogVersion(), latestLogFile.get().getLogWriteToken()));
     }
     return Option.empty();
   }
@@ -840,6 +834,35 @@ public class FSUtils {
       }
     }
     return result;
+  }
+
+  public static Map<String, Boolean> deleteFilesParallelize(
+      HoodieTableMetaClient metaClient,
+      List<String> paths,
+      HoodieEngineContext context,
+      int parallelism,
+      boolean ignoreFailed) {
+    return FSUtils.parallelizeFilesProcess(context,
+        metaClient.getFs(),
+        parallelism,
+        pairOfSubPathAndConf -> {
+          Path file = new Path(pairOfSubPathAndConf.getKey());
+          try {
+            FileSystem fs = metaClient.getFs();
+            if (fs.exists(file)) {
+              return fs.delete(file, false);
+            }
+            return true;
+          } catch (IOException e) {
+            if (!ignoreFailed) {
+              throw new HoodieIOException("Failed to delete : " + file, e);
+            } else {
+              LOG.warn("Ignore failed deleting : " + file);
+              return true;
+            }
+          }
+        },
+        paths);
   }
 
   /**

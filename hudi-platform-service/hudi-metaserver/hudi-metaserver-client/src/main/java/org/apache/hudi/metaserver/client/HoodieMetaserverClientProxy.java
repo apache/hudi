@@ -33,14 +33,14 @@ import java.lang.reflect.UndeclaredThrowableException;
  */
 public class HoodieMetaserverClientProxy implements InvocationHandler, Serializable {
 
-  private final transient HoodieMetaserverClient client;
   private final int retryLimit;
   private final long retryDelayMs;
+  private final HoodieMetaserverConfig config;
 
   private HoodieMetaserverClientProxy(HoodieMetaserverConfig config) {
     this.retryLimit = config.getConnectionRetryLimit();
     this.retryDelayMs = config.getConnectionRetryDelay() * 1000L;
-    this.client = new HoodieMetaserverClientImp(config);
+    this.config = config;
   }
 
   public static HoodieMetaserverClient getProxy(HoodieMetaserverConfig config) {
@@ -51,7 +51,7 @@ public class HoodieMetaserverClientProxy implements InvocationHandler, Serializa
 
   @Override
   public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-    try {
+    try (HoodieMetaserverClient client = new HoodieMetaserverClientImp(config)) {
       return new RetryHelper<Object, Exception>(retryDelayMs, retryLimit, retryDelayMs, Exception.class.getName())
           .tryWith(() -> method.invoke(client, args)).start();
     } catch (IllegalAccessException | InvocationTargetException | UndeclaredThrowableException e) {

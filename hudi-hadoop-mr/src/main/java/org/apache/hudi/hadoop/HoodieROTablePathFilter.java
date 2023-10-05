@@ -49,6 +49,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieCommonConfig.TIMESTAMP_AS_OF;
+import static org.apache.hudi.common.table.timeline.TimelineUtils.validateTimestampAsOf;
+import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 
 /**
  * Given a path is a part of - Hoodie table = accepts ONLY the latest version of each path - Non-Hoodie table = then
@@ -185,16 +187,20 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
             metaClientCache.put(baseDir.toString(), metaClient);
           }
 
-          if (getConf().get(TIMESTAMP_AS_OF.key()) != null) {
+          final Configuration conf = getConf();
+          final String timestampAsOf = conf.get(TIMESTAMP_AS_OF.key());
+          if (nonEmpty(timestampAsOf)) {
+            validateTimestampAsOf(metaClient, timestampAsOf);
+
             // Build FileSystemViewManager with specified time, it's necessary to set this config when you may
             // access old version files. For example, in spark side, using "hoodie.datasource.read.paths"
             // which contains old version files, if not specify this value, these files will be filtered.
             fsView = FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext,
-                metaClient, HoodieInputFormatUtils.buildMetadataConfig(getConf()),
-                metaClient.getActiveTimeline().filterCompletedInstants().findInstantsBeforeOrEquals(getConf().get(TIMESTAMP_AS_OF.key())));
+                metaClient, HoodieInputFormatUtils.buildMetadataConfig(conf),
+                metaClient.getActiveTimeline().filterCompletedInstants().findInstantsBeforeOrEquals(timestampAsOf));
           } else {
             fsView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
-                metaClient, HoodieInputFormatUtils.buildMetadataConfig(getConf()));
+                metaClient, HoodieInputFormatUtils.buildMetadataConfig(conf));
           }
           String partition = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), folder);
           List<HoodieBaseFile> latestFiles = fsView.getLatestBaseFiles(partition).collect(Collectors.toList());

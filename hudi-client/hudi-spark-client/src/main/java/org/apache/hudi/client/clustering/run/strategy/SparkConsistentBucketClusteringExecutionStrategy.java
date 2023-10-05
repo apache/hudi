@@ -18,8 +18,8 @@
 
 package org.apache.hudi.client.clustering.run.strategy;
 
+import org.apache.hudi.HoodieDatasetBulkInsertHelper;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.clustering.plan.strategy.SparkConsistentBucketClusteringPlanStrategy;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.ConsistentHashingNode;
@@ -28,8 +28,11 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
+import org.apache.hudi.execution.bulkinsert.ConsistentBucketIndexBulkInsertPartitionerWithRows;
 import org.apache.hudi.execution.bulkinsert.RDDConsistentBucketBulkInsertPartitioner;
+import org.apache.hudi.table.ConsistentHashingBucketInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.cluster.strategy.BaseConsistentHashingBucketClusteringPlanStrategy;
 import org.apache.hudi.table.action.commit.SparkBulkInsertHelper;
 
 import org.apache.avro.Schema;
@@ -64,7 +67,19 @@ public class SparkConsistentBucketClusteringExecutionStrategy<T extends HoodieRe
                                                                    List<HoodieFileGroupId> fileGroupIdList,
                                                                    boolean shouldPreserveHoodieMetadata,
                                                                    Map<String, String> extraMetadata) {
-    throw new HoodieClusteringException("Not implement yet");
+    LOG.info("Starting clustering for a group, parallelism:" + numOutputGroups + " commit:" + instantTime);
+    Properties props = getWriteConfig().getProps();
+
+    HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder().withProps(props).build();
+
+    ConsistentBucketIndexBulkInsertPartitionerWithRows partitioner = new ConsistentBucketIndexBulkInsertPartitionerWithRows(getHoodieTable(), shouldPreserveHoodieMetadata);
+
+    addHashingChildNodes(partitioner, extraMetadata);
+
+    Dataset<Row> repartitionedRecords = partitioner.repartitionRecords(inputRecords, numOutputGroups);
+
+    return HoodieDatasetBulkInsertHelper.bulkInsert(repartitionedRecords, instantTime, getHoodieTable(), newConfig,
+        partitioner.arePartitionRecordsSorted(), shouldPreserveHoodieMetadata);
   }
 
   @Override
@@ -79,15 +94,19 @@ public class SparkConsistentBucketClusteringExecutionStrategy<T extends HoodieRe
     HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder().withProps(props).build();
 
     RDDConsistentBucketBulkInsertPartitioner<T> partitioner = new RDDConsistentBucketBulkInsertPartitioner<>(getHoodieTable(), strategyParams, preserveHoodieMetadata);
+    addHashingChildNodes(partitioner, extraMetadata);
+
+    return (HoodieData<WriteStatus>) SparkBulkInsertHelper.newInstance()
+        .bulkInsert(inputRecords, instantTime, getHoodieTable(), newConfig, false, partitioner, true, numOutputGroups);
+  }
+
+  private void addHashingChildNodes(ConsistentHashingBucketInsertPartitioner partitioner, Map<String, String> extraMetadata) {
     try {
-      List<ConsistentHashingNode> nodes = ConsistentHashingNode.fromJsonString(extraMetadata.get(SparkConsistentBucketClusteringPlanStrategy.METADATA_CHILD_NODE_KEY));
-      partitioner.addHashingChildrenNodes(extraMetadata.get(SparkConsistentBucketClusteringPlanStrategy.METADATA_PARTITION_KEY), nodes);
+      List<ConsistentHashingNode> nodes = ConsistentHashingNode.fromJsonString(extraMetadata.get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_CHILD_NODE_KEY));
+      partitioner.addHashingChildrenNodes(extraMetadata.get(BaseConsistentHashingBucketClusteringPlanStrategy.METADATA_PARTITION_KEY), nodes);
     } catch (Exception e) {
       LOG.error("Failed to add hashing children nodes", e);
       throw new HoodieClusteringException("Failed to add hashing children nodes", e);
     }
-
-    return (HoodieData<WriteStatus>) SparkBulkInsertHelper.newInstance()
-        .bulkInsert(inputRecords, instantTime, getHoodieTable(), newConfig, false, partitioner, true, numOutputGroups);
   }
 }

@@ -110,6 +110,18 @@ public class CleanerUtils {
     return metadataMigrator.upgradeToLatest(cleanMetadata, cleanMetadata.getVersion());
   }
 
+  /**
+   * Get Latest Version of Hoodie Cleaner Metadata - Output of cleaner operation.
+   * @return Latest version of Clean metadata corresponding to clean instant
+   * @throws IOException
+   */
+  public static HoodieCleanMetadata getCleanerMetadata(HoodieTableMetaClient metaClient, byte[] details)
+      throws IOException {
+    CleanMetadataMigrator metadataMigrator = new CleanMetadataMigrator(metaClient);
+    HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(details);
+    return metadataMigrator.upgradeToLatest(cleanMetadata, cleanMetadata.getVersion());
+  }
+
   public static Option<HoodieInstant> getEarliestCommitToRetain(
       HoodieTimeline commitsTimeline, HoodieCleaningPolicy cleaningPolicy, int commitsRetained,
       Instant latestInstant, int hoursRetained, HoodieTimelineTimeZone timeZone) {
@@ -156,6 +168,20 @@ public class CleanerUtils {
     CleanPlanMigrator cleanPlanMigrator = new CleanPlanMigrator(metaClient);
     HoodieCleanerPlan cleanerPlan = TimelineMetadataUtils.deserializeAvroMetadata(
         metaClient.getActiveTimeline().readCleanerInfoAsBytes(cleanInstant).get(), HoodieCleanerPlan.class);
+    return cleanPlanMigrator.upgradeToLatest(cleanerPlan, cleanerPlan.getVersion());
+  }
+
+  /**
+   * Get Latest version of cleaner plan corresponding to a clean instant.
+   *
+   * @param metaClient   Hoodie Table Meta Client
+   * @return Cleaner plan corresponding to clean instant
+   * @throws IOException
+   */
+  public static HoodieCleanerPlan getCleanerPlan(HoodieTableMetaClient metaClient, byte[] details)
+      throws IOException {
+    CleanPlanMigrator cleanPlanMigrator = new CleanPlanMigrator(metaClient);
+    HoodieCleanerPlan cleanerPlan = TimelineMetadataUtils.deserializeAvroMetadata(details, HoodieCleanerPlan.class);
     return cleanPlanMigrator.upgradeToLatest(cleanerPlan, cleanerPlan.getVersion());
   }
 

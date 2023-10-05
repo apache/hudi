@@ -33,6 +33,8 @@ import org.apache.hudi.exception.HoodieMetadataException;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.expression.Expression;
+import org.apache.hudi.internal.schema.Types;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -124,14 +126,13 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
       }
     }
 
-    return createFSBackedTableMetadata(engineContext, metadataConfig, datasetBasePath);
+    return createFSBackedTableMetadata(engineContext, datasetBasePath);
   }
 
   static FileSystemBackedTableMetadata createFSBackedTableMetadata(HoodieEngineContext engineContext,
-                                                                   HoodieMetadataConfig metadataConfig,
                                                                    String datasetBasePath) {
-    return new FileSystemBackedTableMetadata(engineContext, new SerializableConfiguration(engineContext.getHadoopConf()),
-        datasetBasePath, metadataConfig.shouldAssumeDatePartitioning());
+    return new FileSystemBackedTableMetadata(
+        engineContext, new SerializableConfiguration(engineContext.getHadoopConf()), datasetBasePath);
   }
 
   static HoodieBackedTableMetadata createHoodieBackedTableMetadata(HoodieEngineContext engineContext,
@@ -145,6 +146,14 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * Fetch all the files at the given partition path, per the latest snapshot of the metadata.
    */
   FileStatus[] getAllFilesInPartition(Path partitionPath) throws IOException;
+
+  /**
+   * Retrieve the paths of partitions under the provided sub-directories,
+   * and try to filter these partitions using the provided {@link Expression}.
+   */
+  List<String> getPartitionPathWithPathPrefixUsingFilterExpression(List<String> relativePathPrefixes,
+                                                                   Types.RecordType partitionFields,
+                                                                   Expression expression) throws IOException;
 
   /**
    * Fetches all partition paths that are the sub-directories of the list of provided (relative) paths.

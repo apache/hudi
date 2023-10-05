@@ -49,7 +49,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
 
   /**
    * A COMPACTION action eventually becomes COMMIT when completed. So, when grouping instants
-   * for state transitions, this needs to be taken into account
+   * for state transitions, this needs to be taken into account.
    */
   private static final Map<String, String> COMPARABLE_ACTIONS = createComparableActionsMap();
 
@@ -240,7 +240,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     throw new IllegalArgumentException("Cannot get file name for unknown action " + action);
   }
 
-  private static final Map<String, String> createComparableActionsMap() {
+  private static Map<String, String> createComparableActionsMap() {
     Map<String, String> comparableMap = new HashMap<>();
     comparableMap.put(HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.COMMIT_ACTION);
     comparableMap.put(HoodieTimeline.LOG_COMPACTION_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION);

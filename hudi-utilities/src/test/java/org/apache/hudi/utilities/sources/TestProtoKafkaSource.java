@@ -23,9 +23,9 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig;
-import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.schema.ProtoClassBasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.test.proto.Nested;
 import org.apache.hudi.utilities.test.proto.Sample;
 import org.apache.hudi.utilities.test.proto.SampleEnum;
@@ -63,6 +63,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -158,7 +159,7 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
           .setPrimitiveFixedSignedLong(RANDOM.nextLong())
           .setPrimitiveBoolean(RANDOM.nextBoolean())
           .setPrimitiveString(UUID.randomUUID().toString())
-          .setPrimitiveBytes(ByteString.copyFrom(UUID.randomUUID().toString().getBytes()));
+          .setPrimitiveBytes(ByteString.copyFrom(getUTF8Bytes(UUID.randomUUID().toString())));
 
       // randomly set nested messages, lists, and maps to test edge cases
       if (RANDOM.nextBoolean()) {
@@ -179,7 +180,7 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
             .setWrappedDouble(DoubleValue.of(RANDOM.nextDouble()))
             .setWrappedFloat(FloatValue.of(RANDOM.nextFloat()))
             .setWrappedBoolean(BoolValue.of(RANDOM.nextBoolean()))
-            .setWrappedBytes(BytesValue.of(ByteString.copyFrom(UUID.randomUUID().toString().getBytes())))
+            .setWrappedBytes(BytesValue.of(ByteString.copyFrom(getUTF8Bytes(UUID.randomUUID().toString()))))
             .setEnum(SampleEnum.SECOND)
             .setTimestamp(Timestamps.fromMillis(System.currentTimeMillis()));
       }

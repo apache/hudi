@@ -26,7 +26,6 @@ import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.parser.BaseHoodieDateTimeParser;
-import org.apache.hudi.keygen.parser.HoodieDateTimeParser;
 
 import org.apache.avro.generic.GenericRecord;
 import org.joda.time.DateTime;
@@ -48,6 +47,7 @@ import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.DATE_TIM
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.INPUT_TIME_UNIT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * Avro Key generator, that relies on timestamps for partitioning field. Still picks record key by name.
@@ -82,12 +82,12 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
 
   TimestampBasedAvroKeyGenerator(TypedProperties config, String recordKeyField, String partitionPathField) throws IOException {
     super(config, Option.ofNullable(recordKeyField), partitionPathField);
-    String dateTimeParserClass = config.getString(DATE_TIME_PARSER.key(), HoodieDateTimeParser.class.getName());
+    String dateTimeParserClass = getStringWithAltKeys(config, DATE_TIME_PARSER, true);
     this.parser = KeyGenUtils.createDateTimeParser(config, dateTimeParserClass);
     this.inputDateTimeZone = parser.getInputDateTimeZone();
     this.outputDateTimeZone = parser.getOutputDateTimeZone();
     this.outputDateFormat = parser.getOutputDateFormat();
-    this.timestampType = TimestampType.valueOf(config.getString(TIMESTAMP_TYPE_FIELD.key()));
+    this.timestampType = TimestampType.valueOf(getStringWithAltKeys(config, TIMESTAMP_TYPE_FIELD));
 
     switch (this.timestampType) {
       case EPOCHMILLISECONDS:
@@ -97,7 +97,8 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
         timeUnit = SECONDS;
         break;
       case SCALAR:
-        String timeUnitStr = config.getString(INPUT_TIME_UNIT.key(), TimeUnit.SECONDS.toString());
+        String timeUnitStr = getStringWithAltKeys(
+            config, INPUT_TIME_UNIT, TimeUnit.SECONDS.toString());
         timeUnit = TimeUnit.valueOf(timeUnitStr.toUpperCase());
         break;
       default:
@@ -131,7 +132,7 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
       // {Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP} won't be null, it has been checked in the initialization process of
       // inputFormatter
       String delimiter = parser.getConfigInputDateFormatDelimiter();
-      String format = config.getString(TIMESTAMP_INPUT_DATE_FORMAT.key(), "").split(delimiter)[0];
+      String format = getStringWithAltKeys(config, TIMESTAMP_INPUT_DATE_FORMAT, true).split(delimiter)[0];
 
       // if both input and output timeZone are not configured, use GMT.
       if (null != inputDateTimeZone) {

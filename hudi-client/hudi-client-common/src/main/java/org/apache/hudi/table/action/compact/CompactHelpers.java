@@ -36,9 +36,10 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Set;
+
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 
 /**
  * Base class helps to perform compact.
@@ -83,7 +84,7 @@ public class CompactHelpers<T, I, K, O> {
     try {
       activeTimeline.transitionCompactionInflightToComplete(
           HoodieTimeline.getCompactionInflightInstant(compactionCommitTime),
-          Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+          serializeCommitMetadata(commitMetadata));
     } catch (IOException e) {
       throw new HoodieCompactionException(
           "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + compactionCommitTime, e);
@@ -95,7 +96,7 @@ public class CompactHelpers<T, I, K, O> {
     try {
       activeTimeline.transitionLogCompactionInflightToComplete(
           HoodieTimeline.getLogCompactionInflightInstant(logCompactionCommitTime),
-          Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+          serializeCommitMetadata(commitMetadata));
     } catch (IOException e) {
       throw new HoodieCompactionException(
           "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + logCompactionCommitTime, e);

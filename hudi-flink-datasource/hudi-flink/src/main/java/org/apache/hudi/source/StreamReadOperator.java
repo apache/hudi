@@ -22,11 +22,13 @@ import org.apache.hudi.adapter.AbstractStreamOperatorAdapter;
 import org.apache.hudi.adapter.AbstractStreamOperatorFactoryAdapter;
 import org.apache.hudi.adapter.MailboxExecutorAdapter;
 import org.apache.hudi.adapter.Utils;
+import org.apache.hudi.metrics.FlinkStreamReadMetrics;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
+import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.runtime.state.JavaSerializer;
 import org.apache.flink.runtime.state.StateInitializationContext;
 import org.apache.flink.runtime.state.StateSnapshotContext;
@@ -84,6 +86,8 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
   // When there are no more files to read, this will be set to IDLE.
   private transient volatile SplitState currentSplitState;
 
+  private transient FlinkStreamReadMetrics readMetrics;
+
   private StreamReadOperator(MergeOnReadInputFormat format, ProcessingTimeService timeService,
                              MailboxExecutorAdapter mailboxExecutor) {
     this.format = Preconditions.checkNotNull(format, "The InputFormat should not be null.");
@@ -94,6 +98,8 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
   @Override
   public void initializeState(StateInitializationContext context) throws Exception {
     super.initializeState(context);
+
+    registerMetrics();
 
     // TODO Replace Java serialization with Avro approach to keep state compatibility.
     inputSplitsState = context.getOperatorStateStore().getListState(
@@ -161,7 +167,9 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
       // there is only one log message for one data bucket.
       LOG.info("Processing input split : {}", split);
       format.open(split);
+      readMetrics.setSplitLatestCommit(split.getLatestCommit());
     }
+
     try {
       consumeAsMiniBatch(split);
     } finally {
@@ -223,6 +231,12 @@ public class StreamReadOperator extends AbstractStreamOperatorAdapter<RowData>
       sourceContext.close();
       sourceContext = null;
     }
+  }
+
+  private void registerMetrics() {
+    MetricGroup metrics = getRuntimeContext().getMetricGroup();
+    readMetrics = new FlinkStreamReadMetrics(metrics);
+    readMetrics.registerMetrics();
   }
 
   public static OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory(MergeOnReadInputFormat format) {

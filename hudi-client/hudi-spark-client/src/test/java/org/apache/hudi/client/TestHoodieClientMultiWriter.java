@@ -19,7 +19,7 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
-import org.apache.hudi.client.transaction.IngestionPrimaryWriterBasedConflictResolutionStrategy;
+import org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
@@ -108,6 +108,15 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
   private Properties lockProperties = null;
 
+
+  /**
+   * super is not thread safe!!
+   **/
+  @Override
+  public SparkRDDWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) {
+    return new SparkRDDWriteClient(context, cfg);
+  }
+
   @BeforeEach
   public void setup() throws IOException {
     if (lockProperties == null) {
@@ -143,12 +152,12 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
   private static final List<ConflictResolutionStrategy> CONFLICT_RESOLUTION_STRATEGY_CLASSES = Arrays.asList(
       new SimpleConcurrentFileWritesConflictResolutionStrategy(),
-      new IngestionPrimaryWriterBasedConflictResolutionStrategy());
+      new PreferWriterConflictResolutionStrategy());
 
   private static Iterable<Object[]> providerClassResolutionStrategyAndTableType() {
     List<Object[]> opts = new ArrayList<>();
     for (Object providerClass : LOCK_PROVIDER_CLASSES) {
-      for (ConflictResolutionStrategy resolutionStrategy: CONFLICT_RESOLUTION_STRATEGY_CLASSES) {
+      for (ConflictResolutionStrategy resolutionStrategy : CONFLICT_RESOLUTION_STRATEGY_CLASSES) {
         opts.add(new Object[] {HoodieTableType.COPY_ON_WRITE, providerClass, resolutionStrategy});
         opts.add(new Object[] {HoodieTableType.MERGE_ON_READ, providerClass, resolutionStrategy});
       }
@@ -158,19 +167,20 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
   /**
    * Test multi-writers with early conflict detect enable, including
-   *    1. MOR + Direct marker
-   *    2. COW + Direct marker
-   *    3. MOR + Timeline server based marker
-   *    4. COW + Timeline server based marker
-   *
-   *                                    |---------------------- 003 heartBeat expired -------------------|
-   *
-   *  ---|---------|--------------------|--------------------------------------|-------------------------|-------------------------> time
+   * 1. MOR + Direct marker
+   * 2. COW + Direct marker
+   * 3. MOR + Timeline server based marker
+   * 4. COW + Timeline server based marker
+   * <p>
+   * |---------------------- 003 heartBeat expired -------------------|
+   * <p>
+   * ---|---------|--------------------|--------------------------------------|-------------------------|-------------------------> time
    * init 001
-   *               002 start writing
-   *                                    003 start which has conflict with 002
-   *                                    and failed soon
-   *                                                                           002 commit successfully       004 write successfully
+   * 002 start writing
+   * 003 start which has conflict with 002
+   * and failed soon
+   * 002 commit successfully       004 write successfully
+   *
    * @param tableType
    * @param markerType
    * @throws Exception
@@ -206,9 +216,11 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       writeConfig = buildWriteConfigForEarlyConflictDetect(markerType, properties, InProcessLockProvider.class, earlyConflictDetectionStrategy);
     }
 
+    final SparkRDDWriteClient client1 = getHoodieWriteClient(writeConfig);
+
     // Create the first commit
     final String nextCommitTime1 = "001";
-    createCommitWithInserts(writeConfig, getHoodieWriteClient(writeConfig), "000", nextCommitTime1, 200, true);
+    createCommitWithInserts(writeConfig, client1, "000", nextCommitTime1, 200, true);
 
     final SparkRDDWriteClient client2 = getHoodieWriteClient(writeConfig);
     final SparkRDDWriteClient client3 = getHoodieWriteClient(writeConfig);
@@ -260,6 +272,10 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     if (server != null) {
       server.close();
     }
+    client1.close();
+    client2.close();
+    client3.close();
+    client4.close();
   }
 
   @ParameterizedTest
@@ -341,6 +357,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     // both should have been completed successfully. I mean, we already assert for conflict for writer2 at L155.
     assertTrue(writer1Completed.get() && writer2Completed.get());
+    client1.close();
+    client2.close();
   }
 
   @ParameterizedTest
@@ -367,17 +385,19 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
             .withLockProvider(InProcessLockProvider.class)
             .build())
         .withAutoCommit(false)
+        .withEmbeddedTimelineServerEnabled(false)
         // Timeline-server-based markers are not used for multi-writer tests
         .withMarkersType(MarkerType.DIRECT.name())
         .withProperties(lockProperties)
-        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withStorageType(FileSystemViewStorageType.REMOTE_FIRST)
-            .withSecondaryStorageType(FileSystemViewStorageType.MEMORY).build())
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withStorageType(FileSystemViewStorageType.MEMORY)
+            .build())
         .build();
 
     // Create the first commit
     SparkRDDWriteClient<?> client = getHoodieWriteClient(cfg);
     createCommitWithInsertsForPartition(cfg, client, "000", "001", 100, "2016/03/01");
-
+    client.close();
     int numConcurrentWriters = 5;
     ExecutorService executors = Executors.newFixedThreadPool(numConcurrentWriters);
 
@@ -389,6 +409,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         try {
           SparkRDDWriteClient<?> writeClient = getHoodieWriteClient(cfg);
           createCommitWithInsertsForPartition(cfg, writeClient, "001", newCommitTime, 100, partition);
+          writeClient.close();
         } catch (Exception e) {
           throw new RuntimeException(e);
         }
@@ -427,6 +448,11 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       setUpMORTestTable();
     }
+
+    // Use RDD API to perform clustering (TODO: Fix row-writer API)
+    Properties properties = new Properties();
+    properties.put("hoodie.datasource.write.row.writer.enable", String.valueOf(false));
+
     // Disabling embedded timeline server, it doesn't work with multiwriter
     HoodieWriteConfig.Builder writeConfigBuilder = getConfigBuilder()
         .withCleanConfig(HoodieCleanConfig.newBuilder()
@@ -445,7 +471,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(providerClass)
             .withConflictResolutionStrategy(resolutionStrategy)
-            .build()).withAutoCommit(false).withProperties(lockProperties);
+            .build()).withAutoCommit(false).withProperties(lockProperties)
+        .withProperties(properties);
+
     Set<String> validInstants = new HashSet<>();
 
     // Create the first commit with inserts
@@ -527,7 +555,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     String pendingCompactionTime = (tableType == HoodieTableType.MERGE_ON_READ)
         ? metaClient.reloadActiveTimeline().filterPendingCompactionTimeline()
-          .firstInstant().get().getTimestamp()
+        .firstInstant().get().getTimestamp()
         : "";
     Option<HoodieInstant> pendingCleanInstantOp = metaClient.reloadActiveTimeline().getCleanerTimeline().filterInflightsAndRequested()
         .firstInstant();
@@ -551,7 +579,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       latchCountDownAndWait(runCountDownLatch, 30000);
       if (tableType == HoodieTableType.MERGE_ON_READ) {
         assertDoesNotThrow(() -> {
-          HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata =  client2.compact(pendingCompactionTime);
+          HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client2.compact(pendingCompactionTime);
           client2.commitCompaction(pendingCompactionTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
           validInstants.add(pendingCompactionTime);
         });
@@ -576,6 +604,11 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         .filterCompletedInstants().getInstantsAsStream().map(HoodieInstant::getTimestamp)
         .collect(Collectors.toSet());
     assertTrue(validInstants.containsAll(completedInstants));
+
+    client.close();
+    client1.close();
+    client2.close();
+    client3.close();
   }
 
   @ParameterizedTest
@@ -587,22 +620,22 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     }
     // Disabling embedded timeline server, it doesn't work with multiwriter
     HoodieWriteConfig.Builder writeConfigBuilder = getConfigBuilder()
-            .withCleanConfig(HoodieCleanConfig.newBuilder()
-                    .withAutoClean(false)
-                    .withAsyncClean(true)
-                    .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
-            .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-                    .withInlineCompaction(false)
-                    .withMaxNumDeltaCommitsBeforeCompaction(2).build())
-            .withEmbeddedTimelineServerEnabled(false)
-            // Timeline-server-based markers are not used for multi-writer tests
-            .withMarkersType(MarkerType.DIRECT.name())
-            .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withStorageType(
-                    FileSystemViewStorageType.MEMORY).build())
-            .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
-            // Set the config so that heartbeat will expire in 1 second without update
-            .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
-                    .build()).withAutoCommit(false).withProperties(lockProperties);
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withAutoClean(false)
+            .withAsyncClean(true)
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withInlineCompaction(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(2).build())
+        .withEmbeddedTimelineServerEnabled(false)
+        // Timeline-server-based markers are not used for multi-writer tests
+        .withMarkersType(MarkerType.DIRECT.name())
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withStorageType(
+            FileSystemViewStorageType.MEMORY).build())
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        // Set the config so that heartbeat will expire in 1 second without update
+        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
+            .build()).withAutoCommit(false).withProperties(lockProperties);
     Set<String> validInstants = new HashSet<>();
     // Create the first commit with inserts
     HoodieWriteConfig cfg = writeConfigBuilder.build();
@@ -662,6 +695,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     future1.get();
     future3.get();
+    client.close();
+    client1.close();
+    client2.close();
   }
 
   @ParameterizedTest
@@ -690,7 +726,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         .build();
 
     // Create the first commit
-    createCommitWithInserts(cfg, getHoodieWriteClient(cfg), "000", "001", 200, true);
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+      createCommitWithInserts(cfg, client, "000", "001", 200, true);
+    }
     // Start another inflight commit
     String newCommitTime = "003";
     int numRecords = 100;
@@ -718,6 +756,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     } catch (Exception e) {
       // Expected
     }
+    client1.close();
+    client2.close();
+    client3.close();
   }
 
   @Test
@@ -736,7 +777,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     HoodieWriteConfig cfg2 = writeConfigBuilder.build();
 
     // Create the first commit
-    createCommitWithInserts(cfg, getHoodieWriteClient(cfg), "000", "001", 5000, false);
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+      createCommitWithInserts(cfg, client, "000", "001", 5000, false);
+    }
     // Start another inflight commit
     String newCommitTime1 = "003";
     String newCommitTime2 = "004";
@@ -750,6 +793,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     JavaRDD<HoodieRecord> writeRecords2 = jsc.parallelize(updates2, 4);
 
     runConcurrentAndAssert(writeRecords1, writeRecords2, client1, client2, SparkRDDWriteClient::upsert, true);
+    client1.close();
+    client2.close();
   }
 
   private void runConcurrentAndAssert(JavaRDD<HoodieRecord> writeRecords1, JavaRDD<HoodieRecord> writeRecords2,
@@ -820,7 +865,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     HoodieWriteConfig cfg2 = writeConfigBuilder.build();
 
     // Create the first commit
-    createCommitWithInserts(cfg, getHoodieWriteClient(cfg), "000", "001", 200, false);
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+      createCommitWithInserts(cfg, client, "000", "001", 200, false);
+    }
     // Start another inflight commit
     String newCommitTime1 = "003";
     String newCommitTime2 = "004";
@@ -834,6 +881,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     JavaRDD<HoodieRecord> writeRecords2 = jsc.parallelize(updates2, 1);
 
     runConcurrentAndAssert(writeRecords1, writeRecords2, client1, client2, SparkRDDWriteClient::bulkInsert, false);
+    client1.close();
+    client2.close();
   }
 
   private void ingestBatch(Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn,
@@ -855,8 +904,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
   }
 
   private JavaRDD<WriteStatus> createCommitWithInserts(HoodieWriteConfig cfg, SparkRDDWriteClient client,
-                                       String prevCommitTime, String newCommitTime, int numRecords,
-                                       boolean doCommit) throws Exception {
+                                                       String prevCommitTime, String newCommitTime, int numRecords,
+                                                       boolean doCommit) throws Exception {
     // Finish first base commit
     JavaRDD<WriteStatus> result = insertFirstBatch(cfg, client, newCommitTime, prevCommitTime, numRecords, SparkRDDWriteClient::bulkInsert,
         false, false, numRecords);

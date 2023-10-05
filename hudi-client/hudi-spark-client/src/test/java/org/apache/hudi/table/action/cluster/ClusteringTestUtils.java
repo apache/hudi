@@ -42,7 +42,6 @@ import org.apache.hudi.config.HoodiePreCommitValidatorConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
 import java.nio.file.Paths;
@@ -54,6 +53,7 @@ import java.util.Properties;
 import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createBaseFile;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
+import static org.apache.hudi.utils.HoodieWriterClientTestHarness.getPropertiesForKeyGen;
 
 public class ClusteringTestUtils {
   protected static int timelineServicePort =
@@ -80,7 +80,7 @@ public class ClusteringTestUtils {
         .withClusteringSortColumns(populateMetaFields ? "_hoodie_record_key" : "_row_key")
         .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(0).withInlineClustering(false)
         .build();
-    properties.putAll(HoodieClientTestUtils.getPropertiesForKeyGen());
+    properties.putAll(getPropertiesForKeyGen());
 
     // write config builder
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr)

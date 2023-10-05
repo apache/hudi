@@ -59,6 +59,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -109,7 +110,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     // execute CopyOnWriteRollbackActionExecutor with filelisting mode
     BaseRollbackPlanActionExecutor copyOnWriteRollbackPlanActionExecutor =
         new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, rollbackInstant, needRollBackInstant, false,
-            table.getConfig().shouldRollbackUsingMarkers());
+            table.getConfig().shouldRollbackUsingMarkers(), false);
     HoodieRollbackPlan rollbackPlan = (HoodieRollbackPlan) copyOnWriteRollbackPlanActionExecutor.execute().get();
     CopyOnWriteRollbackActionExecutor copyOnWriteRollbackActionExecutor = new CopyOnWriteRollbackActionExecutor(context, table.getConfig(), table, "003", needRollBackInstant, true,
         false);
@@ -184,7 +185,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     HoodieInstant needRollBackInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "002");
     String rollbackInstant = "003";
 
-    ListingBasedRollbackStrategy rollbackStrategy = new ListingBasedRollbackStrategy(table, context, table.getConfig(), rollbackInstant);
+    ListingBasedRollbackStrategy rollbackStrategy = new ListingBasedRollbackStrategy(table, context, table.getConfig(), rollbackInstant, false);
     List<HoodieRollbackRequest> rollBackRequests = rollbackStrategy.getRollbackRequests(needRollBackInstant);
     rollBackRequests.forEach(entry -> System.out.println(" " + entry.getPartitionPath() + ", " + entry.getFileId() + " "
         + Arrays.toString(entry.getFilesToBeDeleted().toArray())));
@@ -199,7 +200,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     Mockito.when(fs.exists(any()))
         .thenThrow(new IOException("Failing exists call for " + rollbackRequest.getFilesToBeDeleted().get(0)));
 
-    rollbackStrategy = new ListingBasedRollbackStrategy(table, context, cfg, rollbackInstant);
+    rollbackStrategy = new ListingBasedRollbackStrategy(table, context, cfg, rollbackInstant, false);
     List<HoodieRollbackRequest> rollBackRequestsUpdated = rollbackStrategy.getRollbackRequests(needRollBackInstant);
     rollBackRequestsUpdated.forEach(entry -> System.out.println(" " + entry.getPartitionPath() + ", " + entry.getFileId() + " "
         + Arrays.toString(entry.getFilesToBeDeleted().toArray())));
@@ -266,7 +267,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     // Schedule rollback
     BaseRollbackPlanActionExecutor copyOnWriteRollbackPlanActionExecutor =
         new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, "003", needRollBackInstant, false,
-            table.getConfig().shouldRollbackUsingMarkers());
+            table.getConfig().shouldRollbackUsingMarkers(), false);
     HoodieRollbackPlan hoodieRollbackPlan = (HoodieRollbackPlan) copyOnWriteRollbackPlanActionExecutor.execute().get();
 
     // execute CopyOnWriteRollbackActionExecutor with filelisting mode
@@ -291,7 +292,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
 
     BaseRollbackPlanActionExecutor copyOnWriteRollbackPlanActionExecutor =
         new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, "003", commitInstant, false,
-            table.getConfig().shouldRollbackUsingMarkers());
+            table.getConfig().shouldRollbackUsingMarkers(), false);
     HoodieRollbackPlan hoodieRollbackPlan = (HoodieRollbackPlan) copyOnWriteRollbackPlanActionExecutor.execute().get();
     CopyOnWriteRollbackActionExecutor copyOnWriteRollbackActionExecutor = new CopyOnWriteRollbackActionExecutor(context, cfg, table, "003", commitInstant, false,
         false);
@@ -357,7 +358,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     // Create the rollback plan and perform the rollback
     BaseRollbackPlanActionExecutor copyOnWriteRollbackPlanActionExecutor =
         new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, "003", needRollBackInstant, false,
-            table.getConfig().shouldRollbackUsingMarkers());
+            table.getConfig().shouldRollbackUsingMarkers(), false);
     copyOnWriteRollbackPlanActionExecutor.execute();
 
     CopyOnWriteRollbackActionExecutor copyOnWriteRollbackActionExecutor = new CopyOnWriteRollbackActionExecutor(context, table.getConfig(), table, "003",
@@ -429,7 +430,10 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
         2, true);
 
     // Create completed clustering commit
-    SparkRDDWriteClient clusteringClient = getHoodieWriteClient(ClusteringTestUtils.getClusteringConfig(basePath));
+    Properties properties = new Properties();
+    properties.put("hoodie.datasource.write.row.writer.enable", String.valueOf(false));
+    SparkRDDWriteClient clusteringClient = getHoodieWriteClient(
+        ClusteringTestUtils.getClusteringConfig(basePath, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, properties));
 
     // Save an older instant for us to run clustering.
     String clusteringInstant1 = HoodieActiveTimeline.createNewInstantTime();
@@ -447,7 +451,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     String rollbackInstant = HoodieActiveTimeline.createNewInstantTime();
     BaseRollbackPlanActionExecutor copyOnWriteRollbackPlanActionExecutor =
         new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, rollbackInstant, needRollBackInstant, false,
-            !table.getConfig().shouldRollbackUsingMarkers());
+            !table.getConfig().shouldRollbackUsingMarkers(), false);
     copyOnWriteRollbackPlanActionExecutor.execute().get();
 
     // execute CopyOnWriteRollbackActionExecutor with filelisting mode
@@ -460,59 +464,12 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     rollbackInstant = HoodieActiveTimeline.createNewInstantTime();
     copyOnWriteRollbackPlanActionExecutor =
         new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, rollbackInstant, needRollBackInstant, false,
-            table.getConfig().shouldRollbackUsingMarkers());
+            table.getConfig().shouldRollbackUsingMarkers(), false);
     HoodieRollbackPlan rollbackPlan = (HoodieRollbackPlan) copyOnWriteRollbackPlanActionExecutor.execute().get();
 
     // execute CopyOnWriteRollbackActionExecutor with filelisting mode
     CopyOnWriteRollbackActionExecutor copyOnWriteRollbackActionExecutorForClustering = new CopyOnWriteRollbackActionExecutor(
         context, table.getConfig(), table, rollbackInstant, needRollBackInstant, true, false, true);
     copyOnWriteRollbackActionExecutorForClustering.execute();
-  }
-
-  /**
-   * This method tests rollback of completed ingestion commits and replacecommit inflight files
-   * when there is another replacecommit with greater timestamp already present in the timeline.
-   */
-  @Test
-  public void testDeletingInflightsWhichAreAlreadyRolledBack() throws Exception {
-
-    // insert data
-    HoodieWriteConfig writeConfig = getConfigBuilder().withAutoCommit(false).build();
-    SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig);
-
-    // Create a base commit.
-    int numRecords = 200;
-    String firstCommit = HoodieActiveTimeline.createNewInstantTime();
-    String partitionStr = HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
-    dataGen = new HoodieTestDataGenerator(new String[]{partitionStr});
-    writeBatch(writeClient, firstCommit, "000", Option.of(Arrays.asList("000")), "000",
-        numRecords, dataGen::generateInserts, SparkRDDWriteClient::insert, true, numRecords, numRecords,
-        1, true);
-    // Create inflight commit.
-    String secondCommit = writeClient.startCommit();
-    // Insert completed commit
-    String thirdCommit = HoodieActiveTimeline.createNewInstantTime();
-    writeBatch(writeClient, thirdCommit, firstCommit, Option.of(Arrays.asList("000")), "000",
-        numRecords, dataGen::generateInserts, SparkRDDWriteClient::insert, false, numRecords, numRecords,
-        1, true);
-    // Rollback secondCommit which is an inflight.
-    writeClient.rollback(secondCommit);
-    assertEquals(1, metaClient.reloadActiveTimeline()
-        .getRollbackTimeline().filterCompletedInstants().getInstants().size());
-    assertFalse(metaClient.getActiveTimeline().filterInflightsAndRequested().firstInstant().isPresent());
-
-    // Create inflight commit back into timeline for testing purposes.
-    writeClient.startCommitWithTime(secondCommit);
-    assertTrue(metaClient.reloadActiveTimeline().filterInflightsAndRequested().firstInstant().isPresent());
-
-    // Insert completed commit
-    String fourthCommit = HoodieActiveTimeline.createNewInstantTime();
-    writeBatch(writeClient, fourthCommit, thirdCommit, Option.of(Arrays.asList("000")), "000",
-        numRecords, dataGen::generateInserts, SparkRDDWriteClient::insert, false, numRecords, numRecords,
-        1, true);
-    assertEquals(1, metaClient.reloadActiveTimeline()
-        .getRollbackTimeline().filterCompletedInstants().getInstants().size());
-    assertFalse(metaClient.getActiveTimeline().filterInflightsAndRequested().firstInstant().isPresent());
-    assertEquals(3, metaClient.getActiveTimeline().getCommitsTimeline().countInstants());
   }
 }

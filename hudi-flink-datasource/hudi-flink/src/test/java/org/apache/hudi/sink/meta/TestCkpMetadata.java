@@ -18,13 +18,14 @@
 
 package org.apache.hudi.sink.meta;
 
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 
 import org.apache.flink.configuration.Configuration;
-import org.apache.hadoop.fs.FileSystem;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -32,6 +33,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.stream.IntStream;
@@ -49,11 +51,20 @@ public class TestCkpMetadata {
   @TempDir
   File tempFile;
 
+  protected Configuration conf;
+
+  protected HoodieFlinkWriteClient writeClient;
+
   @BeforeEach
   public void beforeEach() throws Exception {
+    setup();
+  }
+
+  protected void setup() throws IOException {
     String basePath = tempFile.getAbsolutePath();
-    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    this.conf = TestConfigurations.getDefaultConf(basePath);
     StreamerUtil.initTableIfNotExists(conf);
+    this.writeClient = FlinkWriteClients.createWriteClient(conf);
   }
 
   @ParameterizedTest
@@ -94,9 +105,16 @@ public class TestCkpMetadata {
         metadata1.getInstantCache(), is(Collections.singletonList("4")));
   }
 
-  private CkpMetadata getCkpMetadata(String uniqueId) {
-    String basePath = tempFile.getAbsolutePath();
-    FileSystem fs = FSUtils.getFs(basePath, HadoopConfigurations.getHadoopConf(new Configuration()));
-    return CkpMetadata.getInstance(fs, basePath, uniqueId);
+  protected CkpMetadata getCkpMetadata(String uniqueId) {
+    conf.set(FlinkOptions.WRITE_CLIENT_ID, uniqueId);
+    return CkpMetadataFactory.getCkpMetadata(writeClient.getConfig(), conf);
+  }
+
+  @AfterEach
+  public void cleanup() {
+    if (writeClient != null) {
+      writeClient.close();
+      writeClient = null;
+    }
   }
 }

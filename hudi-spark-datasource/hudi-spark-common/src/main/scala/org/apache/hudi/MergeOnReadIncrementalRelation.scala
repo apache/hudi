@@ -19,9 +19,10 @@ package org.apache.hudi
 
 import org.apache.hadoop.fs.{FileStatus, GlobPattern, Path}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
+import org.apache.hudi.HoodieSparkConfUtils.getHollowCommitHandling
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_STATE_TRANSITION_TIME
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
 import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, getCommitMetadata, handleHollowCommitIfNeeded}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
@@ -54,15 +55,10 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
   override def updatePrunedDataSchema(prunedSchema: StructType): Relation =
     this.copy(prunedDataSchema = Some(prunedSchema))
 
-  override def imbueConfigs(sqlContext: SQLContext): Unit = {
-    super.imbueConfigs(sqlContext)
-    sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "false")
-  }
-
   override protected def timeline: HoodieTimeline = {
     if (fullTableScan) {
       handleHollowCommitIfNeeded(metaClient.getCommitsAndCompactionTimeline, metaClient, hollowCommitHandling)
-    } else if (hollowCommitHandling == HollowCommitHandling.USE_STATE_TRANSITION_TIME) {
+    } else if (hollowCommitHandling == HollowCommitHandling.USE_TRANSITION_TIME) {
       metaClient.getCommitsAndCompactionTimeline.findInstantsInRangeByStateTransitionTime(startTimestamp, endTimestamp)
     } else {
       handleHollowCommitIfNeeded(metaClient.getCommitsAndCompactionTimeline, metaClient, hollowCommitHandling)
@@ -81,8 +77,6 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
     val optionalFilters = filters
     val readers = createBaseFileReaders(tableSchema, requiredSchema, requestedColumns, requiredFilters, optionalFilters)
 
-    // TODO(HUDI-3639) implement incremental span record filtering w/in RDD to make sure returned iterator is appropriately
-    //                 filtered, since file-reader might not be capable to perform filtering
     new HoodieMergeOnReadRDD(
       sqlContext.sparkContext,
       config = jobConf,
@@ -91,7 +85,10 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
       requiredSchema = requiredSchema,
       tableState = tableState,
       mergeType = mergeType,
-      fileSplits = fileSplits)
+      fileSplits = fileSplits,
+      includeStartTime = includeStartTime,
+      startTimestamp = startTs,
+      endTimestamp = endTs)
   }
 
   override protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
@@ -137,16 +134,13 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   // Validate this Incremental implementation is properly configured
   validate()
 
-  protected val hollowCommitHandling: HollowCommitHandling =
-    optParams.get(DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key)
-      .map(HollowCommitHandling.valueOf)
-      .getOrElse(HollowCommitHandling.valueOf(DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.defaultValue))
+  protected val hollowCommitHandling: HollowCommitHandling = getHollowCommitHandling(optParams)
 
   protected def startTimestamp: String = optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key)
 
   protected def endTimestamp: String = optParams.getOrElse(
     DataSourceReadOptions.END_INSTANTTIME.key,
-    if (hollowCommitHandling == USE_STATE_TRANSITION_TIME) super.timeline.lastInstant().get.getStateTransitionTime
+    if (hollowCommitHandling == USE_TRANSITION_TIME) super.timeline.lastInstant().get.getStateTransitionTime
     else super.timeline.lastInstant().get.getTimestamp)
 
   protected def startInstantArchived: Boolean = super.timeline.isBeforeTimelineStarts(startTimestamp)
@@ -168,7 +162,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
     if (!startInstantArchived || !endInstantArchived) {
       // If endTimestamp commit is not archived, will filter instants
       // before endTimestamp.
-      if (hollowCommitHandling == USE_STATE_TRANSITION_TIME) {
+      if (hollowCommitHandling == USE_TRANSITION_TIME) {
         super.timeline.findInstantsInRangeByStateTransitionTime(startTimestamp, endTimestamp).getInstants.asScala.toList
       } else {
         super.timeline.findInstantsInRange(startTimestamp, endTimestamp).getInstants.asScala.toList
@@ -184,19 +178,25 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
     listAffectedFilesForCommits(conf, new Path(metaClient.getBasePath), commitsMetadata)
   }
 
+  protected lazy val (includeStartTime, startTs) = if (startInstantArchived) {
+    (false, startTimestamp)
+  } else {
+    (true, includedCommits.head.getTimestamp)
+  }
+  protected lazy val endTs: String = if (endInstantArchived) endTimestamp else includedCommits.last.getTimestamp
+
   // Record filters making sure that only records w/in the requested bounds are being fetched as part of the
   // scan collected by this relation
   protected lazy val incrementalSpanRecordFilters: Seq[Filter] = {
     val isNotNullFilter = IsNotNull(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
 
-    val largerThanFilter = if (startInstantArchived) {
-      GreaterThan(HoodieRecord.COMMIT_TIME_METADATA_FIELD, startTimestamp)
+    val largerThanFilter = if (includeStartTime) {
+      GreaterThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, startTs)
     } else {
-      GreaterThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, includedCommits.head.getTimestamp)
+      GreaterThan(HoodieRecord.COMMIT_TIME_METADATA_FIELD, startTs)
     }
 
-    val lessThanFilter = LessThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-      if (endInstantArchived) endTimestamp else includedCommits.last.getTimestamp)
+    val lessThanFilter = LessThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, endTs)
 
     Seq(isNotNullFilter, largerThanFilter, lessThanFilter)
   }
@@ -222,7 +222,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
       throw new HoodieException("Incremental queries are not supported when meta fields are disabled")
     }
 
-    if (hollowCommitHandling == USE_STATE_TRANSITION_TIME && fullTableScan) {
+    if (hollowCommitHandling == USE_TRANSITION_TIME && fullTableScan) {
       throw new HoodieException("Cannot use stateTransitionTime while enables full table scan")
     }
   }

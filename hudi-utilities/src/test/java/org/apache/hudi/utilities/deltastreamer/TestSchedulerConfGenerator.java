@@ -18,11 +18,15 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.SparkConfigs;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.utilities.streamer.HoodieStreamer;
+import org.apache.hudi.utilities.streamer.SchedulerConfGenerator;
 
 import org.junit.jupiter.api.Test;
 
+import java.net.URI;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -33,7 +37,7 @@ public class TestSchedulerConfGenerator {
 
   @Test
   public void testGenerateSparkSchedulingConf() throws Exception {
-    HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
+    HoodieStreamer.Config cfg = new HoodieStreamer.Config();
     Map<String, String> configs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
     assertNull(configs.get(SparkConfigs.SPARK_SCHEDULER_ALLOCATION_FILE_KEY()), "spark.scheduler.mode not set");
 
@@ -76,5 +80,21 @@ public class TestSchedulerConfGenerator {
             + "</allocations>";
     String generatedConfig = SchedulerConfGenerator.generateConfig(1, 3, 2, 4, 5, 6);
     assertEquals(targetConfig, generatedConfig);
+  }
+
+  @Test
+  public void testGeneratedConfigFileScheme() throws Exception {
+    System.setProperty(SchedulerConfGenerator.SPARK_SCHEDULER_MODE_KEY, "FAIR");
+    HoodieStreamer.Config cfg = new HoodieStreamer.Config();
+    cfg.continuousMode = true;
+    cfg.tableType = HoodieTableType.MERGE_ON_READ.name();
+    Map<String, String> configs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
+
+    URI schedulerFile = URI.create(configs.get(SparkConfigs.SPARK_SCHEDULER_ALLOCATION_FILE_KEY()));
+    if (HoodieSparkUtils.gteqSpark3_2()) {
+      assertNotNull(schedulerFile.getScheme());
+    } else {
+      assertNull(schedulerFile.getScheme());
+    }
   }
 }

@@ -38,6 +38,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+
 /**
  * Converts Json record to Avro Generic Record.
  */
@@ -290,7 +292,7 @@ public class MercifulJsonConverter {
       @Override
       public Pair<Boolean, Object> convert(Object value, String name, Schema schema, boolean shouldSanitize, String invalidCharMask) {
         // Should return ByteBuffer (see GenericData.isBytes())
-        return Pair.of(true, ByteBuffer.wrap(value.toString().getBytes()));
+        return Pair.of(true, ByteBuffer.wrap(getUTF8Bytes(value.toString())));
       }
     };
   }

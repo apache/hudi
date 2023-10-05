@@ -32,6 +32,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.UUID;
 
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+
 /**
  * A transformer that allows a sql-query template be used to transform the source before writing to Hudi data-set.
  *
@@ -47,7 +49,7 @@ public class SqlQueryBasedTransformer implements Transformer {
   @Override
   public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
       TypedProperties properties) {
-    String transformerSQL = properties.getString(SqlTransformerConfig.TRANSFORMER_SQL.key());
+    String transformerSQL = getStringWithAltKeys(properties, SqlTransformerConfig.TRANSFORMER_SQL);
     if (null == transformerSQL) {
       throw new HoodieTransformException("Missing configuration : (" + SqlTransformerConfig.TRANSFORMER_SQL.key() + ")");
     }

@@ -91,16 +91,17 @@ public abstract class HoodieSparkTable<T>
   protected Option<HoodieTableMetadataWriter> getMetadataWriter(
       String triggeringInstantTimestamp,
       HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
-    if (config.isMetadataTableEnabled() || metaClient.getTableConfig().isMetadataTableAvailable()) {
+    if (config.isMetadataTableEnabled()) {
+      // if any partition is deleted, we need to reload the metadata table writer so that new table configs are picked up
+      // to reflect the delete mdt partitions.
+      deleteMetadataIndexIfNecessary();
+
       // Create the metadata table writer. First time after the upgrade this creation might trigger
       // metadata table bootstrapping. Bootstrapping process could fail and checking the table
       // existence after the creation is needed.
-      final HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
+      HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
           context.getHadoopConf().get(), config, failedWritesCleaningPolicy, context,
           Option.of(triggeringInstantTimestamp));
-      // even with metadata enabled, some index could have been disabled
-      // delete metadata partitions corresponding to such indexes
-      deleteMetadataIndexIfNecessary();
       try {
         if (isMetadataTableExists || metaClient.getFs().exists(new Path(
             HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath())))) {
@@ -111,6 +112,7 @@ public abstract class HoodieSparkTable<T>
         throw new HoodieMetadataException("Checking existence of metadata table failed", e);
       }
     } else {
+      // if metadata is not enabled in the write config, we should try and delete it (if present)
       maybeDeleteMetadataTable();
     }
 

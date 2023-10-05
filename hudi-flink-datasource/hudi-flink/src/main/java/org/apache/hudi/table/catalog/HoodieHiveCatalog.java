@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -34,7 +35,7 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieCatalogException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
-import org.apache.hudi.sync.common.util.ConfigUtils;
+import org.apache.hudi.table.HoodieTableFactory;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
@@ -455,8 +456,9 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       throw new DatabaseNotExistException(getName(), tablePath.getDatabaseName());
     }
 
-    if (!table.getOptions().getOrDefault(CONNECTOR.key(), "").equalsIgnoreCase("hudi")) {
-      throw new HoodieCatalogException(String.format("The %s is not hoodie table", tablePath.getObjectName()));
+    if (!table.getOptions().getOrDefault(CONNECTOR.key(), "").equalsIgnoreCase(HoodieTableFactory.FACTORY_ID)) {
+      throw new HoodieCatalogException(String.format("Unsupported connector identity %s, supported identity is %s",
+          table.getOptions().getOrDefault(CONNECTOR.key(), ""), HoodieTableFactory.FACTORY_ID));
     }
 
     if (table instanceof CatalogView) {

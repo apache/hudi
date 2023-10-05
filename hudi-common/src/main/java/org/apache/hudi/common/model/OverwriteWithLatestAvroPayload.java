@@ -30,7 +30,7 @@ import java.io.IOException;
 import java.util.Objects;
 
 /**
- * Default payload used for delta streamer.
+ * Default payload.
  *
  * <ol>
  * <li> preCombine - Picks the latest delta record for a key, based on an ordering field;

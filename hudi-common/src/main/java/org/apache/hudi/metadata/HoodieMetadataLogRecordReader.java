@@ -74,16 +74,16 @@ public class HoodieMetadataLogRecordReader implements Closeable {
   }
 
   @SuppressWarnings("unchecked")
-  public Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixes) {
-    if (keyPrefixes.isEmpty()) {
+  public Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> sortedKeyPrefixes) {
+    if (sortedKeyPrefixes.isEmpty()) {
       return Collections.emptyMap();
     }
 
     // NOTE: Locking is necessary since we're accessing [[HoodieMetadataLogRecordReader]]
     //       materialized state, to make sure there's no concurrent access
     synchronized (this) {
-      logRecordScanner.scanByKeyPrefixes(keyPrefixes);
-      Predicate<String> p = createPrefixMatchingPredicate(keyPrefixes);
+      logRecordScanner.scanByKeyPrefixes(sortedKeyPrefixes);
+      Predicate<String> p = createPrefixMatchingPredicate(sortedKeyPrefixes);
       return logRecordScanner.getRecords().entrySet()
           .stream()
           .filter(r -> r != null && p.test(r.getKey()))
@@ -97,17 +97,17 @@ public class HoodieMetadataLogRecordReader implements Closeable {
    * the delta-log blocks
    */
   @SuppressWarnings("unchecked")
-  public Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(List<String> keys) {
-    if (keys.isEmpty()) {
+  public Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(List<String> sortedKeys) {
+    if (sortedKeys.isEmpty()) {
       return Collections.emptyMap();
     }
 
     // NOTE: Locking is necessary since we're accessing [[HoodieMetadataLogRecordReader]]
     //       materialized state, to make sure there's no concurrent access
     synchronized (this) {
-      logRecordScanner.scanByFullKeys(keys);
+      logRecordScanner.scanByFullKeys(sortedKeys);
       Map<String, HoodieRecord> allRecords = logRecordScanner.getRecords();
-      return keys.stream()
+      return sortedKeys.stream()
           .map(key -> (HoodieRecord<HoodieMetadataPayload>) allRecords.get(key))
           .filter(Objects::nonNull)
           .collect(Collectors.toMap(HoodieRecord::getRecordKey, r -> r));

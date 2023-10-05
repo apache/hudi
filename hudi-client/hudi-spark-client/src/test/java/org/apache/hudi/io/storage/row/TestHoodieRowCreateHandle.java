@@ -25,11 +25,10 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.SparkDatasetTestUtils;
 
 import org.apache.spark.sql.Dataset;
@@ -57,7 +56,7 @@ import static org.junit.jupiter.api.Assertions.fail;
  * Unit tests {@link HoodieRowCreateHandle}.
  */
 @SuppressWarnings("checkstyle:LineLength")
-public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
+public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
 
   private static final Random RANDOM = new Random();
 
@@ -190,16 +189,8 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
       HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
       new HoodieRowCreateHandle(table, cfg, " def", UUID.randomUUID().toString(), "001", RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE);
       fail("Should have thrown exception");
-    } catch (HoodieInsertException ioe) {
-      // expected without metadata table
-      if (enableMetadataTable) {
-        fail("Should have thrown TableNotFoundException");
-      }
     } catch (TableNotFoundException e) {
-      // expected with metadata table
-      if (!enableMetadataTable) {
-        fail("Should have thrown HoodieInsertException");
-      }
+      // expected throw failure
     }
   }
 

@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import javax.annotation.concurrent.Immutable;
+
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -49,7 +50,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   // Meta fields are not populated by default for metadata table
   public static final boolean DEFAULT_METADATA_POPULATE_META_FIELDS = false;
   // Default number of commits to retain, without cleaning, on metadata table
-  public static final int DEFAULT_METADATA_CLEANER_COMMITS_RETAINED = 3;
+  public static final int DEFAULT_METADATA_CLEANER_COMMITS_RETAINED = 20;
 
   public static final String METADATA_PREFIX = "hoodie.metadata";
   public static final String OPTIMIZED_LOG_BLOCKS_SCAN = ".optimized.log.blocks.scan.enable";
@@ -71,14 +72,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Enable publishing of metrics around metadata table.");
 
-  // Parallelism for inserts
-  public static final ConfigProperty<Integer> INSERT_PARALLELISM_VALUE = ConfigProperty
-      .key(METADATA_PREFIX + ".insert.parallelism")
-      .defaultValue(1)
-      .markAdvanced()
-      .sinceVersion("0.7.0")
-      .withDocumentation("Parallelism to use when inserting to the metadata table");
-
   // Async index
   public static final ConfigProperty<Boolean> ASYNC_INDEX_ENABLE = ConfigProperty
       .key(METADATA_PREFIX + ".index.async")
@@ -98,13 +91,16 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   public static final ConfigProperty<String> ENABLE_LOG_COMPACTION_ON_METADATA_TABLE = ConfigProperty
       .key(METADATA_PREFIX + ".log.compaction.enable")
       .defaultValue("false")
-      .sinceVersion("0.14")
+      .markAdvanced()
+      .sinceVersion("0.14.0")
       .withDocumentation("This configs enables logcompaction for the metadata table.");
 
   // Log blocks threshold, after a file slice crosses this threshold log compact operation is scheduled.
   public static final ConfigProperty<Integer> LOG_COMPACT_BLOCKS_THRESHOLD = ConfigProperty
       .key(METADATA_PREFIX + ".log.compaction.blocks.threshold")
       .defaultValue(5)
+      .markAdvanced()
+      .sinceVersion("0.14.0")
       .withDocumentation("Controls the criteria to log compacted files groups in metadata table.");
 
   // Regex to filter out matching directories during bootstrap
@@ -114,14 +110,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.7.0")
       .withDocumentation("Directories matching this regex, will be filtered out when initializing metadata table from lake storage for the first time.");
-
-  public static final ConfigProperty<String> ASSUME_DATE_PARTITIONING = ConfigProperty
-      .key("hoodie.assume.date.partitioning")
-      .defaultValue("false")
-      .markAdvanced()
-      .sinceVersion("0.3.0")
-      .withDocumentation("Should HoodieWriteClient assume the data is partitioned by dates, i.e three levels from base path. "
-          + "This is a stop-gap to support tables created by versions < 0.3.1. Will be removed eventually");
 
   public static final ConfigProperty<Integer> FILE_LISTING_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.file.listing.parallelism")
@@ -250,43 +238,57 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> RECORD_INDEX_ENABLE_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".record.index.enable")
       .defaultValue(false)
+      .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Create the HUDI Record Index within the Metadata Table");
 
   public static final ConfigProperty<Integer> RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".record.index.min.filegroup.count")
       .defaultValue(10)
+      .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Minimum number of file groups to use for Record Index.");
 
   public static final ConfigProperty<Integer> RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".record.index.max.filegroup.count")
-      .defaultValue(1000)
+      .defaultValue(10000)
+      .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Maximum number of file groups to use for Record Index.");
 
   public static final ConfigProperty<Integer> RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".record.index.max.filegroup.size")
       .defaultValue(1024 * 1024 * 1024)
+      .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Maximum size in bytes of a single file group. Large file group takes longer to compact.");
 
   public static final ConfigProperty<Float> RECORD_INDEX_GROWTH_FACTOR_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".record.index.growth.factor")
       .defaultValue(2.0f)
+      .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("The current number of records are multiplied by this number when estimating the number of "
           + "file groups to create automatically. This helps account for growth in the number of records in the dataset.");
 
+  public static final ConfigProperty<Integer> RECORD_INDEX_MAX_PARALLELISM = ConfigProperty
+      .key(METADATA_PREFIX + ".max.init.parallelism")
+      .defaultValue(100000)
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("Maximum parallelism to use when initializing Record Index.");
+
   public static final ConfigProperty<Long> MAX_READER_MEMORY_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".max.reader.memory")
       .defaultValue(1024 * 1024 * 1024L)
+      .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Max memory to use for the reader to read from metadata");
 
   public static final ConfigProperty<Integer> MAX_READER_BUFFER_SIZE_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".max.reader.buffer.size")
       .defaultValue(10 * 1024 * 1024)
+      .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Max memory to use for the reader buffer while merging log blocks");
 
@@ -294,8 +296,29 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".spillable.map.path")
       .noDefaultValue()
       .withInferFunction(cfg -> Option.of(cfg.getStringOrDefault(FileSystemViewStorageConfig.SPILLABLE_DIR)))
+      .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Path on local storage to use, when keys read from metadata are held in a spillable map.");
+
+  public static final ConfigProperty<Long> MAX_LOG_FILE_SIZE_BYTES_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".max.logfile.size")
+      .defaultValue(2 * 1024 * 1024 * 1024L)  // 2GB
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("Maximum size in bytes of a single log file. Larger log files can contain larger log blocks "
+          + "thereby reducing the number of blocks to search for keys");
+
+  public static final ConfigProperty<Boolean> AUTO_INITIALIZE = ConfigProperty
+      .key(METADATA_PREFIX + ".auto.initialize")
+      .defaultValue(true)
+      .sinceVersion("0.14.0")
+      .markAdvanced()
+      .withDocumentation("Initializes the metadata table by reading from the file system when the table is first created. Enabled by default. "
+          + "Warning: This should only be disabled when manually constructing the metadata table outside of typical Hudi writer flows.");
+
+  public long getMaxLogFileSize() {
+    return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
+  }
 
   private HoodieMetadataConfig() {
     super();
@@ -309,10 +332,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return Math.max(getInt(HoodieMetadataConfig.FILE_LISTING_PARALLELISM_VALUE), 1);
   }
 
-  public Boolean shouldAssumeDatePartitioning() {
-    return getBoolean(HoodieMetadataConfig.ASSUME_DATE_PARTITIONING);
-  }
-
   public boolean enabled() {
     return getBoolean(ENABLE);
   }
@@ -323,6 +342,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean isColumnStatsIndexEnabled() {
     return getBooleanOrDefault(ENABLE_METADATA_INDEX_COLUMN_STATS);
+  }
+
+  public boolean isRecordIndexEnabled() {
+    return getBooleanOrDefault(RECORD_INDEX_ENABLE_PROP);
   }
 
   public List<String> getColumnsEnabledForColumnStatsIndex() {
@@ -413,9 +436,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getInt(MAX_READER_BUFFER_SIZE_PROP);
   }
 
-  /**
-   * Builder for {@link HoodieMetadataConfig}.
-   */
+  public int getRecordIndexMaxParallelism() {
+    return getInt(RECORD_INDEX_MAX_PARALLELISM);
+  }
+
+  public boolean shouldAutoInitialize() {
+    return getBoolean(AUTO_INITIALIZE);
+  }
+
   public static class Builder {
 
     private EngineType engineType = EngineType.SPARK;
@@ -488,11 +516,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withInsertParallelism(int parallelism) {
-      metadataConfig.setValue(INSERT_PARALLELISM_VALUE, String.valueOf(parallelism));
-      return this;
-    }
-
     public Builder withAsyncIndex(boolean asyncIndex) {
       metadataConfig.setValue(ASYNC_INDEX_ENABLE, String.valueOf(asyncIndex));
       return this;
@@ -518,8 +541,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withAssumeDatePartitioning(boolean assumeDatePartitioning) {
-      metadataConfig.setValue(ASSUME_DATE_PARTITIONING, String.valueOf(assumeDatePartitioning));
+    public Builder withRecordIndexMaxParallelism(int parallelism) {
+      metadataConfig.setValue(RECORD_INDEX_MAX_PARALLELISM, String.valueOf(parallelism));
       return this;
     }
 
@@ -589,6 +612,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withMaxLogFileSizeBytes(long sizeInBytes) {
+      metadataConfig.setValue(MAX_LOG_FILE_SIZE_BYTES_PROP, String.valueOf(sizeInBytes));
+      return this;
+    }
+
     public HoodieMetadataConfig build() {
       metadataConfig.setDefaultValue(ENABLE, getDefaultMetadataEnable(engineType));
       metadataConfig.setDefaults(HoodieMetadataConfig.class.getName());
@@ -631,17 +659,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   public static final boolean DEFAULT_METADATA_METRICS_ENABLE = METRICS_ENABLE.defaultValue();
 
   /**
-   * @deprecated Use {@link #INSERT_PARALLELISM_VALUE} and its methods.
-   */
-  @Deprecated
-  public static final String METADATA_INSERT_PARALLELISM_PROP = INSERT_PARALLELISM_VALUE.key();
-  /**
-   * @deprecated Use {@link #INSERT_PARALLELISM_VALUE} and its methods.
-   */
-  @Deprecated
-  public static final int DEFAULT_METADATA_INSERT_PARALLELISM = INSERT_PARALLELISM_VALUE.defaultValue();
-
-  /**
    * @deprecated Use {@link #COMPACT_NUM_DELTA_COMMITS} and its methods.
    */
   @Deprecated
@@ -672,16 +689,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
    */
   @Deprecated
   public static final String DEFAULT_DIRECTORY_FILTER_REGEX = DIR_FILTER_REGEX.defaultValue();
-  /**
-   * @deprecated Use {@link #ASSUME_DATE_PARTITIONING} and its methods.
-   */
-  @Deprecated
-  public static final String HOODIE_ASSUME_DATE_PARTITIONING_PROP = ASSUME_DATE_PARTITIONING.key();
-  /**
-   * @deprecated Use {@link #ASSUME_DATE_PARTITIONING} and its methods.
-   */
-  @Deprecated
-  public static final String DEFAULT_ASSUME_DATE_PARTITIONING = ASSUME_DATE_PARTITIONING.defaultValue();
   /**
    * @deprecated Use {@link #FILE_LISTING_PARALLELISM_VALUE} and its methods.
    */

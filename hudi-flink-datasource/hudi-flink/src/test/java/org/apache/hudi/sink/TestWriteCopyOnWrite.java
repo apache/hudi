@@ -19,11 +19,13 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieWriteConflictException;
@@ -34,6 +36,7 @@ import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -61,6 +64,11 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setString(FlinkOptions.TABLE_TYPE, getTableType().name());
     setUp(conf);
+  }
+
+  @AfterEach
+  public void after() {
+    conf = null;
   }
 
   /**
@@ -133,6 +141,15 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .jobFailover()
         .assertNextEvent()
         .checkLastPendingInstantCompleted()
+        .end();
+  }
+
+  @Test
+  public void testPartialFailover() throws Exception {
+    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
+    conf.setString(FlinkOptions.OPERATION, "INSERT");
+    // open the function and ingest data
+    preparePipeline()
         // triggers subtask failure for multiple times to simulate partial failover, for partial over,
         // we allow the task to reuse the pending instant for data flushing, no metadata event should be sent
         .subTaskFails(0, 1)
@@ -575,6 +592,27 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     assertSame(writeClient.getConfig().getViewStorageConfig().getStorageType(), FileSystemViewStorageType.REMOTE_FIRST);
     assertEquals(viewStorageConfig.getRemoteViewServerPort(), writeClient.getConfig().getViewStorageConfig().getRemoteViewServerPort());
     assertEquals(viewStorageConfig.getRemoteTimelineClientTimeoutSecs(), 500);
+    writeClient.close();
+  }
+
+  @Test
+  public void testRollbackFailedWritesWithLazyCleanPolicy() throws Exception {
+    conf.setString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(), HoodieFailedWritesCleaningPolicy.LAZY.name());
+
+    preparePipeline()
+        .consume(TestData.DATA_SET_INSERT)
+        .checkpoint(1)
+        .assertNextEvent()
+        .checkpointComplete(1)
+        .subTaskFails(0, 0)
+        .assertEmptyEvent()
+        .rollbackLastCompleteInstantToInflight()
+        .jobFailover()
+        .subTaskFails(0, 1)
+        // the last checkpoint instant was not rolled back by subTaskFails(0, 1)
+        // with LAZY cleaning strategy because clean action could roll back failed writes.
+        .assertNextEvent()
+        .end();
   }
 
   // -------------------------------------------------------------------------

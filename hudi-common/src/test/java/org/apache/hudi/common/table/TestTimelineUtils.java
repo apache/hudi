@@ -51,7 +51,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -74,6 +73,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.LOG_COMPACTIO
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.SAVEPOINT_ACTION;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -491,7 +491,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     List<HoodieInstant> rollbackInstants = new ArrayList<>();
     rollbackInstants.add(new HoodieInstant(false, commitTs, actionType));
     HoodieRestoreMetadata metadata = TimelineMetadataUtils.convertRestoreMetadata(commitTs, 200, rollbackInstants,
-        CollectionUtils.createImmutableMap(commitTs, rollbackM));
+        Collections.singletonMap(commitTs, rollbackM));
     return TimelineMetadataUtils.serializeRestoreMetadata(metadata).get();
   }
 
@@ -503,7 +503,8 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     List<HoodieInstant> rollbacks = new ArrayList<>();
     rollbacks.add(new HoodieInstant(false, actionType, commitTs));
 
-    HoodieRollbackStat rollbackStat = new HoodieRollbackStat(partition, deletedFiles, Collections.emptyList(), Collections.emptyMap());
+    HoodieRollbackStat rollbackStat = new HoodieRollbackStat(partition, deletedFiles, Collections.emptyList(),
+        Collections.emptyMap(), Collections.emptyMap());
     List<HoodieRollbackStat> rollbackStats = new ArrayList<>();
     rollbackStats.add(rollbackStat);
     return TimelineMetadataUtils.convertRollbackMetadata(commitTs, Option.empty(), rollbacks, rollbackStats);
@@ -522,7 +523,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     for (Map.Entry<String, String> extraEntries : extraMetadata.entrySet()) {
       commit.addMetadata(extraEntries.getKey(), extraEntries.getValue());
     }
-    return commit.toJsonString().getBytes(StandardCharsets.UTF_8);
+    return serializeCommitMetadata(commit).get();
   }
 
   private byte[] getReplaceCommitMetadata(String basePath, String commitTs, String replacePartition, int replaceCount,
@@ -549,7 +550,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     for (Map.Entry<String, String> extraEntries : extraMetadata.entrySet()) {
       commit.addMetadata(extraEntries.getKey(), extraEntries.getValue());
     }
-    return commit.toJsonString().getBytes(StandardCharsets.UTF_8);
+    return serializeCommitMetadata(commit).get();
   }
 
   private Option<byte[]> getCleanMetadata(String partition, String time) throws IOException {
@@ -587,7 +588,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     Stream<String> completed = Stream.of("001", "005");
     HoodieTimeline completedTimeline = new MockHoodieTimeline(completed, Stream.empty());
     switch (handlingMode) {
-      case EXCEPTION:
+      case FAIL:
         HoodieException e = assertThrows(HoodieException.class, () ->
             handleHollowCommitIfNeeded(completedTimeline, metaClient, handlingMode));
         assertTrue(e.getMessage().startsWith("Found hollow commit:"));
@@ -599,7 +600,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
         assertFalse(filteredTimeline.containsInstant("005"));
         break;
       }
-      case USE_STATE_TRANSITION_TIME: {
+      case USE_TRANSITION_TIME: {
         HoodieTimeline filteredTimeline = handleHollowCommitIfNeeded(completedTimeline, metaClient, handlingMode);
         assertTrue(filteredTimeline.containsInstant("001"));
         assertFalse(filteredTimeline.containsInstant("003"));

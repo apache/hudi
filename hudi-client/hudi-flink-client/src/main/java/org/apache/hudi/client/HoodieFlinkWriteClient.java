@@ -34,7 +34,6 @@ import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
@@ -273,6 +272,15 @@ public class HoodieFlinkWriteClient<T> extends
     return postWrite(result, instantTime, table);
   }
 
+  @Override
+  public List<WriteStatus> deletePrepped(List<HoodieRecord<T>> preppedRecords, final String instantTime) {
+    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
+        initTable(WriteOperationType.DELETE_PREPPED, Option.ofNullable(instantTime));
+    preWrite(instantTime, WriteOperationType.DELETE_PREPPED, table.getMetaClient());
+    HoodieWriteMetadata<List<WriteStatus>> result = table.deletePrepped(context, instantTime, preppedRecords);
+    return postWrite(result, instantTime, table);
+  }
+
   public List<WriteStatus> deletePartitions(List<String> partitions, String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
         initTable(WriteOperationType.DELETE_PARTITION, Option.ofNullable(instantTime));
@@ -301,11 +309,6 @@ public class HoodieFlinkWriteClient<T> extends
       this.lastCompletedTxnAndMetadata = TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient);
       this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(metaClient);
     }
-  }
-
-  @Override
-  protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata, HoodieData<WriteStatus> writeStatuses) {
-    tableServiceClient.writeTableMetadata(table, instantTime, actionType, metadata, writeStatuses);
   }
 
   /**
@@ -342,21 +345,13 @@ public class HoodieFlinkWriteClient<T> extends
   }
 
   @Override
-  protected List<WriteStatus> postWrite(HoodieWriteMetadata<List<WriteStatus>> result,
-                                        String instantTime,
-                                        HoodieTable hoodieTable) {
+  public List<WriteStatus> postWrite(HoodieWriteMetadata<List<WriteStatus>> result,
+                                     String instantTime,
+                                     HoodieTable hoodieTable) {
     if (result.getIndexLookupDuration().isPresent()) {
       metrics.updateIndexMetrics(getOperationType().name(), result.getIndexUpdateDuration().get().toMillis());
     }
     return result.getWriteStatuses();
-  }
-
-  @Override
-  protected void preCommit(HoodieInstant inflightInstant, HoodieCommitMetadata metadata) {
-    // Create a Hoodie table after startTxn which encapsulated the commits and files visible.
-    // Important to create this after the lock to ensure the latest commits show up in the timeline without need for reload
-    HoodieTable table = createTable(config, hadoopConf);
-    resolveWriteConflict(table, metadata, this.pendingInflightAndRequestedInstants);
   }
 
   @Override
@@ -365,46 +360,9 @@ public class HoodieFlinkWriteClient<T> extends
   }
 
   @Override
-  public void commitCompaction(
-      String compactionInstantTime,
-      HoodieCommitMetadata metadata,
-      Option<Map<String, String>> extraMetadata) {
-    tableServiceClient.commitCompaction(compactionInstantTime, metadata, extraMetadata);
-  }
-
-  @Override
-  public void completeCompaction(
-      HoodieCommitMetadata metadata,
-      HoodieTable table,
-      String compactionCommitTime) {
-    tableServiceClient.completeCompaction(metadata, table, compactionCommitTime);
-  }
-
-  @Override
   protected HoodieWriteMetadata<List<WriteStatus>> compact(String compactionInstantTime, boolean shouldComplete) {
     // only used for metadata table, the compaction happens in single thread
     return tableServiceClient.compact(compactionInstantTime, shouldComplete);
-  }
-
-  @Override
-  public void commitLogCompaction(String logCompactionInstantTime, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
-    HoodieFlinkTable<T> table = HoodieFlinkTable.create(config, context);
-    extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
-    completeLogCompaction(metadata, table, logCompactionInstantTime);
-  }
-
-  @Override
-  protected void completeLogCompaction(HoodieCommitMetadata metadata,
-                                       HoodieTable table,
-                                       String logCompactionCommitTime) {
-    tableServiceClient.completeLogCompaction(metadata, table, logCompactionCommitTime);
-  }
-
-  @Override
-  protected HoodieWriteMetadata<List<WriteStatus>> logCompact(String logCompactionInstantTime, boolean shouldComplete) {
-    HoodieFlinkTable<T> table = HoodieFlinkTable.create(config, context);
-    preWrite(logCompactionInstantTime, WriteOperationType.LOG_COMPACT, table.getMetaClient());
-    return tableServiceClient.logCompact(logCompactionInstantTime, shouldComplete);
   }
 
   @Override

@@ -603,7 +603,7 @@ public class IncrementalInputSplits implements Serializable {
   @VisibleForTesting
   public HoodieTimeline filterInstantsAsPerUserConfigs(HoodieTimeline timeline) {
     final HoodieTimeline oriTimeline = timeline;
-    if (this.skipCompaction) {
+    if (OptionsResolver.isMorTable(this.conf) & this.skipCompaction) {
       // the compaction commit uses 'commit' as action which is tricky
       timeline = timeline.filter(instant -> !instant.getAction().equals(HoodieTimeline.COMMIT_ACTION));
     }
