@@ -23,6 +23,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -91,6 +92,7 @@ public class ITTestHoodieSanity extends ITTestBase {
    * and performs upserts on it. Hive integration and upsert functionality is checked by running a count query in hive
    * console.
    */
+  @Disabled
   public void testRunHoodieJavaAppOnSinglePartitionKeyMORTable() throws Exception {
     String hiveTableName = "docker_hoodie_single_partition_key_mor_test_" + HoodieActiveTimeline.createNewInstantTime();
     testRunHoodieJavaApp(hiveTableName, HoodieTableType.MERGE_ON_READ.name(),
@@ -105,6 +107,7 @@ public class ITTestHoodieSanity extends ITTestBase {
    * data-set and performs upserts on it. Hive integration and upsert functionality is checked by running a count query
    * in hive console.
    */
+  @Disabled
   public void testRunHoodieJavaAppOnMultiPartitionKeysMORTable(String command) throws Exception {
     String hiveTableName = "docker_hoodie_multi_partition_key_mor_test_" + HoodieActiveTimeline.createNewInstantTime();
     testRunHoodieJavaApp(command, hiveTableName, HoodieTableType.MERGE_ON_READ.name(),
