@@ -50,9 +50,7 @@ import java.util.stream.Collectors;
  *
  * RecordKey is internally generated using either SimpleKeyGenerator or ComplexKeyGenerator.
  *
- * @deprecated
  */
-@Deprecated
 public class CustomKeyGenerator extends BuiltinKeyGenerator {
 
   private final CustomAvroKeyGenerator customAvroKeyGenerator;
