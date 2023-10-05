@@ -67,25 +67,27 @@ public class HoodieFileSliceReader<T> extends LogFileIterator<T> {
   }
 
   private Boolean hasNextInternal() {
-    if (baseFileIterator.isPresent() && baseFileIterator.get().hasNext()) {
+    while (baseFileIterator.isPresent() && baseFileIterator.get().hasNext()) {
       try {
         HoodieRecord currentRecord = baseFileIterator.get().next().wrapIntoHoodieRecordPayloadWithParams(schema, props,
             simpleKeyGenFieldsOpt, scanner.isWithOperationField(), scanner.getPartitionNameOverride(), false, Option.empty());
         Option<HoodieRecord> logRecord = removeLogRecord(currentRecord.getRecordKey());
         if (!logRecord.isPresent()) {
           nextRecord = currentRecord;
-        } else {
-          HoodieRecord<T> mergedRecord = (HoodieRecord<T>) merger.merge(currentRecord, schema, logRecord.get(), schema, payloadProps).get().getLeft();
+          return true;
+        }
+        Option<Pair<HoodieRecord, Schema>> mergedRecordOpt =  merger.merge(currentRecord, schema, logRecord.get(), schema, payloadProps);
+        if (mergedRecordOpt.isPresent()) {
+          HoodieRecord<T> mergedRecord = (HoodieRecord<T>) mergedRecordOpt.get().getLeft();
           nextRecord = mergedRecord.wrapIntoHoodieRecordPayloadWithParams(schema, props, simpleKeyGenFieldsOpt, scanner.isWithOperationField(),
               scanner.getPartitionNameOverride(), false, Option.empty());
+          return true;
         }
-        return true;
       } catch (IOException e) {
         throw new HoodieClusteringException("Failed to wrapIntoHoodieRecordPayloadWithParams: " + e.getMessage());
       }
-    } else {
-      return super.doHasNext();
     }
+    return super.doHasNext();
   }
 
   @Override
