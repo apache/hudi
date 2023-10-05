@@ -28,7 +28,7 @@ import org.apache.hudi.DataSourceUtils.tryOverrideParquetWriteLegacyFormatProper
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieWriterUtils._
-import org.apache.hudi.avro.AvroSchemaUtils.{canProject, isCompatibleProjectionOf, isSchemaCompatible, resolveNullableSchema}
+import org.apache.hudi.avro.AvroSchemaUtils.{canProject, isCompatibleProjectionOf, isSchemaCompatible, isValidEvolutionOf, resolveNullableSchema}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.removeMetadataFields
 import org.apache.hudi.client.common.HoodieSparkEngineContext
@@ -53,7 +53,7 @@ import org.apache.hudi.exception.{HoodieException, HoodieWriteConflictException,
 import org.apache.hudi.hive.{HiveSyncConfigHolder, HiveSyncTool}
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
-import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils.reconcileSchemaRequirements
+import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils.{reconcileSchema, reconcileSchemaRequirements}
 import org.apache.hudi.internal.schema.utils.{AvroSchemaEvolutionUtils, SerDeHelper}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName
@@ -90,8 +90,6 @@ object HoodieSparkSqlWriter {
    * as non-null in the incoming batch, w/o canonicalization such write might fail as we won't be able to read existing
    * null records from the table (for updating, for ex). Note, that this config has only effect when
    * 'hoodie.datasource.write.reconcile.schema' is set to false
-   *
-   * Also does type promotion to to the tables schema if possible.
    *
    * NOTE: This is an internal config that is not exposed to the public
    */
@@ -572,22 +570,25 @@ object HoodieSparkSqlWriter {
           } else {
             if (!shouldValidateSchemasCompatibility) {
               // if no validation is enabled, check for col drop
-              // if col drop is allowed, go ahead. if not, check for projection, so that we do not allow dropping cols
-              //Convert to internalschema and back because  Union[int, null] will change to Union[null, int]
-              if (addNullForDeletedColumns
-                && isCompatibleProjectionOf(AvroInternalSchemaConverter.convert(
-                AvroInternalSchemaConverter.convert(latestTableSchema), latestTableSchema.getFullName), canonicalizedSourceSchema)) {
-                canonicalizeSchema(latestTableSchema, canonicalizedSourceSchema, Map(MAKE_NEW_COLUMNS_NULLABLE.key -> "true"))
-              } else if (allowAutoEvolutionColumnDrop || canProject(latestTableSchema, canonicalizedSourceSchema)) {
+              if (allowAutoEvolutionColumnDrop) {
                 canonicalizedSourceSchema
               } else {
-                log.error(
-                  s"""Incoming batch schema is not compatible with the table's one.
-                   |Incoming schema ${sourceSchema.toString(true)}
-                   |Incoming schema (canonicalized) ${canonicalizedSourceSchema.toString(true)}
-                   |Table's schema ${latestTableSchema.toString(true)}
-                   |""".stripMargin)
-                throw new SchemaCompatibilityException("Incoming batch schema is not compatible with the table's one")
+                val reconciledSchema = if (addNullForDeletedColumns) {
+                  AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema, latestTableSchema)
+                } else {
+                  canonicalizedSourceSchema
+                }
+                if (isValidEvolutionOf(reconciledSchema, latestTableSchema)) {
+                  reconciledSchema
+                } else {
+                  log.error(
+                    s"""Incoming batch schema is not compatible with the table's one.
+                       |Incoming schema ${sourceSchema.toString(true)}
+                       |Incoming schema (canonicalized) ${reconciledSchema.toString(true)}
+                       |Table's schema ${latestTableSchema.toString(true)}
+                       |""".stripMargin)
+                  throw new SchemaCompatibilityException("Incoming batch schema is not compatible with the table's one")
+                }
               }
             } else if (isSchemaCompatible(latestTableSchema, canonicalizedSourceSchema, allowAutoEvolutionColumnDrop)) {
                 canonicalizedSourceSchema
@@ -708,8 +709,6 @@ object HoodieSparkSqlWriter {
    * <ol>
    *  <li>Nullability: making sure that nullability of the fields in the source schema is matching
    *  that of the latest table's ones</li>
-   *  <li>Type Promotion: if the source schema field has a different data type, but is able to be promoted, the promotion
-   *   will be applied</li>
    * </ol>
    *
    * TODO support casing reconciliation

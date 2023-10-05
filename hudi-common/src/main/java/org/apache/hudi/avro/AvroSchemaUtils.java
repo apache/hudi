@@ -116,9 +116,26 @@ public class AvroSchemaUtils {
     return "hoodie." + sanitizedTableName + "." + sanitizedTableName + "_record";
   }
 
+
+  /**
+   * Validate whether the {@code targetSchema} is a valid evolution of {@code sourceSchema}.
+   * Basically {@link #isCompatibleProjectionOf(Schema, Schema)} but type promotion in the
+   * opposite direction
+   */
+  public static boolean isValidEvolutionOf(Schema sourceSchema, Schema targetSchema) {
+    return isProjectionOfInternal(sourceSchema, targetSchema,
+        AvroSchemaUtils::isAtomicSchemasCompatibleEvolution);
+  }
+
+  private static boolean isAtomicSchemasCompatibleEvolution(Schema oneAtomicType, Schema anotherAtomicType) {
+    // NOTE: Checking for compatibility of atomic types, we should ignore their
+    //       corresponding fully-qualified names (as irrelevant)
+    return isSchemaCompatible(anotherAtomicType, oneAtomicType, false, true);
+  }
+
+
   /**
    * Validate whether the {@code targetSchema} is a "compatible" projection of {@code sourceSchema}.
-   *
    * Only difference of this method from {@link #isStrictProjectionOf(Schema, Schema)} is
    * the fact that it allows some legitimate type promotions (like {@code int -> long},
    * {@code decimal(3, 2) -> decimal(5, 2)}, etc) that allows projection to have a "wider"
@@ -173,18 +190,9 @@ public class AvroSchemaUtils {
       } else if (sourceSchema.getType() == Schema.Type.MAP) {
         return isProjectionOfInternal(sourceSchema.getValueType(), targetSchema.getValueType(), atomicTypeEqualityPredicate);
       } else if (sourceSchema.getType() == Schema.Type.UNION) {
-        List<Schema> sourceNestedSchemas = sourceSchema.getTypes();
-        List<Schema> targetNestedSchemas = targetSchema.getTypes();
-        if (sourceNestedSchemas.size() != targetNestedSchemas.size()) {
-          return false;
-        }
-
-        for (int i = 0; i < sourceNestedSchemas.size(); ++i) {
-          if (!isProjectionOfInternal(sourceNestedSchemas.get(i), targetNestedSchemas.get(i), atomicTypeEqualityPredicate)) {
-            return false;
-          }
-        }
-        return true;
+        return isProjectionOfInternal(resolveNullableSchema(sourceSchema),
+            resolveNullableSchema(targetSchema),
+            atomicTypeEqualityPredicate);
       }
     }
 

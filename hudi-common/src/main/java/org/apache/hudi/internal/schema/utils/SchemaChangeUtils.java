@@ -80,6 +80,7 @@ public class SchemaChangeUtils {
       case DOUBLE:
         return dsr == Types.StringType.get() || dsr.typeId() == Type.TypeID.DECIMAL;
       case DATE:
+      case BINARY:
         return dsr == Types.StringType.get();
       case DECIMAL:
         if (dsr.typeId() == Type.TypeID.DECIMAL) {
@@ -96,7 +97,7 @@ public class SchemaChangeUtils {
         }
         break;
       case STRING:
-        return dsr == Types.DateType.get() || dsr.typeId() == Type.TypeID.DECIMAL;
+        return dsr == Types.DateType.get() || dsr.typeId() == Type.TypeID.DECIMAL || dsr == Types.BinaryType.get();
       default:
         return false;
     }

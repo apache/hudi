@@ -111,6 +111,10 @@ public class AvroSchemaEvolutionUtils {
     return SchemaChangeUtils.applyTableChanges2Schema(internalSchemaAfterAddColumns, typeChange);
   }
 
+  public static Schema reconcileSchema(Schema incomingSchema, Schema oldTableSchema) {
+    return convert(reconcileSchema(incomingSchema, convert(oldTableSchema)), oldTableSchema.getFullName());
+  }
+
   /**
    * Reconciles nullability and datatype requirements b/w {@code source} and {@code target} schemas,
    * by adjusting these of the {@code source} schema to be in-line with the ones of the

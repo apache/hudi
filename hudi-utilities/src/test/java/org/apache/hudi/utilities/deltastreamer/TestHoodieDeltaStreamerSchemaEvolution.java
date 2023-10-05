@@ -42,6 +42,8 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -146,10 +148,16 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
   }
 
   private void testBase(String updateFile, String updateColumn, String condition, int count) throws Exception {
-    testBase(updateFile, updateColumn, condition, count, true);
+    Map<String,Integer> conditions = new HashMap<>();
+    conditions.put(condition, count);
+    testBase(updateFile, updateColumn, conditions, true);
 
     //adding non-nullable cols should fail, but instead it is adding nullable cols
     //assertThrows(Exception.class, () -> testBase(tableType, shouldCluster, shouldCompact, reconcileSchema, rowWriterEnable, updateFile, updateColumn, condition, count, false));
+  }
+
+  private void testBase(String updateFile, String updateColumn, Map<String,Integer> conditions) throws Exception {
+    testBase(updateFile, updateColumn, conditions, true);
   }
 
   private void doFirstDeltaWrite() throws Exception {
@@ -194,7 +202,7 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
   /**
    * Main testing logic for non-type promotion tests
    */
-  private void testBase(String updateFile, String updateColumn, String condition, int count, Boolean nullable) throws Exception {
+  private void testBase(String updateFile, String updateColumn, Map<String,Integer> conditions, Boolean nullable) throws Exception {
     boolean isCow = tableType.equals("COPY_ON_WRITE");
     PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + testNum++;
     tableBasePath = basePath + "test_parquet_table" + testNum;
@@ -248,8 +256,12 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     }
     assertRecordCount(numRecords);
 
-    sparkSession.read().format("hudi").load(tableBasePath).select(updateColumn).show(9);
-    assertEquals(count, sparkSession.read().format("hudi").load(tableBasePath).filter(condition).count());
+    Dataset<Row> df = sparkSession.read().format("hudi").load(tableBasePath);
+    df.select(updateColumn).show(9);
+    for (String condition : conditions.keySet()) {
+      assertEquals(conditions.get(condition).intValue(), df.filter(condition).count());
+    }
+
   }
 
   private static Stream<Arguments> testArgs() {
@@ -414,6 +426,31 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     //assertThrows(Exception.class, () -> testBase("testAddColChangeOrderSomeFiles.json", "extra_col", "extra_col = 'yes'", 1));
   }
 
+  /**
+   * Add and drop cols in the same write
+   */
+  @ParameterizedTest
+  @MethodSource("testArgs")
+  public void testAddAndDropCols(String tableType,
+                                Boolean shouldCluster,
+                                Boolean shouldCompact,
+                                Boolean rowWriterEnable,
+                                Boolean addFilegroups,
+                                Boolean multiLogFiles) throws Exception {
+    this.tableType = tableType;
+    this.shouldCluster = shouldCluster;
+    this.shouldCompact = shouldCompact;
+    this.rowWriterEnable = rowWriterEnable;
+    this.addFilegroups = addFilegroups;
+    this.multiLogFiles = multiLogFiles;
+    Map<String,Integer> conditions = new HashMap<>();
+    conditions.put("distance_in_meters is NULL", 2);
+    conditions.put("tip_history[0].currency is NULL", 2);
+    conditions.put("tip_history[0].zextra_col_nest = 'yes'", 2);
+    conditions.put("zextra_col = 'yes'", 2);
+    testBase("testAddAndDropCols.json", "tip_history",  conditions);
+  }
+
   private String typePromoUpdates;
 
   private void assertDataType(String colName, DataType expectedType) {
@@ -505,7 +542,7 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
                                 Boolean multiLogFiles) throws Exception {
     testTypePromotion(tableType, shouldCluster, shouldCompact, rowWriterEnable, addFilegroups, multiLogFiles, true);
   }
-  
+
   public void testTypePromotion(String tableType,
                                 Boolean shouldCluster,
                                 Boolean shouldCompact,
