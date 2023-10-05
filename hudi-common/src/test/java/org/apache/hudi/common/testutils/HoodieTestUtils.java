@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.testutils;
 
-import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -34,6 +34,8 @@ import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.serializers.JavaSerializer;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.junit.jupiter.api.Assumptions;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -44,7 +46,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.UUID;
-import org.junit.jupiter.api.Assumptions;
+import java.util.stream.Collectors;
 
 /**
  * A utility class for testing.
@@ -246,5 +248,10 @@ public class HoodieTestUtils {
     conf.set("fs.defaultFS", "hdfs://localhost:9000");
     conf.set("dfs.replication", "3");
     return (DistributedFileSystem) DistributedFileSystem.get(conf);
+  }
+
+  public static List<String> getLogFileListFromFileSlice(FileSlice fileSlice) {
+    return fileSlice.getLogFiles().map(logFile -> logFile.getPath().toString())
+        .collect(Collectors.toList());
   }
 }

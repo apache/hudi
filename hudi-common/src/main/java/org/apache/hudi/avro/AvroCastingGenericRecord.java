@@ -39,6 +39,7 @@ import static org.apache.avro.Schema.Type.ARRAY;
 import static org.apache.avro.Schema.Type.MAP;
 import static org.apache.avro.Schema.Type.STRING;
 import static org.apache.avro.Schema.Type.UNION;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 
 /**
@@ -230,7 +231,7 @@ public class AvroCastingGenericRecord implements GenericRecord {
         }
       case BYTES:
         if (oldSchema.getType() == STRING) {
-          return s -> ByteBuffer.wrap((s.toString()).getBytes(StandardCharsets.UTF_8));
+          return s -> getUTF8Bytes(s.toString());
         }
         return null;
       default:

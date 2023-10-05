@@ -20,7 +20,7 @@ package org.apache.hudi.client.utils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
-import org.apache.hudi.client.timeline.ActiveAction;
+import org.apache.hudi.common.table.timeline.ActiveAction;
 import org.apache.hudi.client.timeline.ActiveActionWithDetails;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
@@ -48,7 +48,6 @@ import javax.annotation.Nonnull;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -56,6 +55,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Tools used for migrating to new LSM tree style archived timeline.
@@ -95,7 +96,7 @@ public class LegacyArchivedMetaEntryReader {
         if (action.equals(HoodieTimeline.COMPACTION_ACTION)) {
           return HoodieAvroUtils.indexedRecordToBytes((IndexedRecord) actionData);
         } else {
-          return actionData.toString().getBytes(StandardCharsets.UTF_8);
+          return getUTF8Bytes(actionData.toString());
         }
       }
       return null;

@@ -51,7 +51,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -74,6 +73,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.LOG_COMPACTIO
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.SAVEPOINT_ACTION;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -523,7 +523,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     for (Map.Entry<String, String> extraEntries : extraMetadata.entrySet()) {
       commit.addMetadata(extraEntries.getKey(), extraEntries.getValue());
     }
-    return commit.toJsonString().getBytes(StandardCharsets.UTF_8);
+    return serializeCommitMetadata(commit).get();
   }
 
   private byte[] getReplaceCommitMetadata(String basePath, String commitTs, String replacePartition, int replaceCount,
@@ -550,7 +550,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     for (Map.Entry<String, String> extraEntries : extraMetadata.entrySet()) {
       commit.addMetadata(extraEntries.getKey(), extraEntries.getValue());
     }
-    return commit.toJsonString().getBytes(StandardCharsets.UTF_8);
+    return serializeCommitMetadata(commit).get();
   }
 
   private Option<byte[]> getCleanMetadata(String partition, String time) throws IOException {

@@ -23,6 +23,7 @@ import org.apache.hudi.QuickstartUtils.{DataGenerator, convertToStringList, getQ
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, RawTripTestPayload}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.DataSourceTestUtils
@@ -436,20 +437,42 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           checkAnswer(createTestResult(tableName))(
             Seq(1, "jack", "haha", 1.9, 1000), Seq(2, "jack","exx1", 0.9, 1000)
           )
+          var maxColumnId = getMaxColumnId(tablePath)
           // drop column newprice
-
           spark.sql(s"alter table ${tableName} drop column newprice")
           checkAnswer(createTestResult(tableName))(
             Seq(1, "jack", "haha", 1000), Seq(2, "jack","exx1", 1000)
           )
+          validateInternalSchema(tablePath, isDropColumn = true, currentMaxColumnId = maxColumnId)
+          maxColumnId = getMaxColumnId(tablePath)
           // add newprice back
           spark.sql(s"alter table ${tableName} add columns(newprice string comment 'add newprice back' after ext1)")
           checkAnswer(createTestResult(tableName))(
             Seq(1, "jack", "haha", null, 1000), Seq(2, "jack","exx1", null, 1000)
           )
+          validateInternalSchema(tablePath, isDropColumn = false, currentMaxColumnId = maxColumnId)
         }
       }
     })
+  }
+
+  private def validateInternalSchema(basePath: String, isDropColumn: Boolean, currentMaxColumnId: Int): Unit = {
+    val hadoopConf = spark.sessionState.newHadoopConf()
+    val metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(hadoopConf).build()
+    val schema = new TableSchemaResolver(metaClient).getTableInternalSchemaFromCommitMetadata.get()
+    val lastInstant = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get()
+    assert(schema.schemaId() == lastInstant.getTimestamp.toLong)
+    if (isDropColumn) {
+      assert(schema.getMaxColumnId == currentMaxColumnId)
+    } else {
+      assert(schema.getMaxColumnId == currentMaxColumnId + 1)
+    }
+  }
+
+  private def getMaxColumnId(basePath: String): Int = {
+    val hadoopConf = spark.sessionState.newHadoopConf()
+    val metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(hadoopConf).build()
+    new TableSchemaResolver(metaClient).getTableInternalSchemaFromCommitMetadata.get.getMaxColumnId
   }
 
   test("Test alter column nullability") {

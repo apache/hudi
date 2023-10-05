@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CleanerUtils;
@@ -43,7 +44,6 @@ import org.apache.hadoop.fs.Path;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -51,6 +51,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.bootstrap.TestBootstrapIndex.generateBootstrapIndex;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -188,6 +189,7 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
     partToFileId.forEach((key, value) -> {
       try {
         List<String> files = new ArrayList<>();
+        FileCreateUtils.createPartitionMetaFile(basePath, key);
         if (addBaseFiles) {
           files.addAll(testTable.withBaseFilesInPartition(key, value.toArray(new String[0])).getValue());
         }
@@ -207,10 +209,10 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
     });
     HoodieCommitMetadata commitMeta = generateCommitMetadata(instantTime, partToFileIds);
     metadataWriter.performTableServices(Option.of(instantTime));
-    metadataWriter.update(commitMeta, context.emptyHoodieData(), instantTime);
+    metadataWriter.updateFromWriteStatuses(commitMeta, context.emptyHoodieData(), instantTime);
     metaClient.getActiveTimeline().saveAsComplete(
         new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime),
-        Option.of(commitMeta.toJsonString().getBytes(StandardCharsets.UTF_8)));
+        serializeCommitMetadata(commitMeta));
     metaClient = HoodieTableMetaClient.reload(metaClient);
   }
 

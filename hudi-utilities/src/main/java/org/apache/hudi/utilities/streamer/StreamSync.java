@@ -723,8 +723,7 @@ public class StreamSync implements Serializable, Closeable {
           throw new HoodieStreamerException(
               "Unable to find previous checkpoint. Please double check if this table "
                   + "was indeed built via delta streamer. Last Commit :" + lastCommit + ", Instants :"
-                  + commitsTimelineOpt.get().getInstants() + ", CommitMetadata="
-                  + commitMetadata.toJsonString());
+                  + commitsTimelineOpt.get().getInstants());
         }
         // KAFKA_CHECKPOINT_TYPE will be honored only for first batch.
         if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {

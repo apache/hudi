@@ -54,7 +54,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.client.utils.MetadataConversionUtils.getHoodieCommitMetadata;
+import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.getHoodieCommitMetadata;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.table.action.rollback.BaseRollbackHelper.EMPTY_STRING;
 
@@ -92,7 +92,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
     try {
       HoodieTableMetaClient metaClient = table.getMetaClient();
       List<String> partitionPaths =
-          FSUtils.getAllPartitionPaths(context, table.getMetaClient().getBasePath(), false, false);
+          FSUtils.getAllPartitionPaths(context, table.getMetaClient().getBasePath(), false);
       int numPartitions = Math.max(Math.min(partitionPaths.size(), config.getRollbackParallelism()), 1);
 
       context.setJobStatus(this.getClass().getSimpleName(), "Creating Listing Rollback Plan: " + config.getTableName());

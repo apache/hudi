@@ -20,13 +20,14 @@ package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.avro.AvroCastingGenericRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.SizeAwareDataInputStream;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 
@@ -63,6 +64,7 @@ import java.util.function.UnaryOperator;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -144,6 +146,13 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     // TODO AvroSparkReader need
     RecordIterator iterator = RecordIterator.getInstance(this, content);
     return new CloseableMappingIterator<>(iterator, data -> (HoodieRecord<T>) new HoodieAvroIndexedRecord(data));
+  }
+
+  @Override
+  protected <T> ClosableIterator<T> deserializeRecords(HoodieReaderContext<T> readerContext, byte[] content) throws IOException {
+    checkState(this.readerSchema != null, "Reader's schema has to be non-null");
+    RecordIterator iterator = RecordIterator.getInstance(this, content);
+    return new CloseableMappingIterator<>(iterator, data -> (T) data);
   }
 
   private static class RecordIterator implements ClosableIterator<IndexedRecord> {
@@ -295,7 +304,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     try {
       OutputStream out = new DeflaterOutputStream(baos);
-      out.write(text.getBytes(StandardCharsets.UTF_8));
+      out.write(getUTF8Bytes(text));
       out.close();
     } catch (IOException e) {
       throw new HoodieIOException("IOException while compressing text " + text, e);

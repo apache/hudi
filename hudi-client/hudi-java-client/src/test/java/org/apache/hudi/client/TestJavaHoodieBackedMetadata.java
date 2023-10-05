@@ -113,6 +113,7 @@ import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.util.Time;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.schema.MessageType;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -190,6 +191,13 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         Arguments.of(MERGE_ON_READ, true),
         Arguments.of(MERGE_ON_READ, false)
     );
+  }
+
+  private final List<BaseHoodieWriteClient> clientsToClose = new ArrayList<>();
+
+  @AfterEach
+  public void closeClients() {
+    clientsToClose.forEach(BaseHoodieWriteClient::close);
   }
 
   /**
@@ -2619,6 +2627,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     } else {
       client = testClient;
     }
+    clientsToClose.add(client);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTableMetadata tableMetadata = metadata(client);
@@ -2632,7 +2641,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // Partitions should match
     FileSystemBackedTableMetadata fsBackedTableMetadata = new FileSystemBackedTableMetadata(engineContext, metaClient.getTableConfig(),
-        new SerializableConfiguration(hadoopConf), config.getBasePath(), config.shouldAssumeDatePartitioning());
+        new SerializableConfiguration(hadoopConf), config.getBasePath());
     List<String> fsPartitions = fsBackedTableMetadata.getAllPartitionPaths();
     List<String> metadataPartitions = tableMetadata.getAllPartitionPaths();
 
@@ -2742,8 +2751,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     // Metadata table has a fixed number of partitions
     // Cannot use FSUtils.getAllFoldersWithPartitionMetaFile for this as that function filters all directory
     // in the .hoodie folder.
-    List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, getMetadataTableBasePath(basePath),
-        false, false);
+    List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, getMetadataTableBasePath(basePath), false);
     assertEquals(metadataWriter.getEnabledPartitionTypes().size(), metadataTablePartitions.size());
 
     final Map<String, MetadataPartitionType> metadataEnabledPartitionTypes = new HashMap<>();

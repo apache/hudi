@@ -49,12 +49,10 @@ public class ManifestFileWriter {
 
   private final HoodieTableMetaClient metaClient;
   private final boolean useFileListingFromMetadata;
-  private final boolean assumeDatePartitioning;
 
-  private ManifestFileWriter(HoodieTableMetaClient metaClient, boolean useFileListingFromMetadata, boolean assumeDatePartitioning) {
+  private ManifestFileWriter(HoodieTableMetaClient metaClient, boolean useFileListingFromMetadata) {
     this.metaClient = metaClient;
     this.useFileListingFromMetadata = useFileListingFromMetadata;
-    this.assumeDatePartitioning = assumeDatePartitioning;
   }
 
   /**
@@ -62,7 +60,7 @@ public class ManifestFileWriter {
    */
   public synchronized void writeManifestFile(boolean useAbsolutePath) {
     try {
-      List<String> baseFiles = fetchLatestBaseFilesForAllPartitions(metaClient, useFileListingFromMetadata, assumeDatePartitioning, useAbsolutePath)
+      List<String> baseFiles = fetchLatestBaseFilesForAllPartitions(metaClient, useFileListingFromMetadata, useAbsolutePath)
           .collect(Collectors.toList());
       if (baseFiles.isEmpty()) {
         LOG.warn("No base file to generate manifest file.");
@@ -84,19 +82,18 @@ public class ManifestFileWriter {
   }
 
   public static Stream<String> fetchLatestBaseFilesForAllPartitions(HoodieTableMetaClient metaClient,
-      boolean useFileListingFromMetadata, boolean assumeDatePartitioning, boolean useAbsolutePath) {
+      boolean useFileListingFromMetadata, boolean useAbsolutePath) {
     try {
       List<String> partitions = FSUtils.getAllPartitionPaths(new HoodieLocalEngineContext(metaClient.getHadoopConf()),
-          metaClient.getBasePath(), useFileListingFromMetadata, assumeDatePartitioning);
+          metaClient.getBasePath(), useFileListingFromMetadata);
       LOG.info("Retrieve all partitions: " + partitions.size());
-      return partitions.parallelStream().flatMap(p -> {
-        Configuration hadoopConf = metaClient.getHadoopConf();
-        HoodieLocalEngineContext engContext = new HoodieLocalEngineContext(hadoopConf);
-        HoodieMetadataFileSystemView fsView = new HoodieMetadataFileSystemView(engContext, metaClient,
-            metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
-            HoodieMetadataConfig.newBuilder().enable(useFileListingFromMetadata).withAssumeDatePartitioning(assumeDatePartitioning).build());
-        return fsView.getLatestBaseFiles(p).map(useAbsolutePath ? HoodieBaseFile::getPath : HoodieBaseFile::getFileName);
-      });
+
+      Configuration hadoopConf = metaClient.getHadoopConf();
+      HoodieLocalEngineContext engContext = new HoodieLocalEngineContext(hadoopConf);
+      HoodieMetadataFileSystemView fsView = new HoodieMetadataFileSystemView(engContext, metaClient,
+          metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
+          HoodieMetadataConfig.newBuilder().enable(useFileListingFromMetadata).build());
+      return partitions.parallelStream().flatMap(partition -> fsView.getLatestBaseFiles(partition).map(useAbsolutePath ? HoodieBaseFile::getPath : HoodieBaseFile::getFileName));
     } catch (Exception e) {
       throw new HoodieException("Error in fetching latest base files.", e);
     }
@@ -123,16 +120,10 @@ public class ManifestFileWriter {
    */
   public static class Builder {
     private boolean useFileListingFromMetadata;
-    private boolean assumeDatePartitioning;
     private HoodieTableMetaClient metaClient;
 
     public Builder setUseFileListingFromMetadata(boolean useFileListingFromMetadata) {
       this.useFileListingFromMetadata = useFileListingFromMetadata;
-      return this;
-    }
-
-    public Builder setAssumeDatePartitioning(boolean assumeDatePartitioning) {
-      this.assumeDatePartitioning = assumeDatePartitioning;
       return this;
     }
 
@@ -143,7 +134,7 @@ public class ManifestFileWriter {
 
     public ManifestFileWriter build() {
       ValidationUtils.checkArgument(metaClient != null, "MetaClient needs to be set to init ManifestFileGenerator");
-      return new ManifestFileWriter(metaClient, useFileListingFromMetadata, assumeDatePartitioning);
+      return new ManifestFileWriter(metaClient, useFileListingFromMetadata);
     }
   }
 }

@@ -30,7 +30,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.regex.Matcher;
@@ -40,6 +39,7 @@ import static org.apache.hudi.common.util.ConfigUtils.OLD_SCHEMAPROVIDER_CONFIG_
 import static org.apache.hudi.common.util.ConfigUtils.SCHEMAPROVIDER_CONFIG_PREFIX;
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Obtains latest schema from the Confluent/Kafka schema-registry.
@@ -97,7 +97,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
   }
 
   protected void setAuthorizationHeader(String creds, HttpURLConnection connection) {
-    String encodedAuth = Base64.getEncoder().encodeToString(creds.getBytes(StandardCharsets.UTF_8));
+    String encodedAuth = Base64.getEncoder().encodeToString(getUTF8Bytes(creds));
     connection.setRequestProperty("Authorization", "Basic " + encodedAuth);
   }
 

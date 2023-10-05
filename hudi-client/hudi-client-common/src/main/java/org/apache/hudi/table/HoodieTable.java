@@ -991,6 +991,9 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       case BLOOM_FILTERS:
         metadataIndexDisabled = !config.isMetadataBloomFilterIndexEnabled();
         break;
+      case RECORD_INDEX:
+        metadataIndexDisabled = !config.isRecordIndexEnabled();
+        break;
       default:
         LOG.debug("Not a valid metadata partition type: " + partitionType.name());
         return false;

@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -57,6 +58,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.TreeMap;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -152,14 +154,14 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     // Write the records
     sortedRecordsMap.forEach((recordKey, recordBytes) -> {
       try {
-        KeyValue kv = new KeyValue(recordKey.getBytes(), null, null, recordBytes);
+        KeyValue kv = new KeyValue(getUTF8Bytes(recordKey), null, null, recordBytes);
         writer.append(kv);
       } catch (IOException e) {
         throw new HoodieIOException("IOException serializing records", e);
       }
     });
 
-    writer.appendFileInfo(HoodieAvroHFileReader.SCHEMA_KEY.getBytes(), getSchema().toString().getBytes());
+    writer.appendFileInfo(getUTF8Bytes(HoodieAvroHFileReader.SCHEMA_KEY), getUTF8Bytes(getSchema().toString()));
 
     writer.close();
     ostream.flush();
@@ -176,8 +178,21 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     FileSystem fs = FSUtils.getFs(pathForReader.toString(), hadoopConf);
     // Read the content
     try (HoodieAvroHFileReader reader = new HoodieAvroHFileReader(hadoopConf, pathForReader, new CacheConfig(hadoopConf),
-                                                             fs, content, Option.of(getSchemaFromHeader()))) {
+        fs, content, Option.of(getSchemaFromHeader()))) {
       return unsafeCast(reader.getRecordIterator(readerSchema));
+    }
+  }
+
+  @Override
+  protected <T> ClosableIterator<T> deserializeRecords(HoodieReaderContext<T> readerContext, byte[] content) throws IOException {
+    checkState(readerSchema != null, "Reader's schema has to be non-null");
+
+    Configuration hadoopConf = FSUtils.buildInlineConf(getBlockContentLocation().get().getHadoopConf());
+    FileSystem fs = FSUtils.getFs(pathForReader.toString(), hadoopConf);
+    // Read the content
+    try (HoodieAvroHFileReader reader = new HoodieAvroHFileReader(hadoopConf, pathForReader, new CacheConfig(hadoopConf),
+        fs, content, Option.of(getSchemaFromHeader()))) {
+      return unsafeCast(reader.getIndexedRecordIterator(readerSchema, readerSchema));
     }
   }
 

@@ -551,7 +551,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder()
             .withPath(basePath)
-            .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder().build())
             .withCleanConfig(HoodieCleanConfig.newBuilder()
                 .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).build())
             .build();
@@ -607,8 +607,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
   public void testCleanWithReplaceCommits() throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-            .withMaxNumDeltaCommitsBeforeCompaction(1)
-            .withAssumeDatePartitioning(true).build())
+            .withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
             .retainCommits(2).build())
@@ -929,7 +928,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
   @Test
   public void testCleaningWithZeroPartitionPaths() throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(2).build())
         .build();
@@ -954,7 +953,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
   @ValueSource(booleans = {true, false})
   public void testKeepLatestCommitsWithPendingCompactions(boolean isAsync) throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).withAsyncClean(isAsync).retainCommits(2).build())
         .build();
@@ -979,7 +978,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
   public void testKeepLatestVersionsWithPendingCompactions(boolean retryFailure) throws Exception {
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder().withPath(basePath)
-            .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder().build())
             .withCleanConfig(HoodieCleanConfig.newBuilder()
                 .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(2).build())
             .build();
@@ -1004,7 +1003,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder()
             .withPath(basePath)
-            .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder().build())
             .withCleanConfig(HoodieCleanConfig.newBuilder()
                 .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(1).build())
             .build();
@@ -1032,8 +1031,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
   public void testRerunFailedClean(boolean simulateMetadataFailure) throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-            .withMaxNumDeltaCommitsBeforeCompaction(1)
-            .withAssumeDatePartitioning(true).build())
+            .withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(2).build())
         .build();
@@ -1124,15 +1122,16 @@ public class TestCleaner extends HoodieCleanerTestBase {
         put(p1, CollectionUtils.createImmutableList(file1P1, file2P1));
       }
     });
-    commitWithMdt("1", part1ToFileId, testTable, metadataWriter);
-    commitWithMdt("2", part1ToFileId, testTable, metadataWriter);
+    commitWithMdt("10", part1ToFileId, testTable, metadataWriter);
+    testTable.addClean("15");
+    commitWithMdt("20", part1ToFileId, testTable, metadataWriter);
 
     // add clean instant
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant("", "", ""),
         "", "", new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>());
     HoodieCleanMetadata cleanMeta = new HoodieCleanMetadata("", 0L, 0,
-        "2", "", new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>());
-    testTable.addClean("3", cleanerPlan, cleanMeta);
+        "20", "", new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>());
+    testTable.addClean("30", cleanerPlan, cleanMeta);
 
     // add file in partition "part_2"
     String file3P2 = UUID.randomUUID().toString();
@@ -1142,8 +1141,8 @@ public class TestCleaner extends HoodieCleanerTestBase {
         put(p2, CollectionUtils.createImmutableList(file3P2, file4P2));
       }
     });
-    commitWithMdt("3", part2ToFileId, testTable, metadataWriter);
-    commitWithMdt("4", part2ToFileId, testTable, metadataWriter);
+    commitWithMdt("30", part2ToFileId, testTable, metadataWriter);
+    commitWithMdt("40", part2ToFileId, testTable, metadataWriter);
 
     // empty commits
     String file5P2 = UUID.randomUUID().toString();
@@ -1153,25 +1152,25 @@ public class TestCleaner extends HoodieCleanerTestBase {
         put(p2, CollectionUtils.createImmutableList(file5P2, file6P2));
       }
     });
-    commitWithMdt("5", part2ToFileId, testTable, metadataWriter);
-    commitWithMdt("6", part2ToFileId, testTable, metadataWriter);
+    commitWithMdt("50", part2ToFileId, testTable, metadataWriter);
+    commitWithMdt("60", part2ToFileId, testTable, metadataWriter);
 
     // archive commit 1, 2
     new HoodieTimelineArchiver<>(config, HoodieSparkTable.create(config, context, metaClient))
         .archiveIfRequired(context, false);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    assertFalse(metaClient.getActiveTimeline().containsInstant("1"));
-    assertFalse(metaClient.getActiveTimeline().containsInstant("2"));
+    assertFalse(metaClient.getActiveTimeline().containsInstant("10"));
+    assertFalse(metaClient.getActiveTimeline().containsInstant("20"));
 
     runCleaner(config);
-    assertFalse(testTable.baseFileExists(p1, "1", file1P1), "Clean old FileSlice in p1 by fallback to full clean");
-    assertFalse(testTable.baseFileExists(p1, "1", file2P1), "Clean old FileSlice in p1 by fallback to full clean");
-    assertFalse(testTable.baseFileExists(p2, "3", file3P2), "Clean old FileSlice in p2");
-    assertFalse(testTable.baseFileExists(p2, "3", file4P2), "Clean old FileSlice in p2");
-    assertTrue(testTable.baseFileExists(p1, "2", file1P1), "Latest FileSlice exists");
-    assertTrue(testTable.baseFileExists(p1, "2", file2P1), "Latest FileSlice exists");
-    assertTrue(testTable.baseFileExists(p2, "4", file3P2), "Latest FileSlice exists");
-    assertTrue(testTable.baseFileExists(p2, "4", file4P2), "Latest FileSlice exists");
+    assertFalse(testTable.baseFileExists(p1, "10", file1P1), "Clean old FileSlice in p1 by fallback to full clean");
+    assertFalse(testTable.baseFileExists(p1, "10", file2P1), "Clean old FileSlice in p1 by fallback to full clean");
+    assertFalse(testTable.baseFileExists(p2, "30", file3P2), "Clean old FileSlice in p2");
+    assertFalse(testTable.baseFileExists(p2, "30", file4P2), "Clean old FileSlice in p2");
+    assertTrue(testTable.baseFileExists(p1, "20", file1P1), "Latest FileSlice exists");
+    assertTrue(testTable.baseFileExists(p1, "20", file2P1), "Latest FileSlice exists");
+    assertTrue(testTable.baseFileExists(p2, "40", file3P2), "Latest FileSlice exists");
+    assertTrue(testTable.baseFileExists(p2, "40", file4P2), "Latest FileSlice exists");
   }
 
   /**

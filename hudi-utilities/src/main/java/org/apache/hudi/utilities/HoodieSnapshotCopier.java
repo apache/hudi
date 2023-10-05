@@ -71,15 +71,11 @@ public class HoodieSnapshotCopier implements Serializable {
     @Parameter(names = {"--output-path", "-op"}, description = "The snapshot output path", required = true)
     String outputPath = null;
 
-    @Parameter(names = {"--date-partitioned", "-dp"}, description = "Can we assume date partitioning?")
-    boolean shouldAssumeDatePartitioning = false;
-
     @Parameter(names = {"--use-file-listing-from-metadata"}, description = "Fetch file listing from Hudi's metadata")
     public Boolean useFileListingFromMetadata = HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
   }
 
   public void snapshot(JavaSparkContext jsc, String baseDir, final String outputDir,
-                       final boolean shouldAssumeDatePartitioning,
                        final boolean useFileListingFromMetadata) throws IOException {
     FileSystem fs = FSUtils.getFs(baseDir, jsc.hadoopConfiguration());
     final SerializableConfiguration serConf = new SerializableConfiguration(jsc.hadoopConfiguration());
@@ -98,7 +94,7 @@ public class HoodieSnapshotCopier implements Serializable {
     LOG.info(String.format("Starting to snapshot latest version files which are also no-late-than %s.",
         latestCommitTimestamp));
 
-    List<String> partitions = FSUtils.getAllPartitionPaths(context, baseDir, useFileListingFromMetadata, shouldAssumeDatePartitioning);
+    List<String> partitions = FSUtils.getAllPartitionPaths(context, baseDir, useFileListingFromMetadata);
     if (partitions.size() > 0) {
       LOG.info(String.format("The job needs to copy %d partitions.", partitions.size()));
 
@@ -191,7 +187,7 @@ public class HoodieSnapshotCopier implements Serializable {
 
     // Copy
     HoodieSnapshotCopier copier = new HoodieSnapshotCopier();
-    copier.snapshot(jsc, cfg.basePath, cfg.outputPath, cfg.shouldAssumeDatePartitioning, cfg.useFileListingFromMetadata);
+    copier.snapshot(jsc, cfg.basePath, cfg.outputPath, cfg.useFileListingFromMetadata);
 
     // Stop the job
     jsc.stop();

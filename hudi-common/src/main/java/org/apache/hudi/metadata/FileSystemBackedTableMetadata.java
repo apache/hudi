@@ -63,24 +63,20 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
 
   private static final int DEFAULT_LISTING_PARALLELISM = 1500;
 
-  private final boolean assumeDatePartitioning;
-
   private final boolean hiveStylePartitioningEnabled;
   private final boolean urlEncodePartitioningEnabled;
 
   public FileSystemBackedTableMetadata(HoodieEngineContext engineContext, HoodieTableConfig tableConfig,
-                                       SerializableConfiguration conf, String datasetBasePath,
-                                       boolean assumeDatePartitioning) {
+                                       SerializableConfiguration conf, String datasetBasePath) {
     super(engineContext, conf, datasetBasePath);
 
     this.hiveStylePartitioningEnabled = Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
     this.urlEncodePartitioningEnabled = Boolean.parseBoolean(tableConfig.getUrlEncodePartitioning());
-    this.assumeDatePartitioning = assumeDatePartitioning;
   }
 
   public FileSystemBackedTableMetadata(HoodieEngineContext engineContext,
-                                       SerializableConfiguration conf, String datasetBasePath,
-                                       boolean assumeDatePartitioning) {
+                                       SerializableConfiguration conf,
+                                       String datasetBasePath) {
     super(engineContext, conf, datasetBasePath);
 
     FileSystem fs = FSUtils.getFs(dataBasePath.get(), conf.get());
@@ -89,7 +85,6 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
     HoodieTableConfig tableConfig = new HoodieTableConfig(fs, metaPath.toString(), null, null);
     this.hiveStylePartitioningEnabled = Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
     this.urlEncodePartitioningEnabled = Boolean.parseBoolean(tableConfig.getUrlEncodePartitioning());
-    this.assumeDatePartitioning = assumeDatePartitioning;
   }
 
   @Override
@@ -100,12 +95,6 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
 
   @Override
   public List<String> getAllPartitionPaths() throws IOException {
-    Path basePath = dataBasePath.get();
-    if (assumeDatePartitioning) {
-      FileSystem fs = basePath.getFileSystem(hadoopConf.get());
-      return FSUtils.getAllPartitionFoldersThreeLevelsDown(fs, dataBasePath.toString());
-    }
-
     return getPartitionPathWithPathPrefixes(Collections.singletonList(""));
   }
 

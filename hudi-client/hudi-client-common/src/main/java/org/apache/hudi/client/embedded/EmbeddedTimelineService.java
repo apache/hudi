@@ -100,6 +100,12 @@ public class EmbeddedTimelineService {
                   * writeConfig.getHoodieClientHeartbeatTolerableMisses());
     }
 
+    if (writeConfig.isTimelineServerBasedInstantStateEnabled()) {
+      timelineServiceConfBuilder
+          .instantStateForceRefreshRequestNumber(writeConfig.getTimelineServerBasedInstantStateForceRefreshRequestNumber())
+          .enableInstantStateRequests(true);
+    }
+
     server = new TimelineService(context, hadoopConf.newCopy(), timelineServiceConfBuilder.build(),
         FSUtils.getFs(basePath, hadoopConf.newCopy()), viewManager);
     serverPort = server.startService();

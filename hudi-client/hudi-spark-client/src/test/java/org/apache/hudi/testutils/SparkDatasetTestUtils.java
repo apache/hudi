@@ -18,6 +18,7 @@
 
 package org.apache.hudi.testutils;
 
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -112,7 +113,30 @@ public class SparkDatasetTestUtils {
   public static Dataset<Row> getRandomRows(SQLContext sqlContext, int count, String partitionPath, boolean isError) {
     List<Row> records = new ArrayList<>();
     for (long recordNum = 0; recordNum < count; recordNum++) {
-      records.add(getRandomValue(partitionPath, isError));
+      records.add(getRandomValue(partitionPath, isError, ""));
+    }
+    return sqlContext.createDataFrame(records, isError ? ERROR_STRUCT_TYPE : STRUCT_TYPE);
+  }
+
+  public static Dataset<Row> getRandomRowsWithCommitTime(SQLContext sqlContext,
+                                                         int count,
+                                                         String partitionPath,
+                                                         boolean isError,
+                                                         String commitTime) {
+    List<Row> records = new ArrayList<>();
+    for (long recordNum = 0; recordNum < count; recordNum++) {
+      records.add(getRandomValue(partitionPath, isError, commitTime));
+    }
+    return sqlContext.createDataFrame(records, isError ? ERROR_STRUCT_TYPE : STRUCT_TYPE);
+  }
+
+  public static Dataset<Row> getRandomRowsWithKeys(SQLContext sqlContext,
+                                                   List<HoodieKey> keys,
+                                                   boolean isError,
+                                                   String commitTime) {
+    List<Row> records = new ArrayList<>();
+    for (HoodieKey key : keys) {
+      records.add(getRandomValue(key, isError, commitTime));
     }
     return sqlContext.createDataFrame(records, isError ? ERROR_STRUCT_TYPE : STRUCT_TYPE);
   }
@@ -123,10 +147,10 @@ public class SparkDatasetTestUtils {
    * @param partitionPath partition path to be set in the Row.
    * @return the Row thus generated.
    */
-  public static Row getRandomValue(String partitionPath, boolean isError) {
+  public static Row getRandomValue(String partitionPath, boolean isError, String commitTime) {
     // order commit time, seq no, record key, partition path, file name
     Object[] values = new Object[9];
-    values[0] = ""; //commit time
+    values[0] = commitTime; //commit time
     if (!isError) {
       values[1] = ""; // commit seq no
     } else {
@@ -137,6 +161,35 @@ public class SparkDatasetTestUtils {
     values[4] = ""; // filename
     values[5] = UUID.randomUUID().toString();
     values[6] = partitionPath;
+    values[7] = RANDOM.nextInt();
+    if (!isError) {
+      values[8] = RANDOM.nextLong();
+    } else {
+      values[8] = UUID.randomUUID().toString();
+    }
+    return new GenericRow(values);
+  }
+
+  /**
+   * Generate random Row with a given key.
+   *
+   * @param key a {@link HoodieKey} key.
+   * @return the Row thus generated.
+   */
+  public static Row getRandomValue(HoodieKey key, boolean isError, String commitTime) {
+    // order commit time, seq no, record key, partition path, file name
+    Object[] values = new Object[9];
+    values[0] = commitTime; //commit time
+    if (!isError) {
+      values[1] = ""; // commit seq no
+    } else {
+      values[1] = RANDOM.nextLong();
+    }
+    values[2] = key.getRecordKey();
+    values[3] = key.getPartitionPath();
+    values[4] = ""; // filename
+    values[5] = UUID.randomUUID().toString();
+    values[6] = key.getPartitionPath();
     values[7] = RANDOM.nextInt();
     if (!isError) {
       values[8] = RANDOM.nextLong();

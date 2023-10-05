@@ -253,7 +253,9 @@ public abstract class BaseConsistentHashingBucketClusteringPlanStrategy<T extend
         boolean forward = k == 1;
         do {
           int nextIdx = forward ? (rangeIdx[k] + 1 < fileSlices.size() ? rangeIdx[k] + 1 : 0) : (rangeIdx[k] >= 1 ? rangeIdx[k] - 1 : fileSlices.size() - 1);
-          boolean isNeighbour = identifier.getBucketByFileId(fileSlices.get(nextIdx).getFileId()) == identifier.getFormerBucket(fileSlices.get(rangeIdx[k]).getFileId());
+          ConsistentHashingNode bucketOfNextFile = identifier.getBucketByFileId(fileSlices.get(nextIdx).getFileId());
+          ConsistentHashingNode nextBucket = forward ? identifier.getLatterBucket(fileSlices.get(rangeIdx[k]).getFileId()) : identifier.getFormerBucket(fileSlices.get(rangeIdx[k]).getFileId());
+          boolean isNeighbour = bucketOfNextFile == nextBucket;
           /**
            * Merge condition:
            * 1. there is still slot to merge bucket
@@ -261,7 +263,9 @@ public abstract class BaseConsistentHashingBucketClusteringPlanStrategy<T extend
            * 3. the previous file slice and current file slice are neighbour in the hash ring
            * 4. Both the total file size up to now and the previous file slice size are smaller than merge size threshold
            */
-          if (remainingMergeSlot == 0 || added[nextIdx] || !isNeighbour || totalSize > mergeSize || fileSlices.get(nextIdx).getTotalFileSize() > mergeSize) {
+          if (remainingMergeSlot == 0 || added[nextIdx] || !isNeighbour || totalSize > mergeSize || fileSlices.get(nextIdx).getTotalFileSize() > mergeSize
+              || nextIdx == rangeIdx[1 - k] // if start equal to end after update range
+          ) {
             break;
           }
 

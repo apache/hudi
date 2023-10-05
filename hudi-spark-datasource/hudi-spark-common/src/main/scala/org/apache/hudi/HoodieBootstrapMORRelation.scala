@@ -106,6 +106,6 @@ case class HoodieBootstrapMORRelation(override val sqlContext: SQLContext,
   }
 
 
-  override def updatePrunedDataSchema(prunedSchema: StructType): HoodieBootstrapMORRelation =
+  override def updatePrunedDataSchema(prunedSchema: StructType): Relation =
     this.copy(prunedDataSchema = Some(prunedSchema))
 }

@@ -69,6 +69,13 @@ object HoodieOptionConfig {
     .defaultValue(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue())
     .build()
 
+  val SQL_PAYLOAD_TYPE: HoodieSQLOption[String] = buildConf()
+    .withSqlKey("payloadType")
+    .withHoodieKey(DataSourceWriteOptions.PAYLOAD_TYPE.key)
+    .withTableConfigKey(HoodieTableConfig.PAYLOAD_TYPE.key)
+    .defaultValue(DataSourceWriteOptions.PAYLOAD_TYPE.defaultValue())
+    .build()
+
   val SQL_RECORD_MERGER_STRATEGY: HoodieSQLOption[String] = buildConf()
     .withSqlKey("recordMergerStrategy")
     .withHoodieKey(DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key)
@@ -193,7 +200,7 @@ object HoodieOptionConfig {
   // extract primaryKey, preCombineField, type options
   def extractSqlOptions(options: Map[String, String]): Map[String, String] = {
     val sqlOptions = mapTableConfigsToSqlOptions(options)
-    val targetOptions = sqlOptionKeyToWriteConfigKey.keySet -- Set(SQL_PAYLOAD_CLASS.sqlKeyName) -- Set(SQL_RECORD_MERGER_STRATEGY.sqlKeyName)
+    val targetOptions = sqlOptionKeyToWriteConfigKey.keySet -- Set(SQL_PAYLOAD_CLASS.sqlKeyName) -- Set(SQL_RECORD_MERGER_STRATEGY.sqlKeyName) -- Set(SQL_PAYLOAD_TYPE.sqlKeyName)
     sqlOptions.filterKeys(targetOptions.contains)
   }
 
@@ -233,7 +240,7 @@ object HoodieOptionConfig {
   def makeOptionsCaseInsensitive(sqlOptions: Map[String, String]): Map[String, String] = {
     // Make Keys Case Insensitive
     val standardOptions = Seq(SQL_KEY_TABLE_PRIMARY_KEY, SQL_KEY_PRECOMBINE_FIELD,
-    SQL_KEY_TABLE_TYPE, SQL_PAYLOAD_CLASS, SQL_RECORD_MERGER_STRATEGY).map(key => key.sqlKeyName)
+    SQL_KEY_TABLE_TYPE, SQL_PAYLOAD_CLASS, SQL_RECORD_MERGER_STRATEGY, SQL_PAYLOAD_TYPE).map(key => key.sqlKeyName)
 
     sqlOptions.map(option => {
       standardOptions.find(x => x.toLowerCase().contains(option._1.toLowerCase())) match {

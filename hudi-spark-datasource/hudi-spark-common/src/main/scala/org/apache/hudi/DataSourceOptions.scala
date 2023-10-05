@@ -47,8 +47,8 @@ import scala.language.implicitConversions
  */
 
 /**
-  * Options supported for reading hoodie tables.
-  */
+ * Options supported for reading hoodie tables.
+ */
 object DataSourceReadOptions {
 
   val QUERY_TYPE_SNAPSHOT_OPT_VAL = "snapshot"
@@ -272,8 +272,8 @@ object DataSourceReadOptions {
 }
 
 /**
-  * Options supported for writing hoodie tables.
-  */
+ * Options supported for writing hoodie tables.
+ */
 object DataSourceWriteOptions {
 
   val BULK_INSERT_OPERATION_OPT_VAL = WriteOperationType.BULK_INSERT.value
@@ -325,11 +325,11 @@ object DataSourceWriteOptions {
   val SPARK_SQL_WRITES_PREPPED_KEY = "_hoodie.spark.sql.writes.prepped";
 
   /**
-    * May be derive partition path from incoming df if not explicitly set.
-    *
-    * @param optParams Parameters to be translated
-    * @return Parameters after translation
-    */
+   * May be derive partition path from incoming df if not explicitly set.
+   *
+   * @param optParams Parameters to be translated
+   * @return Parameters after translation
+   */
   def mayBeDerivePartitionPath(optParams: Map[String, String]): Map[String, String] = {
     var translatedOptParams = optParams
     // translate the api partitionBy of spark DataFrameWriter to PARTITIONPATH_FIELD
@@ -383,6 +383,8 @@ object DataSourceWriteOptions {
    * This will render any value set for `PRECOMBINE_FIELD_OPT_VAL` in-effective
    */
   val PAYLOAD_CLASS_NAME = HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME
+
+  val PAYLOAD_TYPE = HoodieWriteConfig.WRITE_PAYLOAD_TYPE
 
   /**
    * HoodieMerger will replace the payload to process the merge of data
@@ -455,6 +457,7 @@ object DataSourceWriteOptions {
   val SQL_INSERT_MODE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.sql.insert.mode")
     .defaultValue("upsert")
+    .markAdvanced()
     .deprecatedAfter("0.14.0")
     .withDocumentation("Insert mode when insert data to pk-table. The optional modes are: upsert, strict and non-strict." +
       "For upsert mode, insert statement do the upsert operation for the pk-table which will update the duplicate record." +
@@ -475,7 +478,7 @@ object DataSourceWriteOptions {
     .defaultValue("false")
     .markAdvanced()
     .withDocumentation("If set to true, records from the incoming dataframe will not overwrite existing records with the same key during the write operation. " +
-    "This config is deprecated as of 0.14.0. Please use hoodie.datasource.insert.dup.policy instead.");
+      "This config is deprecated as of 0.14.0. Please use hoodie.datasource.insert.dup.policy instead.");
 
   val PARTITIONS_TO_DELETE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.partitions.to.delete")
@@ -520,6 +523,7 @@ object DataSourceWriteOptions {
   val STREAMING_DISABLE_COMPACTION: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.streaming.disable.compaction")
     .defaultValue("false")
+    .markAdvanced()
     .sinceVersion("0.14.0")
     .withDocumentation("By default for MOR table, async compaction is enabled with spark streaming sink. "
       + "By setting this config to true, we can disable it and the expectation is that, users will schedule and execute "
@@ -542,6 +546,8 @@ object DataSourceWriteOptions {
     .key("hoodie.spark.sql.insert.into.operation")
     .defaultValue(WriteOperationType.INSERT.value())
     .withValidValues(WriteOperationType.BULK_INSERT.value(), WriteOperationType.INSERT.value(), WriteOperationType.UPSERT.value())
+    .markAdvanced()
+    .sinceVersion("0.14.0")
     .withDocumentation("Sql write operation to use with INSERT_INTO spark sql command. This comes with 3 possible values, bulk_insert, " +
       "insert and upsert. bulk_insert is generally meant for initial loads and is known to be performant compared to insert. But bulk_insert may not " +
       "do small file management. If you prefer hudi to automatically manage small files, then you can go with \"insert\". There is no precombine " +
@@ -557,9 +563,11 @@ object DataSourceWriteOptions {
     .key("hoodie.datasource.insert.dup.policy")
     .defaultValue(NONE_INSERT_DUP_POLICY)
     .withValidValues(NONE_INSERT_DUP_POLICY, DROP_INSERT_DUP_POLICY, FAIL_INSERT_DUP_POLICY)
+    .markAdvanced()
+    .sinceVersion("0.14.0")
     .withDocumentation("When operation type is set to \"insert\", users can optionally enforce a dedup policy. This policy will be employed "
       + " when records being ingested already exists in storage. Default policy is none and no action will be taken. Another option is to choose " +
-    " \"drop\", on which matching records from incoming will be dropped and the rest will be ingested. Third option is \"fail\" which will " +
+      " \"drop\", on which matching records from incoming will be dropped and the rest will be ingested. Third option is \"fail\" which will " +
       "fail the write operation when same records are re-ingested. In other words, a given record as deduced by the key generation policy " +
       "can be ingested only once to the target table of interest.")
 
@@ -591,8 +599,6 @@ object DataSourceWriteOptions {
   val HIVE_PARTITION_FIELDS: ConfigProperty[String] = HoodieSyncConfig.META_SYNC_PARTITION_FIELDS
   @Deprecated
   val HIVE_PARTITION_EXTRACTOR_CLASS: ConfigProperty[String] = HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS
-  @Deprecated
-  val HIVE_ASSUME_DATE_PARTITION: ConfigProperty[String] = HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION
   @Deprecated
   val HIVE_USE_PRE_APACHE_INPUT_FORMAT: ConfigProperty[String] = HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT
 
@@ -671,9 +677,6 @@ object DataSourceWriteOptions {
     .withDocumentation("Controls whether overwrite use dynamic or static mode, if not configured, " +
       "respect spark.sql.sources.partitionOverwriteMode")
 
-  /** @deprecated Use {@link HIVE_ASSUME_DATE_PARTITION} and its methods instead */
-  @Deprecated
-  val HIVE_ASSUME_DATE_PARTITION_OPT_KEY = HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION.key()
   /** @deprecated Use {@link HIVE_USE_PRE_APACHE_INPUT_FORMAT} and its methods instead */
   @Deprecated
   val HIVE_USE_PRE_APACHE_INPUT_FORMAT_OPT_KEY = HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT.key()
@@ -862,9 +865,6 @@ object DataSourceWriteOptions {
   /** @deprecated Use {@link HIVE_PARTITION_EXTRACTOR_CLASS} and its methods instead */
   @Deprecated
   val DEFAULT_HIVE_PARTITION_EXTRACTOR_CLASS_OPT_VAL = HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.defaultValue()
-  /** @deprecated Use {@link HIVE_ASSUME_DATE_PARTITION} and its methods instead */
-  @Deprecated
-  val DEFAULT_HIVE_ASSUME_DATE_PARTITION_OPT_VAL = HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION.defaultValue()
   @Deprecated
   val DEFAULT_USE_PRE_APACHE_INPUT_FORMAT_OPT_VAL = "false"
   /** @deprecated Use {@link HIVE_USE_JDBC} and its methods instead */
@@ -906,7 +906,7 @@ object DataSourceOptionsHelper {
   private val log = LoggerFactory.getLogger(DataSourceOptionsHelper.getClass)
 
   // put all the configs with alternatives here
-  val allConfigsWithAlternatives = List(
+  private val allConfigsWithAlternatives = List(
     DataSourceReadOptions.QUERY_TYPE,
     DataSourceWriteOptions.TABLE_TYPE,
     HoodieTableConfig.BASE_FILE_FORMAT,

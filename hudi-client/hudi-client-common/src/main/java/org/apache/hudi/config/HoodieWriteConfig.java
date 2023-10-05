@@ -27,8 +27,10 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.HoodieTableServiceManagerConfig;
 import org.apache.hudi.common.config.TypedProperties;
@@ -42,6 +44,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.RecordPayloadType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
@@ -49,6 +52,7 @@ import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -150,6 +154,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting. "
           + "This will render any value set for PRECOMBINE_FIELD_OPT_VAL in-effective");
+
+  public static final ConfigProperty<String> WRITE_PAYLOAD_TYPE = ConfigProperty
+      .key("hoodie.datasource.write.payload.type")
+      .defaultValue(RecordPayloadType.OVERWRITE_LATEST_AVRO.name())
+      .markAdvanced()
+      .withDocumentation(RecordPayloadType.class);
 
   public static final ConfigProperty<String> RECORD_MERGER_IMPLS = ConfigProperty
       .key("hoodie.datasource.write.record.merger.impls")
@@ -418,6 +428,18 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.9.0")
       .withDocumentation(MarkerType.class);
 
+  public static final ConfigProperty<Boolean> INSTANT_STATE_TIMELINE_SERVER_BASED = ConfigProperty
+      .key("hoodie.instant_state.timeline_server_based.enabled")
+      .defaultValue(false)
+      .sinceVersion("1.0.0")
+      .withDocumentation("If enabled, writers get instant state from timeline server rather than requesting DFS directly");
+
+  public static final ConfigProperty<Integer> INSTANT_STATE_TIMELINE_SERVER_BASED_FORCE_REFRESH_REQUEST_NUMBER = ConfigProperty
+      .key("hoodie.instant_state.timeline_server_based.force_refresh.request.number")
+      .defaultValue(100)
+      .sinceVersion("1.0.0")
+      .withDocumentation("Number of requests to trigger instant state cache refreshing");
+
   public static final ConfigProperty<Integer> MARKERS_TIMELINE_SERVER_BASED_BATCH_NUM_THREADS = ConfigProperty
       .key("hoodie.markers.timeline_server_based.batch.num_threads")
       .defaultValue(20)
@@ -561,7 +583,8 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> NUM_RETRIES_ON_CONFLICT_FAILURES = ConfigProperty
       .key("hoodie.write.num.retries.on.conflict.failures")
       .defaultValue(0)
-      .sinceVersion("0.13.0")
+      .markAdvanced()
+      .sinceVersion("0.14.0")
       .withDocumentation("Maximum number of times to retry a batch on conflict failure.");
 
   public static final ConfigProperty<String> WRITE_SCHEMA_OVERRIDE = ConfigProperty
@@ -702,6 +725,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.sensitive.config.keys")
       .defaultValue("ssl,tls,sasl,auth,credentials")
       .markAdvanced()
+      .sinceVersion("0.14.0")
       .withDocumentation("Comma separated list of filters for sensitive config keys. Hudi Streamer "
           + "will not print any configuration which contains the configured filter. For example with "
           + "a configured filter `ssl`, value for config `ssl.trustore.location` would be masked.");
@@ -1242,10 +1266,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(PRECOMBINE_FIELD_NAME);
   }
 
-  public String getWritePayloadClass() {
-    return getString(WRITE_PAYLOAD_CLASS_NAME);
-  }
-
   public String getKeyGeneratorClass() {
     return getString(KEYGENERATOR_CLASS_NAME);
   }
@@ -1265,10 +1285,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public Boolean shouldAutoCommit() {
     return getBoolean(AUTO_COMMIT_ENABLE);
-  }
-
-  public Boolean shouldAssumeDatePartitioning() {
-    return metadataConfig.shouldAssumeDatePartitioning();
   }
 
   public boolean shouldUseExternalSchemaTransformation() {
@@ -1349,6 +1365,14 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getFinalizeWriteParallelism() {
     return getInt(FINALIZE_WRITE_PARALLELISM_VALUE);
+  }
+
+  public boolean isTimelineServerBasedInstantStateEnabled() {
+    return getBoolean(INSTANT_STATE_TIMELINE_SERVER_BASED);
+  }
+
+  public int getTimelineServerBasedInstantStateForceRefreshRequestNumber() {
+    return getInt(INSTANT_STATE_TIMELINE_SERVER_BASED_FORCE_REFRESH_REQUEST_NUMBER);
   }
 
   public MarkerType getMarkersType() {
@@ -1454,7 +1478,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean enableOptimizedLogBlocksScan() {
-    return getBoolean(HoodieCompactionConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN);
+    return getBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN);
   }
 
   public HoodieCleaningPolicy getCleanerPolicy() {
@@ -1586,11 +1610,11 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public Boolean getCompactionLazyBlockReadEnabled() {
-    return getBoolean(HoodieCompactionConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE);
+    return getBoolean(HoodieReaderConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE);
   }
 
   public Boolean getCompactionReverseLogReadEnabled() {
-    return getBoolean(HoodieCompactionConfig.COMPACTION_REVERSE_LOG_READ_ENABLE);
+    return getBoolean(HoodieReaderConfig.COMPACTION_REVERSE_LOG_READ_ENABLE);
   }
 
   public int getArchiveDeleteParallelism() {
@@ -1728,8 +1752,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public HoodieClusteringConfig.LayoutOptimizationStrategy getLayoutOptimizationStrategy() {
-    return HoodieClusteringConfig.LayoutOptimizationStrategy.fromValue(
-        getStringOrDefault(HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY));
+    return HoodieClusteringConfig.resolveLayoutOptimizationStrategy(getStringOrDefault(HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY));
   }
 
   public HoodieClusteringConfig.SpatialCurveCompositionStrategyType getLayoutOptimizationCurveBuildMethod() {
@@ -2256,7 +2279,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getSpillableMapBasePath() {
     return Option.ofNullable(getString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH))
-        .orElseGet(HoodieMemoryConfig::getDefaultSpillableMapBasePath);
+        .orElseGet(FileIOUtils::getDefaultSpillableMapBasePath);
   }
 
   public double getWriteStatusFailureFraction() {
@@ -2924,6 +2947,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withEmbeddedTimelineServerPort(int port) {
       writeConfig.setValue(EMBEDDED_TIMELINE_SERVER_PORT_NUM, String.valueOf(port));
+      return this;
+    }
+
+    public Builder withTimelineServerBasedInstantStateEnable(boolean enable) {
+      writeConfig.setValue(INSTANT_STATE_TIMELINE_SERVER_BASED, String.valueOf(enable));
       return this;
     }
 

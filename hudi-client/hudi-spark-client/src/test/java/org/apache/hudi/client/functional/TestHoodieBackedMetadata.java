@@ -22,6 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
+import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -121,6 +122,7 @@ import org.apache.hadoop.util.Time;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.schema.MessageType;
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -208,6 +210,13 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         Arguments.of(MERGE_ON_READ, true),
         Arguments.of(MERGE_ON_READ, false)
     );
+  }
+
+  private final List<BaseHoodieWriteClient> clientsToClose = new ArrayList<>();
+
+  @AfterEach
+  public void closeClients() {
+    clientsToClose.forEach(BaseHoodieWriteClient::close);
   }
 
   /**
@@ -744,7 +753,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       metadataWriter.deletePartitions("0000003", Arrays.asList(COLUMN_STATS));
 
       HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
-      List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, metadataMetaClient.getBasePath(), false, false);
+      List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, metadataMetaClient.getBasePath(), false);
       // partition should be physically deleted
       assertEquals(metadataWriter.getEnabledPartitionTypes().size(), metadataTablePartitions.size());
       assertFalse(metadataTablePartitions.contains(COLUMN_STATS.getPartitionPath()));
@@ -3080,6 +3089,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, HoodieIndex.IndexType indexType,
                                                     HoodieFailedWritesCleaningPolicy cleaningPolicy) {
+    Properties properties = getDisabledRowWriterProperties();
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr)
         .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2).withDeleteParallelism(2)
         .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
@@ -3093,7 +3103,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withEnableBackupForRemoteFileSystemView(false) // Fail test if problem connecting to timeline-server
             .withRemoteServerPort(timelineServicePort)
-            .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build());
+            .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build())
+        .withProperties(properties);
   }
 
   @Test
@@ -3126,6 +3137,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withClusteringConfig(HoodieClusteringConfig.newBuilder()
             .withInlineClusteringNumCommits(0)
             .build())
+        .withProperties(getDisabledRowWriterProperties())
         .build();
     SparkRDDWriteClient clusteringClient = getHoodieWriteClient(clusterWriteCfg);
     clusteringClient.scheduleTableService("0000003", Option.empty(), TableServiceType.CLUSTER);
@@ -3184,6 +3196,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withClusteringConfig(HoodieClusteringConfig.newBuilder()
             .withInlineClusteringNumCommits(0)
             .build())
+        .withProperties(getDisabledRowWriterProperties())
         .build();
     SparkRDDWriteClient clusteringClient = getHoodieWriteClient(clusterWriteCfg);
     clusteringClient.scheduleTableService("0000003", Option.empty(), TableServiceType.CLUSTER);
@@ -3329,6 +3342,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     } else {
       client = testClient;
     }
+    clientsToClose.add(client);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTableMetadata tableMetadata = metadata(client);
@@ -3342,7 +3356,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // Partitions should match
     FileSystemBackedTableMetadata fsBackedTableMetadata = new FileSystemBackedTableMetadata(engineContext, metaClient.getTableConfig(),
-        new SerializableConfiguration(hadoopConf), config.getBasePath(), config.shouldAssumeDatePartitioning());
+        new SerializableConfiguration(hadoopConf), config.getBasePath());
     List<String> fsPartitions = fsBackedTableMetadata.getAllPartitionPaths();
     List<String> metadataPartitions = tableMetadata.getAllPartitionPaths();
 
@@ -3452,8 +3466,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // Metadata table has a fixed number of partitions
     // Cannot use FSUtils.getAllFoldersWithPartitionMetaFile for this as that function filters all directory
     // in the .hoodie folder.
-    List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, getMetadataTableBasePath(basePath),
-        false, false);
+    List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, getMetadataTableBasePath(basePath), false);
     assertEquals(metadataWriter.getEnabledPartitionTypes().size(), metadataTablePartitions.size());
 
     final Map<String, MetadataPartitionType> metadataEnabledPartitionTypes = new HashMap<>();
@@ -3554,5 +3567,17 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   @Override
   protected HoodieTableType getTableType() {
     return tableType;
+  }
+
+  /**
+   * Disabling row writer here as clustering tests will throw the error below if it is used.
+   * java.util.concurrent.CompletionException: java.lang.ClassNotFoundException
+   * TODO: Fix this and increase test coverage to include clustering via row writers
+   * @return
+   */
+  private static Properties getDisabledRowWriterProperties() {
+    Properties properties = new Properties();
+    properties.setProperty("hoodie.datasource.write.row.writer.enable", String.valueOf(false));
+    return properties;
   }
 }

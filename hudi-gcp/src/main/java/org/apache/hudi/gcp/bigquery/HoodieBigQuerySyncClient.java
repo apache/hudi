@@ -49,7 +49,6 @@ import org.slf4j.LoggerFactory;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_LOCATION;
@@ -118,7 +117,7 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
       QueryJobConfiguration queryConfig = QueryJobConfiguration.newBuilder(query)
           .setUseLegacySql(false)
           .build();
-      JobId jobId = JobId.of(UUID.randomUUID().toString());
+      JobId jobId = JobId.newBuilder().setProject(projectId).setRandomJob().build();
       Job queryJob = bigquery.create(JobInfo.newBuilder(queryConfig).setJobId(jobId).build());
 
       queryJob = queryJob.waitFor();

@@ -92,19 +92,20 @@ public abstract class TestHoodieReaderWriterBase {
     Configuration conf = new Configuration();
     verifyMetadata(conf);
 
-    HoodieAvroFileReader hoodieReader = createReader(conf);
-    BloomFilter filter = hoodieReader.readBloomFilter();
-    for (int i = 0; i < NUM_RECORDS; i++) {
-      String key = "key" + String.format("%02d", i);
-      assertTrue(filter.mightContain(key));
+    try (HoodieAvroFileReader hoodieReader = createReader(conf)) {
+      BloomFilter filter = hoodieReader.readBloomFilter();
+      for (int i = 0; i < NUM_RECORDS; i++) {
+        String key = "key" + String.format("%02d", i);
+        assertTrue(filter.mightContain(key));
+      }
+      assertFalse(filter.mightContain("non-existent-key"));
+      assertEquals(avroSchema, hoodieReader.getSchema());
+      assertEquals(NUM_RECORDS, hoodieReader.getTotalRecords());
+      String[] minMaxRecordKeys = hoodieReader.readMinMaxRecordKeys();
+      assertEquals(2, minMaxRecordKeys.length);
+      assertEquals("key00", minMaxRecordKeys[0]);
+      assertEquals("key" + (NUM_RECORDS - 1), minMaxRecordKeys[1]);
     }
-    assertFalse(filter.mightContain("non-existent-key"));
-    assertEquals(avroSchema, hoodieReader.getSchema());
-    assertEquals(NUM_RECORDS, hoodieReader.getTotalRecords());
-    String[] minMaxRecordKeys = hoodieReader.readMinMaxRecordKeys();
-    assertEquals(2, minMaxRecordKeys.length);
-    assertEquals("key00", minMaxRecordKeys[0]);
-    assertEquals("key" + (NUM_RECORDS - 1), minMaxRecordKeys[1]);
   }
 
   @Test
@@ -156,8 +157,9 @@ public abstract class TestHoodieReaderWriterBase {
   public void testWriteReadWithEvolvedSchema(String evolvedSchemaPath) throws Exception {
     writeFileWithSimpleSchema();
     Configuration conf = new Configuration();
-    HoodieAvroFileReader hoodieReader = createReader(conf);
-    verifyReaderWithSchema(evolvedSchemaPath, hoodieReader);
+    try (HoodieAvroFileReader hoodieReader = createReader(conf)) {
+      verifyReaderWithSchema(evolvedSchemaPath, hoodieReader);
+    }
   }
 
   @Test

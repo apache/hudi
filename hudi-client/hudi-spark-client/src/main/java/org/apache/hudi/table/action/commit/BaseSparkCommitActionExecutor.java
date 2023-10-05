@@ -19,13 +19,12 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.utils.SparkPartitionUtils;
 import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy;
+import org.apache.hudi.client.utils.SparkPartitionUtils;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -41,7 +40,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
-import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
@@ -66,7 +64,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
@@ -171,7 +168,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
     context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile:" + config.getTableName());
     WorkloadProfile workloadProfile =
-            new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
+        new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
     LOG.debug("Input workload profile :" + workloadProfile);
 
     // partition using the insert partitioner
@@ -294,28 +291,10 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   }
 
   @Override
-  protected void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
+  protected void commit(HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
     context.setJobStatus(this.getClass().getSimpleName(), "Commit write status collect: " + config.getTableName());
-    String actionType = getCommitActionType();
-    LOG.info("Committing " + instantTime + ", action Type " + actionType + ", operation Type " + operationType);
-    result.setCommitted(true);
-    if (!result.getWriteStats().isPresent()) {
-      result.setWriteStats(result.getWriteStatuses().map(WriteStatus::getStat).collectAsList());
-    }
-    // Finalize write
-    finalizeWrite(instantTime, result.getWriteStats().get(), result);
-    try {
-      HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-      HoodieCommitMetadata metadata = result.getCommitMetadata().get();
-      writeTableMetadata(metadata, result.getWriteStatuses(), actionType);
-      activeTimeline.saveAsComplete(new HoodieInstant(true, getCommitActionType(), instantTime),
-          Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
-      LOG.info("Committed " + instantTime);
-      result.setCommitMetadata(Option.of(metadata));
-    } catch (IOException e) {
-      throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
-          e);
-    }
+    commit(result.getWriteStatuses(), result, result.getWriteStats().isPresent()
+        ? result.getWriteStats().get() : result.getWriteStatuses().map(WriteStatus::getStat).collectAsList());
   }
 
   protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<HoodieData<WriteStatus>> writeStatuses) {
@@ -425,7 +404,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
   public Partitioner getLayoutPartitioner(WorkloadProfile profile, String layoutPartitionerClass) {
     return (Partitioner) ReflectionUtils.loadClass(layoutPartitionerClass,
-        new Class[] { WorkloadProfile.class, HoodieEngineContext.class, HoodieTable.class, HoodieWriteConfig.class },
+        new Class[] {WorkloadProfile.class, HoodieEngineContext.class, HoodieTable.class, HoodieWriteConfig.class},
         profile, context, table, config);
   }
 

@@ -22,9 +22,10 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DummyActiveAction
 import org.apache.hudi.client.common.HoodieJavaEngineContext
-import org.apache.hudi.client.timeline.{ActiveAction, LSMTimelineWriter}
-import org.apache.hudi.common.model.{HoodieAvroPayload, HoodieTableType, WriteOperationType}
-import org.apache.hudi.common.table.timeline.{HoodieArchivedTimeline, HoodieInstant, LSMTimeline}
+import org.apache.hudi.client.timeline.LSMTimelineWriter
+import org.apache.hudi.common.model.{HoodieAvroPayload, HoodieCommitMetadata, HoodieTableType, WriteOperationType}
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata
+import org.apache.hudi.common.table.timeline.{ActiveAction, HoodieArchivedTimeline, HoodieInstant, LSMTimeline}
 import org.apache.hudi.common.testutils.{HoodieTestTable, HoodieTestUtils}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.index.HoodieIndex.IndexType
@@ -66,8 +67,9 @@ object LSMTimelineReadBenchmark extends HoodieBenchmarkBase {
         val instantTime = startTs + i + ""
         val action = if (i % 2 == 0) "delta_commit" else "commit"
         val instant = new HoodieInstant(HoodieInstant.State.COMPLETED, action, instantTime, instantTime + 1000)
-        val metadata = HoodieTestTable.of(metaClient).createCommitMetadata(instantTime, WriteOperationType.INSERT, util.Arrays.asList("par1", "par2"), 10, false).toJsonString.getBytes()
-        instantBuffer.add(new DummyActiveAction(instant, metadata))
+        val metadata: HoodieCommitMetadata = HoodieTestTable.of(metaClient).createCommitMetadata(instantTime, WriteOperationType.INSERT, util.Arrays.asList("par1", "par2"), 10, false)
+        val serializedMetadata = serializeCommitMetadata(metadata).get()
+        instantBuffer.add(new DummyActiveAction(instant, serializedMetadata))
         if (i % batchSize == 0) {
           // archive 10 instants each time
           writer.write(instantBuffer, org.apache.hudi.common.util.Option.empty(), org.apache.hudi.common.util.Option.empty())

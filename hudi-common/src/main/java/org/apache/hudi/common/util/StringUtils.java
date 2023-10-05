@@ -21,6 +21,7 @@ package org.apache.hudi.common.util;
 import javax.annotation.Nullable;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -101,6 +102,10 @@ public class StringUtils {
     }
 
     return out;
+  }
+
+  public static byte[] getUTF8Bytes(String str) {
+    return str.getBytes(StandardCharsets.UTF_8);
   }
 
   public static boolean isNullOrEmpty(String str) {
