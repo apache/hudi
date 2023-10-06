@@ -26,6 +26,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.util.collection.ClosableIterator
 import org.apache.hudi.util.CloseableInternalRowIterator
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{HoodieInternalRowUtils, SparkSession}
@@ -36,13 +37,11 @@ import org.apache.spark.sql.{HoodieInternalRowUtils, SparkSession}
  *
  * This uses Spark parquet reader to read parquet data files or parquet log blocks.
  *
- * @param sparkSession      {@link SparkSession} instance.
- * @param parquetFileFormat {@link ParquetFileFormat} instance for parquet file format in Spark.
- * @param hadoopConf        Hadoop configuration.
+ * @param baseFileReader    A reader that transforms a {@link PartitionedFile} to an iterator of {@link InternalRow}
+ * @param partitionValues   The values for a partition in which the file group lives.
  */
-class SparkFileFormatInternalRowReaderContext(sparkSession: SparkSession,
-                                              parquetFileFormat: ParquetFileFormat,
-                                              hadoopConf: Configuration) extends BaseSparkInternalRowReaderContext {
+class SparkFileFormatInternalRowReaderContext(baseFileReader: PartitionedFile => Iterator[InternalRow],
+                                              partitionValues: InternalRow) extends BaseSparkInternalRowReaderContext {
   lazy val sparkAdapter = SparkAdapterSupport.sparkAdapter
 
   override def getFileRecordIterator(filePath: Path,
@@ -52,13 +51,7 @@ class SparkFileFormatInternalRowReaderContext(sparkSession: SparkSession,
                                      requiredSchema: Schema,
                                      conf: Configuration): ClosableIterator[InternalRow] = {
     val fileInfo = sparkAdapter.getSparkPartitionedFileUtils.createPartitionedFile(
-      InternalRow.empty, filePath, 0, length)
-
-    val dataStructSchema = HoodieInternalRowUtils.getCachedSchema(dataSchema)
-    val requiredStructSchema = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
-    new CloseableInternalRowIterator(parquetFileFormat.buildReaderWithPartitionValues(
-      sparkSession, dataStructSchema, StructType(Seq.empty), requiredStructSchema, Seq.empty,
-      Map(), conf
-    ).apply(fileInfo))
+      partitionValues, filePath, start, length)
+    new CloseableInternalRowIterator(baseFileReader(fileInfo))
   }
 }

@@ -34,6 +34,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.EmptyIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
@@ -166,8 +167,13 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
     while (logRecordIterator.hasNext()) {
       Pair<Option<T>, Map<String, Object>> nextRecordInfo = logRecordIterator.next();
-      Option<T> resultRecord = merge(Option.empty(), Collections.emptyMap(),
-          nextRecordInfo.getLeft(), nextRecordInfo.getRight());
+      Option<T> resultRecord;
+      try {
+        resultRecord = merge(Option.empty(), Collections.emptyMap(),
+            nextRecordInfo.getLeft(), nextRecordInfo.getRight());
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to merge the next record", e);
+      }
       if (resultRecord.isPresent()) {
         nextRecord = readerContext.seal(resultRecord.get());
         return true;
@@ -228,6 +234,41 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   public void close() throws IOException {
     if (baseFileIterator != null) {
       baseFileIterator.close();
+    }
+  }
+
+  public HoodieFileGroupReaderIterator<T> getClosableIterator() {
+    return new HoodieFileGroupReaderIterator<>(this);
+  }
+
+  public static class HoodieFileGroupReaderIterator<T> implements ClosableIterator<T> {
+    private final HoodieFileGroupReader<T> reader;
+
+    public HoodieFileGroupReaderIterator(HoodieFileGroupReader<T> reader) {
+      this.reader = reader;
+    }
+
+    @Override
+    public boolean hasNext() {
+      try {
+        return reader.hasNext();
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to read record", e);
+      }
+    }
+
+    @Override
+    public T next() {
+      return reader.next();
+    }
+
+    @Override
+    public void close() {
+      try {
+        reader.close();
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to close the reader", e);
+      }
     }
   }
 }

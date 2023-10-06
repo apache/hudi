@@ -23,8 +23,11 @@ import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
-import org.apache.hudi.{SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.{AvroConversionUtils, SparkFileFormatInternalRowReaderContext}
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
+import org.apache.spark.sql.execution.datasources.parquet.LegacyHoodieParquetFileFormat
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.{Dataset, HoodieInternalRowUtils, HoodieUnsafeUtils, Row, SaveMode, SparkSession}
 import org.apache.spark.{HoodieSparkKryoRegistrar, SparkConf}
@@ -68,9 +71,14 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   }
 
   override def getHoodieReaderContext: HoodieReaderContext[InternalRow] = {
-    new SparkFileFormatInternalRowReaderContext(spark,
-      SparkAdapterSupport.sparkAdapter.createLegacyHoodieParquetFileFormat(false).get,
-      getHadoopConf)
+    val parquetFileFormat = new LegacyHoodieParquetFileFormat
+    val metaClient = HoodieTableMetaClient.builder.setConf(getHadoopConf).setBasePath(getBasePath).build
+    val avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema
+    val structTypeSchema = AvroConversionUtils.convertAvroSchemaToStructType(avroSchema)
+    val recordReaderIterator = parquetFileFormat.buildReaderWithPartitionValues(
+      spark, structTypeSchema, structTypeSchema, structTypeSchema, Seq.empty, Map.empty, getHadoopConf
+    )
+    new SparkFileFormatInternalRowReaderContext(recordReaderIterator, new GenericInternalRow(0))
   }
 
   override def commitToTable(recordList: util.List[String], operation: String, options: util.Map[String, String]): Unit = {
