@@ -71,9 +71,9 @@ public class HoodieCommonConfig extends HoodieConfig {
           + " operation will fail schema compatibility check. Set this option to true will make the newly added "
           + " column nullable to successfully complete the write operation.");
 
-  public static final ConfigProperty<Boolean> ADD_NULL_FOR_DELETED_COLUMNS = ConfigProperty
+  public static final ConfigProperty<String> ADD_NULL_FOR_DELETED_COLUMNS = ConfigProperty
       .key("hoodie.datasource.add.null.for.deleted.columns")
-      .defaultValue(false)
+      .defaultValue("false")
       .markAdvanced()
       .withDocumentation("When a non-nullable column is deleted in datasource during a write operation, the write "
           + " operation will fail schema compatibility check. Set this option to true will make the deleted "

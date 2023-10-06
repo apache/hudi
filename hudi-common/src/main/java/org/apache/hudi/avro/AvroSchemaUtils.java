@@ -190,9 +190,18 @@ public class AvroSchemaUtils {
       } else if (sourceSchema.getType() == Schema.Type.MAP) {
         return isProjectionOfInternal(sourceSchema.getValueType(), targetSchema.getValueType(), atomicTypeEqualityPredicate);
       } else if (sourceSchema.getType() == Schema.Type.UNION) {
-        return isProjectionOfInternal(resolveNullableSchema(sourceSchema),
-            resolveNullableSchema(targetSchema),
-            atomicTypeEqualityPredicate);
+        List<Schema> sourceNestedSchemas = sourceSchema.getTypes();
+        List<Schema> targetNestedSchemas = targetSchema.getTypes();
+        if (sourceNestedSchemas.size() != targetNestedSchemas.size()) {
+          return false;
+        }
+
+        for (int i = 0; i < sourceNestedSchemas.size(); ++i) {
+          if (!isProjectionOfInternal(sourceNestedSchemas.get(i), targetNestedSchemas.get(i), atomicTypeEqualityPredicate)) {
+            return false;
+          }
+        }
+        return true;
       }
     }
 

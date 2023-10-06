@@ -81,7 +81,6 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     TypedProperties extraProps = new TypedProperties();
     extraProps.setProperty("hoodie.datasource.write.table.type", tableType);
     extraProps.setProperty("hoodie.datasource.write.row.writer.enable", rowWriterEnable.toString());
-    extraProps.setProperty("hoodie.metadata.enable", "false");
     extraProps.setProperty("hoodie.datasource.add.null.for.deleted.columns", "true");
     //extraProps.setProperty("hoodie.logfile.data.block.format", "parquet");
 

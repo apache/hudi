@@ -500,7 +500,8 @@ object HoodieSparkSqlWriter {
                          latestTableSchemaOpt: Option[Schema],
                          internalSchemaOpt: Option[InternalSchema],
                          opts: Map[String, String]): Schema = {
-    val addNullForDeletedColumns = opts(DataSourceWriteOptions.ADD_NULL_FOR_DELETED_COLUMNS.key()).toBoolean
+    val addNullForDeletedColumns = opts.getOrDefault(DataSourceWriteOptions.ADD_NULL_FOR_DELETED_COLUMNS.key(),
+      DataSourceWriteOptions.ADD_NULL_FOR_DELETED_COLUMNS.defaultValue).toBoolean
     val shouldReconcileSchema = opts(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
     val shouldValidateSchemasCompatibility = opts.getOrDefault(HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key,
       HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.defaultValue).toBoolean
@@ -508,7 +509,7 @@ object HoodieSparkSqlWriter {
     latestTableSchemaOpt match {
       // In case table schema is empty we're just going to use the source schema as a
       // writer's schema. No additional handling is required
-      case None => sourceSchema
+      case None => AvroInternalSchemaConverter.fixNullOrdering(sourceSchema)
       // Otherwise, we need to make sure we reconcile incoming and latest table schemas
       case Some(latestTableSchemaWithMetaFields) =>
         // NOTE: Meta-fields will be unconditionally injected by Hudi writing handles, for the sake of
@@ -528,7 +529,7 @@ object HoodieSparkSqlWriter {
         val canonicalizedSourceSchema = if (shouldCanonicalizeSchema) {
           canonicalizeSchema(sourceSchema, latestTableSchema, opts)
         } else {
-          sourceSchema
+          AvroInternalSchemaConverter.fixNullOrdering(sourceSchema)
         }
 
         val allowAutoEvolutionColumnDrop = opts.getOrDefault(HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key,
