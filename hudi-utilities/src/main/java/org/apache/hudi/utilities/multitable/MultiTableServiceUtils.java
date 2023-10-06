@@ -51,7 +51,7 @@ public class MultiTableServiceUtils {
   public static class Constants {
     public static final String TABLES_TO_BE_SERVED_PROP = "hoodie.tableservice.tablesToServe";
 
-    public static final String TABLES_SKIP_WRONG_PATH = "hoodie.tableservice.skip.wrong.path";
+    public static final String TABLES_SKIP_WRONG_PATH = "hoodie.tableservice.skipNonHudiTable";
 
     public static final String COMMA_SEPARATOR = ",";
 
@@ -75,7 +75,7 @@ public class MultiTableServiceUtils {
               return true;
             } else {
               // Log the wrong path in console.
-              LOG.error("Hoodie table not found in path " + tablePath);
+              LOG.warn("Hoodie table not found in path {}, skip", tablePath);
               return false;
             }
           }).collect(Collectors.toList());
