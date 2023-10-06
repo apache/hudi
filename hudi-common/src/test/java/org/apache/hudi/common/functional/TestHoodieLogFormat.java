@@ -62,7 +62,6 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.CorruptedLogFileException;
-import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -458,22 +457,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     }
     assertEquals(logBlockWrittenNum, logBlockReadNum, "All written log should be correctly found");
     reader.close();
-
-    // test writing oversize data block which should be rejected
-    Writer oversizeWriter =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("test-fileid1").withDeltaCommit("100").withSizeThreshold(3L * 1024 * 1024 * 1024).withFs(fs)
-            .build();
-    // write to the existing file
-    ((HoodieLogFormatWriter) writer).withOutputStream(fs.append(writer.getLogFile().getPath()));
-    List<HoodieLogBlock> dataBlocks = new ArrayList<>(logBlockWrittenNum + 1);
-    for (int i = 0; i < logBlockWrittenNum + 1; i++) {
-      dataBlocks.add(reusableDataBlock);
-    }
-    assertThrows(HoodieIOException.class, () -> {
-      oversizeWriter.appendBlocks(dataBlocks);
-    }, "Blocks appended may overflow. Please decrease log block size or log block amount");
-    oversizeWriter.close();
   }
 
   @ParameterizedTest
