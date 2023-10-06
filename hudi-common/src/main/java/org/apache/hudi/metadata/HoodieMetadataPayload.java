@@ -330,12 +330,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
                                                                                List<String> filesDeleted) {
     int size = filesAdded.size() + filesDeleted.size();
     Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>(size, 1);
-    filesAdded.forEach((fileName, fileSize) -> {
-      // Assert that the file-size of the file being added is positive, since Hudi
-      // should not be creating empty files
-      checkState(fileSize > 0);
-      fileInfo.put(fileName, new HoodieMetadataFileInfo(fileSize, false));
-    });
+    filesAdded.forEach((fileName, fileSize) -> fileInfo.put(fileName, new HoodieMetadataFileInfo(fileSize, false)));
 
     filesDeleted.forEach(fileName -> fileInfo.put(fileName, DELETE_FILE_METADATA));
 

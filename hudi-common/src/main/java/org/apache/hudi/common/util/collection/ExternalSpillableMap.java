@@ -215,6 +215,10 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
       this.inMemoryMap.put(key, value);
     } else if (this.currentInMemoryMapSize < this.maxInMemorySizeInBytes) {
       this.currentInMemoryMapSize += this.estimatedPayloadSize;
+      // Remove the old version of the record from disk first to avoid data duplication.
+      if (inDiskContainsKey(key)) {
+        getDiskBasedMap().remove(key);
+      }
       this.inMemoryMap.put(key, value);
     } else {
       getDiskBasedMap().put(key, value);

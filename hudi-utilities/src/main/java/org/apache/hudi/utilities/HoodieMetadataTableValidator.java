@@ -580,7 +580,7 @@ public class HoodieMetadataTableValidator implements Serializable {
    */
   private List<String> validatePartitions(HoodieSparkEngineContext engineContext, String basePath) {
     // compare partitions
-    List<String> allPartitionPathsFromFS = FSUtils.getAllPartitionPaths(engineContext, basePath, false, cfg.assumeDatePartitioning);
+    List<String> allPartitionPathsFromFS = FSUtils.getAllPartitionPaths(engineContext, basePath, false);
     HoodieTimeline completedTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
 
     // ignore partitions created by uncommitted ingestion.
@@ -610,7 +610,7 @@ public class HoodieMetadataTableValidator implements Serializable {
       }
     }).collect(Collectors.toList());
 
-    List<String> allPartitionPathsMeta = FSUtils.getAllPartitionPaths(engineContext, basePath, true, cfg.assumeDatePartitioning);
+    List<String> allPartitionPathsMeta = FSUtils.getAllPartitionPaths(engineContext, basePath, true);
 
     Collections.sort(allPartitionPathsFromFS);
     Collections.sort(allPartitionPathsMeta);
@@ -1283,7 +1283,6 @@ public class HoodieMetadataTableValidator implements Serializable {
           .withMetadataIndexBloomFilter(enableMetadataTable)
           .withMetadataIndexColumnStats(enableMetadataTable)
           .withEnableRecordIndex(enableMetadataTable)
-          .withAssumeDatePartitioning(cfg.assumeDatePartitioning)
           .build();
       this.fileSystemView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
           metaClient, metadataConfig);

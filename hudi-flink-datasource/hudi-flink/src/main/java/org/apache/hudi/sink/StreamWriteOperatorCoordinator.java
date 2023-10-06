@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
@@ -37,6 +38,7 @@ import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
+import org.apache.hudi.sink.meta.CkpMetadataFactory;
 import org.apache.hudi.sink.utils.HiveSyncContext;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.util.ClientIds;
@@ -186,9 +188,9 @@ public class StreamWriteOperatorCoordinator
     this.gateways = new SubtaskGateway[this.parallelism];
     // init table, create if not exists.
     this.metaClient = initTableIfNotExists(this.conf);
-    this.ckpMetadata = initCkpMetadata(this.metaClient, this.conf);
     // the write client must create after the table creation
     this.writeClient = FlinkWriteClients.createWriteClient(conf);
+    this.ckpMetadata = initCkpMetadata(writeClient.getConfig(), this.conf);
     initMetadataTable(this.writeClient);
     this.tableState = TableState.create(conf);
     // start the executor
@@ -349,8 +351,8 @@ public class StreamWriteOperatorCoordinator
     writeClient.initMetadataTable();
   }
 
-  private static CkpMetadata initCkpMetadata(HoodieTableMetaClient metaClient, Configuration conf) throws IOException {
-    CkpMetadata ckpMetadata = CkpMetadata.getInstance(metaClient, conf.getString(FlinkOptions.WRITE_CLIENT_ID));
+  private static CkpMetadata initCkpMetadata(HoodieWriteConfig writeConfig, Configuration conf) throws IOException {
+    CkpMetadata ckpMetadata = CkpMetadataFactory.getCkpMetadata(writeConfig, conf);
     ckpMetadata.bootstrap();
     return ckpMetadata;
   }

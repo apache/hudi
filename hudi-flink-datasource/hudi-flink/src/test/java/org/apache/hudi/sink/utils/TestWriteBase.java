@@ -19,6 +19,7 @@
 package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -27,10 +28,12 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
+import org.apache.hudi.sink.meta.CkpMetadataFactory;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestUtils;
@@ -144,7 +147,8 @@ public class TestWriteBase {
       this.pipeline = TestData.getWritePipeline(this.basePath, conf);
       // open the function and ingest data
       this.pipeline.openFunction();
-      this.ckpMetadata = CkpMetadata.getInstance(conf);
+      HoodieWriteConfig writeConfig = this.pipeline.getCoordinator().getWriteClient().getConfig();
+      this.ckpMetadata = CkpMetadataFactory.getCkpMetadata(writeConfig, conf);
       return this;
     }
 
@@ -257,6 +261,14 @@ public class TestWriteBase {
      */
     public TestHarness checkpoint(long checkpointId) throws Exception {
       this.pipeline.checkpointFunction(checkpointId);
+      return this;
+    }
+
+    /**
+     * Stop the timeline server.
+     */
+    public TestHarness stopTimelineServer() {
+      pipeline.getCoordinator().getWriteClient().getTimelineServer().ifPresent(EmbeddedTimelineService::stop);
       return this;
     }
 

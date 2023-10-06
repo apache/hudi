@@ -423,7 +423,7 @@ public class ITTestHoodieFlinkCompactor {
     Set<Pair<String, String>> fileIdCommitTimeSet = new HashSet<>();
     HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
     HoodieWrapperFileSystem fs = metaClient.getFs();
-    FSUtils.getAllPartitionPaths(HoodieFlinkEngineContext.DEFAULT, metaClient.getBasePath(), false, false).forEach(
+    FSUtils.getAllPartitionPaths(HoodieFlinkEngineContext.DEFAULT, metaClient.getBasePath(), false).forEach(
         partition -> {
           try {
             Arrays.stream(fs.listStatus(FSUtils.getPartitionPath(metaClient.getBasePathV2(), partition)))
