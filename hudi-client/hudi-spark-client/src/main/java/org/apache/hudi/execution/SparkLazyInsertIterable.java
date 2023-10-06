@@ -34,8 +34,6 @@ import org.apache.hudi.util.ExecutorFactory;
 import java.util.Iterator;
 import java.util.List;
 
-import static org.apache.hudi.common.util.ValidationUtils.checkState;
-
 public class SparkLazyInsertIterable<T> extends HoodieLazyInsertIterable<T> {
 
   private final boolean useWriterSchema;
