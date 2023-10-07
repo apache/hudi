@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.config.HoodieInternalConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.{HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.spark.internal.Logging
@@ -101,13 +100,9 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
         isOverWritePartition = true
       }
     }
-    var config = buildHoodieInsertConfig(catalogTable, sparkSession, isOverWritePartition, isOverWriteTable, partitionSpec, extraOptions)
     val staticOverwritePartitionPathOpt = getStaticOverwritePartitionPath(catalogTable, partitionSpec, isOverWritePartition)
-    staticOverwritePartitionPathOpt match {
-      case Some(staticOverwritePartitionPath) =>
-        config = config ++ Map(HoodieInternalConfig.STATIC_OVERWRITE_PARTITION_PATHS.key() -> staticOverwritePartitionPath)
-      case _ =>
-    }
+    val config = buildHoodieInsertConfig(catalogTable, sparkSession, isOverWritePartition, isOverWriteTable, partitionSpec, extraOptions, staticOverwritePartitionPathOpt)
+
     val alignedQuery = alignQueryOutput(query, catalogTable, partitionSpec, sparkSession.sessionState.conf)
 
     val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, mode, config, Dataset.ofRows(sparkSession, alignedQuery))

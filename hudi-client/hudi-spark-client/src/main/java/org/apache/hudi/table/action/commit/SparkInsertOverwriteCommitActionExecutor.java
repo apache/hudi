@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieInternalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -82,7 +83,7 @@ public class SparkInsertOverwriteCommitActionExecutor<T>
   protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata) {
     if (writeMetadata.getWriteStatuses().isEmpty()) {
       String staticOverwritePartition = config.getStringOrDefault(HoodieInternalConfig.STATIC_OVERWRITE_PARTITION_PATHS);
-      if (staticOverwritePartition == null || staticOverwritePartition.isEmpty()) {
+      if (StringUtils.isNullOrEmpty(staticOverwritePartition)) {
         return Collections.emptyMap();
       } else {
         return Collections.singletonMap(staticOverwritePartition, getAllExistingFileIds(staticOverwritePartition));
