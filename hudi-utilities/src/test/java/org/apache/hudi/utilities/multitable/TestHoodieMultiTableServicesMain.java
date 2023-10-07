@@ -176,6 +176,7 @@ class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implement
     cfg.autoDiscovery = false;
     cfg.batch = true;
     HoodieTableMetaClient metaClient1 = getMetaClient("table1");
+    cfg.configs.add(String.format("%s=%s", TABLES_SKIP_WRONG_PATH, "true"));
     cfg.configs.add(String.format("%s=%s", TABLES_TO_BE_SERVED_PROP, metaClient1.getBasePathV2() + ",file:///fakepath"));
     HoodieMultiTableServicesMain main = new HoodieMultiTableServicesMain(jsc, cfg);
     try {

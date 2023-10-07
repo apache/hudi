@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.TableNotFoundException;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -81,6 +82,12 @@ public class MultiTableServiceUtils {
           }).collect(Collectors.toList());
     } else {
       tablePaths = Arrays.asList(tablesArray);
+      tablePaths.stream()
+          .filter(tablePath -> !isHoodieTable(new Path(tablePath), conf.get()))
+          .findFirst()
+          .ifPresent(tablePath -> {
+            throw new TableNotFoundException("Table not found: " + tablePath);
+          });
     }
     return tablePaths;
   }
