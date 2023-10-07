@@ -1559,10 +1559,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   private void testParquetDFSSource(boolean useSchemaProvider, List<String> transformerClassNames) throws Exception {
-    testParquetDFSSource(useSchemaProvider, transformerClassNames, false);
+    testParquetDFSSource(useSchemaProvider, transformerClassNames, false, WriteOperationType.INSERT);
   }
 
-  private void testParquetDFSSource(boolean useSchemaProvider, List<String> transformerClassNames, boolean testEmptyBatch) throws Exception {
+  private void testParquetDFSSource(boolean useSchemaProvider, List<String> transformerClassNames, boolean testEmptyBatch, WriteOperationType writeType) throws Exception {
     PARQUET_SOURCE_ROOT = basePath + "/parquetFilesDfs" + testNum;
     int parquetRecordsCount = 10;
     boolean hasTransformer = transformerClassNames != null && !transformerClassNames.isEmpty();
@@ -1572,7 +1572,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     String tableBasePath = basePath + "/test_parquet_table" + testNum;
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
-        TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, testEmptyBatch ? TestParquetDFSSourceEmptyBatch.class.getName()
+        TestHelpers.makeConfig(tableBasePath, writeType, testEmptyBatch ? TestParquetDFSSourceEmptyBatch.class.getName()
                 : ParquetDFSSource.class.getName(),
             transformerClassNames, PROPS_FILENAME_TEST_PARQUET, false,
             useSchemaProvider, 100000, false, null, null, "timestamp", null), jsc);
@@ -1883,7 +1883,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @Test
   public void testParquetDFSSourceForEmptyBatch() throws Exception {
-    testParquetDFSSource(false, null, true);
+    testParquetDFSSource(false, null, true, WriteOperationType.INSERT);
   }
 
   @Test
@@ -2251,6 +2251,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testDeltaStreamerWithSpecifiedOperation(basePath + "/insert_overwrite_table", WriteOperationType.INSERT_OVERWRITE_TABLE, recordType);
   }
 
+  @ParameterizedTest
+  @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
+  public void testBulkInsert(HoodieRecordType recordType) throws Exception {
+    testDeltaStreamerWithSpecifiedOperation(basePath + "/bulk_insert", WriteOperationType.BULK_INSERT, recordType);
+  }
+
   @Disabled("Local run passing; flaky in CI environment.")
   @Test
   public void testDeletePartitions() throws Exception {
@@ -2336,8 +2342,13 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     cfg.sourceLimit = 1000;
     new HoodieDeltaStreamer(cfg, jsc).sync();
-    assertRecordCount(950, tableBasePath, sqlContext);
-    assertDistanceCount(950, tableBasePath, sqlContext);
+    if (operationType == WriteOperationType.BULK_INSERT) {
+      assertRecordCount(1950, tableBasePath, sqlContext);
+      assertDistanceCount(1950, tableBasePath, sqlContext);
+    } else {
+      assertRecordCount(950, tableBasePath, sqlContext);
+      assertDistanceCount(950, tableBasePath, sqlContext);
+    }
     TestHelpers.assertCommitMetadata("00001", tableBasePath, fs, 2);
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
@@ -2527,6 +2538,44 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     final HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
     Stream<HoodieBaseFile> baseFileStream = partition.isPresent() ? fsView.getLatestBaseFiles(partition.get()) : fsView.getLatestBaseFiles();
     return baseFileStream.map(HoodieBaseFile::getFileId).collect(Collectors.toSet());
+  }
+
+  private void testBulkInsertOptRowWriterParquetDFSSource(boolean useSchemaProvider, List<String> transformerClassNames, boolean testEmptyBatch) throws Exception {
+    testParquetDFSSource(useSchemaProvider, transformerClassNames, testEmptyBatch, WriteOperationType.BULK_INSERT);
+  }
+
+  private void testBulkInsertOptRowWriterParquetDFSSource(boolean useSchemaProvider, List<String> transformerClassNames) throws Exception {
+    testBulkInsertOptRowWriterParquetDFSSource(useSchemaProvider, transformerClassNames, false);
+  }
+
+  @Test
+  public void testBulkInsertOptBasic() throws Exception {
+    testBulkInsertOptRowWriterParquetDFSSource(true, Collections.singletonList(TripsWithDistanceTransformer.class.getName()), false);
+  }
+
+  @Test
+  public void testBulkInsertWithoutSchemaProviderAndNoTransformer() throws Exception {
+    testBulkInsertOptRowWriterParquetDFSSource(false, null);
+  }
+
+  @Test
+  public void testBulkInsertForEmptyBatch() throws Exception {
+    testBulkInsertOptRowWriterParquetDFSSource(false, null, true);
+  }
+
+  @Test
+  public void testBulkInsertWithoutSchemaProviderAndTransformer() throws Exception {
+    testBulkInsertOptRowWriterParquetDFSSource(false, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
+  }
+
+  @Test
+  public void testBulkInsertWithSourceSchemaFileAndNoTransformer() throws Exception {
+    testBulkInsertOptRowWriterParquetDFSSource(true, null);
+  }
+
+  @Test
+  public void testBulkInsertWithSchemaFilesAndTransformer() throws Exception {
+    testBulkInsertOptRowWriterParquetDFSSource(true, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
   }
 
   class TestStreamSync extends DeltaSync {

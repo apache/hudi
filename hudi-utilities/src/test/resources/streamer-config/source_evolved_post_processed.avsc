@@ -94,7 +94,7 @@
         "namespace": "triprec.height",
         "size": 5,
         "logicalType": "decimal",
-        "precision": 10,
+        "precision": 12,
         "scale": 6
       }
     },

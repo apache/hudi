@@ -130,7 +130,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       + "{\"name\": \"nation\", \"type\": \"bytes\"},"
       + "{\"name\":\"current_date\",\"type\": {\"type\": \"int\", \"logicalType\": \"date\"}},"
       + "{\"name\":\"current_ts\",\"type\": {\"type\": \"long\"}},"
-      + "{\"name\":\"height\",\"type\":{\"type\":\"fixed\",\"name\":\"abc\",\"size\":5,\"logicalType\":\"decimal\",\"precision\":10,\"scale\":6}},";
+      + "{\"name\":\"height\",\"type\":{\"type\":\"fixed\",\"name\":\"abc\",\"size\":5,\"logicalType\":\"decimal\",\"precision\":12,\"scale\":6}},";
 
   public static final String TRIP_EXAMPLE_SCHEMA =
       TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA + TRIP_SCHEMA_SUFFIX;
@@ -148,7 +148,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false}]}";
 
   public static final String NULL_SCHEMA = Schema.create(Schema.Type.NULL).toString();
-  public static final String TRIP_HIVE_COLUMN_TYPES = "bigint,string,string,string,string,string,double,double,double,double,int,bigint,float,binary,int,bigint,decimal(10,6),"
+  public static final String TRIP_HIVE_COLUMN_TYPES = "bigint,string,string,string,string,string,double,double,double,double,int,bigint,float,binary,int,bigint,decimal(12,6),"
       + "map<string,string>,struct<amount:double,currency:string>,array<struct<amount:double,currency:string>>,boolean";
 
 
@@ -397,7 +397,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     BigDecimal bigDecimal = new BigDecimal(String.format(Locale.ENGLISH, "%5f", rand.nextFloat()));
     Schema decimalSchema = AVRO_SCHEMA.getField("height").schema();
     Conversions.DecimalConversion decimalConversions = new Conversions.DecimalConversion();
-    GenericFixed genericFixed = decimalConversions.toFixed(bigDecimal, decimalSchema, LogicalTypes.decimal(10, 6));
+    GenericFixed genericFixed = decimalConversions.toFixed(bigDecimal, decimalSchema, LogicalTypes.decimal(12, 6));
     rec.put("height", genericFixed);
   }
 

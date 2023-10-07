@@ -47,6 +47,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.util.SparkKeyGenUtils;
 import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.config.SchemaProviderPostProcessorConfig;
@@ -108,8 +109,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.DROP_PARTITION_COLUMNS;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
@@ -134,8 +138,8 @@ public class UtilHelpers {
   }
 
   public static Source createSource(String sourceClass, TypedProperties cfg, JavaSparkContext jssc,
-      SparkSession sparkSession, SchemaProvider schemaProvider,
-      HoodieIngestionMetrics metrics) throws IOException {
+                                    SparkSession sparkSession, SchemaProvider schemaProvider,
+                                    HoodieIngestionMetrics metrics) throws IOException {
     try {
       try {
         return (Source) ReflectionUtils.loadClass(sourceClass,
@@ -222,7 +226,7 @@ public class UtilHelpers {
   public static InitialCheckPointProvider createInitialCheckpointProvider(
       String className, TypedProperties props) throws IOException {
     try {
-      return (InitialCheckPointProvider) ReflectionUtils.loadClass(className, new Class<?>[]{TypedProperties.class}, props);
+      return (InitialCheckPointProvider) ReflectionUtils.loadClass(className, new Class<?>[] {TypedProperties.class}, props);
     } catch (Throwable e) {
       throw new IOException("Could not load initial checkpoint provider class " + className, e);
     }
@@ -281,7 +285,7 @@ public class UtilHelpers {
   /**
    * Parse Schema from file.
    *
-   * @param fs File System
+   * @param fs         File System
    * @param schemaFile Schema File
    */
   public static String parseSchema(FileSystem fs, String schemaFile) throws Exception {
@@ -369,13 +373,13 @@ public class UtilHelpers {
   /**
    * Build Hoodie write client.
    *
-   * @param jsc Java Spark Context
-   * @param basePath Base Path
-   * @param schemaStr Schema
+   * @param jsc         Java Spark Context
+   * @param basePath    Base Path
+   * @param schemaStr   Schema
    * @param parallelism Parallelism
    */
   public static SparkRDDWriteClient<HoodieRecordPayload> createHoodieClient(JavaSparkContext jsc, String basePath, String schemaStr,
-      int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) {
+                                                                            int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) {
     HoodieCompactionConfig compactionConfig = compactionStrategyClass
         .map(strategy -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false)
             .withCompactionStrategy(ReflectionUtils.loadClass(strategy)).build())
@@ -525,7 +529,7 @@ public class UtilHelpers {
   }
 
   public static SchemaProvider wrapSchemaProviderWithPostProcessor(SchemaProvider provider,
-                                                                                    TypedProperties cfg, JavaSparkContext jssc, List<String> transformerClassNames) {
+                                                                   TypedProperties cfg, JavaSparkContext jssc, List<String> transformerClassNames) {
 
     if (provider == null) {
       return null;
@@ -618,5 +622,24 @@ public class UtilHelpers {
     TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
     Schema schema = schemaResolver.getTableAvroSchema(false);
     return schema.toString();
+  }
+
+  /**
+   * Get the partition columns as a set of strings.
+   *
+   * @param props TypedProperties
+   * @return Set of partition columns.
+   */
+  public static Set<String> getPartitionColumns(TypedProperties props) {
+    String partitionColumns = SparkKeyGenUtils.getPartitionColumns(props);
+    return Arrays.stream(partitionColumns.split(",")).collect(Collectors.toSet());
+  }
+
+  /**
+   * Set based on hoodie.datasource.write.drop.partition.columns config.
+   * When set to true, will not write the partition columns into the table.
+   */
+  public static Boolean isDropPartitionColumns(TypedProperties props) {
+    return props.getBoolean(DROP_PARTITION_COLUMNS.key(), DROP_PARTITION_COLUMNS.defaultValue());
   }
 }
