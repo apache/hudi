@@ -1410,4 +1410,56 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       assertResult(tableSchemaAfterCreate1.get)(tableSchemaAfterCreate2.get)
     }
   }
+
+  test("Test Create Hoodie Table with base file format") {
+    // Parquet
+    Seq("cow", "mor").foreach { tableType =>
+      withTable(generateTableName) { tableName =>
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | tblproperties (
+             |  primaryKey ='id',
+             |  type = '$tableType',
+             |  preCombineField = 'ts',
+             |  hoodie.table.base.file.format = 'PARQUET'
+             | )
+       """.stripMargin)
+        val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
+        assertResult(table.storage.serde.get)("org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe")
+        assertResult(table.storage.inputFormat.get)(
+          if (tableType.equals("mor")) "org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat"
+          else "org.apache.hudi.hadoop.HoodieParquetInputFormat")
+        assertResult(table.storage.outputFormat.get)("org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat")
+      }
+    }
+
+    // Orc
+    withTable(generateTableName) { tableName =>
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | tblproperties (
+           |  primaryKey ='id',
+           |  type = 'cow',
+           |  preCombineField = 'ts',
+           |  hoodie.table.base.file.format = 'ORC'
+           | )
+       """.stripMargin)
+      val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
+      assertResult(table.storage.serde.get)("org.apache.hadoop.hive.ql.io.orc.OrcSerde")
+      assertResult(table.storage.inputFormat.get)("org.apache.hadoop.hive.ql.io.orc.OrcInputFormat")
+      assertResult(table.storage.outputFormat.get)("org.apache.hadoop.hive.ql.io.orc.OrcOutputFormat")
+    }
+  }
 }
