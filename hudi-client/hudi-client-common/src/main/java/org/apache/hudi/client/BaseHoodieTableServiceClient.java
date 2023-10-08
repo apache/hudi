@@ -172,8 +172,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    * Performs a compaction operation on a table, serially before or after an insert/upsert action.
    * Scheduling and execution is done inline.
    */
-  protected Option<String> inlineCompaction(Option<Map<String, String>> extraMetadata) {
-    Option<String> compactionInstantTimeOpt = inlineScheduleCompaction(extraMetadata);
+  protected Option<String> inlineCompaction(Option<Map<String, String>> extraMetadata, HoodieTableMetaClient metaClient) {
+    Option<String> compactionInstantTimeOpt = inlineScheduleCompaction(extraMetadata, metaClient);
     compactionInstantTimeOpt.ifPresent(compactInstantTime -> {
       // inline compaction should auto commit as the user is never given control
       compact(compactInstantTime, true);
@@ -183,10 +183,10 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
   private void inlineCompaction(HoodieTable table, Option<Map<String, String>> extraMetadata) {
     if (shouldDelegateToTableServiceManager(config, ActionType.compaction)) {
-      scheduleCompaction(extraMetadata);
+      scheduleCompaction(extraMetadata, table.getMetaClient());
     } else {
       runAnyPendingCompactions(table);
-      inlineCompaction(extraMetadata);
+      inlineCompaction(extraMetadata, table.getMetaClient());
     }
   }
 
@@ -235,8 +235,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   /**
    * Performs a log compaction operation on a table, serially before or after an insert/upsert action.
    */
-  protected Option<String> inlineLogCompact(Option<Map<String, String>> extraMetadata) {
-    Option<String> logCompactionInstantTimeOpt = scheduleLogCompaction(extraMetadata);
+  protected Option<String> inlineLogCompact(Option<Map<String, String>> extraMetadata, HoodieTableMetaClient metaClient) {
+    Option<String> logCompactionInstantTimeOpt = scheduleLogCompaction(extraMetadata, metaClient);
     logCompactionInstantTimeOpt.ifPresent(logCompactInstantTime -> {
       // inline log compaction should auto commit as the user is never given control
       logCompact(logCompactInstantTime, true);
@@ -266,8 +266,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    * @param extraMetadata extra metadata to be used.
    * @return compaction instant if scheduled.
    */
-  protected Option<String> inlineScheduleCompaction(Option<Map<String, String>> extraMetadata) {
-    return scheduleCompaction(extraMetadata);
+  protected Option<String> inlineScheduleCompaction(Option<Map<String, String>> extraMetadata, HoodieTableMetaClient metaClient) {
+    return scheduleCompaction(extraMetadata, metaClient);
   }
 
   /**
@@ -275,8 +275,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    *
    * @param extraMetadata Extra Metadata to be stored
    */
-  public Option<String> scheduleCompaction(Option<Map<String, String>> extraMetadata) throws HoodieIOException {
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+  public Option<String> scheduleCompaction(Option<Map<String, String>> extraMetadata, HoodieTableMetaClient metaClient) throws HoodieIOException {
+    String instantTime = HoodieActiveTimeline.createNewInstantTimeInTimeZone(metaClient.getTableConfig().getTimelineTimezone());
     return scheduleCompactionAtInstant(instantTime, extraMetadata) ? Option.of(instantTime) : Option.empty();
   }
 
@@ -349,8 +349,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    *
    * @param extraMetadata Extra Metadata to be stored
    */
-  public Option<String> scheduleLogCompaction(Option<Map<String, String>> extraMetadata) throws HoodieIOException {
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+  public Option<String> scheduleLogCompaction(Option<Map<String, String>> extraMetadata, HoodieTableMetaClient metaClient) throws HoodieIOException {
+    String instantTime = HoodieActiveTimeline.createNewInstantTimeInTimeZone(metaClient.getTableConfig().getTimelineTimezone());
     return scheduleLogCompactionAtInstant(instantTime, extraMetadata) ? Option.of(instantTime) : Option.empty();
   }
 
@@ -419,8 +419,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    *
    * @param extraMetadata Extra Metadata to be stored
    */
-  public Option<String> scheduleClustering(Option<Map<String, String>> extraMetadata) throws HoodieIOException {
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+  public Option<String> scheduleClustering(Option<Map<String, String>> extraMetadata, HoodieTableMetaClient metaClient) throws HoodieIOException {
+    String instantTime = HoodieActiveTimeline.createNewInstantTimeInTimeZone(metaClient.getTableConfig().getTimelineTimezone());
     return scheduleClusteringAtInstant(instantTime, extraMetadata) ? Option.of(instantTime) : Option.empty();
   }
 
@@ -542,14 +542,14 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         && table.getActiveTimeline().getWriteTimeline().filterPendingCompactionTimeline().empty()) {
       // proceed only if there are no pending compactions
       metadata.addMetadata(HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT.key(), "true");
-      inlineScheduleCompaction(extraMetadata);
+      inlineScheduleCompaction(extraMetadata, table.getMetaClient());
     }
 
     // Do an inline log compaction if enabled
     if (config.inlineLogCompactionEnabled()) {
       runAnyPendingLogCompactions(table);
       metadata.addMetadata(HoodieCompactionConfig.INLINE_LOG_COMPACT.key(), "true");
-      inlineLogCompact(extraMetadata);
+      inlineLogCompact(extraMetadata, table.getMetaClient());
     } else {
       metadata.addMetadata(HoodieCompactionConfig.INLINE_LOG_COMPACT.key(), "false");
     }
@@ -567,7 +567,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         && table.getActiveTimeline().filterPendingReplaceTimeline().empty()) {
       // proceed only if there are no pending clustering
       metadata.addMetadata(HoodieClusteringConfig.SCHEDULE_INLINE_CLUSTERING.key(), "true");
-      inlineScheduleClustering(extraMetadata);
+      inlineScheduleClustering(extraMetadata, table.getMetaClient());
     }
   }
 
@@ -647,8 +647,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    * Executes a clustering plan on a table, serially before or after an insert/upsert action.
    * Schedules and executes clustering inline.
    */
-  protected Option<String> inlineClustering(Option<Map<String, String>> extraMetadata) {
-    Option<String> clusteringInstantOpt = inlineScheduleClustering(extraMetadata);
+  protected Option<String> inlineClustering(Option<Map<String, String>> extraMetadata, HoodieTableMetaClient metaClient) {
+    Option<String> clusteringInstantOpt = inlineScheduleClustering(extraMetadata, metaClient);
     clusteringInstantOpt.ifPresent(clusteringInstant -> {
       // inline cluster should auto commit as the user is never given control
       cluster(clusteringInstant, true);
@@ -658,10 +658,10 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
   private void inlineClustering(HoodieTable table, Option<Map<String, String>> extraMetadata) {
     if (shouldDelegateToTableServiceManager(config, ActionType.replacecommit)) {
-      scheduleClustering(extraMetadata);
+      scheduleClustering(extraMetadata, table.getMetaClient());
     } else {
       runAnyPendingClustering(table);
-      inlineClustering(extraMetadata);
+      inlineClustering(extraMetadata, table.getMetaClient());
     }
   }
 
@@ -671,8 +671,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    * @param extraMetadata extra metadata to use.
    * @return clustering instant if scheduled.
    */
-  protected Option<String> inlineScheduleClustering(Option<Map<String, String>> extraMetadata) {
-    return scheduleClustering(extraMetadata);
+  protected Option<String> inlineScheduleClustering(Option<Map<String, String>> extraMetadata, HoodieTableMetaClient metaClient) {
+    return scheduleClustering(extraMetadata, metaClient);
   }
 
   protected void runAnyPendingClustering(HoodieTable table) {
@@ -1078,7 +1078,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     if (instant.isPresent() && HoodieTimeline.compareTimestamps(instant.get(), HoodieTimeline.LESSER_THAN_OR_EQUALS,
         HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS)) {
       LOG.info("Found pending bootstrap instants. Rolling them back");
-      table.rollbackBootstrap(context, HoodieActiveTimeline.createNewInstantTime());
+      table.rollbackBootstrap(context, HoodieActiveTimeline.createNewInstantTimeInTimeZone(table.getMetaClient().getTableConfig().getTimelineTimezone()));
       LOG.info("Finished rolling back pending bootstrap");
     }
   }

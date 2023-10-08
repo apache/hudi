@@ -822,7 +822,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     if (failedRestore.isPresent() && savepointToRestoreTimestamp.equals(RestoreUtils.getSavepointToRestoreTimestamp(table, failedRestore.get()))) {
       return Pair.of(failedRestore.get().getTimestamp(), Option.of(RestoreUtils.getRestorePlan(table.getMetaClient(), failedRestore.get())));
     }
-    final String restoreInstantTimestamp = HoodieActiveTimeline.createNewInstantTime();
+    final String restoreInstantTimestamp = HoodieActiveTimeline.createNewInstantTimeInTimeZone(table.getMetaClient().getTableConfig().getTimelineTimezone());
     return Pair.of(restoreInstantTimestamp, table.scheduleRestore(context, restoreInstantTimestamp, savepointToRestoreTimestamp));
   }
 
@@ -911,7 +911,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
         HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites());
 
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    String instantTime = HoodieActiveTimeline.createNewInstantTimeInTimeZone(metaClient.getTableConfig().getTimelineTimezone());
     startCommit(instantTime, actionType, metaClient);
     return instantTime;
   }

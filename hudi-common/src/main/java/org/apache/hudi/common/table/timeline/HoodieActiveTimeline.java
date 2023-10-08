@@ -20,6 +20,7 @@ package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -135,9 +136,18 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   /**
    * Returns next instant time in the correct format.
-   * Ensures each instant time is atleast 1 second apart since we create instant times at second granularity
+   * Ensures each instant time is at least 1 second apart since we create instant times at second granularity
    */
   public static String createNewInstantTime() {
+    return HoodieInstantTimeGenerator.createNewInstantTime(0);
+  }
+
+  /**
+   * Returns next instant time in the correct format in the timezone specified.
+   * Ensures each instant time is at least 1 second apart since we create instant times at second granularity
+   */
+  public static String createNewInstantTimeInTimeZone(HoodieTimelineTimeZone timelineTimeZone) {
+    HoodieInstantTimeGenerator.setCommitTimeZone(timelineTimeZone);
     return HoodieInstantTimeGenerator.createNewInstantTime(0);
   }
 
