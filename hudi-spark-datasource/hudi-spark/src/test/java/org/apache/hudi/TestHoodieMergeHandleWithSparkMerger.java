@@ -66,6 +66,7 @@ import static org.apache.hudi.common.config.HoodieReaderConfig.FILE_GROUP_READER
 import static org.apache.hudi.common.config.HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT;
 import static org.apache.hudi.common.model.HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY;
 import static org.apache.hudi.config.HoodieWriteConfig.RECORD_MERGER_IMPLS;
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_RECORD_POSITIONS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -169,6 +170,9 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
     extraProperties.setProperty(
         FILE_GROUP_READER_ENABLED.key(),
         "true");
+    extraProperties.setProperty(
+        WRITE_RECORD_POSITIONS.key(),
+        "true");
 
     return getConfigBuilder(true)
         .withPath(basePath())
@@ -237,6 +241,9 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
         "true");
     properties.put(
         DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT().key(),
+        "true");
+    properties.put(
+        WRITE_RECORD_POSITIONS.key(),
         "true");
     Dataset<Row> rows = spark()
         .read()

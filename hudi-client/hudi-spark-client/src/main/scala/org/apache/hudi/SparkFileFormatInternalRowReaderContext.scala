@@ -50,8 +50,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: PartitionedFile =>
                                      dataSchema: Schema,
                                      requiredSchema: Schema,
                                      conf: Configuration): ClosableIterator[InternalRow] = {
-    val fileInfo = sparkAdapter.getSparkPartitionedFileUtils.createPartitionedFile(
-      partitionValues, filePath, start, length)
-    new CloseableInternalRowIterator(baseFileReader(fileInfo))
+    val fileInfo = sparkAdapter.getSparkPartitionedFileUtils.createPartitionedFile(partitionValues, filePath, start, length)
+    new CloseableInternalRowIterator(baseFileReader.apply(fileInfo))
   }
 }

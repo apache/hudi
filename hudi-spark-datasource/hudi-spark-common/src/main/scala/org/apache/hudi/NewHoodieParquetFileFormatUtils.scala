@@ -36,7 +36,7 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.{HoodieSchemaException, InternalSchema}
 import org.apache.spark.sql.catalyst.analysis.Resolver
-import org.apache.spark.sql.execution.datasources.parquet.{FileGroupReaderBasedParquetFileFormat, NewHoodieParquetFileFormat}
+import org.apache.spark.sql.execution.datasources.parquet.{HoodieFileGroupReaderBasedParquetFileFormat, NewHoodieParquetFileFormat}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, HadoopFsRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.sources.BaseRelation
@@ -150,7 +150,7 @@ class NewHoodieParquetFileFormatUtils(val sqlContext: SQLContext,
       sqlContext.getConf(config.key(), defaultValueOption.getOrElse(config.defaultValue())))
   }
 
-  private def checkIfFileGroupReaderEnabled(config: ConfigProperty[java.lang.Boolean],
+  private def checkIfAConfigurationEnabled(config: ConfigProperty[java.lang.Boolean],
                              defaultValueOption: Option[String] = Option.empty): Boolean = {
     optParams.getOrElse(config.key(),
       sqlContext.getConf(config.key(), defaultValueOption.getOrElse(String.valueOf(config.defaultValue())))).toBoolean
@@ -186,7 +186,8 @@ class NewHoodieParquetFileFormatUtils(val sqlContext: SQLContext,
     val recordMergerStrategy = getConfigValue(HoodieWriteConfig.RECORD_MERGER_STRATEGY,
       Option(metaClient.getTableConfig.getRecordMergerStrategy))
 
-    val fileGroupReaderEnabled = checkIfFileGroupReaderEnabled(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
+    val fileGroupReaderEnabled = checkIfAConfigurationEnabled(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
+    val shouldUseRecordPosition = checkIfAConfigurationEnabled(HoodieWriteConfig.WRITE_RECORD_POSITIONS)
 
     val tableState = // Subset of the state of table's configuration as of at the time of the query
       HoodieTableState(
@@ -207,9 +208,9 @@ class NewHoodieParquetFileFormatUtils(val sqlContext: SQLContext,
       Seq.empty
     }
     fileIndex.shouldEmbedFileSlices = true
-    val fileGroupReaderBasedFileFormat = new FileGroupReaderBasedParquetFileFormat(sparkSession.sparkContext.broadcast(tableState),
-      sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
-      metaClient.getTableConfig.getTableName, mergeType, mandatoryFields, isMOR, isBootstrap)
+    val fileGroupReaderBasedFileFormat = new HoodieFileGroupReaderBasedParquetFileFormat(
+      tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
+      metaClient.getTableConfig.getTableName, mergeType, mandatoryFields, isMOR, isBootstrap, shouldUseRecordPosition)
     val newHoodieParquetFileFormat = new NewHoodieParquetFileFormat(sparkSession.sparkContext.broadcast(tableState),
       sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
       metaClient.getTableConfig.getTableName, mergeType, mandatoryFields, isMOR, isBootstrap)
