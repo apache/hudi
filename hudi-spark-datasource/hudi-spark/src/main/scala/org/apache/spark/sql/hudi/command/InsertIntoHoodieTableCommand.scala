@@ -100,8 +100,8 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
         isOverWritePartition = true
       }
     }
-
-    val config = buildHoodieInsertConfig(catalogTable, sparkSession, isOverWritePartition, isOverWriteTable, partitionSpec, extraOptions)
+    val staticOverwritePartitionPathOpt = getStaticOverwritePartitionPath(catalogTable, partitionSpec, isOverWritePartition)
+    val config = buildHoodieInsertConfig(catalogTable, sparkSession, isOverWritePartition, isOverWriteTable, partitionSpec, extraOptions, staticOverwritePartitionPathOpt)
 
     val alignedQuery = alignQueryOutput(query, catalogTable, partitionSpec, sparkSession.sessionState.conf)
 
@@ -116,6 +116,22 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     }
 
     success
+  }
+
+  private def getStaticOverwritePartitionPath(hoodieCatalogTable: HoodieCatalogTable,
+                                              partitionsSpec: Map[String, Option[String]],
+                                              isOverWritePartition: Boolean): Option[String] = {
+    if (isOverWritePartition) {
+      val staticPartitionValues = filterStaticPartitionValues(partitionsSpec)
+      val isStaticOverwritePartition = staticPartitionValues.keys.size == hoodieCatalogTable.partitionFields.length
+      if (isStaticOverwritePartition) {
+        Option.apply(makePartitionPath(hoodieCatalogTable, staticPartitionValues))
+      } else {
+        Option.empty
+      }
+    } else {
+      Option.empty
+    }
   }
 
   /**
