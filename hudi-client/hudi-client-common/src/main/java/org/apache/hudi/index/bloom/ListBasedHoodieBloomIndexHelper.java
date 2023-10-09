@@ -64,8 +64,8 @@ public class ListBasedHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper 
 
     List<HoodieKeyLookupResult> keyLookupResults =
         CollectionUtils.toStream(
-                new HoodieBloomIndexCheckFunction<Pair<HoodieFileGroupId, String>>(hoodieTable, config, Pair::getLeft, Pair::getRight)
-                    .apply(fileComparisonPairList.iterator())
+            new HoodieBloomIndexCheckFunction<Pair<HoodieFileGroupId, String>>(hoodieTable, config, Pair::getLeft, Pair::getRight)
+                .apply(fileComparisonPairList.iterator())
             )
             .flatMap(Collection::stream)
             .filter(lr -> lr.getMatchingRecordKeysAndPositions().size() > 0)

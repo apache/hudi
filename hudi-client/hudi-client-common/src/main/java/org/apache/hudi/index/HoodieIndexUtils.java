@@ -282,9 +282,14 @@ public class HoodieIndexUtils {
     HoodieData<HoodieRecord<R>> untaggedUpdatingRecords = incomingRecordsAndLocations.filter(p -> p.getRight().isPresent()).map(Pair::getLeft)
         .distinctWithKey(HoodieRecord::getRecordKey, config.getGlobalIndexReconcileParallelism());
     // the tagging partitions and locations
+    // NOTE: The incoming records may only differ in record position, however, for the purpose of
+    //       merging in case of partition updates, it is safe to ignore the record positions.
     HoodieData<HoodieRecordGlobalLocation> globalLocations = incomingRecordsAndLocations
         .filter(p -> p.getRight().isPresent())
-        .map(p -> p.getRight().get())
+        .map(p -> new HoodieRecordGlobalLocation(
+            p.getRight().get().getPartitionPath(),
+            p.getRight().get().getInstantTime(),
+            p.getRight().get().getFileId()))
         .distinct(config.getGlobalIndexReconcileParallelism());
     // merged existing records with current locations being set
     HoodieData<HoodieRecord<R>> existingRecords = getExistingRecords(globalLocations, config, hoodieTable);
