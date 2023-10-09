@@ -1194,6 +1194,11 @@ object HoodieSparkSqlWriter {
       && !optParams.containsKey(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE.key)) {
       mergedParams.put(HoodieCompactionConfig.INLINE_COMPACT.key(), "true")
     }
+    // disallow drop partition columns when upsert MOR table
+    if (mergedParams.get(OPERATION.key).get == UPSERT_OPERATION_OPT_VAL && tableConfig.getTableType == MERGE_ON_READ) {
+      mergedParams.put(HoodieTableConfig.DROP_PARTITION_COLUMNS.key, "false")
+    }
+
     val params = mergedParams.toMap
     (params, HoodieWriterUtils.convertMapToHoodieConfig(params))
   }
