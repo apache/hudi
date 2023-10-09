@@ -46,6 +46,12 @@ public class HoodieInternalConfig extends HoodieConfig {
       .withDocumentation("For SQL operations, if enables bulk_insert operation, "
           + "this configure will take effect to decide overwrite whole table or partitions specified");
 
+  public static final ConfigProperty<String> STATIC_OVERWRITE_PARTITION_PATHS = ConfigProperty
+      .key("hoodie.static.overwrite.partition.paths")
+      .defaultValue("")
+      .markAdvanced()
+      .withDocumentation("Inner configure to pass static partition paths to executors for SQL operations.");
+
   /**
    * Returns if partition records are sorted or not.
    *
