@@ -187,7 +187,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     List<String> logFiles = operation.getDeltaFileNames().stream().map(
         p -> new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), operation.getPartitionPath()), p).toString())
         .collect(toList());
-    HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
+    try (HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(fs)
         .withBasePath(metaClient.getBasePath())
         .withLogFilePaths(logFiles)
@@ -207,19 +207,18 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         .withOptimizedLogBlocksScan(executionHelper.enableOptimizedLogBlockScan(config))
         .withRecordMerger(config.getRecordMerger())
         .withInstantRange(instantRange)
-        .build();
+        .build()) {
 
-    Option<HoodieBaseFile> oldDataFileOpt =
-        operation.getBaseFile(metaClient.getBasePath(), operation.getPartitionPath());
+      Option<HoodieBaseFile> oldDataFileOpt =
+              operation.getBaseFile(metaClient.getBasePath(), operation.getPartitionPath());
 
-    // Considering following scenario: if all log blocks in this fileSlice is rollback, it returns an empty scanner.
-    // But in this case, we need to give it a base file. Otherwise, it will lose base file in following fileSlice.
-    if (!scanner.iterator().hasNext()) {
-      if (!oldDataFileOpt.isPresent()) {
-        scanner.close();
-        return new ArrayList<>();
-      } else {
-        // TODO: we may directly rename original parquet file if there is not evolution/devolution of schema
+      // Considering following scenario: if all log blocks in this fileSlice is rollback, it returns an empty scanner.
+      // But in this case, we need to give it a base file. Otherwise, it will lose base file in following fileSlice.
+      if (!scanner.iterator().hasNext()) {
+        if (!oldDataFileOpt.isPresent()) {
+          return new ArrayList<>();
+        } else {
+          // TODO: we may directly rename original parquet file if there is not evolution/devolution of schema
         /*
         TaskContextSupplier taskContextSupplier = hoodieCopyOnWriteTable.getTaskContextSupplier();
         String newFileName = FSUtils.makeDataFileName(instantTime,
@@ -229,28 +228,28 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         Path newFilePath = new Path(oldFilePath.getParent(), newFileName);
         FileUtil.copy(fs,oldFilePath, fs, newFilePath, false, fs.getConf());
         */
+        }
       }
-    }
 
-    // Compacting is very similar to applying updates to existing file
-    Iterator<List<WriteStatus>> result;
-    result = executionHelper.writeFileAndGetWriteStats(compactionHandler, operation, instantTime, scanner, oldDataFileOpt);
-    scanner.close();
-    Iterable<List<WriteStatus>> resultIterable = () -> result;
-    return StreamSupport.stream(resultIterable.spliterator(), false).flatMap(Collection::stream).peek(s -> {
-      s.getStat().setTotalUpdatedRecordsCompacted(scanner.getNumMergedRecordsInLog());
-      s.getStat().setTotalLogFilesCompacted(scanner.getTotalLogFiles());
-      s.getStat().setTotalLogRecords(scanner.getTotalLogRecords());
-      s.getStat().setPartitionPath(operation.getPartitionPath());
-      s.getStat()
-          .setTotalLogSizeCompacted(operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
-      s.getStat().setTotalLogBlocks(scanner.getTotalLogBlocks());
-      s.getStat().setTotalCorruptLogBlock(scanner.getTotalCorruptBlocks());
-      s.getStat().setTotalRollbackBlocks(scanner.getTotalRollbacks());
-      RuntimeStats runtimeStats = new RuntimeStats();
-      runtimeStats.setTotalScanTime(scanner.getTotalTimeTakenToReadAndMergeBlocks());
-      s.getStat().setRuntimeStats(runtimeStats);
-    }).collect(toList());
+      // Compacting is very similar to applying updates to existing file
+      Iterator<List<WriteStatus>> result;
+      result = executionHelper.writeFileAndGetWriteStats(compactionHandler, operation, instantTime, scanner, oldDataFileOpt);
+      Iterable<List<WriteStatus>> resultIterable = () -> result;
+      return StreamSupport.stream(resultIterable.spliterator(), false).flatMap(Collection::stream).peek(s -> {
+        s.getStat().setTotalUpdatedRecordsCompacted(scanner.getNumMergedRecordsInLog());
+        s.getStat().setTotalLogFilesCompacted(scanner.getTotalLogFiles());
+        s.getStat().setTotalLogRecords(scanner.getTotalLogRecords());
+        s.getStat().setPartitionPath(operation.getPartitionPath());
+        s.getStat()
+                .setTotalLogSizeCompacted(operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
+        s.getStat().setTotalLogBlocks(scanner.getTotalLogBlocks());
+        s.getStat().setTotalCorruptLogBlock(scanner.getTotalCorruptBlocks());
+        s.getStat().setTotalRollbackBlocks(scanner.getTotalRollbacks());
+        RuntimeStats runtimeStats = new RuntimeStats();
+        runtimeStats.setTotalScanTime(scanner.getTotalTimeTakenToReadAndMergeBlocks());
+        s.getStat().setRuntimeStats(runtimeStats);
+      }).collect(toList());
+    }
   }
 
   public String getMaxInstantTime(HoodieTableMetaClient metaClient) {
