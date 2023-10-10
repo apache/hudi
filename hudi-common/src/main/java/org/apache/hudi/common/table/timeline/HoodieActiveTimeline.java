@@ -173,7 +173,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
     this.details = (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails;
-    
+
     LOG.info("Loaded instants upto : " + lastInstant());
   }
 
@@ -206,12 +206,11 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   /**
    * Create a complete instant and save to storage with a completion time.
-   * @param shouldLock whether the lock should be enabled.
    * @param instant the complete instant.
    */
-  public void createCompleteInstant(boolean shouldLock, HoodieInstant instant) {
+  public void createCompleteInstant(HoodieInstant instant) {
     LOG.info("Creating a new complete instant " + instant);
-    createCompleteFileInMetaPath(shouldLock, instant, Option.empty());
+    createCompleteFileInMetaPath(true, instant, Option.empty());
   }
 
   /**

@@ -82,9 +82,9 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     HoodieInstant commit1 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "1");
     HoodieInstant commit2 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "2");
     HoodieInstant commit3 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "3");
-    timeline.createCompleteInstant(true, commit1);
-    timeline.createCompleteInstant(true, commit2);
-    timeline.createCompleteInstant(true, commit3);
+    timeline.createCompleteInstant(commit1);
+    timeline.createCompleteInstant(commit2);
+    timeline.createCompleteInstant(commit3);
     timeline = timeline.reload();
 
     // previous read iteration read till instant time "1", next read iteration should return ["2", "3"]
@@ -126,8 +126,8 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     HoodieInstant commit1 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "1");
     HoodieInstant commit2 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "2");
     HoodieInstant commit3 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "3");
-    timeline.createCompleteInstant(true, commit1);
-    timeline.createCompleteInstant(true, commit2);
+    timeline.createCompleteInstant(commit1);
+    timeline.createCompleteInstant(commit2);
     timeline.createNewInstant(commit3);
     commit3 = timeline.transitionReplaceRequestedToInflight(commit3, Option.empty());
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(

@@ -188,11 +188,7 @@ public class FSUtils {
   }
 
   public static String getCommitFromCommitFile(String commitFileName) {
-    try {
-      return HoodieInstant.extractTimestamp(commitFileName);
-    } catch (IllegalArgumentException e) {
-      return "";
-    }
+    return HoodieInstant.extractTimestamp(commitFileName);
   }
 
   public static String getCommitTime(String fullFileName) {

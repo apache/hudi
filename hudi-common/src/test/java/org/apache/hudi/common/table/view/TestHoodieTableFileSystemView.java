@@ -451,7 +451,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertEquals(deltaFile1, logFiles.get(2).getFileName(), "Log File Order check");
 
     // schedules a compaction
-    String compactionInstantTime1 = HoodieActiveTimeline.createNewInstantTime(); // 60 -> 80
+    String compactionInstantTime1 = metaClient.createNewInstantTime(); // 60 -> 80
     String compactionFile1 = FSUtils.makeBaseFileName(compactionInstantTime1, TEST_WRITE_TOKEN, fileId);
     List<Pair<String, FileSlice>> partitionFileSlicesPairs = new ArrayList<>();
     partitionFileSlicesPairs.add(Pair.of(partitionPath, fileSlices.get(0)));
@@ -885,7 +885,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
       commitTimeline.createNewInstant(compactionInstant);
     }
 
-    commitTimeline.saveAsComplete(false, compactionInstant, Option.empty());
+    commitTimeline.saveAsComplete(compactionInstant, Option.empty());
     refreshFsView();
     // populate the cache
     roView.getAllBaseFiles(partitionPath);
@@ -1567,12 +1567,12 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
   private void saveAsComplete(HoodieActiveTimeline timeline, HoodieInstant inflight, Option<byte[]> data) {
     if (inflight.getAction().equals(HoodieTimeline.COMPACTION_ACTION)) {
-      timeline.transitionCompactionInflightToComplete(false, inflight, data);
+      timeline.transitionCompactionInflightToComplete(true, inflight, data);
     } else {
       HoodieInstant requested = new HoodieInstant(State.REQUESTED, inflight.getAction(), inflight.getTimestamp());
       timeline.createNewInstant(requested);
       timeline.transitionRequestedToInflight(requested, Option.empty());
-      timeline.saveAsComplete(false, inflight, data);
+      timeline.saveAsComplete(inflight, data);
     }
   }
 

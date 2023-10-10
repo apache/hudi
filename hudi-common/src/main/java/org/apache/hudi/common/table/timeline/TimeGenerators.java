@@ -26,10 +26,10 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import org.apache.hadoop.conf.Configuration;
 
-import static org.apache.hudi.common.config.HoodieTimeGeneratorConfig.BASE_PATH;
+import static org.apache.hudi.common.config.HoodieCommonConfig.BASE_PATH;
 
 /**
- * Holds all different {@link TimeGenerator} implementations, use {@link HoodieTimeGeneratorConfig#BASE_PATH}
+ * Holds all different {@link TimeGenerator} implementations, use {@link HoodieCommonConfig.BASE_PATH}
  * to cache the existing instances.
  */
 public class TimeGenerators {
@@ -39,13 +39,12 @@ public class TimeGenerators {
 
   public static TimeGenerator getTimeGenerator(HoodieTimeGeneratorConfig timeGeneratorConfig,
                                                Configuration hadoopConf) {
-    ValidationUtils.checkState(timeGeneratorConfig.contains(BASE_PATH), "Option [" + BASE_PATH + "] is required");
-    ValidationUtils.checkArgument(timeGeneratorConfig != null, "Time generator config is required");
+    ValidationUtils.checkState(timeGeneratorConfig.contains(BASE_PATH), "Option [" + BASE_PATH.key() + "] is required");
     ValidationUtils.checkArgument(hadoopConf != null, "Hadoop configuration is required");
     return TIME_GENERATOR_CACHE.get(timeGeneratorConfig.getBasePath(), s -> {
       TimeGeneratorType type = timeGeneratorConfig.getTimeGeneratorType();
       switch (type) {
-        case LOCK_PROVIDER:
+        case WAIT_TO_ADJUST_SKEW:
           return new WaitBasedTimeGenerator(timeGeneratorConfig, new SerializableConfiguration(hadoopConf));
         default:
           throw new IllegalArgumentException("Unsupported TimeGenerator Type " + type);

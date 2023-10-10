@@ -23,11 +23,14 @@ import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.RetryHelper;
 import org.apache.hudi.exception.HoodieLockException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
+import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS;
@@ -69,6 +72,8 @@ public abstract class TimeGeneratorBase implements TimeGenerator, Serializable {
    */
   private final SerializableConfiguration hadoopConf;
 
+  private final RetryHelper<Boolean, HoodieLockException> lockRetryHelper;
+
   public TimeGeneratorBase(HoodieTimeGeneratorConfig config, SerializableConfiguration hadoopConf) {
     this.config = config;
     this.lockConfiguration = config.getLockConfiguration();
@@ -80,6 +85,8 @@ public abstract class TimeGeneratorBase implements TimeGenerator, Serializable {
         Integer.parseInt(DEFAULT_LOCK_ACQUIRE_WAIT_TIMEOUT_MS));
     maxWaitTimeInMs = lockConfiguration.getConfig().getLong(LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY,
         Long.parseLong(DEFAULT_LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS));
+    lockRetryHelper = new RetryHelper<>(maxWaitTimeInMs, maxRetries, maxWaitTimeInMs,
+        Arrays.asList(HoodieLockException.class, InterruptedException.class), "acquire timeGenerator lock");
   }
 
   protected LockProvider getLockProvider() {
@@ -98,34 +105,17 @@ public abstract class TimeGeneratorBase implements TimeGenerator, Serializable {
   }
 
   public void lock() {
-    LockProvider lockProvider = getLockProvider();
-    int retryCount = 0;
-    boolean acquired = false;
-    while (retryCount <= maxRetries) {
+    lockRetryHelper.start(() -> {
       try {
-        acquired = lockProvider.tryLock(lockAcquireWaitTimeInMs, TimeUnit.MILLISECONDS);
-        if (acquired) {
-          break;
+        if (!getLockProvider().tryLock(lockAcquireWaitTimeInMs, TimeUnit.MILLISECONDS)) {
+          throw new HoodieLockException("Unable to acquire the lock. Current lock owner information : "
+              + getLockProvider().getCurrentOwnerLockInfo());
         }
-        LOG.info("Retrying to acquire the timeGenerator lock. Current lock owner information : "
-            + lockProvider.getCurrentOwnerLockInfo());
-        Thread.sleep(maxWaitTimeInMs);
-      } catch (HoodieLockException | InterruptedException e) {
-        if (retryCount >= maxRetries) {
-          throw new HoodieLockException("Unable to acquire the timeGenerator lock, lock object " + lockProvider.getLock(), e);
-        }
-        try {
-          Thread.sleep(maxWaitTimeInMs);
-        } catch (InterruptedException ex) {
-          // ignore InterruptedException here
-        }
-      } finally {
-        retryCount++;
+        return true;
+      } catch (InterruptedException e) {
+        throw new HoodieLockException(e);
       }
-    }
-    if (!acquired) {
-      throw new HoodieLockException("Unable to acquire the timeGenerator lock, lock object " + lockProvider.getLock());
-    }
+    });
   }
 
   public void unlock() {

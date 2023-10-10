@@ -1977,7 +1977,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
       // Write 1 (Bulk insert)
-      newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      newCommitTime = client.createNewInstantTime();
       records = dataGen.generateInserts(newCommitTime, 20);
       client.startCommitWithTime(newCommitTime);
       writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), newCommitTime).collect();
@@ -1985,7 +1985,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       validateMetadata(client);
 
       // Write 2 (inserts)
-      newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      newCommitTime = client.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
       validateMetadata(client);
 
@@ -1995,14 +1995,14 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       validateMetadata(client);
 
       // Write 3 (updates)
-      newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      newCommitTime = client.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
       records = dataGen.generateUniqueUpdates(newCommitTime, 10);
       writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
 
       // Write 4 (updates and inserts)
-      newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      newCommitTime = client.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
       records = dataGen.generateUpdates(newCommitTime, 10);
       writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
@@ -2011,14 +2011,14 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // Compaction
       if (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ) {
-        newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+        newCommitTime = client.createNewInstantTime();
         client.scheduleCompactionAtInstant(newCommitTime, Option.empty());
         client.compact(newCommitTime);
         validateMetadata(client);
       }
 
       // Write 5 (updates and inserts)
-      newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      newCommitTime = client.createNewInstantTime();
       instantToRestore = newCommitTime;
       client.startCommitWithTime(newCommitTime);
       records = dataGen.generateUpdates(newCommitTime, 5);
@@ -2032,21 +2032,21 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // Compaction
       if (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ) {
-        newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+        newCommitTime = client.createNewInstantTime();
         client.scheduleCompactionAtInstant(newCommitTime, Option.empty());
         client.compact(newCommitTime);
         validateMetadata(client);
       }
 
       // upserts
-      newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      newCommitTime = client.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
       records = dataGen.generateUpdates(newCommitTime, 5);
       writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
 
       // Clean
-      newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      newCommitTime = client.createNewInstantTime();
       client.clean(newCommitTime);
       validateMetadata(client);
 

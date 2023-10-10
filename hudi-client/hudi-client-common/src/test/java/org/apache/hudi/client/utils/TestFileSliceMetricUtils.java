@@ -21,8 +21,8 @@ package org.apache.hudi.client.utils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
-
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;

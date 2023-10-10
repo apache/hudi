@@ -50,8 +50,6 @@ public class LockConfiguration implements Serializable {
 
   public static final String FILESYSTEM_LOCK_PATH_PROP_KEY = FILESYSTEM_BASED_LOCK_PROPERTY_PREFIX + "path";
 
-  public static final String FILESYSTEM_LOCK_FILE_NAME_PROP_KEY = FILESYSTEM_BASED_LOCK_PROPERTY_PREFIX + "file.name";
-
   public static final String FILESYSTEM_LOCK_EXPIRE_PROP_KEY = FILESYSTEM_BASED_LOCK_PROPERTY_PREFIX + "expire";
 
   // configs for metastore based locks

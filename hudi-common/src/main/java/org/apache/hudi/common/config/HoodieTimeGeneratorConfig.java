@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.Option;
 
 import java.util.Properties;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.BASE_PATH;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_PREFIX;
 
 /**
@@ -30,21 +31,20 @@ import static org.apache.hudi.common.config.LockConfiguration.LOCK_PREFIX;
  */
 public class HoodieTimeGeneratorConfig extends HoodieConfig {
 
-  public static final String BASE_PATH = "hoodie.base.path";
-  private static final String LOCK_PROVIDER_KEY = LOCK_PREFIX + "provider";
+  public static final String LOCK_PROVIDER_KEY = LOCK_PREFIX + "provider";
   private static final String DEFAULT_LOCK_PROVIDER = "org.apache.hudi.client.transaction.lock.InProcessLockProvider";
 
   public static final ConfigProperty<String> TIME_GENERATOR_TYPE = ConfigProperty
       .key("hoodie.time.generator.type")
-      .defaultValue(TimeGeneratorType.LOCK_PROVIDER.name())
-      .withValidValues(TimeGeneratorType.LOCK_PROVIDER.name())
+      .defaultValue(TimeGeneratorType.WAIT_TO_ADJUST_SKEW.name())
+      .withValidValues(TimeGeneratorType.WAIT_TO_ADJUST_SKEW.name())
       .sinceVersion("1.0.0")
       .markAdvanced()
       .withDocumentation("Time generator type, which is used to generate globally monotonically increasing timestamp");
 
   public static final ConfigProperty<Long> MAX_EXPECTED_CLOCK_SKEW_MS = ConfigProperty
       .key("hoodie.time.generator.max_expected_clock_skew_ms")
-      .defaultValue(20L)
+      .defaultValue(200L)
       .withInferFunction(cfg -> {
         if (DEFAULT_LOCK_PROVIDER.equals(cfg.getString(LOCK_PROVIDER_KEY))) {
           return Option.of(1L);
@@ -53,7 +53,7 @@ public class HoodieTimeGeneratorConfig extends HoodieConfig {
       })
       .sinceVersion("1.0.0")
       .markAdvanced()
-      .withDocumentation("The max expected clock skew time for WaitBasedTimeGenerator");
+      .withDocumentation("The max expected clock skew time for WaitBasedTimeGenerator in ms");
 
   private HoodieTimeGeneratorConfig() {
     super();
@@ -68,7 +68,7 @@ public class HoodieTimeGeneratorConfig extends HoodieConfig {
   }
 
   public String getBasePath() {
-    return props.getString(BASE_PATH);
+    return getString(BASE_PATH);
   }
 
   public static HoodieTimeGeneratorConfig.Builder newBuilder() {
@@ -98,7 +98,7 @@ public class HoodieTimeGeneratorConfig extends HoodieConfig {
     }
 
     public Builder withTimeGeneratorType(TimeGeneratorType type) {
-      timeGeneratorConfig.setValue(MAX_EXPECTED_CLOCK_SKEW_MS, type.name());
+      timeGeneratorConfig.setValue(TIME_GENERATOR_TYPE, type.name());
       return this;
     }
 

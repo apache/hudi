@@ -38,6 +38,14 @@ import static org.apache.hudi.common.util.ConfigUtils.enumNames;
     description = "The following set of configurations are common across Hudi.")
 public class HoodieCommonConfig extends HoodieConfig {
 
+  public static final ConfigProperty<String> BASE_PATH = ConfigProperty
+      .key("hoodie.base.path")
+      .noDefaultValue()
+      .withDocumentation("Base path on lake storage, under which all the table data is stored. "
+          + "Always prefix it explicitly with the storage scheme (e.g hdfs://, s3:// etc). "
+          + "Hudi stores all the main meta-data about commits, savepoints, cleaning audit logs "
+          + "etc in .hoodie directory under this base path directory.");
+
   public static final ConfigProperty<Boolean> SCHEMA_EVOLUTION_ENABLE = ConfigProperty
       .key("hoodie.schema.on.read.enable")
       .defaultValue(false)

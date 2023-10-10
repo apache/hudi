@@ -82,6 +82,7 @@ public class CompactHelpers<T, I, K, O> {
   public void completeInflightCompaction(HoodieTable table, String compactionCommitTime, HoodieCommitMetadata commitMetadata) {
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     try {
+      // Callers should already guarantee the lock.
       activeTimeline.transitionCompactionInflightToComplete(false,
           HoodieTimeline.getCompactionInflightInstant(compactionCommitTime),
           serializeCommitMetadata(commitMetadata));
@@ -94,7 +95,7 @@ public class CompactHelpers<T, I, K, O> {
   public void completeInflightLogCompaction(HoodieTable table, String logCompactionCommitTime, HoodieCommitMetadata commitMetadata) {
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     try {
-      // The caller already enable the lock
+      // Callers should already guarantee the lock.
       activeTimeline.transitionLogCompactionInflightToComplete(false,
           HoodieTimeline.getLogCompactionInflightInstant(logCompactionCommitTime),
           serializeCommitMetadata(commitMetadata));

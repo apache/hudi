@@ -168,7 +168,7 @@ public class TestCommitUtils {
     timeline.createNewInstant(instant);
     timeline.transitionRequestedToInflight(instant, TimelineMetadataUtils.serializeCommitMetadata(commitMetadata));
     if (isCompleted) {
-      timeline.saveAsComplete(false,
+      timeline.saveAsComplete(
           new HoodieInstant(true, instant.getAction(), instant.getTimestamp()),
           TimelineMetadataUtils.serializeCommitMetadata(commitMetadata));
     }
@@ -182,7 +182,7 @@ public class TestCommitUtils {
     commitMetadata.setOperationType(WriteOperationType.COMPACT);
     timeline.createNewInstant(instant);
     timeline.transitionRequestedToInflight(instant, TimelineMetadataUtils.serializeCommitMetadata(commitMetadata));
-    timeline.saveAsComplete(false,
+    timeline.saveAsComplete(
         new HoodieInstant(true, instant.getAction(), instant.getTimestamp()),
         TimelineMetadataUtils.serializeCommitMetadata(commitMetadata));
   }

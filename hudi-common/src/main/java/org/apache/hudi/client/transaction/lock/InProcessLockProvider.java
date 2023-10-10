@@ -19,16 +19,15 @@
 
 package org.apache.hudi.client.transaction.lock;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.lock.LockState;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieLockException;
 
 import org.apache.hadoop.conf.Configuration;
-import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,7 +57,7 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
 
   public InProcessLockProvider(final LockConfiguration lockConfiguration, final Configuration conf) {
     TypedProperties typedProperties = lockConfiguration.getConfig();
-    basePath = lockConfiguration.getConfig().getProperty(HoodieWriteConfig.BASE_PATH.key());
+    basePath = lockConfiguration.getConfig().getProperty(HoodieCommonConfig.BASE_PATH.key());
     ValidationUtils.checkArgument(basePath != null);
     lock = LOCK_INSTANCE_PER_BASEPATH.computeIfAbsent(basePath, (ignore) -> new ReentrantReadWriteLock());
     maxWaitTimeMillis = typedProperties.getLong(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,
@@ -81,7 +80,7 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
   }
 
   @Override
-  public boolean tryLock(long time, @NotNull TimeUnit unit) {
+  public boolean tryLock(long time, TimeUnit unit) {
     LOG.info(getLogMessage(LockState.ACQUIRING));
     if (lock.isWriteLockedByCurrentThread()) {
       throw new HoodieLockException(getLogMessage(LockState.ALREADY_ACQUIRED));

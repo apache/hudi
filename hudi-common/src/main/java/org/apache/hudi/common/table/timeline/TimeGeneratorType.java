@@ -30,5 +30,5 @@ public enum TimeGeneratorType {
 
   @EnumFieldDescription("A wait based time generator, holding a mutex lock with skew times to "
       + "produce globally monotonically increasing timestamp")
-  LOCK_PROVIDER
+  WAIT_TO_ADJUST_SKEW
 }

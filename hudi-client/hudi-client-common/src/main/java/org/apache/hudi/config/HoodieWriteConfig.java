@@ -225,13 +225,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation(HoodieFileFormat.class, "File format to store all the base file data.");
 
-  public static final ConfigProperty<String> BASE_PATH = ConfigProperty
-      .key("hoodie.base.path")
-      .noDefaultValue()
-      .withDocumentation("Base path on lake storage, under which all the table data is stored. "
-          + "Always prefix it explicitly with the storage scheme (e.g hdfs://, s3:// etc). "
-          + "Hudi stores all the main meta-data about commits, savepoints, cleaning audit logs "
-          + "etc in .hoodie directory under this base path directory.");
+  public static final ConfigProperty<String> BASE_PATH = HoodieCommonConfig.BASE_PATH;
 
   public static final ConfigProperty<String> AVRO_SCHEMA_STRING = ConfigProperty
       .key("hoodie.avro.schema")

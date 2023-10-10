@@ -74,7 +74,8 @@ public class TestHoodieInstant extends HoodieCommonTestHarness {
       HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
       timeline.createNewInstant(instantRequested);
       timeline.transitionRequestedToInflight(instantRequested, Option.empty());
-      timeline.saveAsComplete(false, new HoodieInstant(true, instantRequested.getAction(), instantRequested.getTimestamp()),
+      timeline.saveAsComplete(
+          new HoodieInstant(true, instantRequested.getAction(), instantRequested.getTimestamp()),
           Option.empty());
       metaClient.reloadActiveTimeline();
       timeline = metaClient.getActiveTimeline();

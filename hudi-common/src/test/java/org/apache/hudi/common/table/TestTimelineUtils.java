@@ -116,7 +116,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, ts1);
     activeTimeline.createNewInstant(instant1);
     // create replace metadata only with replaced file Ids (no new files created)
-    activeTimeline.saveAsComplete(false, instant1,
+    activeTimeline.saveAsComplete(instant1,
         Option.of(getReplaceCommitMetadata(basePath, ts1, replacePartition, 2,
             newFilePartition, 0, Collections.emptyMap(), WriteOperationType.CLUSTER)));
     metaClient.reloadActiveTimeline();
@@ -129,7 +129,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, ts2);
     activeTimeline.createNewInstant(instant2);
     // create replace metadata only with replaced file Ids (no new files created)
-    activeTimeline.saveAsComplete(false, instant2,
+    activeTimeline.saveAsComplete(instant2,
         Option.of(getReplaceCommitMetadata(basePath, ts2, replacePartition, 0,
             newFilePartition, 3, Collections.emptyMap(), WriteOperationType.CLUSTER)));
     metaClient.reloadActiveTimeline();
@@ -154,11 +154,11 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
       String ts = i + "";
       HoodieInstant instant = new HoodieInstant(true, COMMIT_ACTION, ts);
       activeTimeline.createNewInstant(instant);
-      activeTimeline.saveAsComplete(false, instant, Option.of(getCommitMetadata(basePath, ts, ts, 2, Collections.emptyMap())));
+      activeTimeline.saveAsComplete(instant, Option.of(getCommitMetadata(basePath, ts, ts, 2, Collections.emptyMap())));
 
       HoodieInstant cleanInstant = new HoodieInstant(true, CLEAN_ACTION, ts);
       activeTimeline.createNewInstant(cleanInstant);
-      activeTimeline.saveAsComplete(false, cleanInstant, getCleanMetadata(olderPartition, ts));
+      activeTimeline.saveAsComplete(cleanInstant, getCleanMetadata(olderPartition, ts));
     }
 
     metaClient.reloadActiveTimeline();
@@ -193,11 +193,11 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
       String ts = i + "";
       HoodieInstant instant = new HoodieInstant(true, COMMIT_ACTION, ts);
       activeTimeline.createNewInstant(instant);
-      activeTimeline.saveAsComplete(false, instant, Option.of(getCommitMetadata(basePath, partitionPath, ts, 2, Collections.emptyMap())));
+      activeTimeline.saveAsComplete(instant, Option.of(getCommitMetadata(basePath, partitionPath, ts, 2, Collections.emptyMap())));
 
       HoodieInstant cleanInstant = new HoodieInstant(true, CLEAN_ACTION, ts);
       activeTimeline.createNewInstant(cleanInstant);
-      activeTimeline.saveAsComplete(false, cleanInstant, getCleanMetadata(partitionPath, ts));
+      activeTimeline.saveAsComplete(cleanInstant, getCleanMetadata(partitionPath, ts));
     }
 
     metaClient.reloadActiveTimeline();
@@ -220,7 +220,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
       String ts = i + "";
       HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.RESTORE_ACTION, ts);
       activeTimeline.createNewInstant(instant);
-      activeTimeline.saveAsComplete(false, instant, Option.of(getRestoreMetadata(basePath, ts, ts, 2, COMMIT_ACTION)));
+      activeTimeline.saveAsComplete(instant, Option.of(getRestoreMetadata(basePath, ts, ts, 2, COMMIT_ACTION)));
     }
 
     metaClient.reloadActiveTimeline();
@@ -245,14 +245,14 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     String ts = "0";
     HoodieInstant instant = new HoodieInstant(true, COMMIT_ACTION, ts);
     activeTimeline.createNewInstant(instant);
-    activeTimeline.saveAsComplete(false, instant, Option.of(getCommitMetadata(basePath, ts, ts, 2, Collections.emptyMap())));
+    activeTimeline.saveAsComplete(instant, Option.of(getCommitMetadata(basePath, ts, ts, 2, Collections.emptyMap())));
 
     ts = "1";
     instant = new HoodieInstant(true, COMMIT_ACTION, ts);
     activeTimeline.createNewInstant(instant);
     Map<String, String> extraMetadata = new HashMap<>();
     extraMetadata.put(extraMetadataKey, extraMetadataValue1);
-    activeTimeline.saveAsComplete(false, instant, Option.of(getCommitMetadata(basePath, ts, ts, 2, extraMetadata)));
+    activeTimeline.saveAsComplete(instant, Option.of(getCommitMetadata(basePath, ts, ts, 2, extraMetadata)));
 
     metaClient.reloadActiveTimeline();
 
@@ -266,7 +266,8 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     activeTimeline.createNewInstant(instant2);
     String newValueForMetadata = "newValue2";
     extraMetadata.put(extraMetadataKey, newValueForMetadata);
-    activeTimeline.saveAsComplete(false, instant2, Option.of(getReplaceCommitMetadata(basePath, ts2, "p2", 0,
+    activeTimeline.saveAsComplete(instant2,
+        Option.of(getReplaceCommitMetadata(basePath, ts2, "p2", 0,
             "p2", 3, extraMetadata, WriteOperationType.CLUSTER)));
     metaClient.reloadActiveTimeline();
 

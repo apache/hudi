@@ -102,8 +102,8 @@ public class TestFileBasedInternalSchemaStorageManager extends HoodieCommonTestH
     HoodieInstant instant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, commitTime);
     timeline.createNewInstant(instant);
     timeline.transitionRequestedToInflight(instant, Option.empty());
-    timeline.saveAsComplete(false,
-        new HoodieInstant(true, instant.getAction(), instant.getTimestamp()), Option.empty());
+    timeline.saveAsComplete(new HoodieInstant(true, instant.getAction(), instant.getTimestamp()),
+        Option.empty());
   }
 
   private InternalSchema getSimpleSchema() {
