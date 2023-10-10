@@ -78,13 +78,14 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
   }
 
   public HoodieParquetDataBlock(List<HoodieRecord> records,
+                                boolean shouldWriteRecordPositions,
                                 Map<HeaderMetadataType, String> header,
                                 String keyField,
                                 CompressionCodecName compressionCodecName,
                                 double expectedCompressionRatio,
                                 boolean useDictionaryEncoding
   ) {
-    super(records, header, new HashMap<>(), keyField);
+    super(records, shouldWriteRecordPositions, header, new HashMap<>(), keyField);
 
     this.compressionCodecName = Option.of(compressionCodecName);
     this.expectedCompressionRatio = Option.of(expectedCompressionRatio);

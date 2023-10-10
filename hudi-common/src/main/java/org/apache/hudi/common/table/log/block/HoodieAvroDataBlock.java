@@ -84,10 +84,11 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
   }
 
   public HoodieAvroDataBlock(@Nonnull List<HoodieRecord> records,
-      @Nonnull Map<HeaderMetadataType, String> header,
-      @Nonnull String keyField
+                             boolean shouldWriteRecordPositions,
+                             @Nonnull Map<HeaderMetadataType, String> header,
+                             @Nonnull String keyField
   ) {
-    super(records, header, new HashMap<>(), keyField);
+    super(records, shouldWriteRecordPositions, header, new HashMap<>(), keyField);
   }
 
   @Override
@@ -225,7 +226,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
    */
   @Deprecated
   public HoodieAvroDataBlock(List<HoodieRecord> records, Schema schema) {
-    super(records, Collections.singletonMap(HeaderMetadataType.SCHEMA, schema.toString()), new HashMap<>(), HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    super(records, false, Collections.singletonMap(HeaderMetadataType.SCHEMA, schema.toString()), new HashMap<>(), HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 
   public static HoodieAvroDataBlock getBlock(byte[] content, Schema readerSchema) throws IOException {
