@@ -338,10 +338,15 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
       Row("11", "14", "1", 1),
       Row("12", "16", "1", 1))
 
-    // NOTE: Expected to fail in both cases, as such transformation is not permitted
-    assertThrows(classOf[SchemaCompatibilityException]) {
+    // Now, only fails for reconcile
+    if (shouldReconcileSchema) {
+      assertThrows(classOf[SchemaCompatibilityException]) {
+        appendData(sixthSchema, sixthBatch)
+      }
+    } else {
       appendData(sixthSchema, sixthBatch)
     }
+
 
     // TODO add test w/ overlapping updates
   }

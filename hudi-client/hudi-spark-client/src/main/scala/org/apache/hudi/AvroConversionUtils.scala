@@ -202,7 +202,16 @@ object AvroConversionUtils {
       }
 
       case Schema.Type.UNION => {
-        Schema.createUnion(schema.getTypes.map(innerSchema => getAvroSchemaWithDefaults(innerSchema, dataType)))
+        val innerFields = schema.getTypes
+        val containsNullSchema = innerFields.foldLeft(false)((nullFieldEncountered, schema) => nullFieldEncountered | schema.getType == Schema.Type.NULL)
+        if (containsNullSchema) {
+          // Need to re shuffle the fields in list because to set null as default, null schema must be head in union schema
+          Schema.createUnion(List(Schema.create(Schema.Type.NULL)) ++ innerFields.filter(innerSchema => !(innerSchema.getType == Schema.Type.NULL))
+            .map(innerSchema => getAvroSchemaWithDefaults(innerSchema, dataType)))
+
+        } else {
+          Schema.createUnion(schema.getTypes.map(innerSchema => getAvroSchemaWithDefaults(innerSchema, dataType)))
+        }
       }
 
       case Schema.Type.MAP => {
