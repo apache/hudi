@@ -39,7 +39,7 @@ public class LogFileIterator<T> extends CachingIterator<HoodieRecord<T>> {
     this.records = scanner.getRecords();
   }
 
-  private Boolean hasNextInternal() {
+  private boolean hasNextInternal() {
     if (iterator == null) {
       iterator = records.values().iterator();
     }
@@ -51,7 +51,7 @@ public class LogFileIterator<T> extends CachingIterator<HoodieRecord<T>> {
   }
 
   @Override
-  protected Boolean doHasNext() {
+  protected boolean doHasNext() {
     return hasNextInternal();
   }
 }

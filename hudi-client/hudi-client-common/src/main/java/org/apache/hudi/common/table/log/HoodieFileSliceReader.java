@@ -66,7 +66,7 @@ public class HoodieFileSliceReader<T> extends LogFileIterator<T> {
     this.records = scanner.getRecords();
   }
 
-  private Boolean hasNextInternal() {
+  private boolean hasNextInternal() {
     while (baseFileIterator.isPresent() && baseFileIterator.get().hasNext()) {
       try {
         HoodieRecord currentRecord = baseFileIterator.get().next().wrapIntoHoodieRecordPayloadWithParams(schema, props,
@@ -91,7 +91,7 @@ public class HoodieFileSliceReader<T> extends LogFileIterator<T> {
   }
 
   @Override
-  protected Boolean doHasNext() {
+  protected boolean doHasNext() {
     return hasNextInternal();
   }
 

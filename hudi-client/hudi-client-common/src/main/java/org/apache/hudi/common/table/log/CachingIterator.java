@@ -24,7 +24,7 @@ public abstract class CachingIterator<T> implements Iterator<T> {
 
   protected T nextRecord;
 
-  protected abstract Boolean doHasNext();
+  protected abstract boolean doHasNext();
 
   @Override
   public final boolean hasNext() {
