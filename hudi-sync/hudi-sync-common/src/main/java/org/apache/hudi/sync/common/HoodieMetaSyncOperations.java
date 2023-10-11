@@ -107,6 +107,13 @@ public interface HoodieMetaSyncOperations {
   }
 
   /**
+   * Update partitions to the table in metastore.
+   */
+  default void touchPartitionsToTable(String tableName, List<String> touchPartitions) {
+
+  }
+
+  /**
    * Drop partitions from the table in metastore.
    */
   default void dropPartitions(String tableName, List<String> partitionsToDrop) {

@@ -242,6 +242,8 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
             events.add(PartitionEvent.newPartitionAddEvent(storagePartition));
           } else if (!paths.get(storageValue).equals(fullStoragePartitionPath)) {
             events.add(PartitionEvent.newPartitionUpdateEvent(storagePartition));
+          } else {
+            events.add(PartitionEvent.newPartitionTouchEvent(storagePartition));
           }
         }
       }
