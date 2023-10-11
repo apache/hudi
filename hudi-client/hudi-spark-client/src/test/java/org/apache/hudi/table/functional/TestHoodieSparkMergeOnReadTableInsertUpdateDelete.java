@@ -442,7 +442,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
     List<HoodieRecord> hoodieRecords = records.stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
-    return new HoodieAvroDataBlock(hoodieRecords, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    return new HoodieAvroDataBlock(hoodieRecords, false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 
   private String generateFakeWriteToken(String correctWriteToken) {
