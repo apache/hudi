@@ -79,7 +79,13 @@ public class HoodieSyncConfig extends HoodieConfig {
   public static final ConfigProperty<String> META_SYNC_DATABASE_NAME = ConfigProperty
       .key("hoodie.datasource.hive_sync.database")
       .defaultValue("default")
-      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(DATABASE_NAME)))
+      .withInferFunction(cfg -> {
+        String databaseName = cfg.getString(DATABASE_NAME);
+        // Need to check if database name is empty as Option won't check it
+        return StringUtils.isNullOrEmpty(databaseName)
+            ? Option.empty()
+            : Option.of(databaseName);
+      })
       .markAdvanced()
       .withDocumentation("The name of the destination database that we should sync the hudi table to.");
 
