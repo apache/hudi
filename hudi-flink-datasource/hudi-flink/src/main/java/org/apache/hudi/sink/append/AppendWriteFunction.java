@@ -145,7 +145,7 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   }
 
   private void flushData(boolean endInput) {
-    writeMetrics.startFlushing();
+    writeMetrics.startCheckpointFlushing();
     final List<WriteStatus> writeStatus;
     if (this.writerHelper != null) {
       writeStatus = this.writerHelper.getWriteStatuses(this.taskID);
@@ -169,8 +169,8 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     // blocks flushing until the coordinator starts a new instant
     this.confirming = true;
 
-    writeMetrics.endFlushing();
-    LOG.info("Flushing costs: {} ms", writeMetrics.getFlushDataCosts());
+    writeMetrics.endCheckpointFlushing();
+    LOG.info("Flushing costs: {} ms", writeMetrics.getCheckpointFlushCosts());
     writeMetrics.resetAfterCommit();
   }
 

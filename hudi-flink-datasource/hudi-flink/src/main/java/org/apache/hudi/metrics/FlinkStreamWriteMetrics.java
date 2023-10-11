@@ -26,24 +26,20 @@ import org.apache.flink.dropwizard.metrics.DropwizardMeterWrapper;
 import org.apache.flink.metrics.Histogram;
 import org.apache.flink.metrics.Meter;
 import org.apache.flink.metrics.MetricGroup;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Metrics for flink stream write (including append write, normal/bucket stream write etc.).
  * Used in subclasses of {@link AbstractStreamWriteFunction}.
  */
 public class FlinkStreamWriteMetrics extends HoodieFlinkMetrics {
-  private static final Logger LOG = LoggerFactory.getLogger(FlinkStreamWriteMetrics.class);
-
-  private static String FLUSHING_KEY = "flushing";
-  private static String HANDLE_CLOSING_KEY = "handle_closing";
-  private static String HANDLE_CREATION_KEY = "handle_creation";
+  private static final String CHECKPOINT_FLUSH_KEY = "checkpoint_flush";
+  private static final String SINGLE_FILE_FLUSH_KEY = "single_file_flush";
+  private static final String HANDLE_CREATION_KEY = "handle_creation";
 
   /**
    * Flush data costs during checkpoint.
    */
-  private long flushDataCosts;
+  private long checkpointFlushCosts;
 
   /**
    * Number of records written in during a checkpoint window.
@@ -58,7 +54,7 @@ public class FlinkStreamWriteMetrics extends HoodieFlinkMetrics {
   /**
    * Total costs for closing write handles during a checkpoint window.
    */
-  private long handleCloseTotalCosts;
+  private long fileFlushTotalCosts;
 
   /**
    * Number of handles opened during a checkpoint window. Increased with partition number/bucket number etc.
@@ -88,47 +84,47 @@ public class FlinkStreamWriteMetrics extends HoodieFlinkMetrics {
   /**
    * Cost of write handle closing.
    */
-  private final Histogram handleCloseCosts;
+  private final Histogram singleFileFlushCost;
 
   public FlinkStreamWriteMetrics(MetricGroup metricGroup) {
     super(metricGroup);
     this.recordWrittenPerSecond = new DropwizardMeterWrapper(new com.codahale.metrics.Meter());
     this.handleSwitchPerSecond = new DropwizardMeterWrapper(new com.codahale.metrics.Meter());
     this.handleCreationCosts = new DropwizardHistogramWrapper(new com.codahale.metrics.Histogram(new SlidingWindowReservoir(100)));
-    this.handleCloseCosts = new DropwizardHistogramWrapper(new com.codahale.metrics.Histogram(new SlidingWindowReservoir(100)));
+    this.singleFileFlushCost = new DropwizardHistogramWrapper(new com.codahale.metrics.Histogram(new SlidingWindowReservoir(100)));
   }
 
   @Override
   public void registerMetrics() {
     metricGroup.meter("recordWrittenPerSecond", recordWrittenPerSecond);
     metricGroup.gauge("currentCommitWrittenRecords", () -> writtenRecords);
-    metricGroup.gauge("writerFlushCosts", () -> flushDataCosts);
+    metricGroup.gauge("checkpointFlushCosts", () -> checkpointFlushCosts);
     metricGroup.gauge("writeBufferedSize", () -> writeBufferedSize);
 
-    metricGroup.gauge("writerHandleCloseTotalCosts", () -> handleCloseTotalCosts);
+    metricGroup.gauge("fileFlushTotalCosts", () -> fileFlushTotalCosts);
     metricGroup.gauge("numOfFilesWritten", () -> numOfFilesWritten);
     metricGroup.gauge("numOfOpenHandle", () -> numOfOpenHandle);
 
     metricGroup.meter("handleSwitchPerSecond", handleSwitchPerSecond);
 
     metricGroup.histogram("handleCreationCosts", handleCreationCosts);
-    metricGroup.histogram("handleCloseCosts", handleCloseCosts);
+    metricGroup.histogram("handleCloseCosts", singleFileFlushCost);
   }
 
   public void setWriteBufferedSize(long writeBufferedSize) {
     this.writeBufferedSize = writeBufferedSize;
   }
 
-  public long getFlushDataCosts() {
-    return flushDataCosts;
+  public long getCheckpointFlushCosts() {
+    return checkpointFlushCosts;
   }
 
-  public void startFlushing() {
-    startTimer(FLUSHING_KEY);
+  public void startCheckpointFlushing() {
+    startTimer(CHECKPOINT_FLUSH_KEY);
   }
 
-  public void endFlushing() {
-    this.flushDataCosts = stopTimer(FLUSHING_KEY);
+  public void endCheckpointFlushing() {
+    this.checkpointFlushCosts = stopTimer(CHECKPOINT_FLUSH_KEY);
   }
 
   public void markRecordIn() {
@@ -157,14 +153,14 @@ public class FlinkStreamWriteMetrics extends HoodieFlinkMetrics {
     handleCreationCosts.update(stopTimer(HANDLE_CREATION_KEY));
   }
 
-  public void startHandleClose() {
-    startTimer(HANDLE_CLOSING_KEY);
+  public void startSingleFileFlush() {
+    startTimer(SINGLE_FILE_FLUSH_KEY);
   }
 
-  public void endHandleClose() {
-    long costs = stopTimer(HANDLE_CLOSING_KEY);
-    handleCloseCosts.update(costs);
-    this.handleCloseTotalCosts += costs;
+  public void endSingleFileFlush() {
+    long costs = stopTimer(SINGLE_FILE_FLUSH_KEY);
+    singleFileFlushCost.update(costs);
+    this.fileFlushTotalCosts += costs;
   }
 
   public void resetAfterCommit() {

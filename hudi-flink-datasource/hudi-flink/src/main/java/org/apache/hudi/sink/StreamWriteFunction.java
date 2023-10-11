@@ -397,12 +397,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     final String bucketID = getBucketID(value);
 
     DataBucket bucket = this.buckets.computeIfAbsent(bucketID,
-        k -> {
-          // create a new bucket and update metrics
-          writeMetrics.increaseNumOfOpenHandle();
-          return new DataBucket(this.config.getDouble(FlinkOptions.WRITE_BATCH_SIZE), value);
-        });
-
+        k -> new DataBucket(this.config.getDouble(FlinkOptions.WRITE_BATCH_SIZE), value));
     final DataItem item = DataItem.fromHoodieRecord(value);
 
     bucket.records.add(item);
@@ -465,7 +460,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
 
   @SuppressWarnings("unchecked, rawtypes")
   private void flushRemaining(boolean endInput) {
-    writeMetrics.startFlushing();
+    writeMetrics.startCheckpointFlushing();
     this.currentInstant = instantToWrite(hasData());
     if (this.currentInstant == null) {
       // in case there are empty checkpoints that has no input data
@@ -506,7 +501,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     // blocks flushing until the coordinator starts a new instant
     this.confirming = true;
 
-    writeMetrics.endFlushing();
+    writeMetrics.endCheckpointFlushing();
     writeMetrics.resetAfterCommit();
   }
 
@@ -518,9 +513,9 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
 
   protected List<WriteStatus> writeBucket(String instant, DataBucket bucket, List<HoodieRecord> records) {
     bucket.preWrite(records);
-    writeMetrics.startHandleClose();
+    writeMetrics.startSingleFileFlush();
     List<WriteStatus> statuses = writeFunction.apply(records, instant);
-    writeMetrics.endHandleClose();
+    writeMetrics.endSingleFileFlush();
     writeMetrics.increaseNumOfFilesWritten();
     return statuses;
   }
