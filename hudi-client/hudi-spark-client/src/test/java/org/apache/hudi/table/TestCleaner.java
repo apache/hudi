@@ -1086,7 +1086,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
   }
 
   /**
-   * Test if cleaner will fallback to full clean if commit for incremental clean is archived.
+   * Test if cleaner will fall back to full clean if commit for incremental clean is archived.
    */
   @Test
   public void testIncrementalFallbackToFullClean() throws Exception {
@@ -1332,7 +1332,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
       return Pair.of(FSUtils.getFileId(fileName), FSUtils.getCommitTime(fileName));
     });
     Stream<Pair<String, String>> stream2 = paths.stream().filter(rtFilePredicate).map(path -> Pair.of(FSUtils.getFileIdFromLogPath(new Path(path)),
-        FSUtils.getBaseCommitTimeFromLogPath(new Path(path))));
+        FSUtils.getDeltaCommitTimeFromLogPath(new Path(path))));
     return Stream.concat(stream1, stream2);
   }
 

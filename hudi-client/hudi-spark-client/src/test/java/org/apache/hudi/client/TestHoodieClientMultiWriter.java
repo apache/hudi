@@ -516,10 +516,13 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       // We want the upsert to go through only after the compaction
       // and cleaning schedule completion. So, waiting on latch here.
       latchCountDownAndWait(scheduleCountDownLatch, 30000);
-      if (tableType == HoodieTableType.MERGE_ON_READ) {
-        // Since the compaction already went in, this upsert has
+      if (tableType == HoodieTableType.MERGE_ON_READ && !(resolutionStrategy instanceof PreferWriterConflictResolutionStrategy)) {
+        // HUDI-6897: Improve SimpleConcurrentFileWritesConflictResolutionStrategy for NB-CC
+        // There is no need to throw concurrent modification exception for the simple strategy under NB-CC, because the compactor would finally resolve the conflicts instead.
+
+        // Since the concurrent modifications went in, this upsert has
         // to fail
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(HoodieWriteConflictException.class, () -> {
           createCommitWithUpserts(cfg, client1, thirdCommitTime, commitTimeBetweenPrevAndNew, newCommitTime, numRecords);
         });
       } else {

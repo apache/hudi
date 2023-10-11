@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.exception.HoodieException;
 
 import java.text.ParseException;
 import java.time.LocalDateTime;
@@ -83,20 +84,35 @@ public class HoodieInstantTimeGenerator {
 
   public static Date parseDateFromInstantTime(String timestamp) throws ParseException {
     try {
-      // Enables backwards compatibility with non-millisecond granularity instants
-      String timestampInMillis = timestamp;
-      if (isSecondGranularity(timestamp)) {
-        // Add milliseconds to the instant in order to parse successfully
-        timestampInMillis = timestamp + DEFAULT_MILLIS_EXT;
-      } else if (timestamp.length() > MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH) {
-        // compaction and cleaning in metadata has special format. handling it by trimming extra chars and treating it with ms granularity
-        timestampInMillis = timestamp.substring(0, MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH);
-      }
-
+      String timestampInMillis = fixInstantTimeCompatibility(timestamp);
       LocalDateTime dt = LocalDateTime.parse(timestampInMillis, MILLIS_INSTANT_TIME_FORMATTER);
       return Date.from(dt.atZone(ZoneId.systemDefault()).toInstant());
     } catch (DateTimeParseException e) {
       throw new ParseException(e.getMessage(), e.getErrorIndex());
+    }
+  }
+
+  public static String instantTimePlusMillis(String timestamp, long milliseconds) {
+    try {
+      String timestampInMillis = fixInstantTimeCompatibility(timestamp);
+      LocalDateTime dt = LocalDateTime.parse(timestampInMillis, MILLIS_INSTANT_TIME_FORMATTER);
+      ZoneId zoneId = HoodieTimelineTimeZone.UTC.equals(commitTimeZone) ? ZoneId.of("UTC") : ZoneId.systemDefault();
+      return MILLIS_INSTANT_TIME_FORMATTER.format(dt.atZone(zoneId).toInstant().plusMillis(milliseconds).atZone(zoneId).toLocalDateTime());
+    } catch (DateTimeParseException e) {
+      throw new HoodieException(e);
+    }
+  }
+
+  private static String fixInstantTimeCompatibility(String instantTime) {
+    // Enables backwards compatibility with non-millisecond granularity instants
+    if (isSecondGranularity(instantTime)) {
+      // Add milliseconds to the instant in order to parse successfully
+      return instantTime + DEFAULT_MILLIS_EXT;
+    } else if (instantTime.length() > MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH) {
+      // compaction and cleaning in metadata has special format. handling it by trimming extra chars and treating it with ms granularity
+      return instantTime.substring(0, MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH);
+    } else {
+      return instantTime;
     }
   }
 

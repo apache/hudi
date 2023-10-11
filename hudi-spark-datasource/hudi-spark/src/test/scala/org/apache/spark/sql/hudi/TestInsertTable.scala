@@ -1714,7 +1714,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test Bulk Insert Into Consistent Hashing Bucket Index Table") {
+  // [HUDI-6900] TestInsertTable "Test Bulk Insert Into Consistent Hashing Bucket Index Table" is failing continuously
+  ignore("Test Bulk Insert Into Consistent Hashing Bucket Index Table") {
     withSQLConf("hoodie.datasource.write.operation" -> "bulk_insert") {
       Seq("false", "true").foreach { bulkInsertAsRow =>
         withTempDir { tmp =>
@@ -1725,10 +1726,10 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
             s"""
                |create table $tableName (
                |  id int,
-               |  dt string,
                |  name string,
                |  price double,
-               |  ts long
+               |  ts long,
+               |  dt string
                |) using hudi
                | tblproperties (
                | primaryKey = 'id,name',

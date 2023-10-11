@@ -80,7 +80,7 @@ public class TestHoodieLogFile {
 
   private void assertFileGetters(String pathStr, FileStatus fileStatus, HoodieLogFile hoodieLogFile, long fileLength, String suffix) {
     assertEquals(fileId, hoodieLogFile.getFileId());
-    assertEquals(baseCommitTime, hoodieLogFile.getBaseCommitTime());
+    assertEquals(baseCommitTime, hoodieLogFile.getDeltaCommitTime());
     assertEquals(logVersion, hoodieLogFile.getLogVersion());
     assertEquals(writeToken, hoodieLogFile.getLogWriteToken());
     assertEquals(fileExtension, hoodieLogFile.getFileExtension());

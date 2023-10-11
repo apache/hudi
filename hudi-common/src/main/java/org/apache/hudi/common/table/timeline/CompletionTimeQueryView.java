@@ -16,27 +16,33 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.timeline;
+package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.generic.GenericRecord;
 
+import java.io.Serializable;
+import java.time.Instant;
+import java.util.Date;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.apache.hudi.common.table.timeline.HoodieArchivedTimeline.COMPLETION_TIME_ARCHIVED_META_FIELD;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
 
 /**
  * Query view for instant completion time.
  */
-public class CompletionTimeQueryView implements AutoCloseable {
+public class CompletionTimeQueryView implements AutoCloseable, Serializable {
+  private static final long serialVersionUID = 1L;
+
+  private static final long MILLI_SECONDS_IN_THREE_DAYS = 3 * 24 * 3600 * 1000;
+
   private final HoodieTableMetaClient metaClient;
 
   /**
@@ -59,6 +65,15 @@ public class CompletionTimeQueryView implements AutoCloseable {
    * The constructor.
    *
    * @param metaClient   The table meta client.
+   */
+  public CompletionTimeQueryView(HoodieTableMetaClient metaClient) {
+    this(metaClient, HoodieInstantTimeGenerator.formatDate(new Date(Instant.now().minusMillis(MILLI_SECONDS_IN_THREE_DAYS).toEpochMilli())));
+  }
+
+  /**
+   * The constructor.
+   *
+   * @param metaClient   The table meta client.
    * @param startInstant The earliest instant time to eagerly load from, by default load last N days of completed instants.
    */
   public CompletionTimeQueryView(HoodieTableMetaClient metaClient, String startInstant) {
@@ -67,6 +82,64 @@ public class CompletionTimeQueryView implements AutoCloseable {
     this.startInstant = startInstant;
     this.firstInstantOnActiveTimeline = metaClient.getActiveTimeline().firstInstant().map(HoodieInstant::getTimestamp).orElse("");
     load();
+  }
+
+  /**
+   * Returns whether the instant is completed.
+   */
+  public boolean isCompleted(String instantTime) {
+    return getCompletionTime(instantTime).isPresent();
+  }
+
+  /**
+   * Returns whether the give instant time {@code instantTime} completed before the base instant {@code baseInstant}.
+   */
+  public boolean isCompletedBefore(String baseInstant, String instantTime) {
+    Option<String> completionTimeOpt = getCompletionTime(baseInstant, instantTime);
+    if (completionTimeOpt.isPresent()) {
+      return HoodieTimeline.compareTimestamps(completionTimeOpt.get(), LESSER_THAN, baseInstant);
+    }
+    return false;
+  }
+
+  /**
+   * Returns whether the give instant time {@code instantTime} is sliced after or on the base instant {@code baseInstant}.
+   */
+  public boolean isSlicedAfterOrOn(String baseInstant, String instantTime) {
+    Option<String> completionTimeOpt = getCompletionTime(baseInstant, instantTime);
+    if (completionTimeOpt.isPresent()) {
+      return HoodieTimeline.compareTimestamps(completionTimeOpt.get(), GREATER_THAN_OR_EQUALS, baseInstant);
+    }
+    return true;
+  }
+
+  /**
+   * Get completion time with a base instant time as a reference to fix the compatibility.
+   *
+   * @param baseInstant The base instant
+   * @param instantTime The instant time to query the completion time with
+   *
+   * @return Probability fixed completion time.
+   */
+  public Option<String> getCompletionTime(String baseInstant, String instantTime) {
+    Option<String> completionTimeOpt = getCompletionTime(instantTime);
+    if (completionTimeOpt.isPresent()) {
+      String completionTime = completionTimeOpt.get();
+      if (completionTime.length() != baseInstant.length()) {
+        // ==============================================================
+        // LEGACY CODE
+        // ==============================================================
+        // Fixes the completion time to reflect the completion sequence correctly
+        // if the file slice base instant time is not in datetime format. For example,
+        // 1. many test cases just use integer string as the instant time.
+        // 2. MDT uses compaction instant time as [delta_instant] + "001".
+
+        // CAUTION: this fix only works for OCC(Optimistic Concurrency Control).
+        // for NB-CC(Non-blocking Concurrency Control), the file slicing may be incorrect.
+        return Option.of(instantTime);
+      }
+    }
+    return completionTimeOpt;
   }
 
   /**
@@ -119,6 +192,10 @@ public class CompletionTimeQueryView implements AutoCloseable {
   }
 
   private void setCompletionTime(String instantTime, String completionTime) {
+    if (completionTime == null) {
+      // the meta-server instant does not have completion time
+      completionTime = instantTime;
+    }
     this.startToCompletionInstantTimeMap.putIfAbsent(instantTime, completionTime);
   }
 

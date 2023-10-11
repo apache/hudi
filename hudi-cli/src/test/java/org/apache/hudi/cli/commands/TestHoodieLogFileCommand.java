@@ -113,7 +113,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
     try (HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
         .onParentPath(new Path(partitionPath))
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-        .withFileId("test-log-fileid1").overBaseCommit("100").withFs(fs)
+        .withFileId("test-log-fileid1").withDeltaCommit("100").withFs(fs)
         .withSizeThreshold(1).build()) {
 
       // write data to file
@@ -210,7 +210,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
       writer =
           HoodieLogFormat.newWriterBuilder().onParentPath(new Path(partitionPath))
               .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-              .withFileId("test-log-fileid1").overBaseCommit(INSTANT_TIME).withFs(fs).withSizeThreshold(500).build();
+              .withFileId("test-log-fileid1").withDeltaCommit(INSTANT_TIME).withFs(fs).withSizeThreshold(500).build();
 
       SchemaTestUtil testUtil = new SchemaTestUtil();
       List<HoodieRecord> records1 = testUtil.generateHoodieTestRecords(0, 100).stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());

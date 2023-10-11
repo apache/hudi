@@ -170,7 +170,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
   private Pair<String, HoodieLogFile> appendRecordsToLogFile(String partitionPath, String fileId, List<HoodieRecord> records) throws Exception {
     try (HoodieLogFormat.Writer logWriter = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(basePath, partitionPath))
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId)
-        .overBaseCommit(currentInstantTime).withFs(fs).build()) {
+        .withDeltaCommit(currentInstantTime).withFs(fs).build()) {
       Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, currentInstantTime);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());

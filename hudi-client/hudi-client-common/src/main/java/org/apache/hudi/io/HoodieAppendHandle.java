@@ -44,8 +44,9 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
-import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
+import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.SizeEstimator;
@@ -99,11 +100,11 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   protected Writer writer;
 
   protected final List<WriteStatus> statuses;
-  // Total number of records written during an append
+  // Total number of records written during appending
   protected long recordsWritten = 0;
-  // Total number of records deleted during an append
+  // Total number of records deleted during appending
   protected long recordsDeleted = 0;
-  // Total number of records updated during an append
+  // Total number of records updated during appending
   protected long updatedRecordsWritten = 0;
   // Total number of new records inserted into the delta file
   protected long insertRecordsWritten = 0;
@@ -120,17 +121,15 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private final long maxBlockSize = config.getLogFileDataBlockMaxSize();
   // Header metadata for a log block
   protected final Map<HeaderMetadataType, String> header = new HashMap<>();
-  private SizeEstimator<HoodieRecord> sizeEstimator;
-  // Instant time of the basefile on which append operation is performed.
-  private String baseInstantTime;
+  private final SizeEstimator<HoodieRecord> sizeEstimator;
   // This is used to distinguish between normal append and logcompaction's append operation.
   private boolean isLogCompaction = false;
   // use writer schema for log compaction.
   private boolean useWriterSchema = false;
 
-  private Properties recordProperties = new Properties();
+  private final Properties recordProperties = new Properties();
   // Block Sequence number will be used to detect duplicate log blocks(by log reader) added due to spark task retries.
-  // It should always start with 0 for a given file slice. for roll overs and delete blocks, we increment by 1.
+  // It should always start with 0 for a given file slice. for rolling-over and delete blocks, we increment by 1.
   private int blockSequenceNumber = 0;
   // On task failures, a given task could be retried. So, this attempt number will track the number of attempts.
   private int attemptNumber = 0;
@@ -167,37 +166,28 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
   private void init(HoodieRecord record) {
     if (doInit) {
-      // extract some information from the first record
-      SliceView rtView = hoodieTable.getSliceView();
-      Option<FileSlice> fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);
-      // Set the base commit time as the current instantTime for new inserts into log files
-      String baseInstantTime;
+      String prevCommit = instantTime;
       String baseFile = "";
       List<String> logFiles = new ArrayList<>();
-      if (fileSlice.isPresent()) {
-        baseInstantTime = fileSlice.get().getBaseInstantTime();
-        baseFile = fileSlice.get().getBaseFile().map(BaseFile::getFileName).orElse("");
-        logFiles = fileSlice.get().getLogFiles().map(HoodieLogFile::getFileName).collect(Collectors.toList());
-      } else {
-        baseInstantTime = instantTime;
-        // Handle log file only case. This is necessary for the concurrent clustering and writer case (e.g., consistent hashing bucket index).
-        // NOTE: flink engine use instantTime to mark operation type, check BaseFlinkCommitActionExecutor::execute
-        if (record.getCurrentLocation() != null && HoodieInstantTimeGenerator.isValidInstantTime(record.getCurrentLocation().getInstantTime())) {
-          baseInstantTime = record.getCurrentLocation().getInstantTime();
+      if (config.isCDCEnabled()) {
+        // the cdc reader needs the base file metadata to have deterministic update sequence.
+        TableFileSystemView.SliceView rtView = hoodieTable.getSliceView();
+        Option<FileSlice> fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);
+        if (fileSlice.isPresent()) {
+          prevCommit = fileSlice.get().getBaseInstantTime();
+          baseFile = fileSlice.get().getBaseFile().map(BaseFile::getFileName).orElse("");
+          logFiles = fileSlice.get().getLogFiles().map(HoodieLogFile::getFileName).collect(Collectors.toList());
         }
-        // This means there is no base data file, start appending to a new log file
-        fileSlice = Option.of(new FileSlice(partitionPath, baseInstantTime, this.fileId));
-        LOG.info("New AppendHandle for partition :" + partitionPath);
       }
 
       // Prepare the first write status
-      writeStatus.setStat(new HoodieDeltaWriteStat());
+      HoodieDeltaWriteStat deltaWriteStat = new HoodieDeltaWriteStat();
+      writeStatus.setStat(deltaWriteStat);
       writeStatus.setFileId(fileId);
       writeStatus.setPartitionPath(partitionPath);
       averageRecordSize = sizeEstimator.sizeEstimate(record);
 
-      HoodieDeltaWriteStat deltaWriteStat = (HoodieDeltaWriteStat) writeStatus.getStat();
-      deltaWriteStat.setPrevCommit(baseInstantTime);
+      deltaWriteStat.setPrevCommit(prevCommit);
       deltaWriteStat.setPartitionPath(partitionPath);
       deltaWriteStat.setFileId(fileId);
       deltaWriteStat.setBaseFile(baseFile);
@@ -205,26 +195,37 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
       try {
         // Save hoodie partition meta in the partition path
-        HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, baseInstantTime,
+        HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, instantTime,
             new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath),
             hoodieTable.getPartitionMetafileFormat());
         partitionMetadata.trySave(getPartitionId());
 
-        // Since the actual log file written to can be different based on when rollover happens, we use the
-        // base file to denote some log appends happened on a slice. writeToken will still fence concurrent
-        // writers.
-        // https://issues.apache.org/jira/browse/HUDI-1517
-        createMarkerFile(partitionPath, FSUtils.makeBaseFileName(baseInstantTime, writeToken, fileId, hoodieTable.getBaseFileExtension()));
-
-        this.writer = createLogWriter(fileSlice, baseInstantTime);
+        this.writer = createLogWriter(getFileInstant(record));
       } catch (Exception e) {
         LOG.error("Error in update task at commit " + instantTime, e);
         writeStatus.setGlobalError(e);
         throw new HoodieUpsertException("Failed to initialize HoodieAppendHandle for FileId: " + fileId + " on commit "
-            + instantTime + " on HDFS path " + hoodieTable.getMetaClient().getBasePath() + "/" + partitionPath, e);
+            + instantTime + " on HDFS path " + hoodieTable.getMetaClient().getBasePathV2() + "/" + partitionPath, e);
       }
       doInit = false;
     }
+  }
+
+  /**
+   * Returns the instant time to use in the log file name.
+   */
+  private String getFileInstant(HoodieRecord<?> record) {
+    if (config.isConsistentHashingEnabled()) {
+      // Handle log file only case. This is necessary for the concurrent clustering and writer case (e.g., consistent hashing bucket index).
+      // NOTE: flink engine use instantTime to mark operation type, check BaseFlinkCommitActionExecutor::execute
+      String taggedInstant = HoodieRecordUtils.getCurrentLocationInstant(record);
+      if (HoodieInstantTimeGenerator.isValidInstantTime(taggedInstant) && !instantTime.equals(taggedInstant)) {
+        // the tagged instant is the pending clustering instant, use this instant in the file name so that
+        // the dual-write file is shadowed to the reader view.
+        return taggedInstant;
+      }
+    }
+    return instantTime;
   }
 
   /**
@@ -387,7 +388,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     statuses.add(this.writeStatus);
   }
 
-  private void processAppendResult(AppendResult result, List<HoodieRecord> recordList) throws IOException {
+  private void processAppendResult(AppendResult result, List<HoodieRecord> recordList) {
     HoodieDeltaWriteStat stat = (HoodieDeltaWriteStat) this.writeStatus.getStat();
 
     if (stat.getPath() == null) {
@@ -615,7 +616,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     }
 
     // Append if max number of records reached to achieve block size
-    if (numberOfRecords >= (long) (maxBlockSize / averageRecordSize)) {
+    if (numberOfRecords >= (maxBlockSize / averageRecordSize)) {
       // Recompute averageRecordSize before writing a new block and update existing value with
       // avg of new and old
       LOG.info("Flush log block to disk, the current avgRecordSize => " + averageRecordSize);
@@ -647,10 +648,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
   private static Map<HeaderMetadataType, String> getUpdatedHeader(Map<HeaderMetadataType, String> header, int blockSequenceNumber, long attemptNumber,
                                                                   HoodieWriteConfig config, boolean addBlockIdentifier) {
-    Map<HeaderMetadataType, String> updatedHeader = new HashMap<>();
-    updatedHeader.putAll(header);
+    Map<HeaderMetadataType, String> updatedHeader = new HashMap<>(header);
     if (addBlockIdentifier && !HoodieTableMetadata.isMetadataTable(config.getBasePath())) { // add block sequence numbers only for data table.
-      updatedHeader.put(HeaderMetadataType.BLOCK_IDENTIFIER, String.valueOf(attemptNumber) + "," + String.valueOf(blockSequenceNumber));
+      updatedHeader.put(HeaderMetadataType.BLOCK_IDENTIFIER, attemptNumber + "," + blockSequenceNumber);
     }
     return updatedHeader;
   }

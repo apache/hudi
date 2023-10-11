@@ -714,7 +714,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
             .onParentPath(FSUtils.getPartitionPath(metadataWriteConfig.getBasePath(), metadataPartition.getPartitionPath()))
             .withFileId(fileGroupFileId)
-            .overBaseCommit(instantTime)
+            .withDeltaCommit(instantTime)
             .withLogVersion(HoodieLogFile.LOGFILE_BASE_VERSION)
             .withFileSize(0L)
             .withSizeThreshold(metadataWriteConfig.getLogFileMaxSize())

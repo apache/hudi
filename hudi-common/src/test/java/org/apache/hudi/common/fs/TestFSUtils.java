@@ -228,7 +228,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     Path rlPath = new Path(new Path(partitionPath), oldLogFile);
     assertTrue(FSUtils.isLogFile(rlPath));
     assertEquals(fileName, FSUtils.getFileIdFromLogPath(rlPath));
-    assertEquals("100", FSUtils.getBaseCommitTimeFromLogPath(rlPath));
+    assertEquals("100", FSUtils.getDeltaCommitTimeFromLogPath(rlPath));
     assertEquals(1, FSUtils.getFileVersionFromLog(rlPath));
     assertNull(FSUtils.getTaskPartitionIdFromLogPath(rlPath));
     assertNull(FSUtils.getStageIdFromLogPath(rlPath));
@@ -246,7 +246,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     Path rlPath = new Path(new Path(partitionPath), logFile);
     assertTrue(FSUtils.isLogFile(rlPath));
     assertEquals(fileName, FSUtils.getFileIdFromLogPath(rlPath));
-    assertEquals("100", FSUtils.getBaseCommitTimeFromLogPath(rlPath));
+    assertEquals("100", FSUtils.getDeltaCommitTimeFromLogPath(rlPath));
     assertEquals(2, FSUtils.getFileVersionFromLog(rlPath));
     assertEquals(1, FSUtils.getTaskPartitionIdFromLogPath(rlPath));
     assertEquals(0, FSUtils.getStageIdFromLogPath(rlPath));
@@ -263,7 +263,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertTrue(FSUtils.isLogFile(path));
     assertEquals("log", FSUtils.getFileExtensionFromLog(path));
     assertEquals(fileName, FSUtils.getFileIdFromLogPath(path));
-    assertEquals("100", FSUtils.getBaseCommitTimeFromLogPath(path));
+    assertEquals("100", FSUtils.getDeltaCommitTimeFromLogPath(path));
     assertEquals(1, FSUtils.getTaskPartitionIdFromLogPath(path));
     assertEquals("1-0-1", FSUtils.getWriteTokenFromLogPath(path));
     assertEquals(0, FSUtils.getStageIdFromLogPath(path));
@@ -281,7 +281,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertFalse(FSUtils.isLogFile(path));
     assertEquals("archive", FSUtils.getFileExtensionFromLog(path));
     assertEquals(fileName, FSUtils.getFileIdFromLogPath(path));
-    assertEquals("", FSUtils.getBaseCommitTimeFromLogPath(path));
+    assertEquals("", FSUtils.getDeltaCommitTimeFromLogPath(path));
     assertEquals(1, FSUtils.getTaskPartitionIdFromLogPath(path));
     assertEquals("1-0-1", FSUtils.getWriteTokenFromLogPath(path));
     assertEquals(0, FSUtils.getStageIdFromLogPath(path));
@@ -350,8 +350,8 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertEquals(log5, logFilesList.get(4));
   }
 
-  public static String makeOldLogFileName(String fileId, String logFileExtension, String baseCommitTime, int version) {
-    return "." + String.format("%s_%s%s.%d", fileId, baseCommitTime, logFileExtension, version);
+  public static String makeOldLogFileName(String fileId, String logFileExtension, String deltaCommitTime, int version) {
+    return "." + String.format("%s_%s%s.%d", fileId, deltaCommitTime, logFileExtension, version);
   }
 
   @Test
@@ -372,7 +372,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
     String logFileName = FSUtils.makeLogFileName(fileId, LOG_EXTENSION, instantTime, version, writeToken);
     assertTrue(FSUtils.isLogFile(new Path(logFileName)));
-    assertEquals(instantTime, FSUtils.getBaseCommitTimeFromLogPath(new Path(logFileName)));
+    assertEquals(instantTime, FSUtils.getDeltaCommitTimeFromLogPath(new Path(logFileName)));
     assertEquals(fileId, FSUtils.getFileIdFromLogPath(new Path(logFileName)));
     assertEquals(version, FSUtils.getFileVersionFromLog(new Path(logFileName)));
     assertEquals(LOG_STR, FSUtils.getFileExtensionFromLog(new Path(logFileName)));
@@ -389,8 +389,6 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
     assertEquals(3, (int) FSUtils.getLatestLogVersion(FSUtils.getFs(basePath, new Configuration()),
         new Path(partitionPath.toString()), fileId, LOG_EXTENSION, instantTime).get().getLeft());
-    assertEquals(4, FSUtils.computeNextLogVersion(FSUtils.getFs(basePath, new Configuration()),
-        new Path(partitionPath.toString()), fileId, LOG_EXTENSION, instantTime));
   }
 
   @Test

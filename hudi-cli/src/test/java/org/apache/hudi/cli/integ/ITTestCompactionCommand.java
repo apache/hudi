@@ -22,7 +22,6 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.commands.TableCommand;
 import org.apache.hudi.cli.testutils.HoodieCLIIntegrationTestBase;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
-import org.apache.hudi.client.CompactionAdminClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.TestCompactionAdminClient;
 import org.apache.hudi.client.WriteStatus;
@@ -30,7 +29,6 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -40,12 +38,11 @@ import org.apache.hudi.common.testutils.CompactionTestUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.testutils.HoodieClientTestBase;
+
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.BeforeEach;
@@ -63,7 +60,6 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -229,10 +225,11 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
             String.format("compaction unscheduleFileId --fileId %s --partitionPath %s --sparkMaster %s",
             op.getFileGroupId().getFileId(), op.getFileGroupId().getPartitionPath(), "local"));
 
+    // Always has no file
     assertAll("Command run failed",
         () -> assertTrue(ShellEvaluationResultUtil.isSuccess(result)),
-        () -> assertTrue(removeNonWordAndStripSpace(result.toString()).contains("true")),
-        () -> assertFalse(removeNonWordAndStripSpace(result.toString()).contains("false")));
+        () -> assertEquals("No File renames needed to unschedule file from pending compaction. Operation successful.",
+            result.toString()));
   }
 
   /**
@@ -248,31 +245,15 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
         numEntriesPerInstant, numEntriesPerInstant, numEntriesPerInstant);
 
     metaClient.reloadActiveTimeline();
-    CompactionAdminClient client = new CompactionAdminClient(new HoodieSparkEngineContext(jsc), metaClient.getBasePath());
-    List<Pair<HoodieLogFile, HoodieLogFile>> renameFiles =
-        client.getRenamingActionsForUnschedulingCompactionPlan(metaClient, compactionInstant, 1, Option.empty(), false);
-
-    renameFiles.forEach(lfPair -> {
-      try {
-        metaClient.getFs().rename(lfPair.getLeft().getPath(), lfPair.getRight().getPath());
-      } catch (IOException e) {
-        throw new HoodieIOException(e.getMessage(), e);
-      }
-    });
-
-    client.unscheduleCompactionPlan(compactionInstant, false, 1, false);
 
     Object result = shell.evaluate(() ->
             String.format("compaction repair --instant %s --sparkMaster %s", compactionInstant, "local"));
 
-    // All Executes is succeeded, result contains true and has no false
-    // Expected:
-    // ║ File Id │ Source File Path │ Destination File Path │ Rename Executed? │ Rename Succeeded? │ Error ║
-    // ║ *       │     *            │        *              │    true          │     true          │       ║
+    // Always has no file
     assertAll("Command run failed",
         () -> assertTrue(ShellEvaluationResultUtil.isSuccess(result)),
-        () -> assertTrue(removeNonWordAndStripSpace(result.toString()).contains("true")),
-        () -> assertFalse(removeNonWordAndStripSpace(result.toString()).contains("false")));
+        () -> assertEquals("No File renames needed to repair compaction. Operation successful.",
+            result.toString()));
   }
 
   private String prepareScheduleCompaction() {

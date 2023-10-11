@@ -951,12 +951,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
             + "table could be in an inconsistent state. Pending restores: " + Arrays.toString(inflightRestoreTimeline.getInstantsAsStream()
             .map(instant -> instant.getTimestamp()).collect(Collectors.toList()).toArray()));
 
-    // if there are pending compactions, their instantTime must not be greater than that of this instant time
-    metaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant().ifPresent(latestPending ->
-        ValidationUtils.checkArgument(
-            HoodieTimeline.compareTimestamps(latestPending.getTimestamp(), HoodieTimeline.LESSER_THAN, instantTime),
-            "Latest pending compaction instant time must be earlier than this instant time. Latest Compaction :"
-                + latestPending + ",  Ingesting at " + instantTime));
     if (config.getFailedWritesCleanPolicy().isLazy()) {
       this.heartbeatClient.start(instantTime);
     }

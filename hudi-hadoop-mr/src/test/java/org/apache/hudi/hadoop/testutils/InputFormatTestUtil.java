@@ -359,7 +359,7 @@ public class InputFormatTestUtil {
                                                      String newCommit, String rolledBackInstant, int logVersion)
       throws InterruptedException, IOException {
     HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(partitionDir.getPath())).withFileId(fileId)
-        .overBaseCommit(baseCommit).withFs(fs).withLogVersion(logVersion).withRolloverLogWriteToken("1-0-1")
+        .withDeltaCommit(baseCommit).withFs(fs).withLogVersion(logVersion).withRolloverLogWriteToken("1-0-1")
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
     // generate metadata
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
@@ -385,7 +385,7 @@ public class InputFormatTestUtil {
       throws InterruptedException, IOException {
     HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(partitionDir.getPath()))
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId).withLogVersion(logVersion)
-        .withRolloverLogWriteToken("1-0-1").overBaseCommit(baseCommit).withFs(fs).build();
+        .withRolloverLogWriteToken("1-0-1").withDeltaCommit(newCommit).withFs(fs).build();
     List<IndexedRecord> records = new ArrayList<>();
     for (int i = offset; i < offset + numberOfRecords; i++) {
       records.add(SchemaTestUtil.generateAvroRecordFromJson(schema, i, newCommit, "fileid0"));
@@ -412,7 +412,7 @@ public class InputFormatTestUtil {
                                                                    String fileId, String baseCommit, String newCommit, String oldCommit, int logVersion)
       throws InterruptedException, IOException {
     HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(partitionDir.getPath()))
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId).overBaseCommit(baseCommit)
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId).withDeltaCommit(baseCommit)
         .withLogVersion(logVersion).withFs(fs).build();
 
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();

@@ -21,7 +21,7 @@ import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieDefaultTimeline, HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.{CompletionTimeQueryView, HoodieDefaultTimeline, HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util
 import org.apache.spark.sql.Row
@@ -152,12 +152,13 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
                                    maxInstant: String,
                                    merge: Boolean): java.util.List[Row] = {
     var fileSliceStream: java.util.stream.Stream[FileSlice] = null
+    val basePath = getBasePath(table)
+    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val completionTimeQueryView = new CompletionTimeQueryView(metaClient)
     if (!merge) {
       fileSliceStream = fsView.getLatestFileSlices(partition)
     } else {
       fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(partition, if (maxInstant.isEmpty) {
-        val basePath = getBasePath(table)
-        val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
         metaClient.getActiveTimeline.filterCompletedAndCompactionInstants().lastInstant().get().getTimestamp
       } else {
         maxInstant
@@ -177,10 +178,11 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
         val numLogFiles = fs.getLogFiles.count()
         val sumLogFileSize = fs.getLogFiles.iterator().asScala.map(_.getFileSize).sum
         val logFilesScheduledForCompactionTotalSize = fs.getLogFiles.iterator().asScala
-          .filter(logFile => logFile.getBaseCommitTime.equals(fs.getBaseInstantTime))
+          // this is candidate for next compaction scheduling(with compaction instant time > fs.getBaseInstantTime)
+          .filter(logFile => completionTimeQueryView.getCompletionTime(logFile.getDeltaCommitTime).isPresent)
           .map(_.getFileSize).sum
         val logFilesUnscheduledTotalSize = fs.getLogFiles.iterator().asScala
-          .filter(logFile => !logFile.getBaseCommitTime.equals(fs.getBaseInstantTime))
+          .filter(logFile => !completionTimeQueryView.getCompletionTime(logFile.getDeltaCommitTime).isPresent)
           .map(_.getFileSize).sum
         val logSelectedForCompactionToBaseRatio = if (baseFileSize > 0) {
           logFilesScheduledForCompactionTotalSize / (baseFileSize * 1.0)
@@ -193,10 +195,10 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
           -1
         }
         val logFilesCommitTimeEqualInstantTime = fs.getLogFiles.iterator().asScala
-          .filter(logFile => logFile.getBaseCommitTime.equals(fs.getBaseInstantTime))
+          .filter(logFile => logFile.getDeltaCommitTime.equals(fs.getBaseInstantTime))
           .mkString("[", ",", "]")
         val logFilesCommitTimeNonEqualInstantTime = fs.getLogFiles.iterator().asScala
-          .filter(logFile => !logFile.getBaseCommitTime.equals(fs.getBaseInstantTime))
+          .filter(logFile => !logFile.getDeltaCommitTime.equals(fs.getBaseInstantTime))
           .mkString("[", ",", "]")
         rows.add(Row(partition, fileId, baseInstantTime, baseFilePath, baseFileSize, numLogFiles, sumLogFileSize,
           logFilesScheduledForCompactionTotalSize, logFilesUnscheduledTotalSize, logSelectedForCompactionToBaseRatio,
@@ -204,6 +206,7 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
         ))
       }
     }
+    completionTimeQueryView.close()
     rows
   }
 
