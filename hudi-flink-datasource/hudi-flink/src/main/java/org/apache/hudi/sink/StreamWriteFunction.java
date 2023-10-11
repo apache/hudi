@@ -460,7 +460,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
 
   @SuppressWarnings("unchecked, rawtypes")
   private void flushRemaining(boolean endInput) {
-    writeMetrics.startCheckpointFlushing();
+    writeMetrics.startDataFlush();
     this.currentInstant = instantToWrite(hasData());
     if (this.currentInstant == null) {
       // in case there are empty checkpoints that has no input data
@@ -501,7 +501,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     // blocks flushing until the coordinator starts a new instant
     this.confirming = true;
 
-    writeMetrics.endCheckpointFlushing();
+    writeMetrics.endDataFlush();
     writeMetrics.resetAfterCommit();
   }
 
@@ -513,9 +513,9 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
 
   protected List<WriteStatus> writeBucket(String instant, DataBucket bucket, List<HoodieRecord> records) {
     bucket.preWrite(records);
-    writeMetrics.startSingleFileFlush();
+    writeMetrics.startFileFlush();
     List<WriteStatus> statuses = writeFunction.apply(records, instant);
-    writeMetrics.endSingleFileFlush();
+    writeMetrics.endFileFlush();
     writeMetrics.increaseNumOfFilesWritten();
     return statuses;
   }

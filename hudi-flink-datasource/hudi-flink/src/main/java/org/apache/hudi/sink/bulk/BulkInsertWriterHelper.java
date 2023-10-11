@@ -222,9 +222,9 @@ public class BulkInsertWriterHelper {
   }
 
   private WriteStatus closeWriteHandle(HoodieRowDataCreateHandle rowCreateHandle) throws IOException {
-    appendWriteMetrics.ifPresent(FlinkStreamWriteMetrics::startSingleFileFlush);
+    appendWriteMetrics.ifPresent(FlinkStreamWriteMetrics::startFileFlush);
     WriteStatus status = rowCreateHandle.close();
-    appendWriteMetrics.ifPresent(FlinkStreamWriteMetrics::endSingleFileFlush);
+    appendWriteMetrics.ifPresent(FlinkStreamWriteMetrics::endFileFlush);
     return status;
   }
 
