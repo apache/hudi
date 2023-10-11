@@ -89,7 +89,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> DATABASE_NAME = ConfigProperty
       .key("hoodie.database.name")
-      .noDefaultValue()
+      .noDefaultValue("Database name can't have default value as it's used to toggle Hive incremental query feature. See HUDI-2837")
       .withDocumentation("Database name that will be used for incremental query.If different databases have the same table name during incremental query, "
           + "we can set it to limit the table name under a specific database");
 
