@@ -220,5 +220,31 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     }
     return changePartitions;
   }
+
+  @Override
+  public void touchPartitionsToTable(String tableName, List<String> touchPartitions) {
+    if (touchPartitions.isEmpty()) {
+      LOG.info("No partitions to touch for " + tableName);
+      return;
+    }
+    LOG.info("Touching partitions " + touchPartitions.size() + " on " + tableName);
+    List<String> sqls = constructTouchPartitions(tableName, touchPartitions);
+    for (String sql : sqls) {
+      runSQL(sql);
+    }
+  }
+
+  private List<String> constructTouchPartitions(String tableName, List<String> partitions) {
+    List<String> touchPartitions = new ArrayList<>();
+    String useDatabase = "USE " + HIVE_ESCAPE_CHARACTER + databaseName + HIVE_ESCAPE_CHARACTER;
+    touchPartitions.add(useDatabase);
+    String alterTable = "ALTER TABLE " + HIVE_ESCAPE_CHARACTER + tableName + HIVE_ESCAPE_CHARACTER + " TOUCH";
+    for (String partition : partitions) {
+      String partitionClause = getPartitionClause(partition);
+      alterTable += " PARTITION (" + partitionClause + ")";
+    }
+    touchPartitions.add(alterTable);
+    return touchPartitions;
+  }
 }
 

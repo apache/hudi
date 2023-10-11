@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hive;
 
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -30,7 +31,6 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hive.ddl.DDLExecutor;
-import org.apache.hudi.hive.ddl.HMSDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.hive.ddl.JDBCExecutor;
@@ -53,6 +53,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.hadoop.utils.HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP;
@@ -88,12 +90,12 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     // disable jdbc and depend on metastore client for all hive registrations
     try {
       this.client = IMetaStoreClientUtil.getMSC(config.getHiveConf());
+      setMetaConf(config.getHiveConf());
       if (!StringUtils.isNullOrEmpty(config.getString(HIVE_SYNC_MODE))) {
         HiveSyncMode syncMode = HiveSyncMode.of(config.getString(HIVE_SYNC_MODE));
         switch (syncMode) {
           case HMS:
-            ddlExecutor = new HMSDDLExecutor(config, this.client);
-            break;
+            throw new UnsupportedOperationException("HMS sync mode is not supported.");
           case HIVEQL:
             ddlExecutor = new HiveQueryDDLExecutor(config, this.client);
             break;
@@ -129,6 +131,11 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   @Override
   public void updatePartitionsToTable(String tableName, List<String> changedPartitions) {
     ddlExecutor.updatePartitionsToTable(tableName, changedPartitions);
+  }
+
+  @Override
+  public void touchPartitionsToTable(String tableName, List<String> touchPartitions) {
+    ddlExecutor.touchPartitionsToTable(tableName, touchPartitions);
   }
 
   @Override
@@ -498,6 +505,16 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       return getInitialTable(tableName).getSd().getLocation();
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to get the basepath of the table " + tableId(databaseName, tableName), e);
+    }
+  }
+
+  private void setMetaConf(HiveConf configuration) throws TException {
+    Properties confProperties = configuration.getAllProperties();
+    Set<String> confPropertyNames = confProperties.stringPropertyNames();
+    for (String propertyName : confPropertyNames) {
+      if (propertyName.startsWith("hive.metastore.callerContext")) {
+        this.client.setMetaConf(propertyName, confProperties.getProperty(propertyName));
+      }
     }
   }
 }

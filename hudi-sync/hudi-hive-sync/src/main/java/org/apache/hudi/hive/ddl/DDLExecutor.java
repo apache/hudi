@@ -84,6 +84,14 @@ public interface DDLExecutor extends AutoCloseable {
   void updatePartitionsToTable(String tableName, List<String> changedPartitions);
 
   /**
+   * Touches partitions for a given table.
+   *
+   * @param tableName
+   * @param touchPartitions
+   */
+  public void touchPartitionsToTable(String tableName, List<String> touchPartitions);
+
+  /**
    * Drop partitions for a given table.
    *
    * @param tableName
