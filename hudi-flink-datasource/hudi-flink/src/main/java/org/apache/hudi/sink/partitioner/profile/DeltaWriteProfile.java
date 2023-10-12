@@ -77,7 +77,7 @@ public class DeltaWriteProfile extends WriteProfile {
         } else {
           smallFileSlice.getLogFiles().findFirst().ifPresent(logFile -> {
             // in case there is something error, and the file slice has no log file
-            sf.location = new HoodieRecordLocation(logFile.getBaseCommitTime(), logFile.getFileId());
+            sf.location = new HoodieRecordLocation(logFile.getDeltaCommitTime(), logFile.getFileId());
             sf.sizeBytes = getTotalFileSize(smallFileSlice);
             smallFileLocations.add(sf);
           });

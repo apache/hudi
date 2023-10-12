@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 
 import org.apache.avro.JsonProperties;
@@ -120,13 +121,13 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     writeParquetFile(typeCode, filePath, rowKeys);
 
     // Read and verify
-    Set<String> filtered =
+    Set<Pair<String, Long>> filtered =
         parquetUtils.filterRowKeys(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath), filter);
 
     assertEquals(filter.size(), filtered.size(), "Filtered count does not match");
 
-    for (String rowKey : filtered) {
-      assertTrue(filter.contains(rowKey), "filtered key must be in the given filter");
+    for (Pair<String, Long> rowKeyAndPosition : filtered) {
+      assertTrue(filter.contains(rowKeyAndPosition.getLeft()), "filtered key must be in the given filter");
     }
   }
 
@@ -147,12 +148,12 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     writeParquetFile(typeCode, filePath, rowKeys, schema, true, partitionPath);
 
     // Read and verify
-    List<HoodieKey> fetchedRows =
-        parquetUtils.fetchHoodieKeys(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath));
+    List<Pair<HoodieKey, Long>> fetchedRows =
+        parquetUtils.fetchRecordKeysWithPositions(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath));
     assertEquals(rowKeys.size(), fetchedRows.size(), "Total count does not match");
 
-    for (HoodieKey entry : fetchedRows) {
-      assertTrue(expected.contains(entry), "Record key must be in the given filter");
+    for (Pair<HoodieKey, Long> entry : fetchedRows) {
+      assertTrue(expected.contains(entry.getLeft()), "Record key must be in the given filter");
     }
   }
 
@@ -168,18 +169,18 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     }
 
     String filePath = Paths.get(basePath, "test.parquet").toUri().toString();
-    Schema schema = getSchemaWithFields(Arrays.asList(new String[]{"abc", "def"}));
+    Schema schema = getSchemaWithFields(Arrays.asList(new String[] {"abc", "def"}));
     writeParquetFile(BloomFilterTypeCode.SIMPLE.name(), filePath, rowKeys, schema, true, partitionPath,
         false, "abc", "def");
 
     // Read and verify
-    List<HoodieKey> fetchedRows =
-        parquetUtils.fetchHoodieKeys(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath),
-            Option.of(new TestBaseKeyGen("abc","def")));
+    List<Pair<HoodieKey, Long>> fetchedRows =
+        parquetUtils.fetchRecordKeysWithPositions(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath),
+            Option.of(new TestBaseKeyGen("abc", "def")));
     assertEquals(rowKeys.size(), fetchedRows.size(), "Total count does not match");
 
-    for (HoodieKey entry : fetchedRows) {
-      assertTrue(expected.contains(entry), "Record key must be in the given filter");
+    for (Pair<HoodieKey, Long> entry : fetchedRows) {
+      assertTrue(expected.contains(entry.getLeft()), "Record key must be in the given filter");
     }
   }
 

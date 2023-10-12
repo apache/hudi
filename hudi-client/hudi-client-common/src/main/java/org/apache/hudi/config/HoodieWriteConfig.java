@@ -752,6 +752,14 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "The class must be a subclass of `org.apache.hudi.callback.HoodieClientInitCallback`."
           + "By default, no Hudi client init callback is executed.");
 
+  public static final ConfigProperty<Boolean> WRITE_RECORD_POSITIONS = ConfigProperty
+      .key("hoodie.write.record.positions")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Whether to write record positions to the block header for data blocks containing updates and delete blocks. "
+          + "The record positions can be used to improve the performance of merging records from base and log files.");
+
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
    * operation are already prepped.
@@ -1277,6 +1285,10 @@ public class HoodieWriteConfig extends HoodieConfig {
   public boolean isCDCEnabled() {
     return getBooleanOrDefault(
         HoodieTableConfig.CDC_ENABLED, HoodieTableConfig.CDC_ENABLED.defaultValue());
+  }
+
+  public boolean isConsistentHashingEnabled() {
+    return getIndexType() == HoodieIndex.IndexType.BUCKET && getBucketIndexEngineType() == HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING;
   }
 
   public boolean isConsistentLogicalTimestampEnabled() {
@@ -2050,6 +2062,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public long getLogFileDataBlockMaxSize() {
     return getLong(HoodieStorageConfig.LOGFILE_DATA_BLOCK_MAX_SIZE);
+  }
+
+  public boolean shouldWriteRecordPositions() {
+    return getBoolean(WRITE_RECORD_POSITIONS);
   }
 
   public double getParquetCompressionRatio() {
@@ -3087,6 +3103,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withWritesFileIdEncoding(Integer fileIdEncoding) {
       writeConfig.setValue(WRITES_FILEID_ENCODING, Integer.toString(fileIdEncoding));
+      return this;
+    }
+
+    public Builder withWriteRecordPositionsEnabled(boolean shouldWriteRecordPositions) {
+      writeConfig.setValue(WRITE_RECORD_POSITIONS, String.valueOf(shouldWriteRecordPositions));
       return this;
     }
 

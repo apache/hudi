@@ -18,24 +18,19 @@
 
 package org.apache.hudi.common.table.log;
 
-import java.util.Iterator;
+import org.apache.hudi.common.model.HoodieLogFile;
 
-public abstract class CachingIterator<T> implements Iterator<T> {
-
-  protected T nextRecord;
-
-  protected abstract boolean doHasNext();
-
-  @Override
-  public final boolean hasNext() {
-    return nextRecord != null || doHasNext();
+/**
+ * A callback allowing plug-in logic for log file creation.
+ */
+public interface LogFileCreationCallback {
+  /**
+   * Executes action right before log file is created.
+   *
+   * @param logFile The log file.
+   * @return true if the action executes successfully.
+   */
+  default boolean preFileCreation(HoodieLogFile logFile) {
+    return true;
   }
-
-  @Override
-  public final T next() {
-    T record = nextRecord;
-    nextRecord = null;
-    return record;
-  }
-
 }

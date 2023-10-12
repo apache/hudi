@@ -96,6 +96,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
@@ -726,18 +727,23 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
         return;
       }
 
-      // we are not including log appends here, since they are already fail-safe.
+      // Ignores log file appended for update, since they are already fail-safe.
+      // but new created log files should be included.
       Set<String> invalidDataPaths = getInvalidDataPaths(markers);
       Set<String> validDataPaths = stats.stream()
           .map(HoodieWriteStat::getPath)
-          .filter(p -> p.endsWith(this.getBaseFileExtension()))
+          .collect(Collectors.toSet());
+      Set<String> validCdcDataPaths = stats.stream()
+          .map(HoodieWriteStat::getCdcStats)
+          .filter(Objects::nonNull)
+          .flatMap(cdcStat -> cdcStat.keySet().stream())
           .collect(Collectors.toSet());
 
       // Contains list of partially created files. These needs to be cleaned up.
       invalidDataPaths.removeAll(validDataPaths);
-
+      invalidDataPaths.removeAll(validCdcDataPaths);
       if (!invalidDataPaths.isEmpty()) {
-        LOG.info("Removing duplicate data files created due to task retries before committing. Paths=" + invalidDataPaths);
+        LOG.info("Removing duplicate files created due to task retries before committing. Paths=" + invalidDataPaths);
         Map<String, List<Pair<String, String>>> invalidPathsByPartition = invalidDataPaths.stream()
             .map(dp -> Pair.of(new Path(basePath, dp).getParent().toString(), new Path(basePath, dp).toString()))
             .collect(Collectors.groupingBy(Pair::getKey));

@@ -116,7 +116,7 @@ public class HoodieMultiTableServicesMain {
           .flatMap(p -> MultiTableServiceUtils.findHoodieTablesUnderPath(jsc, p).stream())
           .collect(Collectors.toList());
     } else {
-      tablePaths = MultiTableServiceUtils.getTablesToBeServedFromProps(props);
+      tablePaths = MultiTableServiceUtils.getTablesToBeServedFromProps(jsc, props);
     }
     LOG.info("All table paths: " + String.join(",", tablePaths));
     if (cfg.batch) {

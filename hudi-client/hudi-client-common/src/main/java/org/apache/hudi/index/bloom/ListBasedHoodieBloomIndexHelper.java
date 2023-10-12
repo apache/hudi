@@ -64,22 +64,23 @@ public class ListBasedHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper 
 
     List<HoodieKeyLookupResult> keyLookupResults =
         CollectionUtils.toStream(
-          new HoodieBloomIndexCheckFunction<Pair<HoodieFileGroupId, String>>(hoodieTable, config, Pair::getLeft, Pair::getRight)
-              .apply(fileComparisonPairList.iterator())
-        )
+            new HoodieBloomIndexCheckFunction<Pair<HoodieFileGroupId, String>>(hoodieTable, config, Pair::getLeft, Pair::getRight)
+                .apply(fileComparisonPairList.iterator())
+            )
             .flatMap(Collection::stream)
-            .filter(lr -> lr.getMatchingRecordKeys().size() > 0)
+            .filter(lr -> lr.getMatchingRecordKeysAndPositions().size() > 0)
             .collect(toList());
 
     return context.parallelize(keyLookupResults).flatMap(lookupResult ->
-        lookupResult.getMatchingRecordKeys().stream()
+        lookupResult.getMatchingRecordKeysAndPositions().stream()
             .map(recordKey -> new ImmutablePair<>(lookupResult, recordKey)).iterator()
     ).mapToPair(pair -> {
       HoodieKeyLookupResult lookupResult = pair.getLeft();
-      String recordKey = pair.getRight();
+      String recordKey = pair.getRight().getLeft();
+      long recordPosition = pair.getRight().getRight();
       return new ImmutablePair<>(
           new HoodieKey(recordKey, lookupResult.getPartitionPath()),
-          new HoodieRecordLocation(lookupResult.getBaseInstantTime(), lookupResult.getFileId()));
+          new HoodieRecordLocation(lookupResult.getBaseInstantTime(), lookupResult.getFileId(), recordPosition));
     });
   }
 }

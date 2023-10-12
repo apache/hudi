@@ -182,8 +182,8 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
     val (instant2, commitMetadata2) = (ret2.get().getLeft, ret2.get().getRight)
     assertEquals(instant2.getTimestamp, commit2Time)
     val relativePath2 = commitMetadata2.getFileIdAndRelativePaths.values().stream().findAny().get()
-    // deltacommit: .log file should contain the timestamp from base parquet file.
-    assert(relativePath2.contains(commit1Time))
+    // deltacommit: .log file should contain the timestamp of it's instant time.
+    assert(relativePath2.contains(commit2Time))
     assert(relativePath2.contains(HoodieFileFormat.HOODIE_LOG.getFileExtension))
 
     // Third Operation:
@@ -223,8 +223,8 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
     val (instant4, commitMetadata4) = (ret4.get().getLeft, ret4.get().getRight)
     assertEquals(instant4.getTimestamp, commit4Time)
     val relativePath4 = commitMetadata4.getFileIdAndRelativePaths.values().stream().findAny().get()
-    // deltacommit: .log file should contain the timestamp from base parquet file.
-    assert(relativePath4.contains(commit3Time))
+    // deltacommit: .log file should contain the timestamp of it's instant time.
+    assert(relativePath4.contains(commit4Time))
     assert(relativePath4.contains(HoodieFileFormat.HOODIE_LOG.getFileExtension))
   }
 }

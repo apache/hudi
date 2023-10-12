@@ -686,7 +686,7 @@ public class TestHoodieRealtimeRecordReader {
           InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, "fileid0", instantTime, newCommitTime,
               numRecords, numRecords, 0);
       writer.close();
-      createDeltaCommitFile(basePath, newCommitTime, "2016/05/01", "2016/05/01/.fileid0_100.log.1_1-0-1", "fileid0", schema.toString());
+      createDeltaCommitFile(basePath, newCommitTime, "2016/05/01", "2016/05/01/.fileid0_102.log.0_1-0-1", "fileid0", schema.toString());
 
       InputFormatTestUtil.setupIncremental(baseJobConf, "101", 1);
 

@@ -59,6 +59,7 @@ import static org.apache.hudi.common.testutils.RawTripTestPayload.recordToString
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS;
 import static org.apache.spark.sql.SaveMode.Append;
 import static org.apache.spark.sql.SaveMode.Overwrite;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -244,7 +245,13 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
       //Corrupt to prove that colstats does not exclude filegroup
       filesToCorrupt.forEach(TestDataSkippingWithMORColstats::corruptFile);
       assertEquals(1, filesToCorrupt.size());
-      assertThrows(SparkException.class, () -> readMatchingRecords().count());
+      if (shouldRollback) {
+        // the update log files got deleted during rollback,
+        // so the cols tats does not include the file groups with corrupt files.
+        assertDoesNotThrow(() -> readMatchingRecords().count(), "The non match file group got rollback correctly");
+      } else {
+        assertThrows(SparkException.class, () -> readMatchingRecords().count(), "The corrupt parquets are not excluded");
+      }
     }
   }
 

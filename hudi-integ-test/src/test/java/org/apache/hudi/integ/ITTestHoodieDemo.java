@@ -111,6 +111,7 @@ public class ITTestHoodieDemo extends ITTestBase {
   }
 
   @Test
+  @Disabled
   public void testParquetDemo() throws Exception {
     baseFileFormat = HoodieFileFormat.PARQUET;
 

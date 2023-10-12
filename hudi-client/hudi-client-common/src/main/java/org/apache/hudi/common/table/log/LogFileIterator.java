@@ -31,10 +31,7 @@ public class LogFileIterator<T> extends CachingIterator<HoodieRecord<T>> {
   Iterator<HoodieRecord> iterator;
 
   protected Option<HoodieRecord> removeLogRecord(String key) {
-    if (records.containsKey(key)) {
-      return Option.of(records.remove(key));
-    }
-    return Option.empty();
+    return Option.ofNullable(records.remove(key));
   }
 
   public LogFileIterator(HoodieMergedLogRecordScanner scanner) {
@@ -42,7 +39,7 @@ public class LogFileIterator<T> extends CachingIterator<HoodieRecord<T>> {
     this.records = scanner.getRecords();
   }
 
-  private Boolean hasNextInternal() {
+  private boolean hasNextInternal() {
     if (iterator == null) {
       iterator = records.values().iterator();
     }
@@ -54,7 +51,7 @@ public class LogFileIterator<T> extends CachingIterator<HoodieRecord<T>> {
   }
 
   @Override
-  protected Boolean doHasNext() {
+  protected boolean doHasNext() {
     return hasNextInternal();
   }
 }

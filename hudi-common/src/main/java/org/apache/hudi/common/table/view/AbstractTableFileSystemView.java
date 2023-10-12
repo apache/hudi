@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
@@ -91,6 +92,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   protected HoodieTableMetaClient metaClient;
 
+  protected CompletionTimeQueryView completionTimeQueryView;
+
   // This is the commits timeline that will be visible for all views extending this view
   // This is nothing but the write timeline, which contains both ingestion and compaction(major and minor) writers.
   private HoodieTimeline visibleCommitsAndCompactionTimeline;
@@ -115,6 +118,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   protected void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
     this.metaClient = metaClient;
+    this.completionTimeQueryView = new CompletionTimeQueryView(metaClient);
     refreshTimeline(visibleActiveTimeline);
     resetFileGroupsReplaced(visibleCommitsAndCompactionTimeline);
     this.bootstrapIndex =  BootstrapIndex.getBootstrapIndex(metaClient);
@@ -136,6 +140,20 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   protected void refreshTimeline(HoodieTimeline visibleActiveTimeline) {
     this.visibleCommitsAndCompactionTimeline = visibleActiveTimeline.getWriteTimeline();
+  }
+
+  /**
+   * Refresh the completion time query view.
+   */
+  protected void refreshCompletionTimeQueryView() {
+    this.completionTimeQueryView = new CompletionTimeQueryView(metaClient);
+  }
+
+  /**
+   * Returns the completion time for instant.
+   */
+  public Option<String> getCompletionTime(String instantTime) {
+    return this.completionTimeQueryView.getCompletionTime(instantTime, instantTime);
   }
 
   /**
@@ -203,11 +221,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       if (baseFiles.containsKey(pair)) {
         baseFiles.get(pair).forEach(group::addBaseFile);
       }
-      if (logFiles.containsKey(pair)) {
-        logFiles.get(pair).forEach(group::addLogFile);
-      }
-
       if (addPendingCompactionFileSlice) {
+        // pending compaction file slice must be added before log files so that
+        // the log files completed later than the compaction instant time could be included
+        // in the file slice with that compaction instant time as base instant time.
         Option<Pair<String, CompactionOperation>> pendingCompaction =
             getPendingCompactionOperationWithInstant(group.getFileGroupId());
         if (pendingCompaction.isPresent()) {
@@ -215,6 +232,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
           // so that any new ingestion uses the correct base-instant
           group.addNewFileSliceAtInstant(pendingCompaction.get().getKey());
         }
+      }
+      if (logFiles.containsKey(pair)) {
+        logFiles.get(pair).stream().sorted(HoodieLogFile.getLogFileComparator()).forEach(logFile -> group.addLogFile(completionTimeQueryView, logFile));
       }
       fileGroups.add(group);
     });
@@ -266,6 +286,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     try {
       writeLock.lock();
       this.metaClient = null;
+      this.completionTimeQueryView = null;
       this.visibleCommitsAndCompactionTimeline = null;
       clear();
     } finally {

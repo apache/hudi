@@ -233,21 +233,21 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     initWriteConfigAndMetatableWriter(writeConfig, true);
     syncTableMetadata(writeConfig);
     validateMetadata(testTable);
-    doWriteInsertAndUpsert(testTable);
+    doWriteInsertAndUpsert(testTable, "0000003", "0000004", false);
     validateMetadata(testTable);
     if (addRollback) {
       // trigger an UPSERT that will be rolled back
-      doWriteOperationAndValidate(testTable, "0000003");
+      doWriteOperationAndValidate(testTable, "0000005");
 
       // rollback last commit
-      doRollbackAndValidate(testTable, "0000003", "0000004");
+      doRollbackAndValidate(testTable, "0000005", "0000006");
     }
 
     // trigger couple of upserts
-    doWriteOperation(testTable, "0000005");
-    doWriteOperation(testTable, "0000006");
     doWriteOperation(testTable, "0000007");
-    doCleanAndValidate(testTable, "0000008", Arrays.asList("0000007"));
+    doWriteOperation(testTable, "0000008");
+    doWriteOperation(testTable, "0000009");
+    doCleanAndValidate(testTable, "0000010", Arrays.asList("0000009"));
     validateMetadata(testTable, true);
   }
 
@@ -1953,12 +1953,13 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   private void testTableOperationsImpl(HoodieSparkEngineContext engineContext, HoodieWriteConfig writeConfig) throws IOException {
 
     String newCommitTime = null;
+    String instantToRestore = null;
     List<HoodieRecord> records = new ArrayList<>();
     List<WriteStatus> writeStatuses = null;
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
       // Write 1 (Bulk insert)
-      newCommitTime = "20210101000100000";
+      newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       records = dataGen.generateInserts(newCommitTime, 20);
       client.startCommitWithTime(newCommitTime);
       writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), newCommitTime).collect();
@@ -1966,7 +1967,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       validateMetadata(client);
 
       // Write 2 (inserts)
-      newCommitTime = "20210101000200000";
+      newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
       validateMetadata(client);
 
@@ -1976,14 +1977,14 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       validateMetadata(client);
 
       // Write 3 (updates)
-      newCommitTime = "20210101000300000";
+      newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
       records = dataGen.generateUniqueUpdates(newCommitTime, 10);
       writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
 
       // Write 4 (updates and inserts)
-      newCommitTime = "20210101000400000";
+      newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
       records = dataGen.generateUpdates(newCommitTime, 10);
       writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
@@ -1992,14 +1993,15 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // Compaction
       if (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ) {
-        newCommitTime = "20210101000500000";
+        newCommitTime = HoodieActiveTimeline.createNewInstantTime();
         client.scheduleCompactionAtInstant(newCommitTime, Option.empty());
         client.compact(newCommitTime);
         validateMetadata(client);
       }
 
       // Write 5 (updates and inserts)
-      newCommitTime = "20210101000600000";
+      newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      instantToRestore = newCommitTime;
       client.startCommitWithTime(newCommitTime);
       records = dataGen.generateUpdates(newCommitTime, 5);
       writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
@@ -2012,26 +2014,26 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // Compaction
       if (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ) {
-        newCommitTime = "20210101000700000";
+        newCommitTime = HoodieActiveTimeline.createNewInstantTime();
         client.scheduleCompactionAtInstant(newCommitTime, Option.empty());
         client.compact(newCommitTime);
         validateMetadata(client);
       }
 
       // upserts
-      newCommitTime = "20210101000900000";
+      newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
       records = dataGen.generateUpdates(newCommitTime, 5);
       writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
 
       // Clean
-      newCommitTime = "20210101001000000";
+      newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       client.clean(newCommitTime);
       validateMetadata(client);
 
       // Restore
-      client.restoreToInstant("20210101000600000", writeConfig.isMetadataTableEnabled());
+      client.restoreToInstant(instantToRestore, writeConfig.isMetadataTableEnabled());
       validateMetadata(client);
     }
   }
@@ -3167,6 +3169,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   }
 
   @Test
+  @Disabled("[HUDI-2461] Make MDT as non-blocking")
+  // because the MDT always uses [instant time + "001"] as the compaction instant time,
+  // there is no way to support out-of-order commits until we also make the MDT non-blocking.
   public void testOutOfOrderCommits() throws Exception {
     init(HoodieTableType.COPY_ON_WRITE);
     // Disable small file handling that way multiple files are created for small batches.

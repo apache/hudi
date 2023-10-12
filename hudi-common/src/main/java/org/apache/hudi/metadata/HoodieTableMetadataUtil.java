@@ -392,7 +392,9 @@ public class HoodieTableMetadataUtil {
 
                         Map<String, Long> cdcPathAndSizes = stat.getCdcStats();
                         if (cdcPathAndSizes != null && !cdcPathAndSizes.isEmpty()) {
-                          map.putAll(cdcPathAndSizes);
+                          cdcPathAndSizes.entrySet().forEach(cdcEntry -> {
+                            map.put(FSUtils.getFileName(cdcEntry.getKey(), partitionStatName), cdcEntry.getValue());
+                          });
                         }
                         return map;
                       },

@@ -82,7 +82,7 @@ public class DirectMarkerTransactionManager extends TransactionManager {
       throw new HoodieNotSupportedException("Only Support ZK-based lock for DirectMarkerTransactionManager now.");
     }
     TypedProperties props = new TypedProperties(writeConfig.getProps());
-    props.setProperty(LockConfiguration.ZK_LOCK_KEY_PROP_KEY, partitionPath + "/" + fileId);
+    props.setProperty(LockConfiguration.ZK_LOCK_KEY_PROP_KEY, (null != partitionPath && !partitionPath.isEmpty()) ? partitionPath + "/" + fileId : fileId);
     return props;
   }
 

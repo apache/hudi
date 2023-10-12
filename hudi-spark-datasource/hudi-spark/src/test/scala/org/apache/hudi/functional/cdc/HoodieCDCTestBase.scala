@@ -38,6 +38,7 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNull}
 
+import java.util.function.Predicate
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
@@ -113,6 +114,12 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
       classOf[HoodieCommitMetadata]
     )
     commitMetadata.getWriteStats.asScala.flatMap(_.getCdcStats.keys).toList
+  }
+
+  protected def isFilesExistInFileSystem(files: List[String]): Boolean = {
+    files.stream().allMatch(new Predicate[String] {
+      override def test(file: String): Boolean = fs.exists(new Path(basePath + "/" + file))
+    })
   }
 
   protected def getCDCBlocks(relativeLogFile: String, cdcSchema: Schema): List[HoodieDataBlock] = {

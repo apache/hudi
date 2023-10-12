@@ -147,8 +147,10 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieSparkClientTestHarne
         String fileId = testTable.addCommit(instantTime).getFileIdWithInserts(entry.getKey(), recordsPerSlice.toArray(new HoodieRecord[0]));
         Tuple2<String, String> fileIdInstantTimePair = new Tuple2<>(fileId, instantTime);
         List<Tuple2<HoodieKey, HoodieRecordLocation>> expectedEntries = new ArrayList<>();
+        // record position
+        long position = 0;
         for (HoodieRecord record : recordsPerSlice) {
-          expectedEntries.add(new Tuple2<>(record.getKey(), new HoodieRecordLocation(fileIdInstantTimePair._2, fileIdInstantTimePair._1)));
+          expectedEntries.add(new Tuple2<>(record.getKey(), new HoodieRecordLocation(fileIdInstantTimePair._2, fileIdInstantTimePair._1, position++)));
         }
         expectedList.put(new Tuple2<>(entry.getKey(), fileIdInstantTimePair._1), expectedEntries);
       }
