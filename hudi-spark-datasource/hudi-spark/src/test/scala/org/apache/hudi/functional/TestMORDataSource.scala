@@ -27,7 +27,7 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
-import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.testutils.RawTripTestPayload.{recordToString, recordsToStrings}
 import org.apache.hudi.common.util
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.TestCOWDataSource.convertColumnsToNullable
@@ -992,6 +992,89 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option("hoodie.clustering.plan.strategy.sort.columns", "struct_cluster_col")
       .mode(SaveMode.Overwrite)
       .save(basePath)
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
+  def testClusteringSamePrecombine(recordType: HoodieRecordType): Unit = {
+    var writeOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.OPERATION.key() -> DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      DataSourceWriteOptions.TABLE_TYPE.key()-> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
+      "hoodie.clustering.inline"-> "true",
+      "hoodie.clustering.inline.max.commits" -> "2",
+      "hoodie.clustering.plan.strategy.sort.columns" -> "_row_key",
+      "hoodie.metadata.enable" -> "false",
+      "hoodie.datasource.write.row.writer.enable" -> "false"
+    )
+    if (recordType.equals(HoodieRecordType.SPARK)) {
+      writeOpts = Map(HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[HoodieSparkRecordMerger].getName,
+        HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet") ++ writeOpts
+    }
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 10)).asScala
+    val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(writeOpts)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    val records2 = recordsToStrings(dataGen.generateUniqueUpdates("002", 5)).asScala
+    val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
+    inputDF2.write.format("org.apache.hudi")
+      .options(writeOpts)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    assertEquals(5,
+      spark.read.format("hudi").load(basePath)
+        .select("_row_key", "partition", "rider")
+        .except(inputDF2.select("_row_key", "partition", "rider")).count())
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
+  def testClusteringSamePrecombineWithDelete(recordType: HoodieRecordType): Unit = {
+    var writeOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.OPERATION.key() -> DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      DataSourceWriteOptions.TABLE_TYPE.key() -> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
+      "hoodie.clustering.inline" -> "true",
+      "hoodie.clustering.inline.max.commits" -> "2",
+      "hoodie.clustering.plan.strategy.sort.columns" -> "_row_key",
+      "hoodie.metadata.enable" -> "false",
+      "hoodie.datasource.write.row.writer.enable" -> "false"
+    )
+    if (recordType.equals(HoodieRecordType.SPARK)) {
+      writeOpts = Map(HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[HoodieSparkRecordMerger].getName,
+        HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet") ++ writeOpts
+    }
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 10)).asScala
+    val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(writeOpts)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    writeOpts = writeOpts + (DataSourceWriteOptions.OPERATION.key() -> DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
+    val records2 = recordsToStrings(dataGen.generateUniqueUpdates("002", 5)).asScala
+    val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
+    inputDF2.write.format("org.apache.hudi")
+      .options(writeOpts)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    assertEquals(5,
+      spark.read.format("hudi").load(basePath).count())
   }
 
   @ParameterizedTest
