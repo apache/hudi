@@ -60,7 +60,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.function.UnaryOperator;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 
@@ -158,13 +157,12 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
 
   private static class RecordIterator implements ClosableIterator<IndexedRecord> {
 
-    private final Boolean whichImplementation = false;
     private byte[] content;
     private final SizeAwareDataInputStream dis;
     private final GenericDatumReader<IndexedRecord> reader;
     private final ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
     private Option<Schema> castSchema = Option.empty();
-    private UnaryOperator<Object> converter;
+    //private UnaryOperator<Object> converter;
     private int totalRecords = 0;
     private int readRecords = 0;
 
@@ -178,21 +176,22 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
       if (new HoodieAvroDataBlockVersion(version).hasRecordCount()) {
         this.totalRecords = this.dis.readInt();
       }
-      if (whichImplementation) {
-        if (AvroCastingGenericRecord.recordNeedsRewriteForExtendedAvroSchemaEvolution(writerSchema, readerSchema)) {
-          this.reader = new GenericDatumReader<>(writerSchema, writerSchema);
-          this.castSchema = Option.of(readerSchema);
-        } else {
-          this.reader = new GenericDatumReader<>(writerSchema, readerSchema);
-        }
+
+      if (AvroCastingGenericRecord.recordNeedsRewriteForExtendedAvroSchemaEvolution(writerSchema, readerSchema)) {
+        this.reader = new GenericDatumReader<>(writerSchema, writerSchema);
+        this.castSchema = Option.of(readerSchema);
       } else {
-        this.converter = AvroCastingGenericRecord.getConverter(writerSchema, readerSchema);
-        if (this.converter != null) {
-          this.reader = new GenericDatumReader<>(writerSchema, writerSchema);
-        } else {
-          this.reader = new GenericDatumReader<>(writerSchema, readerSchema);
-        }
+        this.reader = new GenericDatumReader<>(writerSchema, readerSchema);
       }
+
+      /*
+      this.converter = AvroCastingGenericRecord.getConverter(writerSchema, readerSchema);
+      if (this.converter != null) {
+        this.reader = new GenericDatumReader<>(writerSchema, writerSchema);
+      } else {
+        this.reader = new GenericDatumReader<>(writerSchema, readerSchema);
+      }
+      */
     }
 
     public static RecordIterator getInstance(HoodieAvroDataBlock dataBlock, byte[] content) throws IOException {
@@ -225,15 +224,16 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
         IndexedRecord record = this.reader.read(null, decoder);
         this.dis.skipBytes(recordLength);
         this.readRecords++;
-        if (whichImplementation) {
-          if (this.castSchema.isPresent()) {
-            return  HoodieAvroUtils.rewriteRecordWithNewSchema(record, this.castSchema.get());
-          }
-        } else {
-          if (this.converter != null) {
-            return (IndexedRecord) this.converter.apply(record);
-          }
+
+        if (this.castSchema.isPresent()) {
+          return  HoodieAvroUtils.rewriteRecordWithNewSchema(record, this.castSchema.get());
         }
+
+        /*
+        if (this.converter != null) {
+          return (IndexedRecord) this.converter.apply(record);
+        }
+        */
         return record;
       } catch (IOException e) {
         throw new HoodieIOException("Unable to convert bytes to record.", e);

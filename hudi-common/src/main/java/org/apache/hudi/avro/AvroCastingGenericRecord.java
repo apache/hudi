@@ -98,7 +98,7 @@ public class AvroCastingGenericRecord implements GenericRecord {
    * NOTE: this does not determine whether the schema evolution is valid. It is just trying to find if the schema evolves from
    * a number to string, as quick as possible.
    */
-  public static Boolean recordNeedsRewriteForExtendedAvroSchemaEvolution(Schema writerSchema, Schema readerSchema) {
+  public static boolean recordNeedsRewriteForExtendedAvroSchemaEvolution(Schema writerSchema, Schema readerSchema) {
     if (writerSchema.equals(readerSchema)) {
       return false;
     }
@@ -138,7 +138,7 @@ public class AvroCastingGenericRecord implements GenericRecord {
     }
   }
 
-  private static Boolean needsRewriteToString(Schema schema) {
+  private static  boolean needsRewriteToString(Schema schema) {
     switch (schema.getType()) {
       case INT:
       case LONG:
