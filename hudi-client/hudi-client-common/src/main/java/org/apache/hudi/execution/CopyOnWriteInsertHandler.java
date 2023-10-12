@@ -19,7 +19,6 @@
 package org.apache.hudi.execution;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
@@ -95,7 +94,7 @@ public class CopyOnWriteInsertHandler<T>
           record.getPartitionPath(), idPrefix, taskContextSupplier);
       handles.put(partitionPath, handle);
     }
-    handle.write(record, genResult.schema, new TypedProperties(genResult.props));
+    handle.write(record, genResult.schema, config.getProps());
   }
 
   @Override

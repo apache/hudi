@@ -229,7 +229,7 @@ public class HoodieConfig implements Serializable {
   }
 
   public TypedProperties getProps() {
-    return getProps(false);
+    return props;
   }
 
   public TypedProperties getProps(boolean includeGlobalProps) {
