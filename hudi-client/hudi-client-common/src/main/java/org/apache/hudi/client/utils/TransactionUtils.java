@@ -67,7 +67,8 @@ public class TransactionUtils {
       Option<HoodieInstant> lastCompletedTxnOwnerInstant,
       boolean reloadActiveTimeline,
       Set<String> pendingInstants) throws HoodieWriteConflictException {
-    if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
+    // Skip to resolve conflict if there are multiple writers working on the same MOR table with simple bucket index
+    if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl() && !config.isLocklessMultiWriter()) {
       // deal with pendingInstants
       Stream<HoodieInstant> completedInstantsDuringCurrentWriteOperation = getCompletedInstantsDuringCurrentWriteOperation(table.getMetaClient(), pendingInstants);
 

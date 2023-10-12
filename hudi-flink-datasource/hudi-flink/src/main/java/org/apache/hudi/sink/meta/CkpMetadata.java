@@ -200,6 +200,19 @@ public class CkpMetadata implements Serializable, AutoCloseable {
     return this.instantCache;
   }
 
+  @Nullable
+  @VisibleForTesting
+  public String lastCompleteInstant() {
+    load();
+    for (int i = this.messages.size() - 1; i >= 0; i--) {
+      CkpMessage ckpMsg = this.messages.get(i);
+      if (ckpMsg.isComplete()) {
+        return ckpMsg.getInstant();
+      }
+    }
+    return null;
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------

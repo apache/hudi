@@ -216,6 +216,7 @@ public class StreamerUtil {
         properties.put(option.key(), option.defaultValue());
       }
     }
+    properties.put(HoodieTableConfig.TYPE.key(), conf.getString(FlinkOptions.TABLE_TYPE));
     return new TypedProperties(properties);
   }
 

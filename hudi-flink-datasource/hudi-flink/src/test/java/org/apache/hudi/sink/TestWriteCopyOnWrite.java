@@ -523,6 +523,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   public void testWriteMultiWriterInvolved() throws Exception {
     conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
     conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    conf.setString(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE, HoodieIndex.BucketIndexEngineType.SIMPLE.name());
     conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
 
     TestHarness pipeline1 = preparePipeline(conf)
@@ -540,9 +541,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .checkWrittenData(EXPECTED3, 1);
     // step to commit the 2nd txn, should throw exception
     // for concurrent modification of same fileGroups
-    pipeline1.checkpoint(1)
-        .assertNextEvent()
-        .checkpointCompleteThrows(1, HoodieWriteConflictException.class, "Cannot resolve conflicts");
+    testConcurrentCommit(pipeline1);
   }
 
   // case2: txn2's time range has partial overlap with txn1
@@ -552,6 +551,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   public void testWriteMultiWriterPartialOverlapping() throws Exception {
     conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
     conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    conf.setString(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE, HoodieIndex.BucketIndexEngineType.SIMPLE.name());
     conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
 
     TestHarness pipeline1 = preparePipeline(conf)
@@ -574,7 +574,11 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
 
     // step to commit the 2nd txn, should throw exception
     // for concurrent modification of same fileGroups
-    pipeline2.checkpoint(1)
+    testConcurrentCommit(pipeline2);
+  }
+
+  protected void testConcurrentCommit(TestHarness pipeline) throws Exception {
+    pipeline.checkpoint(1)
         .assertNextEvent()
         .checkpointCompleteThrows(1, HoodieWriteConflictException.class, "Cannot resolve conflicts");
   }

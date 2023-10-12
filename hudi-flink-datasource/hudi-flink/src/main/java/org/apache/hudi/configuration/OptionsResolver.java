@@ -159,6 +159,13 @@ public class OptionsResolver {
   }
 
   /**
+   * Returns whether the table index is simple bucket index.
+   */
+  public static boolean isSimpleBucketIndexType(Configuration conf) {
+    return isBucketIndexType(conf) && getBucketEngineType(conf).equals(HoodieIndex.BucketIndexEngineType.SIMPLE);
+  }
+
+  /**
    * Returns the default plan strategy class.
    */
   public static String getDefaultPlanStrategyClassName(Configuration conf) {
@@ -358,6 +365,13 @@ public class OptionsResolver {
    */
   public static boolean allowCommitOnEmptyBatch(Configuration conf) {
     return conf.getBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false);
+  }
+
+  /**
+   * Returns whether this is lockless multi-writer ingestion.
+   */
+  public static boolean isLocklessMultiWriter(Configuration config) {
+    return isMorTable(config) && isSimpleBucketIndexType(config) && isOptimisticConcurrencyControl(config);
   }
 
   public static boolean isLazyFailedWritesCleanPolicy(Configuration conf) {
