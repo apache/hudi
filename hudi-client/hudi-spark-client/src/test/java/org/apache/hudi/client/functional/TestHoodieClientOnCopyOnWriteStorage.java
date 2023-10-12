@@ -1545,7 +1545,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     // setup clustering config.
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
-        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).withInlineClustering(false).withScheduleInlineClustering(scheduleInlineClustering)
+        .withClusteringTargetPartitions(0).withAsyncClusteringMaxCommits(1).withInlineClustering(false).withScheduleInlineClustering(scheduleInlineClustering)
         .build();
 
     HoodieWriteConfig config = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY).withAutoCommit(false)
@@ -1557,7 +1557,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     List<HoodieRecord> records1 = dataGen.generateInserts(commitTime1, 200);
     client.startCommitWithTime(commitTime1);
     JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(records1, 2);
-    JavaRDD<WriteStatus> statuses = client.upsert(insertRecordsRDD1, commitTime1);
+    JavaRDD<WriteStatus> statuses = client.insert(insertRecordsRDD1, commitTime1);
     List<WriteStatus> statusList = statuses.collect();
     assertNoWriteErrors(statusList);
     client.commit(commitTime1, statuses);

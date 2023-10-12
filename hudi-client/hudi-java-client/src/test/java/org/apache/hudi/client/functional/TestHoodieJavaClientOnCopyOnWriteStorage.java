@@ -819,7 +819,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
 
     // setup clustering config.
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
-        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).withInlineClustering(false).withScheduleInlineClustering(scheduleInlineClustering)
+        .withClusteringTargetPartitions(0).withAsyncClusteringMaxCommits(1).withInlineClustering(false).withScheduleInlineClustering(scheduleInlineClustering)
         .withClusteringExecutionStrategyClass(JavaSortAndSizeExecutionStrategy.class.getName())
         .withClusteringPlanStrategyClass(JavaSizeBasedClusteringPlanStrategy.class.getName())
         .build();
@@ -832,7 +832,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     String commitTime1 = HoodieActiveTimeline.createNewInstantTime();
     List<HoodieRecord> records1 = dataGen.generateInserts(commitTime1, 200);
     client.startCommitWithTime(commitTime1);
-    List<WriteStatus> statuses = client.upsert(records1, commitTime1);
+    List<WriteStatus> statuses = client.insert(records1, commitTime1);
     assertNoWriteErrors(statuses);
     client.commit(commitTime1, statuses);
 
