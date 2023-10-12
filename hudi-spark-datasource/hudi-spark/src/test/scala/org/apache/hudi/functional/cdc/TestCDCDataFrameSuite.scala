@@ -688,4 +688,69 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
 
     assertEquals(spark.read.format("org.apache.hudi").load(basePath).count(), 2)
   }
+
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieCDCSupplementalLoggingMode])
+  def testCDCCleanRetain(loggingMode: HoodieCDCSupplementalLoggingMode): Unit = {
+    val options = Map(
+      "hoodie.table.cdc.enabled" -> "true",
+      "hoodie.table.cdc.supplemental.logging.mode" -> loggingMode.name(),
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      "hoodie.bulkinsert.shuffle.parallelism" -> "2",
+      "hoodie.delete.shuffle.parallelism" -> "1",
+      "hoodie.datasource.write.recordkey.field" -> "_row_key",
+      "hoodie.datasource.write.precombine.field" -> "timestamp",
+      "hoodie.table.name" -> ("hoodie_test" + loggingMode.name()),
+      "hoodie.clean.automatic" -> "true",
+      "hoodie.cleaner.commits.retained" -> "1"
+    )
+
+    // Insert Operation
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(options)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(spark.sessionState.newHadoopConf)
+      .build()
+
+    // Upsert Operation
+    val hoodieRecords2 = dataGen.generateUniqueUpdates("001", 50)
+    val records2 = recordsToStrings(hoodieRecords2).toList
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
+    inputDF2.write.format("org.apache.hudi")
+      .options(options)
+      .option("hoodie.datasource.write.operation", "upsert")
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val instant2 = metaClient.reloadActiveTimeline.lastInstant().get()
+    val cdcLogFiles2 = getCDCLogFile(instant2)
+    assertTrue(isFilesExistInFileSystem(cdcLogFiles2))
+
+    // Upsert Operation
+    val hoodieRecords3 = dataGen.generateUniqueUpdates("002", 50)
+    val records3 = recordsToStrings(hoodieRecords3).toList
+    val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 2))
+    inputDF3.write.format("org.apache.hudi")
+      .options(options)
+      .option("hoodie.datasource.write.operation", "upsert")
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // Upsert Operation
+    val hoodieRecords4 = dataGen.generateUniqueUpdates("003", 50)
+    val records4 = recordsToStrings(hoodieRecords4).toList
+    val inputDF4 = spark.read.json(spark.sparkContext.parallelize(records4, 2))
+    inputDF4.write.format("org.apache.hudi")
+      .options(options)
+      .option("hoodie.datasource.write.operation", "upsert")
+      .mode(SaveMode.Append)
+      .save(basePath)
+    assertFalse(isFilesExistInFileSystem(cdcLogFiles2))
+  }
 }
