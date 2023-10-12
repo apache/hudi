@@ -234,10 +234,10 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   private def parseSchemaAndConfigs(): (StructType, Map[String, String]) = {
     val globalProps = DFSPropertiesConfiguration.getGlobalProps.asScala.toMap
     val globalTableConfigs = mappingSparkDatasourceConfigsToTableConfigs(globalProps)
-    val globalSqlOptions = mapHoodieOptionsToSqlOptions(globalTableConfigs)
+    val globalSqlOptions = mapHoodieConfigsToSqlOptions(globalTableConfigs)
 
     val sqlOptions = withDefaultSqlOptions(globalSqlOptions ++
-      mapHoodieOptionsToSqlOptions(catalogProperties))
+      mapHoodieConfigsToSqlOptions(catalogProperties))
 
     // get final schema and parameters
     val (finalSchema, tableConfigs) = (table.tableType, hoodieTableExists) match {
@@ -265,7 +265,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
           s". The associated location('$tableLocation') already exists.")
     }
     HoodieOptionConfig.validateTable(spark, finalSchema,
-      mapHoodieOptionsToSqlOptions(tableConfigs))
+      mapHoodieConfigsToSqlOptions(tableConfigs))
 
     val resolver = spark.sessionState.conf.resolver
     val dataSchema = finalSchema.filterNot { f =>

@@ -134,9 +134,9 @@ object HoodieOptionConfig {
   }
 
   /**
-   * Mapping the hoodie options (including data source write configs and hoodie table configs) to SQL options.
+   * Mapping the hoodie configs (including data source write configs and hoodie table configs) to SQL options.
    */
-  def mapHoodieOptionsToSqlOptions(options: Map[String, String]): Map[String, String] = {
+  def mapHoodieConfigsToSqlOptions(options: Map[String, String]): Map[String, String] = {
     options.map { case (k, v) =>
       if (writeConfigKeyToSqlOptionKey.contains(k)) {
         writeConfigKeyToSqlOptionKey(k) -> hoodieConfigValueToSqlOptionValue.getOrElse(v, v)
@@ -170,6 +170,22 @@ object HoodieOptionConfig {
       .toMap
   }
 
+  /**
+   * Get the table type from the table options.
+   * @param options
+   * @return
+   */
+  def getTableType(options: Map[String, String]): String = {
+    val params = mapSqlOptionsToDataSourceWriteConfigs(options)
+    params.getOrElse(DataSourceWriteOptions.TABLE_TYPE.key,
+      DataSourceWriteOptions.TABLE_TYPE.defaultValue)
+  }
+
+  def getPreCombineField(options: Map[String, String]): Option[String] = {
+    val params = mapSqlOptionsToDataSourceWriteConfigs(options)
+    params.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key).filter(_.nonEmpty)
+  }
+
   def deleteHoodieOptions(options: Map[String, String]): Map[String, String] = {
     options.filterNot(_._1.startsWith("hoodie.")).filterNot(kv => sqlOptionKeyToWriteConfigKey.contains(kv._1))
   }
@@ -184,7 +200,7 @@ object HoodieOptionConfig {
 
   // extract primaryKey, preCombineField, type options
   def extractSqlOptions(options: Map[String, String]): Map[String, String] = {
-    val sqlOptions = mapHoodieOptionsToSqlOptions(options)
+    val sqlOptions = mapHoodieConfigsToSqlOptions(options)
     val targetOptions = sqlOptionKeyToWriteConfigKey.keySet -- Set(SQL_PAYLOAD_CLASS.sqlKeyName) -- Set(SQL_RECORD_MERGER_STRATEGY.sqlKeyName) -- Set(SQL_PAYLOAD_TYPE.sqlKeyName)
     sqlOptions.filterKeys(targetOptions.contains)
   }
