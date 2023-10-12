@@ -71,9 +71,8 @@ public class AvroInternalSchemaConverter {
   /**
    * Convert avro Schema to avro Schema.
    *
-   * @param internalSchema internal schema.
-   * @param name the record name.
-   * @return an avro Schema.
+   * @param Schema avro schema.
+   * @return an avro Schema where null is the first.
    */
   public static Schema fixNullOrdering(Schema schema) {
     return convert(convert(schema), schema.getFullName());

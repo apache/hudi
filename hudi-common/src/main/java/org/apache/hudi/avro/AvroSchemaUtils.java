@@ -116,7 +116,6 @@ public class AvroSchemaUtils {
     return "hoodie." + sanitizedTableName + "." + sanitizedTableName + "_record";
   }
 
-
   /**
    * Validate whether the {@code targetSchema} is a valid evolution of {@code sourceSchema}.
    * Basically {@link #isCompatibleProjectionOf(Schema, Schema)} but type promotion in the
@@ -132,7 +131,6 @@ public class AvroSchemaUtils {
     //       corresponding fully-qualified names (as irrelevant)
     return isSchemaCompatible(anotherAtomicType, oneAtomicType, false, true);
   }
-
 
   /**
    * Validate whether the {@code targetSchema} is a "compatible" projection of {@code sourceSchema}.

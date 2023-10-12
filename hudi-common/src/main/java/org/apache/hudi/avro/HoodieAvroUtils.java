@@ -96,6 +96,8 @@ import java.util.TimeZone;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static org.apache.avro.Schema.Type.ARRAY;
+import static org.apache.avro.Schema.Type.MAP;
 import static org.apache.avro.Schema.Type.UNION;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.isNullable;
@@ -921,7 +923,7 @@ public class HoodieAvroUtils {
       case ARRAY:
         ValidationUtils.checkArgument(oldRecord instanceof Collection, "cannot rewrite record with different type");
         Collection array = (Collection) oldRecord;
-        List<Object> newArray = new ArrayList();
+        List<Object> newArray = new ArrayList(array.size());
         fieldNames.push("element");
         for (Object element : array) {
           newArray.add(rewriteRecordWithNewSchema(element, oldSchema.getElementType(), newSchema.getElementType(), renameCols, fieldNames, validate));
@@ -931,7 +933,7 @@ public class HoodieAvroUtils {
       case MAP:
         ValidationUtils.checkArgument(oldRecord instanceof Map, "cannot rewrite record with different type");
         Map<Object, Object> map = (Map<Object, Object>) oldRecord;
-        Map<Object, Object> newMap = new HashMap<>();
+        Map<Object, Object> newMap = new HashMap<>(map.size(), 1);
         fieldNames.push("value");
         for (Map.Entry<Object, Object> entry : map.entrySet()) {
           newMap.put(entry.getKey(), rewriteRecordWithNewSchema(entry.getValue(), oldSchema.getValueType(), newSchema.getValueType(), renameCols, fieldNames, validate));
@@ -1082,6 +1084,69 @@ public class HoodieAvroUtils {
   }
 
   /**
+   * Avro does not support type promotion from numbers to string. This function returns true if
+   * it will be necessary to rewrite the record to support this promotion.
+   * NOTE: this does not determine whether the writerSchema and readerSchema are compatible.
+   * It is just trying to find if the reader expects a number to be promoted to string, as quick as possible.
+   */
+  public static boolean recordNeedsRewriteForExtendedAvroTypePromotion(Schema writerSchema, Schema readerSchema) {
+    if (writerSchema.equals(readerSchema)) {
+      return false;
+    }
+    switch (readerSchema.getType()) {
+      case RECORD:
+        Map<String, Schema.Field> writerFields = new HashMap<>();
+        for (Schema.Field field : writerSchema.getFields()) {
+          writerFields.put(field.name(), field);
+        }
+        for (Schema.Field field : readerSchema.getFields()) {
+          if (writerFields.containsKey(field.name())) {
+            if (recordNeedsRewriteForExtendedAvroTypePromotion(writerFields.get(field.name()).schema(), field.schema())) {
+              return true;
+            }
+          }
+        }
+        return false;
+      case ARRAY:
+        if (writerSchema.getType().equals(ARRAY)) {
+          return recordNeedsRewriteForExtendedAvroTypePromotion(writerSchema.getElementType(), readerSchema.getElementType());
+        }
+        return false;
+      case MAP:
+        if (writerSchema.getType().equals(MAP)) {
+          return recordNeedsRewriteForExtendedAvroTypePromotion(writerSchema.getValueType(), readerSchema.getValueType());
+        }
+        return false;
+      case UNION:
+        return recordNeedsRewriteForExtendedAvroTypePromotion(getActualSchemaFromUnion(writerSchema), getActualSchemaFromUnion(readerSchema));
+      case ENUM:
+      case STRING:
+      case BYTES:
+        return needsRewriteToString(writerSchema);
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Helper for recordNeedsRewriteForExtendedAvroSchemaEvolution. Returns true if schema type is
+   * int, long, float, double, or bytes because avro doesn't support evolution from those types to
+   * string so some intervention is needed
+   */
+  private static  boolean needsRewriteToString(Schema schema) {
+    switch (schema.getType()) {
+      case INT:
+      case LONG:
+      case FLOAT:
+      case DOUBLE:
+      case BYTES:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /**
    * convert days to Date
    *
    * NOTE: This method could only be used in tests
@@ -1111,7 +1176,7 @@ public class HoodieAvroUtils {
 
   private static Schema getActualSchemaFromUnion(Schema schema, Object data) {
     Schema actualSchema;
-    if (!schema.getType().equals(UNION)) {
+    if (schema.getType() != UNION) {
       return schema;
     }
     if (schema.getTypes().size() == 2
@@ -1127,6 +1192,25 @@ public class HoodieAvroUtils {
       // since flink/spark do not write this type.
       int i = GenericData.get().resolveUnion(schema, data);
       actualSchema = schema.getTypes().get(i);
+    }
+    return actualSchema;
+  }
+
+  private static Schema getActualSchemaFromUnion(Schema schema) {
+    Schema actualSchema;
+    if (schema.getType() != UNION) {
+      return schema;
+    }
+    if (schema.getTypes().size() == 2
+        && schema.getTypes().get(0).getType() == Schema.Type.NULL) {
+      actualSchema = schema.getTypes().get(1);
+    } else if (schema.getTypes().size() == 2
+        && schema.getTypes().get(1).getType() == Schema.Type.NULL) {
+      actualSchema = schema.getTypes().get(0);
+    } else if (schema.getTypes().size() == 1) {
+      actualSchema = schema.getTypes().get(0);
+    } else {
+      return schema;
     }
     return actualSchema;
   }
