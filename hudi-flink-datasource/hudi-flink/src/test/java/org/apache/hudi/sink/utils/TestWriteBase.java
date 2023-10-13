@@ -479,11 +479,7 @@ public class TestWriteBase {
     }
 
     public TestHarness checkLastPendingInstantCompleted() {
-      // the ckp meta has been cleaned because of the failover, fetch the instant from timeline.
-      String lastCompleteInstant = OptionsResolver.isMorTable(conf)
-          ? TestUtils.getLastDeltaCompleteInstant(basePath)
-          : TestUtils.getLastCompleteInstant(basePath, HoodieTimeline.COMMIT_ACTION);
-      assertThat(lastCompleteInstant, is(this.lastPending));
+      checkInstantState(HoodieInstant.State.COMPLETED, this.lastPending);
       this.lastComplete = lastPending;
       this.lastPending = lastPendingInstant();
       return this;
@@ -528,7 +524,15 @@ public class TestWriteBase {
     }
 
     protected String lastCompleteInstant() {
-      return this.ckpMetadata.lastCompleteInstant();
+      if (OptionsResolver.isLocklessMultiWriter(this.conf)) {
+        // If there are lockless multiple writer, fetch last complete instant of current writer from ckp metadata
+        // because the writer started first might finish later, similarly, the writer started later might finish first.
+        return this.ckpMetadata.lastCompleteInstant();
+      } else {
+        return OptionsResolver.isMorTable(conf)
+            ? TestUtils.getLastDeltaCompleteInstant(basePath)
+            : TestUtils.getLastCompleteInstant(basePath, HoodieTimeline.COMMIT_ACTION);
+      }
     }
 
     public TestHarness checkCompletedInstantCount(int count) {

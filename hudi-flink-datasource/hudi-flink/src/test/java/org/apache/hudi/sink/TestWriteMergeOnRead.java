@@ -214,14 +214,6 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
   }
 
   @Override
-  protected void testConcurrentCommit(TestHarness pipeline) throws Exception {
-    pipeline.checkpoint(1)
-        .assertNextEvent()
-        .checkpointComplete(1)
-        .checkWrittenData(EXPECTED3, 1);
-  }
-
-  @Override
   protected HoodieTableType getTableType() {
     return HoodieTableType.MERGE_ON_READ;
   }

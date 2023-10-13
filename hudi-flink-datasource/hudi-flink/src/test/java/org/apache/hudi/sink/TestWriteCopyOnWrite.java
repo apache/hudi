@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.sink.utils.TestWriteBase;
@@ -523,7 +524,6 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   public void testWriteMultiWriterInvolved() throws Exception {
     conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
     conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
-    conf.setString(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE, HoodieIndex.BucketIndexEngineType.SIMPLE.name());
     conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
 
     TestHarness pipeline1 = preparePipeline(conf)
@@ -539,9 +539,20 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .assertNextEvent()
         .checkpointComplete(1)
         .checkWrittenData(EXPECTED3, 1);
-    // step to commit the 2nd txn, should throw exception
-    // for concurrent modification of same fileGroups
-    testConcurrentCommit(pipeline1);
+    // step to commit the 2nd txn
+    pipeline1 = pipeline1
+        .checkpoint(1)
+        .assertNextEvent();
+    if (OptionsResolver.isLocklessMultiWriter(conf)) {
+      // should success for concurrent modification of same fileGroups if using lockless multi writers
+      pipeline1
+          .checkpointComplete(1)
+          .checkWrittenData(EXPECTED3, 1);
+    } else {
+      // should throw exception otherwise
+      pipeline1
+          .checkpointCompleteThrows(1, HoodieWriteConflictException.class, "Cannot resolve conflicts");
+    }
   }
 
   // case2: txn2's time range has partial overlap with txn1
@@ -551,7 +562,6 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   public void testWriteMultiWriterPartialOverlapping() throws Exception {
     conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
     conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
-    conf.setString(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE, HoodieIndex.BucketIndexEngineType.SIMPLE.name());
     conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
 
     TestHarness pipeline1 = preparePipeline(conf)
@@ -567,20 +577,23 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     // step to commit the 1st txn, should succeed
     pipeline1.checkpoint(1)
         .assertNextEvent()
-        .checkpoint(1)
-        .assertNextEvent()
         .checkpointComplete(1)
         .checkWrittenData(EXPECTED3, 1);
 
-    // step to commit the 2nd txn, should throw exception
-    // for concurrent modification of same fileGroups
-    testConcurrentCommit(pipeline2);
-  }
-
-  protected void testConcurrentCommit(TestHarness pipeline) throws Exception {
-    pipeline.checkpoint(1)
-        .assertNextEvent()
-        .checkpointCompleteThrows(1, HoodieWriteConflictException.class, "Cannot resolve conflicts");
+    // step to commit the 2nd txn
+    // should success for concurrent modification of same fileGroups if using lockless multi writers
+    // should throw exception otherwise
+    pipeline2 = pipeline2
+        .checkpoint(1)
+        .assertNextEvent();
+    if (OptionsResolver.isLocklessMultiWriter(conf)) {
+      pipeline2
+          .checkpointComplete(1)
+          .checkWrittenData(EXPECTED3, 1);
+    } else {
+      pipeline2
+          .checkpointCompleteThrows(1, HoodieWriteConflictException.class, "Cannot resolve conflicts");
+    }
   }
 
   @Test
