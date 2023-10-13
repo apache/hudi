@@ -52,7 +52,7 @@ public class FlinkStreamWriteMetrics extends HoodieFlinkMetrics {
   private long writeBufferedSize;
 
   /**
-   * Total costs for closing write handles during a checkpoint window.
+   * Total costs for flushing files during a checkpoint window.
    */
   private long fileFlushTotalCosts;
 
