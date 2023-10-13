@@ -20,7 +20,6 @@ package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieCommonConfig;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
@@ -190,7 +189,7 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     GenericRecord genericRecord = HiveAvroSerializer.rewriteRecordIgnoreResultCheck(oldRecord, getLogScannerReaderSchema());
     HoodieRecord record = new HoodieAvroIndexedRecord(genericRecord);
     Option<Pair<HoodieRecord, Schema>> mergeResult = HoodieAvroRecordMerger.INSTANCE.merge(record,
-        genericRecord.getSchema(), newRecord, getLogScannerReaderSchema(), new TypedProperties(payloadProps));
+        genericRecord.getSchema(), newRecord, getLogScannerReaderSchema(), payloadProps);
     return mergeResult.map(p -> (HoodieAvroIndexedRecord) p.getLeft());
   }
 
