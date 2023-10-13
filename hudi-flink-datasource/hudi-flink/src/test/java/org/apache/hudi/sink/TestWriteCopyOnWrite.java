@@ -543,8 +543,8 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     pipeline1 = pipeline1
         .checkpoint(1)
         .assertNextEvent();
-    if (OptionsResolver.isLocklessMultiWriter(conf)) {
-      // should success for concurrent modification of same fileGroups if using lockless multi writers
+    if (OptionsResolver.isNonBlockingConcurrencyControl(conf)) {
+      // should success for concurrent modification of same fileGroups if using non-blocking concurrency control
       pipeline1
           .checkpointComplete(1)
           .checkWrittenData(EXPECTED3, 1);
@@ -581,12 +581,12 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .checkWrittenData(EXPECTED3, 1);
 
     // step to commit the 2nd txn
-    // should success for concurrent modification of same fileGroups if using lockless multi writers
+    // should success for concurrent modification of same fileGroups if using non-blocking concurrency control
     // should throw exception otherwise
     pipeline2 = pipeline2
         .checkpoint(1)
         .assertNextEvent();
-    if (OptionsResolver.isLocklessMultiWriter(conf)) {
+    if (OptionsResolver.isNonBlockingConcurrencyControl(conf)) {
       pipeline2
           .checkpointComplete(1)
           .checkWrittenData(EXPECTED3, 1);

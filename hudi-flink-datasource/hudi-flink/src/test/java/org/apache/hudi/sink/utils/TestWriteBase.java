@@ -524,11 +524,13 @@ public class TestWriteBase {
     }
 
     protected String lastCompleteInstant() {
-      if (OptionsResolver.isLocklessMultiWriter(this.conf)) {
-        // If there are lockless multiple writer, fetch last complete instant of current writer from ckp metadata
-        // because the writer started first might finish later, similarly, the writer started later might finish first.
-        return this.ckpMetadata.lastCompleteInstant();
+      // If using non-blocking concurrency control, fetch last complete instant of current writer from ckp metadata
+      // because the writer started first might finish later, similarly, the writer started later might finish first.
+      String lastCommitFromCkpMeta = this.ckpMetadata.lastCompleteInstant();
+      if (lastCommitFromCkpMeta != null || this.ckpMetadata.isEmpty()) {
+        return lastCommitFromCkpMeta;
       } else {
+        // The ckp meta has been cleaned because of the failover, fetch the instant from timeline.
         return OptionsResolver.isMorTable(conf)
             ? TestUtils.getLastDeltaCompleteInstant(basePath)
             : TestUtils.getLastCompleteInstant(basePath, HoodieTimeline.COMMIT_ACTION);

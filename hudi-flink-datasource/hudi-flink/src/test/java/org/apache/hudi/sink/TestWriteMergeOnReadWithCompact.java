@@ -87,7 +87,7 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
   }
 
   @Test
-  public void testLocklessMultiWriterWithPartialUpdatePayload() throws Exception {
+  public void testNonBlockingConcurrencyControlWithPartialUpdatePayload() throws Exception {
     conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
     conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
     conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, PartialUpdateAvroPayload.class.getName());
@@ -95,7 +95,7 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
     conf.setBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
     conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
 
-    // start pipeline1 and insert record: [id1,par1,id1,Danny,null,1,par1], suspend the tx commit
+    // start pipeline1 and insert record: [id1,Danny,null,1,par1], suspend the tx commit
     List<RowData> dataset1 = Collections.singletonList(
         insertRow(
             StringData.fromString("id1"), StringData.fromString("Danny"), null,
@@ -104,7 +104,7 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
         .consume(dataset1)
         .assertEmptyDataFiles();
 
-    // start pipeline2 and insert record: [id1,par1,id1,null,23,1,par1], suspend the tx commit
+    // start pipeline2 and insert record: [id1,null,23,1,par1], suspend the tx commit
     Configuration conf2 = conf.clone();
     conf2.setString(FlinkOptions.WRITE_CLIENT_ID, "2");
     List<RowData> dataset2 = Collections.singletonList(
@@ -138,8 +138,8 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
       assertNotNull(scheduleInstant.get());
     }
 
-    // step to commit the 3nd txn
-    // it would also trigger inline compactor
+    // step to commit the 3rd txn
+    // it also triggers inline compactor
     List<RowData> dataset3 = Collections.singletonList(
         insertRow(
             StringData.fromString("id3"), StringData.fromString("Julian"), 53,
@@ -155,8 +155,76 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
         "[id1,par1,id1,Danny,23,2,par1, id3,par1,id3,Julian,53,4,par1]");
     pipeline1.checkWrittenData(finalSnapshotResult, 1);
     // read optimized read result is [(id1,Danny,23,2,par1)]
-    // because the data of third commit is not included in the last compaction.
+    // because the data files belongs 3rd commit is not included in the last compaction.
     Map<String, String> readOptimizedResult = Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,2,par1]");
+    TestData.checkWrittenData(tempFile, readOptimizedResult, 1);
+  }
+
+  @Test
+  public void testNonBlockingConcurrencyControlWithInflightInstant() throws Exception {
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
+    conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    // disable schedule compaction in writers
+    conf.setBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
+    conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
+
+    // start pipeline1 and insert record: [id1,Danny,23,1,par1], suspend the tx commit
+    List<RowData> dataset1 = Collections.singletonList(
+        insertRow(
+            StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+            TimestampData.fromEpochMillis(1), StringData.fromString("par1")));
+    TestHarness pipeline1 = preparePipeline(conf)
+        .consume(dataset1)
+        .assertEmptyDataFiles();
+
+    // start pipeline2 and insert record: [id2,Stephen,34,2,par1], suspend the tx commit
+    Configuration conf2 = conf.clone();
+    conf2.setString(FlinkOptions.WRITE_CLIENT_ID, "2");
+
+    List<RowData> dataset2 = Collections.singletonList(
+        insertRow(
+            StringData.fromString("id2"), StringData.fromString("Stephen"), 34,
+            TimestampData.fromEpochMillis(2), StringData.fromString("par1")));
+    TestHarness pipeline2 = preparePipeline(conf2)
+        .consume(dataset2)
+        .assertEmptyDataFiles();
+
+    // step to commit the 1st txn
+    pipeline1.checkpoint(1)
+        .assertNextEvent()
+        .checkpointComplete(1);
+
+    // step to flush the 2nd data, but not commit yet
+    pipeline2.checkpoint(1)
+        .assertNextEvent();
+
+    // schedule compaction outside of all writers
+    try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
+      Option<String> scheduleInstant = writeClient.scheduleCompaction(Option.empty());
+      assertNotNull(scheduleInstant.get());
+    }
+
+    // step to commit the 3rd txn and insert record: [id3,Julian,53,4,par1]
+    // it also triggers inline compactor
+    List<RowData> dataset3 = Collections.singletonList(
+        insertRow(
+            StringData.fromString("id3"), StringData.fromString("Julian"), 53,
+            TimestampData.fromEpochMillis(4), StringData.fromString("par1")));
+    pipeline1.consume(dataset3)
+        .checkpoint(2)
+        .assertNextEvent()
+        .checkpointComplete(2);
+
+    // snapshot read result is [(id1,Danny,23,1,par1), (id3,Julian,53,4,par1)] after 1st writer and 3rd writer finish to commit
+    // and the data of 2nd writer is not included because it is still in inflight state
+    Map<String, String> finalSnapshotResult = Collections.singletonMap(
+        "par1",
+        "[id1,par1,id1,Danny,23,1,par1, id3,par1,id3,Julian,53,4,par1]");
+    pipeline1.checkWrittenData(finalSnapshotResult, 1);
+    // read optimized read result is [(id1,Danny,23,1,par1)]
+    // because 2nd commit is in inflight state and
+    // the data files belongs 3rd commit is not included in the last compaction.
+    Map<String, String> readOptimizedResult = Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,1,par1]");
     TestData.checkWrittenData(tempFile, readOptimizedResult, 1);
   }
 

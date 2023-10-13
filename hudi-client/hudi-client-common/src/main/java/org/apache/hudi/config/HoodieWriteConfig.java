@@ -2616,7 +2616,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     return props.getInteger(WRITES_FILEID_ENCODING, HoodieMetadataPayload.RECORD_INDEX_FIELD_FILEID_ENCODING_UUID);
   }
 
-  public boolean isLocklessMultiWriter() {
+  public boolean isNonBlockingConcurrencyControl() {
     return getTableType().equals(HoodieTableType.MERGE_ON_READ)
         && getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()
         && isSimpleBucketIndex();

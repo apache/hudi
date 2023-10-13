@@ -368,9 +368,9 @@ public class OptionsResolver {
   }
 
   /**
-   * Returns whether this is lockless multi-writer ingestion.
+   * Returns whether this is non-blocking concurrency control.
    */
-  public static boolean isLocklessMultiWriter(Configuration config) {
+  public static boolean isNonBlockingConcurrencyControl(Configuration config) {
     return isMorTable(config) && isSimpleBucketIndexType(config) && isOptimisticConcurrencyControl(config);
   }
 
