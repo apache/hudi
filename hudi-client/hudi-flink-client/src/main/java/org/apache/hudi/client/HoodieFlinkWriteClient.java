@@ -309,6 +309,7 @@ public class HoodieFlinkWriteClient<T> extends
       this.lastCompletedTxnAndMetadata = TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient);
       this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(metaClient);
     }
+    tableServiceClient.startAsyncArchiveService(this);
   }
 
   /**
