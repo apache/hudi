@@ -108,7 +108,7 @@ public class FlinkStreamWriteMetrics extends HoodieFlinkMetrics {
     metricGroup.meter("handleSwitchPerSecond", handleSwitchPerSecond);
 
     metricGroup.histogram("handleCreationCosts", handleCreationCosts);
-    metricGroup.histogram("handleCloseCosts", fileFlushCost);
+    metricGroup.histogram("fileFlushCost", fileFlushCost);
   }
 
   public void setWriteBufferedSize(long writeBufferedSize) {
