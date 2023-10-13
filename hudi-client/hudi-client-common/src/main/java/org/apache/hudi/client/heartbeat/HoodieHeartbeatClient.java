@@ -250,11 +250,8 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
   }
 
   private void updateHeartbeat(String instantTime) throws HoodieHeartbeatException {
-    try {
+    try (OutputStream outputStream = this.fs.create(new Path(heartbeatFolderPath + Path.SEPARATOR + instantTime), true)) {
       Long newHeartbeatTime = System.currentTimeMillis();
-      OutputStream outputStream =
-          this.fs.create(new Path(heartbeatFolderPath + Path.SEPARATOR + instantTime), true);
-      outputStream.close();
       Heartbeat heartbeat = instantToHeartbeatMap.get(instantTime);
       if (heartbeat.getLastHeartbeatTime() != null && isHeartbeatExpired(instantTime)) {
         LOG.error("Aborting, missed generating heartbeat within allowable interval " + this.maxAllowableHeartbeatIntervalInMs);
