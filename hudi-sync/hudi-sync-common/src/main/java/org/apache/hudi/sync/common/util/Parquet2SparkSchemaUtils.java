@@ -19,10 +19,14 @@
 package org.apache.hudi.sync.common.util;
 
 import org.apache.hudi.common.util.ValidationUtils;
+
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Type;
+
+import java.util.Collections;
+import java.util.Map;
 
 import static org.apache.parquet.schema.Type.Repetition.OPTIONAL;
 
@@ -34,23 +38,41 @@ import static org.apache.parquet.schema.Type.Repetition.OPTIONAL;
 public class Parquet2SparkSchemaUtils {
 
   public static String convertToSparkSchemaJson(GroupType parquetSchema) {
+    return convertToSparkSchemaJson(parquetSchema, Collections.emptyMap());
+  }
+
+  public static String convertToSparkSchemaJson(GroupType parquetSchema, Map<String, String> commentMap) {
     String fieldsJsonString = parquetSchema.getFields().stream().map(field -> {
       switch (field.getRepetition()) {
         case OPTIONAL:
           return "{\"name\":\"" + field.getName() + "\",\"type\":" + convertFieldType(field)
-                  + ",\"nullable\":true,\"metadata\":{}}";
+              + ",\"nullable\":true,\"metadata\":{" + getCommentStr(commentMap.get(field.getName())) + "}}";
         case REQUIRED:
           return "{\"name\":\"" + field.getName() + "\",\"type\":" + convertFieldType(field)
-                  + ",\"nullable\":false,\"metadata\":{}}";
+              + ",\"nullable\":false,\"metadata\":{" + getCommentStr(commentMap.get(field.getName())) + "}}";
         case REPEATED:
           String arrayType = arrayType(field, false);
           return "{\"name\":\"" + field.getName() + "\",\"type\":" + arrayType
-                  + ",\"nullable\":false,\"metadata\":{}}";
+              + ",\"nullable\":false,\"metadata\":{" + getCommentStr(commentMap.get(field.getName())) + "}}";
         default:
           throw new UnsupportedOperationException("Unsupport convert " + field + " to spark sql type");
       }
     }).reduce((a, b) -> a + "," + b).orElse("");
     return "{\"type\":\"struct\",\"fields\":[" + fieldsJsonString + "]}";
+  }
+
+  /**
+   * get comment
+   *
+   * @param comment
+   * @return
+   */
+  private static String getCommentStr(String comment) {
+    String result = "";
+    if (comment != null) {
+      result = String.format("\"comment\":\"%s\"", comment);
+    }
+    return result;
   }
 
   private static String convertFieldType(Type field) {

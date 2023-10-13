@@ -25,7 +25,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 
 import org.apache.flink.table.api.DataTypes;
-import org.apache.flink.table.api.TableSchema;
+import org.apache.flink.table.catalog.Column;
+import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
@@ -177,45 +178,6 @@ public class HiveSchemaUtils {
   }
 
   /**
-   * Create Hive field schemas from Flink table schema including the hoodie metadata fields.
-   */
-  public static List<FieldSchema> toHiveFieldSchema(TableSchema schema, boolean withOperationField) {
-    List<FieldSchema> columns = new ArrayList<>();
-    Collection<String> metaFields = new ArrayList<>(HoodieRecord.HOODIE_META_COLUMNS);
-    if (withOperationField) {
-      metaFields.add(HoodieRecord.OPERATION_METADATA_FIELD);
-    }
-
-    for (String metaField : metaFields) {
-      columns.add(new FieldSchema(metaField, "string", null));
-    }
-    columns.addAll(createHiveColumns(schema));
-    return columns;
-  }
-
-  /**
-   * Create Hive columns from Flink table schema.
-   */
-  private static List<FieldSchema> createHiveColumns(TableSchema schema) {
-    final DataType dataType = schema.toPersistedRowDataType();
-    final RowType rowType = (RowType) dataType.getLogicalType();
-    final String[] fieldNames = rowType.getFieldNames().toArray(new String[0]);
-    final DataType[] fieldTypes = dataType.getChildren().toArray(new DataType[0]);
-
-    List<FieldSchema> columns = new ArrayList<>(fieldNames.length);
-
-    for (int i = 0; i < fieldNames.length; i++) {
-      columns.add(
-          new FieldSchema(
-              fieldNames[i],
-              toHiveTypeInfo(fieldTypes[i]).getTypeName(),
-              null));
-    }
-
-    return columns;
-  }
-
-  /**
    * Convert Flink DataType to Hive TypeInfo. For types with a precision parameter, e.g.
    * timestamp, the supported precisions in Hive and Flink can be different. Therefore the
    * conversion will fail for those types if the precision is not supported by Hive and
@@ -250,5 +212,45 @@ public class HiveSchemaUtils {
       }
     }
     return Pair.of(regularColumns, partitionColumns);
+  }
+
+  /**
+   * Create Hive field schemas from Flink table schema including the hoodie metadata fields.
+   */
+  public static List<FieldSchema> toHiveFieldSchemaWithResolved(ResolvedSchema schema, boolean withOperationField) {
+    List<FieldSchema> columns = new ArrayList<>();
+    Collection<String> metaFields = new ArrayList<>(HoodieRecord.HOODIE_META_COLUMNS);
+    if (withOperationField) {
+      metaFields.add(HoodieRecord.OPERATION_METADATA_FIELD);
+    }
+
+    for (String metaField : metaFields) {
+      columns.add(new FieldSchema(metaField, "string", null));
+    }
+    columns.addAll(createHiveColumnsWithResolved(schema));
+    return columns;
+  }
+
+  /**
+   * Create Hive columns from Flink table schema.
+   */
+  private static List<FieldSchema> createHiveColumnsWithResolved(ResolvedSchema schema) {
+    final DataType dataType = schema.toPhysicalRowDataType();
+    List<Column> sourceColumns = schema.getColumns();
+    final RowType rowType = (RowType) dataType.getLogicalType();
+    final String[] fieldNames = rowType.getFieldNames().toArray(new String[0]);
+    final DataType[] fieldTypes = dataType.getChildren().toArray(new DataType[0]);
+
+    List<FieldSchema> columns = new ArrayList<>(fieldNames.length);
+
+    for (int i = 0; i < fieldNames.length; i++) {
+      columns.add(
+          new FieldSchema(
+              fieldNames[i],
+              toHiveTypeInfo(fieldTypes[i]).getTypeName(),
+              sourceColumns.get(i).getComment().isPresent() ? sourceColumns.get(i).getComment().get() : null));
+    }
+
+    return columns;
   }
 }
