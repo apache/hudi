@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieHFileDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
@@ -148,12 +149,12 @@ public class InputFormatTestUtil {
 
   public static void commit(java.nio.file.Path basePath, String commitNumber) throws IOException {
     // create the commit
-    Files.createFile(basePath.resolve(Paths.get(".hoodie", commitNumber + ".commit")));
+    Files.createFile(basePath.resolve(Paths.get(".hoodie", commitNumber + "_" + InProcessTimeGenerator.createNewInstantTime() + ".commit")));
   }
 
   public static void deltaCommit(java.nio.file.Path basePath, String commitNumber) throws IOException {
     // create the commit
-    Files.createFile(basePath.resolve(Paths.get(".hoodie", commitNumber + ".deltacommit")));
+    Files.createFile(basePath.resolve(Paths.get(".hoodie", commitNumber + "_" + InProcessTimeGenerator.createNewInstantTime() + ".deltacommit")));
   }
 
   public static void setupIncremental(JobConf jobConf, String startCommit, int numberOfCommitsToPull) {

@@ -62,6 +62,14 @@ public class TestCommitUtils {
   private static final String ID3 = "id3";
   @TempDir
   public java.nio.file.Path tempDir;
+  private HoodieTableMetaClient metaClient;
+
+  private void init() throws IOException {
+    java.nio.file.Path basePath = tempDir.resolve("dataset");
+    java.nio.file.Files.createDirectories(basePath);
+    String basePathStr = basePath.toAbsolutePath().toString();
+    metaClient = HoodieTestUtils.init(basePathStr, HoodieTableType.MERGE_ON_READ);
+  }
 
   @Test
   public void testCommitMetadataCreation() {
@@ -115,11 +123,7 @@ public class TestCommitUtils {
 
   @Test
   public void testGetValidCheckpointForCurrentWriter() throws IOException {
-    java.nio.file.Path basePath = tempDir.resolve("dataset");
-    java.nio.file.Files.createDirectories(basePath);
-    String basePathStr = basePath.toAbsolutePath().toString();
-    HoodieTableMetaClient metaClient =
-        HoodieTestUtils.init(basePathStr, HoodieTableType.MERGE_ON_READ);
+    init();
     HoodieActiveTimeline timeline = new HoodieActiveTimeline(metaClient);
 
     // Deltacommit 1 completed: (id1, 3)

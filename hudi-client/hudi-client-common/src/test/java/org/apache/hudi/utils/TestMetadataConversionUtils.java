@@ -162,6 +162,10 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
   public void testCompletedCompaction() throws Exception {
     String newCommitTime = HoodieTestTable.makeNewCommitTime();
     createCompactionMetadata(newCommitTime);
+    // Creating compaction commits would initialize timeline(see HoodieTestTable.addRequestedCompaction)
+    // Because of HUDI-6885, now HUDI have to iterator instants to get the correct completion time.
+    // So we have to reload here to get all commits written before.
+    metaClient.reloadActiveTimeline();
     HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
         new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, newCommitTime), metaClient);
     assertEquals(metaEntry.getActionState(), State.COMPLETED.toString());

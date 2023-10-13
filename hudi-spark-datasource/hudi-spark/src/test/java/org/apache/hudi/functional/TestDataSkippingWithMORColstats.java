@@ -25,7 +25,6 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -345,7 +344,7 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
         .withKeyGenerator("org.apache.hudi.keygen.NonpartitionedKeyGenerator")
         .build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
-      client.scheduleCompactionAtInstant(HoodieActiveTimeline.createNewInstantTime(), Option.empty());
+      client.scheduleCompactionAtInstant(client.createNewInstantTime(), Option.empty());
     }
   }
 

@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi.command
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodiePartitionMetadata
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
+import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
@@ -62,7 +62,6 @@ case class AlterHoodieTableAddPartitionCommand(
 
     val basePath = new Path(hoodieCatalogTable.tableLocation)
     val fileSystem = hoodieCatalogTable.metaClient.getFs
-    val instantTime = HoodieActiveTimeline.createNewInstantTime
     val format = hoodieCatalogTable.tableConfig.getPartitionMetafileFormat
     val (partitionMetadata, parts) = normalizedSpecs.map { spec =>
       val partitionPath = makePartitionPath(hoodieCatalogTable, spec)
@@ -72,7 +71,7 @@ case class AlterHoodieTableAddPartitionCommand(
           throw new AnalysisException(s"Partition metadata already exists for path: $fullPartitionPath")
         }
         None
-      } else Some(new HoodiePartitionMetadata(fileSystem, instantTime, basePath, fullPartitionPath, format))
+      } else Some(new HoodiePartitionMetadata(fileSystem, HoodieTimeline.INIT_INSTANT_TS, basePath, fullPartitionPath, format))
       (metadata, CatalogTablePartition(spec, table.storage.copy(locationUri = Some(fullPartitionPath.toUri))))
     }.unzip
     partitionMetadata.flatten.foreach(_.trySave(0))

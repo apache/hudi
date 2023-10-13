@@ -21,6 +21,9 @@ package org.apache.hudi.examples.common;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
+import org.apache.hudi.common.table.timeline.TimeGenerator;
+import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
@@ -32,15 +35,18 @@ import org.apache.spark.sql.SparkSession;
 import java.util.List;
 
 public class RandomJsonSource extends JsonSource {
-  private HoodieExampleDataGenerator<HoodieAvroPayload> dataGen;
+  private final HoodieExampleDataGenerator<HoodieAvroPayload> dataGen;
+  private final TimeGenerator timeGenerator;
 
   public RandomJsonSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession, SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
     dataGen = new HoodieExampleDataGenerator<>();
+    timeGenerator = TimeGenerators
+        .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(""), sparkContext.hadoopConfiguration());
   }
 
   protected InputBatch<JavaRDD<String>> fetchNewData(Option<String> lastCkptStr, long sourceLimit) {
-    String commitTime = HoodieActiveTimeline.createNewInstantTime();
+    String commitTime = HoodieActiveTimeline.createNewInstantTime(true, timeGenerator);
     List<String> inserts = dataGen.convertToStringList(dataGen.generateInserts(commitTime, 20));
 
     return new InputBatch<>(Option.of(sparkContext.parallelize(inserts, 1)), commitTime);

@@ -41,7 +41,7 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
-import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstantTimeGenerator}
+import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstantTimeGenerator, TimeGenerators}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ConfigUtils.getAllConfigKeys
 import org.apache.hudi.common.util.{CommitUtils, StringUtils, Option => HOption}
@@ -259,7 +259,8 @@ object HoodieSparkSqlWriter {
           .setCommitTimezone(timelineTimeZone)
           .initTable(sparkContext.hadoopConfiguration, path)
       }
-      val instantTime = HoodieActiveTimeline.createNewInstantTime()
+
+      var instantTime: String = null
       tableConfig = tableMetaClient.getTableConfig
 
       val commitActionType = CommitUtils.getCommitActionType(operation, tableConfig.getTableType)
@@ -330,6 +331,7 @@ object HoodieSparkSqlWriter {
               streamingWritesParamsOpt.map(_.asyncClusteringTriggerFn.get.apply(client))
             }
 
+            instantTime = client.createNewInstantTime()
             // Issue deletes
             client.startCommitWithTime(instantTime, commitActionType)
             val writeStatuses = DataSourceUtils.doDeleteOperation(client, hoodieKeysAndLocationsToDelete, instantTime, preppedSparkSqlWrites || preppedWriteOperation)
@@ -360,6 +362,7 @@ object HoodieSparkSqlWriter {
               mapAsJavaMap(parameters - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)))
               .asInstanceOf[SparkRDDWriteClient[_]]
             // Issue delete partitions
+            instantTime = client.createNewInstantTime()
             client.startCommitWithTime(instantTime, commitActionType)
             val writeStatuses = DataSourceUtils.doDeletePartitionsOperation(client, partitionsToDelete, instantTime)
             (writeStatuses, client)
@@ -414,8 +417,7 @@ object HoodieSparkSqlWriter {
             // Short-circuit if bulk_insert via row is enabled.
             // scalastyle:off
             if (hoodieConfig.getBoolean(ENABLE_ROW_WRITER) && operation == WriteOperationType.BULK_INSERT) {
-              return bulkInsertAsRow(client, parameters, hoodieConfig, df, mode, tblName, basePath,
-                instantTime, writerSchema, tableConfig)
+              return bulkInsertAsRow(client, parameters, hoodieConfig, df, mode, tblName, basePath, writerSchema, tableConfig)
             }
             // scalastyle:on
 
@@ -423,6 +425,7 @@ object HoodieSparkSqlWriter {
             if (writeConfig.getRecordMerger.getRecordType == HoodieRecordType.SPARK && tableType == MERGE_ON_READ && writeConfig.getLogDataBlockFormat.orElse(HoodieLogBlockType.AVRO_DATA_BLOCK) != HoodieLogBlockType.PARQUET_DATA_BLOCK) {
               throw new UnsupportedOperationException(s"${writeConfig.getRecordMerger.getClass.getName} only support parquet log.")
             }
+            instantTime = client.createNewInstantTime()
             // Convert to RDD[HoodieRecord]
             val hoodieRecords =
               HoodieCreateRecordUtils.createHoodieRecordRdd(HoodieCreateRecordUtils.createHoodieRecordRddArgs(df,
@@ -885,7 +888,6 @@ object HoodieSparkSqlWriter {
                       mode: SaveMode,
                       tblName: String,
                       basePath: Path,
-                      instantTime: String,
                       writerSchema: Schema,
                       tableConfig: HoodieTableConfig):
   (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig) = {
@@ -907,6 +909,7 @@ object HoodieSparkSqlWriter {
     val overwriteOperationType = Option(hoodieConfig.getString(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE))
       .map(WriteOperationType.fromValue)
       .orNull
+    val instantTime = writeClient.createNewInstantTime()
     val executor = mode match {
       case _ if overwriteOperationType == null =>
         // Don't need to overwrite

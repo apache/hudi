@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
@@ -98,7 +99,8 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
       return createHandle.close().get(0);
     }).collect();
 
-    final Path commitFile = new Path(config.getBasePath() + "/.hoodie/" + HoodieTimeline.makeCommitFileName("100"));
+    final Path commitFile = new Path(config.getBasePath() + "/.hoodie/"
+        + HoodieTimeline.makeCommitFileName("100" + "_" + InProcessTimeGenerator.createNewInstantTime()));
     FSUtils.getFs(basePath, HoodieTestUtils.getDefaultHadoopConf()).create(commitFile);
     return statuses.get(0);
   }

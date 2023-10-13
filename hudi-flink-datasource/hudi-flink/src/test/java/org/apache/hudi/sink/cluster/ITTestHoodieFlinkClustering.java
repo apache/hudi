@@ -24,7 +24,6 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
@@ -155,10 +154,9 @@ public class ITTestHoodieFlinkClustering {
 
     // judge whether have operation
     // To compute the clustering instant time and do clustering.
-    String clusteringInstantTime = HoodieActiveTimeline.createNewInstantTime();
-
     try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
       HoodieFlinkTable<?> table = writeClient.getHoodieTable();
+      String clusteringInstantTime = writeClient.createNewInstantTime();
 
       boolean scheduled = writeClient.scheduleClusteringAtInstant(clusteringInstantTime, Option.empty());
 
@@ -290,10 +288,9 @@ public class ITTestHoodieFlinkClustering {
     // set table schema
     CompactionUtil.setAvroSchema(conf, metaClient);
 
-    // To compute the clustering instant time.
-    String clusteringInstantTime = HoodieActiveTimeline.createNewInstantTime();
-
     try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
+      // To compute the clustering instant time.
+      String clusteringInstantTime = writeClient.createNewInstantTime();
 
       boolean scheduled = writeClient.scheduleClusteringAtInstant(clusteringInstantTime, Option.empty());
 
@@ -303,7 +300,7 @@ public class ITTestHoodieFlinkClustering {
       // wait for the asynchronous commit to finish
       TimeUnit.SECONDS.sleep(3);
 
-      clusteringInstantTime = HoodieActiveTimeline.createNewInstantTime();
+      clusteringInstantTime = writeClient.createNewInstantTime();
 
       scheduled = writeClient.scheduleClusteringAtInstant(clusteringInstantTime, Option.empty());
 
@@ -365,10 +362,10 @@ public class ITTestHoodieFlinkClustering {
 
     // judge whether have operation
     // To compute the clustering instant time and do clustering.
-    String firstClusteringInstant = HoodieActiveTimeline.createNewInstantTime();
 
     try (HoodieFlinkWriteClient<?> writeClient = FlinkWriteClients.createWriteClient(conf)) {
       HoodieFlinkTable<?> table = writeClient.getHoodieTable();
+      String firstClusteringInstant = writeClient.createNewInstantTime();
 
       boolean scheduled = writeClient.scheduleClusteringAtInstant(firstClusteringInstant, Option.empty());
 
@@ -425,7 +422,7 @@ public class ITTestHoodieFlinkClustering {
       // archive the first commit, retain the second commit before the inflight replacecommit
       writeClient.archive();
 
-      scheduled = writeClient.scheduleClusteringAtInstant(HoodieActiveTimeline.createNewInstantTime(), Option.empty());
+      scheduled = writeClient.scheduleClusteringAtInstant(writeClient.createNewInstantTime(), Option.empty());
 
       assertTrue(scheduled, "The clustering plan should be scheduled");
       table.getMetaClient().reloadActiveTimeline();
@@ -562,10 +559,10 @@ public class ITTestHoodieFlinkClustering {
 
     // judge whether have operation
     // To compute the clustering instant time and do clustering.
-    String clusteringInstantTime = HoodieActiveTimeline.createNewInstantTime();
 
     try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
       HoodieFlinkTable<?> table = writeClient.getHoodieTable();
+      String clusteringInstantTime = writeClient.createNewInstantTime();
 
       boolean scheduled = writeClient.scheduleClusteringAtInstant(clusteringInstantTime, Option.empty());
 
@@ -681,10 +678,10 @@ public class ITTestHoodieFlinkClustering {
 
     // judge whether have operation
     // To compute the clustering instant time and do clustering.
-    String clusteringInstantTime = HoodieActiveTimeline.createNewInstantTime();
 
     try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
       HoodieFlinkTable<?> table = writeClient.getHoodieTable();
+      String clusteringInstantTime = writeClient.createNewInstantTime();
 
       boolean scheduled = writeClient.scheduleClusteringAtInstant(clusteringInstantTime, Option.empty());
 

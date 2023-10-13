@@ -19,7 +19,7 @@
 package org.apache.hudi.execution;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.queue.DisruptorExecutor;
 import org.apache.hudi.common.util.queue.ExecutorType;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
@@ -45,8 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestDisruptorExecutionInSpark extends HoodieSparkClientTestHarness {
 
-  private final String instantTime = HoodieActiveTimeline.createNewInstantTime();
-
+  private final String instantTime = InProcessTimeGenerator.createNewInstantTime();
 
   private final HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
       .withExecutorType(ExecutorType.DISRUPTOR.name())

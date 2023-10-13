@@ -215,17 +215,18 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
-  public HoodieDefaultTimeline findInstantsInRangeByStateTransitionTime(String startTs, String endTs) {
+  public HoodieDefaultTimeline findInstantsInRangeByCompletionTime(String startTs, String endTs) {
     return new HoodieDefaultTimeline(
-        getInstantsAsStream().filter(s -> HoodieTimeline.isInRange(s.getStateTransitionTime(), startTs, endTs)),
+        getInstantsAsStream().filter(s -> s.getCompletionTime() != null && HoodieTimeline.isInRange(s.getCompletionTime(), startTs, endTs)),
         details);
   }
 
   @Override
-  public HoodieDefaultTimeline findInstantsModifiedAfterByStateTransitionTime(String instantTime) {
+  public HoodieDefaultTimeline findInstantsModifiedAfterByCompletionTime(String instantTime) {
     return new HoodieDefaultTimeline(instants.stream()
-        .filter(s -> HoodieTimeline.compareTimestamps(s.getStateTransitionTime(),
-            GREATER_THAN, instantTime) && !s.getTimestamp().equals(instantTime)), details);
+        .filter(s -> s.getCompletionTime() != null
+            && HoodieTimeline.compareTimestamps(s.getCompletionTime(), GREATER_THAN, instantTime)
+            && !s.getTimestamp().equals(instantTime)), details);
   }
 
   @Override
@@ -466,8 +467,9 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
-  public Stream<HoodieInstant> getInstantsOrderedByStateTransitionTime() {
-    return getInstantsAsStream().sorted(HoodieInstant.STATE_TRANSITION_COMPARATOR);
+  public Stream<HoodieInstant> getInstantsOrderedByCompletionTime() {
+    return getInstantsAsStream().filter(s -> s.getCompletionTime() != null)
+        .sorted(HoodieInstant.STATE_TRANSITION_COMPARATOR);
   }
 
   @Override

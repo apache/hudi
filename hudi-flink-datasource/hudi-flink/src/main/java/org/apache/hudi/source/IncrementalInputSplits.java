@@ -285,7 +285,7 @@ public class IncrementalInputSplits implements Serializable {
 
     // version number should be monotonically increasing
     // fetch the instant offset by completion time
-    String offsetToIssue = instants.stream().map(HoodieInstant::getStateTransitionTime).max(String::compareTo).orElse(endInstant);
+    String offsetToIssue = instants.stream().map(HoodieInstant::getCompletionTime).max(String::compareTo).orElse(endInstant);
 
     if (instantRange == null) {
       // reading from the earliest, scans the partitions and files directly.
@@ -377,12 +377,12 @@ public class IncrementalInputSplits implements Serializable {
     // while with smaller txn start time.
     List<HoodieInstant> instants = commitTimeline.getInstantsAsStream()
         .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), LESSER_THAN, issuedInstant))
-        .filter(s -> HoodieTimeline.compareTimestamps(s.getStateTransitionTime(), GREATER_THAN, issuedOffset))
+        .filter(s -> HoodieTimeline.compareTimestamps(s.getCompletionTime(), GREATER_THAN, issuedOffset))
         .filter(s -> StreamerUtil.isWriteCommit(metaClient.getTableType(), s, commitTimeline)).collect(Collectors.toList());
     if (instants.isEmpty()) {
       return Result.EMPTY;
     }
-    String offsetToIssue = instants.stream().map(HoodieInstant::getStateTransitionTime).max(String::compareTo).orElse(issuedOffset);
+    String offsetToIssue = instants.stream().map(HoodieInstant::getCompletionTime).max(String::compareTo).orElse(issuedOffset);
     List<MergeOnReadInputSplit> inputSplits = instants.stream().map(instant -> {
       String instantTs = instant.getTimestamp();
 

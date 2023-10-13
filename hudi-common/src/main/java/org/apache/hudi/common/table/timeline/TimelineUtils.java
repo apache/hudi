@@ -252,7 +252,7 @@ public class TimelineUtils {
       // Get 'hollow' instants that have less instant time than exclusiveStartInstantTime but with greater commit completion time
       HoodieDefaultTimeline hollowInstantsTimeline = (HoodieDefaultTimeline) timeline.getCommitsTimeline()
           .filter(s -> compareTimestamps(s.getTimestamp(), LESSER_THAN, exclusiveStartInstantTime))
-          .filter(s -> compareTimestamps(s.getStateTransitionTime(), GREATER_THAN, lastMaxCompletionTime.get()));
+          .filter(s -> compareTimestamps(s.getCompletionTime(), GREATER_THAN, lastMaxCompletionTime.get()));
       if (!hollowInstantsTimeline.empty()) {
         return timelineSinceLastSync.mergeTimeline(hollowInstantsTimeline);
       }
@@ -413,5 +413,14 @@ public class TimelineUtils {
 
   public enum HollowCommitHandling {
     FAIL, BLOCK, USE_TRANSITION_TIME;
+  }
+
+  /**
+   * Concat two timelines timeline1 and timeline2 to build a new timeline.
+   */
+  public static HoodieTimeline concatTimeline(HoodieTimeline timeline1, HoodieTimeline timeline2,
+                                              HoodieTableMetaClient metaClient) {
+    return new HoodieDefaultTimeline(Stream.concat(timeline1.getInstantsAsStream(), timeline2.getInstantsAsStream()).sorted(),
+        instant -> metaClient.getActiveTimeline().getInstantDetails(instant));
   }
 }

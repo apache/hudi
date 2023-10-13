@@ -153,10 +153,10 @@ public class ITTestHoodieFlinkCompactor {
     CompactionUtil.inferChangelogMode(conf, metaClient);
 
     try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
-
-      String compactionInstantTime = scheduleCompactionPlan(metaClient, writeClient);
-
       HoodieFlinkTable<?> table = writeClient.getHoodieTable();
+
+      String compactionInstantTime = scheduleCompactionPlan(table.getMetaClient(), writeClient);
+
       // generate compaction plan
       // should support configurable commit metadata
       HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(
@@ -224,10 +224,9 @@ public class ITTestHoodieFlinkCompactor {
     CompactionUtil.inferChangelogMode(conf, metaClient);
 
     try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
-
-      String compactionInstantTime = scheduleCompactionPlan(metaClient, writeClient);
-
       HoodieFlinkTable<?> table = writeClient.getHoodieTable();
+
+      String compactionInstantTime = scheduleCompactionPlan(table.getMetaClient(), writeClient);
 
       // try to upgrade or downgrade
       if (upgrade) {
@@ -338,7 +337,8 @@ public class ITTestHoodieFlinkCompactor {
 
     HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf);
 
-    compactionInstantTimeList.add(scheduleCompactionPlan(metaClient, writeClient));
+    HoodieFlinkTable<?> table = writeClient.getHoodieTable();
+    compactionInstantTimeList.add(scheduleCompactionPlan(table.getMetaClient(), writeClient));
 
     // insert a new record to new partition, so that we can generate a new compaction plan
     String insertT1ForNewPartition = "insert into t1 values\n"
@@ -352,10 +352,8 @@ public class ITTestHoodieFlinkCompactor {
     // the reader metadata view is not complete
     writeClient = FlinkWriteClients.createWriteClient(conf);
 
-    metaClient.reloadActiveTimeline();
-    compactionInstantTimeList.add(scheduleCompactionPlan(metaClient, writeClient));
-
-    HoodieFlinkTable<?> table = writeClient.getHoodieTable();
+    table = writeClient.getHoodieTable();
+    compactionInstantTimeList.add(scheduleCompactionPlan(table.getMetaClient(), writeClient));
 
     List<Pair<String, HoodieCompactionPlan>> compactionPlans = new ArrayList<>(2);
     for (String compactionInstantTime : compactionInstantTimeList) {
@@ -475,10 +473,10 @@ public class ITTestHoodieFlinkCompactor {
     CompactionUtil.inferChangelogMode(conf, metaClient);
 
     try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
-
-      String compactionInstantTime = scheduleCompactionPlan(metaClient, writeClient);
-
       HoodieFlinkTable<?> table = writeClient.getHoodieTable();
+
+      String compactionInstantTime = scheduleCompactionPlan(table.getMetaClient(), writeClient);
+
       // generate compaction plan
       // should support configurable commit metadata
       HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(

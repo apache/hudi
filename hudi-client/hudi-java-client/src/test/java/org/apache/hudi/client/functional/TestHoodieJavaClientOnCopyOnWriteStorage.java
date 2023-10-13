@@ -788,7 +788,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
             .withInlineClustering(true).withInlineClusteringNumCommits(2).build());
     try (HoodieJavaWriteClient client = getHoodieWriteClient(cfgBuilder.build())) {
       int numRecords = 200;
-      String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      String newCommitTime = client.createNewInstantTime();
       List<HoodieRecord> records1 = dataGen.generateInserts(newCommitTime, numRecords);
       client.startCommitWithTime(newCommitTime);
       List<WriteStatus> statuses = client.insert(records1, newCommitTime);
@@ -829,7 +829,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
         .withProps(getPropertiesForKeyGen()).build();
     HoodieJavaWriteClient client = getHoodieWriteClient(config);
     dataGen = new HoodieTestDataGenerator(new String[] {"2015/03/16"});
-    String commitTime1 = HoodieActiveTimeline.createNewInstantTime();
+    String commitTime1 = client.createNewInstantTime();
     List<HoodieRecord> records1 = dataGen.generateInserts(commitTime1, 200);
     client.startCommitWithTime(commitTime1);
     List<WriteStatus> statuses = client.insert(records1, commitTime1);
@@ -902,12 +902,12 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     }
 
     dataGen = new HoodieTestDataGenerator(new String[] {partitionPath});
-    String commitTime1 = HoodieActiveTimeline.createNewInstantTime();
+    String commitTime1 = client.createNewInstantTime();
     List<HoodieRecord> records1 = dataGen.generateInserts(commitTime1, 200);
     List<WriteStatus> statuses1 = writeAndVerifyBatch(client, records1, commitTime1, populateMetaFields, failInlineClustering);
     Set<HoodieFileGroupId> fileIds1 = getFileGroupIdsFromWriteStatus(statuses1);
 
-    String commitTime2 = HoodieActiveTimeline.createNewInstantTime();
+    String commitTime2 = client.createNewInstantTime();
     List<HoodieRecord> records2 = dataGen.generateInserts(commitTime2, 200);
     List<WriteStatus> statuses2 = writeAndVerifyBatch(client, records2, commitTime2, populateMetaFields, failInlineClustering);
     client.close();

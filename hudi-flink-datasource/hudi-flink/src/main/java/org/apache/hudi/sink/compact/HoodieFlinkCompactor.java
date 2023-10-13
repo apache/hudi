@@ -221,7 +221,7 @@ public class HoodieFlinkCompactor {
 
       // checks the compaction plan and do compaction.
       if (cfg.schedule) {
-        Option<String> compactionInstantTimeOption = CompactionUtil.getCompactionInstantTime(metaClient);
+        Option<String> compactionInstantTimeOption = CompactionUtil.getCompactionInstantTime(table.getMetaClient());
         if (compactionInstantTimeOption.isPresent()) {
           boolean scheduled = writeClient.scheduleCompactionAtInstant(compactionInstantTimeOption.get(), Option.empty());
           if (!scheduled) {

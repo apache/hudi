@@ -177,7 +177,7 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
     // load active instants first.
     this.metaClient.getActiveTimeline()
         .filterCompletedInstants().getInstantsAsStream()
-        .forEach(instant -> setCompletionTime(instant.getTimestamp(), instant.getStateTransitionTime()));
+        .forEach(instant -> setCompletionTime(instant.getTimestamp(), instant.getCompletionTime()));
     // then load the archived instants.
     HoodieArchivedTimeline.loadInstants(metaClient,
         new HoodieArchivedTimeline.StartTsFilter(this.startInstant),

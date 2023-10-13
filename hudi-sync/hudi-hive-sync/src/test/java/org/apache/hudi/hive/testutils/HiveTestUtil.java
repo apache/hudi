@@ -44,10 +44,13 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
@@ -236,7 +239,13 @@ public class HiveTestUtil {
     List<Path> pathsToDelete = new ArrayList<>();
     Path metaFolderPath = new Path(basePath, METAFOLDER_NAME);
     String actionSuffix = "." + actionType;
-    pathsToDelete.add(new Path(metaFolderPath, instantTime + actionSuffix));
+    try {
+      Path completeInstantPath = HoodieTestUtils
+          .getCompleteInstantPath(fileSystem, metaFolderPath, instantTime, actionType);
+      pathsToDelete.add(completeInstantPath);
+    } catch (HoodieIOException e) {
+      // File doesn't exist
+    }
     pathsToDelete.add(new Path(metaFolderPath, instantTime + actionSuffix + ".requested"));
     pathsToDelete.add(new Path(metaFolderPath, instantTime + actionSuffix + ".inflight"));
     pathsToDelete.forEach(path -> {
@@ -288,7 +297,7 @@ public class HiveTestUtil {
         getUTF8Bytes(""));
     createMetaFile(
         basePath,
-        HoodieTimeline.makeRollbackFileName(instantTime),
+        HoodieTimeline.makeRollbackFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
         serializeRollbackMetadata(rollbackMetadata).get());
   }
 
@@ -555,14 +564,14 @@ public class HiveTestUtil {
   public static void createCommitFile(HoodieCommitMetadata commitMetadata, String instantTime, String basePath) throws IOException {
     createMetaFile(
         basePath,
-        HoodieTimeline.makeCommitFileName(instantTime),
+        HoodieTimeline.makeCommitFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
         serializeCommitMetadata(commitMetadata).get());
   }
 
   public static void createReplaceCommitFile(HoodieReplaceCommitMetadata commitMetadata, String instantTime) throws IOException {
     createMetaFile(
         basePath,
-        HoodieTimeline.makeReplaceFileName(instantTime),
+        HoodieTimeline.makeReplaceFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
         serializeCommitMetadata(commitMetadata).get());
   }
 
@@ -575,7 +584,7 @@ public class HiveTestUtil {
       throws IOException {
     createMetaFile(
         basePath,
-        HoodieTimeline.makeCommitFileName(instantTime),
+        HoodieTimeline.makeCommitFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
         serializeCommitMetadata(commitMetadata).get());
   }
 
@@ -583,7 +592,7 @@ public class HiveTestUtil {
       throws IOException {
     createMetaFile(
         basePath,
-        HoodieTimeline.makeDeltaFileName(deltaCommitTime),
+        HoodieTimeline.makeDeltaFileName(deltaCommitTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
         serializeCommitMetadata(deltaCommitMetadata).get());
   }
 

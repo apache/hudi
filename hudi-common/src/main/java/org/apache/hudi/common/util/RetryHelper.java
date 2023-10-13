@@ -45,6 +45,15 @@ public class RetryHelper<T, R extends Exception> implements Serializable {
   private String taskInfo = "N/A";
   private List<? extends Class<? extends Exception>> retryExceptionsClasses;
 
+  public RetryHelper(long maxRetryIntervalMs, int maxRetryNumbers, long initialRetryIntervalMs,
+                     List<Class<? extends Exception>> retryExceptions, String taskInfo) {
+    this.num = maxRetryNumbers;
+    this.initialIntervalTime = initialRetryIntervalMs;
+    this.maxIntervalTime = maxRetryIntervalMs;
+    this.retryExceptionsClasses = retryExceptions;
+    this.taskInfo = taskInfo;
+  }
+
   public RetryHelper(long maxRetryIntervalMs, int maxRetryNumbers, long initialRetryIntervalMs, String retryExceptions) {
     this.num = maxRetryNumbers;
     this.initialIntervalTime = initialRetryIntervalMs;

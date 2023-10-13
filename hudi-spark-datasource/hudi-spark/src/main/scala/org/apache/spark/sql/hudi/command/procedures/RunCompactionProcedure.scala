@@ -105,7 +105,7 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
         tableName.asInstanceOf[Option[String]])
 
       if (operation.isSchedule) {
-        val instantTime = HoodieActiveTimeline.createNewInstantTime
+        val instantTime = client.createNewInstantTime()
         if (client.scheduleCompactionAtInstant(instantTime, HOption.empty[java.util.Map[String, String]])) {
           filteredPendingCompactionInstants = Seq(instantTime)
         }

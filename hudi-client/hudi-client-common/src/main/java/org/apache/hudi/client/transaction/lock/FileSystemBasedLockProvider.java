@@ -201,7 +201,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
 
   private void checkRequiredProps(final LockConfiguration config) {
     ValidationUtils.checkArgument(config.getConfig().getString(FILESYSTEM_LOCK_PATH_PROP_KEY, null) != null
-          || config.getConfig().getString(HoodieWriteConfig.BASE_PATH.key(), null) != null);
+        || config.getConfig().getString(HoodieWriteConfig.BASE_PATH.key(), null) != null);
     ValidationUtils.checkArgument(config.getConfig().getInteger(FILESYSTEM_LOCK_EXPIRE_PROP_KEY) >= 0);
   }
 

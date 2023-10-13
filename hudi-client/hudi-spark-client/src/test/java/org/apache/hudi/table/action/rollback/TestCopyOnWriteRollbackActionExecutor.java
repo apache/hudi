@@ -29,11 +29,11 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
@@ -353,7 +353,8 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
         .withBaseFilesInPartition(p2, "id22").getLeft();
 
     HoodieTable table = this.getHoodieTable(metaClient, getConfigBuilder().withRollbackBackupEnabled(true).build());
-    HoodieInstant needRollBackInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "002");
+    HoodieInstant needRollBackInstant = HoodieTestUtils.getCompleteInstant(metaClient.getFs(), new Path(metaClient.getMetaPath()),
+        "002", HoodieTimeline.COMMIT_ACTION);
 
     // Create the rollback plan and perform the rollback
     BaseRollbackPlanActionExecutor copyOnWriteRollbackPlanActionExecutor =
@@ -367,7 +368,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
 
     // Completed and inflight instants should have been backed up
     Path backupDir = new Path(metaClient.getMetaPath(), table.getConfig().getRollbackBackupDirectory());
-    assertTrue(fs.exists(new Path(backupDir, testTable.getCommitFilePath("002").getName())));
+    assertTrue(fs.exists(new Path(backupDir, needRollBackInstant.getFileName())));
     assertTrue(fs.exists(new Path(backupDir, testTable.getInflightCommitFilePath("002").getName())));
   }
 
@@ -416,7 +417,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
 
     // Create a base commit.
     int numRecords = 200;
-    String firstCommit = HoodieActiveTimeline.createNewInstantTime();
+    String firstCommit = writeClient.createNewInstantTime();
     String partitionStr = HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
     dataGen = new HoodieTestDataGenerator(new String[]{partitionStr});
     writeBatch(writeClient, firstCommit, "000", Option.of(Arrays.asList("000")), "000",
@@ -424,7 +425,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
         1, true);
 
     // Create second commit.
-    String secondCommit = HoodieActiveTimeline.createNewInstantTime();
+    String secondCommit = writeClient.createNewInstantTime();
     writeBatch(writeClient, secondCommit, firstCommit, Option.of(Arrays.asList(firstCommit)), "000", 100,
         dataGen::generateInserts, SparkRDDWriteClient::insert, true, 100, 300,
         2, true);
@@ -436,7 +437,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
         ClusteringTestUtils.getClusteringConfig(basePath, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, properties));
 
     // Save an older instant for us to run clustering.
-    String clusteringInstant1 = HoodieActiveTimeline.createNewInstantTime();
+    String clusteringInstant1 = clusteringClient.createNewInstantTime();
 
     // Create completed clustering commit
     ClusteringTestUtils.runClustering(clusteringClient, false, true);
@@ -448,7 +449,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     HoodieInstant needRollBackInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, secondCommit);
 
     // Schedule rollback
-    String rollbackInstant = HoodieActiveTimeline.createNewInstantTime();
+    String rollbackInstant = writeClient.createNewInstantTime();
     BaseRollbackPlanActionExecutor copyOnWriteRollbackPlanActionExecutor =
         new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, rollbackInstant, needRollBackInstant, false,
             !table.getConfig().shouldRollbackUsingMarkers(), false);
@@ -461,7 +462,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
 
     // Schedule rollback for incomplete clustering instant.
     needRollBackInstant = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringInstant1);
-    rollbackInstant = HoodieActiveTimeline.createNewInstantTime();
+    rollbackInstant = writeClient.createNewInstantTime();
     copyOnWriteRollbackPlanActionExecutor =
         new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, rollbackInstant, needRollBackInstant, false,
             table.getConfig().shouldRollbackUsingMarkers(), false);

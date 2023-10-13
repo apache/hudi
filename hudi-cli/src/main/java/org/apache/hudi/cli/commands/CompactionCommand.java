@@ -197,7 +197,7 @@ public class CompactionCommand {
     HoodieCLI.initFS(initialized);
 
     // First get a compaction instant time and pass it to spark launcher for scheduling compaction
-    String compactionInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    String compactionInstantTime = client.createNewInstantTime();
 
     String sparkPropertiesPath =
         Utils.getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));

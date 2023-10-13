@@ -23,7 +23,7 @@ import org.apache.hudi.HoodieSparkConfUtils.getHollowCommitHandling
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
-import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, getCommitMetadata, handleHollowCommitIfNeeded}
+import org.apache.hudi.common.table.timeline.TimelineUtils.{concatTimeline, HollowCommitHandling, getCommitMetadata, handleHollowCommitIfNeeded}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.StringUtils
@@ -58,11 +58,17 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
   override protected def timeline: HoodieTimeline = {
     if (fullTableScan) {
       handleHollowCommitIfNeeded(metaClient.getCommitsAndCompactionTimeline, metaClient, hollowCommitHandling)
-    } else if (hollowCommitHandling == HollowCommitHandling.USE_TRANSITION_TIME) {
-      metaClient.getCommitsAndCompactionTimeline.findInstantsInRangeByStateTransitionTime(startTimestamp, endTimestamp)
     } else {
-      handleHollowCommitIfNeeded(metaClient.getCommitsAndCompactionTimeline, metaClient, hollowCommitHandling)
-        .findInstantsInRange(startTimestamp, endTimestamp)
+      val completeTimeline = if (hollowCommitHandling == HollowCommitHandling.USE_TRANSITION_TIME) {
+        metaClient.getCommitsTimeline.filterCompletedInstants()
+          .findInstantsInRangeByCompletionTime(startTimestamp, endTimestamp)
+      } else {
+        handleHollowCommitIfNeeded(metaClient.getCommitsTimeline.filterCompletedInstants(), metaClient, hollowCommitHandling)
+          .findInstantsInRange(startTimestamp, endTimestamp)
+      }
+      // Need to add pending compaction instants to avoid data missing, see HUDI-5990 for details.
+      val pendingCompactionTimeline = metaClient.getCommitsAndCompactionTimeline.filterPendingMajorOrMinorCompactionTimeline()
+      concatTimeline(completeTimeline, pendingCompactionTimeline, metaClient)
     }
   }
 
@@ -140,7 +146,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
 
   protected def endTimestamp: String = optParams.getOrElse(
     DataSourceReadOptions.END_INSTANTTIME.key,
-    if (hollowCommitHandling == USE_TRANSITION_TIME) super.timeline.lastInstant().get.getStateTransitionTime
+    if (hollowCommitHandling == USE_TRANSITION_TIME) super.timeline.lastInstant().get.getCompletionTime
     else super.timeline.lastInstant().get.getTimestamp)
 
   protected def startInstantArchived: Boolean = super.timeline.isBeforeTimelineStarts(startTimestamp)
@@ -163,7 +169,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
       // If endTimestamp commit is not archived, will filter instants
       // before endTimestamp.
       if (hollowCommitHandling == USE_TRANSITION_TIME) {
-        super.timeline.findInstantsInRangeByStateTransitionTime(startTimestamp, endTimestamp).getInstants.asScala.toList
+        super.timeline.findInstantsInRangeByCompletionTime(startTimestamp, endTimestamp).getInstants.asScala.toList
       } else {
         super.timeline.findInstantsInRange(startTimestamp, endTimestamp).getInstants.asScala.toList
       }
