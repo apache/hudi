@@ -463,16 +463,6 @@ object HoodieFileIndex extends Logging {
     if (listingModeOverride != null) {
       properties.setProperty(DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key, listingModeOverride)
     }
-    val partitionColumns = metaClient.getTableConfig.getPartitionFields
-    if (partitionColumns.isPresent) {
-      // NOTE: Multiple partition fields could have non-encoded slashes in the partition value.
-      //       We might not be able to properly parse partition-values from the listed partition-paths.
-      //       Fallback to eager listing in this case.
-      if (partitionColumns.get().length > 1
-        && (listingModeOverride == null || DataSourceReadOptions.FILE_INDEX_LISTING_MODE_LAZY.equals(listingModeOverride))) {
-        properties.setProperty(DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key, DataSourceReadOptions.FILE_INDEX_LISTING_MODE_EAGER)
-      }
-    }
 
     properties
   }
