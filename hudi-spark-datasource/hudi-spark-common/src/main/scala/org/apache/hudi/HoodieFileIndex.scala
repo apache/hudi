@@ -81,7 +81,7 @@ case class HoodieFileIndex(spark: SparkSession,
     spark = spark,
     metaClient = metaClient,
     schemaSpec = schemaSpec,
-    configProperties = getConfigProperties(spark, options, metaClient),
+    configProperties = getConfigProperties(spark, options),
     queryPaths = HoodieFileIndex.getQueryPaths(options),
     specifiedQueryInstant = options.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key).map(HoodieSqlCommonUtils.formatQueryInstant),
     fileStatusCache = fileStatusCache
@@ -445,7 +445,7 @@ object HoodieFileIndex extends Logging {
     schema.fieldNames.filter { colName => refs.exists(r => resolver.apply(colName, r.name)) }
   }
 
-  def getConfigProperties(spark: SparkSession, options: Map[String, String], metaClient: HoodieTableMetaClient) = {
+  def getConfigProperties(spark: SparkSession, options: Map[String, String]) = {
     val sqlConf: SQLConf = spark.sessionState.conf
     val properties = TypedProperties.fromMap(options.filter(p => p._2 != null).asJava)
 
@@ -462,16 +462,6 @@ object HoodieFileIndex extends Logging {
       DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key, null)
     if (listingModeOverride != null) {
       properties.setProperty(DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key, listingModeOverride)
-    }
-    val partitionColumns = metaClient.getTableConfig.getPartitionFields
-    if (partitionColumns.isPresent) {
-      // NOTE: Multiple partition fields could have non-encoded slashes in the partition value.
-      //       We might not be able to properly parse partition-values from the listed partition-paths.
-      //       Fallback to eager listing in this case.
-      if (partitionColumns.get().length > 1
-        && (listingModeOverride == null || DataSourceReadOptions.FILE_INDEX_LISTING_MODE_LAZY.equals(listingModeOverride))) {
-        properties.setProperty(DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key, DataSourceReadOptions.FILE_INDEX_LISTING_MODE_EAGER)
-      }
     }
 
     properties
