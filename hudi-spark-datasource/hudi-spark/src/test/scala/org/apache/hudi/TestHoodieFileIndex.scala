@@ -38,6 +38,7 @@ import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtil
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.TimestampType
 import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
@@ -325,21 +326,29 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
         EqualTo(attribute("dt"), literal("2021/03/01")),
         EqualTo(attribute("hh"), literal("10"))
       )
-      val partitionAndFilesNoPruning = fileIndex.listFiles(Seq(partitionFilter2), Seq.empty)
+      // NOTE: That if file-index is in lazy-listing mode and we can't parse partition values, there's no way
+      //       to recover from this since Spark by default have to inject partition values parsed from the partition paths.
+      if (listingModeOverride == DataSourceReadOptions.FILE_INDEX_LISTING_MODE_LAZY) {
+        assertThrows(classOf[HoodieException]) {
+          fileIndex.listFiles(Seq(partitionFilter2), Seq.empty)
+        }
+      } else {
+        val partitionAndFilesNoPruning = fileIndex.listFiles(Seq(partitionFilter2), Seq.empty)
 
-      assertEquals(1, partitionAndFilesNoPruning.size)
-      // The partition prune would not work for this case, so the partition value it
-      // returns is a InternalRow.empty.
-      assertTrue(partitionAndFilesNoPruning.forall(_.values.numFields == 0))
-      // The returned file size should equal to the whole file size in all the partition paths.
-      assertEquals(getFileCountInPartitionPaths("2021/03/01/10", "2021/03/02/10"),
-        partitionAndFilesNoPruning.flatMap(_.files).length)
+        assertEquals(1, partitionAndFilesNoPruning.size)
+        // The partition prune would not work for this case, so the partition value it
+        // returns is a InternalRow.empty.
+        assertTrue(partitionAndFilesNoPruning.forall(_.values.numFields == 0))
+        // The returned file size should equal to the whole file size in all the partition paths.
+        assertEquals(getFileCountInPartitionPaths("2021/03/01/10", "2021/03/02/10"),
+          partitionAndFilesNoPruning.flatMap(_.files).length)
 
-      val readDF = spark.read.format("hudi").options(readerOpts).load()
+        val readDF = spark.read.format("hudi").options(readerOpts).load()
 
-      assertEquals(10, readDF.count())
-      // There are 5 rows in the  dt = 2021/03/01 and hh = 10
-      assertEquals(5, readDF.filter("dt = '2021/03/01' and hh ='10'").count())
+        assertEquals(10, readDF.count())
+        // There are 5 rows in the  dt = 2021/03/01 and hh = 10
+        assertEquals(5, readDF.filter("dt = '2021/03/01' and hh ='10'").count())
+      }
     }
 
     {
@@ -422,7 +431,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     val partitionAndFilesAfterPrune = fileIndex.listFiles(Seq(partitionFilters), Seq.empty)
     assertEquals(1, partitionAndFilesAfterPrune.size)
 
-    assertTrue(fileIndex.areAllPartitionPathsCached())
+    assertEquals(fileIndex.areAllPartitionPathsCached(), !complexExpressionPushDown)
 
     val PartitionDirectory(partitionActualValues, filesAfterPrune) = partitionAndFilesAfterPrune.head
     val partitionExpectValues = Seq("default", "2021-03-01", "5", "CN")
