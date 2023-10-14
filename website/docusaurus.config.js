@@ -47,6 +47,12 @@ module.exports = {
     },
   },
   plugins: [
+    ['@docusaurus/plugin-content-blog', {
+      id: 'video-blog',
+      path: 'videoBlog',
+      routeBasePath: 'videos',
+      blogSidebarCount: 0,
+    }],
     [
       '@docusaurus/plugin-content-docs',
       {
@@ -445,6 +451,20 @@ module.exports = {
     colorMode: {
       defaultMode: 'light',
       disableSwitch: true,
+    },
+    blog: {
+      path: 'blog', // Path to the existing blog folder
+      routeBasePath: 'blog', // Route for the existing blog
+      include: ['*.md', '*.mdx'], // File types to include for the existing blog
+
+      // Add the new blog for videos
+      videoBlog: {
+        path: 'video-blog', // Path to the video blog folder
+        routeBasePath: 'videos', // Route for the video blog
+        include: ['*.md', '*.mdx'], // File types to include for the video blog
+        videoBlogRoute: '/videos'
+        // Add any other specific settings for the video blog
+      },
     },
   },
   presets: [
