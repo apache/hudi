@@ -1994,22 +1994,22 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |""".stripMargin)
       spark.sql(
         s"""
-           |insert into `hudi_test`.`tmp_hudi_test_1`
+           |insert into ${targetTable}
            |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 10 as `hour`
            |""".stripMargin)
       spark.sql(
         s"""
-           |insert into `hudi_test`.`tmp_hudi_test_1`
+           |insert into ${targetTable}
            |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 11 as `hour`
            |""".stripMargin)
       spark.sql(
         s"""
-           |insert into `hudi_test`.`tmp_hudi_test_1`
+           |insert into ${targetTable}
            |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 12 as `hour`
            |""".stripMargin)
       val df = spark.sql(
         s"""
-           |select * from `hudi_test`.`tmp_hudi_test_1` where day='2023-10-12' and hour=11;
+           |select * from ${targetTable} where day='2023-10-12' and hour=11;
            |""".stripMargin)
       assertResult(1)(df.rdd.partitions.size)
       assertResult(1)(df.rdd.firstParent.partitions.size)
