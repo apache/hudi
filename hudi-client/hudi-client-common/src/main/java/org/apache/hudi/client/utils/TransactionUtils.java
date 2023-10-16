@@ -67,7 +67,8 @@ public class TransactionUtils {
       Option<HoodieInstant> lastCompletedTxnOwnerInstant,
       boolean reloadActiveTimeline,
       Set<String> pendingInstants) throws HoodieWriteConflictException {
-    if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
+    // Skip to resolve conflict if using non-blocking concurrency control
+    if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl() && !config.isNonBlockingConcurrencyControl()) {
       // deal with pendingInstants
       Stream<HoodieInstant> completedInstantsDuringCurrentWriteOperation = getCompletedInstantsDuringCurrentWriteOperation(table.getMetaClient(), pendingInstants);
 

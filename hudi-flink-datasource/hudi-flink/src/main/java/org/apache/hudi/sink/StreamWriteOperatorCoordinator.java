@@ -460,7 +460,7 @@ public class StreamWriteOperatorCoordinator
   private void scheduleTableServices(Boolean committed) {
     // if compaction is on, schedule the compaction
     if (tableState.scheduleCompaction) {
-      CompactionUtil.scheduleCompaction(metaClient, writeClient, tableState.isDeltaTimeCompaction, committed);
+      CompactionUtil.scheduleCompaction(writeClient, tableState.isDeltaTimeCompaction, committed);
     }
     // if clustering is on, schedule the clustering
     if (tableState.scheduleClustering) {

@@ -964,14 +964,22 @@ public class TestData {
    */
   private static String filterOutVariables(GenericRecord genericRecord) {
     List<String> fields = new ArrayList<>();
-    fields.add(genericRecord.get("_hoodie_record_key").toString());
-    fields.add(genericRecord.get("_hoodie_partition_path").toString());
-    fields.add(genericRecord.get("uuid").toString());
-    fields.add(genericRecord.get("name").toString());
-    fields.add(genericRecord.get("age").toString());
+    fields.add(getFieldValue(genericRecord, "_hoodie_record_key"));
+    fields.add(getFieldValue(genericRecord, "_hoodie_partition_path"));
+    fields.add(getFieldValue(genericRecord, "uuid"));
+    fields.add(getFieldValue(genericRecord, "name"));
+    fields.add(getFieldValue(genericRecord, "age"));
     fields.add(genericRecord.get("ts").toString());
     fields.add(genericRecord.get("partition").toString());
     return String.join(",", fields);
+  }
+
+  private static String getFieldValue(GenericRecord genericRecord, String fieldName) {
+    if (genericRecord.get(fieldName) != null) {
+      return genericRecord.get(fieldName).toString();
+    } else {
+      return null;
+    }
   }
 
   public static BinaryRowData insertRow(Object... fields) {
