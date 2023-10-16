@@ -133,11 +133,9 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
         // ==============================================================
         // LEGACY CODE
         // ==============================================================
-        // Fixes the completion time to reflect the completion sequence correctly.
-        // The file slice base instant time is not in datetime format in the following scenarios:
-        //   1. many test cases just use integer string as the instant time.
-        //   2. MDT uses compaction instant time with pattern [delta_instant] + "001".
-
+        // Fixes the completion time to reflect the completion sequence correctly
+        // if the file slice base instant time is not in datetime format.
+        // For example, many test cases just use integer string as the instant time.
         // CAUTION: this fix only works for OCC(Optimistic Concurrency Control).
         // for NB-CC(Non-blocking Concurrency Control), the file slicing may be incorrect.
         return Option.of(instantTime);

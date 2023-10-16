@@ -1574,13 +1574,6 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
-   * Create the timestamp for a compaction operation on the metadata table.
-   */
-  public static String createCompactionTimestamp(String timestamp) {
-    return timestamp + OperationSuffix.COMPACTION.getSuffix();
-  }
-
-  /**
    * Create the timestamp for an index initialization operation on the metadata table.
    * <p>
    * Since many MDT partitions can be initialized one after other the offset parameter controls generating a
