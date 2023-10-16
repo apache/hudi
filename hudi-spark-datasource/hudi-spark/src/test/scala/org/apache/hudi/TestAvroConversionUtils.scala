@@ -89,7 +89,9 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
            "name" : "nullableMap",
            "type" : [ "null", {
              "type" : "map",
-             "values" : [ {
+             "values" : [
+             "null",
+             {
                "type" : "record",
                "name" : "nullableMap",
                "namespace" : "SchemaNS.SchemaName",
@@ -101,14 +103,16 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
                  "type" : [ "null", "int" ],
                  "default" : null
                } ]
-             }, "null" ]
+             } ]
            } ],
            "default" : null
          }, {
            "name" : "map",
            "type" : {
              "type" : "map",
-             "values" : [ {
+             "values" : [
+             "null",
+             {
                "type" : "record",
                "name" : "map",
                "namespace" : "SchemaNS.SchemaName",
@@ -120,13 +124,15 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
                  "type" : [ "null", "int" ],
                  "default" : null
                } ]
-             }, "null" ]
+             } ]
            }
          }, {
            "name" : "nullableArray",
            "type" : [ "null", {
              "type" : "array",
-             "items" : [ {
+             "items" : [
+             "null",
+             {
                "type" : "record",
                "name" : "nullableArray",
                "namespace" : "SchemaNS.SchemaName",
@@ -138,14 +144,16 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
                  "type" : [ "null", "int" ],
                  "default" : null
                } ]
-             }, "null" ]
+             } ]
            } ],
            "default" : null
          }, {
            "name" : "array",
            "type" : {
              "type" : "array",
-             "items" : [ {
+             "items" : [
+             "null",
+             {
                "type" : "record",
                "name" : "array",
                "namespace" : "SchemaNS.SchemaName",
@@ -157,7 +165,7 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
                  "type" : [ "null", "int" ],
                  "default" : null
                } ]
-             }, "null" ]
+             } ]
            }
          } ]
        }
@@ -257,6 +265,7 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
                 {
                   "type": "map",
                   "values": [
+                    "null",
                     {
                       "type": "record",
                       "name": "nullableMap",
@@ -276,8 +285,7 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
                           "default": null
                         }
                       ]
-                    },
-                    "null"
+                    }
                   ]
                 }
               ],
@@ -288,6 +296,7 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
               "type": {
                 "type": "map",
                 "values": [
+                  "null",
                   {
                     "type": "record",
                     "name": "map",
@@ -307,8 +316,7 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
                         "default": null
                       }
                     ]
-                  },
-                  "null"
+                  }
                 ]
               }
             },
@@ -319,6 +327,7 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
                 {
                   "type": "array",
                   "items": [
+                    "null",
                     {
                       "type": "record",
                       "name": "nullableArray",
@@ -338,8 +347,7 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
                           "default": null
                         }
                       ]
-                    },
-                    "null"
+                    }
                   ]
                 }
               ],
@@ -350,6 +358,7 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
               "type": {
                 "type": "array",
                 "items": [
+                  "null",
                   {
                     "type": "record",
                     "name": "array",
@@ -369,8 +378,7 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
                         "default": null
                       }
                     ]
-                  },
-                  "null"
+                  }
                 ]
               }
             }
