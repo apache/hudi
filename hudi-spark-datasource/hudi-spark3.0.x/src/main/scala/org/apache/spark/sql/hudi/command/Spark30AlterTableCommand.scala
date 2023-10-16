@@ -222,10 +222,14 @@ object Spark30AlterTableCommand extends Logging {
           sparkSession.sqlContext.conf.getAllConfs).asJava)
 
     val hadoopConf = sparkSession.sessionState.newHadoopConf()
-    val metaClient = HoodieTableMetaClient.builder().setBasePath(path).setConf(hadoopConf).build()
+    val metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(path)
+      .setConf(hadoopConf)
+      .setTimeGeneratorConfig(client.getConfig.getTimeGeneratorConfig)
+      .build()
 
     val commitActionType = CommitUtils.getCommitActionType(WriteOperationType.ALTER_SCHEMA, metaClient.getTableType)
-    val instantTime = HoodieActiveTimeline.createNewInstantTime
+    val instantTime = client.createNewInstantTime()
     client.startCommitWithTime(instantTime, commitActionType)
     client.setOperationType(WriteOperationType.ALTER_SCHEMA)
 

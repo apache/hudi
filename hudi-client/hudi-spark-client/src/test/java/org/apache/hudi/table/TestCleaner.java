@@ -307,7 +307,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
       String earliestInstantToRetain = "";
 
       for (int idx = 0; idx < 3; ++idx) {
-        instantTime = HoodieActiveTimeline.createNewInstantTime();
+        instantTime = client.createNewInstantTime();
         if (idx == 2) {
           earliestInstantToRetain = instantTime;
         }
@@ -317,7 +317,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
       }
 
 
-      instantTime = HoodieActiveTimeline.createNewInstantTime();
+      instantTime = client.createNewInstantTime();
       HoodieTable table = HoodieSparkTable.create(writeConfig, context);
       Option<HoodieCleanerPlan> cleanPlan = table.scheduleCleaning(context, instantTime, Option.empty());
       assertEquals(cleanPlan.get().getFilePathsToBeDeletedPerPartition().get(partition1).size(), 1);
@@ -327,14 +327,14 @@ public class TestCleaner extends HoodieCleanerTestBase {
       table.clean(context, instantTime);
 
 
-      instantTime = HoodieActiveTimeline.createNewInstantTime();
+      instantTime = client.createNewInstantTime();
       List<HoodieRecord> records = dataGen.generateInsertsForPartition(instantTime, 1, partition1);
       client.startCommitWithTime(instantTime);
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
       client.insert(recordsRDD, instantTime).collect();
 
 
-      instantTime = HoodieActiveTimeline.createNewInstantTime();
+      instantTime = client.createNewInstantTime();
       earliestInstantToRetain = instantTime;
       List<HoodieRecord> updatedRecords = dataGen.generateUpdates(instantTime, records);
       JavaRDD<HoodieRecord> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
@@ -348,14 +348,14 @@ public class TestCleaner extends HoodieCleanerTestBase {
       String compactionInstantTime = client.scheduleCompaction(Option.empty()).get().toString();
 
       for (int idx = 0; idx < 3; ++idx) {
-        instantTime = HoodieActiveTimeline.createNewInstantTime();
+        instantTime = client.createNewInstantTime();
         records = dataGen.generateInsertsForPartition(instantTime, 1, partition2);
         client.startCommitWithTime(instantTime);
         client.insert(jsc.parallelize(records, 1), instantTime).collect();
       }
 
       // earliest commit to retain should be earlier than first pending compaction in incremental cleaning scenarios.
-      instantTime = HoodieActiveTimeline.createNewInstantTime();
+      instantTime = client.createNewInstantTime();
       cleanPlan = table.scheduleCleaning(context, instantTime, Option.empty());
       assertEquals(earliestInstantToRetain,cleanPlan.get().getEarliestInstantToRetain().getTimestamp());
     }
@@ -386,13 +386,13 @@ public class TestCleaner extends HoodieCleanerTestBase {
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(context, writeConfig)) {
       String instantTime;
       for (int idx = 0; idx < 3; ++idx) {
-        instantTime = HoodieActiveTimeline.createNewInstantTime();
+        instantTime = client.createNewInstantTime();
         List<HoodieRecord> records = dataGen.generateInserts(instantTime, 1);
         client.startCommitWithTime(instantTime);
         client.insert(jsc.parallelize(records, 1), instantTime).collect();
       }
 
-      instantTime = HoodieActiveTimeline.createNewInstantTime();
+      instantTime = client.createNewInstantTime();
       HoodieTable table = HoodieSparkTable.create(writeConfig, context);
       Option<HoodieCleanerPlan> cleanPlan = table.scheduleCleaning(context, instantTime, Option.empty());
       assertEquals(cleanPlan.get().getPartitionsToBeDeleted().size(), 0);

@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.sink.utils.TestWriteBase;
@@ -538,11 +539,24 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .assertNextEvent()
         .checkpointComplete(1)
         .checkWrittenData(EXPECTED3, 1);
-    // step to commit the 2nd txn, should throw exception
-    // for concurrent modification of same fileGroups
-    pipeline1.checkpoint(1)
-        .assertNextEvent()
-        .checkpointCompleteThrows(1, HoodieWriteConflictException.class, "Cannot resolve conflicts");
+    // step to commit the 2nd txn
+    validateConcurrentCommit(pipeline1);
+  }
+
+  private void validateConcurrentCommit(TestHarness pipeline) throws Exception {
+    pipeline
+        .checkpoint(1)
+        .assertNextEvent();
+    if (OptionsResolver.isNonBlockingConcurrencyControl(conf)) {
+      // NB-CC(non-blocking concurrency control) allows concurrent modification of the same fileGroup
+      pipeline
+          .checkpointComplete(1)
+          .checkWrittenData(EXPECTED3, 1);
+    } else {
+      // normal OCC(optimistic concurrency control) should throw exception otherwise
+      pipeline
+          .checkpointCompleteThrows(1, HoodieWriteConflictException.class, "Cannot resolve conflicts");
+    }
   }
 
   // case2: txn2's time range has partial overlap with txn1
@@ -567,16 +581,13 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     // step to commit the 1st txn, should succeed
     pipeline1.checkpoint(1)
         .assertNextEvent()
-        .checkpoint(1)
-        .assertNextEvent()
         .checkpointComplete(1)
         .checkWrittenData(EXPECTED3, 1);
 
-    // step to commit the 2nd txn, should throw exception
-    // for concurrent modification of same fileGroups
-    pipeline2.checkpoint(1)
-        .assertNextEvent()
-        .checkpointCompleteThrows(1, HoodieWriteConflictException.class, "Cannot resolve conflicts");
+    // step to commit the 2nd txn
+    // should success for concurrent modification of same fileGroups if using non-blocking concurrency control
+    // should throw exception otherwise
+    validateConcurrentCommit(pipeline2);
   }
 
   @Test

@@ -27,6 +27,8 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import com.esotericsoftware.kryo.Kryo;
@@ -34,6 +36,9 @@ import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.serializers.JavaSerializer;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.junit.jupiter.api.Assumptions;
 
@@ -253,5 +258,31 @@ public class HoodieTestUtils {
   public static List<String> getLogFileListFromFileSlice(FileSlice fileSlice) {
     return fileSlice.getLogFiles().map(logFile -> logFile.getPath().toString())
         .collect(Collectors.toList());
+  }
+
+  public static HoodieInstant getCompleteInstant(FileSystem fs, Path parent,
+                                                 String instantTime, String action) {
+    return new HoodieInstant(getCompleteInstantFileStatus(fs, parent, instantTime, action));
+  }
+
+  public static Path getCompleteInstantPath(FileSystem fs, Path parent,
+                                            String instantTime, String action) {
+    return getCompleteInstantFileStatus(fs, parent, instantTime, action).getPath();
+  }
+
+  private static FileStatus getCompleteInstantFileStatus(FileSystem fs, Path parent,
+                                                         String instantTime, String action) {
+    try {
+      String actionSuffix = "." + action;
+      Path wildcardPath = new Path(parent, instantTime + "_*" + actionSuffix);
+      FileStatus[] fileStatuses = fs.globStatus(wildcardPath);
+      if (fileStatuses.length != 1) {
+        throw new IOException("Error occur when finding path " + wildcardPath);
+      }
+
+      return fileStatuses[0];
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to get instant file status", e);
+    }
   }
 }

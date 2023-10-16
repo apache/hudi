@@ -29,6 +29,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.testutils.Assertions.assertStreamEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestHoodieInstant extends HoodieCommonTestHarness {
 
@@ -39,6 +40,12 @@ public class TestHoodieInstant extends HoodieCommonTestHarness {
 
     fileName = "20230104152218702.commit.request";
     assertEquals("20230104152218702", HoodieInstant.extractTimestamp(fileName));
+
+    fileName = "20230104152218702_20230104152219346.commit";
+    assertEquals("20230104152218702", HoodieInstant.extractTimestamp(fileName));
+
+    String illegalFileName = "hoodie.properties";
+    assertThrows(IllegalArgumentException.class, () -> HoodieInstant.extractTimestamp(illegalFileName));
   }
 
   @Test
@@ -48,6 +55,12 @@ public class TestHoodieInstant extends HoodieCommonTestHarness {
 
     fileName = "20230104152218702.commit.request";
     assertEquals(".commit.request", HoodieInstant.getTimelineFileExtension(fileName));
+
+    fileName = "20230104152218702_20230104152219346.commit";
+    assertEquals(".commit", HoodieInstant.getTimelineFileExtension(fileName));
+
+    fileName = "hoodie.properties";
+    assertEquals("", HoodieInstant.getTimelineFileExtension(fileName));
   }
 
   @Test
@@ -73,7 +86,7 @@ public class TestHoodieInstant extends HoodieCommonTestHarness {
 
       // Make sure StateTransitionTime is set in the timeline
       assertEquals(0,
-          timeline.getInstantsAsStream().filter(s -> s.getStateTransitionTime().isEmpty()).count());
+          timeline.getInstantsAsStream().filter(s -> s.getCompletionTime().isEmpty()).count());
     } finally {
       cleanMetaClient();
     }

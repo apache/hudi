@@ -167,7 +167,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     this.metrics = Option.empty();
     this.enabledPartitionTypes = new ArrayList<>(4);
 
-    this.dataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(dataWriteConfig.getBasePath()).build();
+    this.dataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf)
+        .setBasePath(dataWriteConfig.getBasePath())
+        .setTimeGeneratorConfig(dataWriteConfig.getTimeGeneratorConfig()).build();
 
     if (writeConfig.isMetadataTableEnabled()) {
       this.metadataWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(writeConfig, failedWritesCleaningPolicy);
@@ -293,7 +295,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     // the metadata table will need to be initialized again.
     if (exists) {
       try {
-        metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get()).setBasePath(metadataWriteConfig.getBasePath()).build();
+        metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get())
+            .setBasePath(metadataWriteConfig.getBasePath())
+            .setTimeGeneratorConfig(dataWriteConfig.getTimeGeneratorConfig()).build();
         if (DEFAULT_METADATA_POPULATE_META_FIELDS != metadataMetaClient.getTableConfig().populateMetaFields()) {
           LOG.info("Re-initiating metadata table properties since populate meta fields have changed");
           metadataMetaClient = initializeMetaClient();
@@ -367,7 +371,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       initMetadataReader();
       // Load the metadata table metaclient if required
       if (metadataMetaClient == null) {
-        metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get()).setBasePath(metadataWriteConfig.getBasePath()).build();
+        metadataMetaClient = HoodieTableMetaClient.builder()
+            .setConf(hadoopConf.get()).setBasePath(metadataWriteConfig.getBasePath())
+            .setTimeGeneratorConfig(dataWriteConfig.getTimeGeneratorConfig()).build();
       }
     }
 
@@ -577,7 +583,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   private HoodieTableMetaClient initializeMetaClient() throws IOException {
-    return HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(HoodieTableType.MERGE_ON_READ)
         .setTableName(dataWriteConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX)
         .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
@@ -587,6 +593,12 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         .setPopulateMetaFields(DEFAULT_METADATA_POPULATE_META_FIELDS)
         .setKeyGeneratorClassProp(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
         .initTable(hadoopConf.get(), metadataWriteConfig.getBasePath());
+
+    // reconcile the meta client with time generator config.
+    return HoodieTableMetaClient.builder()
+        .setBasePath(metadataWriteConfig.getBasePath()).setConf(hadoopConf.get())
+        .setTimeGeneratorConfig(dataWriteConfig.getTimeGeneratorConfig())
+        .build();
   }
 
   /**
@@ -964,7 +976,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       // We cannot create a deltaCommit at instantTime now because a future (rollback) block has already been written to the logFiles.
       // We need to choose a timestamp which would be a validInstantTime for MDT. This is either a commit timestamp completed on the dataset
       // or a timestamp with suffix which we use for MDT clean, compaction etc.
-      String syncCommitTime = HoodieTableMetadataUtil.createRestoreTimestamp(HoodieActiveTimeline.createNewInstantTime());
+      String syncCommitTime = HoodieTableMetadataUtil.createRestoreTimestamp(writeClient.createNewInstantTime(false));
       processAndCommit(syncCommitTime, () -> HoodieTableMetadataUtil.convertMissingPartitionRecords(engineContext,
           partitionsToDelete, partitionFilesToAdd, partitionFilesToDelete, syncCommitTime));
       closeInternal();

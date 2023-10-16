@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionPlanMigrator;
 import org.apache.hudi.common.testutils.CompactionTestUtils.DummyHoodieBaseFile;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
@@ -376,8 +377,8 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
         Stream<Pair<String, String>> inflights) {
       super();
       this.setInstants(Stream.concat(
-          Stream.concat(completedDeltaCommits.map(s -> new HoodieInstant(false, DELTA_COMMIT_ACTION, s)),
-              completedCompactionCommits.map(s -> new HoodieInstant(false, COMMIT_ACTION, s))),
+          Stream.concat(completedDeltaCommits.map(s -> new HoodieInstant(HoodieInstant.State.COMPLETED, DELTA_COMMIT_ACTION, s, InProcessTimeGenerator.createNewInstantTime())),
+              completedCompactionCommits.map(s -> new HoodieInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, s, InProcessTimeGenerator.createNewInstantTime()))),
               inflights.map(s -> new HoodieInstant(true, s.getRight(), s.getLeft())))
           .sorted(Comparator.comparing(HoodieInstant::getFileName)).collect(Collectors.toList()));
     }

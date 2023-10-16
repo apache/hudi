@@ -159,7 +159,7 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().reloadActiveTimeline();
     // Create six commits
     Arrays.asList("001", "003", "005", "007").forEach(timestamp -> {
-      activeTimeline.transitionCompactionInflightToComplete(
+      activeTimeline.transitionCompactionInflightToComplete(true,
           new HoodieInstant(HoodieInstant.State.INFLIGHT, COMPACTION_ACTION, timestamp), Option.empty());
     });
     // Simulate a compaction commit in metadata table timeline

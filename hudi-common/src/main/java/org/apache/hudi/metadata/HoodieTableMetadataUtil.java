@@ -972,7 +972,7 @@ public class HoodieTableMetadataUtil {
     HoodieTimeline timeline = metaClient.getActiveTimeline();
     if (timeline.empty()) {
       final HoodieInstant instant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION,
-          HoodieActiveTimeline.createNewInstantTime());
+          metaClient.createNewInstantTime(false));
       timeline = new HoodieDefaultTimeline(Stream.of(instant), metaClient.getActiveTimeline()::getInstantDetails);
     }
     return new HoodieTableFileSystemView(metaClient, timeline);
@@ -1422,7 +1422,7 @@ public class HoodieTableMetadataUtil {
     }
 
     if (backup) {
-      final Path metadataBackupPath = new Path(metadataTablePath.getParent(), ".metadata_" + HoodieActiveTimeline.createNewInstantTime());
+      final Path metadataBackupPath = new Path(metadataTablePath.getParent(), ".metadata_" + dataMetaClient.createNewInstantTime(false));
       LOG.info("Backing up metadata directory to " + metadataBackupPath + " before deletion");
       try {
         if (fs.rename(metadataTablePath, metadataBackupPath)) {
@@ -1479,7 +1479,7 @@ public class HoodieTableMetadataUtil {
 
     if (backup) {
       final Path metadataPartitionBackupPath = new Path(metadataTablePartitionPath.getParent().getParent(),
-          String.format(".metadata_%s_%s", partitionType.getPartitionPath(), HoodieActiveTimeline.createNewInstantTime()));
+          String.format(".metadata_%s_%s", partitionType.getPartitionPath(), dataMetaClient.createNewInstantTime(false)));
       LOG.info(String.format("Backing up MDT partition %s to %s before deletion", partitionType, metadataPartitionBackupPath));
       try {
         if (fs.rename(metadataTablePartitionPath, metadataPartitionBackupPath)) {

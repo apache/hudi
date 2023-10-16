@@ -524,9 +524,16 @@ public class TestWriteBase {
     }
 
     protected String lastCompleteInstant() {
-      return OptionsResolver.isMorTable(conf)
-          ? TestUtils.getLastDeltaCompleteInstant(basePath)
-          : TestUtils.getLastCompleteInstant(basePath, HoodieTimeline.COMMIT_ACTION);
+      // If using optimistic concurrency control, fetch last complete instant of current writer from ckp metadata
+      // because there are multiple write clients commit to the timeline.
+      if (OptionsResolver.isOptimisticConcurrencyControl(conf)) {
+        return this.ckpMetadata.lastCompleteInstant();
+      } else {
+        // fetch the instant from timeline.
+        return OptionsResolver.isMorTable(conf)
+            ? TestUtils.getLastDeltaCompleteInstant(basePath)
+            : TestUtils.getLastCompleteInstant(basePath, HoodieTimeline.COMMIT_ACTION);
+      }
     }
 
     public TestHarness checkCompletedInstantCount(int count) {

@@ -16,12 +16,11 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.transaction;
+package org.apache.hudi.client.transaction.lock;
 
-import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieLockException;
 
 import junit.framework.AssertionFailedError;
@@ -49,9 +48,9 @@ public class TestInProcessLockProvider {
 
   public TestInProcessLockProvider() {
     TypedProperties properties = new TypedProperties();
-    properties.put(HoodieWriteConfig.BASE_PATH.key(), "table1");
+    properties.put(HoodieCommonConfig.BASE_PATH.key(), "table1");
     lockConfiguration1 = new LockConfiguration(properties);
-    properties.put(HoodieWriteConfig.BASE_PATH.key(), "table2");
+    properties.put(HoodieCommonConfig.BASE_PATH.key(), "table2");
     lockConfiguration2 = new LockConfiguration(properties);
   }
 

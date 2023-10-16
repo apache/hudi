@@ -192,7 +192,9 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     refreshFsView();
 
     // Now create a scenario where archiving deleted replace commits (requested,inflight and replacecommit)
-    boolean deleteReplaceCommit = new File(this.basePath + "/.hoodie/" + clusteringInstantTime3 + ".replacecommit").delete();
+    Path completeInstantPath = HoodieTestUtils.getCompleteInstantPath(metaClient.getFs(), new Path(metaClient.getMetaPath()), clusteringInstantTime3, HoodieTimeline.REPLACE_COMMIT_ACTION);
+
+    boolean deleteReplaceCommit = metaClient.getFs().delete(completeInstantPath);
     boolean deleteReplaceCommitRequested = new File(this.basePath + "/.hoodie/" + clusteringInstantTime3 + ".replacecommit.requested").delete();
     boolean deleteReplaceCommitInflight = new File(this.basePath + "/.hoodie/" + clusteringInstantTime3 + ".replacecommit.inflight").delete();
 
@@ -449,7 +451,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertEquals(deltaFile1, logFiles.get(2).getFileName(), "Log File Order check");
 
     // schedules a compaction
-    String compactionInstantTime1 = HoodieActiveTimeline.createNewInstantTime(); // 60 -> 80
+    String compactionInstantTime1 = metaClient.createNewInstantTime(); // 60 -> 80
     String compactionFile1 = FSUtils.makeBaseFileName(compactionInstantTime1, TEST_WRITE_TOKEN, fileId);
     List<Pair<String, FileSlice>> partitionFileSlicesPairs = new ArrayList<>();
     partitionFileSlicesPairs.add(Pair.of(partitionPath, fileSlices.get(0)));
@@ -1563,9 +1565,9 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertTrue(fileIdsInCompaction.contains(fileId));
   }
 
-  private static void saveAsComplete(HoodieActiveTimeline timeline, HoodieInstant inflight, Option<byte[]> data) {
+  private void saveAsComplete(HoodieActiveTimeline timeline, HoodieInstant inflight, Option<byte[]> data) {
     if (inflight.getAction().equals(HoodieTimeline.COMPACTION_ACTION)) {
-      timeline.transitionCompactionInflightToComplete(inflight, data);
+      timeline.transitionCompactionInflightToComplete(true, inflight, data);
     } else {
       HoodieInstant requested = new HoodieInstant(State.REQUESTED, inflight.getAction(), inflight.getTimestamp());
       timeline.createNewInstant(requested);
@@ -1973,10 +1975,14 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertTrue(latestBaseFilesPerPartition.contains(fileId4));
 
     HoodieWrapperFileSystem fs = metaClient.getFs();
-    fs.delete(new Path(basePath + "/.hoodie", "1.commit"), false);
+    Path instantPath1 = HoodieTestUtils
+        .getCompleteInstantPath(fs, new Path(metaClient.getMetaPath()), "1", HoodieTimeline.COMMIT_ACTION);
+    fs.delete(instantPath1, false);
     fs.delete(new Path(basePath + "/.hoodie", "1.inflight"), false);
     fs.delete(new Path(basePath + "/.hoodie", "1.commit.requested"), false);
-    fs.delete(new Path(basePath + "/.hoodie", "2.replacecommit"), false);
+    Path instantPath2 = HoodieTestUtils
+        .getCompleteInstantPath(fs, new Path(metaClient.getMetaPath()), "2", HoodieTimeline.REPLACE_COMMIT_ACTION);
+    fs.delete(instantPath2, false);
 
     metaClient.reloadActiveTimeline();
     refreshFsView();

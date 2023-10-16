@@ -31,7 +31,6 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -393,7 +392,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     HoodieWriteConfig writeConfig = writeConfigBuilder.withMetadataConfig(metadataConfig).build();
     // do one upsert with synchronous metadata update
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig)) {
-      String instant = HoodieActiveTimeline.createNewInstantTime();
+      String instant = writeClient.createNewInstantTime();
       writeClient.startCommitWithTime(instant);
       List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
       JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);
@@ -445,7 +444,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     HoodieWriteConfig writeConfig = writeConfigBuilder.withMetadataConfig(metadataConfigBuilder.build()).build();
     // do one upsert with synchronous metadata update
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig)) {
-      String instant = HoodieActiveTimeline.createNewInstantTime();
+      String instant = writeClient.createNewInstantTime();
       writeClient.startCommitWithTime(instant);
       List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
       JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);
@@ -499,7 +498,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     HoodieWriteConfig writeConfig = writeConfigBuilder.withMetadataConfig(metadataConfigBuilder.build()).build();
     // do one upsert with synchronous metadata update
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig)) {
-      String instant = HoodieActiveTimeline.createNewInstantTime();
+      String instant = writeClient.createNewInstantTime();
       writeClient.startCommitWithTime(instant);
       List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
       JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);

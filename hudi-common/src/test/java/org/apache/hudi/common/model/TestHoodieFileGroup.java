@@ -135,7 +135,7 @@ public class TestHoodieFileGroup {
 
   private CompletionTimeQueryView getMockCompletionTimeQueryView(MockHoodieTimeline activeTimeline) {
     Map<String, String> completionTimeMap = activeTimeline.filterCompletedInstants().getInstantsAsStream()
-        .collect(Collectors.toMap(HoodieInstant::getTimestamp, HoodieInstant::getStateTransitionTime));
+        .collect(Collectors.toMap(HoodieInstant::getTimestamp, HoodieInstant::getCompletionTime));
     CompletionTimeQueryView queryView = mock(CompletionTimeQueryView.class);
     when(queryView.getCompletionTime(any(String.class), any(String.class)))
         .thenAnswer((InvocationOnMock invocationOnMock) -> {

@@ -26,7 +26,6 @@ import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -109,7 +108,7 @@ public class ClusteringTestUtils {
 
   public static String runClustering(SparkRDDWriteClient clusteringClient, boolean skipExecution, boolean shouldCommit) {
     // Schedule and execute clustering.
-    String clusteringCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    String clusteringCommitTime = clusteringClient.createNewInstantTime();
     return runClusteringOnInstant(clusteringClient, skipExecution, shouldCommit, clusteringCommitTime);
   }
 

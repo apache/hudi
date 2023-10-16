@@ -49,6 +49,7 @@ import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -224,13 +225,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation(HoodieFileFormat.class, "File format to store all the base file data.");
 
-  public static final ConfigProperty<String> BASE_PATH = ConfigProperty
-      .key("hoodie.base.path")
-      .noDefaultValue()
-      .withDocumentation("Base path on lake storage, under which all the table data is stored. "
-          + "Always prefix it explicitly with the storage scheme (e.g hdfs://, s3:// etc). "
-          + "Hudi stores all the main meta-data about commits, savepoints, cleaning audit logs "
-          + "etc in .hoodie directory under this base path directory.");
+  public static final ConfigProperty<String> BASE_PATH = HoodieCommonConfig.BASE_PATH;
 
   public static final ConfigProperty<String> AVRO_SCHEMA_STRING = ConfigProperty
       .key("hoodie.avro.schema")
@@ -784,6 +779,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   private HoodieTableServiceManagerConfig tableServiceManagerConfig;
   private HoodieCommonConfig commonConfig;
   private HoodieStorageConfig storageConfig;
+  private HoodieTimeGeneratorConfig timeGeneratorConfig;
   private EngineType engineType;
 
   /**
@@ -1178,6 +1174,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     this.tableServiceManagerConfig = HoodieTableServiceManagerConfig.newBuilder().fromProperties(props).build();
     this.commonConfig = HoodieCommonConfig.newBuilder().fromProperties(props).build();
     this.storageConfig = HoodieStorageConfig.newBuilder().fromProperties(props).build();
+    this.timeGeneratorConfig = HoodieTimeGeneratorConfig.newBuilder().fromProperties(props)
+        .withDefaultLockProvider(!isLockRequired()).build();
   }
 
   public static HoodieWriteConfig.Builder newBuilder() {
@@ -1289,6 +1287,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean isConsistentHashingEnabled() {
     return getIndexType() == HoodieIndex.IndexType.BUCKET && getBucketIndexEngineType() == HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING;
+  }
+
+  public boolean isSimpleBucketIndex() {
+    return HoodieIndex.IndexType.BUCKET.equals(getIndexType())
+        && HoodieIndex.BucketIndexEngineType.SIMPLE.equals(getBucketIndexEngineType());
   }
 
   public boolean isConsistentLogicalTimestampEnabled() {
@@ -2350,6 +2353,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return storageConfig;
   }
 
+  public HoodieTimeGeneratorConfig getTimeGeneratorConfig() {
+    return timeGeneratorConfig;
+  }
+
   /**
    * Commit call back configs.
    */
@@ -2607,6 +2614,12 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public Integer getWritesFileIdEncoding() {
     return props.getInteger(WRITES_FILEID_ENCODING, HoodieMetadataPayload.RECORD_INDEX_FIELD_FILEID_ENCODING_UUID);
+  }
+
+  public boolean isNonBlockingConcurrencyControl() {
+    return getTableType().equals(HoodieTableType.MERGE_ON_READ)
+        && getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()
+        && isSimpleBucketIndex();
   }
 
   public static class Builder {

@@ -22,7 +22,6 @@ import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -141,7 +140,7 @@ public class TestCompactionUtil {
     TestData.writeDataAsBatch(TestData.DATA_SET_SINGLE_INSERT, conf);
 
     try (HoodieFlinkWriteClient<?> writeClient = FlinkWriteClients.createWriteClient(conf)) {
-      CompactionUtil.scheduleCompaction(metaClient, writeClient, true, true);
+      CompactionUtil.scheduleCompaction(writeClient, true, true);
 
       Option<HoodieInstant> pendingCompactionInstant = metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().lastInstant();
       assertTrue(pendingCompactionInstant.isPresent(), "A compaction plan expects to be scheduled");
@@ -151,7 +150,7 @@ public class TestCompactionUtil {
       TimeUnit.SECONDS.sleep(3); // in case the instant time interval is too close
       writeClient.startCommit();
 
-      CompactionUtil.scheduleCompaction(metaClient, writeClient, true, false);
+      CompactionUtil.scheduleCompaction(writeClient, true, false);
       int numCompactionCommits = metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().countInstants();
       assertThat("Two compaction plan expects to be scheduled", numCompactionCommits, is(2));
     }
@@ -174,7 +173,7 @@ public class TestCompactionUtil {
   private String generateCompactionPlan() {
     HoodieCompactionOperation operation = new HoodieCompactionOperation();
     HoodieCompactionPlan plan = new HoodieCompactionPlan(Collections.singletonList(operation), Collections.emptyMap(), 1, null, null);
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    String instantTime = table.getMetaClient().createNewInstantTime();
     HoodieInstant compactionInstant =
         new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);
     try {

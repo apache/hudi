@@ -17,11 +17,11 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieTimeGeneratorConfig}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGenerator, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieIncrementalPathNotFoundException
@@ -86,7 +86,11 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
         .save(basePath)
     }
 
-    val hoodieMetaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build()
+    val hoodieMetaClient = HoodieTableMetaClient.builder()
+      .setConf(spark.sparkContext.hadoopConfiguration)
+      .setBasePath(basePath)
+      .setLoadActiveTimelineOnLoad(true)
+      .build()
     /**
      * State of timeline after 10 commits
      * +------------------+--------------------------------------+
@@ -113,8 +117,8 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
     val startArchivedCommitTs = archivedInstants(0).asInstanceOf[HoodieInstant].getTimestamp //C0
     val endArchivedCommitTs = archivedInstants(1).asInstanceOf[HoodieInstant].getTimestamp //C1
 
-    val startOutOfRangeCommitTs = HoodieInstantTimeGenerator.createNewInstantTime(0)
-    val endOutOfRangeCommitTs = HoodieInstantTimeGenerator.createNewInstantTime(0)
+    val startOutOfRangeCommitTs = hoodieMetaClient.createNewInstantTime()
+    val endOutOfRangeCommitTs = hoodieMetaClient.createNewInstantTime()
 
     assertTrue(HoodieTimeline.compareTimestamps(startOutOfRangeCommitTs, GREATER_THAN, completedCommits.lastInstant().get().getTimestamp))
     assertTrue(HoodieTimeline.compareTimestamps(endOutOfRangeCommitTs, GREATER_THAN, completedCommits.lastInstant().get().getTimestamp))

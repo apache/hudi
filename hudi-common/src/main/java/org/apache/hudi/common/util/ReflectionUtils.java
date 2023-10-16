@@ -32,10 +32,10 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Enumeration;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
 /**
@@ -45,22 +45,16 @@ public class ReflectionUtils {
 
   private static final Logger LOG = LoggerFactory.getLogger(ReflectionUtils.class);
 
-  private static final Map<String, Class<?>> CLAZZ_CACHE = new HashMap<>();
+  private static final Map<String, Class<?>> CLAZZ_CACHE = new ConcurrentHashMap<>();
 
   public static Class<?> getClass(String clazzName) {
-    if (!CLAZZ_CACHE.containsKey(clazzName)) {
-      synchronized (CLAZZ_CACHE) {
-        if (!CLAZZ_CACHE.containsKey(clazzName)) {
-          try {
-            Class<?> clazz = Class.forName(clazzName);
-            CLAZZ_CACHE.put(clazzName, clazz);
-          } catch (ClassNotFoundException e) {
-            throw new HoodieException("Unable to load class", e);
-          }
-        }
+    return CLAZZ_CACHE.computeIfAbsent(clazzName, c -> {
+      try {
+        return Class.forName(c);
+      } catch (ClassNotFoundException e) {
+        throw new HoodieException("Unable to load class", e);
       }
-    }
-    return CLAZZ_CACHE.get(clazzName);
+    });
   }
 
   public static <T> T loadClass(String className) {
