@@ -2011,8 +2011,12 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         s"""
            |select * from ${targetTable} where day='2023-10-12' and hour=11;
            |""".stripMargin)
-      assertResult(1)(df.rdd.partitions.size)
-      assertResult(1)(df.rdd.firstParent.partitions.size)
+      var rdd_head = df.rdd
+      while (rdd_head.dependencies.size > 0) {
+        assertResult(1)(rdd_head.partitions.size)
+        rdd_head = rdd_head.firstParent
+      }
+      assertResult(1)(rdd_head.partitions.size)
     })
   }
 
