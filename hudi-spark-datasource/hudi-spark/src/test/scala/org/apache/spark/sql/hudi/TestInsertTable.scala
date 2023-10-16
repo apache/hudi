@@ -1968,7 +1968,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     })
   }
 
-  test("Test partition pruning down") {
+  test("Test multiple partition fields pruning") {
 
     withRecordType()(withTempDir { tmp =>
       val targetTable = generateTableName
@@ -2020,7 +2020,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     })
   }
 
-  test("Test one partitoned field table pruning down") {
+  test("Test single partiton field pruning") {
 
     withRecordType()(withTempDir { tmp =>
       val targetTable = generateTableName
