@@ -166,10 +166,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
       AvroReadSupport.setAvroReadSchema(conf, requestedSchema.get());
       AvroReadSupport.setRequestedProjection(conf, requestedSchema.get());
     }
-    ParquetReader<IndexedRecord> reader = new HoodieAvroParquetReaderBuilder<IndexedRecord>(path).withConf(conf)
-        .set(ParquetInputFormat.STRICT_TYPE_CHECKING, "false")
-        .set(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS, "false")
-        .build();
+    ParquetReader<IndexedRecord> reader = new HoodieAvroParquetReaderBuilder<IndexedRecord>(path).withConf(conf).build();
     ParquetReaderIterator<IndexedRecord> parquetReaderIterator = new ParquetReaderIterator<>(reader);
     readerIterators.add(parquetReaderIterator);
     return parquetReaderIterator;

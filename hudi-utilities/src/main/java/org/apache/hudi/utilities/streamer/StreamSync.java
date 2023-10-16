@@ -525,6 +525,11 @@ public class StreamSync implements Serializable, Closeable {
       throw new UnsupportedOperationException("Spark record only support parquet log.");
     }
 
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(new Configuration(fs.getConf()))
+        .setBasePath(cfg.targetBasePath)
+        .setPayloadClassName(cfg.payloadClassName)
+        .build();
+
     final Option<JavaRDD<GenericRecord>> avroRDDOptional;
     final String checkpointStr;
     SchemaProvider schemaProvider;
@@ -572,7 +577,7 @@ public class StreamSync implements Serializable, Closeable {
         Option<Schema> incomingSchemaOpt = transformed.map(df ->
             AvroConversionUtils.convertStructTypeToAvroSchema(df.schema(), getAvroRecordQualifiedName(cfg.targetTableName)));
 
-        schemaProvider = incomingSchemaOpt.map(incomingSchema -> getDeducedSchemaProvider(incomingSchema, dataAndCheckpoint.getSchemaProvider()))
+        schemaProvider = incomingSchemaOpt.map(incomingSchema -> getDeducedSchemaProvider(incomingSchema, dataAndCheckpoint.getSchemaProvider(), metaClient))
             .orElse(dataAndCheckpoint.getSchemaProvider());
         // Rewrite transformed records into the expected target schema
         avroRDDOptional = transformed.map(t -> getTransformedRDD(t, reconcileSchema, schemaProvider.getTargetSchema()));
@@ -582,7 +587,7 @@ public class StreamSync implements Serializable, Closeable {
       InputBatch<JavaRDD<GenericRecord>> dataAndCheckpoint = formatAdapter.fetchNewDataInAvroFormat(resumeCheckpointStr, cfg.sourceLimit);
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
       // Rewrite transformed records into the expected target schema
-      schemaProvider = getDeducedSchemaProvider(dataAndCheckpoint.getSchemaProvider().getSourceSchema(), dataAndCheckpoint.getSchemaProvider());
+      schemaProvider = getDeducedSchemaProvider(dataAndCheckpoint.getSchemaProvider().getSourceSchema(), dataAndCheckpoint.getSchemaProvider(), metaClient);
       Schema targetSchema = schemaProvider.getTargetSchema();
       avroRDDOptional = dataAndCheckpoint.getBatch().map(t -> t.map(g -> HoodieAvroUtils.rewriteRecordDeep(g, targetSchema)));
     }
@@ -665,12 +670,8 @@ public class StreamSync implements Serializable, Closeable {
    * @param sourceSchemaProvider Source schema provider.
    * @return the SchemaProvider that can be used as writer schema.
    */
-  private SchemaProvider getDeducedSchemaProvider(Schema incomingSchema, SchemaProvider sourceSchemaProvider) {
-    Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(hoodieSparkContext.jsc(), fs, cfg.targetBasePath);
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(new Configuration(fs.getConf()))
-        .setBasePath(cfg.targetBasePath)
-        .setPayloadClassName(cfg.payloadClassName)
-        .build();
+  private SchemaProvider getDeducedSchemaProvider(Schema incomingSchema, SchemaProvider sourceSchemaProvider, HoodieTableMetaClient metaClient) {
+    Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(hoodieSparkContext.jsc(), fs, cfg.targetBasePath, metaClient);
     Option<InternalSchema> internalSchemaOpt = HoodieConversionUtils.toJavaOption(
         HoodieSchemaUtils.getLatestTableInternalSchema(
             new HoodieConfig(HoodieStreamer.Config.getProps(fs, cfg)), metaClient));

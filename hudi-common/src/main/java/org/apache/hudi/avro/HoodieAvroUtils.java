@@ -1118,7 +1118,7 @@ public class HoodieAvroUtils {
         }
         return false;
       case UNION:
-        return recordNeedsRewriteForExtendedAvroTypePromotion(getActualSchemaFromUnion(writerSchema), getActualSchemaFromUnion(readerSchema));
+        return recordNeedsRewriteForExtendedAvroTypePromotion(getActualSchemaFromUnion(writerSchema, null), getActualSchemaFromUnion(readerSchema, null));
       case ENUM:
       case STRING:
       case BYTES:
@@ -1187,30 +1187,13 @@ public class HoodieAvroUtils {
       actualSchema = schema.getTypes().get(0);
     } else if (schema.getTypes().size() == 1) {
       actualSchema = schema.getTypes().get(0);
+    } else if (data == null) {
+      return schema;
     } else {
       // deal complex union. this should not happen in hoodie,
       // since flink/spark do not write this type.
       int i = GenericData.get().resolveUnion(schema, data);
       actualSchema = schema.getTypes().get(i);
-    }
-    return actualSchema;
-  }
-
-  private static Schema getActualSchemaFromUnion(Schema schema) {
-    Schema actualSchema;
-    if (schema.getType() != UNION) {
-      return schema;
-    }
-    if (schema.getTypes().size() == 2
-        && schema.getTypes().get(0).getType() == Schema.Type.NULL) {
-      actualSchema = schema.getTypes().get(1);
-    } else if (schema.getTypes().size() == 2
-        && schema.getTypes().get(1).getType() == Schema.Type.NULL) {
-      actualSchema = schema.getTypes().get(0);
-    } else if (schema.getTypes().size() == 1) {
-      actualSchema = schema.getTypes().get(0);
-    } else {
-      return schema;
     }
     return actualSchema;
   }

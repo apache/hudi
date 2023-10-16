@@ -536,6 +536,7 @@ object DataSourceWriteOptions {
     .markAdvanced()
     .withDocumentation("Sync tool class name used to sync to metastore. Defaults to Hive.")
 
+  @Deprecated
   val RECONCILE_SCHEMA: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.RECONCILE_SCHEMA
 
   val ADD_NULL_FOR_DELETED_COLUMNS: ConfigProperty[String] = HoodieCommonConfig.ADD_NULL_FOR_DELETED_COLUMNS

@@ -32,7 +32,7 @@ object HoodieSchemaUtils {
    *
    * @param config          instance of {@link HoodieConfig}
    * @param tableMetaClient instance of HoodieTableMetaClient
-   * @return Pair of(boolean, table schema), where first entry will be true only if schema conversion is required.
+   * @return Option of InternalSchema. Will always be empty if schema on read is disabled
    */
   def getLatestTableInternalSchema(config: HoodieConfig,
                                    tableMetaClient: HoodieTableMetaClient): Option[InternalSchema] = {

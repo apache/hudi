@@ -511,7 +511,7 @@ object HoodieSparkSqlWriter {
 
     latestTableSchemaOpt match {
       // In case table schema is empty we're just going to use the source schema as a
-      // writer's schema. No additional handling is required
+      // writer's schema.
       case None => AvroInternalSchemaConverter.fixNullOrdering(sourceSchema)
       // Otherwise, we need to make sure we reconcile incoming and latest table schemas
       case Some(latestTableSchemaWithMetaFields) =>

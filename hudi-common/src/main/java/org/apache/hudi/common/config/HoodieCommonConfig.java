@@ -58,10 +58,12 @@ public class HoodieCommonConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("The query instant for time travel. Without specified this option, we query the latest snapshot.");
 
+  @Deprecated
   public static final ConfigProperty<Boolean> RECONCILE_SCHEMA = ConfigProperty
       .key("hoodie.datasource.write.reconcile.schema")
       .defaultValue(false)
       .markAdvanced()
+      .deprecatedAfter("0.14.1")
       .withDocumentation("This config controls how writer's schema will be selected based on the incoming batch's "
           + "schema as well as existing table's one. When schema reconciliation is DISABLED, incoming batch's "
           + "schema will be picked as a writer-schema (therefore updating table's schema). When schema reconciliation "
