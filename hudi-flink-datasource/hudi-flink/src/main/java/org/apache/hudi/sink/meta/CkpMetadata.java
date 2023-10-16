@@ -213,12 +213,6 @@ public class CkpMetadata implements Serializable, AutoCloseable {
     return null;
   }
 
-  @Nullable
-  @VisibleForTesting
-  public boolean isEmpty() {
-    return messages.isEmpty();
-  }
-
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------

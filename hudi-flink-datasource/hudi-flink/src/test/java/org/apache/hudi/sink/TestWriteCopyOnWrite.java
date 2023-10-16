@@ -540,17 +540,21 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .checkpointComplete(1)
         .checkWrittenData(EXPECTED3, 1);
     // step to commit the 2nd txn
-    pipeline1 = pipeline1
+    validateConcurrentCommit(pipeline1);
+  }
+
+  private void validateConcurrentCommit(TestHarness pipeline) throws Exception {
+    pipeline
         .checkpoint(1)
         .assertNextEvent();
     if (OptionsResolver.isNonBlockingConcurrencyControl(conf)) {
-      // should success for concurrent modification of same fileGroups if using non-blocking concurrency control
-      pipeline1
+      // NB-CC(non-blocking concurrency control) allows concurrent modification of the same fileGroup
+      pipeline
           .checkpointComplete(1)
           .checkWrittenData(EXPECTED3, 1);
     } else {
-      // should throw exception otherwise
-      pipeline1
+      // normal OCC(optimistic concurrency control) should throw exception otherwise
+      pipeline
           .checkpointCompleteThrows(1, HoodieWriteConflictException.class, "Cannot resolve conflicts");
     }
   }
@@ -583,17 +587,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     // step to commit the 2nd txn
     // should success for concurrent modification of same fileGroups if using non-blocking concurrency control
     // should throw exception otherwise
-    pipeline2 = pipeline2
-        .checkpoint(1)
-        .assertNextEvent();
-    if (OptionsResolver.isNonBlockingConcurrencyControl(conf)) {
-      pipeline2
-          .checkpointComplete(1)
-          .checkWrittenData(EXPECTED3, 1);
-    } else {
-      pipeline2
-          .checkpointCompleteThrows(1, HoodieWriteConflictException.class, "Cannot resolve conflicts");
-    }
+    validateConcurrentCommit(pipeline2);
   }
 
   @Test
