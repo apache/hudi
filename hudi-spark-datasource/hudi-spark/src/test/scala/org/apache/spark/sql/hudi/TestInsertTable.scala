@@ -1978,8 +1978,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |  `id` string,
            |  `name` string,
            |  `dt` bigint,
-           |  `day` STRING COMMENT '日期分区',
-           |  `hour` INT COMMENT '小时分区'
+           |  `day` STRING,
+           |  `hour` INT
            |) using hudi
            |tblproperties (
            |  'primaryKey' = 'id',
