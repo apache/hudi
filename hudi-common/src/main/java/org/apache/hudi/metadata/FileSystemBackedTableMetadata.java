@@ -138,7 +138,7 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
     int currentPartitionLevel = -1;
     boolean needPushDownExpressions;
     Expression fullBoundExpr;
-    // Not like `HoodieBackedTableMetadata`, since we don't know the exact partition levels here,
+    // Not like `HoodieBackedTableMetadata`, since we don't know the exact partition levels here
     // given it's possible that partition values contains `/`, which could affect
     // the result to get right `partitionValue` when listing paths, here we have
     // to make it more strict that `urlEncodePartitioningEnabled` must be enabled.
