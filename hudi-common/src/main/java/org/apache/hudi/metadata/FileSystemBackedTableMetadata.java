@@ -144,7 +144,7 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
     // to make it more strict that `urlEncodePartitioningEnabled` must be enabled.
     // TODO better enable urlEncodePartitioningEnabled if hiveStylePartitioningEnabled is enabled?
     if (hiveStylePartitioningEnabled && urlEncodePartitioningEnabled
-            && pushedExpr != null && partitionFields != null) {
+        && pushedExpr != null && partitionFields != null) {
       currentPartitionLevel = getPathPartitionLevel(partitionFields, relativePathPrefix);
       needPushDownExpressions = true;
       fullBoundExpr = pushedExpr.accept(new BindVisitor(partitionFields, caseSensitive));
@@ -188,11 +188,11 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
         }, fileListingParallelism);
 
         partitionPaths.addAll(result.stream().filter(entry -> entry.getKey().isPresent())
-                .map(entry -> entry.getKey().get())
-                .filter(relativePartitionPath -> fullBoundExpr instanceof Predicates.TrueExpression
-                        || (Boolean) fullBoundExpr.eval(
-                        extractPartitionValues(partitionFields, relativePartitionPath, urlEncodePartitioningEnabled)))
-                .collect(Collectors.toList()));
+            .map(entry -> entry.getKey().get())
+            .filter(relativePartitionPath -> fullBoundExpr instanceof Predicates.TrueExpression
+                || (Boolean) fullBoundExpr.eval(
+                extractPartitionValues(partitionFields, relativePartitionPath, urlEncodePartitioningEnabled)))
+            .collect(Collectors.toList()));
 
         Expression partialBoundExpr;
         // If partitionPaths is nonEmpty, we're already at the last path level, and all paths
@@ -212,10 +212,10 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
         }
 
         pathsToList.addAll(result.stream().filter(entry -> entry.getValue().isPresent()).map(entry -> entry.getValue().get())
-                .filter(path -> partialBoundExpr instanceof Predicates.TrueExpression
-                        || (Boolean) partialBoundExpr.eval(
-                        extractPartitionValues(partitionFields, FSUtils.getRelativePartitionPath(dataBasePath.get(), path), urlEncodePartitioningEnabled)))
-                .collect(Collectors.toList()));
+            .filter(path -> partialBoundExpr instanceof Predicates.TrueExpression
+                || (Boolean) partialBoundExpr.eval(
+                extractPartitionValues(partitionFields, FSUtils.getRelativePartitionPath(dataBasePath.get(), path), urlEncodePartitioningEnabled)))
+            .collect(Collectors.toList()));
       }
     }
     return partitionPaths;
