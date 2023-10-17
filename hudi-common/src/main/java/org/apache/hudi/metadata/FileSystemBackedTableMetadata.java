@@ -132,19 +132,19 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
                                                                            Expression pushedExpr) throws IOException {
     List<Path> pathsToList = new CopyOnWriteArrayList<>();
     pathsToList.add(StringUtils.isNullOrEmpty(relativePathPrefix)
-        ? dataBasePath.get() : new Path(dataBasePath.get(), relativePathPrefix));
+            ? dataBasePath.get() : new Path(dataBasePath.get(), relativePathPrefix));
     List<String> partitionPaths = new CopyOnWriteArrayList<>();
 
     int currentPartitionLevel = -1;
     boolean needPushDownExpressions;
     Expression fullBoundExpr;
-    // Not like `HoodieBackedTableMetadata`, since we don't know the exact partition levels here
+    // Not like `HoodieBackedTableMetadata`, since we don't know the exact partition levels here,
     // given it's possible that partition values contains `/`, which could affect
     // the result to get right `partitionValue` when listing paths, here we have
     // to make it more strict that `urlEncodePartitioningEnabled` must be enabled.
     // TODO better enable urlEncodePartitioningEnabled if hiveStylePartitioningEnabled is enabled?
     if (hiveStylePartitioningEnabled && urlEncodePartitioningEnabled
-        && pushedExpr != null && partitionFields != null) {
+            && pushedExpr != null && partitionFields != null) {
       currentPartitionLevel = getPathPartitionLevel(partitionFields, relativePathPrefix);
       needPushDownExpressions = true;
       fullBoundExpr = pushedExpr.accept(new BindVisitor(partitionFields, caseSensitive));
@@ -169,17 +169,17 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
           return Stream.of(Pair.of(Option.of(FSUtils.getRelativePartitionPath(dataBasePath.get(), path)), Option.empty()));
         }
         return Arrays.stream(fileSystem.listStatus(path))
-            .filter(status -> status.isDirectory() && !status.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME))
-            .map(status -> Pair.of(Option.empty(), Option.of(status.getPath())));
+                .filter(status -> status.isDirectory() && !status.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME))
+                .map(status -> Pair.of(Option.empty(), Option.of(status.getPath())));
       }, listingParallelism);
       pathsToList.clear();
 
       partitionPaths.addAll(result.stream().filter(entry -> entry.getKey().isPresent())
-          .map(entry -> entry.getKey().get())
-          .filter(relativePartitionPath -> fullBoundExpr instanceof Predicates.TrueExpression
-              || (Boolean) fullBoundExpr.eval(
-              extractPartitionValues(partitionFields, relativePartitionPath, urlEncodePartitioningEnabled)))
-          .collect(Collectors.toList()));
+              .map(entry -> entry.getKey().get())
+              .filter(relativePartitionPath -> fullBoundExpr instanceof Predicates.TrueExpression
+                      || (Boolean) fullBoundExpr.eval(
+                      extractPartitionValues(partitionFields, relativePartitionPath, urlEncodePartitioningEnabled)))
+              .collect(Collectors.toList()));
 
       Expression partialBoundExpr;
       // If partitionPaths is nonEmpty, we're already at the last path level, and all paths
@@ -199,10 +199,10 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
       }
 
       pathsToList.addAll(result.stream().filter(entry -> entry.getValue().isPresent()).map(entry -> entry.getValue().get())
-          .filter(path -> partialBoundExpr instanceof Predicates.TrueExpression
-              || (Boolean) partialBoundExpr.eval(
-                  extractPartitionValues(partitionFields, FSUtils.getRelativePartitionPath(dataBasePath.get(), path), urlEncodePartitioningEnabled)))
-          .collect(Collectors.toList()));
+              .filter(path -> partialBoundExpr instanceof Predicates.TrueExpression
+                      || (Boolean) partialBoundExpr.eval(
+                      extractPartitionValues(partitionFields, FSUtils.getRelativePartitionPath(dataBasePath.get(), path), urlEncodePartitioningEnabled)))
+              .collect(Collectors.toList()));
     }
     return partitionPaths;
   }
