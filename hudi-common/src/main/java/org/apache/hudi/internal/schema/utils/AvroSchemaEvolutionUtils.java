@@ -53,6 +53,10 @@ public class AvroSchemaEvolutionUtils {
    * @return reconcile Schema
    */
   public static InternalSchema reconcileSchema(Schema incomingSchema, InternalSchema oldTableSchema) {
+    /* If incoming schema is null, we fall back on table schema. */
+    if (incomingSchema.getType() == Schema.Type.NULL) {
+        return oldTableSchema;
+    }
     InternalSchema inComingInternalSchema = convert(incomingSchema);
     // check column add/missing
     List<String> colNamesFromIncoming = inComingInternalSchema.getAllColsFullName();
@@ -126,7 +130,7 @@ public class AvroSchemaEvolutionUtils {
    * @return schema (based off {@code source} one) that has nullability constraints and datatypes reconciled
    */
   public static Schema reconcileSchemaRequirements(Schema sourceSchema, Schema targetSchema, Map<String, String> opts) {
-    if (sourceSchema.getFields().isEmpty() || targetSchema.getFields().isEmpty()) {
+    if (sourceSchema.getType() == Schema.Type.NULL || sourceSchema.getFields().isEmpty() || targetSchema.getFields().isEmpty()) {
       return sourceSchema;
     }
 

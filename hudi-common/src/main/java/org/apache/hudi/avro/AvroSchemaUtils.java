@@ -122,7 +122,7 @@ public class AvroSchemaUtils {
    * opposite direction
    */
   public static boolean isValidEvolutionOf(Schema sourceSchema, Schema targetSchema) {
-    return isProjectionOfInternal(sourceSchema, targetSchema,
+    return (sourceSchema.getType() == Schema.Type.NULL) || isProjectionOfInternal(sourceSchema, targetSchema,
         AvroSchemaUtils::isAtomicSchemasCompatibleEvolution);
   }
 

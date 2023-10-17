@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.utilities.sources.ParquetDFSSource;
+import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
@@ -75,7 +76,7 @@ public class TestHoodieDeltaStreamerSchemaEvolution extends HoodieDeltaStreamerT
     targetSchemaFile = "";
   }
 
-  private HoodieDeltaStreamer deltaStreamer;
+  private HoodieStreamer deltaStreamer;
 
   private HoodieDeltaStreamer.Config getDeltaStreamerConfig() throws IOException {
     TypedProperties extraProps = new TypedProperties();
