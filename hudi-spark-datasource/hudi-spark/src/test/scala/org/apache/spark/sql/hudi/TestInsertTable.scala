@@ -1968,6 +1968,98 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     })
   }
 
+  test("Test multiple partition fields pruning") {
+
+    withRecordType()(withTempDir { tmp =>
+      val targetTable = generateTableName
+      spark.sql(
+        s"""
+           |create table ${targetTable} (
+           |  `id` string,
+           |  `name` string,
+           |  `dt` bigint,
+           |  `day` STRING,
+           |  `hour` INT
+           |) using hudi
+           |tblproperties (
+           |  'primaryKey' = 'id',
+           |  'type' = 'mor',
+           |  'preCombineField'='dt',
+           |  'hoodie.index.type' = 'BUCKET',
+           |  'hoodie.bucket.index.hash.field' = 'id',
+           |  'hoodie.bucket.index.num.buckets'=512
+           | )
+           |partitioned by (`day`,`hour`)
+           |location '${tmp.getCanonicalPath}/$targetTable'
+           |""".stripMargin)
+      spark.sql(
+        s"""
+           |insert into ${targetTable}
+           |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 10 as `hour`
+           |union
+           |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 11 as `hour`
+           |union
+           |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 12 as `hour`
+           |""".stripMargin)
+      val df = spark.sql(
+        s"""
+           |select * from ${targetTable} where day='2023-10-12' and hour=11;
+           |""".stripMargin)
+      var rddHead = df.rdd
+      while (rddHead.dependencies.size > 0) {
+        assertResult(1)(rddHead.partitions.size)
+        rddHead = rddHead.firstParent
+      }
+      assertResult(1)(rddHead.partitions.size)
+    })
+  }
+
+  test("Test single partiton field pruning") {
+
+    withRecordType()(withTempDir { tmp =>
+      val targetTable = generateTableName
+      spark.sql(
+        s"""
+           |create table ${targetTable} (
+           |  `id` string,
+           |  `name` string,
+           |  `dt` bigint,
+           |  `day` STRING,
+           |  `hour` INT
+           |) using hudi
+           |tblproperties (
+           |  'primaryKey' = 'id',
+           |  'type' = 'mor',
+           |  'preCombineField'='dt',
+           |  'hoodie.index.type' = 'BUCKET',
+           |  'hoodie.bucket.index.hash.field' = 'id',
+           |  'hoodie.bucket.index.num.buckets'=512
+           | )
+           |partitioned by (`day`)
+           |location '${tmp.getCanonicalPath}/$targetTable'
+           |""".stripMargin)
+      spark.sql(
+        s"""
+           |insert into ${targetTable}
+           |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 10 as `hour`
+           |union
+           |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 11 as `hour`
+           |union
+           |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 12 as `hour`
+           |""".stripMargin)
+      val df = spark.sql(
+        s"""
+           |select * from ${targetTable} where day='2023-10-12' and hour=11;
+           |""".stripMargin)
+      var rddHead = df.rdd
+      while (rddHead.dependencies.size > 0) {
+        assertResult(1)(rddHead.partitions.size)
+        rddHead = rddHead.firstParent
+      }
+      assertResult(1)(rddHead.partitions.size)
+    })
+  }
+
   def ingestAndValidateDataNoPrecombine(tableType: String, tableName: String, tmp: File,
                             expectedOperationtype: WriteOperationType,
                             setOptions: List[String] = List.empty) : Unit = {
