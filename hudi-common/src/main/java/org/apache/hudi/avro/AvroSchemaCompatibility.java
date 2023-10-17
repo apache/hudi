@@ -385,7 +385,7 @@ public class AvroSchemaCompatibility {
           }
           case STRING: {
             return (isTypeNumeric(writer.getType()) || (writer.getType() == Schema.Type.BYTES)
-                ? result : result.mergedWith(typeMismatch(reader, writer, locations));
+                ? result : result.mergedWith(typeMismatch(reader, writer, locations)));
           }
 
           case ARRAY:
