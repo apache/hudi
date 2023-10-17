@@ -1462,4 +1462,29 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       assertResult(table.storage.outputFormat.get)("org.apache.hadoop.hive.ql.io.orc.OrcOutputFormat")
     }
   }
+
+  test("Test Create Hoodie Table with table configs") {
+    Seq("COPY_ON_WRITE", "MERGE_ON_READ").foreach { tableType =>
+      withTable(generateTableName) { tableName =>
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | tblproperties (
+             |  hoodie.table.recordkey.fields ='id',
+             |  hoodie.table.type = '$tableType',
+             |  hoodie.table.precombine.field = 'ts'
+             | )
+       """.stripMargin)
+        val hoodieCatalogTable = HoodieCatalogTable(spark, TableIdentifier(tableName))
+        assertResult(Array("id"))(hoodieCatalogTable.primaryKeys)
+        assertResult(tableType)(hoodieCatalogTable.tableTypeName)
+        assertResult("ts")(hoodieCatalogTable.preCombineKey.get)
+      }
+    }
+  }
 }
