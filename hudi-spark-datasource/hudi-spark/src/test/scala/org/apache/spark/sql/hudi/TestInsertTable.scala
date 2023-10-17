@@ -1996,27 +1996,21 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         s"""
            |insert into ${targetTable}
            |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 10 as `hour`
-           |""".stripMargin)
-      spark.sql(
-        s"""
-           |insert into ${targetTable}
+           |union
            |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 11 as `hour`
-           |""".stripMargin)
-      spark.sql(
-        s"""
-           |insert into ${targetTable}
+           |union
            |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 12 as `hour`
            |""".stripMargin)
       val df = spark.sql(
         s"""
            |select * from ${targetTable} where day='2023-10-12' and hour=11;
            |""".stripMargin)
-      var rdd_head = df.rdd
-      while (rdd_head.dependencies.size > 0) {
-        assertResult(1)(rdd_head.partitions.size)
-        rdd_head = rdd_head.firstParent
+      var rddHead = df.rdd
+      while (rddHead.dependencies.size > 0) {
+        assertResult(1)(rddHead.partitions.size)
+        rddHead = rddHead.firstParent
       }
-      assertResult(1)(rdd_head.partitions.size)
+      assertResult(1)(rddHead.partitions.size)
     })
   }
 
@@ -2048,27 +2042,21 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         s"""
            |insert into ${targetTable}
            |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 10 as `hour`
-           |""".stripMargin)
-      spark.sql(
-        s"""
-           |insert into ${targetTable}
+           |union
            |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 11 as `hour`
-           |""".stripMargin)
-      spark.sql(
-        s"""
-           |insert into ${targetTable}
+           |union
            |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 12 as `hour`
            |""".stripMargin)
       val df = spark.sql(
         s"""
            |select * from ${targetTable} where day='2023-10-12' and hour=11;
            |""".stripMargin)
-      var rdd_head = df.rdd
-      while (rdd_head.dependencies.size > 0) {
-        assertResult(1)(rdd_head.partitions.size)
-        rdd_head = rdd_head.firstParent
+      var rddHead = df.rdd
+      while (rddHead.dependencies.size > 0) {
+        assertResult(1)(rddHead.partitions.size)
+        rddHead = rddHead.firstParent
       }
-      assertResult(1)(rdd_head.partitions.size)
+      assertResult(1)(rddHead.partitions.size)
     })
   }
 
