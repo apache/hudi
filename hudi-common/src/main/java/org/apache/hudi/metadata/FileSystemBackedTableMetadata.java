@@ -210,11 +210,11 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
           partialBoundExpr = Predicates.alwaysTrue();
         }
 
-      pathsToList.addAll(result.stream().filter(entry -> entry.getValue().isPresent()).map(entry -> entry.getValue().get())
-          .filter(path -> partialBoundExpr instanceof Predicates.TrueExpression
-              || (Boolean) partialBoundExpr.eval(
-                  extractPartitionValues(partitionFields, FSUtils.getRelativePartitionPath(dataBasePath.get(), path), urlEncodePartitioningEnabled)))
-          .collect(Collectors.toList()));
+        pathsToList.addAll(result.stream().filter(entry -> entry.getValue().isPresent()).map(entry -> entry.getValue().get())
+            .filter(path -> partialBoundExpr instanceof Predicates.TrueExpression
+                || (Boolean) partialBoundExpr.eval(
+                    extractPartitionValues(partitionFields, FSUtils.getRelativePartitionPath(dataBasePath.get(), path), urlEncodePartitioningEnabled)))
+            .collect(Collectors.toList()));
       }
     }
     return partitionPaths;
