@@ -132,7 +132,7 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
                                                                            Expression pushedExpr) throws IOException {
     List<Path> pathsToList = new CopyOnWriteArrayList<>();
     pathsToList.add(StringUtils.isNullOrEmpty(relativePathPrefix)
-            ? dataBasePath.get() : new Path(dataBasePath.get(), relativePathPrefix));
+        ? dataBasePath.get() : new Path(dataBasePath.get(), relativePathPrefix));
     List<String> partitionPaths = new CopyOnWriteArrayList<>();
 
     int currentPartitionLevel = -1;
