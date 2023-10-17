@@ -229,6 +229,11 @@ public class HoodieAvroUtils {
     return reader.read(null, jsonDecoder);
   }
 
+  public static boolean isTypeNumeric(Schema.Type type) {
+    return type == Schema.Type.INT || type == Schema.Type.LONG || type == Schema.Type.FLOAT
+        || type == Schema.Type.DOUBLE || type == Schema.Type.BYTES;
+  }
+
   public static boolean isMetadataField(String fieldName) {
     return HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(fieldName);
   }
@@ -402,15 +407,15 @@ public class HoodieAvroUtils {
   /**
    * Given an Avro record with a given schema, rewrites it into the new schema while setting fields only from the new
    * schema.
-   *
+   * <p>
    * NOTE: This method is rewriting every record's field that is record itself recursively. It's
-   *       caller's responsibility to make sure that no unnecessary re-writing occurs (by preemptively
-   *       checking whether the record does require re-writing to adhere to the new schema)
-   *
+   * caller's responsibility to make sure that no unnecessary re-writing occurs (by preemptively
+   * checking whether the record does require re-writing to adhere to the new schema)
+   * <p>
    * NOTE: Here, the assumption is that you cannot go from an evolved schema (schema with (N) fields)
-   *       to an older schema (schema with (N-1) fields). All fields present in the older record schema MUST be present in the
-   *       new schema and the default/existing values are carried over.
-   *
+   * to an older schema (schema with (N-1) fields). All fields present in the older record schema MUST be present in the
+   * new schema and the default/existing values are carried over.
+   * <p>
    * This particular method does the following:
    * <ol>
    *   <li>Create a new empty GenericRecord with the new schema.</li>
@@ -418,7 +423,7 @@ public class HoodieAvroUtils {
    *   fields of this transformed schema</li>
    *   <li>For SpecificRecord, hoodie_metadata_fields have a special treatment (see below)</li>
    * </ol>
-   *
+   * <p>
    * For SpecificRecord we ignore Hudi Metadata fields, because for code generated
    * avro classes (HoodieMetadataRecord), the avro record is a SpecificBaseRecord type instead of a GenericRecord.
    * SpecificBaseRecord throws null pointer exception for record.get(name) if name is not present in the schema of the
@@ -773,7 +778,7 @@ public class HoodieAvroUtils {
    * Sanitizes Name according to Avro rule for names.
    * Removes characters other than the ones mentioned in https://avro.apache.org/docs/current/spec.html#names .
    *
-   * @param name input name
+   * @param name            input name
    * @param invalidCharMask replacement for invalid characters.
    * @return sanitized name
    */
@@ -834,13 +839,13 @@ public class HoodieAvroUtils {
    * a) Create a new empty GenericRecord with the new schema.
    * b) For GenericRecord, copy over the data from the old schema to the new schema or set default values for all fields of this transformed schema
    *
-   * @param oldRecord oldRecord to be rewritten
-   * @param newSchema newSchema used to rewrite oldRecord
+   * @param oldRecord  oldRecord to be rewritten
+   * @param newSchema  newSchema used to rewrite oldRecord
    * @param renameCols a map store all rename cols, (k, v)-> (colNameFromNewSchema, colNameFromOldSchema)
    * @return newRecord for new Schema
    */
   public static GenericRecord rewriteRecordWithNewSchema(IndexedRecord oldRecord, Schema newSchema, Map<String, String> renameCols) {
-    Object newRecord = rewriteRecordWithNewSchema(oldRecord, oldRecord.getSchema(), newSchema, renameCols, new LinkedList<>(),false);
+    Object newRecord = rewriteRecordWithNewSchema(oldRecord, oldRecord.getSchema(), newSchema, renameCols, new LinkedList<>(), false);
     return (GenericData.Record) newRecord;
   }
 
@@ -856,11 +861,11 @@ public class HoodieAvroUtils {
    * a) Create a new empty GenericRecord with the new schema.
    * b) For GenericRecord, copy over the data from the old schema to the new schema or set default values for all fields of this transformed schema
    *
-   * @param oldRecord oldRecord to be rewritten
+   * @param oldRecord     oldRecord to be rewritten
    * @param oldAvroSchema old avro schema.
-   * @param newSchema newSchema used to rewrite oldRecord
-   * @param renameCols a map store all rename cols, (k, v)-> (colNameFromNewSchema, colNameFromOldSchema)
-   * @param fieldNames track the full name of visited field when we travel new schema.
+   * @param newSchema     newSchema used to rewrite oldRecord
+   * @param renameCols    a map store all rename cols, (k, v)-> (colNameFromNewSchema, colNameFromOldSchema)
+   * @param fieldNames    track the full name of visited field when we travel new schema.
    * @return newRecord for new Schema
    */
 
@@ -1019,7 +1024,7 @@ public class HoodieAvroUtils {
         break;
       case FLOAT:
         if ((oldSchema.getType() == Schema.Type.INT)
-                || (oldSchema.getType() == Schema.Type.LONG)) {
+            || (oldSchema.getType() == Schema.Type.LONG)) {
           return oldSchema.getType() == Schema.Type.INT ? ((Integer) oldValue).floatValue() : ((Long) oldValue).floatValue();
         }
         break;
@@ -1049,9 +1054,9 @@ public class HoodieAvroUtils {
           return toJavaDate((Integer) oldValue).toString();
         }
         if (oldSchema.getType() == Schema.Type.INT
-                || oldSchema.getType() == Schema.Type.LONG
-                || oldSchema.getType() == Schema.Type.FLOAT
-                || oldSchema.getType() == Schema.Type.DOUBLE) {
+            || oldSchema.getType() == Schema.Type.LONG
+            || oldSchema.getType() == Schema.Type.FLOAT
+            || oldSchema.getType() == Schema.Type.DOUBLE) {
           return oldValue.toString();
         }
         if (oldSchema.getType() == Schema.Type.FIXED && oldSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
@@ -1133,7 +1138,7 @@ public class HoodieAvroUtils {
    * int, long, float, double, or bytes because avro doesn't support evolution from those types to
    * string so some intervention is needed
    */
-  private static  boolean needsRewriteToString(Schema schema) {
+  private static boolean needsRewriteToString(Schema schema) {
     switch (schema.getType()) {
       case INT:
       case LONG:
@@ -1148,7 +1153,7 @@ public class HoodieAvroUtils {
 
   /**
    * convert days to Date
-   *
+   * <p>
    * NOTE: This method could only be used in tests
    *
    * @VisibleForTesting
@@ -1162,7 +1167,7 @@ public class HoodieAvroUtils {
 
   /**
    * convert Date to days
-   *
+   * <p>
    * NOTE: This method could only be used in tests
    *
    * @VisibleForTesting
@@ -1180,10 +1185,10 @@ public class HoodieAvroUtils {
       return schema;
     }
     if (schema.getTypes().size() == 2
-            && schema.getTypes().get(0).getType() == Schema.Type.NULL) {
+        && schema.getTypes().get(0).getType() == Schema.Type.NULL) {
       actualSchema = schema.getTypes().get(1);
     } else if (schema.getTypes().size() == 2
-            && schema.getTypes().get(1).getType() == Schema.Type.NULL) {
+        && schema.getTypes().get(1).getType() == Schema.Type.NULL) {
       actualSchema = schema.getTypes().get(0);
     } else if (schema.getTypes().size() == 1) {
       actualSchema = schema.getTypes().get(0);
@@ -1225,7 +1230,7 @@ public class HoodieAvroUtils {
    * Given avro records, rewrites them with new schema.
    *
    * @param oldRecords oldRecords to be rewritten
-   * @param newSchema newSchema used to rewrite oldRecord
+   * @param newSchema  newSchema used to rewrite oldRecord
    * @param renameCols a map store all rename cols, (k, v)-> (colNameFromNewSchema, colNameFromOldSchema)
    * @return a iterator of rewritten GenericRecords
    */
