@@ -230,8 +230,7 @@ public class HoodieAvroUtils {
   }
 
   public static boolean isTypeNumeric(Schema.Type type) {
-    return type == Schema.Type.INT || type == Schema.Type.LONG || type == Schema.Type.FLOAT
-        || type == Schema.Type.DOUBLE || type == Schema.Type.BYTES;
+    return type == Schema.Type.INT || type == Schema.Type.LONG || type == Schema.Type.FLOAT || type == Schema.Type.DOUBLE;
   }
 
   public static boolean isMetadataField(String fieldName) {
