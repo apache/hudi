@@ -18,9 +18,10 @@
 
 package org.apache.hudi.internal.schema.utils;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.TableChanges;
+
+import org.apache.avro.Schema;
 
 import java.util.List;
 import java.util.Map;
@@ -41,13 +42,14 @@ public class AvroSchemaEvolutionUtils {
    * 1) incoming data has missing columns that were already defined in the table –> null values will be injected into missing columns
    * 2) incoming data contains new columns not defined yet in the table -> columns will be added to the table schema (incoming dataframe?)
    * 3) incoming data has missing columns that are already defined in the table and new columns not yet defined in the table ->
-   *     new columns will be added to the table schema, missing columns will be injected with null values
+   * new columns will be added to the table schema, missing columns will be injected with null values
    * 4) support type change
    * 5) support nested schema change.
    * Notice:
-   *    the incoming schema should not have delete/rename semantics.
-   *    for example: incoming schema:  int a, int b, int d;   oldTableSchema int a, int b, int c, int d
-   *    we must guarantee the column c is missing semantic, instead of delete semantic.
+   * the incoming schema should not have delete/rename semantics.
+   * for example: incoming schema:  int a, int b, int d;   oldTableSchema int a, int b, int c, int d
+   * we must guarantee the column c is missing semantic, instead of delete semantic.
+   *
    * @param incomingSchema implicitly evolution of avro when hoodie write operation
    * @param oldTableSchema old internalSchema
    * @return reconcile Schema
@@ -55,7 +57,7 @@ public class AvroSchemaEvolutionUtils {
   public static InternalSchema reconcileSchema(Schema incomingSchema, InternalSchema oldTableSchema) {
     /* If incoming schema is null, we fall back on table schema. */
     if (incomingSchema.getType() == Schema.Type.NULL) {
-        return oldTableSchema;
+      return oldTableSchema;
     }
     InternalSchema inComingInternalSchema = convert(incomingSchema);
     // check column add/missing
@@ -77,7 +79,7 @@ public class AvroSchemaEvolutionUtils {
     // when we do diff operation: user, user.name, user.age will appeared in the resultSet which is redundancy, user.name and user.age should be excluded.
     // deal with add operation
     TreeMap<Integer, String> finalAddAction = new TreeMap<>();
-    for (int i = 0; i < diffFromEvolutionColumns.size(); i++)  {
+    for (int i = 0; i < diffFromEvolutionColumns.size(); i++) {
       String name = diffFromEvolutionColumns.get(i);
       int splitPoint = name.lastIndexOf(".");
       String parentName = splitPoint > 0 ? name.substring(0, splitPoint) : "";
@@ -99,7 +101,7 @@ public class AvroSchemaEvolutionUtils {
           colNamesFromIncoming.stream().filter(c ->
               c.lastIndexOf(".") == splitPoint
                   && c.startsWith(parentName)
-                  && inComingInternalSchema.findIdByName(c) >  inComingInternalSchema.findIdByName(name)
+                  && inComingInternalSchema.findIdByName(c) > inComingInternalSchema.findIdByName(name)
                   && oldTableSchema.findIdByName(c) > 0).sorted((s1, s2) -> oldTableSchema.findIdByName(s1) - oldTableSchema.findIdByName(s2)).findFirst();
       addChange.addColumns(parentName, rawName, inComingInternalSchema.findType(name), null);
       inferPosition.map(i -> addChange.addPositionChange(name, i, "before"));
@@ -126,7 +128,7 @@ public class AvroSchemaEvolutionUtils {
    *
    * @param sourceSchema source schema that needs reconciliation
    * @param targetSchema target schema that source schema will be reconciled against
-   * @param opts config options
+   * @param opts         config options
    * @return schema (based off {@code source} one) that has nullability constraints and datatypes reconciled
    */
   public static Schema reconcileSchemaRequirements(Schema sourceSchema, Schema targetSchema, Map<String, String> opts) {
