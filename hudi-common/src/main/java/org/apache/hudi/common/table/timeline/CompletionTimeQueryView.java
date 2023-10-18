@@ -34,6 +34,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.compareTimestamps;
 
 /**
  * Query view for instant completion time.
@@ -57,9 +58,9 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
   private final String startInstant;
 
   /**
-   * The first instant on the active timeline, used for query optimization.
+   * The first write instant on the active timeline, used for query optimization.
    */
-  private final String firstInstantOnActiveTimeline;
+  private final String firstNonSavepointCommit;
 
   /**
    * The constructor.
@@ -79,8 +80,9 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
   public CompletionTimeQueryView(HoodieTableMetaClient metaClient, String startInstant) {
     this.metaClient = metaClient;
     this.startToCompletionInstantTimeMap = new ConcurrentHashMap<>();
-    this.startInstant = startInstant;
-    this.firstInstantOnActiveTimeline = metaClient.getActiveTimeline().firstInstant().map(HoodieInstant::getTimestamp).orElse("");
+    this.startInstant = minInstant(startInstant, metaClient.getActiveTimeline().firstInstant().map(HoodieInstant::getTimestamp).orElse(""));
+    // Note: use getWriteTimeline() to keep sync with the fs view visibleCommitsAndCompactionTimeline, see AbstractTableFileSystemView.refreshTimeline.
+    this.firstNonSavepointCommit = metaClient.getActiveTimeline().getWriteTimeline().getFirstNonSavepointCommit().map(HoodieInstant::getTimestamp).orElse("");
     load();
   }
 
@@ -88,7 +90,8 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
    * Returns whether the instant is completed.
    */
   public boolean isCompleted(String instantTime) {
-    return getCompletionTime(instantTime).isPresent();
+    return this.startToCompletionInstantTimeMap.containsKey(instantTime)
+        || HoodieTimeline.compareTimestamps(instantTime, LESSER_THAN, this.firstNonSavepointCommit);
   }
 
   /**
@@ -154,7 +157,7 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
     if (completionTime != null) {
       return Option.of(completionTime);
     }
-    if (HoodieTimeline.compareTimestamps(startTime, GREATER_THAN, this.firstInstantOnActiveTimeline)) {
+    if (HoodieTimeline.compareTimestamps(startTime, GREATER_THAN, this.startInstant)) {
       // the instant is still pending
       return Option.empty();
     }
@@ -197,6 +200,10 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
       completionTime = instantTime;
     }
     this.startToCompletionInstantTimeMap.putIfAbsent(instantTime, completionTime);
+  }
+
+  private static String minInstant(String instant1, String instant2) {
+    return compareTimestamps(instant1, LESSER_THAN, instant2) ? instant1 : instant2;
   }
 
   @Override

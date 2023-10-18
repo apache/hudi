@@ -20,7 +20,6 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.client.CompactionAdminClient.ValidationOpResult;
 import org.apache.hudi.common.model.CompactionOperation;
-import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -208,7 +207,6 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
     final HoodieTableFileSystemView newFsView =
         new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
     Set<String> commitsWithDataFile = CollectionUtils.createSet("000", "004");
-    Set<String> commitsWithLogAfterCompactionRequest = CollectionUtils.createSet("000", "002");
     // Expect each file-slice whose base-commit is same as compaction commit to contain no new Log files
     newFsView.getLatestFileSlicesBeforeOrOn(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0], compactionInstant, true)
         .filter(fs -> fs.getBaseInstantTime().compareTo(compactionInstant) <= 0)
@@ -218,16 +216,12 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
           } else {
             assertFalse(fs.getBaseFile().isPresent(), "No Data file should be present");
           }
-          if (commitsWithLogAfterCompactionRequest.contains(fs.getBaseInstantTime())) {
-            assertEquals(4, fs.getLogFiles().count(), "Has Log Files");
-          } else {
-            assertEquals(2, fs.getLogFiles().count(), "Has Log Files");
-          }
+          assertEquals(2, fs.getLogFiles().count(), "Has Log Files");
         });
 
     // Ensure same number of log-files before and after renaming per fileId
     Map<String, Long> fileIdToCountsAfterRenaming =
-        newFsView.getAllFileGroups(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0]).flatMap(HoodieFileGroup::getAllFileSlices)
+        newFsView.getLatestMergedFileSlicesBeforeOrOn(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0], ingestionInstant)
             .filter(fs -> fs.getBaseInstantTime().equals(ingestionInstant))
             .map(fs -> Pair.of(fs.getFileId(), fs.getLogFiles().count()))
             .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
@@ -246,7 +240,7 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
     ensureValidCompactionPlan(compactionInstant);
 
     // Check suggested rename operations
-    metaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
+    metaClient.reloadActiveTimeline();
 
     // Log files belonging to file-slices created because of compaction request must be renamed
 
@@ -277,7 +271,7 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
 
     // Ensure same number of log-files before and after renaming per fileId
     Map<String, Long> fileIdToCountsAfterRenaming =
-        newFsView.getAllFileGroups(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0]).flatMap(HoodieFileGroup::getAllFileSlices)
+        newFsView.getLatestMergedFileSlicesBeforeOrOn(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0], ingestionInstant)
             .filter(fs -> fs.getBaseInstantTime().equals(ingestionInstant))
             .filter(fs -> fs.getFileId().equals(op.getFileId()))
             .map(fs -> Pair.of(fs.getFileId(), fs.getLogFiles().count()))
