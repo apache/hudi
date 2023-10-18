@@ -55,11 +55,18 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.config.HoodieReaderConfig.FILE_GROUP_READER_ENABLED;
+import static org.apache.hudi.common.config.HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT;
+import static org.apache.hudi.common.model.HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY;
+import static org.apache.hudi.config.HoodieWriteConfig.RECORD_MERGER_IMPLS;
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_RECORD_POSITIONS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -79,8 +86,8 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
         HoodieTableConfig.BASE_FILE_FORMAT.key(),
         HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
     properties.setProperty(
-        "hoodie.payload.ordering.field",
-        "_hoodie_record_key");
+        PAYLOAD_ORDERING_FIELD_PROP_KEY,
+        HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName());
     metaClient = getHoodieMetaClient(hadoopConf(), basePath(), HoodieTableType.MERGE_ON_READ, properties);
   }
 
@@ -89,6 +96,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
     HoodieWriteConfig writeConfig = buildDefaultWriteConfig(SCHEMA);
     HoodieRecordMerger merger = writeConfig.getRecordMerger();
     assertTrue(merger instanceof DefaultMerger);
+    assertTrue(writeConfig.getBooleanOrDefault(FILE_GROUP_READER_ENABLED.key(), false));
     insertAndUpdate(writeConfig, 114);
   }
 
@@ -97,6 +105,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
     HoodieWriteConfig writeConfig = buildNoFlushWriteConfig(SCHEMA);
     HoodieRecordMerger merger = writeConfig.getRecordMerger();
     assertTrue(merger instanceof NoFlushMerger);
+    assertTrue(writeConfig.getBooleanOrDefault(FILE_GROUP_READER_ENABLED.key(), false));
     insertAndUpdate(writeConfig, 64);
   }
 
@@ -105,6 +114,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
     HoodieWriteConfig writeConfig = buildCustomWriteConfig(SCHEMA);
     HoodieRecordMerger merger = writeConfig.getRecordMerger();
     assertTrue(merger instanceof CustomMerger);
+    assertTrue(writeConfig.getBooleanOrDefault(FILE_GROUP_READER_ENABLED.key(), false));
     insertAndUpdate(writeConfig, 95);
   }
 
@@ -149,14 +159,20 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
   public HoodieWriteConfig getWriteConfig(Schema avroSchema) {
     Properties extraProperties = new Properties();
     extraProperties.setProperty(
-        "hoodie.datasource.write.record.merger.impls",
+        RECORD_MERGER_IMPLS.key(),
         "org.apache.hudi.HoodieSparkRecordMerger");
     extraProperties.setProperty(
-        "hoodie.logfile.data.block.format",
+        LOGFILE_DATA_BLOCK_FORMAT.key(),
         "parquet");
     extraProperties.setProperty(
-        "hoodie.payload.ordering.field",
-        "_hoodie_record_key");
+        PAYLOAD_ORDERING_FIELD_PROP_KEY,
+        HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName());
+    extraProperties.setProperty(
+        FILE_GROUP_READER_ENABLED.key(),
+        "true");
+    extraProperties.setProperty(
+        WRITE_RECORD_POSITIONS.key(),
+        "true");
 
     return getConfigBuilder(true)
         .withPath(basePath())
@@ -210,11 +226,32 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
   }
 
   public void checkDataEquality(int numRecords) {
-    List<Row> rows = spark()
+    Map<String, String> properties = new HashMap<>();
+    properties.put(
+        RECORD_MERGER_IMPLS.key(),
+        "org.apache.hudi.HoodieSparkRecordMerger");
+    properties.put(
+        LOGFILE_DATA_BLOCK_FORMAT.key(),
+        "parquet");
+    properties.put(
+        PAYLOAD_ORDERING_FIELD_PROP_KEY,
+        HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName());
+    properties.put(
+        FILE_GROUP_READER_ENABLED.key(),
+        "true");
+    properties.put(
+        DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT().key(),
+        "true");
+    properties.put(
+        WRITE_RECORD_POSITIONS.key(),
+        "true");
+    Dataset<Row> rows = spark()
         .read()
+        .options(properties)
         .format("org.apache.hudi")
-        .load(basePath() + "/" + getPartitionPath()).collectAsList();
-    assertEquals(numRecords, rows.size());
+        .load(basePath() + "/" + getPartitionPath());
+    List<Row> result = rows.collectAsList();
+    assertEquals(numRecords, result.size());
   }
 
   public void insertAndUpdate(HoodieWriteConfig writeConfig, int expectedRecordNum) throws Exception {
@@ -276,6 +313,15 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
 
       // Check data after
       checkDataEquality(expectedRecordNum);
+
+      // (3) Write: append, generate the log file.
+      instantTime = "003";
+      writeClient.startCommitWithTime(instantTime);
+
+      List<HoodieRecord> records5 = generateEmptyRecords(getKeys(records).subList(50, 59)); // 9 deletes only
+      assertEquals(9, records5.size());
+      updateRecordsInMORTable(reloadedMetaClient, records5, writeClient, writeConfig, instantTime, false);
+      checkDataEquality(expectedRecordNum - 9);
     }
   }
 
@@ -335,11 +381,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
   public static class CustomMerger extends HoodieSparkRecordMerger {
     @Override
     public boolean shouldFlush(HoodieRecord record, Schema schema, TypedProperties props) throws IOException {
-      if (((HoodieSparkRecord)record).getData().getString(0).equals("001")) {
-        return false;
-      } else {
-        return true;
-      }
+      return !((HoodieSparkRecord) record).getData().getString(0).equals("001");
     }
   }
 }
