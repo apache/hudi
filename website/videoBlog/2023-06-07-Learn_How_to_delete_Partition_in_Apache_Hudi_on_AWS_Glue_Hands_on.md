@@ -7,9 +7,9 @@ category: blog
 image: /assets/images/video_blogs/2023-06-07-Learn_How_to_delete_Partition_in_Apache_Hudi_on_AWS_Glue_Hands_on.png
 navigate: "https://www.youtube.com/watch?v=QqCiycIgSFk"
 tags:
-- how-to
-- apache hudi
+- guide
 - delete partition
 - partition
+- apache hudi
 - aws glue
 ---

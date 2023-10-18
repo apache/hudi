@@ -7,9 +7,10 @@ category: blog
 image: /assets/images/hudi-video-page-default.png
 navigate: "https://www.youtube.com/watch?v=KNzs9dj_Btc"
 tags:
-- how-to
+- guide
 - pre commit validator
 - data quality
 - deltastreamer
+- spark datasource writer
 - apache hudi
 ---

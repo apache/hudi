@@ -13,7 +13,7 @@ tags:
 - amazon s3
 - aws glue
 - amazon dynamodb
-- sns
+- amazon sns
 - amazon quicksight
 - apache hudi
 ---

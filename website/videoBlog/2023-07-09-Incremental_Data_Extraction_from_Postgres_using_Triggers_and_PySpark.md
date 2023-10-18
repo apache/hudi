@@ -12,5 +12,5 @@ tags:
 - postgres
 - pyspark
 - triggers
-- aurora postgresql
+- amazon aurora
 ---

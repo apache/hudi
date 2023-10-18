@@ -7,11 +7,11 @@ category: blog
 image: /assets/images/video_blogs/2023-05-27-Automate_alerting_and_reporting_for_AWS_Glue_job_resource_usage.png
 navigate: "https://www.youtube.com/watch?v=RndpxB88fIo"
 tags:
-- hands-on
+- guide
 - automation
 - alerting
 - reporting
-- aws glue
 - event driven
 - resource usage
+- aws glue
 ---

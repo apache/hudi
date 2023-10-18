@@ -7,6 +7,6 @@ category: blog
 image: /assets/images/hudi-video-page-default.png
 navigate: "https://youtu.be/94DPKkzDm-8"
 tags:
-- hudi
-- video guides
+- guide
+- apache hudi
 ---

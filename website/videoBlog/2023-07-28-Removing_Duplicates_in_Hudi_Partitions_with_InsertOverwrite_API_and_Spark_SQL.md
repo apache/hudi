@@ -7,9 +7,9 @@ category: blog
 image: /assets/images/video_blogs/2023-07-28-Removing_Duplicates_in_Hudi_Partitions_with_InsertOverwrite_API_and_Spark_SQL.png
 navigate: "https://www.youtube.com/watch?v=ue5M0_euwis"
 tags:
-- lab
-- duplicate
-- deduplicate
+- guide
+- duplicates
+- de-duplicate
 - insert overwrite
 - spark-sql
 - partition

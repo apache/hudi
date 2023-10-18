@@ -8,7 +8,6 @@ image: /assets/images/hudi-video-page-default.png
 navigate: "https://www.youtube.com/watch?v=ggVcEpV8Fr8"
 tags:
 - guide
-- hands-on
 - csv
 - aws glue
 - apache hudi

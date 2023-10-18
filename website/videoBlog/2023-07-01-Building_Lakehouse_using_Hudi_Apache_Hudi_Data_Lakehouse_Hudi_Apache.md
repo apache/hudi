@@ -7,7 +7,7 @@ category: blog
 image: /assets/images/hudi-video-page-default.png
 navigate: "https://www.youtube.com/watch?v=LcPINV7CUNc"
 tags:
-- how-to
+- guide
 - lakehouse
 - data-lakehouse
 - spark-sql

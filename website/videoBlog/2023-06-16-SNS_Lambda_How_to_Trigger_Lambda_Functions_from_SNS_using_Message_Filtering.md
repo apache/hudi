@@ -7,8 +7,8 @@ category: blog
 image: /assets/images/hudi-video-page-default.png
 navigate: "https://www.youtube.com/watch?v=WhUfuJs-dsI"
 tags:
-- demo
+- guide
 - aws lambda
-- sns
+- amazon sns
 - beginner
 ---

@@ -8,13 +8,12 @@ image: /assets/images/video_blogs/2023-08-03-Powering_EventDriven_Workloads_with
 navigate: "https://www.youtube.com/watch?v=wk1RAVwo7gc"
 tags:
 - guide
-- hands-on
 - event driven
 - aws glue
 - apache hudi
 - streaming
 - near real-time analytics
 - event bus
-- sqs
+- amazon sqs
 - beginner
 ---

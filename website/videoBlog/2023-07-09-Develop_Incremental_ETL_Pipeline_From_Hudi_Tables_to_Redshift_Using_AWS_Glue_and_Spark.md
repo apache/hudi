@@ -10,6 +10,6 @@ tags:
 - guide
 - incremental-etl
 - aws glue
-- redshift
+- amazon redshift
 - apache hudi
 ---
