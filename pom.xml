@@ -664,6 +664,7 @@
               <exclude>NOTICE</exclude>
               <exclude>DISCLAIMER</exclude>
               <exclude>**/.*</exclude>
+              <exclude>**/emptyFile</exclude>
               <exclude>**/*.json</exclude>
               <exclude>**/*.hfile</exclude>
               <exclude>**/*.log</exclude>

@@ -886,6 +886,24 @@ public class TestHoodieRealtimeRecordReader {
   }
 
   @Test
+  public void testRealtimeInputFormatEmptyFileSplit() throws Exception {
+    // Add the empty paths
+    String emptyPath = ClassLoader.getSystemResource("emptyFile").getPath();
+    FileInputFormat.setInputPaths(baseJobConf, emptyPath);
+
+    HoodieParquetRealtimeInputFormat inputFormat =  new HoodieParquetRealtimeInputFormat();
+    inputFormat.setConf(baseJobConf);
+
+    InputSplit[] inputSplits = inputFormat.getSplits(baseJobConf, 10);
+    assertEquals(1, inputSplits.length);
+    assertEquals(true, inputSplits[0] instanceof RealtimeSplit);
+
+    FileStatus[] files = inputFormat.listStatus(baseJobConf);
+    assertEquals(1, files.length);
+    assertEquals(true, files[0] instanceof RealtimeFileStatus);
+  }
+
+  @Test
   public void testIncrementalWithCompaction() throws Exception {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());

@@ -729,6 +729,23 @@ public class TestHoodieParquetInputFormat {
         files, "200", 5);
   }
 
+  @Test
+  public void testInputFormatLoadForEmptyPartitionedTable() throws IOException {
+    // initial commit
+    File partitionDir = InputFormatTestUtil.prepareTable(basePath, baseFileFormat, 10, "100");
+    InputFormatTestUtil.commit(basePath, "100");
+
+    // Add the empty paths
+    String emptyPath = ClassLoader.getSystemResource("emptyFile").getPath();
+    FileInputFormat.setInputPaths(jobConf, emptyPath);
+
+    InputSplit[] inputSplits = inputFormat.getSplits(jobConf, 10);
+    assertEquals(1, inputSplits.length);
+
+    FileStatus[] files = inputFormat.listStatus(jobConf);
+    assertEquals(1, files.length);
+  }
+
   private void ensureRecordsInCommit(String msg, String commit, int expectedNumberOfRecordsInCommit,
       int totalExpected) throws IOException {
     int actualCount = 0;
