@@ -89,7 +89,7 @@ class TestSparkDataSourceDAGExecution extends HoodieSparkClientTestBase with Sca
   @CsvSource(Array(
     "upsert,org.apache.hudi.client.SparkRDDWriteClient.commit",
     "insert,org.apache.hudi.client.SparkRDDWriteClient.commit",
-    "bulk_insert,org.apache.hudi.HoodieSparkSqlWriter$.bulkInsertAsRow"))
+    "bulk_insert,org.apache.hudi.HoodieSparkSqlWriterInternal.bulkInsertAsRow"))
   def testWriteOperationDoesNotTriggerRepeatedDAG(operation: String, event: String): Unit = {
     // register stage event listeners
     val stageListener = new StageListener(event)
