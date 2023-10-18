@@ -90,7 +90,8 @@
       "name": "height",
       "type": {
         "type": "fixed",
-        "name": "abc",
+        "name": "fixed",
+        "namespace": "triprec.height",
         "size": 5,
         "logicalType": "decimal",
         "precision": 10,
@@ -143,8 +144,7 @@
     },
     {
       "name": "_hoodie_is_deleted",
-      "type": "boolean",
-      "default": false
+      "type": "boolean"
     },
     {
       "name": "evoluted_optional_union_field",
