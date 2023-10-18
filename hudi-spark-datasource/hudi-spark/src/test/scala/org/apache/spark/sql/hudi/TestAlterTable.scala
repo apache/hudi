@@ -427,4 +427,44 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test Rename Table") {
+    withTempDir { tmp =>
+      // Create table with INMEMORY index to generate log only mor table
+      // This test is only relevant for Spark3.1 where Avro1.8.2 is used
+      // Avro1.8.2 resolves field name by fully qualified name, which may cause read issues whe namespaces are different
+      val tableName = generateTableName
+      val newTableName = tableName + "_new"
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price decimal(20,0),
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}'
+           | tblproperties (
+           |  primaryKey ='id',
+           |  type = 'mor',
+           |  preCombineField = 'ts',
+           |  hoodie.index.type = 'INMEMORY',
+           |  hoodie.compact.inline = 'true'
+           | )
+       """.stripMargin)
+      spark.sql(s"insert into $tableName values " +
+        s"(1, 'a1', 10, 1000), (2, 'a2', 10, 1000), (3, 'a3', 10, 1000)")
+      spark.sql(s"alter table $tableName rename to $newTableName")
+      spark.sql(s"insert into $newTableName values " +
+        s"(3, 'a3', 11, 1001), (4, 'a4', 10, 1001), (5, 'a5', 10, 1001), (6, 'a6', 10, 1001)")
+      checkAnswer(s"select id, name, cast(price as string), ts from $newTableName order by id")(
+        Seq(1, "a1", "10", 1000),
+        Seq(2, "a2", "10", 1000),
+        Seq(3, "a3", "11", 1001),
+        Seq(4, "a4", "10", 1001),
+        Seq(5, "a5", "10", 1001),
+        Seq(6, "a6", "10", 1001)
+      )
+    }
+  }
 }
