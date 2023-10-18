@@ -270,11 +270,11 @@ public class ConfigUtils {
    * Gets the raw value for a {@link ConfigProperty} config from properties. The key and
    * alternative keys are used to fetch the config.
    *
-   * @param props          Configs in {@link TypedProperties}.
+   * @param props          Configs in {@link Properties}.
    * @param configProperty {@link ConfigProperty} config to fetch.
    * @return {@link Option} of value if the config exists; empty {@link Option} otherwise.
    */
-  public static Option<Object> getRawValueWithAltKeys(TypedProperties props,
+  public static Option<Object> getRawValueWithAltKeys(Properties props,
                                                       ConfigProperty<?> configProperty) {
     if (props.containsKey(configProperty.key())) {
       return Option.ofNullable(props.get(configProperty.key()));
@@ -429,12 +429,12 @@ public class ConfigUtils {
    * alternative keys are used to fetch the config. The default value of {@link ConfigProperty}
    * config, if exists, is returned if the config is not found in the properties.
    *
-   * @param props          Configs in {@link TypedProperties}.
+   * @param props          Configs in {@link Properties}.
    * @param configProperty {@link ConfigProperty} config to fetch.
    * @return boolean value if the config exists; default boolean value if the config does not exist
    * and there is default value defined in the {@link ConfigProperty} config; {@code false} otherwise.
    */
-  public static boolean getBooleanWithAltKeys(TypedProperties props,
+  public static boolean getBooleanWithAltKeys(Properties props,
                                               ConfigProperty<?> configProperty) {
     Option<Object> rawValue = getRawValueWithAltKeys(props, configProperty);
     boolean defaultValue = configProperty.hasDefaultValue()

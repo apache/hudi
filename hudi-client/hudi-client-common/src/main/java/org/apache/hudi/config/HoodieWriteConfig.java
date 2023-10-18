@@ -33,6 +33,7 @@ import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.HoodieTableServiceManagerConfig;
+import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
@@ -49,7 +50,6 @@ import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.marker.MarkerType;
-import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -84,6 +84,7 @@ import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 
+import com.beust.jcommander.Strings;
 import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.orc.CompressionKind;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -754,6 +755,24 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Whether to write record positions to the block header for data blocks containing updates and delete blocks. "
           + "The record positions can be used to improve the performance of merging records from base and log files.");
+
+  public static final ConfigProperty<Boolean> WRITE_PARTIAL_UPDATES = ConfigProperty
+      .key("hoodie.write.partial.updates")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Whether to write partial updates to the data blocks containing updates "
+          + "in MOR tables. The data blocks containing partial updates have a schema with a "
+          + "subset of fields compared to the full schema of the table. Partial updates are "
+          + "automatically turned on for Spark SQL MERGE INTO statement with upserts to MOR tables.");
+
+  public static final ConfigProperty<String> WRITE_PARTIAL_UPDATE_SCHEMA = ConfigProperty
+      .key("hoodie.write.partial.update.schema")
+      .defaultValue("")
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Avro schema of the partial updates. This is automatically set by the "
+          + "Hudi write client and user is not expected to manually change the value.");
 
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
@@ -2071,6 +2090,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(WRITE_RECORD_POSITIONS);
   }
 
+  public boolean shouldWritePartialUpdates() {
+    return getBoolean(WRITE_PARTIAL_UPDATES);
+  }
+
+  public String getPartialUpdateSchema() {
+    return getString(WRITE_PARTIAL_UPDATE_SCHEMA);
+  }
+
   public double getParquetCompressionRatio() {
     return getDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION);
   }
@@ -3121,6 +3148,16 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withWriteRecordPositionsEnabled(boolean shouldWriteRecordPositions) {
       writeConfig.setValue(WRITE_RECORD_POSITIONS, String.valueOf(shouldWriteRecordPositions));
+      return this;
+    }
+
+    public Builder withWritePartialUpdatesEnabled(boolean shouldWritePartialUpdates) {
+      writeConfig.setValue(WRITE_PARTIAL_UPDATES, String.valueOf(shouldWritePartialUpdates));
+      return this;
+    }
+
+    public Builder withWritePartialUpdateFields(List<String> partialUpdateFields) {
+      writeConfig.setValue(WRITE_PARTIAL_UPDATES, Strings.join(",", partialUpdateFields));
       return this;
     }
 

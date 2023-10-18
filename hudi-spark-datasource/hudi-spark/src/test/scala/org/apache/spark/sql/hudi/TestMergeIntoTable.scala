@@ -261,6 +261,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
   }
 
   test("Test MergeInto for MOR table ") {
+    spark.sql("set hoodie.merge.small.file.group.candidates.limit = 0;")
     withRecordType()(withTempDir {tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
@@ -393,6 +394,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
   }
 
   test("Test MergeInto with insert only") {
+    spark.sql("set hoodie.merge.small.file.group.candidates.limit = 0;")
     withRecordType()(withTempDir {tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
       // Create a partitioned mor table
@@ -448,6 +450,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
   }
 
   test("Test MergeInto For PreCombineField") {
+    spark.sql("set hoodie.merge.small.file.group.candidates.limit = 0;")
     withRecordType()(withTempDir { tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
       Seq("cow", "mor").foreach { tableType =>
@@ -522,6 +525,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
   }
 
   test("Test MergeInto with preCombine field expression") {
+    spark.sql("set hoodie.merge.small.file.group.candidates.limit = 0;")
     withRecordType()(withTempDir { tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
       Seq("cow", "mor").foreach { tableType =>
@@ -767,6 +771,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
   }
 
   test("Merge Hudi to Hudi") {
+    spark.sql("set hoodie.merge.small.file.group.candidates.limit = 0;")
     withRecordType()(withTempDir { tmp =>
       spark.sessionState.conf.setConf(SQLConf.WHOLESTAGE_CODEGEN_ENABLED, false)
       spark.sql("set hoodie.payload.combined.schema.validate = true")
@@ -934,6 +939,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
   }
 
   test("Test MergeInto For MOR With Compaction On") {
+    spark.sql("set hoodie.merge.small.file.group.candidates.limit = 0;")
     withRecordType()(withTempDir { tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
@@ -1193,6 +1199,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
   }
 
   test("Test MergeInto with partial insert") {
+    spark.sql("set hoodie.merge.small.file.group.candidates.limit = 0;")
     Seq(true, false).foreach { sparkSqlOptimizedWrites =>
       withRecordType()(withTempDir { tmp =>
         spark.sql("set hoodie.payload.combined.schema.validate = true")

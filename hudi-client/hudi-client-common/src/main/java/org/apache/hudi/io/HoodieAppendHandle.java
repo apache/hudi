@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -149,7 +150,13 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
   public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr, TaskContextSupplier taskContextSupplier) {
-    super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
+    super(config, instantTime, partitionPath, fileId, hoodieTable,
+        config.shouldWritePartialUpdates()
+            // When enabling writing partial updates to the data blocks in log files, the writer
+            // schema is the partial schema containing the updated fields only
+            ? Option.of(new Schema.Parser().parse(config.getPartialUpdateSchema()))
+            : Option.empty(),
+        taskContextSupplier);
     this.fileId = fileId;
     this.recordItr = recordItr;
     this.sizeEstimator = new DefaultSizeEstimator();
@@ -157,6 +164,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     this.recordProperties.putAll(config.getProps());
     this.attemptNumber = taskContextSupplier.getAttemptNumberSupplier().get();
     this.shouldWriteRecordPositions = config.shouldWriteRecordPositions();
+
   }
 
   public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
@@ -465,7 +473,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
         blocks.add(getBlock(config, pickLogDataBlockFormat(), recordList, shouldWriteRecordPositions,
             getUpdatedHeader(header, blockSequenceNumber++, attemptNumber, config,
-            addBlockIdentifier()), keyField));
+                addBlockIdentifier()), keyField));
       }
 
       if (appendDeleteBlocks && recordsToDeleteWithPositions.size() > 0) {
@@ -651,6 +659,16 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     Map<HeaderMetadataType, String> updatedHeader = new HashMap<>(header);
     if (addBlockIdentifier && !HoodieTableMetadata.isMetadataTable(config.getBasePath())) { // add block sequence numbers only for data table.
       updatedHeader.put(HeaderMetadataType.BLOCK_IDENTIFIER, attemptNumber + "," + blockSequenceNumber);
+    }
+    if (config.shouldWritePartialUpdates()) {
+      // When enabling writing partial updates to the data blocks, the full schema is also written
+      // to the block header so that the reader can differentiate partial updates vs schema
+      // evolution, based on the "SCHEMA" which contains the partial schema and the "FULL_SCHEMA"
+      // which contains the full schema of the table at this time.
+      updatedHeader.put(
+          HeaderMetadataType.FULL_SCHEMA,
+          HoodieAvroUtils.addMetadataFields(
+              getWriteSchema(config), config.allowOperationMetadataField()).toString());
     }
     return updatedHeader;
   }

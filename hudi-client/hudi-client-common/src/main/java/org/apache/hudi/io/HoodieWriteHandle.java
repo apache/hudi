@@ -230,7 +230,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     return taskContextSupplier.getAttemptIdSupplier().get();
   }
 
-  private static Schema getWriteSchema(HoodieWriteConfig config) {
+  protected static Schema getWriteSchema(HoodieWriteConfig config) {
     return new Schema.Parser().parse(config.getWriteSchema());
   }
 
