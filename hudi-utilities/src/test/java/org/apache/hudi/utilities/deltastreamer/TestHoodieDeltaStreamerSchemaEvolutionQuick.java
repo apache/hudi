@@ -25,6 +25,8 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.Metadata;
+import org.apache.spark.sql.types.StructField;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -120,13 +122,11 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     Column col = df.col("tip_history");
     df = df.withColumn("tip_history", col.cast(DataTypes.createArrayType(DataTypes.LongType)));
     col = df.col("fare");
-    /*
     df = df.withColumn("fare", col.cast(DataTypes.createStructType(new StructField[]{
         new StructField("amount", DataTypes.StringType, true, Metadata.empty()),
         new StructField("currency", DataTypes.StringType, true, Metadata.empty()),
         new StructField("zextra_col_nested", DataTypes.StringType, true, Metadata.empty())
     })));
-     */
     col = df.col("begin_lat");
     df = df.withColumn("begin_lat", col.cast(DataTypes.DoubleType));
     col = df.col("end_lat");
@@ -152,14 +152,12 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     df.show(100,false);
     df.cache();
     assertDataType(df, "tip_history", DataTypes.createArrayType(DataTypes.LongType));
-    /*
     assertDataType(df, "fare", DataTypes.createStructType(new StructField[]{
         new StructField("amount", DataTypes.StringType, true, Metadata.empty()),
         new StructField("currency", DataTypes.StringType, true, Metadata.empty()),
         new StructField("extra_col_struct", DataTypes.LongType, true, Metadata.empty()),
         new StructField("zextra_col_nested", DataTypes.StringType, true, Metadata.empty())
     }));
-     */
     assertDataType(df, "begin_lat", DataTypes.DoubleType);
     assertDataType(df, "end_lat", DataTypes.StringType);
     assertDataType(df, "distance_in_meters", DataTypes.FloatType);
