@@ -216,6 +216,12 @@ public class TestAvroSchemaEvolutionUtils {
     Assertions.assertEquals(expectedSchema, AvroInternalSchemaConverter.fixNullOrdering(expectedSchema));
   }
 
+  @Test
+  public void testFixNullOrderingSameSchemaCheck() {
+    Schema schema = SchemaTestUtil.getSchemaFromResource(TestAvroSchemaEvolutionUtils.class, "/source_evolved.avsc");
+    Assertions.assertEquals(schema, AvroInternalSchemaConverter.fixNullOrdering(schema));
+  }
+
   public enum Enum {
     ENUM1, ENUM2
   }
