@@ -31,7 +31,7 @@ import java.util.Arrays;
 
 import scala.collection.JavaConversions;
 
-class RangeSampleSortTest extends HoodieClientTestBase {
+class TestRangeSampleSort extends HoodieClientTestBase {
 
   @Test
   void sortDataFrameBySampleSupportAllTypes() {
