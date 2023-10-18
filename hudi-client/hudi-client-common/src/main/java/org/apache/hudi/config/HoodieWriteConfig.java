@@ -46,6 +46,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.RecordPayloadType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.marker.MarkerType;
@@ -2616,10 +2617,17 @@ public class HoodieWriteConfig extends HoodieConfig {
     return props.getInteger(WRITES_FILEID_ENCODING, HoodieMetadataPayload.RECORD_INDEX_FIELD_FILEID_ENCODING_UUID);
   }
 
-  public boolean isNonBlockingConcurrencyControl() {
-    return getTableType().equals(HoodieTableType.MERGE_ON_READ)
-        && getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()
-        && isSimpleBucketIndex();
+  public boolean needResolveWriteConflict(WriteOperationType operationType) {
+    // Skip to resolve conflict for non bulk_insert operation if using non-blocking concurrency control
+    if (getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
+      if (getTableType().equals(HoodieTableType.MERGE_ON_READ) && isSimpleBucketIndex()) {
+        return operationType == WriteOperationType.UNKNOWN || operationType == WriteOperationType.BULK_INSERT;
+      } else {
+        return true;
+      }
+    } else {
+      return false;
+    }
   }
 
   public static class Builder {

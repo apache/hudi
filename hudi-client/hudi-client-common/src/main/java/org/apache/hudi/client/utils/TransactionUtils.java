@@ -21,6 +21,7 @@ package org.apache.hudi.client.utils;
 import org.apache.hudi.client.transaction.ConcurrentOperation;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -67,8 +68,9 @@ public class TransactionUtils {
       Option<HoodieInstant> lastCompletedTxnOwnerInstant,
       boolean reloadActiveTimeline,
       Set<String> pendingInstants) throws HoodieWriteConflictException {
-    // Skip to resolve conflict if using non-blocking concurrency control
-    if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl() && !config.isNonBlockingConcurrencyControl()) {
+    // Skip to resolve conflict for non bulk_insert operation if using non-blocking concurrency control
+    WriteOperationType operationType = thisCommitMetadata.orElse(new HoodieCommitMetadata()).getOperationType();
+    if (config.needResolveWriteConflict(operationType)) {
       // deal with pendingInstants
       Stream<HoodieInstant> completedInstantsDuringCurrentWriteOperation = getCompletedInstantsDuringCurrentWriteOperation(table.getMetaClient(), pendingInstants);
 
