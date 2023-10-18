@@ -82,7 +82,7 @@ public class CopyOnWriteInsertHandler<T>
     String partitionPath = record.getPartitionPath();
     // just skip the ignored record，do not make partitions on fs
     try {
-      if (record.shouldIgnore(genResult.schema, genResult.props)) {
+      if (record.shouldIgnore(genResult.schema, config.getProps())) {
         numSkippedRecords++;
         return;
       }
