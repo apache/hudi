@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
-import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant}
+import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieIndexConfig, HoodieWriteConfig}
@@ -2003,7 +2003,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |""".stripMargin)
       val df = spark.sql(
         s"""
-           |select * from ${targetTable} where day='2023-10-12' and hour=11;
+           |select * from ${targetTable} where day='2023-10-12' and hour=11
            |""".stripMargin)
       var rddHead = df.rdd
       while (rddHead.dependencies.size > 0) {
@@ -2049,7 +2049,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |""".stripMargin)
       val df = spark.sql(
         s"""
-           |select * from ${targetTable} where day='2023-10-12' and hour=11;
+           |select * from ${targetTable} where day='2023-10-12' and hour=11
            |""".stripMargin)
       var rddHead = df.rdd
       while (rddHead.dependencies.size > 0) {
