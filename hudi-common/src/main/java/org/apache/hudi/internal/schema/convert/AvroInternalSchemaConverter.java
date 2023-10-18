@@ -84,7 +84,7 @@ public class AvroInternalSchemaConverter {
    */
   public static Schema fixNullOrdering(Schema schema) {
     if (schema.getType() == Schema.Type.NULL) {
-      return schema
+      return schema;
     }
     return convert(convert(schema), schema.getFullName());
   }
