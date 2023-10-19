@@ -20,6 +20,7 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -41,10 +42,12 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 public class HoodieCompactor {
 
@@ -252,7 +255,8 @@ public class HoodieCompactor {
     LOG.info("Schema --> : " + schemaStr);
 
     try (SparkRDDWriteClient<HoodieRecordPayload> client =
-             UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
+             UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props);
+         HoodieHeartbeatClient heartbeatClient = client.getHeartbeatClient()) {
       // If no compaction instant is provided by --instant-time, find the earliest scheduled compaction
       // instant from the active timeline
       if (StringUtils.isNullOrEmpty(cfg.compactionInstantTime)) {
@@ -262,11 +266,36 @@ public class HoodieCompactor {
           cfg.compactionInstantTime = firstCompactionInstant.get().getTimestamp();
           LOG.info("Found the earliest scheduled compaction instant which will be executed: "
               + cfg.compactionInstantTime);
-        } else {
-          LOG.info("There is no scheduled compaction in the table.");
-          return 0;
+        }
+
+        // update cfg.compactionInstantTime if finding an expired instant
+        List<HoodieInstant> inflightInstants = metaClient.getActiveTimeline()
+            .filterPendingCompactionTimeline().filterInflights().getInstants();
+        List<String> expiredInstants = inflightInstants.stream().filter(instant -> {
+          try {
+            return heartbeatClient.isHeartbeatExpired(instant.getTimestamp());
+          } catch (IOException io) {
+            LOG.info("Failed to check heartbeat for instant " + instant);
+          }
+          return false;
+        }).map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+
+        if (!expiredInstants.isEmpty()) {
+          cfg.compactionInstantTime = expiredInstants.get(0);
+          LOG.info("Found expired compaction instant, update the earliest scheduled compaction instant which will be executed: "
+              + cfg.compactionInstantTime);
         }
       }
+
+      // do nothing if cfg.compactionInstantTime still is null
+      if (StringUtils.isNullOrEmpty(cfg.compactionInstantTime)) {
+        LOG.info("There is no scheduled compaction in the table.");
+        return 0;
+      }
+
+      // start a heartbeat for the instant
+      heartbeatClient.start(cfg.compactionInstantTime);
+
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(cfg.compactionInstantTime);
       clean(client);
       return UtilHelpers.handleErrors(compactionMetadata.getCommitMetadata().get(), cfg.compactionInstantTime);
