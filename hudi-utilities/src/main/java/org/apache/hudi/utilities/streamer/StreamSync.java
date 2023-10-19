@@ -680,8 +680,7 @@ public class StreamSync implements Serializable, Closeable {
     Schema targetSchema = HoodieSparkSqlWriter.deduceWriterSchema(
           incomingSchema,
           HoodieConversionUtils.toScalaOption(latestTableSchemaOpt),
-          HoodieConversionUtils.toScalaOption(internalSchemaOpt),
-          HoodieConversionUtils.fromProperties(props));
+          HoodieConversionUtils.toScalaOption(internalSchemaOpt), props);
 
     // Override schema provider with the reconciled target schema
     return new DelegatingSchemaProvider(props, hoodieSparkContext.jsc(), sourceSchemaProvider,
