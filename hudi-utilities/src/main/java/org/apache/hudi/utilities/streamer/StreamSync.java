@@ -95,6 +95,7 @@ import org.apache.hudi.utilities.exception.HoodieStreamerException;
 import org.apache.hudi.utilities.exception.HoodieStreamerWriteException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
+import org.apache.hudi.utilities.schema.LazyCastingIterator;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaSet;
 import org.apache.hudi.utilities.schema.SimpleSchemaProvider;
@@ -588,8 +589,8 @@ public class StreamSync implements Serializable, Closeable {
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
       // Rewrite transformed records into the expected target schema
       schemaProvider = getDeducedSchemaProvider(dataAndCheckpoint.getSchemaProvider().getSourceSchema(), dataAndCheckpoint.getSchemaProvider(), metaClient);
-      Schema targetSchema = schemaProvider.getTargetSchema();
-      avroRDDOptional = dataAndCheckpoint.getBatch().map(t -> t.map(g -> HoodieAvroUtils.rewriteRecordDeep(g, targetSchema)));
+      String serializedTargetSchema = schemaProvider.getTargetSchema().toString();
+      avroRDDOptional = dataAndCheckpoint.getBatch().map(t -> t.mapPartitions(iterator -> new LazyCastingIterator(iterator, serializedTargetSchema)));
     }
 
     if (!cfg.allowCommitOnNoCheckpointChange && Objects.equals(checkpointStr, resumeCheckpointStr.orElse(null))) {
