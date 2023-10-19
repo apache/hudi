@@ -37,7 +37,7 @@ object HoodieSchemaUtils {
   def getLatestTableInternalSchema(config: HoodieConfig,
                                    tableMetaClient: HoodieTableMetaClient): Option[InternalSchema] = {
     if (!config.getBooleanOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED)) {
-      Option.empty[InternalSchema]
+      None
     } else {
       try {
         val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
