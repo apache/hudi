@@ -49,7 +49,9 @@ class HoodieMultipleBaseFileFormat(tableState: Broadcast[HoodieTableState],
                                    tableName: String,
                                    mergeType: String,
                                    mandatoryFields: Seq[String],
-                                   isMOR: Boolean) extends FileFormat with SparkAdapterSupport {
+                                   isMOR: Boolean,
+                                   isIncremental: Boolean,
+                                   requiredFilters: Seq[Filter]) extends FileFormat with SparkAdapterSupport {
   private val parquetFormat = new ParquetFileFormat()
   private val orcFormat = new OrcFileFormat()
 
@@ -104,7 +106,9 @@ class HoodieMultipleBaseFileFormat(tableState: Broadcast[HoodieTableState],
                                               options: Map[String, String],
                                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
     val outputSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
-    val requiredSchemaWithMandatory = if (!isMOR || MergeOnReadSnapshotRelation.isProjectionCompatible(tableState.value)) {
+    val requiredSchemaWithMandatory = if (isIncremental) {
+      StructType(dataSchema.toArray ++ partitionSchema.fields)
+    } else if (!isMOR || MergeOnReadSnapshotRelation.isProjectionCompatible(tableState.value)) {
       // add mandatory fields to required schema
       val added: mutable.Buffer[StructField] = mutable.Buffer[StructField]()
       for (field <- mandatoryFields) {
@@ -120,7 +124,8 @@ class HoodieMultipleBaseFileFormat(tableState: Broadcast[HoodieTableState],
     }
 
     val (parquetBaseFileReader, orcBaseFileReader, preMergeParquetBaseFileReader, preMergeOrcBaseFileReader) = buildFileReaders(
-      sparkSession, dataSchema, partitionSchema, requiredSchema, filters, options, hadoopConf, requiredSchemaWithMandatory)
+      sparkSession, dataSchema, partitionSchema, if (isIncremental) requiredSchemaWithMandatory else requiredSchema,
+      filters, options, hadoopConf, requiredSchemaWithMandatory)
 
     val broadcastedHadoopConf = sparkSession.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
     (file: PartitionedFile) => {
@@ -198,20 +203,20 @@ class HoodieMultipleBaseFileFormat(tableState: Broadcast[HoodieTableState],
     PartitionedFile => Iterator[InternalRow],
     PartitionedFile => Iterator[InternalRow]) = {
     val parquetBaseFileReader = parquetFormat.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema,
-      filters, options, new Configuration(hadoopConf))
+      filters ++ requiredFilters, options, new Configuration(hadoopConf))
     val orcBaseFileReader = orcFormat.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema,
-      filters, options, new Configuration(hadoopConf))
+      filters ++ requiredFilters, options, new Configuration(hadoopConf))
 
     val preMergeParquetBaseFileReader = if (isMOR) {
       parquetFormat.buildReaderWithPartitionValues(sparkSession, dataSchema, StructType(Seq.empty),
-        requiredSchemaWithMandatory, Seq.empty, options, new Configuration(hadoopConf))
+        requiredSchemaWithMandatory, requiredFilters, options, new Configuration(hadoopConf))
     } else {
       _: PartitionedFile => Iterator.empty
     }
 
     val preMergeOrcBaseFileReader = if (isMOR) {
       orcFormat.buildReaderWithPartitionValues(sparkSession, dataSchema, StructType(Seq.empty),
-        requiredSchemaWithMandatory, Seq.empty, options, new Configuration(hadoopConf))
+        requiredSchemaWithMandatory, requiredFilters, options, new Configuration(hadoopConf))
     } else {
       _: PartitionedFile => Iterator.empty
     }

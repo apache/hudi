@@ -76,7 +76,8 @@ case class HoodieFileIndex(spark: SparkSession,
                            schemaSpec: Option[StructType],
                            options: Map[String, String],
                            @transient fileStatusCache: FileStatusCache = NoopCache,
-                           includeLogFiles: Boolean = false)
+                           includeLogFiles: Boolean = false,
+                           shouldEmbedFileSlices: Boolean = false)
   extends SparkHoodieTableFileIndex(
     spark = spark,
     metaClient = metaClient,
@@ -88,7 +89,7 @@ case class HoodieFileIndex(spark: SparkSession,
   )
     with FileIndex {
 
-  @transient private var hasPushedDownPartitionPredicates: Boolean = false
+  @transient protected var hasPushedDownPartitionPredicates: Boolean = false
 
   /**
    * NOTE: [[ColumnStatsIndexSupport]] is a transient state, since it's only relevant while logical plan
@@ -103,8 +104,6 @@ case class HoodieFileIndex(spark: SparkSession,
   @transient private lazy val recordLevelIndex = new RecordLevelIndexSupport(spark, metadataConfig, metaClient)
 
   override def rootPaths: Seq[Path] = getQueryPaths.asScala
-
-  var shouldEmbedFileSlices: Boolean = false
 
   /**
    * Returns the FileStatus for all the base files (excluding log files). This should be used only for
@@ -287,7 +286,7 @@ case class HoodieFileIndex(spark: SparkSession,
    * In the fast bootstrap read code path, it gets the file status for the bootstrap base file instead of
    * skeleton file. Returns file status for the base file if available.
    */
-  private def getBaseFileStatus(baseFileOpt: Option[HoodieBaseFile]): Option[FileStatus] = {
+  protected def getBaseFileStatus(baseFileOpt: Option[HoodieBaseFile]): Option[FileStatus] = {
     baseFileOpt.map(baseFile => {
       if (shouldFastBootstrap) {
         if (baseFile.getBootstrapBaseFile.isPresent) {

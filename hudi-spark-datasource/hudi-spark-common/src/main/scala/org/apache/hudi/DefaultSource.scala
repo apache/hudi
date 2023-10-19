@@ -262,34 +262,36 @@ object DefaultSource {
         case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
              (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
              (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
-          resolveBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
+          new HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(
+            sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
 
-        case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-          new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
+        case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, false) =>
+          new HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(
+            sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
+
+        case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, true) =>
+          new HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(
+            sqlContext, metaClient, parameters, userSchema, isBootstrap = true).build()
 
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
-          if (fileFormatUtils.isEmpty) {
-            new MergeOnReadSnapshotRelation(sqlContext, parameters, metaClient, globPaths, userSchema)
-          } else {
-            fileFormatUtils.get.getHadoopFsRelation(isMOR = true, isBootstrap = false)
-          }
-
-        case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-          new MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
+          new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
+            sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
 
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, true) =>
-          if (fileFormatUtils.isEmpty) {
-            new HoodieBootstrapMORRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
-          } else {
-            fileFormatUtils.get.getHadoopFsRelation(isMOR = true, isBootstrap = true)
-          }
+          new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
+            sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
+
+        case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, true) =>
+          new HoodieMergeOnReadIncrementalHadoopFsRelationFactory(
+            sqlContext, metaClient, parameters, userSchema, isBootstrap = true).build()
+
+        case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, false) =>
+          new HoodieMergeOnReadIncrementalHadoopFsRelationFactory(
+            sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
 
         case (_, _, true) =>
-          if (fileFormatUtils.isEmpty) {
-            resolveHoodieBootstrapRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
-          } else {
-            fileFormatUtils.get.getHadoopFsRelation(isMOR = false, isBootstrap = true)
-          }
+          new HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(
+            sqlContext, metaClient, parameters, userSchema, isBootstrap = true).build()
 
         case (_, _, _) =>
           throw new HoodieException(s"Invalid query type : $queryType for tableType: $tableType," +

@@ -178,8 +178,8 @@ class HoodieSparkFileFormatUtils(val sqlContext: SQLContext,
   def hasSchemaOnRead: Boolean = internalSchemaOpt.isDefined
 
   def getHadoopFsRelation(isMOR: Boolean, isBootstrap: Boolean): BaseRelation = {
-
-    val fileIndex = HoodieFileIndex(sparkSession, metaClient, Some(tableStructSchema), optParams, FileStatusCache.getOrCreate(sparkSession), isMOR)
+    val fileIndex = HoodieFileIndex(
+      sparkSession, metaClient, Some(tableStructSchema), optParams, FileStatusCache.getOrCreate(sparkSession), isMOR, shouldEmbedFileSlices = true)
     val recordMergerImpls = ConfigUtils.split2List(getConfigValue(HoodieWriteConfig.RECORD_MERGER_IMPLS)).asScala.toList
     val recordMergerStrategy = getConfigValue(HoodieWriteConfig.RECORD_MERGER_STRATEGY,
       Option(metaClient.getTableConfig.getRecordMergerStrategy))
@@ -205,7 +205,6 @@ class HoodieSparkFileFormatUtils(val sqlContext: SQLContext,
     } else {
       Seq.empty
     }
-    fileIndex.shouldEmbedFileSlices = true
 
     val fileFormat = if (fileGroupReaderEnabled) {
       new HoodieFileGroupReaderBasedParquetFileFormat(
@@ -220,7 +219,6 @@ class HoodieSparkFileFormatUtils(val sqlContext: SQLContext,
         sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
         metaClient.getTableConfig.getTableName, mergeType, mandatoryFields, isMOR, isBootstrap)
     }
-
     HadoopFsRelation(
       location = fileIndex,
       partitionSchema = fileIndex.partitionSchema,
