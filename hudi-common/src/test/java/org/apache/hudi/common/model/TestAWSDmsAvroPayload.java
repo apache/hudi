@@ -53,7 +53,7 @@ public class TestAWSDmsAvroPayload {
     record.put("field1", 0);
     record.put("Op", "I");
 
-    AWSDmsAvroPayload payload = new AWSDmsAvroPayload(Option.of(record));
+    AWSDmsAvroPayload payload = new AWSDmsAvroPayload(Option.of(record), properties);
 
     try {
       Option<IndexedRecord> outputPayload = payload.getInsertValue(avroSchema, properties);
@@ -77,7 +77,7 @@ public class TestAWSDmsAvroPayload {
     oldRecord.put("field1", 0);
     oldRecord.put("Op", "I");
 
-    AWSDmsAvroPayload payload = new AWSDmsAvroPayload(Option.of(newRecord));
+    AWSDmsAvroPayload payload = new AWSDmsAvroPayload(Option.of(newRecord), properties);
 
     try {
       Option<IndexedRecord> outputPayload = payload.combineAndGetUpdateValue(oldRecord, avroSchema, properties);
@@ -101,7 +101,7 @@ public class TestAWSDmsAvroPayload {
     oldRecord.put("field1", 2);
     oldRecord.put("Op", "U");
 
-    AWSDmsAvroPayload payload = new AWSDmsAvroPayload(Option.of(deleteRecord));
+    AWSDmsAvroPayload payload = new AWSDmsAvroPayload(Option.of(deleteRecord), properties);
 
     try {
       Option<IndexedRecord> outputPayload = payload.combineAndGetUpdateValue(oldRecord, avroSchema, properties);
@@ -123,7 +123,7 @@ public class TestAWSDmsAvroPayload {
     oldRecord.put("field1", 2);
     oldRecord.put("Op", "U");
 
-    AWSDmsAvroPayload payload = new AWSDmsAvroPayload(Option.empty());
+    AWSDmsAvroPayload payload = new AWSDmsAvroPayload(Option.empty(), properties);
 
     try {
       Option<IndexedRecord> outputPayload = payload.combineAndGetUpdateValue(oldRecord, avroSchema, properties);
@@ -147,8 +147,8 @@ public class TestAWSDmsAvroPayload {
     oldRecord.put("field1", 3);
     oldRecord.put("Op", "I");
 
-    AWSDmsAvroPayload payload = new AWSDmsAvroPayload(Option.of(deleteRecord));
-    AWSDmsAvroPayload insertPayload = new AWSDmsAvroPayload(Option.of(oldRecord));
+    AWSDmsAvroPayload payload = new AWSDmsAvroPayload(Option.of(deleteRecord), properties);
+    AWSDmsAvroPayload insertPayload = new AWSDmsAvroPayload(Option.of(oldRecord), properties);
 
     OverwriteWithLatestAvroPayload output = payload.preCombine(insertPayload);
     assertEquals(payload, output);

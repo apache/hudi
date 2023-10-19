@@ -59,6 +59,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -129,11 +130,11 @@ public class DataSourceUtils {
   /**
    * Create a payload class via reflection, passing in an ordering/precombine value.
    */
-  public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record, Comparable orderingVal)
+  public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record, Comparable orderingVal, Properties props)
       throws IOException {
     try {
       return (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
-          new Class<?>[] {GenericRecord.class, Comparable.class}, record, orderingVal);
+          new Class<?>[] {GenericRecord.class, Comparable.class}, record, orderingVal, props);
     } catch (Throwable e) {
       throw new IOException("Could not create payload for class: " + payloadClass, e);
     }
@@ -160,11 +161,11 @@ public class DataSourceUtils {
   /**
    * Create a payload class via reflection, do not ordering/precombine value.
    */
-  public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record)
+  public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record, Properties props)
       throws IOException {
     try {
       return (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
-          new Class<?>[] {Option.class}, Option.of(record));
+          new Class<?>[] {Option.class}, Option.of(record), props);
     } catch (Throwable e) {
       throw new IOException("Could not create payload for class: " + payloadClass, e);
     }

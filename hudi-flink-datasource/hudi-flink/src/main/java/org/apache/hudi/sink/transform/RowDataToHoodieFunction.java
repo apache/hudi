@@ -37,6 +37,7 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.io.IOException;
+import java.util.Properties;
 
 import static org.apache.hudi.util.StreamerUtil.flinkConf2TypedProperties;
 
@@ -74,10 +75,12 @@ public class RowDataToHoodieFunction<I extends RowData, O extends HoodieRecord>
    * Config options.
    */
   private final Configuration config;
+  private final Properties props;
 
   public RowDataToHoodieFunction(RowType rowType, Configuration config) {
     this.rowType = rowType;
     this.config = config;
+    this.props = PayloadCreation.extractPropsFromConfiguration(config);
   }
 
   @Override
@@ -94,7 +97,7 @@ public class RowDataToHoodieFunction<I extends RowData, O extends HoodieRecord>
   @SuppressWarnings("unchecked")
   @Override
   public O map(I i) throws Exception {
-    return (O) toHoodieRecord(i);
+    return (O) toHoodieRecord(i, props);
   }
 
   /**
@@ -105,11 +108,11 @@ public class RowDataToHoodieFunction<I extends RowData, O extends HoodieRecord>
    * @throws IOException if error occurs
    */
   @SuppressWarnings("rawtypes")
-  private HoodieRecord toHoodieRecord(I record) throws Exception {
+  private HoodieRecord toHoodieRecord(I record, Properties props) throws Exception {
     GenericRecord gr = (GenericRecord) this.converter.convert(this.avroSchema, record);
     final HoodieKey hoodieKey = keyGenerator.getKey(gr);
 
-    HoodieRecordPayload payload = payloadCreation.createPayload(gr);
+    HoodieRecordPayload payload = payloadCreation.createPayload(gr, props);
     HoodieOperation operation = HoodieOperation.fromValue(record.getRowKind().toByteValue());
     return new HoodieAvroRecord<>(hoodieKey, payload, operation);
   }

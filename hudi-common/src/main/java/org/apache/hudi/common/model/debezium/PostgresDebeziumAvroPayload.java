@@ -51,12 +51,12 @@ public class PostgresDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
   private static final Logger LOG = LoggerFactory.getLogger(PostgresDebeziumAvroPayload.class);
   public static final String DEBEZIUM_TOASTED_VALUE = "__debezium_unavailable_value";
 
-  public PostgresDebeziumAvroPayload(GenericRecord record, Comparable orderingVal) {
-    super(record, orderingVal);
+  public PostgresDebeziumAvroPayload(GenericRecord record, Comparable orderingVal, Properties props) {
+    super(record, orderingVal, props);
   }
 
-  public PostgresDebeziumAvroPayload(Option<GenericRecord> record) {
-    super(record);
+  public PostgresDebeziumAvroPayload(Option<GenericRecord> record, Properties props) {
+    super(record, props);
   }
 
   private Option<Long> extractLSN(IndexedRecord record) {

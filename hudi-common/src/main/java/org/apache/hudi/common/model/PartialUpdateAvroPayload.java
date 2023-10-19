@@ -34,6 +34,8 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Properties;
 
+import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
+
 /**
  * Payload clazz that is used for partial update Hudi Table.
  *
@@ -117,12 +119,12 @@ import java.util.Properties;
  */
 public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvroPayload {
 
-  public PartialUpdateAvroPayload(GenericRecord record, Comparable orderingVal) {
-    super(record, orderingVal);
+  public PartialUpdateAvroPayload(GenericRecord record, Comparable orderingVal, Properties props) {
+    super(record, orderingVal, props);
   }
 
-  public PartialUpdateAvroPayload(Option<GenericRecord> record) {
-    super(record); // natural order
+  public PartialUpdateAvroPayload(Option<GenericRecord> record, Properties props) {
+    super(record, props); // natural order
   }
 
   @Override
@@ -138,7 +140,7 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
       Option<IndexedRecord> mergedRecord = mergeOldRecord(oldRecord, schema, shouldPickOldRecord, true);
       if (mergedRecord.isPresent()) {
         return new PartialUpdateAvroPayload((GenericRecord) mergedRecord.get(),
-            shouldPickOldRecord ? oldValue.orderingVal : this.orderingVal);
+            shouldPickOldRecord ? oldValue.orderingVal : this.orderingVal, properties);
       }
     } catch (Exception ex) {
       return this;
@@ -226,7 +228,7 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
       Schema schema,
       GenericRecord oldRecord,
       GenericRecord updatingRecord, boolean isPreCombining) {
-    if (isDeleteRecord(oldRecord) && !isPreCombining) {
+    if (isDeleteRecord(oldRecord, EMPTY_PROPS) && !isPreCombining) {
       return Option.empty();
     } else {
       final GenericRecordBuilder builder = new GenericRecordBuilder(schema);

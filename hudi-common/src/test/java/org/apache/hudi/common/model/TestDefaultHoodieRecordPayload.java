@@ -79,8 +79,8 @@ public class TestDefaultHoodieRecordPayload {
     record2.put("ts", 1L);
     record2.put("_hoodie_is_deleted", false);
 
-    DefaultHoodieRecordPayload payload1 = new DefaultHoodieRecordPayload(record1, 1);
-    DefaultHoodieRecordPayload payload2 = new DefaultHoodieRecordPayload(record2, 2);
+    DefaultHoodieRecordPayload payload1 = new DefaultHoodieRecordPayload(record1, 1, props);
+    DefaultHoodieRecordPayload payload2 = new DefaultHoodieRecordPayload(record2, 2, props);
     assertEquals(payload1.preCombine(payload2, props), payload2);
     assertEquals(payload2.preCombine(payload1, props), payload2);
 
@@ -107,8 +107,8 @@ public class TestDefaultHoodieRecordPayload {
     delRecord1.put("ts", 1L);
     delRecord1.put("_hoodie_is_deleted", true);
 
-    DefaultHoodieRecordPayload payload1 = new DefaultHoodieRecordPayload(record1, 1);
-    DefaultHoodieRecordPayload payload2 = new DefaultHoodieRecordPayload(delRecord1, 2);
+    DefaultHoodieRecordPayload payload1 = new DefaultHoodieRecordPayload(record1, 1, props);
+    DefaultHoodieRecordPayload payload2 = new DefaultHoodieRecordPayload(delRecord1, 2, props);
     assertEquals(payload1.preCombine(payload2, props), payload2);
     assertEquals(payload2.preCombine(payload1, props), payload2);
 
@@ -141,9 +141,9 @@ public class TestDefaultHoodieRecordPayload {
     defaultDeleteRecord.put("ts", 2L);
     defaultDeleteRecord.put("_hoodie_is_deleted", true);
 
-    DefaultHoodieRecordPayload payload = new DefaultHoodieRecordPayload(record, 1);
-    DefaultHoodieRecordPayload deletePayload = new DefaultHoodieRecordPayload(delRecord, 2);
-    DefaultHoodieRecordPayload defaultDeletePayload = new DefaultHoodieRecordPayload(defaultDeleteRecord, 2);
+    DefaultHoodieRecordPayload payload = new DefaultHoodieRecordPayload(record, 1, props);
+    DefaultHoodieRecordPayload deletePayload = new DefaultHoodieRecordPayload(delRecord, 2, props);
+    DefaultHoodieRecordPayload defaultDeletePayload = new DefaultHoodieRecordPayload(defaultDeleteRecord, 2, props);
 
     assertEquals(record, payload.getInsertValue(schema, props).get());
     assertEquals(defaultDeleteRecord, defaultDeletePayload.getInsertValue(schema, props).get());
@@ -163,7 +163,7 @@ public class TestDefaultHoodieRecordPayload {
     record.put("ts", 0L);
     record.put("_hoodie_is_deleted", false);
 
-    DefaultHoodieRecordPayload payload = new DefaultHoodieRecordPayload(record, 1);
+    DefaultHoodieRecordPayload payload = new DefaultHoodieRecordPayload(record, 1, props);
 
     // Verify failure when DELETE_MARKER is not configured along with DELETE_KEY
     try {
@@ -188,7 +188,7 @@ public class TestDefaultHoodieRecordPayload {
     record.put("partition", "partition0");
     record.put("ts", 0L);
     record.put("_hoodie_is_deleted", false);
-    DefaultHoodieRecordPayload payload = new DefaultHoodieRecordPayload(Option.of(record));
+    DefaultHoodieRecordPayload payload = new DefaultHoodieRecordPayload(Option.of(record), props);
     assertFalse(payload.getMetadata().isPresent());
   }
 
@@ -207,7 +207,7 @@ public class TestDefaultHoodieRecordPayload {
     record2.put("ts", eventTime);
     record2.put("_hoodie_is_deleted", false);
 
-    DefaultHoodieRecordPayload payload2 = new DefaultHoodieRecordPayload(record2, eventTime);
+    DefaultHoodieRecordPayload payload2 = new DefaultHoodieRecordPayload(record2, eventTime, props);
     payload2.combineAndGetUpdateValue(record1, schema, props);
     assertTrue(payload2.getMetadata().isPresent());
     assertEquals(eventTime,
@@ -228,7 +228,7 @@ public class TestDefaultHoodieRecordPayload {
     record2.put("ts", 1L);
     record2.put("_hoodie_is_deleted", false);
 
-    DefaultHoodieRecordPayload payload = new DefaultHoodieRecordPayload(Option.of(record1));
+    DefaultHoodieRecordPayload payload = new DefaultHoodieRecordPayload(Option.of(record1), props);
     Properties properties = new Properties();
     payload.getInsertValue(schema, properties);
     payload.combineAndGetUpdateValue(record2, schema, properties);
@@ -243,7 +243,7 @@ public class TestDefaultHoodieRecordPayload {
     record.put("partition", "partition0");
     record.put("ts", eventTime);
     record.put("_hoodie_is_deleted", false);
-    DefaultHoodieRecordPayload payload = new DefaultHoodieRecordPayload(record, eventTime);
+    DefaultHoodieRecordPayload payload = new DefaultHoodieRecordPayload(record, eventTime, props);
     payload.getInsertValue(schema, props);
     assertTrue(payload.getMetadata().isPresent());
     assertEquals(eventTime,

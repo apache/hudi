@@ -33,6 +33,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Properties;
 
+import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -106,17 +107,17 @@ public class TestPartialUpdateAvroPayload {
     record4.put("child", Arrays.asList("B"));
 
     // Test preCombine: since payload2's ordering val is larger, so payload2 will overwrite payload1 with its non-default field's value
-    PartialUpdateAvroPayload payload1 = new PartialUpdateAvroPayload(record1, 0L);
-    PartialUpdateAvroPayload payload2 = new PartialUpdateAvroPayload(record2, 1L);
-    assertArrayEquals(payload1.preCombine(payload2, schema, properties).recordBytes, new PartialUpdateAvroPayload(record4, 1L).recordBytes);
-    assertArrayEquals(payload2.preCombine(payload1, schema, properties).recordBytes, new PartialUpdateAvroPayload(record4, 1L).recordBytes);
+    PartialUpdateAvroPayload payload1 = new PartialUpdateAvroPayload(record1, 0L, properties);
+    PartialUpdateAvroPayload payload2 = new PartialUpdateAvroPayload(record2, 1L, properties);
+    assertArrayEquals(payload1.preCombine(payload2, schema, properties).recordBytes, new PartialUpdateAvroPayload(record4, 1L, properties).recordBytes);
+    assertArrayEquals(payload2.preCombine(payload1, schema, properties).recordBytes, new PartialUpdateAvroPayload(record4, 1L, properties).recordBytes);
 
     assertEquals(record1, payload1.getInsertValue(schema).get());
     assertEquals(record2, payload2.getInsertValue(schema).get());
 
     // Test combineAndGetUpdateValue: let payload1's ordering val larger than payload2, then payload1 will overwrite payload2 with its non-default field's value
     record1.put("ts", 2L);
-    payload1 = new PartialUpdateAvroPayload(record1, 2L);
+    payload1 = new PartialUpdateAvroPayload(record1, 2L, properties);
     assertEquals(payload1.combineAndGetUpdateValue(record2, schema, properties).get(), record3);
     // Test combineAndGetUpdateValue: let payload1's ordering val equal to  payload2, then payload2 will be considered to newer record
     record1.put("ts", 1L);
@@ -124,10 +125,10 @@ public class TestPartialUpdateAvroPayload {
 
     // Test preCombine again: let payload1's ordering val larger than payload2
     record1.put("ts", 2L);
-    payload1 = new PartialUpdateAvroPayload(record1, 2L);
-    payload2 = new PartialUpdateAvroPayload(record2, 1L);
-    assertArrayEquals(payload1.preCombine(payload2, schema, properties).recordBytes, new PartialUpdateAvroPayload(record3, 2L).recordBytes);
-    assertArrayEquals(payload2.preCombine(payload1, schema, properties).recordBytes, new PartialUpdateAvroPayload(record3, 2L).recordBytes);
+    payload1 = new PartialUpdateAvroPayload(record1, 2L, properties);
+    payload2 = new PartialUpdateAvroPayload(record2, 1L, properties);
+    assertArrayEquals(payload1.preCombine(payload2, schema, properties).recordBytes, new PartialUpdateAvroPayload(record3, 2L, properties).recordBytes);
+    assertArrayEquals(payload2.preCombine(payload1, schema, properties).recordBytes, new PartialUpdateAvroPayload(record3, 2L, properties).recordBytes);
   }
 
   @Test
@@ -156,9 +157,9 @@ public class TestPartialUpdateAvroPayload {
     record2.put("city", "NY0");
     record2.put("child", Collections.emptyList());
 
-    PartialUpdateAvroPayload payload1 = new PartialUpdateAvroPayload(record1, 0L);
-    PartialUpdateAvroPayload delPayload = new PartialUpdateAvroPayload(delRecord1, 1L);
-    PartialUpdateAvroPayload payload2 = new PartialUpdateAvroPayload(record2, 2L);
+    PartialUpdateAvroPayload payload1 = new PartialUpdateAvroPayload(record1, 0L, EMPTY_PROPS);
+    PartialUpdateAvroPayload delPayload = new PartialUpdateAvroPayload(delRecord1, 1L, EMPTY_PROPS);
+    PartialUpdateAvroPayload payload2 = new PartialUpdateAvroPayload(record2, 2L, EMPTY_PROPS);
 
     PartialUpdateAvroPayload mergedPayload = payload1.preCombine(delPayload, schema, new Properties());
     assertTrue(HoodieAvroUtils.bytesToAvro(mergedPayload.recordBytes, schema).get("_hoodie_is_deleted").equals(true));
@@ -210,8 +211,8 @@ public class TestPartialUpdateAvroPayload {
     record2.put("city", null);
     record2.put("child", Arrays.asList("B"));
 
-    PartialUpdateAvroPayload payload1 = new PartialUpdateAvroPayload(record1, 0L);
-    PartialUpdateAvroPayload payload2 = new PartialUpdateAvroPayload(record2, 1L);
+    PartialUpdateAvroPayload payload1 = new PartialUpdateAvroPayload(record1, 0L, EMPTY_PROPS);
+    PartialUpdateAvroPayload payload2 = new PartialUpdateAvroPayload(record2, 1L, EMPTY_PROPS);
 
     // let payload1 as the latest one, then should use payload1's meta field's value as the result even its ordering val is smaller
     GenericRecord mergedRecord1 = (GenericRecord) payload1.preCombine(payload2, schema, properties).getInsertValue(schema, properties).get();
@@ -293,8 +294,8 @@ public class TestPartialUpdateAvroPayload {
     outputWithPreCombineUsed.put("city", "NY1");
     outputWithPreCombineUsed.put("child", Arrays.asList("A"));
 
-    PartialUpdateAvroPayload payload2 = new PartialUpdateAvroPayload(record2, 0L);
-    PartialUpdateAvroPayload payload3 = new PartialUpdateAvroPayload(record3, 2L);
+    PartialUpdateAvroPayload payload2 = new PartialUpdateAvroPayload(record2, 0L, EMPTY_PROPS);
+    PartialUpdateAvroPayload payload3 = new PartialUpdateAvroPayload(record3, 2L, EMPTY_PROPS);
 
     // query A (no preCombine)
     IndexedRecord firstCombineOutput = payload2.combineAndGetUpdateValue(record1, schema, properties).get();

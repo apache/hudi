@@ -54,16 +54,18 @@ import scala.collection.JavaConverters._
  * a HoodieWriteHandle.IGNORE_RECORD, and the write handles will ignore this record.
  *
  * NOTE: Please note that, ctor parameter SHOULD NOT be used w/in the class body as
- *       otherwise Scala will instantiate them as fields making whole [[ExpressionPayload]]
- *       non-serializable. As an additional hedge, these are annotated as [[transient]] to
- *       prevent this from happening.
+ * otherwise Scala will instantiate them as fields making whole [[ExpressionPayload]]
+ * non-serializable. As an additional hedge, these are annotated as [[transient]] to
+ * prevent this from happening.
  */
 class ExpressionPayload(@transient record: GenericRecord,
-                        @transient orderingVal: Comparable[_])
-  extends DefaultHoodieRecordPayload(record, orderingVal) with Logging {
+                        @transient orderingVal: Comparable[_],
+                        @transient props: Properties)
+  extends DefaultHoodieRecordPayload(record, orderingVal, props)
+    with Logging {
 
-  def this(recordOpt: HOption[GenericRecord]) {
-    this(recordOpt.orElse(null), 0)
+  def this(recordOpt: HOption[GenericRecord], props: Properties) {
+    this(recordOpt.orElse(null), 0, props)
   }
 
   override def combineAndGetUpdateValue(currentValue: IndexedRecord,
@@ -236,7 +238,7 @@ class ExpressionPayload(@transient record: GenericRecord,
     val recordSchema = getRecordSchema(properties)
     val incomingRecord = ConvertibleRecord(bytesToAvro(recordBytes, recordSchema))
 
-    if (super.isDeleteRecord(incomingRecord.asAvro)) {
+    if (super.isDeleteRecord(incomingRecord.asAvro, properties)) {
       HOption.empty[IndexedRecord]()
     } else if (isMORTable(properties)) {
       // For the MOR table, both the matched and not-matched record will step into the getInsertValue() method.

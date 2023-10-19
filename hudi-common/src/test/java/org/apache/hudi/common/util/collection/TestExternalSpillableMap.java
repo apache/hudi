@@ -55,6 +55,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -168,13 +169,13 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     String ikey = ((GenericRecord) inMemoryRecord).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
     String iPartitionPath = ((GenericRecord) inMemoryRecord).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
     HoodieRecord inMemoryHoodieRecord = new HoodieAvroRecord<>(new HoodieKey(ikey, iPartitionPath),
-        new HoodieAvroPayload(Option.of((GenericRecord) inMemoryRecord)));
+        new HoodieAvroPayload(Option.of((GenericRecord) inMemoryRecord), EMPTY_PROPS));
 
     IndexedRecord onDiskRecord = iRecords.get(99);
     String dkey = ((GenericRecord) onDiskRecord).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
     String dPartitionPath = ((GenericRecord) onDiskRecord).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
     HoodieRecord onDiskHoodieRecord = new HoodieAvroRecord<>(new HoodieKey(dkey, dPartitionPath),
-        new HoodieAvroPayload(Option.of((GenericRecord) onDiskRecord)));
+        new HoodieAvroPayload(Option.of((GenericRecord) onDiskRecord), EMPTY_PROPS));
     // assert size
     assert records.size() == 100;
     // get should return the same HoodieKey, same location and same value

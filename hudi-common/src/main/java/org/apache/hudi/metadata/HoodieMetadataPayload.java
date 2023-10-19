@@ -185,11 +185,11 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private HoodieRecordIndexInfo recordIndexMetadata;
   private boolean isDeletedRecord = false;
 
-  public HoodieMetadataPayload(@Nullable GenericRecord record, Comparable<?> orderingVal) {
-    this(Option.ofNullable(record));
+  public HoodieMetadataPayload(@Nullable GenericRecord record, Comparable<?> orderingVal, Properties props) {
+    this(Option.ofNullable(record), props);
   }
 
-  public HoodieMetadataPayload(Option<GenericRecord> recordOpt) {
+  public HoodieMetadataPayload(Option<GenericRecord> recordOpt, Properties props) {
     if (recordOpt.isPresent()) {
       GenericRecord record = recordOpt.get();
       // This can be simplified using SpecificData.deepcopy once this bug is fixed
@@ -425,7 +425,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRecord, Schema schema, Properties properties) throws IOException {
-    HoodieMetadataPayload anotherPayload = new HoodieMetadataPayload(Option.of((GenericRecord) oldRecord));
+    HoodieMetadataPayload anotherPayload = new HoodieMetadataPayload(Option.of((GenericRecord) oldRecord), properties);
     HoodieRecordPayload combinedPayload = preCombine(anotherPayload);
     return combinedPayload.getInsertValue(schema, properties);
   }

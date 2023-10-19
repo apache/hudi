@@ -28,6 +28,7 @@ import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.util.Objects;
+import java.util.Properties;
 
 /**
  * Default payload.
@@ -40,12 +41,12 @@ import java.util.Objects;
 public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
     implements HoodieRecordPayload<OverwriteWithLatestAvroPayload> {
 
-  public OverwriteWithLatestAvroPayload(GenericRecord record, Comparable orderingVal) {
-    super(record, orderingVal);
+  public OverwriteWithLatestAvroPayload(GenericRecord record, Comparable orderingVal, Properties props) {
+    super(record, orderingVal, props);
   }
 
-  public OverwriteWithLatestAvroPayload(Option<GenericRecord> record) {
-    this(record.isPresent() ? record.get() : null, 0); // natural order
+  public OverwriteWithLatestAvroPayload(Option<GenericRecord> record, Properties props) {
+    this(record.isPresent() ? record.get() : null, 0, props); // natural order
   }
 
   @Override

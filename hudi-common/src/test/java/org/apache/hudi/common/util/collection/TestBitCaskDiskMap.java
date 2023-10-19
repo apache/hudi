@@ -58,6 +58,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
+import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -218,7 +219,9 @@ public class TestBitCaskDiskMap extends HoodieCommonTestHarness {
     iRecords.forEach(r -> {
       String key = ((GenericRecord) r).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
       String partitionPath = ((GenericRecord) r).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
-      HoodieRecord value = new HoodieAvroRecord<>(new HoodieKey(key, partitionPath), new HoodieAvroPayload(Option.of((GenericRecord) r)));
+      HoodieRecord value = new HoodieAvroRecord<>(
+          new HoodieKey(key, partitionPath),
+          new HoodieAvroPayload(Option.of((GenericRecord) r), EMPTY_PROPS));
       recordMap.put(key, value);
     });
 

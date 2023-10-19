@@ -633,8 +633,9 @@ public class StreamSync implements Serializable, Closeable {
               HoodieRecordPayload payload = shouldCombine ? DataSourceUtils.createPayload(cfg.payloadClassName, gr,
                   (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false, props.getBoolean(
                       KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
-                      Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()))))
-                  : DataSourceUtils.createPayload(cfg.payloadClassName, gr);
+                      Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()))),
+                  props)
+                  : DataSourceUtils.createPayload(cfg.payloadClassName, gr, props);
               avroRecords.add(new HoodieAvroRecord<>(hoodieKey, payload));
             }
             return avroRecords.iterator();

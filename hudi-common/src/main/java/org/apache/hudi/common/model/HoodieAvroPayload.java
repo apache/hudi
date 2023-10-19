@@ -26,6 +26,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.util.Properties;
 
 /**
  * This is a payload to wrap a existing Hoodie Avro Record. Useful to create a HoodieRecord over existing GenericRecords
@@ -38,12 +39,12 @@ public class HoodieAvroPayload implements HoodieRecordPayload<HoodieAvroPayload>
   private final byte[] recordBytes;
   private final Comparable<?> orderingVal;
 
-  public HoodieAvroPayload(GenericRecord record, Comparable<?> orderingVal) {
+  public HoodieAvroPayload(GenericRecord record, Comparable<?> orderingVal, Properties props) {
     this.recordBytes = record == null ? new byte[0] : HoodieAvroUtils.avroToBytes(record);
     this.orderingVal = orderingVal;
   }
 
-  public HoodieAvroPayload(Option<GenericRecord> record) {
+  public HoodieAvroPayload(Option<GenericRecord> record, Properties props) {
     this.recordBytes = record.isPresent() ? HoodieAvroUtils.avroToBytes(record.get()) : new byte[0];
     this.orderingVal = 0;
   }

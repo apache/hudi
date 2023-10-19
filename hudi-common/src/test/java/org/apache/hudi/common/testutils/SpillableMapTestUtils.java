@@ -33,6 +33,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
+
 /**
  * Tests spillable map test utils.
  */
@@ -49,7 +51,7 @@ public class SpillableMapTestUtils {
       String partitionPath = ((GenericRecord) r).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
       recordKeys.add(key);
       HoodieRecord record =
-          new HoodieAvroRecord<>(new HoodieKey(key, partitionPath), new HoodieAvroPayload(Option.of((GenericRecord) r)));
+          new HoodieAvroRecord<>(new HoodieKey(key, partitionPath), new HoodieAvroPayload(Option.of((GenericRecord) r), EMPTY_PROPS));
       record.unseal();
       record.setCurrentLocation(new HoodieRecordLocation("DUMMY_COMMIT_TIME", "DUMMY_FILE_ID"));
       record.seal();

@@ -45,12 +45,12 @@ public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
 
   public static final String OP_FIELD = "Op";
 
-  public AWSDmsAvroPayload(GenericRecord record, Comparable orderingVal) {
-    super(record, orderingVal);
+  public AWSDmsAvroPayload(GenericRecord record, Comparable orderingVal, Properties props) {
+    super(record, orderingVal, props);
   }
 
-  public AWSDmsAvroPayload(Option<GenericRecord> record) {
-    this(record.isPresent() ? record.get() : null, 0); // natural order
+  public AWSDmsAvroPayload(Option<GenericRecord> record, Properties props) {
+    this(record.isPresent() ? record.get() : null, 0, props); // natural order
   }
 
   /**
@@ -96,8 +96,8 @@ public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
   }
 
   @Override
-  protected boolean isDeleteRecord(GenericRecord record) {
-    return isDMSDeleteRecord(record) || super.isDeleteRecord(record);
+  protected boolean isDeleteRecord(GenericRecord record, Properties props) {
+    return isDMSDeleteRecord(record) || super.isDeleteRecord(record, props);
   }
 
   private static boolean isDMSDeleteRecord(GenericRecord record) {

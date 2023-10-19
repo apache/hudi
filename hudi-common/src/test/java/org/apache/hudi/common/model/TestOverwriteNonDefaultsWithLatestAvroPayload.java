@@ -32,6 +32,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 
+import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
@@ -109,9 +110,9 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
     record6.put("city", "NY0");
     record6.put("child", Collections.singletonList("A"));
 
-    OverwriteNonDefaultsWithLatestAvroPayload payload1 = new OverwriteNonDefaultsWithLatestAvroPayload(record1, 1);
-    OverwriteNonDefaultsWithLatestAvroPayload payload2 = new OverwriteNonDefaultsWithLatestAvroPayload(record2, 2);
-    OverwriteNonDefaultsWithLatestAvroPayload payload5 = new OverwriteNonDefaultsWithLatestAvroPayload(record5, 2);
+    OverwriteNonDefaultsWithLatestAvroPayload payload1 = new OverwriteNonDefaultsWithLatestAvroPayload(record1, 1, EMPTY_PROPS);
+    OverwriteNonDefaultsWithLatestAvroPayload payload2 = new OverwriteNonDefaultsWithLatestAvroPayload(record2, 2, EMPTY_PROPS);
+    OverwriteNonDefaultsWithLatestAvroPayload payload5 = new OverwriteNonDefaultsWithLatestAvroPayload(record5, 2, EMPTY_PROPS);
     assertEquals(payload1.preCombine(payload2), payload2);
     assertEquals(payload2.preCombine(payload1), payload2);
 
@@ -166,8 +167,8 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
     record2.put("city", "NY0");
     record2.put("child", Collections.emptyList());
 
-    OverwriteNonDefaultsWithLatestAvroPayload payload1 = new OverwriteNonDefaultsWithLatestAvroPayload(record1, 1);
-    OverwriteNonDefaultsWithLatestAvroPayload payload2 = new OverwriteNonDefaultsWithLatestAvroPayload(delRecord1, 2);
+    OverwriteNonDefaultsWithLatestAvroPayload payload1 = new OverwriteNonDefaultsWithLatestAvroPayload(record1, 1, EMPTY_PROPS);
+    OverwriteNonDefaultsWithLatestAvroPayload payload2 = new OverwriteNonDefaultsWithLatestAvroPayload(delRecord1, 2, EMPTY_PROPS);
 
     assertEquals(payload1.preCombine(payload2), payload2);
     assertEquals(payload2.preCombine(payload1), payload2);
@@ -205,7 +206,7 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
     record3.put("age", "2");
     record3.put("job", "1");
 
-    OverwriteNonDefaultsWithLatestAvroPayload payload2 = new OverwriteNonDefaultsWithLatestAvroPayload(record2, 1);
+    OverwriteNonDefaultsWithLatestAvroPayload payload2 = new OverwriteNonDefaultsWithLatestAvroPayload(record2, 1, EMPTY_PROPS);
     assertEquals(payload2.combineAndGetUpdateValue(record1, avroSchema).get(), record3);
   }
 

@@ -27,6 +27,9 @@ import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Properties;
+
+import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
 
 /**
  * subclass of OverwriteWithLatestAvroPayload.
@@ -39,12 +42,12 @@ import java.util.List;
  */
 public class OverwriteNonDefaultsWithLatestAvroPayload extends OverwriteWithLatestAvroPayload {
 
-  public OverwriteNonDefaultsWithLatestAvroPayload(GenericRecord record, Comparable orderingVal) {
-    super(record, orderingVal);
+  public OverwriteNonDefaultsWithLatestAvroPayload(GenericRecord record, Comparable orderingVal, Properties props) {
+    super(record, orderingVal, props);
   }
 
-  public OverwriteNonDefaultsWithLatestAvroPayload(Option<GenericRecord> record) {
-    super(record); // natural order
+  public OverwriteNonDefaultsWithLatestAvroPayload(Option<GenericRecord> record, Properties props) {
+    super(record, props); // natural order
   }
 
   @Override
@@ -73,7 +76,7 @@ public class OverwriteNonDefaultsWithLatestAvroPayload extends OverwriteWithLate
    * @return the merged record option
    */
   protected Option<IndexedRecord> mergeRecords(Schema schema, GenericRecord baseRecord, GenericRecord mergedRecord) {
-    if (isDeleteRecord(baseRecord)) {
+    if (isDeleteRecord(baseRecord, EMPTY_PROPS)) {
       return Option.empty();
     } else {
       final GenericRecordBuilder builder = new GenericRecordBuilder(schema);

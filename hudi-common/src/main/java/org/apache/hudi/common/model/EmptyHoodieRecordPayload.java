@@ -24,6 +24,8 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
+import java.util.Properties;
+
 /**
  * Empty payload used for deletions.
  */
@@ -32,7 +34,7 @@ public class EmptyHoodieRecordPayload implements HoodieRecordPayload<EmptyHoodie
   public EmptyHoodieRecordPayload() {
   }
 
-  public EmptyHoodieRecordPayload(GenericRecord record, Comparable orderingVal) {
+  public EmptyHoodieRecordPayload(GenericRecord record, Comparable orderingVal, Properties props) {
   }
 
   @Override

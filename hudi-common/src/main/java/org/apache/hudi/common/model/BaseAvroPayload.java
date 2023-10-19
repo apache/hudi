@@ -27,6 +27,8 @@ import org.apache.avro.generic.GenericRecord;
 import java.io.Serializable;
 import java.util.Properties;
 
+import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
+
 /**
  * Base class for all AVRO record based payloads, that can be ordered based on a field.
  */
@@ -43,16 +45,20 @@ public abstract class BaseAvroPayload implements Serializable {
 
   protected final boolean isDeletedRecord;
 
+  public BaseAvroPayload(GenericRecord record, Comparable orderingVal) {
+    this(record, orderingVal, EMPTY_PROPS);
+  }
+
   /**
    * Instantiate {@link BaseAvroPayload}.
    *
    * @param record      Generic record for the payload.
    * @param orderingVal {@link Comparable} to be used in pre combine.
    */
-  public BaseAvroPayload(GenericRecord record, Comparable orderingVal) {
+  public BaseAvroPayload(GenericRecord record, Comparable orderingVal, Properties props) {
     this.recordBytes = record != null ? HoodieAvroUtils.avroToBytes(record) : new byte[0];
     this.orderingVal = orderingVal;
-    this.isDeletedRecord = record == null || isDeleteRecord(record);
+    this.isDeletedRecord = record == null || isDeleteRecord(record, props);
 
     if (orderingVal == null) {
       throw new HoodieException("Ordering value is null for record: " + record);
@@ -83,7 +89,7 @@ public abstract class BaseAvroPayload implements Serializable {
    * @param genericRecord instance of {@link GenericRecord} of interest.
    * @returns {@code true} if record represents a delete record. {@code false} otherwise.
    */
-  protected boolean isDeleteRecord(GenericRecord genericRecord) {
+  protected boolean isDeleteRecord(GenericRecord genericRecord, Properties props) {
     final String isDeleteKey = HoodieRecord.HOODIE_IS_DELETED_FIELD;
     // Modify to be compatible with new version Avro.
     // The new version Avro throws for GenericRecord.get if the field name

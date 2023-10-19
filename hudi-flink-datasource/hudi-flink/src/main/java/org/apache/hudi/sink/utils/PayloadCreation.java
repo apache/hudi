@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
@@ -35,6 +36,7 @@ import javax.annotation.Nullable;
 
 import java.io.Serializable;
 import java.lang.reflect.Constructor;
+import java.util.Properties;
 
 /**
  * Util to create hoodie pay load instance.
@@ -73,22 +75,28 @@ public class PayloadCreation implements Serializable {
     return new PayloadCreation(shouldCombine, constructor, preCombineField);
   }
 
-  public HoodieRecordPayload<?> createPayload(GenericRecord record) throws Exception {
+  public static Properties extractPropsFromConfiguration(Configuration config) {
+    Properties props = new Properties();
+    config.addAllToProperties(props);
+    return props;
+  }
+
+  public HoodieRecordPayload<?> createPayload(GenericRecord record, Properties props) throws Exception {
     if (shouldCombine) {
       ValidationUtils.checkState(preCombineField != null);
       Comparable<?> orderingVal = (Comparable<?>) HoodieAvroUtils.getNestedFieldVal(record,
           preCombineField, false, false);
-      return (HoodieRecordPayload<?>) constructor.newInstance(record, orderingVal);
+      return (HoodieRecordPayload<?>) constructor.newInstance(record, orderingVal, props);
     } else {
-      return (HoodieRecordPayload<?>) this.constructor.newInstance(Option.of(record));
+      return (HoodieRecordPayload<?>) this.constructor.newInstance(Option.of(record), props);
     }
   }
 
-  public HoodieRecordPayload<?> createDeletePayload(BaseAvroPayload payload) throws Exception {
+  public HoodieRecordPayload<?> createDeletePayload(BaseAvroPayload payload, Properties props) throws Exception {
     if (shouldCombine) {
-      return (HoodieRecordPayload<?>) constructor.newInstance(null, payload.getOrderingVal());
+      return (HoodieRecordPayload<?>) constructor.newInstance(null, payload.getOrderingVal(), props);
     } else {
-      return (HoodieRecordPayload<?>) this.constructor.newInstance(Option.empty());
+      return (HoodieRecordPayload<?>) this.constructor.newInstance(Option.empty(), props);
     }
   }
 }

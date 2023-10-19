@@ -35,6 +35,7 @@ import java.util.Arrays;
 import java.util.Objects;
 import java.util.Properties;
 
+import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -63,20 +64,20 @@ public class TestMySqlDebeziumAvroPayload {
   @Test
   public void testInsert() throws IOException {
     GenericRecord insertRecord = createRecord(0, Operation.INSERT, "00001.111");
-    MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(insertRecord, "00001.111");
+    MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(insertRecord, "00001.111", EMPTY_PROPS);
     validateRecord(payload.getInsertValue(avroSchema), 0, Operation.INSERT, "00001.111");
   }
 
   @Test
   public void testPreCombine() {
     GenericRecord insertRecord = createRecord(0, Operation.INSERT, "00002.111");
-    MySqlDebeziumAvroPayload insertPayload = new MySqlDebeziumAvroPayload(insertRecord, "00002.111");
+    MySqlDebeziumAvroPayload insertPayload = new MySqlDebeziumAvroPayload(insertRecord, "00002.111", EMPTY_PROPS);
 
     GenericRecord updateRecord = createRecord(0, Operation.UPDATE, "00001.111");
-    MySqlDebeziumAvroPayload updatePayload = new MySqlDebeziumAvroPayload(updateRecord, "00001.111");
+    MySqlDebeziumAvroPayload updatePayload = new MySqlDebeziumAvroPayload(updateRecord, "00001.111", EMPTY_PROPS);
 
     GenericRecord deleteRecord = createRecord(0, Operation.DELETE, "00002.11");
-    MySqlDebeziumAvroPayload deletePayload = new MySqlDebeziumAvroPayload(deleteRecord, "00002.11");
+    MySqlDebeziumAvroPayload deletePayload = new MySqlDebeziumAvroPayload(deleteRecord, "00002.11", EMPTY_PROPS);
 
     assertEquals(insertPayload, insertPayload.preCombine(updatePayload));
     assertEquals(deletePayload, deletePayload.preCombine(updatePayload));
@@ -86,19 +87,19 @@ public class TestMySqlDebeziumAvroPayload {
   @Test
   public void testMergeWithUpdate() throws IOException {
     GenericRecord updateRecord = createRecord(1, Operation.UPDATE, "00002.11");
-    MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(updateRecord, "00002.11");
+    MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(updateRecord, "00002.11", EMPTY_PROPS);
 
     GenericRecord existingRecord = createRecord(1, Operation.INSERT, "00001.111");
     Option<IndexedRecord> mergedRecord = payload.combineAndGetUpdateValue(existingRecord, avroSchema);
     validateRecord(mergedRecord, 1, Operation.UPDATE, "00002.11");
 
     GenericRecord lateRecord = createRecord(1, Operation.UPDATE, "00000.222");
-    payload = new MySqlDebeziumAvroPayload(lateRecord, "00000.222");
+    payload = new MySqlDebeziumAvroPayload(lateRecord, "00000.222", EMPTY_PROPS);
     mergedRecord = payload.combineAndGetUpdateValue(existingRecord, avroSchema);
     validateRecord(mergedRecord, 1, Operation.INSERT, "00001.111");
 
     GenericRecord originalRecord = createRecord(1, Operation.INSERT, "00000.23");
-    payload = new MySqlDebeziumAvroPayload(originalRecord, "00000.23");
+    payload = new MySqlDebeziumAvroPayload(originalRecord, "00000.23", EMPTY_PROPS);
     updateRecord = createRecord(1, Operation.UPDATE, "00000.123");
     mergedRecord = payload.combineAndGetUpdateValue(updateRecord, avroSchema);
     validateRecord(mergedRecord, 1, Operation.UPDATE, "00000.123");
@@ -107,7 +108,7 @@ public class TestMySqlDebeziumAvroPayload {
   @Test
   public void testMergeWithDelete() throws IOException {
     GenericRecord deleteRecord = createRecord(2, Operation.DELETE, "00002.11");
-    MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(deleteRecord, "00002.11");
+    MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(deleteRecord, "00002.11", EMPTY_PROPS);
     assertTrue(payload.isDeleted(avroSchema, new Properties()));
 
     GenericRecord existingRecord = createRecord(2, Operation.UPDATE, "00001.111");
@@ -116,7 +117,7 @@ public class TestMySqlDebeziumAvroPayload {
     assertFalse(mergedRecord.isPresent());
 
     GenericRecord lateRecord = createRecord(2, Operation.DELETE, "00000.222");
-    payload = new MySqlDebeziumAvroPayload(lateRecord, "00000.222");
+    payload = new MySqlDebeziumAvroPayload(lateRecord, "00000.222", EMPTY_PROPS);
     mergedRecord = payload.combineAndGetUpdateValue(existingRecord, avroSchema);
     validateRecord(mergedRecord, 2, Operation.UPDATE, "00001.111");
   }
@@ -124,7 +125,7 @@ public class TestMySqlDebeziumAvroPayload {
   @Test
   public void testMergeWithBootstrappedExistingRecords() throws IOException {
     GenericRecord incomingRecord = createRecord(3, Operation.UPDATE, "00002.111");
-    MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(incomingRecord, "00002.111");
+    MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(incomingRecord, "00002.111", EMPTY_PROPS);
 
     GenericRecord existingRecord = createRecord(3, null, null);
     Option<IndexedRecord> mergedRecord = payload.combineAndGetUpdateValue(existingRecord, avroSchema);
@@ -134,7 +135,7 @@ public class TestMySqlDebeziumAvroPayload {
   @Test
   public void testInvalidIncomingRecord() {
     GenericRecord incomingRecord = createRecord(4, null, null);
-    MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(incomingRecord, "00002.111");
+    MySqlDebeziumAvroPayload payload = new MySqlDebeziumAvroPayload(incomingRecord, "00002.111", EMPTY_PROPS);
 
     GenericRecord existingRecord = createRecord(4, Operation.INSERT, "00001.111");
     assertThrows(HoodieDebeziumAvroPayloadException.class,

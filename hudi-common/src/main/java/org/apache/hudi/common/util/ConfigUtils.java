@@ -58,6 +58,8 @@ public class ConfigUtils {
    */
   public static final String TABLE_SERDE_PATH = "path";
 
+  public static final Properties EMPTY_PROPS = new Properties();
+
   private static final Logger LOG = LoggerFactory.getLogger(ConfigUtils.class);
 
   /**

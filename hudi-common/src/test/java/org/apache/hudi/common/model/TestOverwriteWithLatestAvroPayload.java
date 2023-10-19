@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.Arrays;
 
+import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
@@ -62,8 +63,8 @@ public class TestOverwriteWithLatestAvroPayload {
     record2.put("ts", 1L);
     record2.put("_hoodie_is_deleted", false);
 
-    OverwriteWithLatestAvroPayload payload1 = new OverwriteWithLatestAvroPayload(record1, 1);
-    OverwriteWithLatestAvroPayload payload2 = new OverwriteWithLatestAvroPayload(record2, 2);
+    OverwriteWithLatestAvroPayload payload1 = new OverwriteWithLatestAvroPayload(record1, 1, EMPTY_PROPS);
+    OverwriteWithLatestAvroPayload payload2 = new OverwriteWithLatestAvroPayload(record2, 2, EMPTY_PROPS);
     assertEquals(payload1.preCombine(payload2), payload2);
     assertEquals(payload2.preCombine(payload1), payload2);
 
@@ -88,8 +89,8 @@ public class TestOverwriteWithLatestAvroPayload {
     delRecord1.put("ts", 1L);
     delRecord1.put("_hoodie_is_deleted", true);
 
-    OverwriteWithLatestAvroPayload payload1 = new OverwriteWithLatestAvroPayload(record1, 1);
-    OverwriteWithLatestAvroPayload payload2 = new OverwriteWithLatestAvroPayload(delRecord1, 2);
+    OverwriteWithLatestAvroPayload payload1 = new OverwriteWithLatestAvroPayload(record1, 1, EMPTY_PROPS);
+    OverwriteWithLatestAvroPayload payload2 = new OverwriteWithLatestAvroPayload(delRecord1, 2, EMPTY_PROPS);
     assertEquals(payload1.preCombine(payload2), payload2);
     assertEquals(payload2.preCombine(payload1), payload2);
 

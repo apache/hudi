@@ -29,6 +29,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Objects;
+import java.util.Properties;
 
 /**
  * Provides support for seamlessly applying changes captured via Debezium for MysqlDB.
@@ -46,12 +47,12 @@ public class MySqlDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
 
   private static final Logger LOG = LoggerFactory.getLogger(MySqlDebeziumAvroPayload.class);
 
-  public MySqlDebeziumAvroPayload(GenericRecord record, Comparable orderingVal) {
-    super(record, orderingVal);
+  public MySqlDebeziumAvroPayload(GenericRecord record, Comparable orderingVal, Properties props) {
+    super(record, orderingVal, props);
   }
 
-  public MySqlDebeziumAvroPayload(Option<GenericRecord> record) {
-    super(record);
+  public MySqlDebeziumAvroPayload(Option<GenericRecord> record, Properties props) {
+    super(record, props);
   }
 
   private Option<String> extractSeq(IndexedRecord record) {

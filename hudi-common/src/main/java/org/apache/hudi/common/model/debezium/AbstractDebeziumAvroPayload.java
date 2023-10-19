@@ -29,6 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Properties;
 
 /**
  * Base class that provides support for seamlessly applying changes captured via Debezium.
@@ -46,12 +47,12 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
 
   private static final Logger LOG = LoggerFactory.getLogger(AbstractDebeziumAvroPayload.class);
 
-  public AbstractDebeziumAvroPayload(GenericRecord record, Comparable orderingVal) {
-    super(record, orderingVal);
+  public AbstractDebeziumAvroPayload(GenericRecord record, Comparable orderingVal, Properties props) {
+    super(record, orderingVal, props);
   }
 
-  public AbstractDebeziumAvroPayload(Option<GenericRecord> record) {
-    super(record);
+  public AbstractDebeziumAvroPayload(Option<GenericRecord> record, Properties props) {
+    super(record, props);
   }
 
   @Override
@@ -93,8 +94,8 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
   }
 
   @Override
-  protected boolean isDeleteRecord(GenericRecord record) {
-    return isDebeziumDeleteRecord(record) || super.isDeleteRecord(record);
+  protected boolean isDeleteRecord(GenericRecord record, Properties props) {
+    return isDebeziumDeleteRecord(record) || super.isDeleteRecord(record, props);
   }
 
   private static boolean isDebeziumDeleteRecord(GenericRecord record) {

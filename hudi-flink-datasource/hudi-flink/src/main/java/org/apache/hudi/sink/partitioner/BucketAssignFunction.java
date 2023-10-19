@@ -51,6 +51,7 @@ import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
 
 import java.util.Objects;
+import java.util.Properties;
 
 /**
  * The function to build the write profile incrementally for records within a checkpoint,
@@ -91,6 +92,8 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
 
   private final Configuration conf;
 
+  private final Properties props;
+
   private final boolean isChangingRecords;
 
   /**
@@ -106,6 +109,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
 
   public BucketAssignFunction(Configuration conf) {
     this.conf = conf;
+    this.props = PayloadCreation.extractPropsFromConfiguration(conf);
     this.isChangingRecords = WriteOperationType.isChangingRecords(
         WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION)));
     this.globalIndex = conf.getBoolean(FlinkOptions.INDEX_GLOBAL_ENABLED)
@@ -184,7 +188,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
             // if partition path changes, emit a delete record for old partition path,
             // then update the index state using location with new partition path.
             HoodieRecord<?> deleteRecord = new HoodieAvroRecord<>(new HoodieKey(recordKey, oldLoc.getPartitionPath()),
-                payloadCreation.createDeletePayload((BaseAvroPayload) record.getData()));
+                payloadCreation.createDeletePayload((BaseAvroPayload) record.getData(), props));
 
             deleteRecord.unseal();
             deleteRecord.setCurrentLocation(oldLoc.toLocal("U"));

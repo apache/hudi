@@ -36,12 +36,12 @@ import static org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro;
  */
 public class EventTimeAvroPayload extends DefaultHoodieRecordPayload {
 
-  public EventTimeAvroPayload(GenericRecord record, Comparable orderingVal) {
-    super(record, orderingVal);
+  public EventTimeAvroPayload(GenericRecord record, Comparable orderingVal, Properties props) {
+    super(record, orderingVal, props);
   }
 
-  public EventTimeAvroPayload(Option<GenericRecord> record) {
-    this(record.isPresent() ? record.get() : null, 0); // natural order
+  public EventTimeAvroPayload(Option<GenericRecord> record, Properties props) {
+    this(record.isPresent() ? record.get() : null, 0, props); // natural order
   }
 
   @Override

@@ -45,12 +45,12 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
   public static final String DELETE_MARKER = "hoodie.payload.delete.marker";
   private Option<Object> eventTime = Option.empty();
 
-  public DefaultHoodieRecordPayload(GenericRecord record, Comparable orderingVal) {
-    super(record, orderingVal);
+  public DefaultHoodieRecordPayload(GenericRecord record, Comparable orderingVal, Properties props) {
+    super(record, orderingVal, props);
   }
 
-  public DefaultHoodieRecordPayload(Option<GenericRecord> record) {
-    this(record.isPresent() ? record.get() : null, 0); // natural order
+  public DefaultHoodieRecordPayload(Option<GenericRecord> record, Properties props) {
+    this(record.isPresent() ? record.get() : null, 0, props); // natural order
   }
 
   @Override
@@ -86,30 +86,27 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     GenericRecord incomingRecord = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
     eventTime = updateEventTime(incomingRecord, properties);
 
-    return isDeleteRecord(incomingRecord, properties) ? Option.empty() : Option.of(incomingRecord);
+    return isDeleted(schema, properties) ? Option.empty() : Option.of(incomingRecord);
   }
 
-  /**
-   * @param genericRecord instance of {@link GenericRecord} of interest.
-   * @param properties payload related properties
-   * @returns {@code true} if record represents a delete record. {@code false} otherwise.
-   */
-  protected boolean isDeleteRecord(GenericRecord genericRecord, Properties properties) {
-    final String deleteKey = properties.getProperty(DELETE_KEY);
+  @Override
+  protected boolean isDeleteRecord(GenericRecord record, Properties props) {
+    final String deleteKey = props.getProperty(DELETE_KEY);
     if (StringUtils.isNullOrEmpty(deleteKey)) {
-      return isDeleteRecord(genericRecord);
+      return super.isDeleteRecord(record, props);
     }
 
-    ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(properties.getProperty(DELETE_MARKER)),
+    ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(props.getProperty(DELETE_MARKER)),
         () -> DELETE_MARKER + " should be configured with " + DELETE_KEY);
     // Modify to be compatible with new version Avro.
     // The new version Avro throws for GenericRecord.get if the field name
     // does not exist in the schema.
-    if (genericRecord.getSchema().getField(deleteKey) == null) {
+    if (record.getSchema().getField(deleteKey) == null) {
       return false;
     }
-    Object deleteMarker = genericRecord.get(deleteKey);
-    return deleteMarker != null && properties.getProperty(DELETE_MARKER).equals(deleteMarker.toString());
+    Object deleteMarker = record.get(deleteKey);
+    return deleteMarker != null && props.getProperty(DELETE_MARKER).equals(deleteMarker.toString());
+
   }
 
   private static Option<Object> updateEventTime(GenericRecord record, Properties properties) {

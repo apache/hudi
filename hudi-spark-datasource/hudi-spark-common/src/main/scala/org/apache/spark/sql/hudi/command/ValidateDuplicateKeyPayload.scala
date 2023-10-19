@@ -30,11 +30,11 @@ import java.util.Properties
  * Validate the duplicate key for insert statement without enable the INSERT_DROP_DUPS_OPT
  * config.
  */
-class ValidateDuplicateKeyPayload(record: GenericRecord, orderingVal: Comparable[_])
-  extends DefaultHoodieRecordPayload(record, orderingVal) {
+class ValidateDuplicateKeyPayload(record: GenericRecord, orderingVal: Comparable[_], props: Properties)
+  extends DefaultHoodieRecordPayload(record, orderingVal, props) {
 
-  def this(record: HOption[GenericRecord]) {
-    this(if (record.isPresent) record.get else null, 0)
+  def this(record: HOption[GenericRecord], props: Properties) {
+    this(if (record.isPresent) record.get else null, 0, props)
   }
 
   override def combineAndGetUpdateValue(currentValue: IndexedRecord,
