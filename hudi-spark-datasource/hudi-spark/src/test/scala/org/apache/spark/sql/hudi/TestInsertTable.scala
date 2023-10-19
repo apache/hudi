@@ -1714,8 +1714,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
-  // [HUDI-6900] TestInsertTable "Test Bulk Insert Into Consistent Hashing Bucket Index Table" is failing continuously
-  ignore("Test Bulk Insert Into Consistent Hashing Bucket Index Table") {
+  test("Test Bulk Insert Into Consistent Hashing Bucket Index Table") {
     withSQLConf("hoodie.datasource.write.operation" -> "bulk_insert") {
       Seq("false", "true").foreach { bulkInsertAsRow =>
         withTempDir { tmp =>
