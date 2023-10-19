@@ -124,11 +124,11 @@ hoodie.metrics.pushgateway.random.job.name.suffix=false
 ```
 
 ### AWS CloudWatchReporter
-Hudi supports publishing metrics to Amazon CloudWatch. It can be configured by setting [`hoodie.metrics.reporter.type`](https://hudi.apache.org/docs/next/configurations#hoodiemetricsreportertype)
+Hudi supports publishing metrics to Amazon CloudWatch. It can be configured by setting [`hoodie.metrics.reporter.type`](https://hudi.apache.org/docs/configurations#hoodiemetricsreportertype)
 to “CLOUDWATCH”. Static AWS credentials to be used can be configured using
-[`hoodie.aws.access.key`](https://hudi.apache.org/docs/next/configurations#hoodieawsaccesskey),
-[`hoodie.aws.secret.key`](https://hudi.apache.org/docs/next/configurations#hoodieawssecretkey),
-[`hoodie.aws.session.token`](https://hudi.apache.org/docs/next/configurations#hoodieawssessiontoken) properties.
+[`hoodie.aws.access.key`](https://hudi.apache.org/docs/configurations#hoodieawsaccesskey),
+[`hoodie.aws.secret.key`](https://hudi.apache.org/docs/configurations#hoodieawssecretkey),
+[`hoodie.aws.session.token`](https://hudi.apache.org/docs/configurations#hoodieawssessiontoken) properties.
 In the absence of static AWS credentials being configured, `DefaultAWSCredentialsProviderChain` will be used to get
 credentials by checking environment properties. Additional Amazon CloudWatch reporter specific properties that can be
 tuned are in the `HoodieMetricsCloudWatchConfig` class.

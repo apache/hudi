@@ -65,7 +65,7 @@ Basic configurations that control archival.
 | hoodie.keep.max.commits | 30 (Optional) | Archiving service moves older entries from timeline into an archived log after each write, to keep the metadata overhead constant, even as the table size grows. This config controls the maximum number of instants to retain in the active timeline.  | 
 | hoodie.keep.min.commits | 20 (Optional) | Similar to hoodie.keep.max.commits, but controls the minimum number of instants to retain in the active timeline.                                                                                                                                       | 
 
-For more advanced configs refer [here](https://hudi.apache.org/docs/next/configurations#Archival-Configs-advanced-configs).
+For more advanced configs refer [here](https://hudi.apache.org/docs/configurations#Archival-Configs-advanced-configs).
 
 #### Flink Options
 Flink jobs using the SQL can be configured through the options in WITH clause. The actual datasource level configs are listed below.
@@ -75,5 +75,5 @@ Flink jobs using the SQL can be configured through the options in WITH clause. T
 | archive.max_commits                                                       | 50 (Optional)                           | Max number of commits to keep before archiving older commits into a sequential log, default 50<br /><br /> `Config Param: ARCHIVE_MAX_COMMITS`                                                                                                                                                                                                                    |
 | archive.min_commits                                                      | 40 (Optional)                           | Min number of commits to keep before archiving older commits into a sequential log, default 40<br /><br /> `Config Param: ARCHIVE_MIN_COMMITS`                                                                                                                                                                                                                    |
 
-Refer [here](https://hudi.apache.org/docs/next/configurations#Flink-Options) for more details.
+Refer [here](https://hudi.apache.org/docs/configurations#Flink-Options) for more details.
 

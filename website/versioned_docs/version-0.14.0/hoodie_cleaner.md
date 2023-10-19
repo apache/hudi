@@ -51,8 +51,8 @@ Hudi cleaner currently supports the below cleaning policies to keep a certain nu
   The corresponding Flink related config is [`clean.retain_hours`](https://hudi.apache.org/docs/configurations/#cleanretain_hours).
 
 ### Configs
-For details about all possible configurations and their default values see the [configuration docs](https://hudi.apache.org/docs/next/configurations/#Clean-Configs).
-For Flink related configs refer [here](https://hudi.apache.org/docs/next/configurations/#FLINK_SQL).
+For details about all possible configurations and their default values see the [configuration docs](https://hudi.apache.org/docs/configurations/#Clean-Configs).
+For Flink related configs refer [here](https://hudi.apache.org/docs/configurations/#FLINK_SQL).
 
 ### Ways to trigger Cleaning
 

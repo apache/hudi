@@ -93,7 +93,7 @@ Following are the different indices currently available under the metadata table
 ## Enable Hudi Metadata Table and Multi-Modal Index in write side
 
 Following are the Spark based basic configs that are needed to enable metadata and multi-modal indices. For advanced configs please refer 
-[here](https://hudi.apache.org/docs/next/configurations#Metadata-Configs-advanced-configs).
+[here](https://hudi.apache.org/docs/configurations#Metadata-Configs-advanced-configs).
 
 | Config Name                               | Default                                   | Description                                                                                                                                                                                                                                                                                                              |
 |-------------------------------------------|-------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -111,7 +111,7 @@ safely use this feature.  The metadata table and related file listing functional
 disabled by default and can be enabled in write side explicitly using the above configs.
 
 For flink, following are the basic configs of interest to enable metadata based indices. Please refer 
-[here](https://hudi.apache.org/docs/next/configurations#Flink-Options) for advanced configs
+[here](https://hudi.apache.org/docs/configurations#Flink-Options) for advanced configs
 
 | Config Name                               | Default                                   | Description                                                                                                                                                                                                                                                                                                        |
 |-------------------------------------------|-------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|

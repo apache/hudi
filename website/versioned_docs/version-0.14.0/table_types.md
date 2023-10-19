@@ -132,7 +132,7 @@ Following are the configs relevant to different query types.
 | as.of.instant                                                                                                                             | N/A **(Required)**         | The query instant for time travel. Required only in the context of time travel queries. Without specified this option, we query the latest snapshot.<br /><br />`Config Param: TIME_TRAVEL_AS_OF_INSTANT`                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 
-Refer [here](https://hudi.apache.org/docs/next/configurations#Read-Options) for more details
+Refer [here](https://hudi.apache.org/docs/configurations#Read-Options) for more details
 
 ### Flink Configs
 
@@ -142,5 +142,5 @@ Refer [here](https://hudi.apache.org/docs/next/configurations#Read-Options) for 
 | read.start-commit                                                     | N/A **(Required)**                    | Required in case of incremental queries. Start commit instant for reading, the commit time format should be 'yyyyMMddHHmmss', by default reading from the latest instant for streaming read<br /><br /> `Config Param: READ_START_COMMIT`                                                                                                                                   |
 | read.end-commit                                                        | N/A **(Required)**                    | Used in the context of incremental queries. End commit instant for reading, the commit time format should be 'yyyyMMddHHmmss'<br /><br /> `Config Param: READ_END_COMMIT`                                                                                                                                                                                                   |
 
-Refer [here](https://hudi.apache.org/docs/next/configurations#Flink-Options) for more details.
+Refer [here](https://hudi.apache.org/docs/configurations#Flink-Options) for more details.
 

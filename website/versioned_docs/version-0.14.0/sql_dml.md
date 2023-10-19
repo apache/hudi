@@ -12,7 +12,7 @@ import TabItem from '@theme/TabItem';
 SparkSQL provides several Data Manipulation Language (DML) actions for interacting with Hudi tables. These operations allow you to insert, update, merge and delete data 
 from your Hudi tables. Let's explore them one by one.
 
-Please refer to [SQL DDL](/docs/next/sql_ddl) for creating Hudi tables using SQL.
+Please refer to [SQL DDL](/docs/sql_ddl) for creating Hudi tables using SQL.
 
 ### Insert Into
 
@@ -25,7 +25,7 @@ SELECT <columns> FROM <source>;
 
 :::note Deprecations
 From 0.14.0, `hoodie.sql.bulk.insert.enable` and `hoodie.sql.insert.mode` are deprecated. Users are expected to use `hoodie.spark.sql.insert.into.operation` instead.
-To manage duplicates with `INSERT INTO`, please check out [insert dup policy config](/docs/next/configurations#hoodiedatasourceinsertduppolicy).
+To manage duplicates with `INSERT INTO`, please check out [insert dup policy config](/docs/configurations#hoodiedatasourceinsertduppolicy).
 :::
 
 Examples: 

@@ -104,7 +104,7 @@ for even more flexibility and get away from Hive-style partition evol route.
 
 ### How does Hudi ensure atomicity?
 
-Hudi writers atomically move an inflight write operation to a "completed" state by writing an object/file to the [timeline](https://hudi.apache.org/docs/next/timeline) folder, identifying the write operation with an instant time that denotes the time the action is deemed to have occurred. This is achieved on the underlying DFS (in the case of S3/Cloud Storage, by an atomic PUT operation) and can be observed by files of the pattern `<instant>.<action>.<state>` in Hudi’s timeline.
+Hudi writers atomically move an inflight write operation to a "completed" state by writing an object/file to the [timeline](https://hudi.apache.org/docs/timeline) folder, identifying the write operation with an instant time that denotes the time the action is deemed to have occurred. This is achieved on the underlying DFS (in the case of S3/Cloud Storage, by an atomic PUT operation) and can be observed by files of the pattern `<instant>.<action>.<state>` in Hudi’s timeline.
 
 ### Does Hudi extend the Hive table layout?
 
@@ -146,7 +146,7 @@ To expand more on the long term approach, Hudi has had a proposal to streamline/
 This has been delayed for a few reasons
 
 - Large hosted query engines and users not upgrading fast enough.
-- The issues brought up - \[[1](https://hudi.apache.org/docs/next/faq#does-hudis-use-of-wall-clock-timestamp-for-instants-pose-any-clock-skew-issues),[2](https://hudi.apache.org/docs/next/faq#hudis-commits-are-based-on-transaction-start-time-instead-of-completed-time-does-this-cause-data-loss-or-inconsistency-in-case-of-incremental-and-time-travel-queries)\],
+- The issues brought up - \[[1](https://hudi.apache.org/docs/faq#does-hudis-use-of-wall-clock-timestamp-for-instants-pose-any-clock-skew-issues),[2](https://hudi.apache.org/docs/faq#hudis-commits-are-based-on-transaction-start-time-instead-of-completed-time-does-this-cause-data-loss-or-inconsistency-in-case-of-incremental-and-time-travel-queries)\],
   relevant to this are not practically very important to users beyond good pedantic discussions,
 - Wanting to do it alongside [non-blocking concurrency control](https://github.com/apache/hudi/pull/7907) in Hudi version 1.x.
 
@@ -228,7 +228,7 @@ GDPR has made deletes a must-have tool in everyone's data management toolbox. Hu
 
 ### Should I need to worry about deleting all copies of the records in case of duplicates?
 
-No. Hudi removes all the copies of a record key when deletes are issued. Here is the long form explanation - Sometimes accidental user errors can lead to duplicates introduced into a Hudi table by either [concurrent inserts](https://hudi.apache.org/docs/next/faq#can-concurrent-inserts-cause-duplicates) or by [not deduping the input records](https://hudi.apache.org/docs/next/faq#can-single-writer-inserts-have-duplicates) for an insert operation. However, using the right index (e.g., in the default [Simple Index](https://github.com/apache/hudi/blob/master/hudi-client/hudi-client-common/src/main/java/org/apache/hudi/index/simple/HoodieSimpleIndex.java#L116) and [Bloom Index](https://github.com/apache/hudi/blob/master/hudi-client/hudi-client-common/src/main/java/org/apache/hudi/index/bloom/HoodieBloomIndex.java#L309)), any subsequent updates and deletes are applied to all copies of the same primary key. This is because the indexing phase identifies records of a primary key in all locations.  So deletes in Hudi remove all copies of the same primary key, i.e., duplicates, and comply with GDPR or CCPA requirements.  Here are two examples [1](https://gist.github.com/yihua/6eb11ce3f888a71935dbf21c77199a48), [2](https://gist.github.com/yihua/e3afe0f34400e60f81f6da925560118e) demonstrating that duplicates are properly deleted from a Hudi table. Hudi is adding [auto key generation](https://github.com/apache/hudi/pull/8107), which will remove the burden of key generation from the user for insert workloads.
+No. Hudi removes all the copies of a record key when deletes are issued. Here is the long form explanation - Sometimes accidental user errors can lead to duplicates introduced into a Hudi table by either [concurrent inserts](https://hudi.apache.org/docs/faq#can-concurrent-inserts-cause-duplicates) or by [not deduping the input records](https://hudi.apache.org/docs/faq#can-single-writer-inserts-have-duplicates) for an insert operation. However, using the right index (e.g., in the default [Simple Index](https://github.com/apache/hudi/blob/master/hudi-client/hudi-client-common/src/main/java/org/apache/hudi/index/simple/HoodieSimpleIndex.java#L116) and [Bloom Index](https://github.com/apache/hudi/blob/master/hudi-client/hudi-client-common/src/main/java/org/apache/hudi/index/bloom/HoodieBloomIndex.java#L309)), any subsequent updates and deletes are applied to all copies of the same primary key. This is because the indexing phase identifies records of a primary key in all locations.  So deletes in Hudi remove all copies of the same primary key, i.e., duplicates, and comply with GDPR or CCPA requirements.  Here are two examples [1](https://gist.github.com/yihua/6eb11ce3f888a71935dbf21c77199a48), [2](https://gist.github.com/yihua/e3afe0f34400e60f81f6da925560118e) demonstrating that duplicates are properly deleted from a Hudi table. Hudi is adding [auto key generation](https://github.com/apache/hudi/pull/8107), which will remove the burden of key generation from the user for insert workloads.
 
 ### How does Hudi handle duplicate record keys in an input?
 
@@ -410,8 +410,8 @@ Depending on how you write to Hudi these are the possible options currently.
   *   Please note it is not possible to disable async compaction for MOR table with spark structured streaming.
 *   Flink:
   *   Async compaction is enabled by default for Merge-On-Read table.
-  *   Offline compaction can be achieved by setting `compaction.async.enabled` to `false` and periodically running [Flink offline Compactor](https://hudi.apache.org/docs/next/compaction/#flink-offline-compaction). When running the offline compactor, one needs to ensure there are no active writes to the table.
-  *   Third option (highly recommended over the second one) is to schedule the compactions from the regular ingestion job and executing the compaction plans from an offline job. To achieve this set `compaction.async.enabled` to `false`, `compaction.schedule.enabled` to `true` and then run the [Flink offline Compactor](https://hudi.apache.org/docs/next/compaction/#flink-offline-compaction) periodically to execute the plans.
+  *   Offline compaction can be achieved by setting `compaction.async.enabled` to `false` and periodically running [Flink offline Compactor](https://hudi.apache.org/docs/compaction/#flink-offline-compaction). When running the offline compactor, one needs to ensure there are no active writes to the table.
+  *   Third option (highly recommended over the second one) is to schedule the compactions from the regular ingestion job and executing the compaction plans from an offline job. To achieve this set `compaction.async.enabled` to `false`, `compaction.schedule.enabled` to `true` and then run the [Flink offline Compactor](https://hudi.apache.org/docs/compaction/#flink-offline-compaction) periodically to execute the plans.
 
 ### How to disable all table services in case of multiple writers?
 
@@ -425,7 +425,7 @@ Hudi runs cleaner to remove old file versions as part of writing data either in 
 
 Yes. Hudi provides the ability to post a callback notification about a write commit. You can use a http hook or choose to
 
-be notified via a Kafka/pulsar topic or plug in your own implementation to get notified. Please refer [here](https://hudi.apache.org/docs/next/writing_data/#commit-notifications)
+be notified via a Kafka/pulsar topic or plug in your own implementation to get notified. Please refer [here](https://hudi.apache.org/docs/writing_data/#commit-notifications)
 
 for details
 

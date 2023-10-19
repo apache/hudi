@@ -11,9 +11,9 @@ Hudi provides efficient upserts, by mapping a given hoodie key (record key + par
 This mapping between record key and file group/file id, never changes once the first version of a record has been written to a file. In short, the
 mapped file group contains all versions of a group of records.
 
-For [Copy-On-Write tables](/docs/next/table_types#copy-on-write-table), this enables fast upsert/delete operations, by 
+For [Copy-On-Write tables](/docs/table_types#copy-on-write-table), this enables fast upsert/delete operations, by 
 avoiding the need to join against the entire dataset to determine which files to rewrite.
-For [Merge-On-Read tables](/docs/next/table_types#merge-on-read-table), this design allows Hudi to bound the amount of 
+For [Merge-On-Read tables](/docs/table_types#merge-on-read-table), this design allows Hudi to bound the amount of 
 records any given base file needs to be merged against.
 Specifically, a given base file needs to merged only against updates for records that are part of that base file. In contrast,
 designs without an indexing component (e.g: [Apache Hive ACID](https://cwiki.apache.org/confluence/display/Hive/Hive+Transactions)),
@@ -78,7 +78,7 @@ HBase index are by nature a global index.
 #### Spark based configs
 
 For Spark DataSource, Spark SQL, DeltaStreamer and Structured Streaming following are the key configs that control 
-indexing behavior. Please refer to [Advanced Configs](https://hudi.apache.org/docs/next/configurations#Common-Index-Configs-advanced-configs)
+indexing behavior. Please refer to [Advanced Configs](https://hudi.apache.org/docs/configurations#Common-Index-Configs-advanced-configs)
 for more details. All these, support the index types mentioned [above](#index-types-in-hudi).
 
 | Config Name                                                                          | Default                                                                                         | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -94,7 +94,7 @@ for more details. All these, support the index types mentioned [above](#index-ty
 #### Flink based configs
 
 For Flink DataStream and Flink SQL only support Bucket Index and internal Flink state store backed in memory index. 
-Following are the basic configs that control the indexing behavior. Please refer [here](https://hudi.apache.org/docs/next/configurations#Flink-Options-advanced-configs)
+Following are the basic configs that control the indexing behavior. Please refer [here](https://hudi.apache.org/docs/configurations#Flink-Options-advanced-configs)
 for advanced configs.
 
 | Config Name                                                                       | Default                                                                                         | Description                                                                                                                                                                                                                                                                            |
