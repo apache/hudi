@@ -154,7 +154,7 @@ public class HoodieFileGroup implements Serializable {
   }
 
   public Stream<FileSlice> getAllFileSlicesBeforeOn(String maxInstantTime) {
-    return fileSlices.values().stream().filter(slice -> compareTimestamps(slice.getBaseInstantTime(), LESSER_THAN_OR_EQUALS, maxInstantTime));
+    return getAllFileSlices().filter(slice -> compareTimestamps(slice.getBaseInstantTime(), LESSER_THAN_OR_EQUALS, maxInstantTime));
   }
 
   /**
