@@ -445,10 +445,9 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertThat("Base Instant for file-group set correctly", fileSlice.getBaseInstantTime(), is(instantTime1));
     assertThat("File-Id must be set correctly", fileSlice.getFileId(), is(fileId));
     List<HoodieLogFile> logFiles = fileSlice.getLogFiles().collect(Collectors.toList());
-    assertEquals(3, logFiles.size(), "Correct number of log-files shows up in file-slice");
-    assertEquals(deltaFile3, logFiles.get(0).getFileName(), "Log File Order check");
-    assertEquals(deltaFile2, logFiles.get(1).getFileName(), "Log File Order check");
-    assertEquals(deltaFile1, logFiles.get(2).getFileName(), "Log File Order check");
+    assertEquals(2, logFiles.size(), "Correct number of log-files shows up in file-slice");
+    assertEquals(deltaFile2, logFiles.get(0).getFileName(), "Log File Order check");
+    assertEquals(deltaFile1, logFiles.get(1).getFileName(), "Log File Order check");
 
     // schedules a compaction
     String compactionInstantTime1 = metaClient.createNewInstantTime(); // 60 -> 80
@@ -473,8 +472,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertThat("Base Instant for file-group set correctly", fileSlice.getBaseInstantTime(), is(compactionInstantTime1));
     assertThat("File-Id must be set correctly", fileSlice.getFileId(), is(fileId));
     logFiles = fileSlice.getLogFiles().collect(Collectors.toList());
-    assertEquals(1, logFiles.size(), "Correct number of log-files shows up in file-slice");
-    assertEquals(deltaFile3, logFiles.get(0).getFileName(), "Log File Order check");
+    assertEquals(0, logFiles.size(), "Correct number of log-files shows up in file-slice");
 
     // now finished the compaction
     saveAsComplete(commitTimeline, compactionInstant, Option.empty());
@@ -1037,6 +1035,9 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     testStreamLatestVersionInPartition(isLatestFileSliceOnly, fullPartitionPath, commitTime1, commitTime2, commitTime3,
         commitTime4, fileId1, fileId2, fileId3, fileId4);
 
+    // Note: the separate archiving of clean and rollback actions is removed since 1.0.0,
+    // now all the instants archive continuously.
+
     // Now create a scenario where archiving deleted commits (1,2, and 3) but retained cleaner clean1. Now clean1 is
     // the lowest commit time. Scenario for HUDI-162 - Here clean is the earliest action in active timeline
     new File(basePath + "/.hoodie/" + commitTime1 + ".commit").delete();
@@ -1078,7 +1079,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     filenames = new HashSet<>();
     List<HoodieLogFile> logFilesList = rtView.getLatestFileSlicesBeforeOrOn("2016/05/01", commitTime4, true)
-        .map(FileSlice::getLogFiles).flatMap(logFileList -> logFileList).collect(Collectors.toList());
+        .flatMap(FileSlice::getLogFiles).collect(Collectors.toList());
     assertEquals(4, logFilesList.size());
     for (HoodieLogFile logFile : logFilesList) {
       filenames.add(logFile.getFileName());
@@ -1422,8 +1423,8 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     String fullPartitionPath3 = basePath + "/" + partitionPath3 + "/";
     new File(fullPartitionPath3).mkdirs();
     String instantTime1 = "1";
-    String deltaInstantTime1 = "2";
-    String deltaInstantTime2 = "3";
+    String deltaInstantTime1 = "3";
+    String deltaInstantTime2 = "4";
     String fileId = UUID.randomUUID().toString();
 
     String dataFileName = FSUtils.makeBaseFileName(instantTime1, TEST_WRITE_TOKEN, fileId);
@@ -1489,8 +1490,8 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     metaClient.getActiveTimeline().transitionCompactionRequestedToInflight(requested);
 
     // Fake delta-ingestion after compaction-requested
-    String deltaInstantTime4 = "4";
-    String deltaInstantTime5 = "6";
+    String deltaInstantTime4 = "5";
+    String deltaInstantTime5 = "7";
     String fileName3 =
         FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, deltaInstantTime4, 0, TEST_WRITE_TOKEN);
     String fileName4 =
