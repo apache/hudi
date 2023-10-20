@@ -229,6 +229,10 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
     TestData.checkWrittenData(tempFile, readOptimizedResult, 1);
   }
 
+  // case1: txn1 is upsert writer, txn2 is bulk_insert writer.
+  //      |----------- txn1 -----------|
+  //                       |----- txn2 ------|
+  // the txn2 would fail to commit caused by conflict
   @Test
   public void testBulkInsertInMultiWriter() throws Exception {
     conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
@@ -268,6 +272,10 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
     pipeline2.commitAsBatchThrows(HoodieWriteConflictException.class, "Cannot resolve conflicts");
   }
 
+  // case1: txn1 is upsert writer, txn2 is bulk_insert writer.
+  //                       |----- txn1 ------|
+  //      |----------- txn2 -----------|
+  // both two txn would success to commit
   @Test
   public void testBulkInsertInSequence() throws Exception {
     conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
@@ -280,16 +288,15 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
     Configuration conf1 = conf.clone();
     conf1.setString(FlinkOptions.OPERATION, "BULK_INSERT");
     conf1.setBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT, false);
-    // start pipeline1 and insert record: [id1,Danny,null,1,par1], commit the 1st tx
+    // start pipeline1 and bulk insert record: [id1,Danny,null,1,par1], suspend the tx commit
     List<RowData> dataset1 = Collections.singletonList(
         insertRow(
             StringData.fromString("id1"), StringData.fromString("Danny"), null,
             TimestampData.fromEpochMillis(1), StringData.fromString("par1")));
-    preparePipeline(conf1)
-        .consume(dataset1)
-        .commitAsBatch();
+    TestHarness pipeline1 = preparePipeline(conf1)
+        .consume(dataset1);
 
-    // start pipeline2 and bulk insert record: [id1,null,23,2,par1], commit the 2nd tx
+    // start pipeline2 and insert record: [id1,null,23,2,par1], suspend the tx commit
     Configuration conf2 = conf.clone();
     conf2.setString(FlinkOptions.WRITE_CLIENT_ID, "2");
     List<RowData> dataset2 = Collections.singletonList(
@@ -297,8 +304,13 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
             StringData.fromString("id1"), null, 23,
             TimestampData.fromEpochMillis(2), StringData.fromString("par1")));
     TestHarness pipeline2 = preparePipeline(conf2)
-        .consume(dataset2)
-        .checkpoint(1)
+        .consume(dataset2);
+
+    // step to commit the 1st txn
+    pipeline1.commitAsBatch();
+
+    // step to commit the 2nd data
+    pipeline2.checkpoint(1)
         .assertNextEvent()
         .checkpointComplete(1);
 
