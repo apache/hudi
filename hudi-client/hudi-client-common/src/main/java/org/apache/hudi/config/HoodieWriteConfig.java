@@ -2618,9 +2618,9 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean needResolveWriteConflict(WriteOperationType operationType) {
-    // Skip to resolve conflict for non bulk_insert operation if using non-blocking concurrency control
     if (getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
       if (getTableType().equals(HoodieTableType.MERGE_ON_READ) && isSimpleBucketIndex()) {
+        // Skip to resolve conflict for non bulk_insert operation if using non-blocking concurrency control
         return operationType == WriteOperationType.UNKNOWN || operationType == WriteOperationType.BULK_INSERT;
       } else {
         return true;

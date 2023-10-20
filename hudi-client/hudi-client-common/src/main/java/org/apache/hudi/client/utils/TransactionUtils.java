@@ -68,8 +68,7 @@ public class TransactionUtils {
       Option<HoodieInstant> lastCompletedTxnOwnerInstant,
       boolean reloadActiveTimeline,
       Set<String> pendingInstants) throws HoodieWriteConflictException {
-    // Skip to resolve conflict for non bulk_insert operation if using non-blocking concurrency control
-    WriteOperationType operationType = thisCommitMetadata.orElse(new HoodieCommitMetadata()).getOperationType();
+    WriteOperationType operationType = thisCommitMetadata.map(HoodieCommitMetadata::getOperationType).orElse(WriteOperationType.UNKNOWN);
     if (config.needResolveWriteConflict(operationType)) {
       // deal with pendingInstants
       Stream<HoodieInstant> completedInstantsDuringCurrentWriteOperation = getCompletedInstantsDuringCurrentWriteOperation(table.getMetaClient(), pendingInstants);
