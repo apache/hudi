@@ -18,16 +18,18 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.avro.generic.GenericRecord;
-
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.exception.HoodieException;
 
+import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
 
+import java.util.Properties;
+
+import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -51,7 +53,8 @@ class TestHoodieRecordUtils {
   @Test
   void loadPayload() {
     String payloadClassName = DefaultHoodieRecordPayload.class.getName();
-    HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClassName, new Object[] {null, 0}, GenericRecord.class, Comparable.class);
+    HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(
+        payloadClassName, new Object[] {null, 0, EMPTY_PROPS}, GenericRecord.class, Comparable.class, Properties.class);
     assertEquals(payload.getClass().getName(), payloadClassName);
   }
 }

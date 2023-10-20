@@ -193,7 +193,16 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     IndexedRecord indexedRecord = (IndexedRecord) data.getInsertValue(recordSchema, props).get();
     String payloadClass = ConfigUtils.getPayloadClass(props);
     String preCombineField = ConfigUtils.getOrderingField(props);
-    return HoodieAvroUtils.createHoodieRecordFromAvro(indexedRecord, payloadClass, preCombineField, simpleKeyGenFieldsOpt, withOperation, partitionNameOp, populateMetaFields, schemaWithoutMetaFields);
+    return HoodieAvroUtils.createHoodieRecordFromAvro(
+        indexedRecord,
+        payloadClass,
+        preCombineField,
+        simpleKeyGenFieldsOpt,
+        withOperation,
+        partitionNameOp,
+        populateMetaFields,
+        schemaWithoutMetaFields,
+        props);
   }
 
   @Override

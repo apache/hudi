@@ -65,9 +65,9 @@ public class PayloadCreation implements Serializable {
     final Class<?>[] argTypes;
     final Constructor<?> constructor;
     if (shouldCombine) {
-      argTypes = new Class<?>[] {GenericRecord.class, Comparable.class};
+      argTypes = new Class<?>[] {GenericRecord.class, Comparable.class, Properties.class};
     } else {
-      argTypes = new Class<?>[] {Option.class};
+      argTypes = new Class<?>[] {Option.class, Properties.class};
     }
     final String clazz = conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME);
     constructor = ReflectionUtils.getClass(clazz).getConstructor(argTypes);

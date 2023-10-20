@@ -27,9 +27,9 @@ import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPU
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineUtils}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
 import org.apache.hudi.common.util
@@ -1774,6 +1774,41 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       TimelineUtils.getCommitMetadata(i, metaClient.getActiveTimeline).getOperationType.equals(WriteOperationType.CLUSTER)
     })
     assertEquals(3, clusterInstants.size)
+  }
+
+  @Test
+  def testDefaultHoodieRecordPayloadWithCustomDeleteFields(): Unit = {
+    val options = Map(
+      HoodieTableConfig.NAME.key -> "test_table",
+      HoodieWriteConfig.BASE_PATH.key -> basePath,
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
+      DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
+      DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key -> classOf[DefaultHoodieRecordPayload].getName,
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
+      DefaultHoodieRecordPayload.DELETE_KEY -> "_change_operation_type",
+      DefaultHoodieRecordPayload.DELETE_MARKER -> "d"
+    )
+
+    val structType = new StructType()
+      .add("id", "string", false)
+      .add("ts", "long", false)
+      .add("value", "long", true)
+      .add("_change_operation_type", "string", false)
+    val rows = Seq(Row("key1", 0L, 1000L, "c"), Row("key1", 2L, 2000L, "d"),
+      Row("key2", 3L, 3000L, "c"), Row("key3", 4L, 4000L, "c"))
+    val df = spark.createDataFrame(spark.sparkContext.parallelize(rows), structType)
+
+    df.write.format("hudi").options(options).mode("overwrite").save(basePath)
+    val actualDf = spark.read.format("hudi").load(basePath)
+      .select("id", "ts", "value", "_change_operation_type")
+    val expectedDf = spark.createDataFrame(spark.sparkContext.parallelize(
+      Seq(Row("key2", 3L, 3000L, "c"), Row("key3", 4L, 4000L, "c"))
+    ), structType)
+
+    assertEquals(2, actualDf.count())
+    assertEquals(2, actualDf.intersect(expectedDf).count())
   }
 }
 

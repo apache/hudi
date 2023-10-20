@@ -52,6 +52,7 @@ import java.util.zip.InflaterInputStream;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.createHoodieRecordFromAvro;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
+import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
@@ -177,7 +178,7 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
       convertedRecords.add(
           createHoodieRecordFromAvro(avroData, DefaultHoodieRecordPayload.class.getName(),
               "timestamp", Option.of(Pair.of("_row_key", "partition_path")),
-              false, Option.empty(), false, Option.of(AVRO_SCHEMA)));
+              false, Option.empty(), false, Option.of(AVRO_SCHEMA), EMPTY_PROPS));
     }
     return convertedRecords;
   }

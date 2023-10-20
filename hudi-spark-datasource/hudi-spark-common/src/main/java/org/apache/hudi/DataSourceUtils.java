@@ -134,7 +134,7 @@ public class DataSourceUtils {
       throws IOException {
     try {
       return (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
-          new Class<?>[] {GenericRecord.class, Comparable.class}, record, orderingVal, props);
+          new Class<?>[] {GenericRecord.class, Comparable.class, Properties.class}, record, orderingVal, props);
     } catch (Throwable e) {
 
       throw new IOException("Could not create payload for class: " + payloadClass, e);

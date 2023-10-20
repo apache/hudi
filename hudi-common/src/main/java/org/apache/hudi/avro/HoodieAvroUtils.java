@@ -1139,18 +1139,19 @@ public class HoodieAvroUtils {
       Boolean withOperation,
       Option<String> partitionNameOp,
       Boolean populateMetaFields,
-      Option<Schema> schemaWithoutMetaFields) {
+      Option<Schema> schemaWithoutMetaFields,
+      Properties props) {
     if (populateMetaFields) {
       return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
-          payloadClass, preCombineField, withOperation);
+          payloadClass, preCombineField, withOperation, props);
       // Support HoodieFileSliceReader
     } else if (simpleKeyGenFieldsOpt.isPresent()) {
       // TODO in HoodieFileSliceReader may partitionName=option#empty
       return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
-          payloadClass, preCombineField, simpleKeyGenFieldsOpt.get(), withOperation, partitionNameOp, schemaWithoutMetaFields);
+          payloadClass, preCombineField, simpleKeyGenFieldsOpt.get(), withOperation, partitionNameOp, schemaWithoutMetaFields, props);
     } else {
       return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
-          payloadClass, preCombineField, withOperation, partitionNameOp, schemaWithoutMetaFields);
+          payloadClass, preCombineField, withOperation, partitionNameOp, schemaWithoutMetaFields, props);
     }
   }
 

@@ -73,6 +73,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FULL_SCAN_LOG_FILES;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
+import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_FILES;
@@ -393,12 +394,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private HoodieRecord<HoodieMetadataPayload> composeRecord(GenericRecord avroRecord, String partitionName) {
     if (metadataTableConfig.populateMetaFields()) {
       return SpillableMapUtils.convertToHoodieRecordPayload(avroRecord,
-          metadataTableConfig.getPayloadClass(), metadataTableConfig.getPreCombineField(), false);
+          metadataTableConfig.getPayloadClass(), metadataTableConfig.getPreCombineField(), false, EMPTY_PROPS);
     }
     return SpillableMapUtils.convertToHoodieRecordPayload(avroRecord,
         metadataTableConfig.getPayloadClass(), metadataTableConfig.getPreCombineField(),
         Pair.of(metadataTableConfig.getRecordKeyFieldProp(), metadataTableConfig.getPartitionFieldProp()),
-        false, Option.of(partitionName), Option.empty());
+        false, Option.of(partitionName), Option.empty(), EMPTY_PROPS);
   }
 
   /**

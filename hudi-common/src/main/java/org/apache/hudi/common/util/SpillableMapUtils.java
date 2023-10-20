@@ -34,9 +34,11 @@ import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.util.Properties;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.getNullableValAsString;
 import static org.apache.hudi.common.util.BinaryUtil.generateChecksum;
+import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
 
 /**
  * A utility class supports spillable map.
@@ -107,20 +109,25 @@ public class SpillableMapUtils {
   /**
    * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
-  public static <R> HoodieRecord<R> convertToHoodieRecordPayload(GenericRecord rec, String payloadClazz, String preCombineField, boolean withOperationField) {
+  public static <R> HoodieRecord<R> convertToHoodieRecordPayload(GenericRecord rec,
+                                                                 String payloadClazz,
+                                                                 String preCombineField,
+                                                                 boolean withOperationField,
+                                                                 Properties props) {
     return convertToHoodieRecordPayload(rec, payloadClazz, preCombineField,
         Pair.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD),
-        withOperationField, Option.empty(), Option.empty());
+        withOperationField, Option.empty(), Option.empty(), props);
   }
 
   public static <R> HoodieRecord<R> convertToHoodieRecordPayload(GenericRecord record, String payloadClazz,
                                                                  String preCombineField,
                                                                  boolean withOperationField,
                                                                  Option<String> partitionName,
-                                                                 Option<Schema> schemaWithoutMetaFields) {
+                                                                 Option<Schema> schemaWithoutMetaFields,
+                                                                 Properties props) {
     return convertToHoodieRecordPayload(record, payloadClazz, preCombineField,
         Pair.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD),
-        withOperationField, partitionName, schemaWithoutMetaFields);
+        withOperationField, partitionName, schemaWithoutMetaFields, props);
   }
 
   /**
@@ -131,7 +138,8 @@ public class SpillableMapUtils {
                                                                  Pair<String, String> recordKeyPartitionPathFieldPair,
                                                                  boolean withOperationField,
                                                                  Option<String> partitionName,
-                                                                 Option<Schema> schemaWithoutMetaFields) {
+                                                                 Option<Schema> schemaWithoutMetaFields,
+                                                                 Properties props) {
     final String recKey = record.get(recordKeyPartitionPathFieldPair.getKey()).toString();
     final String partitionPath = (partitionName.isPresent() ? partitionName.get() :
         record.get(recordKeyPartitionPathFieldPair.getRight()).toString());
@@ -150,8 +158,8 @@ public class SpillableMapUtils {
     }
 
     HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieAvroRecord<>(new HoodieKey(recKey, partitionPath),
-        HoodieRecordUtils.loadPayload(payloadClazz, new Object[] {record, preCombineVal}, GenericRecord.class,
-            Comparable.class), operation);
+        HoodieRecordUtils.loadPayload(payloadClazz, new Object[] {record, preCombineVal, props},
+            GenericRecord.class, Comparable.class, Properties.class), operation);
 
     return (HoodieRecord<R>) hoodieRecord;
   }
@@ -176,7 +184,8 @@ public class SpillableMapUtils {
    */
   public static <R> R generateEmptyPayload(String recKey, String partitionPath, Comparable orderingVal, String payloadClazz) {
     HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieAvroRecord<>(new HoodieKey(recKey, partitionPath),
-        HoodieRecordUtils.loadPayload(payloadClazz, new Object[] {null, orderingVal}, GenericRecord.class, Comparable.class));
+        HoodieRecordUtils.loadPayload(payloadClazz, new Object[] {null, orderingVal, EMPTY_PROPS},
+            GenericRecord.class, Comparable.class, Properties.class));
     return (R) hoodieRecord;
   }
 }
