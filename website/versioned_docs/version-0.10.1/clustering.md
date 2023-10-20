@@ -95,12 +95,12 @@ broadly classified into three types: clustering plan strategy, execution strateg
 
 This strategy comes into play while creating clustering plan. It helps to decide what file groups should be clustered.
 Let's look at different plan strategies that are available with Hudi. Note that these strategies are easily pluggable
-using this [config](/docs/next/configurations#hoodieclusteringplanstrategyclass).
+using this [config](/docs/configurations#hoodieclusteringplanstrategyclass).
 
 1. `SparkSizeBasedClusteringPlanStrategy`: It selects file slices based on
-   the [small file limit](/docs/next/configurations/#hoodieclusteringplanstrategysmallfilelimit)
+   the [small file limit](/docs/configurations/#hoodieclusteringplanstrategysmallfilelimit)
    of base files and creates clustering groups upto max file size allowed per group. The max size can be specified using
-   this [config](/docs/next/configurations/#hoodieclusteringplanstrategymaxbytespergroup). This
+   this [config](/docs/configurations/#hoodieclusteringplanstrategymaxbytespergroup). This
    strategy is useful for stitching together medium-sized files into larger ones to reduce lot of files spread across
    cold partitions.
 2. `SparkRecentDaysClusteringPlanStrategy`: It looks back previous 'N' days partitions and creates a plan that will
@@ -122,12 +122,12 @@ All the strategies are partition-aware and the latter two are still bound by the
 ### Execution Strategy
 
 After building the clustering groups in the planning phase, Hudi applies execution strategy, for each group, primarily
-based on sort columns and size. The strategy can be specified using this [config](/docs/next/configurations/#hoodieclusteringexecutionstrategyclass).
+based on sort columns and size. The strategy can be specified using this [config](/docs/configurations/#hoodieclusteringexecutionstrategyclass).
 
 `SparkSortAndSizeExecutionStrategy` is the default strategy. Users can specify the columns to sort the data by, when
 clustering using
-this [config](/docs/next/configurations/#hoodieclusteringplanstrategysortcolumns). Apart from
-that, we can also set [max file size](/docs/next/configurations/#hoodieparquetmaxfilesize)
+this [config](/docs/configurations/#hoodieclusteringplanstrategysortcolumns). Apart from
+that, we can also set [max file size](/docs/configurations/#hoodieparquetmaxfilesize)
 for the parquet files produced due to clustering. The strategy uses bulk insert to write data into new files, in which
 case, Hudi implicitly uses a partitioner that does sorting based on specified columns. In this way, the strategy changes
 the data layout in a way that not only improves query performance but also balance rewrite overhead automatically.
@@ -135,19 +135,19 @@ the data layout in a way that not only improves query performance but also balan
 Now this strategy can be executed either as a single spark job or multiple jobs depending on number of clustering groups
 created in the planning phase. By default, Hudi will submit multiple spark jobs and union the results. In case you want
 to force Hudi to use single spark job, set the execution strategy
-class [config](/docs/next/configurations/#hoodieclusteringexecutionstrategyclass)
+class [config](/docs/configurations/#hoodieclusteringexecutionstrategyclass)
 to `SingleSparkJobExecutionStrategy`.
 
 ### Update Strategy
 
 Currently, clustering can only be scheduled for tables/partitions not receiving any concurrent updates. By default,
-the [config for update strategy](/docs/next/configurations/#hoodieclusteringupdatesstrategy) is
+the [config for update strategy](/docs/configurations/#hoodieclusteringupdatesstrategy) is
 set to ***SparkRejectUpdateStrategy***. If some file group has updates during clustering then it will reject updates and
 throw an exception. However, in some use-cases updates are very sparse and do not touch most file groups. The default
 strategy to simply reject updates does not seem fair. In such use-cases, users can set the config to ***SparkAllowUpdateStrategy***.
 
 We discussed the critical strategy configurations. All other configurations related to clustering are
-listed [here](/docs/next/configurations/#Clustering-Configs). Out of this list, a few
+listed [here](/docs/configurations/#Clustering-Configs). Out of this list, a few
 configurations that will be very useful are:
 
 |  Config key  | Remarks | Default |

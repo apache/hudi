@@ -13,7 +13,7 @@ You can automatically manage size of files during ingestion. This solution adds 
 it ensures that read queries are always efficient as soon as a write is committed. If you don't 
 manage file sizing as you write and instead try to periodically run a file-sizing clean-up, your queries will be slow until that resize cleanup is periodically performed.
  
-(Note: [bulk_insert](/docs/next/write_operations) write operation does not provide auto-sizing during ingestion)
+(Note: [bulk_insert](/docs/write_operations) write operation does not provide auto-sizing during ingestion)
 
 ### For Copy-On-Write 
 This is as simple as configuring the [maximum size for a base/parquet file](/docs/configurations#hoodieparquetmaxfilesize) 
@@ -41,7 +41,7 @@ ended up creating an associated delta log file, no more inserts can go into that
 has been performed and there are NO log files associated with the base parquet file, can new inserts be sent to auto size that parquet file.
 
 ## Auto-Size With Clustering
-**[Clustering](/docs/next/clustering)** is a feature in Hudi to group 
+**[Clustering](/docs/clustering)** is a feature in Hudi to group 
 small files into larger ones either synchronously or asynchronously. Since first solution of auto-sizing small files has 
 a tradeoff on ingestion speed (since the small files are sized during ingestion), if your use-case is very sensitive to 
 ingestion latency where you don't want to compromise on ingestion speed which may end up creating a lot of small files, 
@@ -50,4 +50,4 @@ small files together in the background to generate larger files. NOTE that durin
 
 *Please note that Hudi always creates immutable files on disk. To be able to do auto-sizing or clustering, Hudi will 
 always create a newer version of the smaller file, resulting in 2 versions of the same file. 
-The [cleaner service](/docs/next/hoodie_cleaner) will later kick in and delete the older version small file and keep the latest one.*
+The [cleaner service](/docs/hoodie_cleaner) will later kick in and delete the older version small file and keep the latest one.*

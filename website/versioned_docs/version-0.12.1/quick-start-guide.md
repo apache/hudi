@@ -520,7 +520,7 @@ complex, custom, NonPartitioned Key gen, etc.
 
 
 :::tip
-With [externalized config file](/docs/next/configurations#externalized-config-file),
+With [externalized config file](/docs/configurations#externalized-config-file),
 instead of directly passing configuration settings to every Hudi job, 
 you can also centrally set them in a configuration file `hudi-default.conf`.
 :::

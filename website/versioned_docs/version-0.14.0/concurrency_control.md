@@ -85,7 +85,7 @@ As can be seen above, a lock provider needs to be configured in muti-writing sce
 
 In case of multi-writing in Hudi, the locks are acquired on the Hudi table for a very short duration during specific phases (such as just before committing the writes or before scheduling table services) instead of locking for the entire span of time. This approach allows multiple writers to work on the same table simultaneously, increasing concurrency and avoids conflicts.
 
-There are 4 different lock providers that require different configurations to be set. Please refer to comprehensive locking configs [here](https://hudi.apache.org/docs/next/configurations#LOCK).
+There are 4 different lock providers that require different configurations to be set. Please refer to comprehensive locking configs [here](https://hudi.apache.org/docs/configurations#LOCK).
 
 #### Zookeeper based lock provider
 ```
@@ -125,7 +125,7 @@ section for the details of each related configuration knob. Following are the ba
 | ----------------------------------------------------------------------- | ------------------------ |------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | hoodie.write.lock.dynamodb.endpoint_url| N/A **(Required)**         | For DynamoDB based lock provider, the url endpoint used for Amazon DynamoDB service. Useful for development with a local dynamodb instance.<br /><br />`Config Param: DYNAMODB_ENDPOINT_URL`<br />`Since Version: 0.10.1`|
 
-For advanced configs refer [here](https://hudi.apache.org/docs/next/configurations#DynamoDB-based-Locks-Configurations)
+For advanced configs refer [here](https://hudi.apache.org/docs/configurations#DynamoDB-based-Locks-Configurations)
 
 
 When using the DynamoDB-based lock provider, the name of the DynamoDB table acting as the lock table for Hudi is
@@ -236,7 +236,7 @@ Multi writing using OCC allows multiple writers to concurrently write and atomic
 
 To improve the concurrency control, the [0.13.0 release](https://hudi.apache.org/releases/release-0.13.0#early-conflict-detection-for-multi-writer) introduced a new feature, early conflict detection in OCC, to detect the conflict during the data writing phase and abort the writing early on once a conflict is detected, using Hudi's marker mechanism. Hudi can now stop a conflicting writer much earlier because of the early conflict detection and release computing resources necessary to cluster, improving resource utilization.
 
-By default, this feature is turned off. To try this out, a user needs to set `hoodie.write.concurrency.early.conflict.detection.enable` to true, when using OCC for concurrency control (Refer [configs](https://hudi.apache.org/docs/next/configurations#Write-Configurations-advanced-configs) page for all relevant configs).
+By default, this feature is turned off. To try this out, a user needs to set `hoodie.write.concurrency.early.conflict.detection.enable` to true, when using OCC for concurrency control (Refer [configs](https://hudi.apache.org/docs/configurations#Write-Configurations-advanced-configs) page for all relevant configs).
 :::note
 Early conflict Detection in OCC is an **EXPERIMENTAL** feature
 :::

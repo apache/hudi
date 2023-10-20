@@ -92,7 +92,7 @@ TBLPROPERTIES (
 ```
 
 ### Create table from an external location
-Often, Hudi tables are created from streaming writers like the [streamer tool](/docs/next/hoodie_streaming_ingestion#hudi-streamer), which
+Often, Hudi tables are created from streaming writers like the [streamer tool](/docs/hoodie_streaming_ingestion#hudi-streamer), which
 may later need some SQL statements to run on them. You can create an External table using the `location` statement.
 
 ```sql

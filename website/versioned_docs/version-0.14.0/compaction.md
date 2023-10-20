@@ -87,7 +87,7 @@ BoundedPartitionAwareCompactionStrategy. Essentially, this is an inverse of the 
 BoundedPartitionAwareCompactionStrategy</li></ul>
 
 :::note
-Please refer to [advanced configs](https://hudi.apache.org/docs/next/configurations#Compaction-Configs) for more details.
+Please refer to [advanced configs](https://hudi.apache.org/docs/configurations#Compaction-Configs) for more details.
 :::
 
 ## Ways to trigger Compaction
