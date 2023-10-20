@@ -25,8 +25,8 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.SpillableMapTestUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
@@ -401,8 +401,9 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     IndexedRecord firstRecord = iRecords.get(0);
     String key = ((GenericRecord) firstRecord).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
     String partitionPath = ((GenericRecord) firstRecord).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
-    HoodieRecord record =
-        new HoodieAvroRecord<>(new HoodieKey(key, partitionPath), new HoodieAvroPayload(Option.of((GenericRecord) firstRecord)));
+    HoodieRecord record = new HoodieAvroRecord<>(
+        new HoodieKey(key, partitionPath),
+        new HoodieAvroPayload(Option.of((GenericRecord) firstRecord), EMPTY_PROPS));
     record.setCurrentLocation(new HoodieRecordLocation(SpillableMapTestUtils.DUMMY_COMMIT_TIME, SpillableMapTestUtils.DUMMY_FILE_ID));
     record.seal();
 

@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
@@ -74,6 +75,7 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.DataSourceUtils.tryOverrideParquetWriteLegacyFormatProperty;
+import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.instanceOf;
@@ -346,10 +348,17 @@ public class TestDataSourceUtils {
     byte[] recordToBytes = HoodieAvroUtils.indexedRecordToBytes(record);
     GenericRecord genericRecord = HoodieAvroUtils.bytesToAvro(recordToBytes, record.getSchema());
 
-    HoodieMetadataPayload genericRecordHoodieMetadataPayload = new HoodieMetadataPayload(Option.of(genericRecord));
+    HoodieMetadataPayload genericRecordHoodieMetadataPayload =
+        new HoodieMetadataPayload(Option.of(genericRecord), EMPTY_PROPS);
     byte[] bytes = SerializationUtils.serialize(genericRecordHoodieMetadataPayload);
     HoodieMetadataPayload deserGenericRecordHoodieMetadataPayload = SerializationUtils.deserialize(bytes);
 
     assertEquals(genericRecordHoodieMetadataPayload, deserGenericRecordHoodieMetadataPayload);
+  }
+
+  class TestOldAvroPayload extends OverwriteWithLatestAvroPayload {
+    public TestOldAvroPayload(GenericRecord record, Comparable orderingVal) {
+      super(record, orderingVal, EMPTY_PROPS);
+    }
   }
 }

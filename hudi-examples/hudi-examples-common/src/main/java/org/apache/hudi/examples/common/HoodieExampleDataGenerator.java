@@ -43,6 +43,8 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
+
 /**
  * Class to be used to generate test data.
  */
@@ -87,7 +89,7 @@ public class HoodieExampleDataGenerator<T extends HoodieRecordPayload<T>> {
   @SuppressWarnings("unchecked")
   public T generateRandomValue(HoodieKey key, String commitTime) {
     GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0);
-    return (T) new HoodieAvroPayload(Option.of(rec));
+    return (T) new HoodieAvroPayload(Option.of(rec), EMPTY_PROPS);
   }
 
   public GenericRecord generateGenericRecord(String rowKey, String riderName, String driverName,

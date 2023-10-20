@@ -106,7 +106,6 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     }
     Object deleteMarker = record.get(deleteKey);
     return deleteMarker != null && props.getProperty(DELETE_MARKER).equals(deleteMarker.toString());
-
   }
 
   private static Option<Object> updateEventTime(GenericRecord record, Properties properties) {

@@ -60,6 +60,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.DATA_BEFORE;
 import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.DATA_BEFORE_AFTER;
+import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
 
 /**
  * This class encapsulates all the cdc-writing functions.
@@ -172,7 +173,7 @@ public class HoodieCDCLogger implements Closeable {
     }
 
     flushIfNeeded(false);
-    HoodieAvroPayload payload = new HoodieAvroPayload(Option.of(cdcRecord));
+    HoodieAvroPayload payload = new HoodieAvroPayload(Option.of(cdcRecord), EMPTY_PROPS);
     if (cdcData.isEmpty()) {
       averageCDCRecordSize = sizeEstimator.sizeEstimate(payload);
     }

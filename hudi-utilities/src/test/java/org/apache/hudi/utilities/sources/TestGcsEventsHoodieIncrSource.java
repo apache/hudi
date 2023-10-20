@@ -71,6 +71,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT;
 import static org.mockito.ArgumentMatchers.eq;
@@ -262,7 +263,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     rec.put("timeStorageClassUpdated", "2022-08-29T05:52:55.869Z");
     rec.put("updated", "2022-08-29T05:52:55.869Z");
 
-    HoodieAvroPayload payload = new HoodieAvroPayload(Option.of(rec));
+    HoodieAvroPayload payload = new HoodieAvroPayload(Option.of(rec), EMPTY_PROPS);
     return new HoodieAvroRecord(new HoodieKey(id, partitionPath), payload);
   }
 

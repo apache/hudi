@@ -22,7 +22,8 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model._
-import org.apache.hudi.common.testutils.{SchemaTestUtil, PreCombineTestUtils}
+import org.apache.hudi.common.testutils.{PreCombineTestUtils, SchemaTestUtil}
+import org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
 import org.apache.hudi.config.HoodiePayloadConfig
@@ -538,10 +539,10 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
   }
 
   @Test def testOverwriteWithLatestAvroPayload(): Unit = {
-    val overWritePayload1 = new OverwriteWithLatestAvroPayload(baseRecord, 1)
+    val overWritePayload1 = new OverwriteWithLatestAvroPayload(baseRecord, 1, EMPTY_PROPS)
     val laterRecord = SchemaTestUtil
       .generateAvroRecordFromJson(schema, 2, "001", "f1")
-    val overWritePayload2 = new OverwriteWithLatestAvroPayload(laterRecord, 2)
+    val overWritePayload2 = new OverwriteWithLatestAvroPayload(laterRecord, 2, EMPTY_PROPS)
 
     // it will provide the record with greatest combine value
     val combinedPayload12 = overWritePayload1.preCombine(overWritePayload2)
@@ -562,12 +563,20 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     val baseOrderingVal: Object = baseRecord.get("favoriteIntNumber")
     val fieldSchema: Schema = baseRecord.getSchema().getField("favoriteIntNumber").schema()
 
-    val basePayload = new OverwriteWithLatestAvroPayload(baseRecord, HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, baseOrderingVal, false).asInstanceOf[Comparable[_]])
+    val basePayload = new OverwriteWithLatestAvroPayload(
+      baseRecord,
+      HoodieAvroUtils.convertValueForSpecificDataTypes(
+        fieldSchema, baseOrderingVal, false).asInstanceOf[Comparable[_]],
+      EMPTY_PROPS)
 
     val laterRecord = SchemaTestUtil
       .generateAvroRecordFromJson(schema, 2, "001", "f1")
     val laterOrderingVal: Object = laterRecord.get("favoriteIntNumber")
-    val newerPayload = new OverwriteWithLatestAvroPayload(laterRecord, HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, laterOrderingVal, false).asInstanceOf[Comparable[_]])
+    val newerPayload = new OverwriteWithLatestAvroPayload(
+      laterRecord,
+      HoodieAvroUtils.convertValueForSpecificDataTypes(
+        fieldSchema, laterOrderingVal, false).asInstanceOf[Comparable[_]],
+      EMPTY_PROPS)
 
     // it will provide the record with greatest combine value
     val preCombinedPayload = basePayload.preCombine(newerPayload)
@@ -589,10 +598,14 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     val earlierOrderingVal: Object = earlierRecord.get("favoriteIntNumber")
 
     val laterPayload = new DefaultHoodieRecordPayload(laterRecord,
-      HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, laterOrderingVal, false).asInstanceOf[Comparable[_]])
+      HoodieAvroUtils.convertValueForSpecificDataTypes(
+        fieldSchema, laterOrderingVal, false).asInstanceOf[Comparable[_]],
+      EMPTY_PROPS)
 
     val earlierPayload = new DefaultHoodieRecordPayload(earlierRecord,
-      HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, earlierOrderingVal, false).asInstanceOf[Comparable[_]])
+      HoodieAvroUtils.convertValueForSpecificDataTypes(
+        fieldSchema, earlierOrderingVal, false).asInstanceOf[Comparable[_]],
+      EMPTY_PROPS)
 
     // it will provide the record with greatest combine value
     val preCombinedPayload = laterPayload.preCombine(earlierPayload)
@@ -612,10 +625,10 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
   }
 
   @Test def testEmptyHoodieRecordPayload(): Unit = {
-    val emptyPayload1 = new EmptyHoodieRecordPayload(baseRecord, 1)
+    val emptyPayload1 = new EmptyHoodieRecordPayload(baseRecord, 1, EMPTY_PROPS)
     val laterRecord = SchemaTestUtil
       .generateAvroRecordFromJson(schema, 2, "001", "f1")
-    val emptyPayload2 = new EmptyHoodieRecordPayload(laterRecord, 2)
+    val emptyPayload2 = new EmptyHoodieRecordPayload(laterRecord, 2, EMPTY_PROPS)
 
     // it will provide an empty record
     val combinedPayload12 = emptyPayload1.preCombine(emptyPayload2)

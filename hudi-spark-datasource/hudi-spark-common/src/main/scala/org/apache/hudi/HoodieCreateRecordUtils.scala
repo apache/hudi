@@ -143,10 +143,10 @@ object HoodieCreateRecordUtils {
               val orderingVal = HoodieAvroUtils.getNestedFieldVal(avroRec, config.getString(PRECOMBINE_FIELD),
                 false, consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]
               DataSourceUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
-                config.getString(PAYLOAD_CLASS_NAME), recordLocation)
+                config.getString(PAYLOAD_CLASS_NAME), recordLocation, config.getProps)
             } else {
               DataSourceUtils.createHoodieRecord(processedRecord, hoodieKey,
-                config.getString(PAYLOAD_CLASS_NAME), recordLocation)
+                config.getString(PAYLOAD_CLASS_NAME), recordLocation, config.getProps)
             }
             hoodieRecord
           }

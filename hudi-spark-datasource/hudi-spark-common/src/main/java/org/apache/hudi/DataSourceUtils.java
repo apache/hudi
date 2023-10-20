@@ -136,6 +136,7 @@ public class DataSourceUtils {
       return (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
           new Class<?>[] {GenericRecord.class, Comparable.class}, record, orderingVal, props);
     } catch (Throwable e) {
+
       throw new IOException("Could not create payload for class: " + payloadClass, e);
     }
   }
@@ -256,8 +257,8 @@ public class DataSourceUtils {
   }
 
   public static HoodieRecord createHoodieRecord(GenericRecord gr, Comparable orderingVal, HoodieKey hKey,
-      String payloadClass, scala.Option<HoodieRecordLocation> recordLocation) throws IOException {
-    HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr, orderingVal);
+      String payloadClass, scala.Option<HoodieRecordLocation> recordLocation, Properties props) throws IOException {
+    HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr, orderingVal, props);
     HoodieAvroRecord record = new HoodieAvroRecord<>(hKey, payload);
     if (recordLocation.isDefined()) {
       record.setCurrentLocation(recordLocation.get());
@@ -266,8 +267,9 @@ public class DataSourceUtils {
   }
 
   public static HoodieRecord createHoodieRecord(GenericRecord gr, HoodieKey hKey,
-                                                String payloadClass, scala.Option<HoodieRecordLocation> recordLocation) throws IOException {
-    HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr);
+                                                String payloadClass, scala.Option<HoodieRecordLocation> recordLocation,
+                                                Properties props) throws IOException {
+    HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr, props);
     HoodieAvroRecord record = new HoodieAvroRecord<>(hKey, payload);
     if (recordLocation.isDefined()) {
       record.setCurrentLocation(recordLocation.get());

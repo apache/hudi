@@ -18,12 +18,6 @@
 
 package org.apache.hudi.sink.compact;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericFixed;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -31,12 +25,20 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.collection.BitCaskDiskMap;
 import org.apache.hudi.common.util.collection.RocksDbDiskMap;
+
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericFixed;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
-import java.io.IOException;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+
+import java.io.IOException;
+
+import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 /**
  * Tests for custom SerDe of non-primitive avro types when using Avro versions > 1.10.0.
@@ -75,7 +77,7 @@ public class TestCustomSerDe extends HoodieCommonTestHarness {
 
     // nullifying the record attribute in EventTimeAvroPayload here as it is not required in the test
     return new HoodieAvroRecord<>(new HoodieKey("recordKey", "partitionPath"),
-        new EventTimeAvroPayload(null, (Comparable) genericFixed));
+        new EventTimeAvroPayload(null, (Comparable) genericFixed, EMPTY_PROPS));
   }
 
 }

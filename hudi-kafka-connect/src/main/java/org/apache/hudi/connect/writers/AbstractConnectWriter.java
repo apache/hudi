@@ -38,6 +38,8 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.List;
 
+import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
+
 /**
  * Base Hudi Writer that manages reading the raw Kafka records and
  * converting them to {@link HoodieRecord}s that can be written to Hudi by
@@ -82,7 +84,7 @@ public abstract class AbstractConnectWriter implements ConnectWriter<WriteStatus
     }
 
     // Tag records with a file ID based on kafka partition and hudi partition.
-    HoodieRecord<?> hoodieRecord = new HoodieAvroRecord<>(keyGenerator.getKey(avroRecord.get()), new HoodieAvroPayload(avroRecord));
+    HoodieRecord<?> hoodieRecord = new HoodieAvroRecord<>(keyGenerator.getKey(avroRecord.get()), new HoodieAvroPayload(avroRecord, EMPTY_PROPS));
     String fileId = KafkaConnectUtils.hashDigest(String.format("%s-%s", record.kafkaPartition(), hoodieRecord.getPartitionPath()));
     hoodieRecord.unseal();
     hoodieRecord.setCurrentLocation(new HoodieRecordLocation(instantTime, fileId));

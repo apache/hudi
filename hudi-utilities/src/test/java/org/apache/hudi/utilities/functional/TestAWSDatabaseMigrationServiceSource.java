@@ -34,6 +34,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
 
+import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -52,15 +53,15 @@ public class TestAWSDatabaseMigrationServiceSource extends SparkClientFunctional
     record.put("id", "1");
     record.put("Op", "");
     record.put("ts", 0L);
-    AWSDmsAvroPayload payload = new AWSDmsAvroPayload(record, (Comparable) record.get("ts"));
+    AWSDmsAvroPayload payload = new AWSDmsAvroPayload(record, (Comparable) record.get("ts"), EMPTY_PROPS);
     assertTrue(payload.combineAndGetUpdateValue(null, schema).isPresent());
 
     record.put("Op", "I");
-    payload = new AWSDmsAvroPayload(record, (Comparable) record.get("ts"));
+    payload = new AWSDmsAvroPayload(record, (Comparable) record.get("ts"), EMPTY_PROPS);
     assertTrue(payload.combineAndGetUpdateValue(null, schema).isPresent());
 
     record.put("Op", "D");
-    payload = new AWSDmsAvroPayload(record, (Comparable) record.get("ts"));
+    payload = new AWSDmsAvroPayload(record, (Comparable) record.get("ts"), EMPTY_PROPS);
     assertFalse(payload.combineAndGetUpdateValue(null, schema).isPresent());
   }
 
