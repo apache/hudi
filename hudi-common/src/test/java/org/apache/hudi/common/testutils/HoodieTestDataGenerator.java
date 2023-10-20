@@ -80,7 +80,6 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
-import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -347,7 +346,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    */
   private HoodieAvroPayload generateAvroPayload(HoodieKey key, String instantTime) {
     GenericRecord rec = generateGenericRecord(key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, 0);
-    return new HoodieAvroPayload(Option.of(rec), EMPTY_PROPS);
+    return new HoodieAvroPayload(Option.of(rec));
   }
 
   public GenericRecord generateGenericRecord(String rowKey, String partitionPath, String riderName, String driverName,

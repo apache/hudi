@@ -51,7 +51,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -172,7 +171,7 @@ public class TestAbstractConnectWriter {
 
   private static HoodieRecord convertToHoodieRecords(IndexedRecord iRecord, String key, String partitionPath) {
     return new HoodieAvroRecord<>(new HoodieKey(key, partitionPath),
-        new HoodieAvroPayload(Option.of((GenericRecord) iRecord), EMPTY_PROPS));
+        new HoodieAvroPayload(Option.of((GenericRecord) iRecord)));
   }
 
   private enum TestInputFormats {

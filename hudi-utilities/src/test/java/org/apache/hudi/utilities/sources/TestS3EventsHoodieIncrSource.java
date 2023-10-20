@@ -69,7 +69,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT;
 import static org.mockito.ArgumentMatchers.eq;
@@ -173,7 +172,7 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
     rec.put("s3", s3Record);
     rec.put("_hoodie_commit_time", commitTime);
 
-    HoodieAvroPayload payload = new HoodieAvroPayload(Option.of(rec), EMPTY_PROPS);
+    HoodieAvroPayload payload = new HoodieAvroPayload(Option.of(rec));
     return new HoodieAvroRecord(new HoodieKey(objectKey, partitionPath), payload);
   }
 

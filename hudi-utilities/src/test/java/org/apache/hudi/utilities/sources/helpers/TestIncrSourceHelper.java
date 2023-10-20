@@ -61,7 +61,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.INIT_INSTANT_TS;
-import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -300,7 +299,7 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
     rec.put("s3", s3Record);
     rec.put("_hoodie_commit_time", commitTime);
 
-    HoodieAvroPayload payload = new HoodieAvroPayload(Option.of(rec), EMPTY_PROPS);
+    HoodieAvroPayload payload = new HoodieAvroPayload(Option.of(rec));
     return new HoodieAvroRecord(new HoodieKey(objectKey, partitionPath), payload);
   }
 

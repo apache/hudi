@@ -24,8 +24,8 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.SpillableMapTestUtils;
 import org.apache.hudi.common.util.Option;
@@ -49,7 +49,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
-import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -172,7 +171,7 @@ public class TestRocksDbDiskMap extends HoodieCommonTestHarness {
       String partitionPath = ((GenericRecord) r).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
       HoodieRecord value = new HoodieAvroRecord<>(
           new HoodieKey(key, partitionPath),
-          new HoodieAvroPayload(Option.of((GenericRecord) r), EMPTY_PROPS));
+          new HoodieAvroPayload(Option.of((GenericRecord) r)));
       recordMap.put(key, value);
     });
 

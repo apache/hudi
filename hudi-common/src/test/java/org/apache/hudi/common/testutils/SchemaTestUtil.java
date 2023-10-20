@@ -59,7 +59,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.genPseudoRandomUUID;
-import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
 
 /**
  * A utility class for testing schema.
@@ -199,7 +198,7 @@ public final class SchemaTestUtil {
 
   private static HoodieRecord convertToHoodieRecords(IndexedRecord iRecord, String key, String partitionPath) {
     return new HoodieAvroRecord<>(new HoodieKey(key, partitionPath),
-        new HoodieAvroPayload(Option.of((GenericRecord) iRecord), EMPTY_PROPS));
+        new HoodieAvroPayload(Option.of((GenericRecord) iRecord)));
   }
 
   public static List<IndexedRecord> updateHoodieTestRecords(List<String> oldRecordKeys, List<IndexedRecord> newRecords,
@@ -218,7 +217,7 @@ public final class SchemaTestUtil {
       throws IOException, URISyntaxException {
     List<IndexedRecord> iRecords = generateTestRecords(from, limit);
     return iRecords.stream().map(r -> new HoodieAvroRecord<>(new HoodieKey(genRandomUUID(), "0000/00/00"),
-        new HoodieAvroPayload(Option.of((GenericRecord) r), EMPTY_PROPS))).collect(Collectors.toList());
+        new HoodieAvroPayload(Option.of((GenericRecord) r)))).collect(Collectors.toList());
   }
 
   public static List<HoodieRecord> updateHoodieTestRecordsWithoutHoodieMetadata(List<HoodieRecord> oldRecords,
@@ -227,7 +226,7 @@ public final class SchemaTestUtil {
       try {
         GenericRecord rec = (GenericRecord) ((HoodieAvroRecord) r).getData().getInsertValue(schema).get();
         rec.put(fieldNameToUpdate, newValue);
-        return new HoodieAvroRecord<>(r.getKey(), new HoodieAvroPayload(Option.of(rec), EMPTY_PROPS));
+        return new HoodieAvroRecord<>(r.getKey(), new HoodieAvroPayload(Option.of(rec)));
       } catch (IOException io) {
         throw new HoodieIOException("unable to get data from hoodie record", io);
       }
