@@ -30,7 +30,7 @@ import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isMetaField, removeMetaFields}
-import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{MatchCreateTableLike, MatchInsertIntoStatement, MatchMergeIntoTable, ResolvesToHudiTable, sparkAdapter}
+import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{MatchCreateIndex, MatchCreateTableLike, MatchDropIndex, MatchInsertIntoStatement, MatchMergeIntoTable, MatchRefreshIndex, MatchShowIndexes, ResolvesToHudiTable, sparkAdapter}
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.command.procedures.{HoodieProcedures, Procedure, ProcedureArgs}
 import org.apache.spark.sql.{AnalysisException, SparkSession}
@@ -354,6 +354,26 @@ object HoodieAnalysis extends SparkAdapterSupport {
       sparkAdapter.getCatalystPlanUtils.unapplyCreateTableLikeCommand(plan)
   }
 
+  private[sql] object MatchCreateIndex {
+    def unapply(plan: LogicalPlan): Option[(LogicalPlan, String, String, Boolean, Seq[(Seq[String], Map[String, String])], Map[String, String])] =
+      sparkAdapter.getCatalystPlanUtils.unapplyCreateIndex(plan)
+  }
+
+  private[sql] object MatchDropIndex {
+    def unapply(plan: LogicalPlan): Option[(LogicalPlan, String, Boolean)] =
+      sparkAdapter.getCatalystPlanUtils.unapplyDropIndex(plan)
+  }
+
+  private[sql] object MatchShowIndexes {
+    def unapply(plan: LogicalPlan): Option[(LogicalPlan, Seq[Attribute])] =
+      sparkAdapter.getCatalystPlanUtils.unapplyShowIndexes(plan)
+  }
+
+  private[sql] object MatchRefreshIndex {
+    def unapply(plan: LogicalPlan): Option[(LogicalPlan, String)] =
+      sparkAdapter.getCatalystPlanUtils.unapplyRefreshIndex(plan)
+  }
+
   private[sql] def failAnalysis(msg: String): Nothing = {
     throw new AnalysisException(msg)
   }
@@ -442,21 +462,20 @@ case class ResolveImplementations() extends Rule[LogicalPlan] {
           }
 
         // Convert to CreateIndexCommand
-        case ci @ CreateIndex(plan @ ResolvesToHudiTable(table), indexName, indexType, ignoreIfExists, columns, options, output) =>
-          // TODO need to resolve columns
-          CreateIndexCommand(table, indexName, indexType, ignoreIfExists, columns, options, output)
+        case ci @ MatchCreateIndex(plan @ ResolvesToHudiTable(table), indexName, indexType, ignoreIfExists, columns, options) if ci.resolved =>
+          CreateIndexCommand(table, indexName, indexType, ignoreIfExists, columns, options)
 
         // Convert to DropIndexCommand
-        case di @ DropIndex(plan @ ResolvesToHudiTable(table), indexName, ignoreIfNotExists, output) if di.resolved =>
-          DropIndexCommand(table, indexName, ignoreIfNotExists, output)
+        case di @ MatchDropIndex(plan @ ResolvesToHudiTable(table), indexName, ignoreIfNotExists) if di.resolved =>
+          DropIndexCommand(table, indexName, ignoreIfNotExists)
 
         // Convert to ShowIndexesCommand
-        case si @ ShowIndexes(plan @ ResolvesToHudiTable(table), output) if si.resolved =>
+        case si @ MatchShowIndexes(plan @ ResolvesToHudiTable(table), output) if si.resolved =>
           ShowIndexesCommand(table, output)
 
         // Covert to RefreshCommand
-        case ri @ RefreshIndex(plan @ ResolvesToHudiTable(table), indexName, output) if ri.resolved =>
-          RefreshIndexCommand(table, indexName, output)
+        case ri @ MatchRefreshIndex(plan @ ResolvesToHudiTable(table), indexName) if ri.resolved =>
+          RefreshIndexCommand(table, indexName)
 
         case _ => plan
       }

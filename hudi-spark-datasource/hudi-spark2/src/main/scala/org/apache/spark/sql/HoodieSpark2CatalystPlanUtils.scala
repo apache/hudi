@@ -107,4 +107,17 @@ object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
       case _ => plan
     }
   }
+
+  /**
+   * Commands of managing indexes are not supported for Spark2.
+   */
+  override def unapplyCreateIndex(plan: LogicalPlan): Option[(LogicalPlan, String, String, Boolean, Seq[(Seq[String], Map[String, String])], Map[String, String])] = {
+    None
+  }
+
+  override def unapplyDropIndex(plan: LogicalPlan): Option[(LogicalPlan, String, Boolean)] = None
+
+  override def unapplyShowIndexes(plan: LogicalPlan): Option[(LogicalPlan, Seq[Attribute])] = None
+
+  override def unapplyRefreshIndex(plan: LogicalPlan): Option[(LogicalPlan, String)] = None
 }
