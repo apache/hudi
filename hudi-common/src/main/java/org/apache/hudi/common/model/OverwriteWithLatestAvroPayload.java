@@ -30,6 +30,8 @@ import java.io.IOException;
 import java.util.Objects;
 import java.util.Properties;
 
+import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
+
 /**
  * Default payload.
  *
@@ -41,8 +43,18 @@ import java.util.Properties;
 public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
     implements HoodieRecordPayload<OverwriteWithLatestAvroPayload> {
 
+  @Deprecated
+  public OverwriteWithLatestAvroPayload(GenericRecord record, Comparable orderingVal) {
+    this(record, orderingVal, EMPTY_PROPS);
+  }
+
   public OverwriteWithLatestAvroPayload(GenericRecord record, Comparable orderingVal, Properties props) {
     super(record, orderingVal, props);
+  }
+
+  @Deprecated
+  public OverwriteWithLatestAvroPayload(Option<GenericRecord> record) {
+    this(record, EMPTY_PROPS); // natural order
   }
 
   public OverwriteWithLatestAvroPayload(Option<GenericRecord> record, Properties props) {

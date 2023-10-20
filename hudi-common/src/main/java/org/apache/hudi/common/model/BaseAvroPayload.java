@@ -45,6 +45,7 @@ public abstract class BaseAvroPayload implements Serializable {
 
   protected final boolean isDeletedRecord;
 
+  @Deprecated
   public BaseAvroPayload(GenericRecord record, Comparable orderingVal) {
     this(record, orderingVal, EMPTY_PROPS);
   }
@@ -83,6 +84,11 @@ public abstract class BaseAvroPayload implements Serializable {
    */
   public boolean canProduceSentinel() {
     return false;
+  }
+
+  @Deprecated
+  protected boolean isDeleteRecord(GenericRecord genericRecord) {
+    return isDeleteRecord(genericRecord, EMPTY_PROPS);
   }
 
   /**
