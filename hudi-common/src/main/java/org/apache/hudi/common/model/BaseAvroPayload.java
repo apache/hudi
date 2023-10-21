@@ -55,6 +55,7 @@ public abstract class BaseAvroPayload implements Serializable {
    *
    * @param record      Generic record for the payload.
    * @param orderingVal {@link Comparable} to be used in pre combine.
+   * @param props       Configuration in {@link Properties}.
    */
   public BaseAvroPayload(GenericRecord record, Comparable orderingVal, Properties props) {
     this.recordBytes = record != null ? HoodieAvroUtils.avroToBytes(record) : new byte[0];

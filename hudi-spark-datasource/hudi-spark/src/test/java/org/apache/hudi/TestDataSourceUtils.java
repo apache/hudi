@@ -25,7 +25,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
@@ -354,11 +353,5 @@ public class TestDataSourceUtils {
     HoodieMetadataPayload deserGenericRecordHoodieMetadataPayload = SerializationUtils.deserialize(bytes);
 
     assertEquals(genericRecordHoodieMetadataPayload, deserGenericRecordHoodieMetadataPayload);
-  }
-
-  class TestOldAvroPayload extends OverwriteWithLatestAvroPayload {
-    public TestOldAvroPayload(GenericRecord record, Comparable orderingVal) {
-      super(record, orderingVal, EMPTY_PROPS);
-    }
   }
 }
