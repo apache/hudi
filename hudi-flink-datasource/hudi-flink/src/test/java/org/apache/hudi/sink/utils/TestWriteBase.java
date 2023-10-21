@@ -327,9 +327,6 @@ public class TestWriteBase {
       this.pipeline.endInput();
       final OperatorEvent nextEvent = this.pipeline.getNextEvent();
       this.pipeline.getCoordinator().handleEventFromOperator(0, nextEvent);
-      if (this.pipeline.getCoordinatorContext().isJobFailed()) {
-        System.err.println(this.pipeline.getCoordinatorContext().getJobFailureReason().getCause());
-      }
       return this;
     }
 

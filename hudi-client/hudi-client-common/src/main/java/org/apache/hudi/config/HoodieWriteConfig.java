@@ -2619,15 +2619,21 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean needResolveWriteConflict(WriteOperationType operationType) {
     if (getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
-      if (getTableType().equals(HoodieTableType.MERGE_ON_READ) && isSimpleBucketIndex()) {
-        // Skip to resolve conflict for non bulk_insert operation if using non-blocking concurrency control
-        return operationType == WriteOperationType.UNKNOWN || operationType == WriteOperationType.BULK_INSERT;
-      } else {
-        return true;
-      }
+      // Skip to resolve conflict for non bulk_insert operation if using non-blocking concurrency control
+      return !isNonBlockingConcurrencyControl() || maybeBulkInsert(operationType);
     } else {
       return false;
     }
+  }
+
+  private boolean maybeBulkInsert(WriteOperationType operationType) {
+    return operationType == WriteOperationType.UNKNOWN || operationType == WriteOperationType.BULK_INSERT;
+  }
+
+  public boolean isNonBlockingConcurrencyControl() {
+    return getTableType().equals(HoodieTableType.MERGE_ON_READ)
+        && getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()
+        && isSimpleBucketIndex();
   }
 
   public static class Builder {

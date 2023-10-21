@@ -387,7 +387,7 @@ public class StreamWriteOperatorCoordinator
 
   private void startInstant() {
     // refresh the last txn metadata
-    this.writeClient.preTxn(WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION)), this.metaClient);
+    this.writeClient.preTxn(tableState.operationType, this.metaClient);
     // put the assignment in front of metadata generation,
     // because the instant request from write task is asynchronous.
     this.instant = this.writeClient.startCommit(tableState.commitAction, this.metaClient);
