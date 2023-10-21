@@ -34,6 +34,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Properties;
 
+import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
+
 /**
  * Provides support for seamlessly applying changes captured via Debezium for PostgresDB.
  * <p>
@@ -50,6 +52,16 @@ public class PostgresDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
 
   private static final Logger LOG = LoggerFactory.getLogger(PostgresDebeziumAvroPayload.class);
   public static final String DEBEZIUM_TOASTED_VALUE = "__debezium_unavailable_value";
+
+  @Deprecated
+  public PostgresDebeziumAvroPayload(GenericRecord record, Comparable orderingVal) {
+    this(record, orderingVal, EMPTY_PROPS);
+  }
+
+  @Deprecated
+  public PostgresDebeziumAvroPayload(Option<GenericRecord> record) {
+    this(record, EMPTY_PROPS);
+  }
 
   public PostgresDebeziumAvroPayload(GenericRecord record, Comparable orderingVal, Properties props) {
     super(record, orderingVal, props);

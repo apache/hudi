@@ -18,10 +18,13 @@
 
 package org.apache.hudi.payload;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.util.Option;
 
+import org.apache.avro.generic.GenericRecord;
+
 import java.util.Properties;
+
+import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
 
 /**
  * Provides support for seamlessly applying changes captured via Amazon Database Migration Service onto S3.
@@ -39,6 +42,16 @@ import java.util.Properties;
  */
 @Deprecated
 public class AWSDmsAvroPayload extends org.apache.hudi.common.model.AWSDmsAvroPayload {
+
+  @Deprecated
+  public AWSDmsAvroPayload(GenericRecord record, Comparable orderingVal) {
+    this(record, orderingVal, EMPTY_PROPS);
+  }
+
+  @Deprecated
+  public AWSDmsAvroPayload(Option<GenericRecord> record) {
+    this(record, EMPTY_PROPS);
+  }
 
   public AWSDmsAvroPayload(GenericRecord record, Comparable orderingVal, Properties props) {
     super(record, orderingVal, props);

@@ -150,7 +150,6 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.table.HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE;
 import static org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
-import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
 import static org.apache.hudi.config.HoodieWriteConfig.UPSERT_PARALLELISM_VALUE;
 import static org.apache.hudi.config.metrics.HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE;
 import static org.apache.hudi.config.metrics.HoodieMetricsConfig.TURN_METRICS_ON;
@@ -2586,7 +2585,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   public static class DummyAvroPayload extends OverwriteWithLatestAvroPayload {
 
     public DummyAvroPayload(GenericRecord gr, Comparable orderingVal) {
-      super(gr, orderingVal, EMPTY_PROPS);
+      super(gr, orderingVal);
     }
   }
 

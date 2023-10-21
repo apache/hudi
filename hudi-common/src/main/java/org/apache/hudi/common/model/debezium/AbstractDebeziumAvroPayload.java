@@ -31,6 +31,8 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.Properties;
 
+import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
+
 /**
  * Base class that provides support for seamlessly applying changes captured via Debezium.
  * <p>
@@ -46,6 +48,16 @@ import java.util.Properties;
 public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvroPayload {
 
   private static final Logger LOG = LoggerFactory.getLogger(AbstractDebeziumAvroPayload.class);
+
+  @Deprecated
+  public AbstractDebeziumAvroPayload(GenericRecord record, Comparable orderingVal) {
+    this(record, orderingVal, EMPTY_PROPS);
+  }
+
+  @Deprecated
+  public AbstractDebeziumAvroPayload(Option<GenericRecord> record) {
+    this(record, EMPTY_PROPS);
+  }
 
   public AbstractDebeziumAvroPayload(GenericRecord record, Comparable orderingVal, Properties props) {
     super(record, orderingVal, props);

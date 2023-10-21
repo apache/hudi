@@ -23,7 +23,6 @@ import org.apache.hudi.AvroConversionUtils.{convertStructTypeToAvroSchema, creat
 import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.TestHoodieRecordSerialization.{OverwriteWithLatestAvroPayloadWithEquality, cloneUsingKryo, convertToAvroRecord, toUnsafeRow}
-import org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.spark.sql.catalyst.InternalRow
@@ -182,7 +181,7 @@ object TestHoodieRecordSerialization {
   }
 
   class OverwriteWithLatestAvroPayloadWithEquality(avroRecord: GenericRecord, _orderingVal: Comparable[_])
-    extends OverwriteWithLatestAvroPayload(avroRecord, _orderingVal, EMPTY_PROPS) {
+    extends OverwriteWithLatestAvroPayload(avroRecord, _orderingVal) {
     override def equals(obj: Any): Boolean =
       obj match {
         case p: OverwriteWithLatestAvroPayloadWithEquality =>

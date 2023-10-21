@@ -24,9 +24,9 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.AvroBinaryTestPayload;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
-import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.SpillableMapTestUtils;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
@@ -218,9 +218,7 @@ public class TestBitCaskDiskMap extends HoodieCommonTestHarness {
     iRecords.forEach(r -> {
       String key = ((GenericRecord) r).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
       String partitionPath = ((GenericRecord) r).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
-      HoodieRecord value = new HoodieAvroRecord<>(
-          new HoodieKey(key, partitionPath),
-          new HoodieAvroPayload(Option.of((GenericRecord) r)));
+      HoodieRecord value = new HoodieAvroRecord<>(new HoodieKey(key, partitionPath), new HoodieAvroPayload(Option.of((GenericRecord) r)));
       recordMap.put(key, value);
     });
 

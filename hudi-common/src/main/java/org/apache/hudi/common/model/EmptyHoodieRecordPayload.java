@@ -34,6 +34,10 @@ public class EmptyHoodieRecordPayload implements HoodieRecordPayload<EmptyHoodie
   public EmptyHoodieRecordPayload() {
   }
 
+  @Deprecated
+  public EmptyHoodieRecordPayload(GenericRecord record, Comparable orderingVal) {
+  }
+
   public EmptyHoodieRecordPayload(GenericRecord record, Comparable orderingVal, Properties props) {
   }
 

@@ -48,13 +48,13 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
     this(record, orderingVal, EMPTY_PROPS);
   }
 
-  public OverwriteWithLatestAvroPayload(GenericRecord record, Comparable orderingVal, Properties props) {
-    super(record, orderingVal, props);
-  }
-
   @Deprecated
   public OverwriteWithLatestAvroPayload(Option<GenericRecord> record) {
-    this(record, EMPTY_PROPS); // natural order
+    this(record, EMPTY_PROPS);
+  }
+
+  public OverwriteWithLatestAvroPayload(GenericRecord record, Comparable orderingVal, Properties props) {
+    super(record, orderingVal, props);
   }
 
   public OverwriteWithLatestAvroPayload(Option<GenericRecord> record, Properties props) {

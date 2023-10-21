@@ -42,6 +42,16 @@ import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
  */
 public class OverwriteNonDefaultsWithLatestAvroPayload extends OverwriteWithLatestAvroPayload {
 
+  @Deprecated
+  public OverwriteNonDefaultsWithLatestAvroPayload(GenericRecord record, Comparable orderingVal) {
+    this(record, orderingVal, EMPTY_PROPS);
+  }
+
+  @Deprecated
+  public OverwriteNonDefaultsWithLatestAvroPayload(Option<GenericRecord> record) {
+    this(record, EMPTY_PROPS);
+  }
+
   public OverwriteNonDefaultsWithLatestAvroPayload(GenericRecord record, Comparable orderingVal, Properties props) {
     super(record, orderingVal, props);
   }

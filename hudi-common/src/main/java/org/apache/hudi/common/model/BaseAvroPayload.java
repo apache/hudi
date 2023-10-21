@@ -93,6 +93,7 @@ public abstract class BaseAvroPayload implements Serializable {
 
   /**
    * @param genericRecord instance of {@link GenericRecord} of interest.
+   * @param props         Configuration in {@link Properties}.
    * @returns {@code true} if record represents a delete record. {@code false} otherwise.
    */
   protected boolean isDeleteRecord(GenericRecord genericRecord, Properties props) {

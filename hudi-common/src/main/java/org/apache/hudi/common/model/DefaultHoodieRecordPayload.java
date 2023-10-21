@@ -75,7 +75,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     /*
      * Now check if the incoming record is a delete record.
      */
-    return isDeleteRecord(incomingRecord, properties) ? Option.empty() : Option.of(incomingRecord);
+    return isDeleted(schema, properties) ? Option.empty() : Option.of(incomingRecord);
   }
 
   @Override
