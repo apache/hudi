@@ -109,6 +109,8 @@ public class TestDefaultHoodieRecordPayload {
 
     DefaultHoodieRecordPayload payload1 = new DefaultHoodieRecordPayload(record1, 1, props);
     DefaultHoodieRecordPayload payload2 = new DefaultHoodieRecordPayload(delRecord1, 2, props);
+    assertFalse(payload1.isDeleted(schema, props));
+    assertTrue(payload2.isDeleted(schema, props));
     assertEquals(payload1.preCombine(payload2, props), payload2);
     assertEquals(payload2.preCombine(payload1, props), payload2);
 
@@ -144,6 +146,10 @@ public class TestDefaultHoodieRecordPayload {
     DefaultHoodieRecordPayload payload = new DefaultHoodieRecordPayload(record, 1, props);
     DefaultHoodieRecordPayload deletePayload = new DefaultHoodieRecordPayload(delRecord, 2, props);
     DefaultHoodieRecordPayload defaultDeletePayload = new DefaultHoodieRecordPayload(defaultDeleteRecord, 2, props);
+
+    assertFalse(payload.isDeleted(schema, props));
+    assertTrue(deletePayload.isDeleted(schema, props));
+    assertFalse(defaultDeletePayload.isDeleted(schema, props));
 
     assertEquals(record, payload.getInsertValue(schema, props).get());
     assertEquals(defaultDeleteRecord, defaultDeletePayload.getInsertValue(schema, props).get());
