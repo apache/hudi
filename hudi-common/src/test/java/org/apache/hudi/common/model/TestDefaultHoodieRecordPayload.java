@@ -169,18 +169,9 @@ public class TestDefaultHoodieRecordPayload {
     record.put("ts", 0L);
     record.put("_hoodie_is_deleted", false);
 
-    DefaultHoodieRecordPayload payload = new DefaultHoodieRecordPayload(record, 1, props);
-
     // Verify failure when DELETE_MARKER is not configured along with DELETE_KEY
     try {
-      payload.getInsertValue(schema, props).get();
-      fail("Should fail");
-    } catch (IllegalArgumentException e) {
-      // Ignore
-    }
-
-    try {
-      payload.combineAndGetUpdateValue(record, schema, props).get();
+      DefaultHoodieRecordPayload payload = new DefaultHoodieRecordPayload(record, 1, props);
       fail("Should fail");
     } catch (IllegalArgumentException e) {
       // Ignore
