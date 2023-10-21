@@ -44,14 +44,17 @@ public class PayloadCreation implements Serializable {
   private static final long serialVersionUID = 1L;
 
   private final boolean shouldCombine;
+  private final boolean shouldUsePropsForPayload;
   private final Constructor<?> constructor;
   private final String preCombineField;
 
   private PayloadCreation(
       boolean shouldCombine,
+      boolean shouldUsePropsForPayload,
       Constructor<?> constructor,
       @Nullable String preCombineField) {
     this.shouldCombine = shouldCombine;
+    this.shouldUsePropsForPayload = shouldUsePropsForPayload;
     this.constructor = constructor;
     this.preCombineField = preCombineField;
   }
@@ -61,17 +64,28 @@ public class PayloadCreation implements Serializable {
     boolean needCombine = conf.getBoolean(FlinkOptions.PRE_COMBINE)
         || WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION)) == WriteOperationType.UPSERT;
     boolean shouldCombine = needCombine && preCombineField != null;
+    boolean shouldUsePropsForPayload = true;
 
-    final Class<?>[] argTypes;
-    final Constructor<?> constructor;
+    Class<?>[] argTypes;
+    Constructor<?> constructor;
     if (shouldCombine) {
       argTypes = new Class<?>[] {GenericRecord.class, Comparable.class, Properties.class};
     } else {
       argTypes = new Class<?>[] {Option.class, Properties.class};
     }
     final String clazz = conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME);
-    constructor = ReflectionUtils.getClass(clazz).getConstructor(argTypes);
-    return new PayloadCreation(shouldCombine, constructor, preCombineField);
+    try {
+      constructor = ReflectionUtils.getClass(clazz).getConstructor(argTypes);
+    } catch (NoSuchMethodException e) {
+      shouldUsePropsForPayload = false;
+      if (shouldCombine) {
+        argTypes = new Class<?>[] {GenericRecord.class, Comparable.class};
+      } else {
+        argTypes = new Class<?>[] {Option.class};
+      }
+      constructor = ReflectionUtils.getClass(clazz).getConstructor(argTypes);
+    }
+    return new PayloadCreation(shouldCombine, shouldUsePropsForPayload, constructor, preCombineField);
   }
 
   public static Properties extractPropsFromConfiguration(Configuration config) {
@@ -85,17 +99,29 @@ public class PayloadCreation implements Serializable {
       ValidationUtils.checkState(preCombineField != null);
       Comparable<?> orderingVal = (Comparable<?>) HoodieAvroUtils.getNestedFieldVal(record,
           preCombineField, false, false);
-      return (HoodieRecordPayload<?>) constructor.newInstance(record, orderingVal, props);
+      if (shouldUsePropsForPayload) {
+        return (HoodieRecordPayload<?>) constructor.newInstance(record, orderingVal, props);
+      }
+      return (HoodieRecordPayload<?>) constructor.newInstance(record, orderingVal);
     } else {
-      return (HoodieRecordPayload<?>) this.constructor.newInstance(Option.of(record), props);
+      if (shouldUsePropsForPayload) {
+        return (HoodieRecordPayload<?>) this.constructor.newInstance(Option.of(record), props);
+      }
+      return (HoodieRecordPayload<?>) this.constructor.newInstance(Option.of(record));
     }
   }
 
   public HoodieRecordPayload<?> createDeletePayload(BaseAvroPayload payload, Properties props) throws Exception {
     if (shouldCombine) {
-      return (HoodieRecordPayload<?>) constructor.newInstance(null, payload.getOrderingVal(), props);
+      if (shouldUsePropsForPayload) {
+        return (HoodieRecordPayload<?>) constructor.newInstance(null, payload.getOrderingVal(), props);
+      }
+      return (HoodieRecordPayload<?>) constructor.newInstance(null, payload.getOrderingVal());
     } else {
-      return (HoodieRecordPayload<?>) this.constructor.newInstance(Option.empty(), props);
+      if (shouldUsePropsForPayload) {
+        return (HoodieRecordPayload<?>) this.constructor.newInstance(Option.empty(), props);
+      }
+      return (HoodieRecordPayload<?>) this.constructor.newInstance(Option.empty());
     }
   }
 }

@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -127,20 +128,6 @@ public class DataSourceUtils {
     }
   }
 
-  /**
-   * Create a payload class via reflection, passing in an ordering/precombine value.
-   */
-  public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record, Comparable orderingVal, Properties props)
-      throws IOException {
-    try {
-      return (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
-          new Class<?>[] {GenericRecord.class, Comparable.class, Properties.class}, record, orderingVal, props);
-    } catch (Throwable e) {
-
-      throw new IOException("Could not create payload for class: " + payloadClass, e);
-    }
-  }
-
   public static Map<String, String> getExtraMetadata(Map<String, String> properties) {
     Map<String, String> extraMetadataMap = new HashMap<>();
     if (properties.containsKey(DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX().key())) {
@@ -157,19 +144,6 @@ public class DataSourceUtils {
               properties.get(HoodieSparkSqlWriter.SPARK_STREAMING_BATCH_ID())));
     }
     return extraMetadataMap;
-  }
-
-  /**
-   * Create a payload class via reflection, do not ordering/precombine value.
-   */
-  public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record, Properties props)
-      throws IOException {
-    try {
-      return (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
-          new Class<?>[] {Option.class, Properties.class}, Option.of(record), props);
-    } catch (Throwable e) {
-      throw new IOException("Could not create payload for class: " + payloadClass, e);
-    }
   }
 
   public static HoodieWriteConfig createHoodieConfig(String schemaStr, String basePath,
@@ -258,7 +232,7 @@ public class DataSourceUtils {
 
   public static HoodieRecord createHoodieRecord(GenericRecord gr, Comparable orderingVal, HoodieKey hKey,
       String payloadClass, scala.Option<HoodieRecordLocation> recordLocation, Properties props) throws IOException {
-    HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr, orderingVal, props);
+    HoodieRecordPayload payload = HoodieRecordUtils.createPayload(payloadClass, gr, orderingVal, props);
     HoodieAvroRecord record = new HoodieAvroRecord<>(hKey, payload);
     if (recordLocation.isDefined()) {
       record.setCurrentLocation(recordLocation.get());
@@ -269,7 +243,7 @@ public class DataSourceUtils {
   public static HoodieRecord createHoodieRecord(GenericRecord gr, HoodieKey hKey,
                                                 String payloadClass, scala.Option<HoodieRecordLocation> recordLocation,
                                                 Properties props) throws IOException {
-    HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr, props);
+    HoodieRecordPayload payload = HoodieRecordUtils.createPayload(payloadClass, gr, props);
     HoodieAvroRecord record = new HoodieAvroRecord<>(hKey, payload);
     if (recordLocation.isDefined()) {
       record.setCurrentLocation(recordLocation.get());

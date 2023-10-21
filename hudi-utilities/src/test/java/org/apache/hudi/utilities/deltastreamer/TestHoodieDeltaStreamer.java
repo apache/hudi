@@ -38,7 +38,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -52,6 +51,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.TestHoodieRecordUtils.DummyAvroPayload;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -2579,13 +2579,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     public TestGenerator(TypedProperties props) {
       super(props);
-    }
-  }
-
-  public static class DummyAvroPayload extends OverwriteWithLatestAvroPayload {
-
-    public DummyAvroPayload(GenericRecord gr, Comparable orderingVal) {
-      super(gr, orderingVal);
     }
   }
 

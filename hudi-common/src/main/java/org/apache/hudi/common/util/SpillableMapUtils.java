@@ -157,11 +157,13 @@ public class SpillableMapUtils {
       record = recordWithoutMetaFields;
     }
 
-    HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieAvroRecord<>(new HoodieKey(recKey, partitionPath),
-        HoodieRecordUtils.loadPayload(payloadClazz, new Object[] {record, preCombineVal, props},
-            GenericRecord.class, Comparable.class, Properties.class), operation);
-
-    return (HoodieRecord<R>) hoodieRecord;
+    try {
+      HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieAvroRecord<>(new HoodieKey(recKey, partitionPath),
+          HoodieRecordUtils.createPayload(payloadClazz, record, (Comparable) preCombineVal, props), operation);
+      return (HoodieRecord<R>) hoodieRecord;
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   /**
@@ -183,9 +185,12 @@ public class SpillableMapUtils {
    * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
   public static <R> R generateEmptyPayload(String recKey, String partitionPath, Comparable orderingVal, String payloadClazz) {
-    HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieAvroRecord<>(new HoodieKey(recKey, partitionPath),
-        HoodieRecordUtils.loadPayload(payloadClazz, new Object[] {null, orderingVal, EMPTY_PROPS},
-            GenericRecord.class, Comparable.class, Properties.class));
-    return (R) hoodieRecord;
+    try {
+      HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieAvroRecord<>(new HoodieKey(recKey, partitionPath),
+          HoodieRecordUtils.createPayload(payloadClazz, null, orderingVal, EMPTY_PROPS));
+      return (R) hoodieRecord;
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
   }
 }

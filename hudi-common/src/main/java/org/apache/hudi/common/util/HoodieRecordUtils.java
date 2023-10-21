@@ -28,14 +28,16 @@ import org.apache.hudi.common.model.OperationModeAwareness;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
+import org.apache.avro.generic.GenericRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.lang.reflect.InvocationTargetException;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Properties;
 
 /**
  * A utility class for HoodieRecord.
@@ -90,16 +92,57 @@ public class HoodieRecordUtils {
   }
 
   /**
-   * Instantiate a given class with an avro record payload.
+   * Creates a payload class via reflection, passing in an ordering/precombine value.
+   *
+   * @param payloadClass Payload class name.
+   * @param record       The Avro record.
+   * @param orderingVal  Ordering value.
+   * @param props        Configuration in {@link Properties}.
+   * @return The payload instance in {@link HoodieRecordPayload}.
+   * @throws IOException upon error.
    */
-  public static <T extends HoodieRecordPayload> T loadPayload(String recordPayloadClass,
-                                                              Object[] payloadArgs,
-                                                              Class<?>... constructorArgTypes) {
+  public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record, Comparable orderingVal, Properties props)
+      throws IOException {
     try {
-      return (T) ReflectionUtils.getClass(recordPayloadClass).getConstructor(constructorArgTypes)
-          .newInstance(payloadArgs);
-    } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
-      throw new HoodieException("Unable to instantiate payload class ", e);
+      return (HoodieRecordPayload) ReflectionUtils.getClass(payloadClass)
+          .getConstructor(new Class<?>[] {GenericRecord.class, Comparable.class, Properties.class})
+          .newInstance(record, orderingVal, props);
+    } catch (NoSuchMethodException nsme) {
+      try {
+        return (HoodieRecordPayload) ReflectionUtils.loadClass(
+            payloadClass, new Class<?>[] {GenericRecord.class, Comparable.class}, record, orderingVal);
+      } catch (Throwable e) {
+        throw new IOException("Could not create payload for class: " + payloadClass, e);
+      }
+    } catch (Throwable e) {
+      throw new IOException("Could not create payload for class: " + payloadClass, e);
+    }
+  }
+
+  /**
+   * Creates a payload class via reflection, without ordering/precombine value.
+   *
+   * @param payloadClass Payload class name.
+   * @param record       The Avro record.
+   * @param props        Configuration in {@link Properties}.
+   * @return The payload instance in {@link HoodieRecordPayload}.
+   * @throws IOException upon error.
+   */
+  public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record, Properties props)
+      throws IOException {
+    try {
+      return (HoodieRecordPayload) ReflectionUtils.getClass(payloadClass)
+          .getConstructor(new Class<?>[] {Option.class, Properties.class})
+          .newInstance(Option.of(record), props);
+    } catch (NoSuchMethodException nsme) {
+      try {
+        return (HoodieRecordPayload) ReflectionUtils.loadClass(
+            payloadClass, new Class<?>[] {Option.class}, Option.of(record));
+      } catch (Throwable e) {
+        throw new IOException("Could not create payload for class: " + payloadClass, e);
+      }
+    } catch (Throwable e) {
+      throw new IOException("Could not create payload for class: " + payloadClass, e);
     }
   }
 

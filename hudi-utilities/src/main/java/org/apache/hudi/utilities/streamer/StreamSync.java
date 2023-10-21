@@ -54,6 +54,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -630,12 +631,12 @@ public class StreamSync implements Serializable, Closeable {
               GenericRecord genRec = genericRecordIterator.next();
               HoodieKey hoodieKey = new HoodieKey(builtinKeyGenerator.getRecordKey(genRec), builtinKeyGenerator.getPartitionPath(genRec));
               GenericRecord gr = isDropPartitionColumns() ? HoodieAvroUtils.removeFields(genRec, partitionColumns) : genRec;
-              HoodieRecordPayload payload = shouldCombine ? DataSourceUtils.createPayload(cfg.payloadClassName, gr,
+              HoodieRecordPayload payload = shouldCombine ? HoodieRecordUtils.createPayload(cfg.payloadClassName, gr,
                   (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false, props.getBoolean(
                       KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
                       Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()))),
                   props)
-                  : DataSourceUtils.createPayload(cfg.payloadClassName, gr, props);
+                  : HoodieRecordUtils.createPayload(cfg.payloadClassName, gr, props);
               avroRecords.add(new HoodieAvroRecord<>(hoodieKey, payload));
             }
             return avroRecords.iterator();

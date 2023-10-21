@@ -22,18 +22,25 @@ import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.exception.HoodieException;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.Properties;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.apache.hudi.common.util.ConfigUtils.EMPTY_PROPS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-class TestHoodieRecordUtils {
+public class TestHoodieRecordUtils {
 
   @Test
   void loadHoodieMerge() {
@@ -50,11 +57,38 @@ class TestHoodieRecordUtils {
     assertThrows(HoodieException.class, () -> HoodieRecordUtils.loadRecordMerger(mergeClassName));
   }
 
-  @Test
-  void loadPayload() {
-    String payloadClassName = DefaultHoodieRecordPayload.class.getName();
-    HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(
-        payloadClassName, new Object[] {null, 0, EMPTY_PROPS}, GenericRecord.class, Comparable.class, Properties.class);
+  private static Iterable<Object[]> payloadClassNames() {
+    List<Object[]> opts = new ArrayList<>();
+    opts.add(new Object[] {DefaultHoodieRecordPayload.class.getName()});
+    opts.add(new Object[] {DummyAvroPayload.class.getName()});
+    return opts;
+  }
+
+  @ParameterizedTest
+  @MethodSource("payloadClassNames")
+  void testCreatePayload(String payloadClassName) throws IOException {
+    HoodieRecordPayload payload = HoodieRecordUtils.createPayload(
+        payloadClassName, null, 0, EMPTY_PROPS);
     assertEquals(payload.getClass().getName(), payloadClassName);
+
+    GenericRecord record = new GenericData.Record(new Schema.Parser().parse(
+        "{\"type\": \"record\"," + "\"name\": \"triprec\"," + "\"fields\": [ "
+            + "{\"name\": \"timestamp\",\"type\": \"long\"} ]}"
+    ));
+    record.put("timestamp", 1L);
+    payload = HoodieRecordUtils.createPayload(
+        payloadClassName, record, EMPTY_PROPS);
+    assertEquals(payload.getClass().getName(), payloadClassName);
+  }
+
+  public static class DummyAvroPayload extends OverwriteWithLatestAvroPayload {
+
+    public DummyAvroPayload(GenericRecord gr, Comparable orderingVal) {
+      super(gr, orderingVal);
+    }
+
+    public DummyAvroPayload(Option<GenericRecord> gr) {
+      super(gr);
+    }
   }
 }
