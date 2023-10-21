@@ -424,6 +424,14 @@ public interface HoodieTimeline extends Serializable {
   }
 
   /**
+   * Return true if specified timestamp is in range [startTs, endTs).
+   */
+  static boolean isInClosedOpenRange(String timestamp, String startTs, String endTs) {
+    return HoodieTimeline.compareTimestamps(timestamp, GREATER_THAN_OR_EQUALS, startTs)
+        && HoodieTimeline.compareTimestamps(timestamp, LESSER_THAN, endTs);
+  }
+
+  /**
    * Return true if specified timestamp is in range [startTs, endTs].
    */
   static boolean isInClosedRange(String timestamp, String startTs, String endTs) {
