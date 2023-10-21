@@ -166,7 +166,7 @@ public class DataSourceUtils {
       throws IOException {
     try {
       return (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
-          new Class<?>[] {Option.class}, Option.of(record), props);
+          new Class<?>[] {Option.class, Properties.class}, Option.of(record), props);
     } catch (Throwable e) {
       throw new IOException("Could not create payload for class: " + payloadClass, e);
     }
