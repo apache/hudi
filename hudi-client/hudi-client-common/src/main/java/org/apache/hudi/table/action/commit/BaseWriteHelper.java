@@ -57,6 +57,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
         // perform index loop up to get existing location of records
         context.setJobStatus(this.getClass().getSimpleName(), "Tagging: " + table.getConfig().getTableName());
         taggedRecords = tag(dedupedRecords, context, table);
+        context.clearJobStatus();
       }
       Duration indexLookupDuration = Duration.between(lookupBegin, Instant.now());
 

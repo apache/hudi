@@ -147,6 +147,11 @@ public final class HoodieLocalEngineContext extends HoodieEngineContext {
   }
 
   @Override
+  public void clearJobStatus() {
+    // no operation for now
+  }
+
+  @Override
   public void putCachedDataIds(HoodieDataCacheKey cacheKey, int... ids) {
     // no operation for now
   }

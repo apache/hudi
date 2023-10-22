@@ -148,26 +148,30 @@ public class TimelineServerPerf implements Serializable {
       int numIterations, int concurrency) {
     HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
     context.setJobStatus(this.getClass().getSimpleName(), "Lookup all performance stats");
-    return context.flatMap(partitionPaths, p -> {
-      ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(100);
-      final List<PerfStats> result = new ArrayList<>();
-      final List<ScheduledFuture<PerfStats>> futures = new ArrayList<>();
-      List<FileSlice> slices = fsView.getLatestFileSlices(p).collect(Collectors.toList());
-      String fileId = slices.isEmpty() ? "dummyId"
-          : slices.get(new Random(Double.doubleToLongBits(Math.random())).nextInt(slices.size())).getFileId();
-      IntStream.range(0, concurrency).forEach(i -> futures.add(executor.schedule(() -> runOneRound(fsView, p, fileId,
-          i, numIterations), 0, TimeUnit.NANOSECONDS)));
-      futures.forEach(x -> {
-        try {
-          result.add(x.get());
-        } catch (InterruptedException | ExecutionException e) {
-          throw new RuntimeException(e);
-        }
-      });
-      System.out.println("SLICES are=");
-      slices.forEach(s -> System.out.println("\t\tFileSlice=" + s));
-      return result.stream();
-    }, cfg.numExecutors);
+    try {
+      return context.flatMap(partitionPaths, p -> {
+        ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(100);
+        final List<PerfStats> result = new ArrayList<>();
+        final List<ScheduledFuture<PerfStats>> futures = new ArrayList<>();
+        List<FileSlice> slices = fsView.getLatestFileSlices(p).collect(Collectors.toList());
+        String fileId = slices.isEmpty() ? "dummyId"
+            : slices.get(new Random(Double.doubleToLongBits(Math.random())).nextInt(slices.size())).getFileId();
+        IntStream.range(0, concurrency).forEach(i -> futures.add(executor.schedule(() -> runOneRound(fsView, p, fileId,
+            i, numIterations), 0, TimeUnit.NANOSECONDS)));
+        futures.forEach(x -> {
+          try {
+            result.add(x.get());
+          } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+          }
+        });
+        System.out.println("SLICES are=");
+        slices.forEach(s -> System.out.println("\t\tFileSlice=" + s));
+        return result.stream();
+      }, cfg.numExecutors);
+    } finally {
+      context.clearJobStatus();
+    }
   }
 
   private static PerfStats runOneRound(SyncableFileSystemView fsView, String partition, String fileId, int id,

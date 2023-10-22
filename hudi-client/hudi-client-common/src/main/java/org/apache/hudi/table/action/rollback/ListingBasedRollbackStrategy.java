@@ -168,6 +168,8 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
     } catch (Exception e) {
       LOG.error("Generating rollback requests failed for " + instantToRollback.getTimestamp(), e);
       throw new HoodieRollbackException("Generating rollback requests failed for " + instantToRollback.getTimestamp(), e);
+    } finally {
+      context.clearJobStatus();
     }
   }
 

@@ -143,6 +143,8 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
         context.mapPartitionsToPairAndReduceByKey(filesToBeDeletedPerPartition,
             iterator -> deleteFilesFunc(iterator, table), PartitionCleanStat::merge, cleanerParallelism);
 
+    context.clearJobStatus();
+
     Map<String, PartitionCleanStat> partitionCleanStatsMap = partitionCleanStats
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 

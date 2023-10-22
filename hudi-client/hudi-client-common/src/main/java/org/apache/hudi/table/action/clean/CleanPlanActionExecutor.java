@@ -137,6 +137,8 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
           CleanPlanner.LATEST_CLEAN_PLAN_VERSION, cleanOps, partitionsToDelete);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to schedule clean operation", e);
+    } finally {
+      context.clearJobStatus();
     }
   }
 

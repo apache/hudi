@@ -356,17 +356,21 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   protected void writeTableMetadata(HoodieTable table, String instantTime, HoodieCommitMetadata metadata, HoodieData<WriteStatus> writeStatuses) {
     context.setJobStatus(this.getClass().getSimpleName(), "Committing to metadata table: " + config.getTableName());
-    Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(instantTime);
-    if (metadataWriterOpt.isPresent()) {
-      try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
-        metadataWriter.updateFromWriteStatuses(metadata, writeStatuses, instantTime);
-      } catch (Exception e) {
-        if (e instanceof HoodieException) {
-          throw (HoodieException) e;
-        } else {
-          throw new HoodieException("Failed to update metadata", e);
+    try {
+      Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(instantTime);
+      if (metadataWriterOpt.isPresent()) {
+        try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
+          metadataWriter.updateFromWriteStatuses(metadata, writeStatuses, instantTime);
+        } catch (Exception e) {
+          if (e instanceof HoodieException) {
+            throw (HoodieException) e;
+          } else {
+            throw new HoodieException("Failed to update metadata", e);
+          }
         }
       }
+    } finally {
+      context.clearJobStatus();
     }
   }
 
@@ -567,6 +571,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
     } finally {
       this.heartbeatClient.stop(instantTime);
+      context.clearJobStatus();
     }
   }
 
@@ -1029,6 +1034,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       }
     } finally {
       this.txnManager.endTransaction(Option.of(ownerInstant));
+      context.clearJobStatus();
     }
   }
 

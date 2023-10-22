@@ -149,6 +149,8 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       return metadata;
     } catch (IOException e) {
       throw new HoodieSavepointException("Failed to savepoint " + instantTime, e);
+    } finally {
+      context.clearJobStatus();
     }
   }
 

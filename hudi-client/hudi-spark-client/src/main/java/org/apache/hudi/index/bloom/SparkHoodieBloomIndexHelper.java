@@ -196,7 +196,11 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
       // we will just try exploding the input and then count to determine comparisons
       // FIX(vc): Only do sampling here and extrapolate?
       context.setJobStatus(this.getClass().getSimpleName(), "Compute all comparisons needed between records and files: " + config.getTableName());
-      fileToComparisons = fileComparisonsRDD.countByKey();
+      try {
+        fileToComparisons = fileComparisonsRDD.countByKey();
+      } finally {
+        context.clearJobStatus();
+      }
     } else {
       fileToComparisons = new HashMap<>();
       partitionToFileInfo.forEach((partitionPath, fileInfos) -> {

@@ -123,6 +123,8 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
         return planGenerator.generateCompactionPlan(instantTime);
       } catch (IOException e) {
         throw new HoodieCompactionException("Could not schedule compaction " + config.getBasePath(), e);
+      } finally {
+        context.clearJobStatus();
       }
     }
     return new HoodieCompactionPlan();

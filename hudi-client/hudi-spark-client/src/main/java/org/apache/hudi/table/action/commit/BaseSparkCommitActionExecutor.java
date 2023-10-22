@@ -111,44 +111,48 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
   private HoodieData<HoodieRecord<T>> clusteringHandleUpdate(HoodieData<HoodieRecord<T>> inputRecords) {
     context.setJobStatus(this.getClass().getSimpleName(), "Handling updates which are under clustering: " + config.getTableName());
-    Set<HoodieFileGroupId> fileGroupsInPendingClustering =
-        table.getFileSystemView().getFileGroupsInPendingClustering().map(Pair::getKey).collect(Collectors.toSet());
-    // Skip processing if there is no inflight clustering
-    if (fileGroupsInPendingClustering.isEmpty()) {
-      return inputRecords;
-    }
+    try {
+      Set<HoodieFileGroupId> fileGroupsInPendingClustering =
+          table.getFileSystemView().getFileGroupsInPendingClustering().map(Pair::getKey).collect(Collectors.toSet());
+      // Skip processing if there is no inflight clustering
+      if (fileGroupsInPendingClustering.isEmpty()) {
+        return inputRecords;
+      }
 
-    UpdateStrategy<T, HoodieData<HoodieRecord<T>>> updateStrategy = (UpdateStrategy<T, HoodieData<HoodieRecord<T>>>) ReflectionUtils
-        .loadClass(config.getClusteringUpdatesStrategyClass(), new Class<?>[] {HoodieEngineContext.class, HoodieTable.class, Set.class},
-            this.context, table, fileGroupsInPendingClustering);
-    // For SparkAllowUpdateStrategy with rollback pending clustering as false, need not handle
-    // the file group intersection between current ingestion and pending clustering file groups.
-    // This will be handled at the conflict resolution strategy.
-    if (updateStrategy instanceof SparkAllowUpdateStrategy && !config.isRollbackPendingClustering()) {
-      return inputRecords;
-    }
-    Pair<HoodieData<HoodieRecord<T>>, Set<HoodieFileGroupId>> recordsAndPendingClusteringFileGroups =
-        updateStrategy.handleUpdate(inputRecords);
+      UpdateStrategy<T, HoodieData<HoodieRecord<T>>> updateStrategy = (UpdateStrategy<T, HoodieData<HoodieRecord<T>>>) ReflectionUtils
+          .loadClass(config.getClusteringUpdatesStrategyClass(), new Class<?>[] {HoodieEngineContext.class, HoodieTable.class, Set.class},
+              this.context, table, fileGroupsInPendingClustering);
+      // For SparkAllowUpdateStrategy with rollback pending clustering as false, need not handle
+      // the file group intersection between current ingestion and pending clustering file groups.
+      // This will be handled at the conflict resolution strategy.
+      if (updateStrategy instanceof SparkAllowUpdateStrategy && !config.isRollbackPendingClustering()) {
+        return inputRecords;
+      }
+      Pair<HoodieData<HoodieRecord<T>>, Set<HoodieFileGroupId>> recordsAndPendingClusteringFileGroups =
+          updateStrategy.handleUpdate(inputRecords);
 
-    Set<HoodieFileGroupId> fileGroupsWithUpdatesAndPendingClustering = recordsAndPendingClusteringFileGroups.getRight();
-    if (fileGroupsWithUpdatesAndPendingClustering.isEmpty()) {
+      Set<HoodieFileGroupId> fileGroupsWithUpdatesAndPendingClustering = recordsAndPendingClusteringFileGroups.getRight();
+      if (fileGroupsWithUpdatesAndPendingClustering.isEmpty()) {
+        return recordsAndPendingClusteringFileGroups.getLeft();
+      }
+      // there are file groups pending clustering and receiving updates, so rollback the pending clustering instants
+      // there could be race condition, for example, if the clustering completes after instants are fetched but before rollback completed
+      if (config.isRollbackPendingClustering()) {
+        Set<HoodieInstant> pendingClusteringInstantsToRollback = getAllFileGroupsInPendingClusteringPlans(table.getMetaClient()).entrySet().stream()
+            .filter(e -> fileGroupsWithUpdatesAndPendingClustering.contains(e.getKey()))
+            .map(Map.Entry::getValue)
+            .collect(Collectors.toSet());
+        pendingClusteringInstantsToRollback.forEach(instant -> {
+          String commitTime = table.getMetaClient().createNewInstantTime();
+          table.scheduleRollback(context, commitTime, instant, false, config.shouldRollbackUsingMarkers(), false);
+          table.rollback(context, commitTime, instant, true, true);
+        });
+        table.getMetaClient().reloadActiveTimeline();
+      }
       return recordsAndPendingClusteringFileGroups.getLeft();
+    } finally {
+      context.clearJobStatus();
     }
-    // there are file groups pending clustering and receiving updates, so rollback the pending clustering instants
-    // there could be race condition, for example, if the clustering completes after instants are fetched but before rollback completed
-    if (config.isRollbackPendingClustering()) {
-      Set<HoodieInstant> pendingClusteringInstantsToRollback = getAllFileGroupsInPendingClusteringPlans(table.getMetaClient()).entrySet().stream()
-          .filter(e -> fileGroupsWithUpdatesAndPendingClustering.contains(e.getKey()))
-          .map(Map.Entry::getValue)
-          .collect(Collectors.toSet());
-      pendingClusteringInstantsToRollback.forEach(instant -> {
-        String commitTime = table.getMetaClient().createNewInstantTime();
-        table.scheduleRollback(context, commitTime, instant, false, config.shouldRollbackUsingMarkers(), false);
-        table.rollback(context, commitTime, instant, true, true);
-      });
-      table.getMetaClient().reloadActiveTimeline();
-    }
-    return recordsAndPendingClusteringFileGroups.getLeft();
   }
 
   @Override
@@ -165,20 +169,24 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     // Handle records update with clustering
     HoodieData<HoodieRecord<T>> inputRecordsWithClusteringUpdate = clusteringHandleUpdate(inputRecords);
 
-    context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile:" + config.getTableName());
-    WorkloadProfile workloadProfile =
-        new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
-    LOG.debug("Input workload profile :" + workloadProfile);
+    try {
+      context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile:" + config.getTableName());
+      WorkloadProfile workloadProfile =
+          new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
+      LOG.debug("Input workload profile :" + workloadProfile);
 
-    // partition using the insert partitioner
-    final Partitioner partitioner = getPartitioner(workloadProfile);
-    saveWorkloadProfileMetadataToInflight(workloadProfile, instantTime);
+      // partition using the insert partitioner
+      final Partitioner partitioner = getPartitioner(workloadProfile);
+      saveWorkloadProfileMetadataToInflight(workloadProfile, instantTime);
 
-    context.setJobStatus(this.getClass().getSimpleName(), "Doing partition and writing data: " + config.getTableName());
-    HoodieData<WriteStatus> writeStatuses = mapPartitionsAsRDD(inputRecordsWithClusteringUpdate, partitioner);
-    HoodieWriteMetadata<HoodieData<WriteStatus>> result = new HoodieWriteMetadata<>();
-    updateIndexAndCommitIfNeeded(writeStatuses, result);
-    return result;
+      context.setJobStatus(this.getClass().getSimpleName(), "Doing partition and writing data: " + config.getTableName());
+      HoodieData<WriteStatus> writeStatuses = mapPartitionsAsRDD(inputRecordsWithClusteringUpdate, partitioner);
+      HoodieWriteMetadata<HoodieData<WriteStatus>> result = new HoodieWriteMetadata<>();
+      updateIndexAndCommitIfNeeded(writeStatuses, result);
+      return result;
+    } finally {
+      context.clearJobStatus();
+    }
   }
 
   /**
@@ -292,8 +300,12 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   @Override
   protected void commit(HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
     context.setJobStatus(this.getClass().getSimpleName(), "Commit write status collect: " + config.getTableName());
-    commit(result.getWriteStatuses(), result, result.getWriteStats().isPresent()
-        ? result.getWriteStats().get() : result.getWriteStatuses().map(WriteStatus::getStat).collectAsList());
+    try {
+      commit(result.getWriteStatuses(), result, result.getWriteStats().isPresent()
+          ? result.getWriteStats().get() : result.getWriteStatuses().map(WriteStatus::getStat).collectAsList());
+    } finally {
+      context.clearJobStatus();
+    }
   }
 
   protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<HoodieData<WriteStatus>> writeStatuses) {

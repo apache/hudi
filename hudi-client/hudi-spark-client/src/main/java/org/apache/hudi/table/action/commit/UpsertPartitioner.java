@@ -277,9 +277,13 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
 
     if (partitionPaths != null && partitionPaths.size() > 0) {
       context.setJobStatus(this.getClass().getSimpleName(), "Getting small files from partitions: " + config.getTableName());
-      JavaRDD<String> partitionPathRdds = jsc.parallelize(partitionPaths, partitionPaths.size());
-      partitionSmallFilesMap = partitionPathRdds.mapToPair((PairFunction<String, String, List<SmallFile>>)
-          partitionPath -> new Tuple2<>(partitionPath, getSmallFiles(partitionPath))).collectAsMap();
+      try {
+        JavaRDD<String> partitionPathRdds = jsc.parallelize(partitionPaths, partitionPaths.size());
+        partitionSmallFilesMap = partitionPathRdds.mapToPair((PairFunction<String, String, List<SmallFile>>)
+            partitionPath -> new Tuple2<>(partitionPath, getSmallFiles(partitionPath))).collectAsMap();
+      } finally {
+        context.clearJobStatus();
+      }
     }
 
     return partitionSmallFilesMap;

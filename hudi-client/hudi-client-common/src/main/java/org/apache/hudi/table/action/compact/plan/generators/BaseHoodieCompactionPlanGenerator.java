@@ -93,80 +93,84 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     LOG.info("Looking for files to compact in " + partitionPaths + " partitions");
     engineContext.setJobStatus(this.getClass().getSimpleName(), "Looking for files to compact: " + writeConfig.getTableName());
 
-    SyncableFileSystemView fileSystemView = (SyncableFileSystemView) this.hoodieTable.getSliceView();
-    // Exclude file groups under compaction.
-    Set<HoodieFileGroupId> fgIdsInPendingCompactionAndClustering = fileSystemView.getPendingCompactionOperations()
-        .map(instantTimeOpPair -> instantTimeOpPair.getValue().getFileGroupId())
-        .collect(Collectors.toSet());
-
-    // Exclude files in pending clustering from compaction.
-    fgIdsInPendingCompactionAndClustering.addAll(fileSystemView.getFileGroupsInPendingClustering().map(Pair::getLeft).collect(Collectors.toSet()));
-
-    // Exclude files in pending logcompaction.
-    if (filterLogCompactionOperations()) {
-      fgIdsInPendingCompactionAndClustering.addAll(fileSystemView.getPendingLogCompactionOperations()
+    try {
+      SyncableFileSystemView fileSystemView = (SyncableFileSystemView) this.hoodieTable.getSliceView();
+      // Exclude file groups under compaction.
+      Set<HoodieFileGroupId> fgIdsInPendingCompactionAndClustering = fileSystemView.getPendingCompactionOperations()
           .map(instantTimeOpPair -> instantTimeOpPair.getValue().getFileGroupId())
-          .collect(Collectors.toList()));
+          .collect(Collectors.toSet());
+
+      // Exclude files in pending clustering from compaction.
+      fgIdsInPendingCompactionAndClustering.addAll(fileSystemView.getFileGroupsInPendingClustering().map(Pair::getLeft).collect(Collectors.toSet()));
+
+      // Exclude files in pending logcompaction.
+      if (filterLogCompactionOperations()) {
+        fgIdsInPendingCompactionAndClustering.addAll(fileSystemView.getPendingLogCompactionOperations()
+            .map(instantTimeOpPair -> instantTimeOpPair.getValue().getFileGroupId())
+            .collect(Collectors.toList()));
+      }
+
+      String lastCompletedInstantTime = hoodieTable.getMetaClient()
+          .getActiveTimeline().getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION,
+              HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION))
+          .filterCompletedInstants().lastInstant().get().getTimestamp();
+      LOG.info("Last completed instant time " + lastCompletedInstantTime);
+      Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
+
+      List<HoodieCompactionOperation> operations = engineContext.flatMap(partitionPaths, partitionPath -> fileSystemView
+          .getLatestFileSlices(partitionPath)
+          .filter(slice -> filterFileSlice(slice, lastCompletedInstantTime, fgIdsInPendingCompactionAndClustering, instantRange))
+          .map(s -> {
+            List<HoodieLogFile> logFiles = s.getLogFiles()
+                // ==============================================================
+                // IMPORTANT
+                // ==============================================================
+                // Currently, our filesystem view could return a file slice with pending log files there,
+                // these files should be excluded from the plan, let's say we have such a sequence of actions
+
+                // t10: a delta commit starts,
+                // t20: the compaction is scheduled and the t10 delta commit is still pending, and the "fg_10.log" is included in the plan
+                // t25: the delta commit 10 finishes,
+                // t30: the compaction execution starts, now the reader considers the log file "fg_10.log" as valid.
+
+                // for both OCC and NB-CC, this is in-correct.
+                .filter(logFile -> completionTimeQueryView.isCompletedBefore(compactionInstant, logFile.getDeltaCommitTime()))
+                .sorted(HoodieLogFile.getLogFileComparator()).collect(toList());
+            totalLogFiles.add(logFiles.size());
+            totalFileSlices.add(1L);
+            // Avro generated classes are not inheriting Serializable. Using CompactionOperation POJO
+            // for Map operations and collecting them finally in Avro generated classes for storing
+            // into meta files.
+            Option<HoodieBaseFile> dataFile = s.getBaseFile();
+            return new CompactionOperation(dataFile, partitionPath, logFiles,
+                writeConfig.getCompactionStrategy().captureMetrics(writeConfig, s));
+          }), partitionPaths.size()).stream()
+          .map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
+
+      LOG.info("Total of " + operations.size() + " compaction operations are retrieved");
+      LOG.info("Total number of log files " + totalLogFiles.value());
+      LOG.info("Total number of file slices " + totalFileSlices.value());
+
+      if (operations.isEmpty()) {
+        LOG.warn("No operations are retrieved for " + metaClient.getBasePath());
+        return null;
+      }
+
+      // Filter the compactions with the passed in filter. This lets us choose most effective compactions only
+      HoodieCompactionPlan compactionPlan = getCompactionPlan(metaClient, operations);
+      ValidationUtils.checkArgument(
+          compactionPlan.getOperations().stream().noneMatch(
+              op -> fgIdsInPendingCompactionAndClustering.contains(new HoodieFileGroupId(op.getPartitionPath(), op.getFileId()))),
+          "Bad Compaction Plan. FileId MUST NOT have multiple pending compactions. "
+              + "Please fix your strategy implementation. FileIdsWithPendingCompactions :" + fgIdsInPendingCompactionAndClustering
+              + ", Selected workload :" + compactionPlan);
+      if (compactionPlan.getOperations().isEmpty()) {
+        LOG.warn("After filtering, Nothing to compact for " + metaClient.getBasePath());
+      }
+      return compactionPlan;
+    } finally {
+      engineContext.clearJobStatus();
     }
-
-    String lastCompletedInstantTime = hoodieTable.getMetaClient()
-        .getActiveTimeline().getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION,
-            HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION))
-        .filterCompletedInstants().lastInstant().get().getTimestamp();
-    LOG.info("Last completed instant time " + lastCompletedInstantTime);
-    Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
-
-    List<HoodieCompactionOperation> operations = engineContext.flatMap(partitionPaths, partitionPath -> fileSystemView
-        .getLatestFileSlices(partitionPath)
-        .filter(slice -> filterFileSlice(slice, lastCompletedInstantTime, fgIdsInPendingCompactionAndClustering, instantRange))
-        .map(s -> {
-          List<HoodieLogFile> logFiles = s.getLogFiles()
-              // ==============================================================
-              // IMPORTANT
-              // ==============================================================
-              // Currently, our filesystem view could return a file slice with pending log files there,
-              // these files should be excluded from the plan, let's say we have such a sequence of actions
-
-              // t10: a delta commit starts,
-              // t20: the compaction is scheduled and the t10 delta commit is still pending, and the "fg_10.log" is included in the plan
-              // t25: the delta commit 10 finishes,
-              // t30: the compaction execution starts, now the reader considers the log file "fg_10.log" as valid.
-
-              // for both OCC and NB-CC, this is in-correct.
-              .filter(logFile -> completionTimeQueryView.isCompletedBefore(compactionInstant, logFile.getDeltaCommitTime()))
-              .sorted(HoodieLogFile.getLogFileComparator()).collect(toList());
-          totalLogFiles.add(logFiles.size());
-          totalFileSlices.add(1L);
-          // Avro generated classes are not inheriting Serializable. Using CompactionOperation POJO
-          // for Map operations and collecting them finally in Avro generated classes for storing
-          // into meta files.
-          Option<HoodieBaseFile> dataFile = s.getBaseFile();
-          return new CompactionOperation(dataFile, partitionPath, logFiles,
-              writeConfig.getCompactionStrategy().captureMetrics(writeConfig, s));
-        }), partitionPaths.size()).stream()
-        .map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
-
-    LOG.info("Total of " + operations.size() + " compaction operations are retrieved");
-    LOG.info("Total number of log files " + totalLogFiles.value());
-    LOG.info("Total number of file slices " + totalFileSlices.value());
-
-    if (operations.isEmpty()) {
-      LOG.warn("No operations are retrieved for " + metaClient.getBasePath());
-      return null;
-    }
-
-    // Filter the compactions with the passed in filter. This lets us choose most effective compactions only
-    HoodieCompactionPlan compactionPlan = getCompactionPlan(metaClient, operations);
-    ValidationUtils.checkArgument(
-        compactionPlan.getOperations().stream().noneMatch(
-            op -> fgIdsInPendingCompactionAndClustering.contains(new HoodieFileGroupId(op.getPartitionPath(), op.getFileId()))),
-        "Bad Compaction Plan. FileId MUST NOT have multiple pending compactions. "
-            + "Please fix your strategy implementation. FileIdsWithPendingCompactions :" + fgIdsInPendingCompactionAndClustering
-            + ", Selected workload :" + compactionPlan);
-    if (compactionPlan.getOperations().isEmpty()) {
-      LOG.warn("After filtering, Nothing to compact for " + metaClient.getBasePath());
-    }
-    return compactionPlan;
   }
 
   protected abstract HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, List<HoodieCompactionOperation> operations);

@@ -230,8 +230,12 @@ public class JavaUpsertPartitioner<T> implements Partitioner  {
 
     if (partitionPaths != null && partitionPaths.size() > 0) {
       context.setJobStatus(this.getClass().getSimpleName(), "Getting small files from partitions: " + config.getTableName());
-      partitionSmallFilesMap = context.mapToPair(partitionPaths,
-          partitionPath -> new ImmutablePair<>(partitionPath, getSmallFiles(partitionPath)), 0);
+      try {
+        partitionSmallFilesMap = context.mapToPair(partitionPaths,
+            partitionPath -> new ImmutablePair<>(partitionPath, getSmallFiles(partitionPath)), 0);
+      } finally {
+        context.clearJobStatus();
+      }
     }
     return partitionSmallFilesMap;
   }

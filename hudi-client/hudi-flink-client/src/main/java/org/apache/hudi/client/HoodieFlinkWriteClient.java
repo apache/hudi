@@ -479,11 +479,15 @@ public class HoodieFlinkWriteClient<T> extends
             FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), table.getMetaClient().getBasePath());
         if (partitionPaths != null && partitionPaths.size() > 0) {
           context.setJobStatus(this.getClass().getSimpleName(), "Getting ExistingFileIds of all partitions: " + config.getTableName());
-          partitionToExistingFileIds = partitionPaths.stream().parallel()
-              .collect(
-                  Collectors.toMap(
-                      partition -> partition,
-                      partition -> getAllExistingFileIds(table, partition)));
+          try {
+            partitionToExistingFileIds = partitionPaths.stream().parallel()
+                .collect(
+                    Collectors.toMap(
+                        partition -> partition,
+                        partition -> getAllExistingFileIds(table, partition)));
+          } finally {
+            context.clearJobStatus();
+          }
         }
         return partitionToExistingFileIds;
       default:

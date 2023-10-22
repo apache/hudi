@@ -681,20 +681,24 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   private void deleteInvalidFilesByPartitions(HoodieEngineContext context, Map<String, List<Pair<String, String>>> invalidFilesByPartition) {
     // Now delete partially written files
     context.setJobStatus(this.getClass().getSimpleName(), "Delete invalid files generated during the write operation: " + config.getTableName());
-    context.map(invalidFilesByPartition.values().stream()
-            .flatMap(Collection::stream)
-            .collect(Collectors.toList()),
-        partitionFilePair -> {
-          final FileSystem fileSystem = metaClient.getFs();
-          LOG.info("Deleting invalid data file=" + partitionFilePair);
-          // Delete
-          try {
-            fileSystem.delete(new Path(partitionFilePair.getValue()), false);
-          } catch (IOException e) {
-            throw new HoodieIOException(e.getMessage(), e);
-          }
-          return true;
-        }, config.getFinalizeWriteParallelism());
+    try {
+      context.map(invalidFilesByPartition.values().stream()
+              .flatMap(Collection::stream)
+              .collect(Collectors.toList()),
+          partitionFilePair -> {
+            final FileSystem fileSystem = metaClient.getFs();
+            LOG.info("Deleting invalid data file=" + partitionFilePair);
+            // Delete
+            try {
+              fileSystem.delete(new Path(partitionFilePair.getValue()), false);
+            } catch (IOException e) {
+              throw new HoodieIOException(e.getMessage(), e);
+            }
+            return true;
+          }, config.getFinalizeWriteParallelism());
+    } finally {
+      context.clearJobStatus();
+    }
   }
 
   /**
@@ -758,7 +762,6 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
         }
 
         // Now delete partially written files
-        context.setJobStatus(this.getClass().getSimpleName(), "Delete all partially written files: " + config.getTableName());
         deleteInvalidFilesByPartitions(context, invalidPathsByPartition);
 
         // Now ensure the deleted files disappear
@@ -789,6 +792,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     if (!checkPassed) {
       throw new HoodieIOException("Consistency check failed to ensure all files " + visibility);
     }
+    context.clearJobStatus();
   }
 
   private boolean waitForCondition(String partitionPath, Stream<Pair<String, String>> partitionFilePaths, FileVisibility visibility) {
