@@ -2617,17 +2617,20 @@ public class HoodieWriteConfig extends HoodieConfig {
     return props.getInteger(WRITES_FILEID_ENCODING, HoodieMetadataPayload.RECORD_INDEX_FIELD_FILEID_ENCODING_UUID);
   }
 
-  public boolean needResolveWriteConflict(WriteOperationType operationType) {
+  public boolean needResolveWriteConflict(Option<WriteOperationType> operationType) {
     if (getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
       // Skip to resolve conflict for non bulk_insert operation if using non-blocking concurrency control
-      return !isNonBlockingConcurrencyControl() || maybeBulkInsert(operationType);
+      // TODO: skip resolve conflict if the option is empty or the inner operation type is UNKNOWN ?
+      return !isNonBlockingConcurrencyControl() || mayBeBulkInsert(operationType);
     } else {
       return false;
     }
   }
 
-  private boolean maybeBulkInsert(WriteOperationType operationType) {
-    return operationType == WriteOperationType.UNKNOWN || operationType == WriteOperationType.BULK_INSERT;
+  private boolean mayBeBulkInsert(Option<WriteOperationType> operationType) {
+    // If the option is empty or the inner operation type is UNKNOWN, it may be bulk insert
+    return operationType.map(type -> type == WriteOperationType.BULK_INSERT || type == WriteOperationType.UNKNOWN)
+        .orElse(true);
   }
 
   public boolean isNonBlockingConcurrencyControl() {

@@ -68,7 +68,7 @@ public class TransactionUtils {
       Option<HoodieInstant> lastCompletedTxnOwnerInstant,
       boolean reloadActiveTimeline,
       Set<String> pendingInstants) throws HoodieWriteConflictException {
-    WriteOperationType operationType = thisCommitMetadata.map(HoodieCommitMetadata::getOperationType).orElse(WriteOperationType.UNKNOWN);
+    Option<WriteOperationType> operationType = thisCommitMetadata.map(HoodieCommitMetadata::getOperationType);
     if (config.needResolveWriteConflict(operationType)) {
       // deal with pendingInstants
       Stream<HoodieInstant> completedInstantsDuringCurrentWriteOperation = getCompletedInstantsDuringCurrentWriteOperation(table.getMetaClient(), pendingInstants);
