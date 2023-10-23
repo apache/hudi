@@ -82,6 +82,7 @@ public class TestCompletionTimeQueryView {
       for (int i = 1; i < 3; i++) {
         assertThat(view.getCompletionTime(String.format("%08d", i)).orElse(""), is(String.format("%08d", i + 1000)));
       }
+      assertThat("The cursor instant should be slided", view.getCursorInstant(), is(String.format("%08d", 1)));
       // query with inflight start time
       assertFalse(view.getCompletionTime(String.format("%08d", 11)).isPresent());
       // query with non-exist start time
