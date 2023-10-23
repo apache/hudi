@@ -25,6 +25,8 @@ import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.bucket.BucketBulkInsertWriterHelper;
 import org.apache.hudi.sink.bulk.BulkInsertWriteFunction;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
+import org.apache.hudi.sink.bulk.sort.SortOperator;
+import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
@@ -32,6 +34,7 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.core.memory.ManagedMemoryUseCase;
 import org.apache.flink.runtime.io.disk.iomanager.IOManager;
 import org.apache.flink.runtime.io.disk.iomanager.IOManagerAsync;
 import org.apache.flink.runtime.jobgraph.OperatorID;
@@ -42,12 +45,16 @@ import org.apache.flink.runtime.operators.testutils.MockEnvironment;
 import org.apache.flink.runtime.operators.testutils.MockEnvironmentBuilder;
 import org.apache.flink.streaming.api.graph.StreamConfig;
 import org.apache.flink.streaming.api.operators.collect.utils.MockOperatorEventGateway;
+import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.runtime.tasks.StreamTask;
+import org.apache.flink.streaming.runtime.tasks.TestProcessingTimeService;
 import org.apache.flink.streaming.util.MockStreamTaskBuilder;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ExecutorService;
@@ -69,16 +76,13 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   private final MockOperatorCoordinatorContext coordinatorContext;
   private final StreamWriteOperatorCoordinator coordinator;
   private final MockStateInitializationContext stateInitializationContext;
+  private final boolean needSortInput;
 
-  private final boolean asyncClustering;
-  private ClusteringFunctionWrapper clusteringFunctionWrapper;
-
-  /**
-   * Bulk insert write function.
-   */
   private BulkInsertWriteFunction<RowData> writeFunction;
   private MapFunction<RowData, RowData> mapFunction;
   private Map<String, String> bucketIdToFileId;
+  private SortOperator sortOperator;
+  private CollectorOutput<RowData> output;
 
   public BulkInsertFunctionWrapper(String tablePath, Configuration conf) throws Exception {
     IOManager ioManager = new IOManagerAsync();
@@ -96,34 +100,27 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     this.coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), 1);
     this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
     this.stateInitializationContext = new MockStateInitializationContext();
-    this.asyncClustering = OptionsResolver.needsAsyncClustering(conf);
-    StreamConfig streamConfig = new StreamConfig(conf);
-    streamConfig.setOperatorID(new OperatorID());
-    StreamTask<?, ?> streamTask = new MockStreamTaskBuilder(environment)
-        .setConfig(new StreamConfig(conf))
-        .setExecutionConfig(new ExecutionConfig().enableObjectReuse())
-        .build();
-    this.clusteringFunctionWrapper = new ClusteringFunctionWrapper(this.conf, streamTask, streamConfig);
+    this.needSortInput = conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT);
   }
 
   public void openFunction() throws Exception {
     this.coordinator.start();
     this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
     setupWriteFunction();
-    RowDataKeyGen keyGen = RowDataKeyGen.instance(conf, rowType);
-    String indexKeys = OptionsResolver.getIndexKeyField(conf);
-    int numBuckets = conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
-    boolean needFixedFileIdSuffix = OptionsResolver.isNonBlockingConcurrencyControl(conf);
-    this.bucketIdToFileId = new HashMap<>();
-    this.mapFunction = r -> BucketBulkInsertWriterHelper.rowWithFileId(bucketIdToFileId, keyGen, r, indexKeys, numBuckets, needFixedFileIdSuffix);
-    if (asyncClustering) {
-      clusteringFunctionWrapper.openFunction();
+    setupMapFunction();
+    if (needSortInput) {
+      setupSortOperator();
     }
   }
 
   public void invoke(I record) throws Exception {
     RowData recordWithFileId = mapFunction.map((RowData) record);
-    writeFunction.processElement(recordWithFileId, null, null);
+    if (needSortInput) {
+      // Sort input first, trigger writeFunction at the #endInput
+      sortOperator.processElement(new StreamRecord(recordWithFileId));
+    } else {
+      writeFunction.processElement(recordWithFileId, null, null);
+    }
   }
 
   public WriteMetadataEvent[] getEventBuffer() {
@@ -140,6 +137,18 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
   @Override
   public void endInput() {
+    if (needSortInput) {
+      // sort all inputs of SortOperator and flush to WriteFunction
+      try {
+        sortOperator.endInput();
+        List<RowData> sortedRecords = output.getRecords();
+        for (RowData record : sortedRecords) {
+          writeFunction.processElement(record, null, null);
+        }
+      } catch (Exception e) {
+        throw new HoodieException(e);
+      }
+    }
     writeFunction.endInput();
     if (bucketIdToFileId != null) {
       this.bucketIdToFileId.clear();
@@ -149,13 +158,6 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   public void checkpointComplete(long checkpointId) {
     stateInitializationContext.getOperatorStateStore().checkpointSuccess(checkpointId);
     coordinator.notifyCheckpointComplete(checkpointId);
-    if (asyncClustering) {
-      try {
-        clusteringFunctionWrapper.cluster(checkpointId);
-      } catch (Exception e) {
-        throw new HoodieException(e);
-      }
-    }
   }
 
   public void coordinatorFails() throws Exception {
@@ -179,9 +181,6 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   @Override
   public void close() throws Exception {
     this.coordinator.close();
-    if (clusteringFunctionWrapper != null) {
-      clusteringFunctionWrapper.close();
-    }
     if (bucketIdToFileId != null) {
       this.bucketIdToFileId.clear();
     }
@@ -228,5 +227,39 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     } catch (InterruptedException e) {
       // ignore
     }
+  }
+
+  private void setupMapFunction() {
+    RowDataKeyGen keyGen = RowDataKeyGen.instance(conf, rowType);
+    String indexKeys = OptionsResolver.getIndexKeyField(conf);
+    int numBuckets = conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
+    boolean needFixedFileIdSuffix = OptionsResolver.isNonBlockingConcurrencyControl(conf);
+    this.bucketIdToFileId = new HashMap<>();
+    this.mapFunction = r -> BucketBulkInsertWriterHelper.rowWithFileId(bucketIdToFileId, keyGen, r, indexKeys, numBuckets, needFixedFileIdSuffix);
+  }
+
+  private void setupSortOperator() throws Exception {
+    IOManager ioManager = new IOManagerAsync();
+    MockEnvironment environment = new MockEnvironmentBuilder()
+        .setTaskName("mockTask")
+        .setManagedMemorySize(12 * MemoryManager.DEFAULT_PAGE_SIZE)
+        .setIOManager(ioManager)
+        .build();
+    StreamTask<?, ?> streamTask = new MockStreamTaskBuilder(environment)
+        .setConfig(new StreamConfig(conf))
+        .setExecutionConfig(new ExecutionConfig().enableObjectReuse())
+        .build();
+    SortOperatorGen sortOperatorGen = BucketBulkInsertWriterHelper.getFileIdSorterGen(rowTypeWithFileId);
+    this.sortOperator = (SortOperator) sortOperatorGen.createSortOperator(conf);
+    this.sortOperator.setProcessingTimeService(new TestProcessingTimeService());
+    this.output = new CollectorOutput<>();
+    StreamConfig streamConfig = new StreamConfig(conf);
+    streamConfig.setOperatorID(new OperatorID());
+    streamConfig.setManagedMemoryFractionOperatorOfUseCase(ManagedMemoryUseCase.OPERATOR, .99);
+    RowDataSerializer inputSerializer = new RowDataSerializer(rowTypeWithFileId);
+    streamConfig.setupNetworkInputs(inputSerializer);
+    streamConfig.serializeAllConfigs();
+    this.sortOperator.setup(streamTask, streamConfig, output);
+    this.sortOperator.open();
   }
 }

@@ -254,7 +254,6 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
     // start pipeline2 and bulk insert record: [id1,null,23,1,par1], suspend the tx commit
     Configuration conf2 = conf.clone();
     conf2.setString(FlinkOptions.OPERATION, "BULK_INSERT");
-    conf2.setBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT, false);
     conf2.setString(FlinkOptions.WRITE_CLIENT_ID, "2");
     List<RowData> dataset2 = Collections.singletonList(
         insertRow(
@@ -269,7 +268,7 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
         .checkpointComplete(1);
 
     // step to commit the 2nd txn, should throw exception
-    pipeline2.commitAsBatchThrows(HoodieWriteConflictException.class, "Cannot resolve conflicts");
+    pipeline2.endInputThrows(HoodieWriteConflictException.class, "Cannot resolve conflicts");
   }
 
   // case1: txn1 is upsert writer, txn2 is bulk_insert writer.
@@ -287,7 +286,6 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
 
     Configuration conf1 = conf.clone();
     conf1.setString(FlinkOptions.OPERATION, "BULK_INSERT");
-    conf1.setBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT, false);
     // start pipeline1 and bulk insert record: [id1,Danny,null,1,par1], suspend the tx commit
     List<RowData> dataset1 = Collections.singletonList(
         insertRow(
@@ -307,7 +305,7 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
         .consume(dataset2);
 
     // step to commit the 1st txn
-    pipeline1.commitAsBatch();
+    pipeline1.endInput();
 
     // step to commit the 2nd data
     pipeline2.checkpoint(1)

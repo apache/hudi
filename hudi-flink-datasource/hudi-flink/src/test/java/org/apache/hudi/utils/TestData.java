@@ -555,9 +555,6 @@ public class TestData {
    */
   public static TestFunctionWrapper<RowData> getWritePipeline(String basePath, Configuration conf) throws Exception {
     if (OptionsResolver.isBulkInsertOperation(conf)) {
-      if (conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT)) {
-        throw new UnsupportedOperationException("Harness test does not support bulk insert sort yet");
-      }
       return new BulkInsertFunctionWrapper<>(basePath, conf);
     } else if (OptionsResolver.isAppendMode(conf)) {
       return new InsertFunctionWrapper<>(basePath, conf);

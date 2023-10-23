@@ -308,7 +308,7 @@ public class TestWriteBase {
     /**
      * Flush data using endInput. Asserts the commit would fail.
      */
-    public void commitAsBatchThrows(Class<?> cause, String msg) {
+    public void endInputThrows(Class<?> cause, String msg) {
       // this triggers the data write and event send
       this.pipeline.endInput();
       final OperatorEvent nextEvent = this.pipeline.getNextEvent();
@@ -322,7 +322,7 @@ public class TestWriteBase {
     /**
      * Flush data using endInput. Asserts the commit would fail.
      */
-    public TestHarness commitAsBatch() {
+    public TestHarness endInput() {
       // this triggers the data write and event send
       this.pipeline.endInput();
       final OperatorEvent nextEvent = this.pipeline.getNextEvent();
