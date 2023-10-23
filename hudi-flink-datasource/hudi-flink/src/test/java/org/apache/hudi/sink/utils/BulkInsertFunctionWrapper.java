@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.adapter.TestStreamConfigs;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
@@ -92,7 +93,6 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     this.conf = conf;
     this.rowType = (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf)).getLogicalType();
     this.rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType);
-    // one function
     this.coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), 1);
     this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
     this.stateInitializationContext = new MockStateInitializationContext();
@@ -221,10 +221,9 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     this.output = new CollectorOutput<>();
     StreamConfig streamConfig = new StreamConfig(conf);
     streamConfig.setOperatorID(new OperatorID());
-    streamConfig.setManagedMemoryFractionOperatorOfUseCase(ManagedMemoryUseCase.OPERATOR, .99);
     RowDataSerializer inputSerializer = new RowDataSerializer(rowTypeWithFileId);
-    streamConfig.setupNetworkInputs(inputSerializer);
-    streamConfig.serializeAllConfigs();
+    TestStreamConfigs.setupNetworkInputs(streamConfig, inputSerializer);
+    streamConfig.setManagedMemoryFractionOperatorOfUseCase(ManagedMemoryUseCase.OPERATOR, .99);
     this.sortOperator.setup(streamTask, streamConfig, output);
     this.sortOperator.open();
   }
