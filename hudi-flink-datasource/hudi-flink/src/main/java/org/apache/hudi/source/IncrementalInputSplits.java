@@ -269,6 +269,12 @@ public class IncrementalInputSplits implements Serializable {
     Result hollowSplits = getHollowInputSplits(metaClient, metaClient.getHadoopConf(), issuedInstant, issuedOffset, commitTimeline, cdcEnabled);
 
     List<HoodieInstant> instants = filterInstantsWithRange(commitTimeline, issuedInstant);
+    // read speed limit, avoid OOM caused by loading too many data at once
+    if (this.conf.getBoolean(FlinkOptions.READ_SPEED_LIMIT_ENABLED)) {
+      int readLimit = this.conf.getInteger(FlinkOptions.READ_SPEED_LIMIT_COMMITS);
+      instants = instants.subList(0, Math.min(readLimit, instants.size()));
+    }
+
     // get the latest instant that satisfies condition
     final String endInstant = instants.size() == 0 ? null : instants.get(instants.size() - 1).getTimestamp();
     final InstantRange instantRange;

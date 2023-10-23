@@ -343,12 +343,25 @@ public class FlinkOptions extends HoodieConfig {
       .noDefaultValue()
       .withDescription("End commit instant for reading, the commit time format should be 'yyyyMMddHHmmss'");
 
+  public static final ConfigOption<Boolean> READ_SPEED_LIMIT_ENABLED = ConfigOptions
+      .key("read.speed.limit.enabled")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Enable stream read speed limit, avoiding the risk of oom caused by the streamReadMonitor "
+          + " loading too many metadata at once");
+
+  public static final ConfigOption<Integer> READ_SPEED_LIMIT_COMMITS = ConfigOptions
+      .key("read.speed.limit.commits")
+      .intType()
+      .defaultValue(5)
+      .withDescription("The maximum number of commits allowed streamReadMonitor to read in each poll");
+
   @AdvancedConfig
   public static final ConfigOption<Boolean> READ_DATA_SKIPPING_ENABLED = ConfigOptions
       .key("read.data.skipping.enabled")
       .booleanType()
       .defaultValue(false)
-      .withDescription("Enables data-skipping allowing queries to leverage indexes to reduce the search space by"
+      .withDescription("Enables data-skipping allowing queries to leverage indexes to reduce the search space by "
           + "skipping over files");
 
   // ------------------------------------------------------------------------

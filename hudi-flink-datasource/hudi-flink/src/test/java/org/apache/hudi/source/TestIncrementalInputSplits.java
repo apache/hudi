@@ -20,6 +20,7 @@ package org.apache.hudi.source;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -189,6 +190,38 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     IncrementalInputSplits.Result result = iis.inputSplits(metaClient, null, null, false);
     List<String> partitions = getFilteredPartitions(result);
     assertEquals(expectedPartitions, partitions);
+  }
+
+  @Test
+  void testInputSplitsWithSpeedLimit() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    conf.set(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING, true);
+    conf.set(FlinkOptions.READ_STREAMING_SKIP_COMPACT, true);
+    conf.set(FlinkOptions.READ_SPEED_LIMIT_ENABLED, true);
+    conf.set(FlinkOptions.READ_SPEED_LIMIT_COMMITS, 1);
+    // insert data
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    HoodieTimeline commitsTimeline = metaClient.reloadActiveTimeline()
+            .filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.COMMIT_ACTION));
+    HoodieInstant firstInstant = commitsTimeline.firstInstant().get();
+    HoodieInstant secondInstant = commitsTimeline.getInstants().get(1);
+    IncrementalInputSplits iis = IncrementalInputSplits.builder()
+            .conf(conf)
+            .path(new Path(basePath))
+            .rowType(TestConfigurations.ROW_TYPE)
+            .partitionPruner(null)
+            .build();
+    IncrementalInputSplits.Result result = iis.inputSplits(metaClient, firstInstant.getTimestamp(), firstInstant.getCompletionTime(), false);
+    result.getInputSplits().stream().forEach(split -> {
+      InstantRange range = split.getInstantRange().get();
+      assertEquals(range.getStartInstant(), firstInstant.getTimestamp());
+      assertEquals(range.getEndInstant(), secondInstant.getTimestamp());
+    });
   }
 
   // -------------------------------------------------------------------------
