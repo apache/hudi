@@ -94,8 +94,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
 
   @Override
   public HoodieRecord<InternalRow> constructHoodieRecord(Option<InternalRow> rowOption,
-                                                         Map<String, Object> metadataMap,
-                                                         Schema schema) {
+                                                         Map<String, Object> metadataMap) {
     if (!rowOption.isPresent()) {
       return new HoodieEmptyRecord<>(
           new HoodieKey((String) metadataMap.get(INTERNAL_META_RECORD_KEY),
@@ -103,8 +102,10 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
           HoodieRecord.HoodieRecordType.SPARK);
     }
 
+    Schema schema = (Schema) metadataMap.get(INTERNAL_META_SCHEMA);
     InternalRow row = rowOption.get();
-    return new HoodieSparkRecord(row, HoodieInternalRowUtils.getCachedSchema(schema));
+    boolean isPartial = (boolean) metadataMap.getOrDefault(INTERNAL_META_IS_PARTIAL, false);
+    return new HoodieSparkRecord(row, HoodieInternalRowUtils.getCachedSchema(schema), isPartial);
   }
 
   @Override

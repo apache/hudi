@@ -46,6 +46,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_SCHEMA;
+
 public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
   protected final HoodieReaderContext<T> readerContext;
   protected final Schema readerSchema;
@@ -122,12 +124,13 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
       // Merge and store the combined record
       // Note that the incoming `record` is from an older commit, so it should be put as
       // the `older` in the merge API
+
       HoodieRecord<T> combinedRecord = (HoodieRecord<T>) recordMerger.merge(
-          readerContext.constructHoodieRecord(Option.of(record), metadata, readerSchema),
-          readerSchema,
+          readerContext.constructHoodieRecord(Option.of(record), metadata),
+          (Schema) metadata.get(INTERNAL_META_SCHEMA),
           readerContext.constructHoodieRecord(
-              existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(), readerSchema),
-          readerSchema,
+              existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight()),
+          (Schema) existingRecordMetadataPair.getRight().get(INTERNAL_META_SCHEMA),
           payloadProps).get().getLeft();
       // If pre-combine returns existing record, no need to update it
       if (combinedRecord.getData() != existingRecordMetadataPair.getLeft().get()) {
@@ -211,8 +214,8 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     }
 
     Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.merge(
-        readerContext.constructHoodieRecord(older, olderInfoMap, baseFileSchema), baseFileSchema,
-        readerContext.constructHoodieRecord(newer, newerInfoMap, readerSchema), readerSchema, payloadProps);
+        readerContext.constructHoodieRecord(older, olderInfoMap), (Schema) olderInfoMap.get(INTERNAL_META_SCHEMA),
+        readerContext.constructHoodieRecord(newer, newerInfoMap), (Schema) newerInfoMap.get(INTERNAL_META_SCHEMA), payloadProps);
     if (mergedRecord.isPresent()) {
       return Option.ofNullable((T) mergedRecord.get().getLeft().getData());
     }

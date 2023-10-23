@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -52,6 +53,8 @@ public abstract class HoodieReaderContext<T> {
   public static final String INTERNAL_META_ORDERING_FIELD = "_2";
   public static final String INTERNAL_META_OPERATION = "_3";
   public static final String INTERNAL_META_INSTANT_TIME = "_4";
+  public static final String INTERNAL_META_SCHEMA = "_5";
+  public static final String INTERNAL_META_IS_PARTIAL = "_6";
 
   /**
    * Gets the file system based on the file path and configuration.
@@ -67,6 +70,7 @@ public abstract class HoodieReaderContext<T> {
    * file.
    *
    * @param filePath       {@link Path} instance of a file.
+   * @param isLogFile      Whether this is a log file.
    * @param start          Starting byte to start reading.
    * @param length         Bytes to read.
    * @param dataSchema     Schema of records in the file in {@link Schema}.
@@ -75,7 +79,15 @@ public abstract class HoodieReaderContext<T> {
    * @return {@link ClosableIterator<T>} that can return all records through iteration.
    */
   public abstract ClosableIterator<T> getFileRecordIterator(
-      Path filePath, long start, long length, Schema dataSchema, Schema requiredSchema, Configuration conf);
+      Path filePath, boolean isLogFile, long start, long length, Schema dataSchema, Schema requiredSchema, Configuration conf);
+
+  /**
+   * Converts an Avro record, e.g., serialized in the log files, to an engine-specific record.
+   *
+   * @param avroRecord The Avro record.
+   * @return An engine-specific record in Type {@link T}.
+   */
+  public abstract T convertAvroRecord(IndexedRecord avroRecord);
 
   /**
    * @param mergerStrategy Merger strategy UUID.
@@ -121,12 +133,10 @@ public abstract class HoodieReaderContext<T> {
    *
    * @param recordOption An option of the record in engine-specific type if exists.
    * @param metadataMap  The record metadata.
-   * @param schema       The Avro schema of the record.
    * @return A new instance of {@link HoodieRecord}.
    */
   public abstract HoodieRecord<T> constructHoodieRecord(Option<T> recordOption,
-                                                        Map<String, Object> metadataMap,
-                                                        Schema schema);
+                                                        Map<String, Object> metadataMap);
 
   /**
    * Seals the engine-specific record to make sure the data referenced in memory do not change.
@@ -160,9 +170,11 @@ public abstract class HoodieReaderContext<T> {
    * @param schema The Avro schema of the record.
    * @return A mapping containing the metadata.
    */
-  public Map<String, Object> generateMetadataForRecord(T record, Schema schema) {
+  public Map<String, Object> generateMetadataForRecord(T record, Schema schema, boolean isPartial) {
     Map<String, Object> meta = new HashMap<>();
     meta.put(INTERNAL_META_RECORD_KEY, getRecordKey(record, schema));
+    meta.put(INTERNAL_META_SCHEMA, schema);
+    meta.put(INTERNAL_META_IS_PARTIAL, isPartial);
     return meta;
   }
 }

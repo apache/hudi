@@ -20,16 +20,20 @@
 package org.apache.hudi
 
 import org.apache.avro.Schema
+import org.apache.avro.generic.IndexedRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.util.collection.ClosableIterator
 import org.apache.hudi.util.CloseableInternalRowIterator
+import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{HoodieInternalRowUtils, SparkSession}
+
+import scala.collection.mutable
 
 /**
  * Implementation of {@link HoodieReaderContext} to read {@link InternalRow}s with
@@ -37,20 +41,48 @@ import org.apache.spark.sql.{HoodieInternalRowUtils, SparkSession}
  *
  * This uses Spark parquet reader to read parquet data files or parquet log blocks.
  *
- * @param baseFileReader    A reader that transforms a {@link PartitionedFile} to an iterator of {@link InternalRow}
- * @param partitionValues   The values for a partition in which the file group lives.
+ * @param sparkSession    Spark session.
+ * @param baseFileReader  A reader that transforms a {@link PartitionedFile} to an iterator of {@link InternalRow}.
+ * @param partitionSchema The partition schema in {@link StructType}.
+ * @param partitionValues The values for a partition in which the file group lives.
  */
-class SparkFileFormatInternalRowReaderContext(baseFileReader: PartitionedFile => Iterator[InternalRow],
+class SparkFileFormatInternalRowReaderContext(@transient sparkSession: SparkSession,
+                                              baseFileReader: PartitionedFile => Iterator[InternalRow],
+                                              partitionSchema: StructType,
                                               partitionValues: InternalRow) extends BaseSparkInternalRowReaderContext {
   lazy val sparkAdapter = SparkAdapterSupport.sparkAdapter
+  val deserializerMap: mutable.Map[Schema, HoodieAvroDeserializer] = mutable.Map()
 
   override def getFileRecordIterator(filePath: Path,
+                                     isLogFile: Boolean,
                                      start: Long,
                                      length: Long,
                                      dataSchema: Schema,
                                      requiredSchema: Schema,
                                      conf: Configuration): ClosableIterator[InternalRow] = {
     val fileInfo = sparkAdapter.getSparkPartitionedFileUtils.createPartitionedFile(partitionValues, filePath, start, length)
-    new CloseableInternalRowIterator(baseFileReader.apply(fileInfo))
+    if (isLogFile) {
+      val dataStructType = HoodieInternalRowUtils.getCachedSchema(dataSchema)
+      new CloseableInternalRowIterator(new ParquetFileFormat().buildReaderWithPartitionValues(
+        sparkSession, dataStructType, partitionSchema, dataStructType, Seq.empty, Map.empty, conf
+      ).apply(fileInfo))
+    } else {
+      new CloseableInternalRowIterator(baseFileReader.apply(fileInfo))
+    }
+  }
+
+  /**
+   * Converts an Avro record, e.g., serialized in the log files, to an engine-specific record.
+   *
+   * @param avroRecord The Avro record.
+   * @return An engine-specific record in Type {@link T}.
+   */
+  override def convertAvroRecord(avroRecord: IndexedRecord): InternalRow = {
+    val schema = avroRecord.getSchema
+    val structType = HoodieInternalRowUtils.getCachedSchema(schema)
+    val deserializer = deserializerMap.getOrElseUpdate(schema, {
+      sparkAdapter.createAvroDeserializer(schema, structType)
+    })
+    deserializer.deserialize(avroRecord).get.asInstanceOf[InternalRow]
   }
 }

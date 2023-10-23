@@ -52,7 +52,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   public HoodieAvroRecord(HoodieKey key, T data, HoodieOperation operation) {
-    super(key, data, operation, Option.empty());
+    super(key, false, data, operation, Option.empty());
   }
 
   public HoodieAvroRecord(HoodieRecord<T> record) {

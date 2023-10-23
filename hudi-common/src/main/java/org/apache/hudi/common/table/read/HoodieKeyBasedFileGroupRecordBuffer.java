@@ -69,6 +69,7 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
     checkState(partitionNameOverrideOpt.isPresent() || partitionPathFieldOpt.isPresent(),
         "Either partition-name override or partition-path field had to be present");
 
+    boolean isPartial = dataBlock.containsPartialUpdates();
 
     Pair<ClosableIterator<T>, Schema> recordsIteratorSchemaPair =
         getRecordsIterator(dataBlock, keySpecOpt);
@@ -76,7 +77,8 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
     try (ClosableIterator<T> recordIterator = recordsIteratorSchemaPair.getLeft()) {
       while (recordIterator.hasNext()) {
         T nextRecord = recordIterator.next();
-        Map<String, Object> metadata = readerContext.generateMetadataForRecord(nextRecord, readerSchema);
+        Map<String, Object> metadata = readerContext.generateMetadataForRecord(
+            nextRecord, recordsIteratorSchemaPair.getRight(), isPartial);
         String recordKey = (String) metadata.get(HoodieReaderContext.INTERNAL_META_RECORD_KEY);
         processNextDataRecord(nextRecord, metadata, recordKey);
       }
@@ -127,10 +129,12 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
 
       String recordKey = readerContext.getRecordKey(baseRecord, baseFileSchema);
       Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(recordKey);
+      Map<String, Object> metadata = readerContext.generateMetadataForRecord(
+          baseRecord, baseFileSchema, false);
 
       Option<T> resultRecord = logRecordInfo != null
-          ? merge(Option.of(baseRecord), Collections.emptyMap(), logRecordInfo.getLeft(), logRecordInfo.getRight())
-          : merge(Option.empty(), Collections.emptyMap(), Option.of(baseRecord), Collections.emptyMap());
+          ? merge(Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight())
+          : merge(Option.empty(), Collections.emptyMap(), Option.of(baseRecord), metadata);
       if (resultRecord.isPresent()) {
         nextRecord = readerContext.seal(resultRecord.get());
         return true;

@@ -123,7 +123,9 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     this.records = Option.empty();
     this.keyFieldName = keyFieldName;
     // If no reader-schema has been provided assume writer-schema as one
-    this.readerSchema = readerSchema.orElseGet(() -> getWriterSchema(super.getLogBlockHeader()));
+    this.readerSchema = containsPartialUpdates()
+        ? getWriterSchema(super.getLogBlockHeader())
+        : readerSchema.orElseGet(() -> getWriterSchema(super.getLogBlockHeader()));
     this.enablePointLookups = enablePointLookups;
   }
 
@@ -143,6 +145,10 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
   public String getKeyFieldName() {
     return keyFieldName;
+  }
+
+  public boolean containsPartialUpdates() {
+    return getLogBlockHeader().containsKey(HeaderMetadataType.FULL_SCHEMA);
   }
 
   protected static Schema getWriterSchema(Map<HeaderMetadataType, String> logBlockHeader) {

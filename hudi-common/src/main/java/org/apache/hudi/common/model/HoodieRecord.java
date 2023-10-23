@@ -120,6 +120,11 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   protected HoodieKey key;
 
   /**
+   * Whether this record contains partial data of a subset of fields.
+   */
+  protected boolean isPartial;
+
+  /**
    * Actual payload of the record.
    */
   protected T data;
@@ -150,11 +155,16 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   protected Option<Map<String, String>> metaData;
 
   public HoodieRecord(HoodieKey key, T data) {
-    this(key, data, null, Option.empty());
+    this(key, false, data, null, Option.empty());
   }
 
-  public HoodieRecord(HoodieKey key, T data, HoodieOperation operation, Option<Map<String, String>> metaData) {
+  public HoodieRecord(HoodieKey key,
+                      boolean isPartial,
+                      T data,
+                      HoodieOperation operation,
+                      Option<Map<String, String>> metaData) {
     this.key = key;
+    this.isPartial = isPartial;
     this.data = data;
     this.currentLocation = null;
     this.newLocation = null;
@@ -170,6 +180,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
       HoodieRecordLocation currentLocation,
       HoodieRecordLocation newLocation) {
     this.key = key;
+    this.isPartial = false;
     this.data = data;
     this.currentLocation = currentLocation;
     this.newLocation = newLocation;
@@ -177,7 +188,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   }
 
   public HoodieRecord(HoodieRecord<T> record) {
-    this(record.key, record.data, record.operation, record.metaData);
+    this(record.key, record.isPartial, record.data, record.operation, record.metaData);
     this.currentLocation = record.currentLocation;
     this.newLocation = record.newLocation;
     this.sealed = record.sealed;
@@ -193,6 +204,10 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
 
   public HoodieKey getKey() {
     return key;
+  }
+
+  public boolean isPartial() {
+    return isPartial;
   }
 
   public HoodieOperation getOperation() {

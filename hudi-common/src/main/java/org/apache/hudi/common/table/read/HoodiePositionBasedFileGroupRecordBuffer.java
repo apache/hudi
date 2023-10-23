@@ -84,6 +84,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
       isFullKey = keySpecOpt.get().isFullKey();
     }
 
+    boolean isPartial = dataBlock.containsPartialUpdates();
     // Extract positions from data block.
     List<Long> recordPositions = extractRecordPositions(dataBlock);
 
@@ -103,7 +104,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
         long recordPosition = recordPositions.get(recordIndex++);
         processNextDataRecord(
             nextRecord,
-            readerContext.generateMetadataForRecord(nextRecord, readerSchema),
+            readerContext.generateMetadataForRecord(nextRecord, readerSchema, isPartial),
             recordPosition
         );
       }
@@ -159,9 +160,12 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
       T baseRecord = baseFileIterator.next();
       Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(nextRecordPosition++);
 
+      Map<String, Object> metadata = readerContext.generateMetadataForRecord(
+          baseRecord, baseFileSchema, false);
+
       Option<T> resultRecord = logRecordInfo != null
-          ? merge(Option.of(baseRecord), Collections.emptyMap(), logRecordInfo.getLeft(), logRecordInfo.getRight())
-          : merge(Option.empty(), Collections.emptyMap(), Option.of(baseRecord), Collections.emptyMap());
+          ? merge(Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight())
+          : merge(Option.empty(), Collections.emptyMap(), Option.of(baseRecord), metadata);
       if (resultRecord.isPresent()) {
         nextRecord = readerContext.seal(resultRecord.get());
         return true;

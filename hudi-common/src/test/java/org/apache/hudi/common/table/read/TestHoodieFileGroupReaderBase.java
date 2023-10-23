@@ -66,12 +66,13 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
   public abstract String getBasePath();
 
-  public abstract HoodieReaderContext<T> getHoodieReaderContext(String[] partitionPath);
+  public abstract HoodieReaderContext<T> getHoodieReaderContext(String tablePath, String[] partitionPath);
 
   public abstract void commitToTable(List<String> recordList, String operation,
                                      Map<String, String> writeConfigs);
 
-  public abstract void validateRecordsInFileGroup(List<T> actualRecordList,
+  public abstract void validateRecordsInFileGroup(String tablePath,
+                                                  List<T> actualRecordList,
                                                   Schema schema,
                                                   String fileGroupId);
 
@@ -107,12 +108,20 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
   }
 
+  @Test
+  public void testReadFileGroupWithPartialUpdatesInMergeOnReadTable() throws Exception {
+    // Avro: "/Users/ethan/Work/tmp/20231018-test-partial-updates/h0_avro"
+    // Parquet: "/Users/ethan/Work/tmp/20231018-test-partial-updates/h0_parquet"
+    validateOutputFromFileGroupReader(
+        getHadoopConf(), "/Users/ethan/Work/tmp/20231018-test-partial-updates/h0_parquet", new String[] {""}, 1);
+  }
+
   private void validateOutputFromFileGroupReader(Configuration hadoopConf,
-                                                 String basePath,
+                                                 String tablePath,
                                                  String[] partitionPaths,
                                                  int expectedLogFileNum) throws Exception {
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(hadoopConf).setBasePath(basePath).build();
+        .setConf(hadoopConf).setBasePath(tablePath).build();
     Schema avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
     FileSystemViewManager viewManager = FileSystemViewManager.createViewManager(
         new HoodieLocalEngineContext(hadoopConf), HoodieMetadataConfig.newBuilder().build(),
@@ -130,11 +139,11 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     props.setProperty("hoodie.payload.ordering.field", "timestamp");
     props.setProperty(RECORD_MERGER_STRATEGY.key(), RECORD_MERGER_STRATEGY.defaultValue());
     props.setProperty(PARTITION_FIELDS.key(), metaClient.getTableConfig().getString(PARTITION_FIELDS.key()));
-    String[] partitionValues = {partitionPaths[0]};
+    String[] partitionValues = partitionPaths[0].isEmpty() ? new String[] {} : new String[] {partitionPaths[0]};
     HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<T>(
-        getHoodieReaderContext(partitionValues),
+        getHoodieReaderContext(tablePath, partitionValues),
         hadoopConf,
-        basePath,
+        tablePath,
         metaClient.getActiveTimeline().lastInstant().get().getTimestamp(),
         fileSlice.getBaseFile(),
         logFilePathList.isEmpty() ? Option.empty() : Option.of(logFilePathList),
@@ -149,6 +158,6 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
     fileGroupReader.close();
 
-    validateRecordsInFileGroup(actualRecordList, avroSchema, fileSlice.getFileId());
+    validateRecordsInFileGroup(tablePath, actualRecordList, avroSchema, fileSlice.getFileId());
   }
 }
