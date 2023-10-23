@@ -343,6 +343,12 @@ public class FlinkOptions extends HoodieConfig {
       .noDefaultValue()
       .withDescription("End commit instant for reading, the commit time format should be 'yyyyMMddHHmmss'");
 
+  public static final ConfigOption<Boolean> READ_SKIP_ARCHIVE_COMMITS = ConfigOptions
+      .key("read.skip.archive.commits")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Allow to skip reading data related to archived metadata in stream-read mode");
+
   @AdvancedConfig
   public static final ConfigOption<Boolean> READ_DATA_SKIPPING_ENABLED = ConfigOptions
       .key("read.data.skipping.enabled")

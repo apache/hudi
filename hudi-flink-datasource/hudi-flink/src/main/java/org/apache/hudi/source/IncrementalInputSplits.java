@@ -333,16 +333,23 @@ public class IncrementalInputSplits implements Serializable {
     String tableName = conf.getString(FlinkOptions.TABLE_NAME);
     List<HoodieCommitMetadata> activeMetadataList = instants.stream()
         .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, commitTimeline)).collect(Collectors.toList());
-    List<HoodieCommitMetadata> archivedMetadataList = getArchivedMetadata(metaClient, instantRange, commitTimeline, tableName);
-    if (archivedMetadataList.size() > 0) {
-      LOG.warn("\n"
-          + "--------------------------------------------------------------------------------\n"
-          + "---------- caution: the reader has fall behind too much from the writer,\n"
-          + "---------- tweak 'read.tasks' option to add parallelism of read tasks.\n"
-          + "--------------------------------------------------------------------------------");
+
+    List<HoodieCommitMetadata> metadataList;
+    if (!conf.getBoolean(FlinkOptions.READ_SKIP_ARCHIVE_COMMITS)) {
+      List<HoodieCommitMetadata> archivedMetadataList = getArchivedMetadata(metaClient, instantRange, commitTimeline, tableName);
+      if (archivedMetadataList.size() > 0) {
+        LOG.warn("\n"
+                + "--------------------------------------------------------------------------------\n"
+                + "---------- caution: the reader has fall behind too much from the writer,\n"
+                + "---------- tweak 'read.tasks' option to add parallelism of read tasks.\n"
+                + "--------------------------------------------------------------------------------");
+      }
+      // IMPORTANT: the merged metadata list must be in ascending order by instant time
+      metadataList = mergeList(archivedMetadataList, activeMetadataList);
+    } else {
+      metadataList = activeMetadataList;
     }
-    // IMPORTANT: the merged metadata list must be in ascending order by instant time
-    List<HoodieCommitMetadata> metadataList = mergeList(archivedMetadataList, activeMetadataList);
+
 
     Set<String> readPartitions = getReadPartitions(metadataList);
     if (readPartitions.size() == 0) {
