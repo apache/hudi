@@ -4,7 +4,7 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-import React, {useState, useCallback} from 'react';
+import React, {useState, useCallback, useEffect} from 'react';
 import {MDXProvider} from '@mdx-js/react';
 import renderRoutes from '@docusaurus/renderRoutes';
 import Layout from '@theme/Layout';
@@ -44,6 +44,27 @@ function DocPageContent({
 
     setHiddenSidebarContainer((value) => !value);
   }, [hiddenSidebar]);
+  if(typeof window !== 'undefined') {
+      useEffect(() => {
+          const timeout = setTimeout(() => {
+            const [_, hashValue] = window.location.href.split('#');
+
+            const element = document.querySelectorAll(`[href="#${hashValue}"]`)?.[0];
+            if(element) {
+              const headerOffset = 90;
+              const elementPosition = element.getBoundingClientRect().top;
+              const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+              window.scrollTo({
+                top: offsetPosition
+              });
+            }
+          }, 100);
+
+          return () => {
+            clearTimeout(timeout);
+          }
+      }, [window.location.href]);
+  }
   return (
     <Layout
       wrapperClassName={ThemeClassNames.wrapper.docsPages}
