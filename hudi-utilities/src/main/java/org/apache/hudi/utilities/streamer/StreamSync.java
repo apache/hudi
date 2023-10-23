@@ -23,6 +23,7 @@ import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieConversionUtils;
+import org.apache.hudi.HoodieSparkRecordMerger;
 import org.apache.hudi.HoodieSparkSqlWriter;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.SparkAdapterSupport$;
@@ -33,6 +34,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineServerHelper;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.commit.DatasetBulkInsertCommitActionExecutor;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.SerializableSchema;
@@ -97,6 +99,7 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaSet;
 import org.apache.hudi.utilities.schema.SimpleSchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
+import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.streamer.HoodieStreamer.Config;
 import org.apache.hudi.utilities.transform.Transformer;
 
@@ -107,6 +110,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.yarn.webapp.hamlet.Hamlet;
 import org.apache.spark.TaskContext;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -155,6 +159,7 @@ import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_ENABLED;
 import static org.apache.hudi.config.HoodieWriteConfig.AUTO_COMMIT_ENABLE;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_INSERT;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_UPSERT;
+import static org.apache.hudi.config.HoodieWriteConfig.RECORD_MERGER_IMPLS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
 import static org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName;
@@ -265,6 +270,8 @@ public class StreamSync implements Serializable, Closeable {
 
   private final boolean autoGenerateRecordKeys;
 
+  private final boolean rowBulkInsert;
+
   @Deprecated
   public StreamSync(HoodieStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
                     TypedProperties props, JavaSparkContext jssc, FileSystem fs, Configuration conf,
@@ -297,13 +304,17 @@ public class StreamSync implements Serializable, Closeable {
       this.errorTableWriter = ErrorTableUtils.getErrorTableWriter(cfg, sparkSession, props, hoodieSparkContext, fs);
       this.errorWriteFailureStrategy = ErrorTableUtils.getErrorWriteFailureStrategy(props);
     }
-    this.formatAdapter = new SourceFormatAdapter(
-        UtilHelpers.createSource(cfg.sourceClassName, props, hoodieSparkContext.jsc(), sparkSession, schemaProvider, metrics),
-        this.errorTableWriter, Option.of(props));
+    Source source = UtilHelpers.createSource(cfg.sourceClassName, props, hoodieSparkContext.jsc(), sparkSession, schemaProvider, metrics);
+    this.formatAdapter = new SourceFormatAdapter(source, this.errorTableWriter, Option.of(props));
 
     this.transformer = UtilHelpers.createTransformer(Option.ofNullable(cfg.transformerClassNames),
         Option.ofNullable(schemaProvider).map(SchemaProvider::getSourceSchema), this.errorTableWriter.isPresent());
-
+    if (this.cfg.operation == WriteOperationType.BULK_INSERT && source.getSourceType() != Source.SourceType.AVRO) {
+      this.props.setProperty(RECORD_MERGER_IMPLS.key(), HoodieSparkRecordMerger.class.getName());
+      this.rowBulkInsert = true;
+    } else {
+      this.rowBulkInsert = false;
+    }
   }
 
   /**
@@ -408,19 +419,25 @@ public class StreamSync implements Serializable, Closeable {
         .build();
     String instantTime = metaClient.createNewInstantTime();
 
-    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> srcRecordsWithCkpt = readFromSource(instantTime);
+    InputBatch inputBatch = readFromSource(instantTime);
 
-    if (srcRecordsWithCkpt != null) {
-      final JavaRDD<HoodieRecord> recordsFromSource = srcRecordsWithCkpt.getRight().getRight();
+    if (inputBatch != null) {
+      final JavaRDD<HoodieRecord> recordsFromSource;
+      if (rowBulkInsert) {
+        recordsFromSource = hoodieSparkContext.emptyRDD();
+      } else {
+        recordsFromSource = (JavaRDD<HoodieRecord>) inputBatch.getBatch().get();
+      }
+
       // this is the first input batch. If schemaProvider not set, use it and register Avro Schema and start
       // compactor
       if (writeClient == null) {
-        this.schemaProvider = srcRecordsWithCkpt.getKey();
+        this.schemaProvider = inputBatch.getSchemaProvider();
         // Setup HoodieWriteClient and compaction now that we decided on schema
         setupWriteClient(recordsFromSource);
       } else {
-        Schema newSourceSchema = srcRecordsWithCkpt.getKey().getSourceSchema();
-        Schema newTargetSchema = srcRecordsWithCkpt.getKey().getTargetSchema();
+        Schema newSourceSchema = inputBatch.getSchemaProvider().getSourceSchema();
+        Schema newTargetSchema = inputBatch.getSchemaProvider().getTargetSchema();
         if (!(processedSchema.isSchemaPresent(newSourceSchema))
             || !(processedSchema.isSchemaPresent(newTargetSchema))) {
           LOG.info("Seeing new schema. Source :" + newSourceSchema.toString(true)
@@ -449,8 +466,7 @@ public class StreamSync implements Serializable, Closeable {
         }
       }
 
-      result = writeToSink(instantTime, recordsFromSource,
-          srcRecordsWithCkpt.getRight().getLeft(), metrics, overallTimerContext);
+      result = writeToSink(instantTime, inputBatch, metrics, overallTimerContext);
     }
 
     metrics.updateStreamerSyncMetrics(System.currentTimeMillis());
@@ -480,7 +496,7 @@ public class StreamSync implements Serializable, Closeable {
    * of schemaProvider, checkpointStr and hoodieRecord
    * @throws Exception in case of any Exception
    */
-  public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> readFromSource(String instantTime) throws IOException {
+  public InputBatch readFromSource(String instantTime) throws IOException {
     // Retrieve the previous round checkpoints, if any
     Option<String> resumeCheckpointStr = Option.empty();
     if (commitsTimelineOpt.isPresent()) {
@@ -495,7 +511,7 @@ public class StreamSync implements Serializable, Closeable {
 
     int maxRetryCount = cfg.retryOnSourceFailures ? cfg.maxRetryCount : 1;
     int curRetryCount = 0;
-    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> sourceDataToSync = null;
+    InputBatch sourceDataToSync = null;
     while (curRetryCount++ < maxRetryCount && sourceDataToSync == null) {
       try {
         sourceDataToSync = fetchFromSource(resumeCheckpointStr, instantTime);
@@ -515,9 +531,10 @@ public class StreamSync implements Serializable, Closeable {
     return sourceDataToSync;
   }
 
-  private Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchFromSource(Option<String> resumeCheckpointStr, String instantTime) {
+  private InputBatch fetchFromSource(Option<String> resumeCheckpointStr, String instantTime) {
     HoodieRecordType recordType = createRecordMerger(props).getRecordType();
     if (recordType == HoodieRecordType.SPARK && HoodieTableType.valueOf(cfg.tableType) == HoodieTableType.MERGE_ON_READ
+        && !cfg.operation.equals(WriteOperationType.BULK_INSERT)
         && HoodieLogBlockType.fromId(props.getProperty(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "avro"))
         != HoodieLogBlockType.PARQUET_DATA_BLOCK) {
       throw new UnsupportedOperationException("Spark record only support parquet log.");
@@ -541,6 +558,9 @@ public class StreamSync implements Serializable, Closeable {
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
       boolean reconcileSchema = props.getBoolean(DataSourceWriteOptions.RECONCILE_SCHEMA().key());
       if (this.userProvidedSchemaProvider != null && this.userProvidedSchemaProvider.getTargetSchema() != null) {
+        if (rowBulkInsert) {
+          return new InputBatch(transformed, checkpointStr, this.userProvidedSchemaProvider);
+        }
         // If the target schema is specified through Avro schema,
         // pass in the schema for the Row-to-Avro conversion
         // to avoid nullability mismatch between Avro schema and Row schema
@@ -584,10 +604,16 @@ public class StreamSync implements Serializable, Closeable {
                 (SchemaProvider) new DelegatingSchemaProvider(props, hoodieSparkContext.jsc(), dataAndCheckpoint.getSchemaProvider(),
                     new SimpleSchemaProvider(hoodieSparkContext.jsc(), targetSchema, props)))
             .orElse(dataAndCheckpoint.getSchemaProvider());
+        if (rowBulkInsert) {
+          return new InputBatch(transformed, checkpointStr, schemaProvider);
+        }
         // Rewrite transformed records into the expected target schema
         avroRDDOptional = transformed.map(t -> getTransformedRDD(t, reconcileSchema, schemaProvider.getTargetSchema()));
       }
     } else {
+      if (rowBulkInsert) {
+        return formatAdapter.fetchNewDataInRowFormat(resumeCheckpointStr, cfg.sourceLimit);
+      }
       // Pull the data from the source & prepare the write
       InputBatch<JavaRDD<GenericRecord>> dataAndCheckpoint =
           formatAdapter.fetchNewDataInAvroFormat(resumeCheckpointStr, cfg.sourceLimit);
@@ -607,7 +633,7 @@ public class StreamSync implements Serializable, Closeable {
     hoodieSparkContext.setJobStatus(this.getClass().getSimpleName(), "Checking if input is empty");
     if ((!avroRDDOptional.isPresent()) || (avroRDDOptional.get().isEmpty())) {
       LOG.info("No new data, perform empty commit.");
-      return Pair.of(schemaProvider, Pair.of(checkpointStr, hoodieSparkContext.emptyRDD()));
+      return new InputBatch<>(Option.of(hoodieSparkContext.emptyRDD()), checkpointStr, schemaProvider);
     }
 
     boolean shouldCombine = cfg.filterDupes || cfg.operation.equals(WriteOperationType.UPSERT);
@@ -664,7 +690,7 @@ public class StreamSync implements Serializable, Closeable {
       throw new UnsupportedOperationException(recordType.name());
     }
 
-    return Pair.of(schemaProvider, Pair.of(checkpointStr, records));
+    return new InputBatch(Option.of(records), checkpointStr, schemaProvider);
   }
 
   private JavaRDD<GenericRecord> getTransformedRDD(Dataset<Row> rowDataset, boolean reconcileSchema, Schema readerSchema) {
@@ -754,56 +780,65 @@ public class StreamSync implements Serializable, Closeable {
    * Perform Hoodie Write. Run Cleaner, schedule compaction and syncs to hive if needed.
    *
    * @param instantTime         instant time to use for ingest.
-   * @param records             Input Records
-   * @param checkpointStr       Checkpoint String
+   * @param inputBatch          input batch that contains the records, checkpoint, and schema provider
    * @param metrics             Metrics
    * @param overallTimerContext Timer Context
    * @return Option Compaction instant if one is scheduled
    */
-  private Pair<Option<String>, JavaRDD<WriteStatus>> writeToSink(String instantTime, JavaRDD<HoodieRecord> records, String checkpointStr,
+  private Pair<Option<String>, JavaRDD<WriteStatus>> writeToSink(String instantTime, InputBatch inputBatch,
                                                                  HoodieIngestionMetrics metrics,
                                                                  Timer.Context overallTimerContext) {
     Option<String> scheduledCompactionInstant = Option.empty();
-    // filter dupes if needed
-    if (cfg.filterDupes) {
-      records = DataSourceUtils.dropDuplicates(hoodieSparkContext.jsc(), records, writeClient.getConfig());
-    }
-
-    boolean isEmpty = records.isEmpty();
-    instantTime = startCommit(instantTime, !autoGenerateRecordKeys);
-    LOG.info("Starting commit  : " + instantTime);
-
     HoodieWriteResult writeResult;
     Map<String, List<String>> partitionToReplacedFileIds = Collections.emptyMap();
     JavaRDD<WriteStatus> writeStatusRDD;
-    switch (cfg.operation) {
-      case INSERT:
-        writeStatusRDD = writeClient.insert(records, instantTime);
-        break;
-      case UPSERT:
-        writeStatusRDD = writeClient.upsert(records, instantTime);
-        break;
-      case BULK_INSERT:
-        writeStatusRDD = writeClient.bulkInsert(records, instantTime);
-        break;
-      case INSERT_OVERWRITE:
-        writeResult = writeClient.insertOverwrite(records, instantTime);
-        partitionToReplacedFileIds = writeResult.getPartitionToReplaceFileIds();
-        writeStatusRDD = writeResult.getWriteStatuses();
-        break;
-      case INSERT_OVERWRITE_TABLE:
-        writeResult = writeClient.insertOverwriteTable(records, instantTime);
-        partitionToReplacedFileIds = writeResult.getPartitionToReplaceFileIds();
-        writeStatusRDD = writeResult.getWriteStatuses();
-        break;
-      case DELETE_PARTITION:
-        List<String> partitions = records.map(record -> record.getPartitionPath()).distinct().collect();
-        writeResult = writeClient.deletePartitions(partitions, instantTime);
-        partitionToReplacedFileIds = writeResult.getPartitionToReplaceFileIds();
-        writeStatusRDD = writeResult.getWriteStatuses();
-        break;
-      default:
-        throw new HoodieStreamerException("Unknown operation : " + cfg.operation);
+    instantTime = startCommit(instantTime, !autoGenerateRecordKeys);
+    LOG.info("Starting commit  : " + instantTime);
+    boolean isEmpty;
+    if (rowBulkInsert) {
+      Dataset<Row> df = (Dataset<Row>) inputBatch.getBatch().get();
+      isEmpty = df.isEmpty();
+      DatasetBulkInsertCommitActionExecutor executor = new DatasetBulkInsertCommitActionExecutor(writeClient.getConfig(), writeClient, instantTime, false);
+      //NOTE: need to get if table is partitioned. Just hardcoding to true for now
+      writeStatusRDD = executor.execute(df, true).getWriteStatuses();
+
+    } else {
+      JavaRDD<HoodieRecord> records = (JavaRDD<HoodieRecord>) inputBatch.getBatch().get();
+      // filter dupes if needed
+      if (cfg.filterDupes) {
+        records = DataSourceUtils.dropDuplicates(hoodieSparkContext.jsc(), records, writeClient.getConfig());
+      }
+      isEmpty = records.isEmpty();
+
+      switch (cfg.operation) {
+        case INSERT:
+          writeStatusRDD = writeClient.insert(records, instantTime);
+          break;
+        case UPSERT:
+          writeStatusRDD = writeClient.upsert(records, instantTime);
+          break;
+        case BULK_INSERT:
+          writeStatusRDD = writeClient.bulkInsert(records, instantTime);
+          break;
+        case INSERT_OVERWRITE:
+          writeResult = writeClient.insertOverwrite(records, instantTime);
+          partitionToReplacedFileIds = writeResult.getPartitionToReplaceFileIds();
+          writeStatusRDD = writeResult.getWriteStatuses();
+          break;
+        case INSERT_OVERWRITE_TABLE:
+          writeResult = writeClient.insertOverwriteTable(records, instantTime);
+          partitionToReplacedFileIds = writeResult.getPartitionToReplaceFileIds();
+          writeStatusRDD = writeResult.getWriteStatuses();
+          break;
+        case DELETE_PARTITION:
+          List<String> partitions = records.map(record -> record.getPartitionPath()).distinct().collect();
+          writeResult = writeClient.deletePartitions(partitions, instantTime);
+          partitionToReplacedFileIds = writeResult.getPartitionToReplaceFileIds();
+          writeStatusRDD = writeResult.getWriteStatuses();
+          break;
+        default:
+          throw new HoodieStreamerException("Unknown operation : " + cfg.operation);
+      }
     }
 
     long totalErrorRecords = writeStatusRDD.mapToDouble(WriteStatus::getTotalErrorRecords).sum().longValue();
@@ -812,8 +847,8 @@ public class StreamSync implements Serializable, Closeable {
     if (!hasErrors || cfg.commitOnErrors) {
       HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
       if (!getBooleanWithAltKeys(props, CHECKPOINT_FORCE_SKIP)) {
-        if (checkpointStr != null) {
-          checkpointCommitMetadata.put(CHECKPOINT_KEY, checkpointStr);
+        if (inputBatch.getCheckpointForNextBatch() != null) {
+          checkpointCommitMetadata.put(CHECKPOINT_KEY, inputBatch.getCheckpointForNextBatch());
         }
         if (cfg.checkpoint != null) {
           checkpointCommitMetadata.put(CHECKPOINT_RESET_KEY, cfg.checkpoint);
@@ -846,7 +881,7 @@ public class StreamSync implements Serializable, Closeable {
       boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, partitionToReplacedFileIds, Option.empty());
       if (success) {
         LOG.info("Commit " + instantTime + " successful!");
-        this.formatAdapter.getSource().onCommit(checkpointStr);
+        this.formatAdapter.getSource().onCommit(inputBatch.getCheckpointForNextBatch());
         // Schedule compaction if needed
         if (cfg.isAsyncCompactionEnabled()) {
           scheduledCompactionInstant = writeClient.scheduleCompaction(Option.empty());

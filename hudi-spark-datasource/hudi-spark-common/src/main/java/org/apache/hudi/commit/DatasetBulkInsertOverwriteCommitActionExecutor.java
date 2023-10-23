@@ -43,7 +43,7 @@ public class DatasetBulkInsertOverwriteCommitActionExecutor extends BaseDatasetB
   public DatasetBulkInsertOverwriteCommitActionExecutor(HoodieWriteConfig config,
                                                         SparkRDDWriteClient writeClient,
                                                         String instantTime) {
-    super(config, writeClient, instantTime);
+    super(config, writeClient, instantTime, true);
   }
 
   @Override
