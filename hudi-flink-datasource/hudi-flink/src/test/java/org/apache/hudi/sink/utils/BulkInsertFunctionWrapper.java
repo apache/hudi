@@ -56,10 +56,6 @@ import org.apache.flink.table.types.logical.RowType;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 /**
  * A wrapper class to manipulate the {@link BulkInsertWriteFunction} instance for testing.
@@ -190,43 +186,13 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   //  Utilities
   // -------------------------------------------------------------------------
 
-  private void setupWriteFunction() {
-    ExecutorService executors = Executors.newFixedThreadPool(2);
-    Runnable writeFunctionInitializer = () -> {
-      try {
-        writeFunction = new BulkInsertWriteFunction<>(conf, rowType);
-        writeFunction.setRuntimeContext(runtimeContext);
-        writeFunction.setOperatorEventGateway(gateway);
-        writeFunction.open(conf);
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    };
-    executors.submit(writeFunctionInitializer);
-    Runnable coordinatorInitializer = () -> {
-      while (true) {
-        try {
-          OperatorEvent initializeEvent = getNextEvent();
-          // handle the bootstrap event
-          coordinator.handleEventFromOperator(0, initializeEvent);
-          break;
-        } catch (NoSuchElementException e) {
-          try {
-            // sleep and retry
-            TimeUnit.SECONDS.sleep(1);
-          } catch (InterruptedException ex) {
-            throw new RuntimeException(ex);
-          }
-        }
-      }
-    };
-    executors.submit(coordinatorInitializer);
-    executors.shutdown();
-    try {
-      executors.awaitTermination(5, TimeUnit.MINUTES);
-    } catch (InterruptedException e) {
-      // ignore
-    }
+  private void setupWriteFunction() throws Exception {
+    writeFunction = new BulkInsertWriteFunction<>(conf, rowType);
+    writeFunction.setRuntimeContext(runtimeContext);
+    writeFunction.setOperatorEventGateway(gateway);
+    writeFunction.open(conf);
+    // handle the bootstrap event
+    coordinator.handleEventFromOperator(0, getNextEvent());
   }
 
   private void setupMapFunction() {
