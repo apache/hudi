@@ -68,11 +68,11 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   private final RowType rowType;
   private final RowType rowTypeWithFileId;
 
+  private final IOManager ioManager;
   private final MockStreamingRuntimeContext runtimeContext;
   private final MockOperatorEventGateway gateway;
   private final MockOperatorCoordinatorContext coordinatorContext;
   private final StreamWriteOperatorCoordinator coordinator;
-  private final MockStateInitializationContext stateInitializationContext;
   private final boolean needSortInput;
 
   private BulkInsertWriteFunction<RowData> writeFunction;
@@ -82,7 +82,7 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   private CollectorOutput<RowData> output;
 
   public BulkInsertFunctionWrapper(String tablePath, Configuration conf) throws Exception {
-    IOManager ioManager = new IOManagerAsync();
+    ioManager = new IOManagerAsync();
     MockEnvironment environment = new MockEnvironmentBuilder()
         .setTaskName("mockTask")
         .setManagedMemorySize(4 * MemoryManager.DEFAULT_PAGE_SIZE)
@@ -95,7 +95,6 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     this.rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType);
     this.coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), 1);
     this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
-    this.stateInitializationContext = new MockStateInitializationContext();
     this.needSortInput = conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT);
   }
 
@@ -152,7 +151,6 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   public void checkpointComplete(long checkpointId) {
-    stateInitializationContext.getOperatorStateStore().checkpointSuccess(checkpointId);
     coordinator.notifyCheckpointComplete(checkpointId);
   }
 
@@ -177,8 +175,13 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   @Override
   public void close() throws Exception {
     this.coordinator.close();
-    if (bucketIdToFileId != null) {
+    this.ioManager.close();
+    this.writeFunction.close();
+    if (this.bucketIdToFileId != null) {
       this.bucketIdToFileId.clear();
+    }
+    if (needSortInput) {
+      this.sortOperator.close();
     }
   }
 
@@ -205,7 +208,6 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   private void setupSortOperator() throws Exception {
-    IOManager ioManager = new IOManagerAsync();
     MockEnvironment environment = new MockEnvironmentBuilder()
         .setTaskName("mockTask")
         .setManagedMemorySize(12 * MemoryManager.DEFAULT_PAGE_SIZE)

@@ -306,7 +306,7 @@ public class TestWriteBase {
     }
 
     /**
-     * Flush data using endInput. Asserts the commit would fail.
+     * Flush data and commit using endInput. Asserts the commit would fail.
      */
     public void endInputThrows(Class<?> cause, String msg) {
       // this triggers the data write and event send
@@ -320,7 +320,7 @@ public class TestWriteBase {
     }
 
     /**
-     * Flush data using endInput. Asserts the commit would fail.
+     * Flush data and commit using endInput.
      */
     public TestHarness endInput() {
       // this triggers the data write and event send
