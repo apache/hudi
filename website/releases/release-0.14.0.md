@@ -222,11 +222,8 @@ ways to match the behavior of non-bootstrapped MOR tables. Snapshot reads will n
 Hive sync for such tables will result in both _ro and _rt suffixed to the table name to signify read optimized and snapshot 
 reading respectively.
 
-#### Table valued function `hudi_table_changes` for incremental read
-Hudi already provides capability to obtain a stream of records that changed since a given commit timestamp using 
-[incremental query](https://hudi.apache.org/docs/quick-start-guide#incremental-query) type. In Hudi 0.14.0, we have 
-added a new and much simpler way of getting the latest state or the change streams for Hudi datasets using a table-valued 
-function called `hudi_table_changes`. Below is the syntax and some examples on how to use this function.
+####  Table-valued function named hudi_table_changes designed for incremental reading through Spark SQL
+Hudi offers the functionality to fetch a stream of records changed since a specified commit timestamp through the [incremental query](https://hudi.apache.org/docs/quick-start-guide#incremental-query) type. With the release of Hudi 0.14.0, we've introduced a more straightforward method to access the most recent state or change streams of Hudi datasets. This is achieved using a table-valued function named `hudi_table_changes` in Spark SQL. Here's the syntax and several examples of how to utilize this function:
 
 ```text
 SYNTAX
