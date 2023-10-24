@@ -383,6 +383,9 @@
           <skip>${skipITs}</skip>
           <argLine>@{argLine}</argLine>
           <useSystemClassLoader>false</useSystemClassLoader>
+          <systemPropertyVariables>
+            <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
+          </systemPropertyVariables>
         </configuration>
       </plugin>
       <plugin>
@@ -1963,6 +1966,7 @@
               </includes>
               <systemPropertyVariables>
                 <dynamodb-local.endpoint>${dynamodb-local.endpoint}</dynamodb-local.endpoint>
+                <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
               </systemPropertyVariables>
               <useSystemClassLoader>false</useSystemClassLoader>
             </configuration>
