@@ -226,9 +226,10 @@ public class StreamReadMonitoringFunction
     this.issuedOffset = result.getOffset();
     LOG.info("\n"
             + "------------------------------------------------------------\n"
+            + "---------- table: {}\n"
             + "---------- consumed to instant: {}\n"
             + "------------------------------------------------------------",
-        this.issuedInstant);
+        conf.getString(FlinkOptions.TABLE_NAME), this.issuedInstant);
   }
 
   @Override
