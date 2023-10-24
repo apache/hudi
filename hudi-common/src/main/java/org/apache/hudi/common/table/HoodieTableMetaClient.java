@@ -22,17 +22,21 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
 import org.apache.hudi.common.fs.FileSystemRetryConfig;
 import org.apache.hudi.common.fs.NoOpConsistencyGuard;
 import org.apache.hudi.common.model.BootstrapIndexType;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.RecordPayloadType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
@@ -47,7 +51,6 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
@@ -80,6 +83,8 @@ import static org.apache.hudi.common.table.HoodieTableConfig.INITIAL_VERSION;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
@@ -161,7 +166,7 @@ public class HoodieTableMetaClient implements Serializable {
     Option<TimelineLayoutVersion> tableConfigVersion = tableConfig.getTimelineLayoutVersion();
     if (layoutVersion.isPresent() && tableConfigVersion.isPresent()) {
       // Ensure layout version passed in config is not lower than the one seen in hoodie.properties
-      ValidationUtils.checkArgument(layoutVersion.get().compareTo(tableConfigVersion.get()) >= 0,
+      checkArgument(layoutVersion.get().compareTo(tableConfigVersion.get()) >= 0,
           "Layout Version defined in hoodie properties has higher version (" + tableConfigVersion.get()
               + ") than the one passed in config (" + layoutVersion.get() + ")");
     }
@@ -196,7 +201,7 @@ public class HoodieTableMetaClient implements Serializable {
                                    String indexType,
                                    Map<String, Map<String, String>> columns,
                                    Map<String, String> options) {
-    ValidationUtils.checkState(
+    checkState(
         !indexMetadataOpt.isPresent() || !indexMetadataOpt.get().getIndexDefinitions().containsKey(indexName),
         "Index metadata is already present");
     List<String> columnNames = new ArrayList<>(columns.keySet());
@@ -892,9 +897,9 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
     public HoodieTableMetaClient build() {
-      ValidationUtils.checkArgument(conf != null || storage != null,
+      checkArgument(conf != null || storage != null,
           "Storage configuration or HoodieStorage needs to be set to init HoodieTableMetaClient");
-      ValidationUtils.checkArgument(basePath != null, "basePath needs to be set to init HoodieTableMetaClient");
+      checkArgument(basePath != null, "basePath needs to be set to init HoodieTableMetaClient");
       if (timeGeneratorConfig == null) {
         timeGeneratorConfig = HoodieTimeGeneratorConfig.newBuilder().withPath(basePath).build();
       }
@@ -923,6 +928,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String recordKeyFields;
     private String secondaryKeyFields;
     private String archiveLogFolder;
+    private RecordMergeMode recordMergeMode;
     private String payloadClassName;
     private String payloadType;
     private String recordMergerStrategy;
@@ -996,6 +1002,11 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder setArchiveLogFolder(String archiveLogFolder) {
       this.archiveLogFolder = archiveLogFolder;
+      return this;
+    }
+
+    public PropertyBuilder setRecordMergeMode(RecordMergeMode recordMergeMode) {
+      this.recordMergeMode = recordMergeMode;
       return this;
     }
 
@@ -1144,6 +1155,7 @@ public class HoodieTableMetaClient implements Serializable {
       return setTableType(metaClient.getTableType())
           .setTableName(metaClient.getTableConfig().getTableName())
           .setArchiveLogFolder(metaClient.getTableConfig().getArchivelogFolder())
+          .setRecordMergeMode(metaClient.getTableConfig().getRecordMergeMode())
           .setPayloadClassName(metaClient.getTableConfig().getPayloadClass())
           .setRecordMergerStrategy(metaClient.getTableConfig().getRecordMergerStrategy());
     }
@@ -1172,6 +1184,10 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.ARCHIVELOG_FOLDER)) {
         setArchiveLogFolder(
             hoodieConfig.getString(HoodieTableConfig.ARCHIVELOG_FOLDER));
+      }
+      if (hoodieConfig.contains(HoodieTableConfig.RECORD_MERGE_MODE)) {
+        setRecordMergeMode(
+            RecordMergeMode.valueOf(hoodieConfig.getString(HoodieTableConfig.RECORD_MERGE_MODE).toUpperCase()));
       }
       if (hoodieConfig.contains(HoodieTableConfig.PAYLOAD_CLASS_NAME)) {
         setPayloadClassName(hoodieConfig.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME));
@@ -1262,8 +1278,8 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
     public Properties build() {
-      ValidationUtils.checkArgument(tableType != null, "tableType is null");
-      ValidationUtils.checkArgument(tableName != null, "tableName is null");
+      checkArgument(tableType != null, "tableType is null");
+      checkArgument(tableName != null, "tableName is null");
 
       HoodieTableConfig tableConfig = new HoodieTableConfig();
 
@@ -1384,6 +1400,36 @@ public class HoodieTableMetaClient implements Serializable {
     public HoodieTableMetaClient initTable(StorageConfiguration<?> configuration, String basePath)
         throws IOException {
       return HoodieTableMetaClient.initTableAndGetMetaClient(configuration, basePath, build());
+    }
+
+    private void validateMergeConfigs() {
+      boolean payloadClassNameSet = null != payloadClassName;
+      boolean payloadTypeSet = null != payloadType;
+      boolean recordMergerStrategySet = null != recordMergerStrategy;
+      boolean recordMergeModeSet = null != recordMergeMode;
+
+      checkArgument(recordMergeModeSet,
+          "Record merge mode " + HoodieTableConfig.RECORD_MERGE_MODE.key() + " should be set");
+      switch (recordMergeMode) {
+        case OVERWRITE_WITH_LATEST:
+          checkArgument((!payloadClassNameSet && !payloadTypeSet)
+                  || (payloadClassNameSet && payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName()))
+                  || (payloadTypeSet && payloadType.equals(RecordPayloadType.OVERWRITE_LATEST_AVRO.name())),
+              "Payload class name or type should be consistent with the record merge mode");
+          break;
+        case EVENT_TIME_ORDERING:
+          checkArgument((!payloadClassNameSet && !payloadTypeSet)
+                  || (payloadClassNameSet && payloadClassName.equals(DefaultHoodieRecordPayload.class.getName()))
+                  || (payloadTypeSet && payloadType.equals(RecordPayloadType.HOODIE_AVRO_DEFAULT.name())),
+              "Payload class name or type should be consistent with the record merge mode");
+          checkArgument(!recordMergerStrategySet
+                  || recordMergerStrategy.equals(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID),
+              "Record merger strategy should be consistent with the record merging mode");
+          break;
+        case CUSTOM:
+        default:
+          // No op
+      }
     }
   }
 }
