@@ -147,8 +147,11 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
   }
 
   @AfterEach
-  public void clean() throws IOException {
+  public void clean() throws Exception {
     cleanupResources();
+    if (metadataWriter != null) {
+      metadataWriter.close();
+    }
   }
 
   private HoodieWriteConfig initTestTableAndGetWriteConfig(boolean enableMetadata, int minArchivalCommits, int maxArchivalCommits, int maxDeltaCommitsMetadataTable) throws Exception {
@@ -382,14 +385,15 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     String file1P0C0 = UUID.randomUUID().toString();
     String file1P1C0 = UUID.randomUUID().toString();
     String commitTs = HoodieActiveTimeline.formatDate(Date.from(curDateTime.minusMinutes(minutesForCommit).toInstant()));
-    HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
-    Map<String, List<String>> part1ToFileId = Collections.unmodifiableMap(new HashMap<String, List<String>>() {
-      {
-        put(p0, CollectionUtils.createImmutableList(file1P0C0));
-        put(p1, CollectionUtils.createImmutableList(file1P1C0));
-      }
-    });
-    return commitWithMdt(commitTs, part1ToFileId, testTable, metadataWriter, true, true, isComplete);
+    try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context)) {
+      Map<String, List<String>> part1ToFileId = Collections.unmodifiableMap(new HashMap<String, List<String>>() {
+        {
+          put(p0, CollectionUtils.createImmutableList(file1P0C0));
+          put(p1, CollectionUtils.createImmutableList(file1P1C0));
+        }
+      });
+      return commitWithMdt(commitTs, part1ToFileId, testTable, metadataWriter, true, true, isComplete);
+    }
   }
 
   private HoodieInstant commitWithMdt(String instantTime, Map<String, List<String>> partToFileId,
