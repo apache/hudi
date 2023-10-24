@@ -117,7 +117,7 @@ public class TestInLineFileSystemHFileInLining {
     HFile.Reader reader =
         HoodieHFileUtils.createHFileReader(inlineFileSystem, inlinePath, cacheConf, inlineConf);
     // Get a scanner that caches and that does not use pread.
-    HFileScanner scanner = reader.getScanner(true, false);
+    HFileScanner scanner = reader.getScanner(inlineConf,true, false);
     // Align scanner at start of the file.
     scanner.seekTo();
     readAllRecords(scanner);

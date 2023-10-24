@@ -124,6 +124,9 @@
                   <include>commons-codec:commons-codec</include>
                   <include>commons-io:commons-io</include>
                   <include>org.openjdk.jol:jol-core</include>
+                  <include>io.opentelemetry:opentelemetry-api</include>
+                  <include>io.opentelemetry:opentelemetry-context</include>
+                  <include>io.opentelemetry:opentelemetry-semconv</include>
                 </includes>
               </artifactSet>
               <relocations combine.children="append">

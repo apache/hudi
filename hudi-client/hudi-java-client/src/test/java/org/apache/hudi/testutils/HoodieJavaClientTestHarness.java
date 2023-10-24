@@ -1006,7 +1006,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
         if (schema == null) {
           schema = new Schema.Parser().parse(new String(reader.getHFileInfo().get(getUTF8Bytes(SCHEMA_KEY))));
         }
-        HFileScanner scanner = reader.getScanner(false, false);
+        HFileScanner scanner = reader.getScanner(fs.getConf(), false, false);
         if (!scanner.seekTo()) {
           // EOF reached
           continue;

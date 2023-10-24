@@ -141,7 +141,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     // to the underlying storage as we fetched (potentially) sparsely distributed
     // keys
     HFile.Reader reader = getHFileReader();
-    HFileScanner scanner = getHFileScanner(reader, true);
+    HFileScanner scanner = getHFileScanner(hadoopConf, reader, true);
     ClosableIterator<IndexedRecord> iterator = new RecordByKeyIterator(reader, scanner, sortedKeys, getSchema(), schema);
     return new CloseableMappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
   }
@@ -200,7 +200,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
       if (!sharedScanner.isPresent()) {
         // For shared scanner, which is primarily used for point-lookups, we're caching blocks
         // by default, to minimize amount of traffic to the underlying storage
-        sharedScanner = Option.of(getHFileScanner(getSharedHFileReader(), true));
+        sharedScanner = Option.of(getHFileScanner(hadoopConf, getSharedHFileReader(), true));
       }
       return sortedCandidateRowKeys.stream()
           .filter(k -> {
@@ -225,7 +225,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
 
     HFile.Reader reader = getHFileReader();
     // TODO eval whether seeking scanner would be faster than pread
-    HFileScanner scanner = getHFileScanner(reader, false, false);
+    HFileScanner scanner = getHFileScanner(hadoopConf, reader, false, false);
     return new RecordIterator(reader, scanner, getSchema(), readerSchema);
   }
 
@@ -235,7 +235,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     // to the underlying storage as we fetched (potentially) sparsely distributed
     // keys
     HFile.Reader reader = getHFileReader();
-    HFileScanner scanner = getHFileScanner(reader, true);
+    HFileScanner scanner = getHFileScanner(hadoopConf, reader, true);
     return new RecordByKeyIterator(reader, scanner, keys, getSchema(), readerSchema);
   }
 
@@ -245,7 +245,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     // to the underlying storage as we fetched (potentially) sparsely distributed
     // keys
     HFile.Reader reader = getHFileReader();
-    HFileScanner scanner = getHFileScanner(reader, true);
+    HFileScanner scanner = getHFileScanner(hadoopConf, reader, true);
     return new RecordByKeyPrefixIterator(reader, scanner, sortedKeyPrefixes, getSchema(), readerSchema);
   }
 
@@ -492,15 +492,15 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
         .collect(Collectors.toList());
   }
 
-  private static HFileScanner getHFileScanner(HFile.Reader reader, boolean cacheBlocks) {
-    return getHFileScanner(reader, cacheBlocks, true);
+  private static HFileScanner getHFileScanner(Configuration conf, HFile.Reader reader, boolean cacheBlocks) {
+    return getHFileScanner(conf, reader, cacheBlocks, true);
   }
 
-  private static HFileScanner getHFileScanner(HFile.Reader reader, boolean cacheBlocks, boolean doSeek) {
+  private static HFileScanner getHFileScanner(Configuration conf, HFile.Reader reader, boolean cacheBlocks, boolean doSeek) {
     // NOTE: Only scanners created in Positional Read ("pread") mode could share the same reader,
     //       since scanners in default mode will be seeking w/in the underlying stream
     try {
-      HFileScanner scanner = reader.getScanner(cacheBlocks, true);
+      HFileScanner scanner = reader.getScanner(conf, cacheBlocks, true);
       if (doSeek) {
         scanner.seekTo(); // places the cursor at the beginning of the first data block.
       }
@@ -640,7 +640,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
   @Override
   public ClosableIterator<String> getRecordKeyIterator() {
     HFile.Reader reader = getHFileReader();
-    final HFileScanner scanner = reader.getScanner(false, false);
+    final HFileScanner scanner = reader.getScanner(hadoopConf,false, false);
     return new ClosableIterator<String>() {
       @Override
       public boolean hasNext() {
