@@ -3546,7 +3546,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     return allfiles;
   }
 
-  // TODO
   private HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>> metadataWriter(SparkRDDWriteClient client) {
     return (HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>>) SparkHoodieBackedTableMetadataWriter
         .create(hadoopConf, client.getConfig(), new HoodieSparkEngineContext(jsc));
