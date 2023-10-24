@@ -2618,7 +2618,13 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean needResolveWriteConflict(WriteOperationType operationType) {
-    return WriteOperationType.BULK_INSERT == operationType || !isNonBlockingConcurrencyControl();
+    if (getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
+      // NB-CC don't need to resolve write conflict except bulk insert operation
+      return WriteOperationType.BULK_INSERT == operationType || !isNonBlockingConcurrencyControl();
+    } else {
+      // SINGLE_WRITER case don't need to resolve write conflict
+      return false;
+    }
   }
 
   public boolean isNonBlockingConcurrencyControl() {
