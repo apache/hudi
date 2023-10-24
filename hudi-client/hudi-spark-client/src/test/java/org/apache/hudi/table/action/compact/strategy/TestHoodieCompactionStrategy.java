@@ -139,9 +139,12 @@ public class TestHoodieCompactionStrategy {
     List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap, keyToPartitionMap);
     List<HoodieCompactionOperation> returned = strategy.orderAndFilter(writeConfig, operations, new ArrayList<>());
 
-    assertTrue(returned.size() < operations.size(),
-        "DayBasedCompactionStrategy should have resulted in fewer compactions");
-    assertEquals(2, returned.size(), "DayBasedCompactionStrategy should have resulted in fewer compactions");
+    assertTrue(returned.size() == operations.size(),
+        "DayBasedCompactionStrategy should have resulted same compactions");
+    assertEquals(4, returned.size(), "DayBasedCompactionStrategy should have resulted same compactions");
+
+    List<String> filterPartitions = strategy.filterPartitionPaths(writeConfig, Arrays.asList(partitionPaths));
+    assertEquals(1, filterPartitions.size(), "DayBasedCompactionStrategy should have resulted in fewer partitions");
 
     int comparison = strategy.getComparator().compare(returned.get(returned.size() - 1).getPartitionPath(),
         returned.get(0).getPartitionPath());
