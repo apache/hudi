@@ -128,9 +128,7 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
         listLatestFileSlices(Seq(), partitionFilters, dataFilters)
       } else {
         val latestCommit = includedCommits.last.getTimestamp
-
         val fsView = new HoodieTableFileSystemView(metaClient, timeline, affectedFilesInCommits)
-
         val modifiedPartitions = getWritePartitionPaths(commitsMetadata)
 
         modifiedPartitions.asScala.flatMap { relativePartitionPath =>
@@ -142,11 +140,15 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
 
     slices.groupBy(fs => {
       if (fs.getBaseFile.isPresent) {
-        getPartitionColumnsAsInternalRow(fs.getBaseFile.get.getFileStatus)
+        getPartitionColumnValuesAsInternalRow(fs.getBaseFile.get.getFileStatus)
       } else {
-        null
+        getPartitionColumnValuesAsInternalRow(fs.getLogFiles.findAny.get.getFileStatus)
       }
     })
+  }
+
+  def getRequiredFilters: Seq[Filter] = {
+    incrementalSpanRecordFilters
   }
 
   private def filterFileSlices(fileSlices: Seq[FileSlice], pathGlobPattern: String): Seq[FileSlice] = {

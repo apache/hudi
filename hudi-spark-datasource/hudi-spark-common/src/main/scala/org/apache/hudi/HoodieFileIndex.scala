@@ -161,7 +161,7 @@ case class HoodieFileIndex(spark: SparkSession,
             || (f.getBaseFile.isPresent && f.getBaseFile.get().getBootstrapBaseFile.isPresent)).
             foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
           if (c.nonEmpty) {
-            PartitionDirectory(new PartitionFileSliceMapping(InternalRow.fromSeq(partitionOpt.get.values), c), baseFileStatusesAndLogFileOnly)
+            PartitionDirectory(new HoodiePartitionFileSliceMapping(InternalRow.fromSeq(partitionOpt.get.values), c), baseFileStatusesAndLogFileOnly)
           } else {
             PartitionDirectory(InternalRow.fromSeq(partitionOpt.get.values), baseFileStatusesAndLogFileOnly)
           }

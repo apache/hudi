@@ -209,16 +209,19 @@ class HoodieSparkFileFormatUtils(val sqlContext: SQLContext,
     val fileFormat = if (fileGroupReaderEnabled) {
       new HoodieFileGroupReaderBasedParquetFileFormat(
         tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
-        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields, isMOR, isBootstrap, shouldUseRecordPosition)
+        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
+        isMOR, isBootstrap, false, shouldUseRecordPosition, Seq.empty)
     } else if (metaClient.getTableConfig.isMultipleBaseFileFormatsEnabled && !isBootstrap) {
       new HoodieMultipleBaseFileFormat(sparkSession.sparkContext.broadcast(tableState),
         sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
-        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields, isMOR)
+        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields, isMOR, false, Seq.empty)
     } else {
       new NewHoodieParquetFileFormat(sparkSession.sparkContext.broadcast(tableState),
         sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
-        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields, isMOR, isBootstrap)
+        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
+        isMOR, isBootstrap, false, Seq.empty)
     }
+
     HadoopFsRelation(
       location = fileIndex,
       partitionSchema = fileIndex.partitionSchema,
