@@ -110,12 +110,12 @@ class TestGetPartitionValuesFromPath extends HoodieSparkSqlTestBase {
            |)
            |partitioned by (region, dt)""".stripMargin)
 
-      spark.sql(s"insert into $tableName partition (region='reg1', dt='2023-10-01') select 1, 'name1', 1000")
-      checkAnswer(s"select id, name, ts, region, cast(dt as string) from $tableName")(
-        Seq(1, "name1", 1000, "reg1", "2023-10-01")
-      )
-
       withSQLConf("hoodie.schema.on.read.enable" -> "true") {
+        spark.sql(s"insert into $tableName partition (region='reg1', dt='2023-10-01') select 1, 'name1', 1000")
+        checkAnswer(s"select id, name, ts, region, cast(dt as string) from $tableName")(
+          Seq(1, "name1", 1000, "reg1", "2023-10-01")
+        )
+
         spark.sql(s"alter table $tableName add columns(price double)")
         checkAnswer(s"select id, name, ts, region, cast(dt as string) from $tableName")(
           Seq(1, "name1", 1000, "reg1", "2023-10-01")
