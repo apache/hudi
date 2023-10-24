@@ -274,7 +274,7 @@ public class ConfigUtils {
    * @param configProperty {@link ConfigProperty} config to fetch.
    * @return {@link Option} of value if the config exists; empty {@link Option} otherwise.
    */
-  public static Option<Object> getRawValueWithAltKeys(TypedProperties props,
+  public static Option<Object> getRawValueWithAltKeys(Properties props,
                                                       ConfigProperty<?> configProperty) {
     if (props.containsKey(configProperty.key())) {
       return Option.ofNullable(props.get(configProperty.key()));
@@ -325,7 +325,7 @@ public class ConfigUtils {
    * @param configProperty {@link ConfigProperty} config of String type to fetch.
    * @return String value if the config exists.
    */
-  public static String getStringWithAltKeys(TypedProperties props,
+  public static String getStringWithAltKeys(Properties props,
                                             ConfigProperty<String> configProperty) {
     return getStringWithAltKeys(props, configProperty, false);
   }
@@ -344,7 +344,7 @@ public class ConfigUtils {
    * {@code useDefaultValue} is true, returns default String value if there is default value
    * defined in the {@link ConfigProperty} config and {@code null} otherwise.
    */
-  public static String getStringWithAltKeys(TypedProperties props,
+  public static String getStringWithAltKeys(Properties props,
                                             ConfigProperty<String> configProperty,
                                             boolean useDefaultValue) {
     if (useDefaultValue) {
@@ -368,7 +368,7 @@ public class ConfigUtils {
    * @param defaultValue   Default value.
    * @return String value if the config exists; default value otherwise.
    */
-  public static String getStringWithAltKeys(TypedProperties props,
+  public static String getStringWithAltKeys(Properties props,
                                             ConfigProperty<?> configProperty,
                                             String defaultValue) {
     Option<Object> rawValue = getRawValueWithAltKeys(props, configProperty);

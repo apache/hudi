@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -78,10 +79,11 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
                                       Option<String> keyFieldOverride,
                                       boolean enableOptimizedLogBlocksScan,
                                       HoodieRecordMerger recordMerger,
+                                      RecordMergeMode recordMergeMode,
                                       HoodieFileGroupRecordBuffer<T> recordBuffer) {
     super(readerContext, fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
         instantRange, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, enableOptimizedLogBlocksScan,
-        recordMerger, recordBuffer);
+        recordMerger, recordMergeMode, recordBuffer);
     this.scannedPrefixes = new HashSet<>();
 
     if (forceFullScan) {
@@ -237,6 +239,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     private boolean forceFullScan = true;
     private boolean enableOptimizedLogBlocksScan = false;
     private HoodieRecordMerger recordMerger = HoodiePreCombineAvroRecordMerger.INSTANCE;
+    private RecordMergeMode recordMergeMode;
 
     private HoodieFileGroupRecordBuffer<T> recordBuffer;
 
@@ -331,6 +334,12 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
       return this;
     }
 
+    @Override
+    public Builder<T> withRecordMergeMode(RecordMergeMode recordMergeMode) {
+      this.recordMergeMode = recordMergeMode;
+      return this;
+    }
+
     public Builder<T> withKeyFiledOverride(String keyFieldOverride) {
       this.keyFieldOverride = Objects.requireNonNull(keyFieldOverride);
       return this;
@@ -361,7 +370,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
           withOperationField, forceFullScan,
           Option.ofNullable(partitionName), internalSchema,
           Option.ofNullable(keyFieldOverride),
-          enableOptimizedLogBlocksScan, recordMerger,
+          enableOptimizedLogBlocksScan, recordMerger, recordMergeMode,
           recordBuffer);
     }
   }

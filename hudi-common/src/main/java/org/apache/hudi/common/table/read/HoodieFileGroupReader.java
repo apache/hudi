@@ -19,8 +19,10 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -47,6 +49,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
@@ -78,6 +81,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   // Core structure to store and process records.
   private final HoodieFileGroupRecordBuffer<T> recordBuffer;
   private final HoodieFileGroupReaderState readerState = new HoodieFileGroupReaderState();
+  private final RecordMergeMode recordMergeMode;
   private ClosableIterator<T> baseFileIterator;
   private HoodieRecordMerger recordMerger;
 
@@ -117,6 +121,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.props = props;
     this.start = start;
     this.length = length;
+    this.recordMergeMode = getRecordMergeMode(props);
     this.recordMerger = readerContext.getRecordMerger(
         getStringWithAltKeys(props, RECORD_MERGER_STRATEGY, RECORD_MERGER_STRATEGY.defaultValue()));
     this.readerState.tablePath = tablePath;
@@ -190,6 +195,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
           .withPartition(getRelativePartitionPath(
               new Path(readerState.tablePath), new Path(logFilePathList.get().get(0)).getParent()))
           .withRecordMerger(recordMerger)
+          .withRecordMergeMode(recordMergeMode)
           .withRecordBuffer(recordBuffer)
           .build();
       logRecordReader.close();
@@ -208,6 +214,11 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
   public HoodieFileGroupReaderIterator<T> getClosableIterator() {
     return new HoodieFileGroupReaderIterator<>(this);
+  }
+
+  public static RecordMergeMode getRecordMergeMode(Properties props) {
+    String mergeMode = ConfigUtils.getStringWithAltKeys(props, HoodieCommonConfig.RECORD_MERGE_MODE).toUpperCase();
+    return RecordMergeMode.valueOf(mergeMode);
   }
 
   public static class HoodieFileGroupReaderIterator<T> implements ClosableIterator<T> {

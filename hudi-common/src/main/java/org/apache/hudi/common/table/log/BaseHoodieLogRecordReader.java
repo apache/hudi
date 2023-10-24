@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -98,6 +99,8 @@ public abstract class BaseHoodieLogRecordReader<T> {
   protected final String preCombineField;
   // Stateless component for merging records
   protected final HoodieRecordMerger recordMerger;
+
+  protected final RecordMergeMode recordMergeMode;
   private final TypedProperties payloadProps;
   // Log File Paths
   protected final List<String> logFilePaths;
@@ -150,6 +153,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
                                       Option<String> keyFieldOverride,
                                       boolean enableOptimizedLogBlocksScan,
                                       HoodieRecordMerger recordMerger,
+                                      RecordMergeMode recordMergeMode,
                                       HoodieFileGroupRecordBuffer<T> recordBuffer) {
     this.readerContext = readerContext;
     this.readerSchema = readerSchema;
@@ -166,6 +170,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
     }
     this.payloadProps = props;
     this.recordMerger = recordMerger;
+    this.recordMergeMode = recordMergeMode;
     this.totalLogFiles.addAndGet(logFilePaths.size());
     this.logFilePaths = logFilePaths;
     this.reverseReader = reverseReader;
@@ -872,6 +877,8 @@ public abstract class BaseHoodieLogRecordReader<T> {
     public Builder withRecordMerger(HoodieRecordMerger recordMerger) {
       throw new UnsupportedOperationException();
     }
+
+    public abstract Builder withRecordMergeMode(RecordMergeMode recordMergeMode);
 
     public Builder withOptimizedLogBlocksScan(boolean enableOptimizedLogBlocksScan) {
       throw new UnsupportedOperationException();
