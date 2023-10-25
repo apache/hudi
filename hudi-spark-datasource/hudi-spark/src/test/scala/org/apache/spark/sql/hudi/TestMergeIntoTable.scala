@@ -19,8 +19,10 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils, ScalaAssertionSupport}
+import org.apache.hudi.common.util.LoggingTestUtils
+import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieFileIndex, HoodieSparkUtils, ScalaAssertionSupport}
 import org.apache.spark.sql.internal.SQLConf
+import org.junit.jupiter.api.Assertions.assertEquals
 
 class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
 
@@ -1233,6 +1235,101 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
           Seq(1, "a1", 10, "2021-03-21"),
           Seq(2, "a2", null, "2021-03-20")
         )
+      })
+    }
+  }
+
+  test("Test MergeInto With Record Index and Data Skipping") {
+    Seq(true, false).foreach { sparkSqlOptimizedWrites =>
+      withRecordType()(withTempDir { tmp =>
+        spark.sql("set hoodie.payload.combined.schema.validate = false")
+        val tableName = generateTableName
+
+        val cls = classOf[HoodieFileIndex]
+        val appender = LoggingTestUtils.attachInMemoryAppender(cls)
+        var msg = "Total file slices: 1; candidate file slices after data skipping: 0; skipping percentage 1.0"
+
+        // Create table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | location '${tmp.getCanonicalPath}'
+             | tblproperties (
+             |  primaryKey ='id',
+             |  preCombineField = 'ts',
+             |  'hoodie.metadata.enable' = 'true',
+             |  'hoodie.metadata.record.index.enable' = 'true',
+             |  'hoodie.enable.data.skipping' = 'true'
+             | )
+       """.stripMargin)
+
+        // test with optimized sql merge enabled / disabled.
+        spark.sql(s"set ${SPARK_SQL_OPTIMIZED_WRITES.key()}=$sparkSqlOptimizedWrites")
+        spark.sql("set hoodie.metadata.enable = true")
+        spark.sql("set hoodie.metadata.record.index.enable = true")
+        spark.sql("set hoodie.enable.data.skipping = true")
+        spark.sql("set hoodie.parquet.small.file.limit = 0")
+
+        spark.sql(
+          s"""
+             | insert into $tableName values
+             | (2, 'a2', 10, 1000),
+             | (3, 'a3', 10, 1000)
+       """.stripMargin)
+
+        assertEquals(0, LoggingTestUtils.getMatchingLogEvents(msg, appender).count(),
+          LoggingTestUtils.getLogs(appender))
+        appender.clear()
+
+        // First merge with a extra input field 'flag' (insert a new record)
+        spark.sql(
+          s"""
+             | merge into $tableName
+             | using (
+             |  select 1 as id, 'a1' as name, 10 as price, 1000 as ts, '1' as flag
+             | ) s0
+             | on s0.id = $tableName.id
+             | when matched and flag = '1' then update set
+             | id = s0.id, name = s0.name, price = s0.price, ts = s0.ts
+             | when not matched and flag = '1' then insert *
+             |
+       """.stripMargin)
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 10.0, 1000),
+          Seq(2, "a2", 10.0, 1000),
+          Seq(3, "a3", 10.0, 1000)
+        )
+
+        assertEquals(1, LoggingTestUtils.getMatchingLogEvents(msg, appender).count())
+        msg = "Total file slices: 2; candidate file slices after data skipping: 1; skipping percentage 0.5"
+        assertEquals(0, LoggingTestUtils.getMatchingLogEvents(msg, appender).count())
+        appender.clear()
+
+        // Second merge (update the record)
+        spark.sql(
+          s"""
+             | merge into $tableName
+             | using (
+             |  select 1 as id, 'a1' as name, 10 as price, 1001 as ts
+             | ) s0
+             | on s0.id = $tableName.id
+             | when matched then update set
+             | id = s0.id, name = s0.name, price = s0.price + $tableName.price, ts = s0.ts
+             | when not matched then insert *
+       """.stripMargin)
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 20.0, 1001),
+          Seq(2, "a2", 10.0, 1000),
+          Seq(3, "a3", 10.0, 1000)
+        )
+
+        assertEquals(1, LoggingTestUtils.getMatchingLogEvents(msg, appender).count())
+        appender.stop()
       })
     }
   }
