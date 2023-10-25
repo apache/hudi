@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewS
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestUtils.{getDefaultHadoopConf, getLogFileListFromFileSlice}
 import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
+import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
@@ -42,7 +43,6 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
         val tableName = generateTableName
         val basePath = tmp.getCanonicalPath + "/" + tableName
         spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
-        spark.sql(s"set ${HoodieMetadataConfig.ENABLE.key} = false")
         spark.sql(s"set ${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
         spark.sql(
           s"""
@@ -78,9 +78,16 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
           val hadoopConf = getDefaultHadoopConf
           val metaClient: HoodieTableMetaClient =
             HoodieTableMetaClient.builder.setConf(hadoopConf).setBasePath(basePath).build
+          val metadataConfig = HoodieMetadataConfig.newBuilder.build
+          val engineContext = new HoodieLocalEngineContext(hadoopConf)
           val viewManager: FileSystemViewManager = FileSystemViewManager.createViewManager(
-            new HoodieLocalEngineContext(hadoopConf), HoodieMetadataConfig.newBuilder.enable(false).build,
-            FileSystemViewStorageConfig.newBuilder.build, HoodieCommonConfig.newBuilder.build)
+            engineContext, metadataConfig, FileSystemViewStorageConfig.newBuilder.build,
+            HoodieCommonConfig.newBuilder.build,
+            (metaClient: HoodieTableMetaClient) => {
+              HoodieTableMetadata.create(
+                engineContext, metadataConfig, metaClient.getBasePathV2.toString)
+            }
+          )
           val fsView: SyncableFileSystemView = viewManager.getFileSystemView(metaClient)
           val fileSlice: FileSlice = fsView.getAllFileSlices("").findFirst.get
           val logFilePathList: List[String] = getLogFileListFromFileSlice(fileSlice)
