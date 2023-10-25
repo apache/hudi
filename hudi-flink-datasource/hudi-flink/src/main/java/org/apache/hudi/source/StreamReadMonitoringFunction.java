@@ -183,9 +183,7 @@ public class StreamReadMonitoringFunction
   public void run(SourceFunction.SourceContext<MergeOnReadInputSplit> context) throws Exception {
     checkpointLock = context.getCheckpointLock();
     while (isRunning) {
-      synchronized (checkpointLock) {
-        monitorDirAndForwardSplits(context);
-      }
+      monitorDirAndForwardSplits(context);
       TimeUnit.SECONDS.sleep(interval);
     }
   }
@@ -211,6 +209,8 @@ public class StreamReadMonitoringFunction
       // table does not exist
       return;
     }
+
+    long start = System.currentTimeMillis();
     IncrementalInputSplits.Result result =
         incrementalInputSplits.inputSplits(metaClient, this.issuedInstant, this.issuedOffset, this.cdcEnabled);
     if (result.isEmpty()) {
@@ -218,29 +218,32 @@ public class StreamReadMonitoringFunction
       return;
     }
 
-    for (MergeOnReadInputSplit split : result.getInputSplits()) {
-      context.collect(split);
+    LOG.debug(
+        "Discovered {} splits, time elapsed {}ms",
+        result.getInputSplits().size(),
+        System.currentTimeMillis() - start);
+
+    // only need to hold the checkpoint lock when emitting the splits
+    start = System.currentTimeMillis();
+    synchronized (checkpointLock) {
+      for (MergeOnReadInputSplit split : result.getInputSplits()) {
+        context.collect(split);
+      }
     }
+
     // update the issues instant time
     this.issuedInstant = result.getEndInstant();
     this.issuedOffset = result.getOffset();
     LOG.info("\n"
             + "------------------------------------------------------------\n"
-            + "---------- consumed to instant: {}\n"
+            + "---------- consumed to instant: {}, time elapsed {}ms\n"
             + "------------------------------------------------------------",
-        this.issuedInstant);
+        this.issuedInstant, System.currentTimeMillis() - start);
   }
 
   @Override
   public void close() throws Exception {
-    super.close();
-
-    if (checkpointLock != null) {
-      synchronized (checkpointLock) {
-        issuedInstant = null;
-        isRunning = false;
-      }
-    }
+    cancel();
 
     if (LOG.isDebugEnabled()) {
       LOG.debug("Closed File Monitoring Source for path: " + path + ".");
