@@ -148,7 +148,8 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   }
 
   public boolean containsPartialUpdates() {
-    return getLogBlockHeader().containsKey(HeaderMetadataType.FULL_SCHEMA);
+    return getLogBlockHeader().containsKey(HeaderMetadataType.IS_PARTIAL)
+        && Boolean.parseBoolean(getLogBlockHeader().get(HeaderMetadataType.IS_PARTIAL));
   }
 
   protected static Schema getWriterSchema(Map<HeaderMetadataType, String> logBlockHeader) {

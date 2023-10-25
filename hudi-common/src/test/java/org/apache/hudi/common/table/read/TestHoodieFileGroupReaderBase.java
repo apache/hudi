@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.FileSlice;
@@ -35,6 +36,7 @@ import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
@@ -113,7 +115,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     // Avro: "/Users/ethan/Work/tmp/20231018-test-partial-updates/h0_avro"
     // Parquet: "/Users/ethan/Work/tmp/20231018-test-partial-updates/h0_parquet"
     validateOutputFromFileGroupReader(
-        getHadoopConf(), "/Users/ethan/Work/tmp/20231018-test-partial-updates/h0_parquet", new String[] {""}, 1);
+        getHadoopConf(), "/Users/ethan/Work/tmp/20231018-test-partial-updates/h0_new_parquet", new String[] {""}, 1);
   }
 
   private void validateOutputFromFileGroupReader(Configuration hadoopConf,
@@ -123,10 +125,13 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
         .setConf(hadoopConf).setBasePath(tablePath).build();
     Schema avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(hadoopConf);
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().build();
     FileSystemViewManager viewManager = FileSystemViewManager.createViewManager(
-        new HoodieLocalEngineContext(hadoopConf), HoodieMetadataConfig.newBuilder().build(),
-        FileSystemViewStorageConfig.newBuilder().build(),
-        HoodieCommonConfig.newBuilder().build());
+        engineContext, metadataConfig, FileSystemViewStorageConfig.newBuilder().build(),
+        HoodieCommonConfig.newBuilder().build(),
+        mc -> HoodieTableMetadata.create(
+            engineContext, metadataConfig, mc.getBasePathV2().toString()));
     SyncableFileSystemView fsView = viewManager.getFileSystemView(metaClient);
     FileSlice fileSlice = fsView.getAllFileSlices(partitionPaths[0]).findFirst().get();
     List<String> logFilePathList = getLogFileListFromFileSlice(fileSlice);
