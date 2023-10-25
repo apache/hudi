@@ -755,16 +755,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Whether to write record positions to the block header for data blocks containing updates and delete blocks. "
           + "The record positions can be used to improve the performance of merging records from base and log files.");
 
-  public static final ConfigProperty<Boolean> WRITE_PARTIAL_UPDATES = ConfigProperty
-      .key("hoodie.write.partial.updates")
-      .defaultValue(false)
-      .markAdvanced()
-      .sinceVersion("1.0.0")
-      .withDocumentation("Whether to write partial updates to the data blocks containing updates "
-          + "in MOR tables. The data blocks containing partial updates have a schema with a "
-          + "subset of fields compared to the full schema of the table. Partial updates are "
-          + "automatically turned on for Spark SQL MERGE INTO statement with upserts to MOR tables.");
-
   public static final ConfigProperty<String> WRITE_PARTIAL_UPDATE_SCHEMA = ConfigProperty
       .key("hoodie.write.partial.update.schema")
       .defaultValue("")
