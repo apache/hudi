@@ -835,7 +835,6 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
   }
 
   test("Test only insert for source table in dup key without preCombineField") {
-    spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
     Seq("cow", "mor").foreach {
       tableType => {
         withTempDir { tmp =>
