@@ -243,44 +243,44 @@ public class HoodieSnapshotExporter {
             false,
             executorOutputFs.getConf());
       }, parallelism);
+
+      // Also copy the .commit files
+      LOG.info(String.format("Copying .commit files which are no-late-than %s.", latestCommitTimestamp));
+      FileStatus[] commitFilesToCopy =
+          Arrays.stream(sourceFs.listStatus(new Path(cfg.sourceBasePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME)))
+              .filter(fileStatus -> {
+                Path path = fileStatus.getPath();
+                if (path.getName().equals(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
+                  return true;
+                } else {
+                  if (fileStatus.isDirectory()) {
+                    return false;
+                  }
+                  String instantTime = FSUtils.getCommitFromCommitFile(path.getName());
+                  return HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.LESSER_THAN_OR_EQUALS, latestCommitTimestamp);
+                }
+              }).toArray(FileStatus[]::new);
+      context.foreach(Arrays.asList(commitFilesToCopy), commitFile -> {
+        Path targetFilePath =
+            new Path(cfg.targetOutputPath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitFile.getPath().getName());
+        FileSystem executorSourceFs = FSUtils.getFs(cfg.sourceBasePath, serConf.newCopy());
+        FileSystem executorOutputFs = FSUtils.getFs(cfg.targetOutputPath, serConf.newCopy());
+
+        if (!executorOutputFs.exists(targetFilePath.getParent())) {
+          executorOutputFs.mkdirs(targetFilePath.getParent());
+        }
+        FileUtil.copy(
+            executorSourceFs,
+            commitFile.getPath(),
+            executorOutputFs,
+            targetFilePath,
+            false,
+            false,
+            executorOutputFs.getConf());
+      }, parallelism);
     } finally {
       context.clearJobStatus();
     }
-
-    // Also copy the .commit files
-    LOG.info(String.format("Copying .commit files which are no-late-than %s.", latestCommitTimestamp));
-    FileStatus[] commitFilesToCopy =
-        Arrays.stream(sourceFs.listStatus(new Path(cfg.sourceBasePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME)))
-            .filter(fileStatus -> {
-              Path path = fileStatus.getPath();
-              if (path.getName().equals(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
-                return true;
-              } else {
-                if (fileStatus.isDirectory()) {
-                  return false;
-                }
-                String instantTime = FSUtils.getCommitFromCommitFile(path.getName());
-                return HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.LESSER_THAN_OR_EQUALS, latestCommitTimestamp);
-              }
-            }).toArray(FileStatus[]::new);
-    context.foreach(Arrays.asList(commitFilesToCopy), commitFile -> {
-      Path targetFilePath =
-          new Path(cfg.targetOutputPath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitFile.getPath().getName());
-      FileSystem executorSourceFs = FSUtils.getFs(cfg.sourceBasePath, serConf.newCopy());
-      FileSystem executorOutputFs = FSUtils.getFs(cfg.targetOutputPath, serConf.newCopy());
-
-      if (!executorOutputFs.exists(targetFilePath.getParent())) {
-        executorOutputFs.mkdirs(targetFilePath.getParent());
-      }
-      FileUtil.copy(
-          executorSourceFs,
-          commitFile.getPath(),
-          executorOutputFs,
-          targetFilePath,
-          false,
-          false,
-          executorOutputFs.getConf());
-    }, parallelism);
   }
 
   private BaseFileOnlyView getBaseFileOnlyView(FileSystem sourceFs, Config cfg) {

@@ -175,36 +175,32 @@ public class HDFSParquetImporter implements Serializable {
 
     HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
     context.setJobStatus(this.getClass().getSimpleName(), "Build records for import: " + cfg.tableName);
-    try {
-      return jsc.newAPIHadoopFile(cfg.srcPath, ParquetInputFormat.class, Void.class, GenericRecord.class,
-          job.getConfiguration())
-          // To reduce large number of tasks.
-          .coalesce(16 * cfg.parallelism).map(entry -> {
-            GenericRecord genericRecord = ((Tuple2<Void, GenericRecord>) entry)._2();
-            Object partitionField = genericRecord.get(cfg.partitionKey);
-            if (partitionField == null) {
-              throw new HoodieIOException("partition key is missing. :" + cfg.partitionKey);
+    return jsc.newAPIHadoopFile(cfg.srcPath, ParquetInputFormat.class, Void.class, GenericRecord.class,
+            job.getConfiguration())
+        // To reduce large number of tasks.
+        .coalesce(16 * cfg.parallelism).map(entry -> {
+          GenericRecord genericRecord = ((Tuple2<Void, GenericRecord>) entry)._2();
+          Object partitionField = genericRecord.get(cfg.partitionKey);
+          if (partitionField == null) {
+            throw new HoodieIOException("partition key is missing. :" + cfg.partitionKey);
+          }
+          Object rowField = genericRecord.get(cfg.rowKey);
+          if (rowField == null) {
+            throw new HoodieIOException("row field is missing. :" + cfg.rowKey);
+          }
+          String partitionPath = partitionField.toString();
+          LOG.debug("Row Key : " + rowField + ", Partition Path is (" + partitionPath + ")");
+          if (partitionField instanceof Number) {
+            try {
+              long ts = (long) (Double.parseDouble(partitionField.toString()) * 1000L);
+              partitionPath = PARTITION_FORMATTER.format(Instant.ofEpochMilli(ts));
+            } catch (NumberFormatException nfe) {
+              LOG.warn("Unable to parse date from partition field. Assuming partition as (" + partitionField + ")");
             }
-            Object rowField = genericRecord.get(cfg.rowKey);
-            if (rowField == null) {
-              throw new HoodieIOException("row field is missing. :" + cfg.rowKey);
-            }
-            String partitionPath = partitionField.toString();
-            LOG.debug("Row Key : " + rowField + ", Partition Path is (" + partitionPath + ")");
-            if (partitionField instanceof Number) {
-              try {
-                long ts = (long) (Double.parseDouble(partitionField.toString()) * 1000L);
-                partitionPath = PARTITION_FORMATTER.format(Instant.ofEpochMilli(ts));
-              } catch (NumberFormatException nfe) {
-                LOG.warn("Unable to parse date from partition field. Assuming partition as (" + partitionField + ")");
-              }
-            }
-            return new HoodieAvroRecord<>(new HoodieKey(rowField.toString(), partitionPath),
-                new HoodieJsonPayload(genericRecord.toString()));
-          });
-    } finally {
-      context.clearJobStatus();
-    }
+          }
+          return new HoodieAvroRecord<>(new HoodieKey(rowField.toString(), partitionPath),
+              new HoodieJsonPayload(genericRecord.toString()));
+        });
   }
 
   /**

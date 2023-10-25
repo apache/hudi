@@ -605,70 +605,66 @@ public class StreamSync implements Serializable, Closeable {
     }
 
     hoodieSparkContext.setJobStatus(this.getClass().getSimpleName(), "Checking if input is empty");
-    try {
-      if ((!avroRDDOptional.isPresent()) || (avroRDDOptional.get().isEmpty())) {
-        LOG.info("No new data, perform empty commit.");
-        return Pair.of(schemaProvider, Pair.of(checkpointStr, hoodieSparkContext.emptyRDD()));
-      }
-
-      boolean shouldCombine = cfg.filterDupes || cfg.operation.equals(WriteOperationType.UPSERT);
-      Set<String> partitionColumns = getPartitionColumns(props);
-      JavaRDD<GenericRecord> avroRDD = avroRDDOptional.get();
-
-      JavaRDD<HoodieRecord> records;
-      SerializableSchema avroSchema = new SerializableSchema(schemaProvider.getTargetSchema());
-      SerializableSchema processedAvroSchema = new SerializableSchema(isDropPartitionColumns() ? HoodieAvroUtils.removeMetadataFields(avroSchema.get()) : avroSchema.get());
-      if (recordType == HoodieRecordType.AVRO) {
-        records = avroRDD.mapPartitions(
-            (FlatMapFunction<Iterator<GenericRecord>, HoodieRecord>) genericRecordIterator -> {
-              if (autoGenerateRecordKeys) {
-                props.setProperty(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, String.valueOf(TaskContext.getPartitionId()));
-                props.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime);
-              }
-              BuiltinKeyGenerator builtinKeyGenerator = (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
-              List<HoodieRecord> avroRecords = new ArrayList<>();
-              while (genericRecordIterator.hasNext()) {
-                GenericRecord genRec = genericRecordIterator.next();
-                HoodieKey hoodieKey = new HoodieKey(builtinKeyGenerator.getRecordKey(genRec), builtinKeyGenerator.getPartitionPath(genRec));
-                GenericRecord gr = isDropPartitionColumns() ? HoodieAvroUtils.removeFields(genRec, partitionColumns) : genRec;
-                HoodieRecordPayload payload = shouldCombine ? DataSourceUtils.createPayload(cfg.payloadClassName, gr,
-                    (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false, props.getBoolean(
-                        KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
-                        Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()))))
-                    : DataSourceUtils.createPayload(cfg.payloadClassName, gr);
-                avroRecords.add(new HoodieAvroRecord<>(hoodieKey, payload));
-              }
-              return avroRecords.iterator();
-            });
-      } else if (recordType == HoodieRecordType.SPARK) {
-        // TODO we should remove it if we can read InternalRow from source.
-        records = avroRDD.mapPartitions(itr -> {
-          if (autoGenerateRecordKeys) {
-            props.setProperty(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, String.valueOf(TaskContext.getPartitionId()));
-            props.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime);
-          }
-          BuiltinKeyGenerator builtinKeyGenerator = (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
-          StructType baseStructType = AvroConversionUtils.convertAvroSchemaToStructType(processedAvroSchema.get());
-          StructType targetStructType = isDropPartitionColumns() ? AvroConversionUtils
-              .convertAvroSchemaToStructType(HoodieAvroUtils.removeFields(processedAvroSchema.get(), partitionColumns)) : baseStructType;
-          HoodieAvroDeserializer deserializer = SparkAdapterSupport$.MODULE$.sparkAdapter().createAvroDeserializer(processedAvroSchema.get(), baseStructType);
-
-          return new CloseableMappingIterator<>(ClosableIterator.wrap(itr), rec -> {
-            InternalRow row = (InternalRow) deserializer.deserialize(rec).get();
-            String recordKey = builtinKeyGenerator.getRecordKey(row, baseStructType).toString();
-            String partitionPath = builtinKeyGenerator.getPartitionPath(row, baseStructType).toString();
-            return new HoodieSparkRecord(new HoodieKey(recordKey, partitionPath),
-                HoodieInternalRowUtils.getCachedUnsafeProjection(baseStructType, targetStructType).apply(row), targetStructType, false);
-          });
-        });
-      } else {
-        throw new UnsupportedOperationException(recordType.name());
-      }
-
-      return Pair.of(schemaProvider, Pair.of(checkpointStr, records));
-    } finally {
-      hoodieSparkContext.clearJobStatus();
+    if ((!avroRDDOptional.isPresent()) || (avroRDDOptional.get().isEmpty())) {
+      LOG.info("No new data, perform empty commit.");
+      return Pair.of(schemaProvider, Pair.of(checkpointStr, hoodieSparkContext.emptyRDD()));
     }
+
+    boolean shouldCombine = cfg.filterDupes || cfg.operation.equals(WriteOperationType.UPSERT);
+    Set<String> partitionColumns = getPartitionColumns(props);
+    JavaRDD<GenericRecord> avroRDD = avroRDDOptional.get();
+
+    JavaRDD<HoodieRecord> records;
+    SerializableSchema avroSchema = new SerializableSchema(schemaProvider.getTargetSchema());
+    SerializableSchema processedAvroSchema = new SerializableSchema(isDropPartitionColumns() ? HoodieAvroUtils.removeMetadataFields(avroSchema.get()) : avroSchema.get());
+    if (recordType == HoodieRecordType.AVRO) {
+      records = avroRDD.mapPartitions(
+          (FlatMapFunction<Iterator<GenericRecord>, HoodieRecord>) genericRecordIterator -> {
+            if (autoGenerateRecordKeys) {
+              props.setProperty(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, String.valueOf(TaskContext.getPartitionId()));
+              props.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime);
+            }
+            BuiltinKeyGenerator builtinKeyGenerator = (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+            List<HoodieRecord> avroRecords = new ArrayList<>();
+            while (genericRecordIterator.hasNext()) {
+              GenericRecord genRec = genericRecordIterator.next();
+              HoodieKey hoodieKey = new HoodieKey(builtinKeyGenerator.getRecordKey(genRec), builtinKeyGenerator.getPartitionPath(genRec));
+              GenericRecord gr = isDropPartitionColumns() ? HoodieAvroUtils.removeFields(genRec, partitionColumns) : genRec;
+              HoodieRecordPayload payload = shouldCombine ? DataSourceUtils.createPayload(cfg.payloadClassName, gr,
+                  (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false, props.getBoolean(
+                      KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
+                      Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()))))
+                  : DataSourceUtils.createPayload(cfg.payloadClassName, gr);
+              avroRecords.add(new HoodieAvroRecord<>(hoodieKey, payload));
+            }
+            return avroRecords.iterator();
+          });
+    } else if (recordType == HoodieRecordType.SPARK) {
+      // TODO we should remove it if we can read InternalRow from source.
+      records = avroRDD.mapPartitions(itr -> {
+        if (autoGenerateRecordKeys) {
+          props.setProperty(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, String.valueOf(TaskContext.getPartitionId()));
+          props.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime);
+        }
+        BuiltinKeyGenerator builtinKeyGenerator = (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+        StructType baseStructType = AvroConversionUtils.convertAvroSchemaToStructType(processedAvroSchema.get());
+        StructType targetStructType = isDropPartitionColumns() ? AvroConversionUtils
+            .convertAvroSchemaToStructType(HoodieAvroUtils.removeFields(processedAvroSchema.get(), partitionColumns)) : baseStructType;
+        HoodieAvroDeserializer deserializer = SparkAdapterSupport$.MODULE$.sparkAdapter().createAvroDeserializer(processedAvroSchema.get(), baseStructType);
+
+        return new CloseableMappingIterator<>(ClosableIterator.wrap(itr), rec -> {
+          InternalRow row = (InternalRow) deserializer.deserialize(rec).get();
+          String recordKey = builtinKeyGenerator.getRecordKey(row, baseStructType).toString();
+          String partitionPath = builtinKeyGenerator.getPartitionPath(row, baseStructType).toString();
+          return new HoodieSparkRecord(new HoodieKey(recordKey, partitionPath),
+              HoodieInternalRowUtils.getCachedUnsafeProjection(baseStructType, targetStructType).apply(row), targetStructType, false);
+        });
+      });
+    } else {
+      throw new UnsupportedOperationException(recordType.name());
+    }
+
+    return Pair.of(schemaProvider, Pair.of(checkpointStr, records));
   }
 
   private JavaRDD<GenericRecord> getTransformedRDD(Dataset<Row> rowDataset, boolean reconcileSchema, Schema readerSchema) {

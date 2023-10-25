@@ -315,14 +315,10 @@ public class SparkBootstrapCommitActionExecutor<T>
         .collect(Collectors.toList());
 
     context.setJobStatus(this.getClass().getSimpleName(), "Run metadata-only bootstrap operation: " + config.getTableName());
-    try {
-      return context.parallelize(
-          bootstrapPaths, Math.min(bootstrapPaths.size(), config.getBootstrapParallelism()))
+    return context.parallelize(
+            bootstrapPaths, Math.min(bootstrapPaths.size(), config.getBootstrapParallelism()))
         .map(partitionFsPair -> getMetadataHandler(config, table, partitionFsPair.getRight().getRight()).runMetadataBootstrap(partitionFsPair.getLeft(),
-              partitionFsPair.getRight().getLeft(), keyGenerator));
-    } finally {
-      context.clearJobStatus();
-    }
+            partitionFsPair.getRight().getLeft(), keyGenerator));
   }
 
   @Override
