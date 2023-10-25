@@ -21,6 +21,7 @@ import org.apache.avro.Schema
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig}
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
+import org.apache.hudi.common.function.SerializableFunctionUnchecked
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.table.log.HoodieLogFileReader
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType
@@ -83,9 +84,11 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
           val viewManager: FileSystemViewManager = FileSystemViewManager.createViewManager(
             engineContext, metadataConfig, FileSystemViewStorageConfig.newBuilder.build,
             HoodieCommonConfig.newBuilder.build,
-            (metaClient: HoodieTableMetaClient) => {
-              HoodieTableMetadata.create(
-                engineContext, metadataConfig, metaClient.getBasePathV2.toString)
+            new SerializableFunctionUnchecked[HoodieTableMetaClient, HoodieTableMetadata] {
+              override def apply(v1: HoodieTableMetaClient): HoodieTableMetadata = {
+                HoodieTableMetadata.create(
+                  engineContext, metadataConfig, metaClient.getBasePathV2.toString)
+              }
             }
           )
           val fsView: SyncableFileSystemView = viewManager.getFileSystemView(metaClient)
