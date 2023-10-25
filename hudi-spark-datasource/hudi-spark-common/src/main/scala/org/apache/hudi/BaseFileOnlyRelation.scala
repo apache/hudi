@@ -152,6 +152,8 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
     val enableFileIndex = HoodieSparkConfUtils.getConfigValue(optParams, sparkSession.sessionState.conf,
       ENABLE_HOODIE_FILE_INDEX.key, ENABLE_HOODIE_FILE_INDEX.defaultValue.toString).toBoolean
     if (enableFileIndex && globPaths.isEmpty) {
+      // We will convert BaseFileOnlyRelation to HadoopFsRelation only if schema evolution is not applied,
+      // in which case shouldExtractPartitionValuesFromPartitionPath is true, so we just use schema from fileIndex.
       HadoopFsRelation(
         location = fileIndex,
         partitionSchema = fileIndex.partitionSchema,
