@@ -42,8 +42,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.hudi.common.util.ValidationUtils.checkState;
-
 /**
  * A buffer that is used to store log records by {@link org.apache.hudi.common.table.log.HoodieMergedLogRecordReader}
  * by calling the {@link #processDataBlock} and {@link #processDeleteBlock} methods into record position based map.
@@ -71,9 +69,6 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
 
   @Override
   public void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException {
-    checkState(partitionNameOverrideOpt.isPresent() || partitionPathFieldOpt.isPresent(),
-        "Either partition-name override or partition-path field had to be present");
-
     // Prepare key filters.
     Set<String> keys = new HashSet<>();
     boolean isFullKey = true;

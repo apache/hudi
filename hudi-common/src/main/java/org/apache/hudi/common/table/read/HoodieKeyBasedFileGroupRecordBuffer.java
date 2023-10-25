@@ -66,9 +66,6 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
 
   @Override
   public void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException {
-    checkState(partitionNameOverrideOpt.isPresent() || partitionPathFieldOpt.isPresent(),
-        "Either partition-name override or partition-path field had to be present");
-
     boolean isPartial = dataBlock.containsPartialUpdates();
 
     Pair<ClosableIterator<T>, Schema> recordsIteratorSchemaPair =
