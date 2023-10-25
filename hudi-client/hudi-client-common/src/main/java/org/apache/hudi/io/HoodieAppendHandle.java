@@ -164,7 +164,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     this.recordProperties.putAll(config.getProps());
     this.attemptNumber = taskContextSupplier.getAttemptNumberSupplier().get();
     this.shouldWriteRecordPositions = config.shouldWriteRecordPositions();
-
   }
 
   public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
