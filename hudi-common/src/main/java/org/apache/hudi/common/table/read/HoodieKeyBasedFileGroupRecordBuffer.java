@@ -39,8 +39,6 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
 
-import static org.apache.hudi.common.util.ValidationUtils.checkState;
-
 /**
  * A buffer that is used to store log records by {@link org.apache.hudi.common.table.log.HoodieMergedLogRecordReader}
  * by calling the {@link #processDataBlock} and {@link #processDeleteBlock} methods into a record key based map.

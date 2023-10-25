@@ -44,8 +44,7 @@ import scala.jdk.CollectionConverters.asScalaIteratorConverter
  * This class utilizes {@link HoodieFileGroupReader} and its related classes to support reading
  * from Parquet formatted base files and their log files.
  */
-class HoodieFileGroupReaderBasedParquetFileFormat(@transient sparkSession: SparkSession,
-                                                  tableState: HoodieTableState,
+class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                                                   tableSchema: HoodieTableSchema,
                                                   tableName: String,
                                                   mergeType: String,
