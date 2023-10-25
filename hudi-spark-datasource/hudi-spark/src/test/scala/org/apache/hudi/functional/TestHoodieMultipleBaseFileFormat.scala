@@ -37,7 +37,7 @@ import scala.collection.JavaConverters._
 /**
  * Test cases on multiple base file format support for COW and MOR table types.
  */
-class TestHoodieMultiFileFormatRelation extends HoodieSparkClientTestBase with SparkDatasetMixin {
+class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with SparkDatasetMixin {
 
   var spark: SparkSession = null
   private val log = LoggerFactory.getLogger(classOf[TestMORDataSource])

@@ -24,7 +24,6 @@ import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.model.{HoodieTableType, WriteConcurrencyMode}
-import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
@@ -116,11 +115,6 @@ class DefaultSource extends RelationProvider
       .setConf(fs.getConf).setBasePath(tablePath).build()
 
     DefaultSource.createRelation(sqlContext, metaClient, schema, globPaths, parameters)
-  }
-
-  def getValidCommits(metaClient: HoodieTableMetaClient): String = {
-    metaClient
-      .getCommitsAndCompactionTimeline.filterCompletedInstants.getInstantsAsStream.toArray().map(_.asInstanceOf[HoodieInstant].getFileName).mkString(",")
   }
 
   /**
@@ -227,6 +221,7 @@ object DefaultSource {
     val queryType = parameters(QUERY_TYPE.key)
     val isCdcQuery = queryType == QUERY_TYPE_INCREMENTAL_OPT_VAL &&
       parameters.get(INCREMENTAL_FORMAT.key).contains(INCREMENTAL_FORMAT_CDC_VAL)
+    val isMultipleBaseFileFormatsEnabled = metaClient.getTableConfig.isMultipleBaseFileFormatsEnabled
 
     log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
 
@@ -245,21 +240,22 @@ object DefaultSource {
     } else if (isCdcQuery) {
       CDCRelation.getCDCRelation(sqlContext, metaClient, parameters)
     } else {
-      lazy val newHudiFileFormatUtils = if (parameters.getOrElse(USE_NEW_HUDI_PARQUET_FILE_FORMAT.key,
-        USE_NEW_HUDI_PARQUET_FILE_FORMAT.defaultValue).toBoolean && (globPaths == null || globPaths.isEmpty)
+      lazy val fileFormatUtils = if ((isMultipleBaseFileFormatsEnabled && !isBootstrappedTable)
+        || (parameters.getOrElse(USE_NEW_HUDI_PARQUET_FILE_FORMAT.key, USE_NEW_HUDI_PARQUET_FILE_FORMAT.defaultValue).toBoolean
+        && (globPaths == null || globPaths.isEmpty)
         && parameters.getOrElse(REALTIME_MERGE.key(), REALTIME_MERGE.defaultValue())
-        .equalsIgnoreCase(REALTIME_PAYLOAD_COMBINE_OPT_VAL)) {
-        val formatUtils = new NewHoodieParquetFileFormatUtils(sqlContext, metaClient, parameters, userSchema)
+        .equalsIgnoreCase(REALTIME_PAYLOAD_COMBINE_OPT_VAL))) {
+        val formatUtils = new HoodieSparkFileFormatUtils(sqlContext, metaClient, parameters, userSchema)
         if (formatUtils.hasSchemaOnRead) Option.empty else Some(formatUtils)
       } else {
         Option.empty
       }
 
-      if (metaClient.getTableConfig.isMultipleBaseFileFormatsEnabled) {
+      if (isMultipleBaseFileFormatsEnabled) {
         if (isBootstrappedTable) {
           throw new HoodieException(s"Multiple base file formats are not supported for bootstrapped table")
         }
-        resolveMultiFileFormatRelation(tableType, queryType, sqlContext, globPaths, userSchema, metaClient, parameters)
+        resolveMultiFileFormatRelation(tableType, queryType, fileFormatUtils.get)
       }
 
       (tableType, queryType, isBootstrappedTable) match {
@@ -272,27 +268,27 @@ object DefaultSource {
           new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
 
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
-          if (newHudiFileFormatUtils.isEmpty) {
+          if (fileFormatUtils.isEmpty) {
             new MergeOnReadSnapshotRelation(sqlContext, parameters, metaClient, globPaths, userSchema)
           } else {
-            newHudiFileFormatUtils.get.getHadoopFsRelation(isMOR = true, isBootstrap = false)
+            fileFormatUtils.get.getHadoopFsRelation(isMOR = true, isBootstrap = false)
           }
 
         case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
           new MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
 
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, true) =>
-          if (newHudiFileFormatUtils.isEmpty) {
+          if (fileFormatUtils.isEmpty) {
             new HoodieBootstrapMORRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
           } else {
-            newHudiFileFormatUtils.get.getHadoopFsRelation(isMOR = true, isBootstrap = true)
+            fileFormatUtils.get.getHadoopFsRelation(isMOR = true, isBootstrap = true)
           }
 
         case (_, _, true) =>
-          if (newHudiFileFormatUtils.isEmpty) {
+          if (fileFormatUtils.isEmpty) {
             resolveHoodieBootstrapRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
           } else {
-            newHudiFileFormatUtils.get.getHadoopFsRelation(isMOR = false, isBootstrap = true)
+            fileFormatUtils.get.getHadoopFsRelation(isMOR = false, isBootstrap = true)
           }
 
         case (_, _, _) =>
@@ -330,13 +326,9 @@ object DefaultSource {
     // NOTE: We fallback to [[HadoopFsRelation]] in all of the cases except ones requiring usage of
     //       [[BaseFileOnlyRelation]] to function correctly. This is necessary to maintain performance parity w/
     //       vanilla Spark, since some of the Spark optimizations are predicated on the using of [[HadoopFsRelation]].
-    //       Currently, there are two such scenarios when [[BaseFileOnlyRelation]] is required:
-    //       1. When schema-on-read is enabled, since that feature depends on [[InternalSchema]].
-    //       2. When multiple file formats are enabled, since we cannot decide the file format at this stage.
     //
     //       You can check out HUDI-3896 for more details
-    // TODO: maybe not needed here. Fix after integrating multi file formats relation
-    if (baseRelation.hasSchemaOnRead || metaClient.getTableConfig.isMultipleBaseFileFormatsEnabled) {
+    if (baseRelation.hasSchemaOnRead) {
       baseRelation
     } else {
       baseRelation.toHadoopFsRelation
@@ -345,19 +337,14 @@ object DefaultSource {
 
   private def resolveMultiFileFormatRelation(tableType: HoodieTableType,
                                              queryType: String,
-                                             sqlContext:
-                                             SQLContext,
-                                             globPaths: Seq[Path],
-                                             userSchema: Option[StructType],
-                                             metaClient: HoodieTableMetaClient,
-                                             parameters: Map[String, String]): BaseHoodieMultiFileFormatRelation = {
+                                             fileFormatUtils: HoodieSparkFileFormatUtils): BaseRelation = {
     (tableType, queryType) match {
       case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL) |
            (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL) =>
-        new HoodieMultiFileFormatCOWRelation(sqlContext, metaClient, parameters, userSchema, globPaths)
+        fileFormatUtils.getHadoopFsRelation(isMOR = false, isBootstrap = false)
       case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL) |
            (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL) =>
-        new HoodieMultiFileFormatMORRelation(sqlContext, metaClient, parameters, userSchema, globPaths)
+        fileFormatUtils.getHadoopFsRelation(isMOR = true, isBootstrap = false)
       case (_, _) =>
         throw new HoodieException(s"Multiple base file formats not supported for query type : $queryType for tableType: $tableType")
     }
