@@ -361,7 +361,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
         getCommitMetadataStream()
             .filter(instantCommitMetadataPair ->
                 !StringUtils.isNullOrEmpty(instantCommitMetadataPair.getValue().getMetadata(HoodieCommitMetadata.SCHEMA_KEY))
-            && WriteOperationType.canSchemaChange(instantCommitMetadataPair.getRight().getOperationType()))
+            && !WriteOperationType.schemaCantChange(instantCommitMetadataPair.getRight().getOperationType()))
             .findFirst()
     );
   }
