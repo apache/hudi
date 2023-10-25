@@ -92,15 +92,11 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   private boolean isDeleted;
 
   public HoodieSparkRecord(UnsafeRow data) {
-    this(data, null, false);
+    this(data, null);
   }
 
   public HoodieSparkRecord(InternalRow data, StructType schema) {
-    this(data, schema, false);
-  }
-
-  public HoodieSparkRecord(InternalRow data, StructType schema, boolean isPartial) {
-    super(null, isPartial, data, null, Option.empty());
+    super(null, data);
 
     validateRow(data, schema);
     this.copy = false;
@@ -122,7 +118,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   private HoodieSparkRecord(HoodieKey key, InternalRow data, StructType schema, HoodieOperation operation, boolean copy) {
-    super(key, false, data, operation, Option.empty());
+    super(key, data, operation, Option.empty());
 
     validateRow(data, schema);
     this.copy = copy;

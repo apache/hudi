@@ -38,19 +38,18 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * A record merger that merges records containing partial updates.
+ * Util class to merge records containing partial updates.
  * This can be plugged into any Spark {@link HoodieRecordMerger} implementation.
  */
-public class SparkPartialRecordMerger {
-  private final Map<Schema, Map<Integer, StructField>> fieldIdToFieldMappingCache = new HashMap<>();
-  private final Map<Schema, Map<String, Integer>> fieldNameToIdMappingCache = new HashMap<>();
-  private final Map<Pair<Schema, Schema>,
-      Pair<Map<Integer, StructField>, Pair<StructType, Schema>>> mergedMappingSchemaCache = new HashMap<>();
-
-  public SparkPartialRecordMerger() {
-  }
+public class SparkPartialMergingUtils {
+  private static final Map<Schema, Map<Integer, StructField>> FIELD_ID_TO_FIELD_MAPPING_CACHE = new ConcurrentHashMap<>();
+  private static final Map<Schema, Map<String, Integer>> FIELD_NAME_TO_ID_MAPPING_CACHE = new ConcurrentHashMap<>();
+  private static final Map<Pair<Schema, Schema>,
+      Pair<Map<Integer, StructField>, Pair<StructType, Schema>>> MERGED_SCHEMA_CACHE = new ConcurrentHashMap<>();
+  private static final Map<Pair<Schema, Schema>, Boolean> IS_PARTIAL_CACHE = new ConcurrentHashMap<>();
 
   /**
    * Merges records which can contain partial updates.
@@ -62,19 +61,20 @@ public class SparkPartialRecordMerger {
    * @param props     Configuration in {@link TypedProperties}.
    * @return The merged record.
    */
-  public Pair<HoodieRecord, Schema> mergePartialRecords(HoodieSparkRecord older,
-                                                        Schema oldSchema,
-                                                        HoodieSparkRecord newer,
-                                                        Schema newSchema,
-                                                        TypedProperties props) {
-    if (newer.isPartial()) {
+  public static Pair<HoodieRecord, Schema> mergePartialRecords(HoodieSparkRecord older,
+                                                               Schema oldSchema,
+                                                               HoodieSparkRecord newer,
+                                                               Schema newSchema,
+                                                               TypedProperties props) {
+    Pair<Map<Integer, StructField>, Pair<StructType, Schema>> mappingSchemaPair =
+        getCachedMergedSchema(oldSchema, newSchema);
+    boolean isNewerPartial = isPartial(newSchema, mappingSchemaPair.getRight().getRight());
+    if (isNewerPartial) {
       InternalRow oldRow = older.getData();
       InternalRow newPartialRow = newer.getData();
 
-      Pair<Map<Integer, StructField>, Pair<StructType, Schema>> mappingSchemaPair =
-          mergeSchema(oldSchema, newSchema);
       Map<Integer, StructField> mergedIdToFieldMapping = mappingSchemaPair.getLeft();
-      Map<String, Integer> newPartialNameToIdMapping = getFieldNameToIdMappingFromSchema(newSchema);
+      Map<String, Integer> newPartialNameToIdMapping = getCachedFieldNameToIdMapping(newSchema);
       List<Object> values = new ArrayList<>(mergedIdToFieldMapping.size());
       for (int fieldId = 0; fieldId < mergedIdToFieldMapping.size(); fieldId++) {
         StructField structField = mergedIdToFieldMapping.get(fieldId);
@@ -90,7 +90,7 @@ public class SparkPartialRecordMerger {
       InternalRow mergedRow = new GenericInternalRow(values.toArray());
 
       HoodieSparkRecord mergedSparkRecord = new HoodieSparkRecord(
-          mergedRow, mappingSchemaPair.getRight().getLeft(), older.isPartial());
+          mergedRow, mappingSchemaPair.getRight().getLeft());
       return Pair.of(mergedSparkRecord, mappingSchemaPair.getRight().getRight());
     } else {
       return Pair.of(newer, newSchema);
@@ -101,8 +101,8 @@ public class SparkPartialRecordMerger {
    * @param avroSchema Avro schema.
    * @return The field ID to {@link StructField} instance mapping.
    */
-  public Map<Integer, StructField> getFieldIdToFieldMappingFromSchema(Schema avroSchema) {
-    return fieldIdToFieldMappingCache.computeIfAbsent(avroSchema, schema -> {
+  public static Map<Integer, StructField> getCachedFieldIdToFieldMapping(Schema avroSchema) {
+    return FIELD_ID_TO_FIELD_MAPPING_CACHE.computeIfAbsent(avroSchema, schema -> {
       StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
       Map<Integer, StructField> schemaFieldIdMapping = new HashMap<>();
       int fieldId = 0;
@@ -120,8 +120,8 @@ public class SparkPartialRecordMerger {
    * @param avroSchema Avro schema.
    * @return The field name to ID mapping.
    */
-  public Map<String, Integer> getFieldNameToIdMappingFromSchema(Schema avroSchema) {
-    return fieldNameToIdMappingCache.computeIfAbsent(avroSchema, schema -> {
+  public static Map<String, Integer> getCachedFieldNameToIdMapping(Schema avroSchema) {
+    return FIELD_NAME_TO_ID_MAPPING_CACHE.computeIfAbsent(avroSchema, schema -> {
       StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
       Map<String, Integer> schemaFieldIdMapping = new HashMap<>();
       int fieldId = 0;
@@ -144,15 +144,15 @@ public class SparkPartialRecordMerger {
    * @return The ID to {@link StructField} instance mapping of the merged schema, and the
    * {@link StructType} and Avro schema of the merged schema.
    */
-  public Pair<Map<Integer, StructField>, Pair<StructType, Schema>> mergeSchema(Schema oldSchema,
-                                                                               Schema newSchema) {
-    return mergedMappingSchemaCache.computeIfAbsent(Pair.of(oldSchema, newSchema), schemaPair -> {
+  public static Pair<Map<Integer, StructField>, Pair<StructType, Schema>> getCachedMergedSchema(Schema oldSchema,
+                                                                                                Schema newSchema) {
+    return MERGED_SCHEMA_CACHE.computeIfAbsent(Pair.of(oldSchema, newSchema), schemaPair -> {
       Schema schema1 = schemaPair.getLeft();
       Schema schema2 = schemaPair.getRight();
-      Map<Integer, StructField> idToFieldMapping1 = getFieldIdToFieldMappingFromSchema(schema1);
-      Map<Integer, StructField> idToFieldMapping2 = getFieldIdToFieldMappingFromSchema(schema2);
-      Map<String, Integer> nameToIdMapping1 = getFieldNameToIdMappingFromSchema(schema1);
-      Map<String, Integer> nameToIdMapping2 = getFieldNameToIdMappingFromSchema(schema2);
+      Map<Integer, StructField> idToFieldMapping1 = getCachedFieldIdToFieldMapping(schema1);
+      Map<Integer, StructField> idToFieldMapping2 = getCachedFieldIdToFieldMapping(schema2);
+      Map<String, Integer> nameToIdMapping1 = getCachedFieldNameToIdMapping(schema1);
+      Map<String, Integer> nameToIdMapping2 = getCachedFieldNameToIdMapping(schema2);
       List<Integer> newFieldIdList = new ArrayList<>();
       for (String name : nameToIdMapping2.keySet()) {
         if (!nameToIdMapping1.containsKey(name)) {
@@ -180,5 +180,14 @@ public class SparkPartialRecordMerger {
         return Pair.of(mergedMapping, Pair.of(mergedStructType, mergedSchema));
       }
     });
+  }
+
+  /**
+   * @param schema       Avro schema to check.
+   * @param mergedSchema The merged schema for the merged record.
+   * @return whether the Avro schema is partial compared to the merged schema.
+   */
+  public static boolean isPartial(Schema schema, Schema mergedSchema) {
+    return !schema.equals(mergedSchema);
   }
 }

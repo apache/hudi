@@ -27,14 +27,13 @@ import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.merge.SparkPartialRecordMerger;
+import org.apache.hudi.merge.SparkPartialMergingUtils;
 
 import org.apache.avro.Schema;
 
 import java.io.IOException;
 
 public class HoodieSparkRecordMerger implements HoodieRecordMerger {
-  protected final SparkPartialRecordMerger sparkPartialRecordMerger = new SparkPartialRecordMerger();
 
   @Override
   public String getMergingStrategy() {
@@ -72,10 +71,10 @@ public class HoodieSparkRecordMerger implements HoodieRecordMerger {
       }
     }
     if (older.getOrderingValue(oldSchema, props).compareTo(newer.getOrderingValue(newSchema, props)) > 0) {
-      return Option.of(sparkPartialRecordMerger.mergePartialRecords(
+      return Option.of(SparkPartialMergingUtils.mergePartialRecords(
           (HoodieSparkRecord) newer, newSchema, (HoodieSparkRecord) older, oldSchema, props));
     } else {
-      return Option.of(sparkPartialRecordMerger.mergePartialRecords(
+      return Option.of(SparkPartialMergingUtils.mergePartialRecords(
           (HoodieSparkRecord) older, oldSchema, (HoodieSparkRecord) newer, newSchema, props));
     }
   }
