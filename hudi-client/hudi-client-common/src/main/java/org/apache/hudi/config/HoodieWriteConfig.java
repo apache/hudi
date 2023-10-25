@@ -46,6 +46,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.RecordPayloadType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.marker.MarkerType;
@@ -2614,6 +2615,16 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public Integer getWritesFileIdEncoding() {
     return props.getInteger(WRITES_FILEID_ENCODING, HoodieMetadataPayload.RECORD_INDEX_FIELD_FILEID_ENCODING_UUID);
+  }
+
+  public boolean needResolveWriteConflict(WriteOperationType operationType) {
+    if (getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
+      // NB-CC don't need to resolve write conflict except bulk insert operation
+      return WriteOperationType.BULK_INSERT == operationType || !isNonBlockingConcurrencyControl();
+    } else {
+      // SINGLE_WRITER case don't need to resolve write conflict
+      return false;
+    }
   }
 
   public boolean isNonBlockingConcurrencyControl() {
