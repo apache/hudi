@@ -24,6 +24,7 @@ import org.apache.avro.generic.IndexedRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.engine.HoodieReaderContext
+import org.apache.hudi.common.model.HoodieLogFile
 import org.apache.hudi.common.util.collection.ClosableIterator
 import org.apache.hudi.util.CloseableInternalRowIterator
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
@@ -54,14 +55,13 @@ class SparkFileFormatInternalRowReaderContext(@transient sparkSession: SparkSess
   val deserializerMap: mutable.Map[Schema, HoodieAvroDeserializer] = mutable.Map()
 
   override def getFileRecordIterator(filePath: Path,
-                                     isLogFile: Boolean,
                                      start: Long,
                                      length: Long,
                                      dataSchema: Schema,
                                      requiredSchema: Schema,
                                      conf: Configuration): ClosableIterator[InternalRow] = {
     val fileInfo = sparkAdapter.getSparkPartitionedFileUtils.createPartitionedFile(partitionValues, filePath, start, length)
-    if (isLogFile) {
+    if (filePath.toString.contains(HoodieLogFile.DELTA_EXTENSION)) {
       val dataStructType = HoodieInternalRowUtils.getCachedSchema(dataSchema)
       new CloseableInternalRowIterator(new ParquetFileFormat().buildReaderWithPartitionValues(
         sparkSession, dataStructType, partitionSchema, dataStructType, Seq.empty, Map.empty, conf

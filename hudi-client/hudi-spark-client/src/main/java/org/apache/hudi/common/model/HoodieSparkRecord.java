@@ -90,7 +90,6 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
    * Record is considered deleted if data is null.
    */
   private boolean isDeleted;
-
   public HoodieSparkRecord(UnsafeRow data) {
     this(data, null);
   }

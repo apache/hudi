@@ -70,7 +70,6 @@ public abstract class HoodieReaderContext<T> {
    * file.
    *
    * @param filePath       {@link Path} instance of a file.
-   * @param isLogFile      Whether this is a log file.
    * @param start          Starting byte to start reading.
    * @param length         Bytes to read.
    * @param dataSchema     Schema of records in the file in {@link Schema}.
@@ -79,7 +78,7 @@ public abstract class HoodieReaderContext<T> {
    * @return {@link ClosableIterator<T>} that can return all records through iteration.
    */
   public abstract ClosableIterator<T> getFileRecordIterator(
-      Path filePath, boolean isLogFile, long start, long length, Schema dataSchema, Schema requiredSchema, Configuration conf);
+      Path filePath, long start, long length, Schema dataSchema, Schema requiredSchema, Configuration conf);
 
   /**
    * Converts an Avro record, e.g., serialized in the log files, to an engine-specific record.
