@@ -19,14 +19,15 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
 import org.apache.spark.sql.Row
 
 class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
   test("Test MergeInto for MOR table 2") {
-    spark.sql("set hoodie.merge.small.file.group.candidates.limit = 0;")
+    spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
     withRecordType()(withTempDir { tmp =>
-      spark.sql("set hoodie.payload.combined.schema.validate = true;")
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       // Create a mor partitioned table.
       spark.sql(
@@ -179,9 +180,9 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
   }
 
   test("Test Merge With Complex Data Type") {
-    spark.sql("set hoodie.merge.small.file.group.candidates.limit = 0;")
+    spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
     withRecordType()(withTempDir { tmp =>
-      spark.sql("set hoodie.payload.combined.schema.validate = true;")
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
       val tableName = generateTableName
       spark.sql(
         s"""
@@ -651,7 +652,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
   }
 
   test("Test Merge Into For Source Table With Different Column Order") {
-    spark.sql("set hoodie.merge.small.file.group.candidates.limit = 0;")
+    spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
     withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName
       // Create a mor partitioned table.
@@ -768,7 +769,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
   }
 
   test("Test only insert for source table in dup key with preCombineField") {
-    spark.sql("set hoodie.merge.small.file.group.candidates.limit = 0;")
+    spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
     Seq("cow", "mor").foreach {
       tableType => {
         withTempDir { tmp =>
@@ -834,7 +835,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
   }
 
   test("Test only insert for source table in dup key without preCombineField") {
-    spark.sql("set hoodie.merge.small.file.group.candidates.limit = 0;")
+    spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
     Seq("cow", "mor").foreach {
       tableType => {
         withTempDir { tmp =>

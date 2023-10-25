@@ -409,7 +409,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       (HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key -> fullSchema.toString) +
       (DataSourceWriteOptions.TABLE_TYPE.key -> targetTableType)
 
-    // Only automatically enable writing partial updates to data blocks for upserts to MOR tables
+    // Only enable writing partial updates to data blocks for upserts to MOR tables,
+    // when ENABLE_MERGE_INTO_PARTIAL_UPDATES is set to true
     val writePartialUpdates = (targetTableType == MOR_TABLE_TYPE_OPT_VAL
       && operation == UPSERT_OPERATION_OPT_VAL
       && parameters.getOrElse(
@@ -516,7 +517,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * corresponding assignments from the generation; When [[keepUpdatedFieldsOnly]] is true,
    * i.e., for partial updates, only the fields as the assignees of the assignments have
    * corresponding assignments, so that the generated records for updates only contain
-   * updated fields, to be written to the log files.
+   * updated fields, to be written to the log files in a MOR table.
    */
   private def serializeConditionalAssignments(conditionalAssignments: Seq[(Option[Expression], Seq[Assignment])],
                                               partialAssignmentMode: Option[PartialAssignmentMode] = None,
