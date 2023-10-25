@@ -27,6 +27,7 @@ import org.apache.hudi.DataSourceOptionsHelper.fetchMissingWriteConfigsFromTable
 import org.apache.hudi.DataSourceUtils.tryOverrideParquetWriteLegacyFormatProperty
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
+import org.apache.hudi.HoodieSparkSqlWriter.{CANONICALIZE_NULLABLE, SQL_MERGE_INTO_WRITES, StreamingWriteParams}
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.avro.AvroSchemaUtils.{isCompatibleProjectionOf, isSchemaCompatible, isValidEvolutionOf, resolveNullableSchema}
 import org.apache.hudi.avro.HoodieAvroUtils
@@ -109,6 +110,48 @@ object HoodieSparkSqlWriter {
    * For spark streaming use-cases, holds the batch Id.
    */
   val SPARK_STREAMING_BATCH_ID = "hoodie.internal.spark.streaming.batch.id"
+
+  def write(sqlContext: SQLContext,
+            mode: SaveMode,
+            optParams: Map[String, String],
+            sourceDf: DataFrame,
+            streamingWritesParamsOpt: Option[StreamingWriteParams] = Option.empty,
+            hoodieWriteClient: Option[SparkRDDWriteClient[_]] = Option.empty):
+  (Boolean, HOption[String], HOption[String], HOption[String], SparkRDDWriteClient[_], HoodieTableConfig) = {
+    new HoodieSparkSqlWriterInternal().write(sqlContext, mode, optParams, sourceDf, streamingWritesParamsOpt, hoodieWriteClient)
+  }
+
+  def bootstrap(sqlContext: SQLContext,
+                mode: SaveMode,
+                optParams: Map[String, String],
+                df: DataFrame,
+                hoodieTableConfigOpt: Option[HoodieTableConfig] = Option.empty,
+                streamingWritesParamsOpt: Option[StreamingWriteParams] = Option.empty,
+                hoodieWriteClient: Option[SparkRDDWriteClient[_]] = Option.empty): Boolean = {
+    new HoodieSparkSqlWriterInternal().bootstrap(sqlContext, mode, optParams, df, hoodieTableConfigOpt, streamingWritesParamsOpt, hoodieWriteClient)
+  }
+
+  /**
+   * Deduces writer's schema based on
+   * <ul>
+   * <li>Source's schema</li>
+   * <li>Target table's schema (including Hudi's [[InternalSchema]] representation)</li>
+   * </ul>
+   */
+  def deduceWriterSchema(sourceSchema: Schema,
+                         latestTableSchemaOpt: Option[Schema],
+                         internalSchemaOpt: Option[InternalSchema],
+                         opts: Map[String, String]): Schema = {
+    new HoodieSparkSqlWriterInternal().deduceWriterSchema(sourceSchema, latestTableSchemaOpt, internalSchemaOpt, opts)
+  }
+
+  def cleanup(): Unit = {
+    Metrics.shutdownAllMetrics()
+  }
+
+}
+
+class HoodieSparkSqlWriterInternal {
 
   private val log = LoggerFactory.getLogger(getClass)
   private var tableExists: Boolean = false
@@ -945,10 +988,6 @@ object HoodieSparkSqlWriter {
     }
   }
 
-  def cleanup() : Unit = {
-    Metrics.shutdownAllMetrics()
-  }
-
   private def handleSaveModes(spark: SparkSession, mode: SaveMode, tablePath: Path, tableConfig: HoodieTableConfig, tableName: String,
                               operation: WriteOperationType, fs: FileSystem): Unit = {
     if (mode == SaveMode.Append && tableExists) {
@@ -1018,8 +1057,9 @@ object HoodieSparkSqlWriter {
     // we must invalidate this table in the cache so writes are reflected in later queries
     if (metaSyncEnabled) {
       getHiveTableNames(hoodieConfig).foreach(name => {
-        val qualifiedTableName = String.join(".", hoodieConfig.getStringOrDefault(HIVE_DATABASE), name)
-        if (spark.catalog.tableExists(qualifiedTableName)) {
+        val syncDb = hoodieConfig.getStringOrDefault(HIVE_DATABASE)
+        val qualifiedTableName = String.join(".", syncDb, name)
+        if (spark.catalog.databaseExists(syncDb) && spark.catalog.tableExists(qualifiedTableName)) {
           spark.catalog.refreshTable(qualifiedTableName)
         }
       })

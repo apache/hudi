@@ -97,7 +97,6 @@ public class DataSourceInternalWriterHelper {
 
   public void abort() {
     LOG.error("Commit " + instantTime + " aborted ");
-    writeClient.rollback(instantTime);
     writeClient.close();
   }
 

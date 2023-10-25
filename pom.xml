@@ -115,7 +115,7 @@
     <log4j2.version>2.17.2</log4j2.version>
     <slf4j.version>1.7.36</slf4j.version>
     <joda.version>2.9.9</joda.version>
-    <hadoop.version>2.10.1</hadoop.version>
+    <hadoop.version>2.10.2</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
     <hive.version>2.3.1</hive.version>
     <hive.parquet.version>1.10.1</hive.parquet.version>
@@ -383,6 +383,9 @@
           <skip>${skipITs}</skip>
           <argLine>@{argLine}</argLine>
           <useSystemClassLoader>false</useSystemClassLoader>
+          <systemPropertyVariables>
+            <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
+          </systemPropertyVariables>
         </configuration>
       </plugin>
       <plugin>
@@ -664,6 +667,7 @@
               <exclude>NOTICE</exclude>
               <exclude>DISCLAIMER</exclude>
               <exclude>**/.*</exclude>
+              <exclude>**/emptyFile</exclude>
               <exclude>**/*.json</exclude>
               <exclude>**/*.hfile</exclude>
               <exclude>**/*.log</exclude>
@@ -1962,6 +1966,7 @@
               </includes>
               <systemPropertyVariables>
                 <dynamodb-local.endpoint>${dynamodb-local.endpoint}</dynamodb-local.endpoint>
+                <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
               </systemPropertyVariables>
               <useSystemClassLoader>false</useSystemClassLoader>
             </configuration>

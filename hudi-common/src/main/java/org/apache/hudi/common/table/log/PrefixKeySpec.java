@@ -17,20 +17,29 @@
  * under the License.
  */
 
-package org.apache.hudi.common.table.read;
+package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.common.config.TypedProperties;
-
-import org.apache.avro.Schema;
+import java.util.List;
 
 /**
- * A class holding the state that is needed by {@code HoodieFileGroupReader},
- * e.g., schema, merging strategy, etc.
+ * This class specifies a set of record keys, each of which is a prefix.
+ * That is, the comparison between a record key and an element
+ * of the set is {@link String#startsWith(String)}.
  */
-public class FileGroupReaderState {
-  public String tablePath;
-  public String latestCommitTime;
-  public Schema baseFileAvroSchema;
-  public Schema logRecordAvroSchema;
-  public TypedProperties mergeProps = new TypedProperties();
+public class PrefixKeySpec implements KeySpec {
+  private final List<String> keysPrefixes;
+
+  public PrefixKeySpec(List<String> keysPrefixes) {
+    this.keysPrefixes = keysPrefixes;
+  }
+
+  @Override
+  public List<String> getKeys() {
+    return keysPrefixes;
+  }
+
+  @Override
+  public boolean isFullKey() {
+    return false;
+  }
 }

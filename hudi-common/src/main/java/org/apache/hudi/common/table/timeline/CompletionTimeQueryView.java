@@ -30,10 +30,9 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.apache.hudi.common.table.timeline.HoodieArchivedTimeline.COMPLETION_TIME_ARCHIVED_META_FIELD;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.EQUALS;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.compareTimestamps;
 
 /**
  * Query view for instant completion time.
@@ -52,14 +51,17 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
   private final Map<String, String> startToCompletionInstantTimeMap;
 
   /**
-   * The start instant time to eagerly load from, by default load last N days of completed instants.
+   * The cursor instant time to eagerly load from, by default load last N days of completed instants.
+   * It is tuned dynamically with lazy loading occurs, assumes an initial cursor instant as t10,
+   * a completion query for t5 would trigger a lazy loading with this cursor instant been updated as t5.
+   * The sliding of the cursor instant economizes redundant loading from different queries.
    */
-  private final String startInstant;
+  private volatile String cursorInstant;
 
   /**
-   * The first instant on the active timeline, used for query optimization.
+   * The first write instant on the active timeline, used for query optimization.
    */
-  private final String firstInstantOnActiveTimeline;
+  private final String firstNonSavepointCommit;
 
   /**
    * The constructor.
@@ -74,13 +76,14 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
    * The constructor.
    *
    * @param metaClient   The table meta client.
-   * @param startInstant The earliest instant time to eagerly load from, by default load last N days of completed instants.
+   * @param cursorInstant The earliest instant time to eagerly load from, by default load last N days of completed instants.
    */
-  public CompletionTimeQueryView(HoodieTableMetaClient metaClient, String startInstant) {
+  public CompletionTimeQueryView(HoodieTableMetaClient metaClient, String cursorInstant) {
     this.metaClient = metaClient;
     this.startToCompletionInstantTimeMap = new ConcurrentHashMap<>();
-    this.startInstant = startInstant;
-    this.firstInstantOnActiveTimeline = metaClient.getActiveTimeline().firstInstant().map(HoodieInstant::getTimestamp).orElse("");
+    this.cursorInstant = minInstant(cursorInstant, metaClient.getActiveTimeline().firstInstant().map(HoodieInstant::getTimestamp).orElse(""));
+    // Note: use getWriteTimeline() to keep sync with the fs view visibleCommitsAndCompactionTimeline, see AbstractTableFileSystemView.refreshTimeline.
+    this.firstNonSavepointCommit = metaClient.getActiveTimeline().getWriteTimeline().getFirstNonSavepointCommit().map(HoodieInstant::getTimestamp).orElse("");
     load();
   }
 
@@ -88,7 +91,8 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
    * Returns whether the instant is completed.
    */
   public boolean isCompleted(String instantTime) {
-    return getCompletionTime(instantTime).isPresent();
+    return this.startToCompletionInstantTimeMap.containsKey(instantTime)
+        || HoodieTimeline.compareTimestamps(instantTime, LESSER_THAN, this.firstNonSavepointCommit);
   }
 
   /**
@@ -129,10 +133,10 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
         // ==============================================================
         // LEGACY CODE
         // ==============================================================
-        // Fixes the completion time to reflect the completion sequence correctly
-        // if the file slice base instant time is not in datetime format. For example,
-        // 1. many test cases just use integer string as the instant time.
-        // 2. MDT uses compaction instant time as [delta_instant] + "001".
+        // Fixes the completion time to reflect the completion sequence correctly.
+        // The file slice base instant time is not in datetime format in the following scenarios:
+        //   1. many test cases just use integer string as the instant time.
+        //   2. MDT uses compaction instant time with pattern [delta_instant] + "001".
 
         // CAUTION: this fix only works for OCC(Optimistic Concurrency Control).
         // for NB-CC(Non-blocking Concurrency Control), the file slicing may be incorrect.
@@ -154,17 +158,23 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
     if (completionTime != null) {
       return Option.of(completionTime);
     }
-    if (HoodieTimeline.compareTimestamps(startTime, GREATER_THAN, this.firstInstantOnActiveTimeline)) {
+    if (HoodieTimeline.compareTimestamps(startTime, GREATER_THAN_OR_EQUALS, this.cursorInstant)) {
       // the instant is still pending
       return Option.empty();
     }
     // the 'startTime' should be out of the eager loading range, switch to a lazy loading.
     // This operation is resource costly.
-    HoodieArchivedTimeline.loadInstants(metaClient,
-        new EqualsTimestampFilter(startTime),
-        HoodieArchivedTimeline.LoadMode.SLIM,
-        r -> true,
-        this::readCompletionTime);
+    synchronized (this) {
+      if (HoodieTimeline.compareTimestamps(startTime, LESSER_THAN, this.cursorInstant)) {
+        HoodieArchivedTimeline.loadInstants(metaClient,
+            new HoodieArchivedTimeline.ClosedOpenTimeRangeFilter(startTime, this.cursorInstant),
+            HoodieArchivedTimeline.LoadMode.SLIM,
+            r -> true,
+            this::readCompletionTime);
+      }
+      // refresh the start instant
+      this.cursorInstant = startTime;
+    }
     return Option.ofNullable(this.startToCompletionInstantTimeMap.get(startTime));
   }
 
@@ -180,7 +190,7 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
         .forEach(instant -> setCompletionTime(instant.getTimestamp(), instant.getCompletionTime()));
     // then load the archived instants.
     HoodieArchivedTimeline.loadInstants(metaClient,
-        new HoodieArchivedTimeline.StartTsFilter(this.startInstant),
+        new HoodieArchivedTimeline.StartTsFilter(this.cursorInstant),
         HoodieArchivedTimeline.LoadMode.SLIM,
         r -> true,
         this::readCompletionTime);
@@ -199,28 +209,16 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
     this.startToCompletionInstantTimeMap.putIfAbsent(instantTime, completionTime);
   }
 
+  private static String minInstant(String instant1, String instant2) {
+    return compareTimestamps(instant1, LESSER_THAN, instant2) ? instant1 : instant2;
+  }
+
+  public String getCursorInstant() {
+    return cursorInstant;
+  }
+
   @Override
   public void close() throws Exception {
     this.startToCompletionInstantTimeMap.clear();
-  }
-
-  // -------------------------------------------------------------------------
-  //  Inner class
-  // -------------------------------------------------------------------------
-
-  /**
-   * A time based filter with equality of specified timestamp.
-   */
-  public static class EqualsTimestampFilter extends HoodieArchivedTimeline.TimeRangeFilter {
-    private final String ts;
-
-    public EqualsTimestampFilter(String ts) {
-      super(ts, ts); // endTs is never used
-      this.ts = ts;
-    }
-
-    public boolean isInRange(String instantTime) {
-      return HoodieTimeline.compareTimestamps(instantTime, EQUALS, ts);
-    }
   }
 }

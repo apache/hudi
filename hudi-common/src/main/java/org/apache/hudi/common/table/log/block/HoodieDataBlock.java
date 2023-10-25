@@ -141,6 +141,10 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     return serializeRecords(records.get());
   }
 
+  public String getKeyFieldName() {
+    return keyFieldName;
+  }
+
   protected static Schema getWriterSchema(Map<HeaderMetadataType, String> logBlockHeader) {
     return new Schema.Parser().parse(logBlockHeader.get(HeaderMetadataType.SCHEMA));
   }

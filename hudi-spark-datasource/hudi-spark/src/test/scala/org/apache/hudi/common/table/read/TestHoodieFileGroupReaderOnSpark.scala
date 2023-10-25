@@ -22,11 +22,17 @@ package org.apache.hudi.common.table.read
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.common.engine.HoodieReaderContext
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
-import org.apache.hudi.{SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.{AvroConversionUtils, SparkFileFormatInternalRowReaderContext}
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
+import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Dataset, HoodieInternalRowUtils, HoodieUnsafeUtils, Row, SaveMode, SparkSession}
+import org.apache.spark.unsafe.types.UTF8String
 import org.apache.spark.{HoodieSparkKryoRegistrar, SparkConf}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
@@ -55,22 +61,39 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     sparkConf.set("spark.hadoop.mapred.output.compression.type", "BLOCK")
     sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
     sparkConf.set("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
+    sparkConf.set("spark.sql.parquet.enableVectorizedReader", "false")
     HoodieSparkKryoRegistrar.register(sparkConf)
     spark = SparkSession.builder.config(sparkConf).getOrCreate
   }
 
   override def getHadoopConf: Configuration = {
-    new Configuration()
+    FSUtils.buildInlineConf(new Configuration)
   }
 
   override def getBasePath: String = {
     tempDir.toAbsolutePath.toUri.toString
   }
 
-  override def getHoodieReaderContext: HoodieReaderContext[InternalRow] = {
-    new SparkFileFormatInternalRowReaderContext(spark,
-      SparkAdapterSupport.sparkAdapter.createLegacyHoodieParquetFileFormat(false).get,
-      getHadoopConf)
+  override def getHoodieReaderContext(partitionValues: Array[String]): HoodieReaderContext[InternalRow] = {
+    val parquetFileFormat = new ParquetFileFormat
+    val metaClient = HoodieTableMetaClient.builder.setConf(getHadoopConf).setBasePath(getBasePath).build
+    val avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema
+    val structTypeSchema = AvroConversionUtils.convertAvroSchemaToStructType(avroSchema)
+    val partitionFields = metaClient.getTableConfig.getPartitionFields
+    val partitionSchema = new StructType(structTypeSchema.fields.filter(f => partitionFields.get().contains(f.name)))
+
+    val recordReaderIterator = parquetFileFormat.buildReaderWithPartitionValues(
+    spark, structTypeSchema, partitionSchema, structTypeSchema, Seq.empty, Map.empty, getHadoopConf)
+    val numPartitionFields = if (partitionFields.isPresent) partitionFields.get().length else 0
+    assertEquals(numPartitionFields, partitionValues.length)
+
+    val partitionValuesEncoded = new Array[UTF8String](partitionValues.length)
+    for (i <- Range(0, numPartitionFields)) {
+      partitionValuesEncoded.update(i, UTF8String.fromString(partitionValues.apply(i)))
+    }
+
+    val partitionValueRow = new GenericInternalRow(partitionValuesEncoded.toArray[Any])
+    new SparkFileFormatInternalRowReaderContext(recordReaderIterator, partitionValueRow)
   }
 
   override def commitToTable(recordList: util.List[String], operation: String, options: util.Map[String, String]): Unit = {

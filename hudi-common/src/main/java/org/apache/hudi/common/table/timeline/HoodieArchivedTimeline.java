@@ -288,8 +288,8 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
    * A time based filter with range (startTs, endTs].
    */
   public static class TimeRangeFilter {
-    private final String startTs;
-    private final String endTs;
+    protected final String startTs;
+    protected final String endTs;
 
     public TimeRangeFilter(String startTs, String endTs) {
       this.startTs = startTs;
@@ -302,14 +302,26 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   }
 
   /**
+   * A time based filter with range [startTs, endTs).
+   */
+  public static class ClosedOpenTimeRangeFilter extends TimeRangeFilter {
+
+    public ClosedOpenTimeRangeFilter(String startTs, String endTs) {
+      super(startTs, endTs);
+    }
+
+    public boolean isInRange(String instantTime) {
+      return HoodieTimeline.isInClosedOpenRange(instantTime, this.startTs, this.endTs);
+    }
+  }
+
+  /**
    * A time based filter with range [startTs, +&#8734).
    */
   public static class StartTsFilter extends TimeRangeFilter {
-    private final String startTs;
 
     public StartTsFilter(String startTs) {
       super(startTs, null); // endTs is never used
-      this.startTs = startTs;
     }
 
     public boolean isInRange(String instantTime) {

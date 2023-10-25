@@ -23,17 +23,20 @@ import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.EmptyIterator;
-import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
@@ -42,13 +45,12 @@ import org.apache.hadoop.fs.Path;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
+import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGER_STRATEGY;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
@@ -73,15 +75,11 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private final long start;
   // Length of bytes to read from the base file
   private final long length;
-  // Key to record and metadata mapping from log files
-  private final Map<String, Pair<Option<T>, Map<String, Object>>> logFileRecordMapping = new HashMap<>();
-  private final FileGroupReaderState readerState = new FileGroupReaderState();
+  // Core structure to store and process records.
+  private final HoodieFileGroupRecordBuffer<T> recordBuffer;
+  private final HoodieFileGroupReaderState readerState = new HoodieFileGroupReaderState();
   private ClosableIterator<T> baseFileIterator;
-  // This is only initialized and used after all records from the base file are iterated
-  private Iterator<Pair<Option<T>, Map<String, Object>>> logRecordIterator;
   private HoodieRecordMerger recordMerger;
-
-  T nextRecord;
 
   public HoodieFileGroupReader(HoodieReaderContext<T> readerContext,
                                HoodieTableMetaClient metaClient,
@@ -90,18 +88,15 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                                HoodieTimeline timeline,
                                HoodieTableQueryType queryType,
                                Option<String> instantTime,
-                               Option<String> startInstantTime) {
+                               Option<String> startInstantTime,
+                               boolean shouldUseRecordPosition) throws Exception {
     // This constructor is a placeholder now to allow automatically fetching the correct list of
     // base and log files for a file group.
     // Derive base and log files and call the corresponding constructor.
-    this.readerContext = readerContext;
-    this.hadoopConf = metaClient.getHadoopConf();
-    this.baseFilePath = Option.empty();
-    this.logFilePathList = Option.empty();
-    this.props = props;
-    this.start = 0;
-    this.length = Long.MAX_VALUE;
-    this.baseFileIterator = new EmptyIterator<>();
+    this(readerContext, metaClient.getHadoopConf(), metaClient.getBasePathV2().toString(),
+        instantTime.get(), Option.empty(), Option.empty(),
+        new TableSchemaResolver(metaClient).getTableAvroSchema(),
+        props, 0, Long.MAX_VALUE, shouldUseRecordPosition);
   }
 
   public HoodieFileGroupReader(HoodieReaderContext<T> readerContext,
@@ -113,7 +108,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                                Schema avroSchema,
                                TypedProperties props,
                                long start,
-                               long length) {
+                               long length,
+                               boolean shouldUseRecordPosition) {
     this.readerContext = readerContext;
     this.hadoopConf = hadoopConf;
     this.baseFilePath = baseFilePath;
@@ -128,6 +124,25 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.readerState.baseFileAvroSchema = avroSchema;
     this.readerState.logRecordAvroSchema = avroSchema;
     this.readerState.mergeProps.putAll(props);
+    String filePath = baseFilePath.isPresent()
+        ? baseFilePath.get().getPath()
+        : logFilePathList.get().get(0);
+    String partitionPath = FSUtils.getRelativePartitionPath(
+        new Path(tablePath), new Path(filePath).getParent());
+    Option<String> partitionNameOpt = StringUtils.isNullOrEmpty(partitionPath)
+        ? Option.empty() : Option.of(partitionPath);
+    Option<Object> partitionConfigValue = ConfigUtils.getRawValueWithAltKeys(props, PARTITION_FIELDS);
+    Option<String[]> partitionPathFieldOpt = partitionConfigValue.isPresent()
+        ? Option.of(Arrays.stream(partitionConfigValue.get().toString().split(","))
+        .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[] {}))
+        : Option.empty();
+    this.recordBuffer = shouldUseRecordPosition
+        ? new HoodiePositionBasedFileGroupRecordBuffer<>(
+        readerContext, avroSchema, avroSchema, partitionNameOpt, partitionPathFieldOpt,
+        recordMerger, props)
+        : new HoodieKeyBasedFileGroupRecordBuffer<>(
+        readerContext, avroSchema, avroSchema, partitionNameOpt, partitionPathFieldOpt,
+        recordMerger, props);
   }
 
   /**
@@ -136,10 +151,10 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   public void initRecordIterators() {
     this.baseFileIterator = baseFilePath.isPresent()
         ? readerContext.getFileRecordIterator(
-        baseFilePath.get().getHadoopPath(), 0, baseFilePath.get().getFileLen(),
-        readerState.baseFileAvroSchema, readerState.baseFileAvroSchema, hadoopConf)
+            baseFilePath.get().getHadoopPath(), start, length, readerState.baseFileAvroSchema, readerState.baseFileAvroSchema, hadoopConf)
         : new EmptyIterator<>();
     scanLogFiles();
+    recordBuffer.setBaseFileIteraotr(baseFileIterator);
   }
 
   /**
@@ -147,49 +162,22 @@ public final class HoodieFileGroupReader<T> implements Closeable {
    * @throws IOException on reader error.
    */
   public boolean hasNext() throws IOException {
-    while (baseFileIterator.hasNext()) {
-      T baseRecord = baseFileIterator.next();
-      String recordKey = readerContext.getRecordKey(baseRecord, readerState.baseFileAvroSchema);
-      Pair<Option<T>, Map<String, Object>> logRecordInfo = logFileRecordMapping.remove(recordKey);
-      Option<T> resultRecord = logRecordInfo != null
-          ? merge(Option.of(baseRecord), Collections.emptyMap(), logRecordInfo.getLeft(), logRecordInfo.getRight())
-          : merge(Option.empty(), Collections.emptyMap(), Option.of(baseRecord), Collections.emptyMap());
-      if (resultRecord.isPresent()) {
-        nextRecord = readerContext.seal(resultRecord.get());
-        return true;
-      }
-    }
-
-    if (logRecordIterator == null) {
-      logRecordIterator = logFileRecordMapping.values().iterator();
-    }
-
-    while (logRecordIterator.hasNext()) {
-      Pair<Option<T>, Map<String, Object>> nextRecordInfo = logRecordIterator.next();
-      Option<T> resultRecord = merge(Option.empty(), Collections.emptyMap(),
-          nextRecordInfo.getLeft(), nextRecordInfo.getRight());
-      if (resultRecord.isPresent()) {
-        nextRecord = readerContext.seal(resultRecord.get());
-        return true;
-      }
-    }
-
-    return false;
+    return recordBuffer.hasNext();
   }
 
   /**
    * @return The next record after calling {@link #hasNext}.
    */
   public T next() {
-    T result = nextRecord;
-    nextRecord = null;
-    return result;
+    return recordBuffer.next();
   }
 
   private void scanLogFiles() {
     if (logFilePathList.isPresent()) {
-      FileSystem fs = readerContext.getFs(logFilePathList.get().get(0), hadoopConf);
-      HoodieMergedLogRecordReader<T> logRecordReader = HoodieMergedLogRecordReader.newBuilder()
+      String path = baseFilePath.isPresent() ? baseFilePath.get().getPath() : logFilePathList.get().get(0);
+      FileSystem fs = readerContext.getFs(path, hadoopConf);
+
+      HoodieMergedLogRecordReader logRecordReader = HoodieMergedLogRecordReader.newBuilder()
           .withHoodieReaderContext(readerContext)
           .withFileSystem(fs)
           .withBasePath(readerState.tablePath)
@@ -200,34 +188,56 @@ public final class HoodieFileGroupReader<T> implements Closeable {
           .withReverseReader(false)
           .withBufferSize(getIntWithAltKeys(props, HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE))
           .withPartition(getRelativePartitionPath(
-              new Path(readerState.tablePath), new Path(logFilePathList.get().get(0)).getParent()
-          ))
+              new Path(readerState.tablePath), new Path(logFilePathList.get().get(0)).getParent()))
           .withRecordMerger(recordMerger)
+          .withRecordBuffer(recordBuffer)
           .build();
-      logFileRecordMapping.putAll(logRecordReader.getRecords());
       logRecordReader.close();
     }
-  }
-
-  private Option<T> merge(Option<T> older, Map<String, Object> olderInfoMap,
-                          Option<T> newer, Map<String, Object> newerInfoMap) throws IOException {
-    if (!older.isPresent()) {
-      return newer;
-    }
-
-    Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.merge(
-        readerContext.constructHoodieRecord(older, olderInfoMap, readerState.baseFileAvroSchema), readerState.baseFileAvroSchema,
-        readerContext.constructHoodieRecord(newer, newerInfoMap, readerState.logRecordAvroSchema), readerState.logRecordAvroSchema, props);
-    if (mergedRecord.isPresent()) {
-      return Option.ofNullable((T) mergedRecord.get().getLeft().getData());
-    }
-    return Option.empty();
   }
 
   @Override
   public void close() throws IOException {
     if (baseFileIterator != null) {
       baseFileIterator.close();
+    }
+    if (recordBuffer != null) {
+      recordBuffer.close();
+    }
+  }
+
+  public HoodieFileGroupReaderIterator<T> getClosableIterator() {
+    return new HoodieFileGroupReaderIterator<>(this);
+  }
+
+  public static class HoodieFileGroupReaderIterator<T> implements ClosableIterator<T> {
+    private final HoodieFileGroupReader<T> reader;
+
+    public HoodieFileGroupReaderIterator(HoodieFileGroupReader<T> reader) {
+      this.reader = reader;
+    }
+
+    @Override
+    public boolean hasNext() {
+      try {
+        return reader.hasNext();
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to read record", e);
+      }
+    }
+
+    @Override
+    public T next() {
+      return reader.next();
+    }
+
+    @Override
+    public void close() {
+      try {
+        reader.close();
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to close the reader", e);
+      }
     }
   }
 }
