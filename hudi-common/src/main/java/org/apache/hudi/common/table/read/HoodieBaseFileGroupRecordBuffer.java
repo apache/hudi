@@ -24,7 +24,6 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
@@ -55,7 +54,6 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   protected final Option<String[]> partitionPathFieldOpt;
   protected final HoodieRecordMerger recordMerger;
   protected final TypedProperties payloadProps;
-  protected final HoodieTableMetaClient hoodieTableMetaClient;
   protected final Map<Object, Pair<Option<T>, Map<String, Object>>> records;
   protected ClosableIterator<T> baseFileIterator;
   protected Iterator<Pair<Option<T>, Map<String, Object>>> logRecordIterator;
@@ -67,8 +65,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
                                          Option<String> partitionNameOverrideOpt,
                                          Option<String[]> partitionPathFieldOpt,
                                          HoodieRecordMerger recordMerger,
-                                         TypedProperties payloadProps,
-                                         HoodieTableMetaClient hoodieTableMetaClient) {
+                                         TypedProperties payloadProps) {
     this.readerContext = readerContext;
     this.readerSchema = readerSchema;
     this.baseFileSchema = baseFileSchema;
@@ -76,7 +73,6 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     this.partitionPathFieldOpt = partitionPathFieldOpt;
     this.recordMerger = recordMerger;
     this.payloadProps = payloadProps;
-    this.hoodieTableMetaClient = hoodieTableMetaClient;
     this.records = new HashMap<>();
   }
 
@@ -162,7 +158,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
       // For same ordering values, uses the natural order(arrival time semantics).
       Comparable existingOrderingVal = readerContext.getOrderingValue(
           existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(), readerSchema,
-          this.hoodieTableMetaClient.getTableConfig().getProps());
+          payloadProps);
       Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
       // Checks the ordering value does not equal to 0
       // because we use 0 as the default value which means natural order

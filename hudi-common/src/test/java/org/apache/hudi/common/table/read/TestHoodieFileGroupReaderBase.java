@@ -38,7 +38,6 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -48,13 +47,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGER_STRATEGY;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getLogFileListFromFileSlice;
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings;
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -131,18 +129,8 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     props.setProperty("hoodie.datasource.write.precombine.field", "timestamp");
     props.setProperty("hoodie.payload.ordering.field", "timestamp");
     props.setProperty(RECORD_MERGER_STRATEGY.key(), RECORD_MERGER_STRATEGY.defaultValue());
-    String filePath = fileSlice.getBaseFile().isPresent() ? fileSlice.getBaseFile().get().getPath() : logFilePathList.get(0);
+    props.setProperty(PARTITION_FIELDS.key(), metaClient.getTableConfig().getString(PARTITION_FIELDS.key()));
     String[] partitionValues = {partitionPaths[0]};
-    HoodieFileGroupRecordBuffer<T> recordBuffer = new HoodieKeyBasedFileGroupRecordBuffer<>(
-        getHoodieReaderContext(partitionValues),
-        avroSchema,
-        avroSchema,
-        Option.of(getRelativePartitionPath(new Path(basePath), new Path(filePath).getParent())),
-        metaClient.getTableConfig().getPartitionFields(),
-        getHoodieReaderContext(partitionValues).getRecordMerger(
-            getStringWithAltKeys(props, RECORD_MERGER_STRATEGY, RECORD_MERGER_STRATEGY.defaultValue())),
-        props,
-        metaClient);
     HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<T>(
         getHoodieReaderContext(partitionValues),
         hadoopConf,
@@ -154,7 +142,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         props,
         0,
         fileSlice.getTotalFileSize(),
-        recordBuffer);
+        false);
     fileGroupReader.initRecordIterators();
     while (fileGroupReader.hasNext()) {
       actualRecordList.add(fileGroupReader.next());
