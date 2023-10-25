@@ -68,6 +68,8 @@ public class SparkBucketIndexPartitioner<T> extends
    */
   private Map<String, Set<String>> updatePartitionPathFileIds;
 
+  private final boolean isNonBlockingConcurrencyControl;
+
   public SparkBucketIndexPartitioner(WorkloadProfile profile,
                                      HoodieEngineContext context,
                                      HoodieTable table,
@@ -91,6 +93,7 @@ public class SparkBucketIndexPartitioner<T> extends
     assignUpdates(profile);
     WriteOperationType operationType = profile.getOperationType();
     this.isOverwrite = INSERT_OVERWRITE.equals(operationType) || INSERT_OVERWRITE_TABLE.equals(operationType);
+    this.isNonBlockingConcurrencyControl = config.isNonBlockingConcurrencyControl();
   }
 
   private void assignUpdates(WorkloadProfile profile) {
@@ -124,7 +127,18 @@ public class SparkBucketIndexPartitioner<T> extends
     if (fileIdOption.isPresent()) {
       return new BucketInfo(BucketType.UPDATE, fileIdOption.get(), partitionPath);
     } else {
-      return new BucketInfo(BucketType.INSERT, BucketIdentifier.newBucketFileIdPrefix(bucketId), partitionPath);
+      BucketType bucketType;
+      String fileIdPrefix;
+      if (isNonBlockingConcurrencyControl) {
+        // Always write into log file instead of base file if using NB-CC
+        bucketType = BucketType.UPDATE;
+        // Creates new file group id with fixed suffix if using NB-CC
+        fileIdPrefix = BucketIdentifier.newBucketFileIdFixedSuffix(bucketId);
+      } else {
+        bucketType = BucketType.INSERT;
+        fileIdPrefix = BucketIdentifier.newBucketFileIdPrefix(bucketId);
+      }
+      return new BucketInfo(bucketType, fileIdPrefix, partitionPath);
     }
   }
 

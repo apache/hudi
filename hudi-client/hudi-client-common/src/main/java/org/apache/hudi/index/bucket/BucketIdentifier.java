@@ -102,8 +102,12 @@ public class BucketIdentifier implements Serializable {
     return FSUtils.createNewFileIdPfx().replaceFirst(".{8}", bucketId);
   }
 
+  public static String newBucketFileIdFixedSuffix(String bucketId) {
+    return bucketId + CONSTANT_FILE_ID_SUFFIX;
+  }
+
   public static String newBucketFileIdFixedSuffix(int bucketId) {
-    return bucketIdStr(bucketId) + CONSTANT_FILE_ID_SUFFIX;
+    return newBucketFileIdFixedSuffix(bucketIdStr(bucketId));
   }
 
   public static boolean isBucketFileName(String name) {
