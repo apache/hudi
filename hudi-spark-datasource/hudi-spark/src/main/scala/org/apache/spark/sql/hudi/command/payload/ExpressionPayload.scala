@@ -27,9 +27,8 @@ import org.apache.hudi.avro.AvroSchemaUtils.{isNullable, resolveNullableSchema}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord}
-import org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.common.util.{BinaryUtil, ValidationUtils, Option => HOption}
+import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, StringUtils, ValidationUtils, Option => HOption}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.spark.internal.Logging
@@ -125,9 +124,7 @@ class ExpressionPayload(@transient record: GenericRecord,
       // If the update condition matched  then execute assignment expression
       // to compute final record to update. We will return the first matched record.
       if (conditionEvalResult) {
-        val writePartialUpdates = getBooleanWithAltKeys(
-          properties, HoodieWriteConfig.WRITE_PARTIAL_UPDATES)
-        val writerSchema = getWriterSchema(properties, writePartialUpdates)
+        val writerSchema = getWriterSchema(properties, true)
         val resultingRow = assignmentEvaluator.apply(inputRecord.asRow)
         lazy val resultingAvroRecord = getAvroSerializerFor(writerSchema)
           .serialize(resultingRow)
@@ -414,14 +411,24 @@ object ExpressionPayload {
     parseSchema(props.getProperty(PAYLOAD_RECORD_AVRO_SCHEMA))
   }
 
-  private def getWriterSchema(props: Properties, isPartialUpdate: Boolean): Schema = {
-    if (isPartialUpdate) {
-      parseSchema(props.getProperty(HoodieWriteConfig.WRITE_PARTIAL_UPDATE_SCHEMA.key))
+  private def getWriterSchema(props: Properties, shouldConsiderPartialUpdate: Boolean): Schema = {
+    if (shouldConsiderPartialUpdate) {
+      val partialSchema = ConfigUtils.getStringWithAltKeys(
+        props, HoodieWriteConfig.WRITE_PARTIAL_UPDATE_SCHEMA, true)
+      if (!StringUtils.isNullOrEmpty(partialSchema)) {
+        parseSchema(partialSchema)
+      } else {
+        getWriterSchema(props)
+      }
     } else {
-      ValidationUtils.checkArgument(props.containsKey(HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key),
-        s"Missing ${HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key} property")
-      parseSchema(props.getProperty(HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key))
+      getWriterSchema(props)
     }
+  }
+
+  private def getWriterSchema(props: Properties): Schema = {
+    ValidationUtils.checkArgument(props.containsKey(HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key),
+      s"Missing ${HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key} property")
+    parseSchema(props.getProperty(HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key))
   }
 
   private def getAvroDeserializerFor(schema: Schema) = {

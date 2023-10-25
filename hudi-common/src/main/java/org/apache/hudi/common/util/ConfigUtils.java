@@ -321,11 +321,11 @@ public class ConfigUtils {
    * alternative keys are used to fetch the config. If the config is not found, an
    * {@link IllegalArgumentException} is thrown.
    *
-   * @param props          Configs in {@link TypedProperties}.
+   * @param props          Configs in {@link Properties}.
    * @param configProperty {@link ConfigProperty} config of String type to fetch.
    * @return String value if the config exists.
    */
-  public static String getStringWithAltKeys(TypedProperties props,
+  public static String getStringWithAltKeys(Properties props,
                                             ConfigProperty<String> configProperty) {
     return getStringWithAltKeys(props, configProperty, false);
   }
@@ -337,14 +337,14 @@ public class ConfigUtils {
    * the properties. If not using default value, if the config is not found, an
    * {@link IllegalArgumentException} is thrown.
    *
-   * @param props           Configs in {@link TypedProperties}.
+   * @param props           Configs in {@link Properties}.
    * @param configProperty  {@link ConfigProperty} config of String type to fetch.
    * @param useDefaultValue Whether to use default value from {@link ConfigProperty}.
    * @return String value if the config exists; otherwise, if the config does not exist and
    * {@code useDefaultValue} is true, returns default String value if there is default value
    * defined in the {@link ConfigProperty} config and {@code null} otherwise.
    */
-  public static String getStringWithAltKeys(TypedProperties props,
+  public static String getStringWithAltKeys(Properties props,
                                             ConfigProperty<String> configProperty,
                                             boolean useDefaultValue) {
     if (useDefaultValue) {
@@ -363,12 +363,12 @@ public class ConfigUtils {
    * alternative keys are used to fetch the config. The default value as the input of the method
    * is returned if the config is not found in the properties.
    *
-   * @param props          Configs in {@link TypedProperties}.
+   * @param props          Configs in {@link Properties}.
    * @param configProperty {@link ConfigProperty} config of String type to fetch.
    * @param defaultValue   Default value.
    * @return String value if the config exists; default value otherwise.
    */
-  public static String getStringWithAltKeys(TypedProperties props,
+  public static String getStringWithAltKeys(Properties props,
                                             ConfigProperty<?> configProperty,
                                             String defaultValue) {
     Option<Object> rawValue = getRawValueWithAltKeys(props, configProperty);

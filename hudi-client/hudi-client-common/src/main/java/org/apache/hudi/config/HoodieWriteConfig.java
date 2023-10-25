@@ -84,7 +84,6 @@ import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 
-import com.beust.jcommander.Strings;
 import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.orc.CompressionKind;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -2091,7 +2090,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean shouldWritePartialUpdates() {
-    return getBoolean(WRITE_PARTIAL_UPDATES);
+    return !StringUtils.isNullOrEmpty(getString(WRITE_PARTIAL_UPDATE_SCHEMA));
   }
 
   public String getPartialUpdateSchema() {
@@ -3148,16 +3147,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withWriteRecordPositionsEnabled(boolean shouldWriteRecordPositions) {
       writeConfig.setValue(WRITE_RECORD_POSITIONS, String.valueOf(shouldWriteRecordPositions));
-      return this;
-    }
-
-    public Builder withWritePartialUpdatesEnabled(boolean shouldWritePartialUpdates) {
-      writeConfig.setValue(WRITE_PARTIAL_UPDATES, String.valueOf(shouldWritePartialUpdates));
-      return this;
-    }
-
-    public Builder withWritePartialUpdateFields(List<String> partialUpdateFields) {
-      writeConfig.setValue(WRITE_PARTIAL_UPDATES, Strings.join(",", partialUpdateFields));
       return this;
     }
 

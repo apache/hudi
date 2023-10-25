@@ -18,7 +18,6 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.avro.Schema
-import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig}
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
@@ -28,6 +27,8 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType
 import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewStorageConfig, SyncableFileSystemView}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestUtils.{getDefaultHadoopConf, getLogFileListFromFileSlice}
+import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
+import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 import java.util.{Collections, List}
@@ -37,11 +38,12 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
 
   test("Test Partial Update") {
     withTempDir { tmp =>
-      Seq("mor").foreach { tableType =>
+      Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
         val basePath = tmp.getCanonicalPath + "/" + tableName
-        spark.sql("set hoodie.merge.small.file.group.candidates.limit = 0;")
-        spark.sql("set hoodie.metadata.enable = false;")
+        spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
+        spark.sql(s"set ${HoodieMetadataConfig.ENABLE.key} = false")
+        spark.sql(s"set ${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
         spark.sql(
           s"""
              |create table $tableName (
@@ -90,15 +92,15 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
             metaClient.getFs, new HoodieLogFile(logFilePathList.get(0)),
             avroSchema, 1024 * 1024, true, false, false,
             "id", null)
+          assertTrue(logReader.hasNext)
           val logBlockHeader = logReader.next().getLogBlockHeader
           assertTrue(logBlockHeader.containsKey(HeaderMetadataType.SCHEMA))
-          assertTrue(logBlockHeader.containsKey(HeaderMetadataType.FULL_SCHEMA))
+          assertTrue(logBlockHeader.containsKey(HeaderMetadataType.IS_PARTIAL))
           val partialSchema = new Schema.Parser().parse(logBlockHeader.get(HeaderMetadataType.SCHEMA))
           val expectedPartialSchema = HoodieAvroUtils.addMetadataFields(HoodieAvroUtils.generateProjectionSchema(
             avroSchema, Seq("price", "_ts").asJava), false)
           assertEquals(expectedPartialSchema, partialSchema)
-          assertEquals(avroSchema, new Schema.Parser().parse(
-            logBlockHeader.get(HeaderMetadataType.FULL_SCHEMA)))
+          assertTrue(logBlockHeader.get(HeaderMetadataType.IS_PARTIAL).toBoolean)
         }
 
         val tableName2 = generateTableName

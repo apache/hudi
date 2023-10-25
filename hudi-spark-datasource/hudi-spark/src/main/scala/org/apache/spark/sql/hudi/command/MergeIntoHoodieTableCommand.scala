@@ -25,7 +25,7 @@ import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME, WRITE_PARTIAL_UPDATES, WRITE_PARTIAL_UPDATE_SCHEMA}
+import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME, WRITE_PARTIAL_UPDATE_SCHEMA}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sync.common.HoodieSyncConfig
@@ -410,12 +410,15 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       (DataSourceWriteOptions.TABLE_TYPE.key -> targetTableType)
 
     // Only automatically enable writing partial updates to data blocks for upserts to MOR tables
-    val writePartialUpdates = targetTableType == MOR_TABLE_TYPE_OPT_VAL && operation == UPSERT_OPERATION_OPT_VAL
+    val writePartialUpdates = (targetTableType == MOR_TABLE_TYPE_OPT_VAL
+      && operation == UPSERT_OPERATION_OPT_VAL
+      && parameters.getOrElse(
+      ENABLE_MERGE_INTO_PARTIAL_UPDATES.key,
+      ENABLE_MERGE_INTO_PARTIAL_UPDATES.defaultValue.toString).toBoolean)
 
     if (writePartialUpdates) {
       val updatedFieldSeq = getUpdatedFields(updatingActions.map(a => a.assignments))
       writeParams ++= Seq(
-        WRITE_PARTIAL_UPDATES.key -> writePartialUpdates.toString,
         WRITE_PARTIAL_UPDATE_SCHEMA.key ->
           HoodieAvroUtils.generateProjectionSchema(fullSchema, updatedFieldSeq.asJava).toString
       )

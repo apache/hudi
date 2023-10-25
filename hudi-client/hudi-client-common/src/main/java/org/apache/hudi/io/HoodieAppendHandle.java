@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -152,8 +151,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
                             String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr, TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, partitionPath, fileId, hoodieTable,
         config.shouldWritePartialUpdates()
-            // When enabling writing partial updates to the data blocks in log files, the writer
-            // schema is the partial schema containing the updated fields only
+            // When enabling writing partial updates to the data blocks in log files,
+            // i.e., partial update schema is set, the writer schema is the partial
+            // schema containing the updated fields only
             ? Option.of(new Schema.Parser().parse(config.getPartialUpdateSchema()))
             : Option.empty(),
         taskContextSupplier);
@@ -661,14 +661,11 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       updatedHeader.put(HeaderMetadataType.BLOCK_IDENTIFIER, attemptNumber + "," + blockSequenceNumber);
     }
     if (config.shouldWritePartialUpdates()) {
-      // When enabling writing partial updates to the data blocks, the full schema is also written
-      // to the block header so that the reader can differentiate partial updates vs schema
-      // evolution, based on the "SCHEMA" which contains the partial schema and the "FULL_SCHEMA"
-      // which contains the full schema of the table at this time.
+      // When enabling writing partial updates to the data blocks, the "IS_PARTIAL" flag is also
+      // written to the block header so that the reader can differentiate partial updates, i.e.,
+      // the "SCHEMA" header contains the partial schema.
       updatedHeader.put(
-          HeaderMetadataType.FULL_SCHEMA,
-          HoodieAvroUtils.addMetadataFields(
-              getWriteSchema(config), config.allowOperationMetadataField()).toString());
+          HeaderMetadataType.IS_PARTIAL, Boolean.toString(true));
     }
     return updatedHeader;
   }
