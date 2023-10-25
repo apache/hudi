@@ -33,6 +33,7 @@ import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.HoodieTableServiceManagerConfig;
+import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
@@ -50,7 +51,6 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.marker.MarkerType;
-import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -755,6 +755,14 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Whether to write record positions to the block header for data blocks containing updates and delete blocks. "
           + "The record positions can be used to improve the performance of merging records from base and log files.");
+
+  public static final ConfigProperty<String> WRITE_PARTIAL_UPDATE_SCHEMA = ConfigProperty
+      .key("hoodie.write.partial.update.schema")
+      .defaultValue("")
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Avro schema of the partial updates. This is automatically set by the "
+          + "Hudi write client and user is not expected to manually change the value.");
 
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
@@ -2070,6 +2078,14 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean shouldWriteRecordPositions() {
     return getBoolean(WRITE_RECORD_POSITIONS);
+  }
+
+  public boolean shouldWritePartialUpdates() {
+    return !StringUtils.isNullOrEmpty(getString(WRITE_PARTIAL_UPDATE_SCHEMA));
+  }
+
+  public String getPartialUpdateSchema() {
+    return getString(WRITE_PARTIAL_UPDATE_SCHEMA);
   }
 
   public double getParquetCompressionRatio() {
