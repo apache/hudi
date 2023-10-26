@@ -54,7 +54,7 @@ public class HoodieReaderConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> FILE_GROUP_READER_ENABLED = ConfigProperty
       .key("hoodie.file.group.reader.enabled")
-      .defaultValue(false)
+      .defaultValue(true)
       .markAdvanced()
       .sinceVersion("1.0.0")
       .withDocumentation("Use engine agnostic file group reader if enabled");

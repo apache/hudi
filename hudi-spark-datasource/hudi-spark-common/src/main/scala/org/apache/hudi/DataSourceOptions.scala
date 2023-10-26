@@ -88,7 +88,7 @@ object DataSourceReadOptions {
 
   val USE_NEW_HUDI_PARQUET_FILE_FORMAT: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.use.new.parquet.file.format")
-    .defaultValue("false")
+    .defaultValue("true")
     .markAdvanced()
     .sinceVersion("0.14.0")
     .withDocumentation("Read using the new Hudi parquet file format. The new Hudi parquet file format is " +
