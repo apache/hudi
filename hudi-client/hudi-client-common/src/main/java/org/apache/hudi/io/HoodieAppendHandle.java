@@ -644,7 +644,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     switch (hoodieTable.getBaseFileFormat()) {
       case PARQUET:
       case ORC:
-        return HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK;
+        return HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK;
       case HFILE:
         return HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK;
       default:
