@@ -274,7 +274,7 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
 
   private def missingFieldError(fieldName: Seq[String], table: LogicalPlan, context: Origin): Throwable = {
     throw new AnalysisException(
-      s"Missing field $fieldName with schema:\n" +
+      s"Missing field ${fieldName.mkString(".")} with schema:\n" +
         table.schema.treeString,
       context.line,
       context.startPosition)
