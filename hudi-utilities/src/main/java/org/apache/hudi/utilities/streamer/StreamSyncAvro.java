@@ -130,6 +130,7 @@ public class StreamSyncAvro extends StreamSync<JavaRDD<HoodieRecord>> {
     } else {
       avroRDDOptional = inputBatch.getBatch().map(rowDataset -> getTransformedRDD(rowDataset, reconcileSchema, this.userProvidedSchemaProvider.getTargetSchema()));
     }
+    schemaProvider = this.userProvidedSchemaProvider;
     return convertGenericRecordToHoodie(new InputBatch<>(avroRDDOptional, inputBatch.getCheckpointForNextBatch(), this.userProvidedSchemaProvider), instantTime);
   }
 
