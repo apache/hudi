@@ -161,8 +161,8 @@ public class HoodieClusteringConfig extends HoodieConfig {
           + "value will let the clustering job run faster, while it will give additional pressure to the "
           + "execution engines to manage more concurrent running jobs.");
 
-  public static final ConfigProperty<Integer> CLUSTERING_READ_RECORDS_PARALLELISM = ConfigProperty
-      .key("hoodie.clustering.read.records.parallelism")
+  public static final ConfigProperty<Integer> CLUSTERING_PARALLELISM = ConfigProperty
+      .key("hoodie.clustering.parallelism")
       .defaultValue(20)
       .markAdvanced()
       .sinceVersion("1.0.0")
