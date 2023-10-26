@@ -54,7 +54,6 @@ public abstract class HoodieReaderContext<T> {
   public static final String INTERNAL_META_OPERATION = "_3";
   public static final String INTERNAL_META_INSTANT_TIME = "_4";
   public static final String INTERNAL_META_SCHEMA = "_5";
-  public static final String INTERNAL_META_IS_PARTIAL = "_6";
 
   /**
    * Gets the file system based on the file path and configuration.
@@ -169,11 +168,10 @@ public abstract class HoodieReaderContext<T> {
    * @param schema The Avro schema of the record.
    * @return A mapping containing the metadata.
    */
-  public Map<String, Object> generateMetadataForRecord(T record, Schema schema, boolean isPartial) {
+  public Map<String, Object> generateMetadataForRecord(T record, Schema schema) {
     Map<String, Object> meta = new HashMap<>();
     meta.put(INTERNAL_META_RECORD_KEY, getRecordKey(record, schema));
     meta.put(INTERNAL_META_SCHEMA, schema);
-    meta.put(INTERNAL_META_IS_PARTIAL, isPartial);
     return meta;
   }
 }

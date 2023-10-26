@@ -27,7 +27,7 @@ import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.merge.SparkPartialMergingUtils;
+import org.apache.hudi.merge.SparkRecordMergingUtils;
 
 import org.apache.avro.Schema;
 
@@ -71,10 +71,10 @@ public class HoodieSparkRecordMerger implements HoodieRecordMerger {
       }
     }
     if (older.getOrderingValue(oldSchema, props).compareTo(newer.getOrderingValue(newSchema, props)) > 0) {
-      return Option.of(SparkPartialMergingUtils.mergePartialRecords(
+      return Option.of(SparkRecordMergingUtils.mergeCompleteOrPartialRecords(
           (HoodieSparkRecord) newer, newSchema, (HoodieSparkRecord) older, oldSchema, props));
     } else {
-      return Option.of(SparkPartialMergingUtils.mergePartialRecords(
+      return Option.of(SparkRecordMergingUtils.mergeCompleteOrPartialRecords(
           (HoodieSparkRecord) older, oldSchema, (HoodieSparkRecord) newer, newSchema, props));
     }
   }

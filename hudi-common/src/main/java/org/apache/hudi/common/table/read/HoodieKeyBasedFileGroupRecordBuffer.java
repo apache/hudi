@@ -64,8 +64,6 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
 
   @Override
   public void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException {
-    boolean isPartial = dataBlock.containsPartialUpdates();
-
     Pair<ClosableIterator<T>, Schema> recordsIteratorSchemaPair =
         getRecordsIterator(dataBlock, keySpecOpt);
 
@@ -73,7 +71,7 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
       while (recordIterator.hasNext()) {
         T nextRecord = recordIterator.next();
         Map<String, Object> metadata = readerContext.generateMetadataForRecord(
-            nextRecord, recordsIteratorSchemaPair.getRight(), isPartial);
+            nextRecord, recordsIteratorSchemaPair.getRight());
         String recordKey = (String) metadata.get(HoodieReaderContext.INTERNAL_META_RECORD_KEY);
         processNextDataRecord(nextRecord, metadata, recordKey);
       }
@@ -125,7 +123,7 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
       String recordKey = readerContext.getRecordKey(baseRecord, baseFileSchema);
       Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(recordKey);
       Map<String, Object> metadata = readerContext.generateMetadataForRecord(
-          baseRecord, baseFileSchema, false);
+          baseRecord, baseFileSchema);
 
       Option<T> resultRecord = logRecordInfo != null
           ? merge(Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight())

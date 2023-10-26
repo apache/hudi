@@ -41,15 +41,14 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Util class to merge records containing partial updates.
+ * Util class to merge records that may contain partial updates.
  * This can be plugged into any Spark {@link HoodieRecordMerger} implementation.
  */
-public class SparkPartialMergingUtils {
+public class SparkRecordMergingUtils {
   private static final Map<Schema, Map<Integer, StructField>> FIELD_ID_TO_FIELD_MAPPING_CACHE = new ConcurrentHashMap<>();
   private static final Map<Schema, Map<String, Integer>> FIELD_NAME_TO_ID_MAPPING_CACHE = new ConcurrentHashMap<>();
   private static final Map<Pair<Schema, Schema>,
       Pair<Map<Integer, StructField>, Pair<StructType, Schema>>> MERGED_SCHEMA_CACHE = new ConcurrentHashMap<>();
-  private static final Map<Pair<Schema, Schema>, Boolean> IS_PARTIAL_CACHE = new ConcurrentHashMap<>();
 
   /**
    * Merges records which can contain partial updates.
@@ -61,11 +60,11 @@ public class SparkPartialMergingUtils {
    * @param props     Configuration in {@link TypedProperties}.
    * @return The merged record.
    */
-  public static Pair<HoodieRecord, Schema> mergePartialRecords(HoodieSparkRecord older,
-                                                               Schema oldSchema,
-                                                               HoodieSparkRecord newer,
-                                                               Schema newSchema,
-                                                               TypedProperties props) {
+  public static Pair<HoodieRecord, Schema> mergeCompleteOrPartialRecords(HoodieSparkRecord older,
+                                                                         Schema oldSchema,
+                                                                         HoodieSparkRecord newer,
+                                                                         Schema newSchema,
+                                                                         TypedProperties props) {
     Pair<Map<Integer, StructField>, Pair<StructType, Schema>> mappingSchemaPair =
         getCachedMergedSchema(oldSchema, newSchema);
     boolean isNewerPartial = isPartial(newSchema, mappingSchemaPair.getRight().getRight());
