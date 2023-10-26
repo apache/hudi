@@ -151,7 +151,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   public void initRecordIterators() {
     this.baseFileIterator = baseFilePath.isPresent()
         ? readerContext.getFileRecordIterator(
-        baseFilePath.get().getHadoopPath(), start, length, readerState.baseFileAvroSchema, readerState.baseFileAvroSchema, hadoopConf)
+            baseFilePath.get().getHadoopPath(), start, length, readerState.baseFileAvroSchema, readerState.baseFileAvroSchema, hadoopConf)
         : new EmptyIterator<>();
     scanLogFiles();
     recordBuffer.setBaseFileIteraotr(baseFileIterator);

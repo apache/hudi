@@ -104,7 +104,6 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
 
     Schema schema = (Schema) metadataMap.get(INTERNAL_META_SCHEMA);
     InternalRow row = rowOption.get();
-    boolean isPartial = (boolean) metadataMap.getOrDefault(INTERNAL_META_IS_PARTIAL, false);
     return new HoodieSparkRecord(row, HoodieInternalRowUtils.getCachedSchema(schema));
   }
 
