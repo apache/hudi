@@ -87,6 +87,7 @@ import org.apache.hudi.utilities.sources.TestDataSource;
 import org.apache.hudi.utilities.sources.TestParquetDFSSourceEmptyBatch;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 import org.apache.hudi.utilities.streamer.NoNewDataTerminationStrategy;
+import org.apache.hudi.utilities.streamer.StreamSyncAvro;
 import org.apache.hudi.utilities.testutils.JdbcTestUtils;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 import org.apache.hudi.utilities.testutils.sources.DistributedTestDataSource;
@@ -2530,7 +2531,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     return baseFileStream.map(HoodieBaseFile::getFileId).collect(Collectors.toSet());
   }
 
-  class TestStreamSync extends DeltaSync {
+  class TestStreamSync extends StreamSyncAvro {
 
     public TestStreamSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider, TypedProperties props,
                           JavaSparkContext jssc, FileSystem fs, Configuration conf,

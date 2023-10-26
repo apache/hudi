@@ -90,9 +90,12 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Function;
 
 import static java.lang.String.format;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.utilities.UtilHelpers.buildProperties;
+import static org.apache.hudi.utilities.UtilHelpers.readConfig;
 
 /**
  * An Utility which can incrementally take the output from {@link HiveIncrementalPuller} and apply it to the target
@@ -170,7 +173,7 @@ public class HoodieStreamer implements Serializable {
     } else if (cfg.propsFilePath.equals(Config.DEFAULT_DFS_SOURCE_PROPERTIES)) {
       hoodieConfig.setAll(UtilHelpers.getConfig(cfg.configs).getProps());
     } else {
-      hoodieConfig.setAll(UtilHelpers.readConfig(hadoopConf, new Path(cfg.propsFilePath), cfg.configs).getProps());
+      hoodieConfig.setAll(readConfig(hadoopConf, new Path(cfg.propsFilePath), cfg.configs).getProps());
     }
 
     // set any configs that Deltastreamer has to override explicitly
@@ -427,6 +430,12 @@ public class HoodieStreamer implements Serializable {
       // Inline compaction is disabled for continuous mode, otherwise enabled for MOR
       return !continuousMode && !forceDisableCompaction
           && HoodieTableType.MERGE_ON_READ.equals(HoodieTableType.valueOf(tableType));
+    }
+
+    public static TypedProperties getProps(FileSystem fs, Config cfg) {
+      return cfg.propsFilePath.isEmpty()
+          ? buildProperties(cfg.configs)
+          : readConfig(fs.getConf(), new Path(cfg.propsFilePath), cfg.configs).getProps();
     }
 
     @Override
@@ -700,7 +709,7 @@ public class HoodieStreamer implements Serializable {
           UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, hoodieSparkContext.jsc()),
           props, hoodieSparkContext.jsc(), cfg.transformerClassNames);
 
-      streamSync = new StreamSync(cfg, sparkSession, schemaProvider, props, hoodieSparkContext, fs, conf, this::onInitializingWriteClient);
+      streamSync = createStreamSync(cfg, sparkSession, schemaProvider, props, hoodieSparkContext, fs, conf, this::onInitializingWriteClient);
 
     }
 
@@ -720,7 +729,7 @@ public class HoodieStreamer implements Serializable {
       if (streamSync != null) {
         streamSync.close();
       }
-      streamSync = new StreamSync(cfg, sparkSession, schemaProvider, props, hoodieSparkContext, fs, hiveConf, this::onInitializingWriteClient);
+      streamSync = createStreamSync(cfg, sparkSession, schemaProvider, props, hoodieSparkContext, fs, hiveConf, this::onInitializingWriteClient);
     }
 
     @Override
@@ -942,6 +951,16 @@ public class HoodieStreamer implements Serializable {
     @VisibleForTesting
     public StreamSync getStreamSync() {
       return streamSync;
+    }
+
+    public static StreamSync createStreamSync(HoodieStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
+                                   TypedProperties props, HoodieSparkEngineContext hoodieSparkContext, FileSystem fs, Configuration conf,
+                                   Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
+      if (cfg.operation == WriteOperationType.BULK_INSERT) {
+        return new StreamSyncRowWriter(cfg, sparkSession, schemaProvider, props, hoodieSparkContext, fs, conf, onInitializingHoodieWriteClient);
+      } else {
+        return new StreamSyncAvro(cfg, sparkSession, schemaProvider, props, hoodieSparkContext, fs, conf, onInitializingHoodieWriteClient);
+      }
     }
   }
 

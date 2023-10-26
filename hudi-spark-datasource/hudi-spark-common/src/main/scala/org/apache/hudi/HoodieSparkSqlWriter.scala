@@ -131,6 +131,13 @@ object HoodieSparkSqlWriter {
     new HoodieSparkSqlWriterInternal().bootstrap(sqlContext, mode, optParams, df, hoodieTableConfigOpt, streamingWritesParamsOpt, hoodieWriteClient)
   }
 
+  def deduceWriterSchema(sourceSchema: Schema,
+                         latestTableSchemaOpt: Option[Schema],
+                         internalSchemaOpt: Option[InternalSchema],
+                         props: TypedProperties): Schema = {
+    deduceWriterSchema(sourceSchema, latestTableSchemaOpt, internalSchemaOpt, props.toMap)
+  }
+
   /**
    * Deduces writer's schema based on
    * <ul>
@@ -147,6 +154,19 @@ object HoodieSparkSqlWriter {
 
   def cleanup(): Unit = {
     Metrics.shutdownAllMetrics()
+  }
+
+  def getBulkInsertRowConfig(writerSchema: Schema, hoodieConfig: HoodieConfig,
+                             basePath: String, tblName: String): HoodieWriteConfig = {
+    val writerSchemaStr = writerSchema.toString
+
+    // Make opts mutable since it could be modified by tryOverrideParquetWriteLegacyFormatProperty
+    val opts = mutable.Map() ++ hoodieConfig.getProps.toMap ++
+      Map(HoodieWriteConfig.AVRO_SCHEMA_STRING.key -> writerSchemaStr)
+
+    // Auto set the value of "hoodie.parquet.writelegacyformat.enabled"
+    tryOverrideParquetWriteLegacyFormatProperty(opts, convertAvroSchemaToStructType(writerSchema))
+    DataSourceUtils.createHoodieConfig(writerSchemaStr, basePath, tblName, opts)
   }
 
 }
@@ -940,15 +960,7 @@ class HoodieSparkSqlWriterInternal {
     val sqlContext = writeClient.getEngineContext.asInstanceOf[HoodieSparkEngineContext].getSqlContext
     val jsc = writeClient.getEngineContext.asInstanceOf[HoodieSparkEngineContext].getJavaSparkContext
 
-    val writerSchemaStr = writerSchema.toString
-
-    // Make opts mutable since it could be modified by tryOverrideParquetWriteLegacyFormatProperty
-    val opts = mutable.Map() ++ hoodieConfig.getProps.toMap ++
-      Map(HoodieWriteConfig.AVRO_SCHEMA_STRING.key -> writerSchemaStr)
-
-    // Auto set the value of "hoodie.parquet.writelegacyformat.enabled"
-    tryOverrideParquetWriteLegacyFormatProperty(opts, convertAvroSchemaToStructType(writerSchema))
-    val writeConfig = DataSourceUtils.createHoodieConfig(writerSchemaStr, basePath.toString, tblName, opts)
+    val writeConfig = HoodieSparkSqlWriter.getBulkInsertRowConfig(writerSchema, hoodieConfig, basePath.toString, tblName)
     val overwriteOperationType = Option(hoodieConfig.getString(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE))
       .map(WriteOperationType.fromValue)
       .orNull
