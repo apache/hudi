@@ -25,7 +25,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 import org.apache.hudi.utilities.streamer.StreamSync;
-import org.apache.hudi.utilities.streamer.StreamSyncAvro;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -40,7 +39,7 @@ import java.util.function.Function;
  * Please use {@link StreamSync} instead.
  */
 @Deprecated
-public class DeltaSync extends StreamSyncAvro {
+public class DeltaSync extends StreamSync {
   public DeltaSync(HoodieStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
                    TypedProperties props, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                    Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {

@@ -43,15 +43,8 @@ public class DatasetBulkInsertCommitActionExecutor extends BaseDatasetBulkInsert
 
   public DatasetBulkInsertCommitActionExecutor(HoodieWriteConfig config,
                                                SparkRDDWriteClient writeClient,
-                                               String instantTime,
-                                               Boolean shouldCommit) {
-    super(config, writeClient, instantTime, shouldCommit);
-  }
-
-  public DatasetBulkInsertCommitActionExecutor(HoodieWriteConfig config,
-                                               SparkRDDWriteClient writeClient,
                                                String instantTime) {
-    this(config, writeClient, instantTime, true);
+    super(config, writeClient, instantTime);
   }
 
   @Override

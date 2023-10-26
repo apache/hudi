@@ -90,7 +90,6 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.function.Function;
 
 import static java.lang.String.format;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
@@ -709,7 +708,7 @@ public class HoodieStreamer implements Serializable {
           UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, hoodieSparkContext.jsc()),
           props, hoodieSparkContext.jsc(), cfg.transformerClassNames);
 
-      streamSync = createStreamSync(cfg, sparkSession, schemaProvider, props, hoodieSparkContext, fs, conf, this::onInitializingWriteClient);
+      streamSync = new StreamSync(cfg, sparkSession, schemaProvider, props, hoodieSparkContext, fs, conf, this::onInitializingWriteClient);
 
     }
 
@@ -729,7 +728,7 @@ public class HoodieStreamer implements Serializable {
       if (streamSync != null) {
         streamSync.close();
       }
-      streamSync = createStreamSync(cfg, sparkSession, schemaProvider, props, hoodieSparkContext, fs, hiveConf, this::onInitializingWriteClient);
+      streamSync = new StreamSync(cfg, sparkSession, schemaProvider, props, hoodieSparkContext, fs, hiveConf, this::onInitializingWriteClient);
     }
 
     @Override
@@ -951,16 +950,6 @@ public class HoodieStreamer implements Serializable {
     @VisibleForTesting
     public StreamSync getStreamSync() {
       return streamSync;
-    }
-
-    public static StreamSync createStreamSync(HoodieStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
-                                   TypedProperties props, HoodieSparkEngineContext hoodieSparkContext, FileSystem fs, Configuration conf,
-                                   Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
-      if (cfg.operation == WriteOperationType.BULK_INSERT) {
-        return new StreamSyncRowWriter(cfg, sparkSession, schemaProvider, props, hoodieSparkContext, fs, conf, onInitializingHoodieWriteClient);
-      } else {
-        return new StreamSyncAvro(cfg, sparkSession, schemaProvider, props, hoodieSparkContext, fs, conf, onInitializingHoodieWriteClient);
-      }
     }
   }
 

@@ -54,33 +54,26 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
   protected final transient HoodieWriteConfig writeConfig;
   protected final transient SparkRDDWriteClient writeClient;
   protected final String instantTime;
-  protected final Boolean shouldCommit;
   protected HoodieTable table;
 
   public BaseDatasetBulkInsertCommitActionExecutor(HoodieWriteConfig config,
                                                    SparkRDDWriteClient writeClient,
-                                                   String instantTime,
-                                                   Boolean shouldCommit) {
+                                                   String instantTime) {
     this.writeConfig = config;
     this.writeClient = writeClient;
     this.instantTime = instantTime;
-    this.shouldCommit = shouldCommit;
   }
 
   protected void preExecute() {
     table.validateInsertSchema();
-    if (shouldCommit) {
-      writeClient.startCommitWithTime(instantTime, getCommitActionType());
-    }
+    writeClient.startCommitWithTime(instantTime, getCommitActionType());
     writeClient.preWrite(instantTime, getWriteOperationType(), table.getMetaClient());
   }
 
   protected abstract Option<HoodieData<WriteStatus>> doExecute(Dataset<Row> records, boolean arePartitionRecordsSorted);
 
   protected void afterExecute(HoodieWriteMetadata<JavaRDD<WriteStatus>> result) {
-    if (shouldCommit) {
-      writeClient.postWrite(result, instantTime, table);
-    }
+    writeClient.postWrite(result, instantTime, table);
   }
 
   private HoodieWriteMetadata<JavaRDD<WriteStatus>> buildHoodieWriteMetadata(Option<HoodieData<WriteStatus>> writeStatuses) {
