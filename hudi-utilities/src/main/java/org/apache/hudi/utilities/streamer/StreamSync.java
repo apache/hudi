@@ -571,7 +571,7 @@ public class StreamSync implements Serializable, Closeable {
           avroRDDOptional = transformed.map(
               rowDataset -> getTransformedRDD(rowDataset, reconcileSchema, this.userProvidedSchemaProvider.getTargetSchema()));
         }
-        schemaProvider = this.userProvidedSchemaProvider;
+        schemaProvider = getDeducedSchemaProvider(this.userProvidedSchemaProvider.getTargetSchema(), this.userProvidedSchemaProvider, metaClient);
       } else {
         // Deduce proper target (writer's) schema for the input dataset, reconciling its
         // schema w/ the table's one
