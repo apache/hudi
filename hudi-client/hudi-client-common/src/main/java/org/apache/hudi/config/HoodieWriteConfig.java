@@ -1795,6 +1795,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieClusteringConfig.LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE);
   }
 
+  public int getClusteringReadRecordsParallelism() {
+    return getInt(HoodieClusteringConfig.CLUSTERING_READ_RECORDS_PARALLELISM);
+  }
+
   /**
    * index properties.
    */

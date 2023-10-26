@@ -161,6 +161,13 @@ public class HoodieClusteringConfig extends HoodieConfig {
           + "value will let the clustering job run faster, while it will give additional pressure to the "
           + "execution engines to manage more concurrent running jobs.");
 
+  public static final ConfigProperty<Integer> CLUSTERING_READ_RECORDS_PARALLELISM = ConfigProperty
+      .key("hoodie.clustering.read.records.parallelism")
+      .defaultValue(20)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Maximum number of parallelism when Spark read records from clustering group.");
+
   public static final ConfigProperty<String> PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "daybased.skipfromlatest.partitions")
       .defaultValue("0")
