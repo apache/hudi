@@ -110,14 +110,6 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
   }
 
-  @Test
-  public void testReadFileGroupWithPartialUpdatesInMergeOnReadTable() throws Exception {
-    // Avro: "/Users/ethan/Work/tmp/20231018-test-partial-updates/h0_avro"
-    // Parquet: "/Users/ethan/Work/tmp/20231018-test-partial-updates/h0_parquet"
-    validateOutputFromFileGroupReader(
-        getHadoopConf(), "/Users/ethan/Work/tmp/20231018-test-partial-updates/h0_new_parquet", new String[] {""}, 1);
-  }
-
   private void validateOutputFromFileGroupReader(Configuration hadoopConf,
                                                  String tablePath,
                                                  String[] partitionPaths,
