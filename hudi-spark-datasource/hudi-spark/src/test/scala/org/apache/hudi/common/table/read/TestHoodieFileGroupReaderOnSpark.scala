@@ -99,7 +99,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
 
     val partitionValueRow = new GenericInternalRow(partitionValuesEncoded.toArray[Any])
     new SparkFileFormatInternalRowReaderContext(
-      spark, recordReaderIterator, partitionSchema, partitionValueRow)
+      recordReaderIterator, partitionSchema, partitionValueRow)
   }
 
   override def commitToTable(recordList: util.List[String], operation: String, options: util.Map[String, String]): Unit = {
