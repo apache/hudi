@@ -154,7 +154,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<HoodieFileFormat> LOG_FILE_FORMAT = ConfigProperty
       .key("hoodie.table.log.file.format")
-      .defaultValue(HoodieFileFormat.HOODIE_LOG)
+      .defaultValue(HoodieFileFormat.PARQUET)
       .withAlternatives("hoodie.table.rt.file.format")
       .withDocumentation("Log format used for the delta logs.");
 

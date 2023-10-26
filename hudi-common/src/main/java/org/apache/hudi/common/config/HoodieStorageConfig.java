@@ -89,7 +89,7 @@ public class HoodieStorageConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> LOGFILE_DATA_BLOCK_FORMAT = ConfigProperty
       .key("hoodie.logfile.data.block.format")
-      .noDefaultValue()
+      .defaultValue("parquet")
       .markAdvanced()
       .withDocumentation("Format of the data block within delta logs. Following formats are currently supported \"avro\", \"hfile\", \"parquet\"");
 
