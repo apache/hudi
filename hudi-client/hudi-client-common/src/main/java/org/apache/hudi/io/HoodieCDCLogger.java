@@ -223,6 +223,10 @@ public class HoodieCDCLogger implements Closeable {
     return stats;
   }
 
+  public Path getPath() {
+    return cdcWriter.getLogFile().getPath();
+  }
+
   @Override
   public void close() {
     try {

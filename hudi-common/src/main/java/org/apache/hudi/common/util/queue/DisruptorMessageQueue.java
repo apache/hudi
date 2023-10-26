@@ -137,6 +137,7 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
         consumer.consume(event.get());
       } catch (Exception e) {
         LOG.error("Failed consuming records", e);
+        consumer.abort();
       }
     });
   }

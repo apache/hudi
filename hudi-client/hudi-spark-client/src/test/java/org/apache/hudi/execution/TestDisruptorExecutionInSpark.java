@@ -86,6 +86,11 @@ public class TestDisruptorExecutionInSpark extends HoodieSparkClientTestHarness 
           }
 
           @Override
+          public void abort() {
+            // No ops.
+          }
+
+          @Override
           public Integer finish() {
             return count;
           }
@@ -132,6 +137,11 @@ public class TestDisruptorExecutionInSpark extends HoodieSparkClientTestHarness 
             } catch (InterruptedException ie) {
               // ignore here
             }
+          }
+
+          @Override
+          public void abort() {
+            // No ops.
           }
 
           @Override

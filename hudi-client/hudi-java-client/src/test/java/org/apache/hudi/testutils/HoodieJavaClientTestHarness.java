@@ -190,6 +190,11 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     public Supplier<Integer> getAttemptNumberSupplier() {
       return () -> (int)attemptId;
     }
+
+    @Override
+    public boolean isAborted() {
+      return false;
+    }
   }
 
   protected void initFileSystem(String basePath, Configuration hadoopConf) {

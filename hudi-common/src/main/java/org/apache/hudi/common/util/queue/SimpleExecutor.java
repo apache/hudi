@@ -72,6 +72,7 @@ public class SimpleExecutor<I, O, E> implements HoodieExecutor<E> {
       return consumer.finish();
     } catch (Exception e) {
       LOG.error("Failed consuming records", e);
+      consumer.abort();
       throw new HoodieException(e);
     }
   }

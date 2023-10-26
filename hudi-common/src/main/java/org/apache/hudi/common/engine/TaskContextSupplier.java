@@ -40,4 +40,9 @@ public abstract class TaskContextSupplier implements Serializable {
    * @returns the attempt number for the task of interest. Attempt starts with 0 and goes up by 1 on retries.
    */
   public abstract Supplier<Integer> getAttemptNumberSupplier();
+
+  /**
+   * Check the task status, whether the task is already aborted.
+   */
+  public abstract boolean isAborted();
 }

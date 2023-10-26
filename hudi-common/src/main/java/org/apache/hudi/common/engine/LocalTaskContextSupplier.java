@@ -51,4 +51,8 @@ public final class LocalTaskContextSupplier extends TaskContextSupplier {
     return () -> 0;
   }
 
+  @Override
+  public boolean isAborted() {
+    return false;
+  }
 }

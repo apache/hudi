@@ -131,6 +131,11 @@ public class TestDisruptorMessageQueue extends HoodieSparkClientTestHarness {
           }
 
           @Override
+          public void abort() {
+            // No ops.
+          }
+
+          @Override
           public Integer finish() {
             return count;
           }
@@ -237,6 +242,11 @@ public class TestDisruptorMessageQueue extends HoodieSparkClientTestHarness {
           }
 
           @Override
+          public void abort() {
+            // No ops.
+          }
+
+          @Override
           public Integer finish() {
             return 0;
           }
@@ -307,6 +317,11 @@ public class TestDisruptorMessageQueue extends HoodieSparkClientTestHarness {
         // Read recs and ensure we have covered all producer recs.
         final HoodieRecord rec = payload.getResult();
         count++;
+      }
+
+      @Override
+      public void abort() {
+        // No ops.
       }
 
       @Override

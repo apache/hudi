@@ -50,4 +50,8 @@ public class JavaTaskContextSupplier extends TaskContextSupplier {
     return () -> 0;
   }
 
+  @Override
+  public boolean isAborted() {
+    return false;
+  }
 }

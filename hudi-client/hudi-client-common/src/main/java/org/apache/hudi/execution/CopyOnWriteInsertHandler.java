@@ -115,6 +115,13 @@ public class CopyOnWriteInsertHandler<T>
   }
 
   @Override
+  public void abort() {
+    for (HoodieWriteHandle handle : handles.values()) {
+      handle.tryCleanWrittenFiles();
+    }
+  }
+
+  @Override
   public List<WriteStatus> finish() {
     closeOpenHandles();
     checkState(statuses.size() + numSkippedRecords > 0);

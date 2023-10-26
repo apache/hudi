@@ -172,6 +172,16 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     }
   }
 
+  @Override
+  public boolean tryCleanWrittenFiles() {
+    try {
+      LOG.warn("Cleaning file " + path);
+      return fs.delete(path, false);
+    } catch (IOException e) {
+      return false;
+    }
+  }
+
   /**
    * Writes all records passed.
    */

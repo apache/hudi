@@ -49,6 +49,11 @@ public class ExplicitWriteHandler<T>
   }
 
   @Override
+  public void abort() {
+    handle.tryCleanWrittenFiles();
+  }
+
+  @Override
   public List<WriteStatus> finish() {
     closeOpenHandle();
     checkState(statuses.size() > 0);

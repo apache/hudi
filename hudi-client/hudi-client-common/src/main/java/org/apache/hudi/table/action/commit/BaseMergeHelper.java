@@ -55,6 +55,11 @@ public abstract class BaseMergeHelper {
     }
 
     @Override
+    public void abort() {
+      upsertHandle.tryCleanWrittenFiles();
+    }
+
+    @Override
     public Void finish() {
       upsertHandle.close();
       return null;

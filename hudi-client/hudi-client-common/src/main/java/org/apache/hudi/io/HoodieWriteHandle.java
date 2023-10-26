@@ -140,6 +140,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
    * @param partitionPath Partition path
    */
   protected void createMarkerFile(String partitionPath, String dataFileName) {
+    stopIfAborted();
     WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime)
         .create(partitionPath, dataFileName, getIOType(), config, fileId, hoodieTable.getMetaClient().getActiveTimeline());
   }
@@ -176,7 +177,8 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   /**
    * Perform the actual writing of the given record into the backing file.
    */
-  public void write(HoodieRecord record, Schema schema, TypedProperties props) {
+  public final void write(HoodieRecord record, Schema schema, TypedProperties props) {
+    stopIfAborted();
     doWrite(record, schema, props);
   }
 
@@ -189,6 +191,11 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   }
 
   public abstract List<WriteStatus> close();
+
+  /**
+   * Try to clean written files if called, return false if failed.
+   */
+  public abstract boolean tryCleanWrittenFiles();
 
   public List<WriteStatus> writeStatuses() {
     return Collections.singletonList(writeStatus);
@@ -265,6 +272,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     return new LogFileCreationCallback() {
       @Override
       public boolean preFileCreation(HoodieLogFile logFile) {
+        stopIfAborted();
         WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
         return writeMarkers.createIfNotExists(partitionPath, logFile.getFileName(), IOType.CREATE,
             config, fileId, hoodieTable.getMetaClient().getActiveTimeline()).isPresent();

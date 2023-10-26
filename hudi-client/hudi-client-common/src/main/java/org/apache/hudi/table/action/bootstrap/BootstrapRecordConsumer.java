@@ -44,4 +44,9 @@ public class BootstrapRecordConsumer implements HoodieConsumer<HoodieRecord, Voi
     bootstrapHandle.close();
     return null;
   }
+
+  @Override
+  public void abort() {
+    bootstrapHandle.tryCleanWrittenFiles();
+  }
 }

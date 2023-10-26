@@ -88,6 +88,11 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieSparkClientTestHar
           }
 
           @Override
+          public void abort() {
+            // No ops.
+          }
+
+          @Override
           public Integer finish() {
             return count;
           }
@@ -126,6 +131,11 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieSparkClientTestHar
             } catch (InterruptedException ie) {
               return;
             }
+          }
+
+          @Override
+          public void abort() {
+            // No ops.
           }
 
           @Override
@@ -169,6 +179,11 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieSparkClientTestHar
         new HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
           @Override
           public void consume(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) {
+          }
+
+          @Override
+          public void abort() {
+            // No ops.
           }
 
           @Override

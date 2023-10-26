@@ -272,11 +272,12 @@ public class HoodieRowCreateHandle implements Serializable {
    *
    * @param partitionPath Partition path
    */
-  private static void createMarkerFile(String partitionPath,
+  private void createMarkerFile(String partitionPath,
                                        String dataFileName,
                                        String instantTime,
                                        HoodieTable<?, ?, ?, ?> table,
                                        HoodieWriteConfig writeConfig) {
+    stopIfAborted();
     WriteMarkersFactory.get(writeConfig.getMarkersType(), table, instantTime)
         .create(partitionPath, dataFileName, IOType.CREATE);
   }
@@ -286,4 +287,18 @@ public class HoodieRowCreateHandle implements Serializable {
     return taskPartitionId + "-" + taskId + "-" + taskEpochId;
   }
 
+  public boolean tryCleanWrittenFiles() {
+    try {
+      LOG.warn("Cleaning file " + path);
+      return table.getMetaClient().getFs().delete(path, false);
+    } catch (IOException e) {
+      return false;
+    }
+  }
+
+  private void stopIfAborted() {
+    if (table.getTaskContextSupplier().isAborted()) {
+      throw new HoodieIOException("The task is already aborted, stop handling new records...");
+    }
+  }
 }

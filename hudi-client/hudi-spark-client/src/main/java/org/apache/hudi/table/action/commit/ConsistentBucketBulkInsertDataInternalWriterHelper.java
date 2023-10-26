@@ -62,13 +62,13 @@ public class ConsistentBucketBulkInsertDataInternalWriterHelper extends BucketBu
 
   public void write(InternalRow row) throws IOException {
     try {
-      if (handle == null) {
+      if (currentHandle == null) {
         // We can ensure that one writer has only one handle
         String partitionPath = String.valueOf(extractPartitionPath(row));
         String recordKey = String.valueOf(extractRecordKey(row));
-        handle = getBucketRowCreateHandle(partitionPath, recordKey);
+        currentHandle = getBucketRowCreateHandle(partitionPath, recordKey);
       }
-      handle.write(row);
+      currentHandle.write(row);
     } catch (Throwable t) {
       LOG.error("Global error thrown while trying to write records in HoodieRowCreateHandle ", t);
       throw new IOException(t);
@@ -90,8 +90,9 @@ public class ConsistentBucketBulkInsertDataInternalWriterHelper extends BucketBu
         "Consistent Hashing bulk_insert only support write to new file group");
 
     // Always create new base file for bulk_insert
-    return new HoodieRowCreateHandle(hoodieTable, writeConfig, partitionPath, fileId,
-        instantTime, taskPartitionId, taskId, taskEpochId, structType, shouldPreserveHoodieMetadata);
+    handles.put(partitionPath, new HoodieRowCreateHandle(hoodieTable, writeConfig, partitionPath, fileId,
+            instantTime, taskPartitionId, taskId, taskEpochId, structType, shouldPreserveHoodieMetadata));
+    return handles.get(partitionPath);
   }
 
   private ConsistentBucketIdentifier getBucketIdentifier(String partition) {
@@ -107,14 +108,4 @@ public class ConsistentBucketBulkInsertDataInternalWriterHelper extends BucketBu
       return new ConsistentBucketIdentifier(metadata);
     }
   }
-
-  @Override
-  public void close() throws IOException {
-    if (handle != null) {
-      LOG.info("Closing bulk insert file " + handle.getFileName());
-      writeStatusList.add(handle.close());
-      handle = null;
-    }
-  }
-
 }

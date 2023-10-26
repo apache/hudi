@@ -109,6 +109,17 @@ public class HoodieMergeHandleWithChangeLog<T, I, K, O> extends HoodieMergeHandl
   }
 
   @Override
+  public boolean tryCleanWrittenFiles() {
+    try {
+      boolean succeed = super.tryCleanWrittenFiles();
+      LOG.warn("Cleaning cdcLogger file " + cdcLogger.getPath());
+      return fs.delete(cdcLogger.getPath(), false) && succeed;
+    } catch (IOException e) {
+      return false;
+    }
+  }
+
+  @Override
   public List<WriteStatus> close() {
     List<WriteStatus> writeStatuses = super.close();
     // if there are cdc data written, set the CDC-related information.

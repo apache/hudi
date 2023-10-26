@@ -342,7 +342,12 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   /**
    * Go through an old record. Here if we detect a newer version shows up, we write the new one to the file.
    */
-  public void write(HoodieRecord<T> oldRecord) {
+  public final void write(HoodieRecord<T> oldRecord) {
+    stopIfAborted();
+    writeInternal(oldRecord);
+  }
+
+  protected void writeInternal(HoodieRecord<T> oldRecord) {
     Schema oldSchema = config.populateMetaFields() ? writeSchemaWithMetaFields : writeSchema;
     Schema newSchema = useWriterSchemaForCompaction ? writeSchemaWithMetaFields : writeSchema;
     boolean copyOldRecord = true;
@@ -389,6 +394,16 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     }
   }
 
+  @Override
+  public boolean tryCleanWrittenFiles() {
+    try {
+      LOG.warn("Cleaning file " + newFilePath);
+      return fs.delete(newFilePath, false);
+    } catch (IOException e) {
+      return false;
+    }
+  }
+
   protected void writeToFile(HoodieKey key, HoodieRecord<T> record, Schema schema, Properties prop, boolean shouldPreserveRecordMetadata) throws IOException {
     // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
     //       file holding this record even in cases when overall metadata is preserved
@@ -405,8 +420,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
 
   protected void writeIncomingRecords() throws IOException {
     // write out any pending records (this can happen when inserts are turned into updates)
-    Iterator<HoodieRecord<T>> newRecordsItr = (keyToNewRecords instanceof ExternalSpillableMap)
-        ? ((ExternalSpillableMap)keyToNewRecords).iterator() : keyToNewRecords.values().iterator();
+    Iterator<HoodieRecord<T>> newRecordsItr = interruptibleIterator((keyToNewRecords instanceof ExternalSpillableMap)
+        ? ((ExternalSpillableMap)keyToNewRecords).iterator() : keyToNewRecords.values().iterator());
     while (newRecordsItr.hasNext()) {
       HoodieRecord<T> hoodieRecord = newRecordsItr.next();
       if (!writtenRecordKeys.contains(hoodieRecord.getRecordKey())) {
