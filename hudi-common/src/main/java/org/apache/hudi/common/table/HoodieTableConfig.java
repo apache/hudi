@@ -244,6 +244,12 @@ public class HoodieTableConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("When set to true, will not write the partition columns into hudi. By default, false.");
 
+  public static final ConfigProperty<Boolean> MULTIPLE_BASE_FILE_FORMATS_ENABLE = ConfigProperty
+      .key("hoodie.table.multiple.base.file.formats.enable")
+      .defaultValue(false)
+      .sinceVersion("1.0.0")
+      .withDocumentation("When set to true, the table can support reading and writing multiple base file formats.");
+
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
 
@@ -745,6 +751,10 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public Boolean shouldDropPartitionColumns() {
     return getBooleanOrDefault(DROP_PARTITION_COLUMNS);
+  }
+
+  public boolean isMultipleBaseFileFormatsEnabled() {
+    return getBooleanOrDefault(MULTIPLE_BASE_FILE_FORMATS_ENABLE);
   }
 
   /**

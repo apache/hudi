@@ -219,7 +219,7 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "the timeline as an immutable log relying only on atomic writes for object storage.");
 
   public static final ConfigProperty<HoodieFileFormat> BASE_FILE_FORMAT = ConfigProperty
-      .key("hoodie.table.base.file.format")
+      .key("hoodie.base.file.format")
       .defaultValue(HoodieFileFormat.PARQUET)
       .withValidValues(HoodieFileFormat.PARQUET.name(), HoodieFileFormat.ORC.name(), HoodieFileFormat.HFILE.name())
       .withAlternatives("hoodie.table.ro.file.format")
@@ -1196,6 +1196,10 @@ public class HoodieWriteConfig extends HoodieConfig {
    */
   public String getBasePath() {
     return getString(BASE_PATH);
+  }
+
+  public HoodieFileFormat getBaseFileFormat() {
+    return HoodieFileFormat.valueOf(getStringOrDefault(BASE_FILE_FORMAT));
   }
 
   public HoodieRecordMerger getRecordMerger() {
@@ -2702,6 +2706,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withPath(String basePath) {
       writeConfig.setValue(BASE_PATH, basePath);
+      return this;
+    }
+
+    public Builder withBaseFileFormat(String baseFileFormat) {
+      writeConfig.setValue(BASE_FILE_FORMAT, HoodieFileFormat.valueOf(baseFileFormat).name());
       return this;
     }
 

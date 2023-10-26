@@ -169,9 +169,12 @@ object HoodieWriterUtils {
       val resolver = spark.sessionState.conf.resolver
       val diffConfigs = StringBuilder.newBuilder
       params.foreach { case (key, value) =>
-        val existingValue = getStringFromTableConfigWithAlternatives(tableConfig, key)
-        if (null != existingValue && !resolver(existingValue, value)) {
-          diffConfigs.append(s"$key:\t$value\t${tableConfig.getString(key)}\n")
+        // Base file format can change between writes, so ignore it.
+        if (!HoodieTableConfig.BASE_FILE_FORMAT.key.equals(key)) {
+          val existingValue = getStringFromTableConfigWithAlternatives(tableConfig, key)
+          if (null != existingValue && !resolver(existingValue, value)) {
+            diffConfigs.append(s"$key:\t$value\t${tableConfig.getString(key)}\n")
+          }
         }
       }
 

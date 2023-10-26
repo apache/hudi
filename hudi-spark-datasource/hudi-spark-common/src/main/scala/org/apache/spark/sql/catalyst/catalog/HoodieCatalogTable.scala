@@ -126,9 +126,9 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   lazy val partitionFields: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
 
   /**
-   * BaseFileFormat
+   * For multiple base file formats
    */
-  lazy val baseFileFormat: String = metaClient.getTableConfig.getBaseFileFormat.name()
+  lazy val isMultipleBaseFileFormatsEnabled: Boolean = tableConfig.isMultipleBaseFileFormatsEnabled
 
   /**
    * Firstly try to load table schema from meta directory on filesystem.

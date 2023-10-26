@@ -122,8 +122,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
       throw new HoodieIOException("Failed to make dir " + path, e);
     }
 
-    return new Path(path.toString(), FSUtils.makeBaseFileName(instantTime, writeToken, fileId,
-        hoodieTable.getMetaClient().getTableConfig().getBaseFileFormat().getFileExtension()));
+    return new Path(path.toString(), FSUtils.makeBaseFileName(instantTime, writeToken, fileId, hoodieTable.getBaseFileExtension()));
   }
 
   /**

@@ -62,7 +62,6 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
-import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.MarkerUtils;
@@ -1021,7 +1020,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
   private Set<String> verifyRecordKeys(List<HoodieRecord> expectedRecords, List<WriteStatus> allStatus, List<GenericRecord> records) {
     for (WriteStatus status : allStatus) {
       Path filePath = new Path(basePath, status.getStat().getPath());
-      records.addAll(BaseFileUtils.getInstance(metaClient).readAvroRecords(hadoopConf, filePath));
+      records.addAll(getFileUtilsInstance(metaClient).readAvroRecords(hadoopConf, filePath));
     }
     Set<String> expectedKeys = recordsToRecordKeySet(expectedRecords);
     assertEquals(records.size(), expectedKeys.size());

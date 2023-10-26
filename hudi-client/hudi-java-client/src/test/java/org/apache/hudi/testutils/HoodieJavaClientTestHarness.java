@@ -1046,4 +1046,8 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     }
     return builder;
   }
+
+  public static BaseFileUtils getFileUtilsInstance(HoodieTableMetaClient metaClient) {
+    return BaseFileUtils.getInstance(metaClient.getTableConfig().getBaseFileFormat());
+  }
 }
