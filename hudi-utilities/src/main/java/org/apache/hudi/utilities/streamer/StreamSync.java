@@ -23,7 +23,6 @@ import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieConversionUtils;
-import org.apache.hudi.HoodieSparkRecordMerger;
 import org.apache.hudi.HoodieSparkSqlWriter;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.SparkAdapterSupport$;
@@ -160,7 +159,6 @@ import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_ENABLED;
 import static org.apache.hudi.config.HoodieWriteConfig.AUTO_COMMIT_ENABLE;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_INSERT;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_UPSERT;
-import static org.apache.hudi.config.HoodieWriteConfig.RECORD_MERGER_IMPLS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
 import static org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName;
@@ -271,7 +269,7 @@ public class StreamSync implements Serializable, Closeable {
 
   private final boolean autoGenerateRecordKeys;
 
-  private final boolean rowBulkInsert;
+  private final boolean useRowWriter;
 
   @Deprecated
   public StreamSync(HoodieStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
@@ -311,10 +309,10 @@ public class StreamSync implements Serializable, Closeable {
     this.transformer = UtilHelpers.createTransformer(Option.ofNullable(cfg.transformerClassNames),
         Option.ofNullable(schemaProvider).map(SchemaProvider::getSourceSchema), this.errorTableWriter.isPresent());
     if (this.cfg.operation == WriteOperationType.BULK_INSERT && source.getSourceType() != Source.SourceType.AVRO) {
-      this.props.setProperty(RECORD_MERGER_IMPLS.key(), HoodieSparkRecordMerger.class.getName());
-      this.rowBulkInsert = true;
+      this.props.setProperty("hoodie.datasource.write.row.writer.enable", "true");
+      this.useRowWriter = true;
     } else {
-      this.rowBulkInsert = false;
+      this.useRowWriter = false;
     }
   }
 
@@ -424,7 +422,7 @@ public class StreamSync implements Serializable, Closeable {
 
     if (inputBatch != null) {
       final JavaRDD<HoodieRecord> recordsFromSource;
-      if (rowBulkInsert) {
+      if (useRowWriter) {
         recordsFromSource = hoodieSparkContext.emptyRDD();
       } else {
         recordsFromSource = (JavaRDD<HoodieRecord>) inputBatch.getBatch().get();
@@ -559,7 +557,7 @@ public class StreamSync implements Serializable, Closeable {
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
       boolean reconcileSchema = props.getBoolean(DataSourceWriteOptions.RECONCILE_SCHEMA().key());
       if (this.userProvidedSchemaProvider != null && this.userProvidedSchemaProvider.getTargetSchema() != null) {
-        if (rowBulkInsert) {
+        if (useRowWriter) {
           return checkEmpty(new InputBatch(transformed, checkpointStr, this.userProvidedSchemaProvider), resumeCheckpointStr);
         }
         // If the target schema is specified through Avro schema,
@@ -605,14 +603,14 @@ public class StreamSync implements Serializable, Closeable {
                 (SchemaProvider) new DelegatingSchemaProvider(props, hoodieSparkContext.jsc(), dataAndCheckpoint.getSchemaProvider(),
                     new SimpleSchemaProvider(hoodieSparkContext.jsc(), targetSchema, props)))
             .orElse(dataAndCheckpoint.getSchemaProvider());
-        if (rowBulkInsert) {
+        if (useRowWriter) {
           return checkEmpty(new InputBatch(transformed, checkpointStr, schemaProvider), resumeCheckpointStr);
         }
         // Rewrite transformed records into the expected target schema
         avroRDDOptional = transformed.map(t -> getTransformedRDD(t, reconcileSchema, schemaProvider.getTargetSchema()));
       }
     } else {
-      if (rowBulkInsert) {
+      if (useRowWriter) {
         return checkEmpty(formatAdapter.fetchNewDataInRowFormat(resumeCheckpointStr, cfg.sourceLimit), resumeCheckpointStr);
       }
       // Pull the data from the source & prepare the write
@@ -794,6 +792,15 @@ public class StreamSync implements Serializable, Closeable {
     }).orElse(Option.empty());
   }
 
+  private HoodieWriteConfig prepareHoodieConfigForRowWriter(Schema writerSchema) {
+    HoodieConfig hoodieConfig = new HoodieConfig(HoodieStreamer.Config.getProps(fs, cfg));
+    hoodieConfig.setValue(DataSourceWriteOptions.TABLE_TYPE(), cfg.tableType);
+    hoodieConfig.setValue(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key(), cfg.payloadClassName);
+    hoodieConfig.setValue(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName(props));
+    hoodieConfig.setValue("path", cfg.targetBasePath);
+    return HoodieSparkSqlWriter.getBulkInsertRowConfig(writerSchema, hoodieConfig, cfg.targetBasePath, cfg.targetTableName);
+  }
+
   /**
    * Perform Hoodie Write. Run Cleaner, schedule compaction and syncs to hive if needed.
    *
@@ -813,17 +820,10 @@ public class StreamSync implements Serializable, Closeable {
     instantTime = startCommit(instantTime, !autoGenerateRecordKeys);
     LOG.info("Starting commit  : " + instantTime);
     boolean isEmpty;
-    if (rowBulkInsert) {
+    if (useRowWriter) {
       Dataset<Row> df = (Dataset<Row>) inputBatch.getBatch().get();
       isEmpty = df.isEmpty();
-
-      HoodieConfig hoodieConfig = new HoodieConfig(HoodieStreamer.Config.getProps(fs, cfg));
-      hoodieConfig.setValue(DataSourceWriteOptions.TABLE_TYPE(), cfg.tableType);
-      hoodieConfig.setValue(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key(), cfg.payloadClassName);
-      hoodieConfig.setValue(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName(props));
-      hoodieConfig.setValue("path", cfg.targetBasePath);
-      HoodieWriteConfig hoodieWriteConfig = HoodieSparkSqlWriter.getBulkInsertRowConfig(inputBatch.getSchemaProvider().getTargetSchema(),
-          hoodieConfig, cfg.targetBasePath, cfg.targetTableName);
+      HoodieWriteConfig hoodieWriteConfig = prepareHoodieConfigForRowWriter(inputBatch.getSchemaProvider().getTargetSchema());
       BaseDatasetBulkInsertCommitActionExecutor executor = new HoodieStreamerDatasetBulkInsertCommitActionExecutor(hoodieWriteConfig, writeClient, instantTime);
       writeStatusRDD = executor.execute(df, !getPartitionColumns(props).isEmpty()).getWriteStatuses();
 

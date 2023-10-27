@@ -1306,6 +1306,48 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }
   }
 
+  @Test
+  public void testBulkInsertRow() throws Exception {
+    // prep parquet source
+    PARQUET_SOURCE_ROOT = basePath + "/parquetFilesMultiCheckpoint" + testNum;
+    int parquetRecords = 100;
+    HoodieTestDataGenerator dataGenerator = prepareParquetDFSFiles(parquetRecords, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, false,
+       null, null);
+
+    prepareParquetDFSSource(true, true, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
+        PARQUET_SOURCE_ROOT, false, "partition_path");
+
+    String tableBasePath = basePath + "/test_multi_checkpoint" + testNum;
+    HoodieDeltaStreamer.Config parquetCfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT, ParquetDFSSource.class.getName(),
+        Collections.emptyList(), PROPS_FILENAME_TEST_PARQUET, false,
+        true, Integer.MAX_VALUE, false, null, null, "timestamp", null);
+
+    HoodieDeltaStreamer parquetDs = new HoodieDeltaStreamer(parquetCfg, jsc);
+    parquetDs.sync();
+    assertRecordCount(100, tableBasePath, sqlContext);
+
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(jsc.hadoopConfiguration(), tableBasePath);
+    List<HoodieInstant> instants = metaClient.getCommitsTimeline().getInstants();
+
+    HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+        .fromBytes(metaClient.getCommitsTimeline().getInstantDetails(instants.get(0)).get(), HoodieCommitMetadata.class);
+
+
+    String parquetFirstcheckpoint = commitMetadata.getExtraMetadata().get(CHECKPOINT_KEY);
+    assertNotNull(parquetFirstcheckpoint);
+
+    parquetCfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, ParquetDFSSource.class.getName(),
+        Collections.emptyList(), PROPS_FILENAME_TEST_PARQUET, false,
+        true, Integer.MAX_VALUE, false, null, null, "timestamp", parquetFirstcheckpoint);
+
+    prepareParquetDFSUpdates(parquetRecords, PARQUET_SOURCE_ROOT, "2.parquet", false, null, null,
+        dataGenerator, "001");
+    parquetDs = new HoodieDeltaStreamer(parquetCfg, jsc);
+    parquetDs.sync();
+    sparkSession.read().format("hudi").load(tableBasePath).show(200,false);
+    assertRecordCount(parquetRecords, tableBasePath, sqlContext);
+  }
+
   /**
    * Test Bulk Insert and upserts with hive syncing. Tests Hudi incremental processing using a 2 step pipeline The first
    * step involves using a SQL template to transform a source TEST-DATA-SOURCE ============================> HUDI TABLE
