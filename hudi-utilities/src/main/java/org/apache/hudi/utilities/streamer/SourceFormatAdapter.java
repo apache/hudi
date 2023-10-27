@@ -78,7 +78,7 @@ public final class SourceFormatAdapter implements Closeable {
     this.source = source;
     this.errorTableWriter = errorTableWriter;
     if (props.isPresent()) {
-      this.shouldSanitize = SanitizationUtils.getShouldSanitize(props.get());
+      this.shouldSanitize = SanitizationUtils.shouldSanitize(props.get());
       this.invalidCharMask = SanitizationUtils.getInvalidCharMask(props.get());
     }
     if (this.shouldSanitize && source.getSourceType() == Source.SourceType.PROTO) {
@@ -100,20 +100,6 @@ public final class SourceFormatAdapter implements Closeable {
    */
   private String getInvalidCharMask() {
     return invalidCharMask;
-  }
-
-  /**
-   * Sanitize all columns including nested ones as per Avro conventions.
-   * @param srcBatch
-   * @return sanitized batch.
-   */
-  private InputBatch<Dataset<Row>> maybeSanitizeFieldNames(InputBatch<Dataset<Row>> srcBatch) {
-    if (!isFieldNameSanitizingEnabled() || !srcBatch.getBatch().isPresent()) {
-      return srcBatch;
-    }
-    Dataset<Row> srcDs = srcBatch.getBatch().get();
-    Dataset<Row> targetDs = SanitizationUtils.sanitizeColumnNamesForAvro(srcDs, getInvalidCharMask());
-    return new InputBatch<>(Option.ofNullable(targetDs), srcBatch.getCheckpointForNextBatch(), srcBatch.getSchemaProvider());
   }
 
   /**
@@ -172,7 +158,7 @@ public final class SourceFormatAdapter implements Closeable {
       }
       case ROW: {
         //we do the sanitizing here if enabled
-        InputBatch<Dataset<Row>> r = maybeSanitizeFieldNames(((Source<Dataset<Row>>) source).fetchNext(lastCkptStr, sourceLimit));
+        InputBatch<Dataset<Row>> r = ((Source<Dataset<Row>>) source).fetchNext(lastCkptStr, sourceLimit);
         return new InputBatch<>(Option.ofNullable(r.getBatch().map(
             rdd -> {
                 SchemaProvider originalProvider = UtilHelpers.getOriginalSchemaProvider(r.getSchemaProvider());
@@ -219,7 +205,7 @@ public final class SourceFormatAdapter implements Closeable {
     switch (source.getSourceType()) {
       case ROW:
         //we do the sanitizing here if enabled
-        InputBatch<Dataset<Row>> datasetInputBatch = maybeSanitizeFieldNames(((Source<Dataset<Row>>) source).fetchNext(lastCkptStr, sourceLimit));
+        InputBatch<Dataset<Row>> datasetInputBatch = ((Source<Dataset<Row>>) source).fetchNext(lastCkptStr, sourceLimit);
         return new InputBatch<>(processErrorEvents(datasetInputBatch.getBatch(),
             ErrorEvent.ErrorReason.JSON_ROW_DESERIALIZATION_FAILURE),
             datasetInputBatch.getCheckpointForNextBatch(), datasetInputBatch.getSchemaProvider());
