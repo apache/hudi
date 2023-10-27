@@ -77,9 +77,9 @@ public class SparkRecordMergingUtils {
       List<Object> values = new ArrayList<>(mergedIdToFieldMapping.size());
       for (int fieldId = 0; fieldId < mergedIdToFieldMapping.size(); fieldId++) {
         StructField structField = mergedIdToFieldMapping.get(fieldId);
-        if (newPartialNameToIdMapping.containsKey(structField.name())) {
+        Integer ordInPartialUpdate = newPartialNameToIdMapping.get(structField.name());
+        if (ordInPartialUpdate != null) {
           // pick from new
-          int ordInPartialUpdate = newPartialNameToIdMapping.get(structField.name());
           values.add(newPartialRow.get(ordInPartialUpdate, structField.dataType()));
         } else {
           // pick from old
