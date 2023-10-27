@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.config;
 
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 
@@ -78,6 +79,8 @@ public class HoodieCommonConfig extends HoodieConfig {
       .withDocumentation("When a non-nullable column is added to datasource during a write operation, the write "
           + " operation will fail schema compatibility check. Set this option to true will make the newly added "
           + " column nullable to successfully complete the write operation.");
+
+  public static final ConfigProperty<String> RECORD_MERGE_MODE = HoodieTableConfig.RECORD_MERGE_MODE;
 
   public static final ConfigProperty<ExternalSpillableMap.DiskMapType> SPILLABLE_DISK_MAP_TYPE = ConfigProperty
       .key("hoodie.common.spillable.diskmap.type")

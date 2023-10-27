@@ -22,6 +22,7 @@ import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.OrderedProperties;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -162,6 +163,12 @@ public class HoodieTableConfig extends HoodieConfig {
       .key("hoodie.timeline.layout.version")
       .noDefaultValue()
       .withDocumentation("Version of timeline used, by the table.");
+
+  public static final ConfigProperty<String> RECORD_MERGE_MODE = ConfigProperty
+      .key("hoodie.record.merge.mode")
+      .defaultValue(RecordMergeMode.OVERWRITE_WITH_LATEST.name())
+      .sinceVersion("1.0.0")
+      .withDocumentation(RecordMergeMode.class);
 
   public static final ConfigProperty<String> PAYLOAD_CLASS_NAME = ConfigProperty
       .key("hoodie.compaction.payload.class")
@@ -566,6 +573,10 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public void setTableVersion(HoodieTableVersion tableVersion) {
     setValue(VERSION, Integer.toString(tableVersion.versionCode()));
+  }
+
+  public RecordMergeMode getRecordMergeMode() {
+    return RecordMergeMode.valueOf(getString(RECORD_MERGE_MODE).toUpperCase());
   }
 
   /**
