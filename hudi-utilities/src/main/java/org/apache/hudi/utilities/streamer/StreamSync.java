@@ -549,6 +549,8 @@ public class StreamSync implements Serializable, Closeable {
 
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
       if (this.userProvidedSchemaProvider != null && this.userProvidedSchemaProvider.getTargetSchema() != null) {
+        // Let's deduce the schema provider for writer side first!
+        schemaProvider = getDeducedSchemaProvider(this.userProvidedSchemaProvider.getTargetSchema(), this.userProvidedSchemaProvider, metaClient);
         // If the target schema is specified through Avro schema,
         // pass in the schema for the Row-to-Avro conversion
         // to avoid nullability mismatch between Avro schema and Row schema
@@ -561,7 +563,7 @@ public class StreamSync implements Serializable, Closeable {
               rowDataset -> {
                 Tuple2<RDD<GenericRecord>, RDD<String>> safeCreateRDDs = HoodieSparkUtils.safeCreateRDD(rowDataset,
                     HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, reconcileSchema,
-                    Option.of(this.userProvidedSchemaProvider.getTargetSchema()));
+                    Option.of(schemaProvider.getTargetSchema()));
                 errorTableWriter.get().addErrorEvents(safeCreateRDDs._2().toJavaRDD()
                     .map(evStr -> new ErrorEvent<>(evStr,
                         ErrorEvent.ErrorReason.AVRO_DESERIALIZATION_FAILURE)));
@@ -569,9 +571,8 @@ public class StreamSync implements Serializable, Closeable {
               });
         } else {
           avroRDDOptional = transformed.map(
-              rowDataset -> getTransformedRDD(rowDataset, reconcileSchema, this.userProvidedSchemaProvider.getTargetSchema()));
+              rowDataset -> getTransformedRDD(rowDataset, reconcileSchema, schemaProvider.getTargetSchema()));
         }
-        schemaProvider = getDeducedSchemaProvider(this.userProvidedSchemaProvider.getTargetSchema(), this.userProvidedSchemaProvider, metaClient);
       } else {
         // Deduce proper target (writer's) schema for the input dataset, reconciling its
         // schema w/ the table's one
