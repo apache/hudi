@@ -142,11 +142,16 @@ public class HoodieCleanConfig extends HoodieConfig {
       .defaultValue(HoodieFailedWritesCleaningPolicy.EAGER.name())
       .withInferFunction(cfg -> {
         Option<String> writeConcurrencyModeOpt = Option.ofNullable(cfg.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE));
-        if (!writeConcurrencyModeOpt.isPresent()
-            || !writeConcurrencyModeOpt.get().equalsIgnoreCase(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name())) {
+        if (!writeConcurrencyModeOpt.isPresent()) {
           return Option.empty();
+        } else {
+          WriteConcurrencyMode writeConcurrencyMode = WriteConcurrencyMode.valueOf(writeConcurrencyModeOpt.get().toUpperCase());
+          if (writeConcurrencyMode.supportsConcurrencyControl()) {
+            return Option.of(HoodieFailedWritesCleaningPolicy.LAZY.name());
+          } else {
+            return Option.empty();
+          }
         }
-        return Option.of(HoodieFailedWritesCleaningPolicy.LAZY.name());
       })
       .markAdvanced()
       .withDocumentation(HoodieFailedWritesCleaningPolicy.class);

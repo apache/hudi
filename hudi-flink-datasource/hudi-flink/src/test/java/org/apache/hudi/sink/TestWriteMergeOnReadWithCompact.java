@@ -89,7 +89,7 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
 
   @Test
   public void testNonBlockingConcurrencyControlWithPartialUpdatePayload() throws Exception {
-    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL.name());
     conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
     conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, PartialUpdateAvroPayload.class.getName());
     // disable schedule compaction in writers
@@ -163,7 +163,7 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
 
   @Test
   public void testNonBlockingConcurrencyControlWithInflightInstant() throws Exception {
-    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL.name());
     conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
     // disable schedule compaction in writers
     conf.setBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
@@ -235,7 +235,7 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
   // the txn2 would fail to commit caused by conflict
   @Test
   public void testBulkInsertInMultiWriter() throws Exception {
-    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL.name());
     conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
     conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, PartialUpdateAvroPayload.class.getName());
     // disable schedule compaction in writers
@@ -277,7 +277,7 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
   // both two txn would success to commit
   @Test
   public void testBulkInsertInSequence() throws Exception {
-    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL.name());
     conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
     conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, PartialUpdateAvroPayload.class.getName());
     // disable schedule compaction in writers

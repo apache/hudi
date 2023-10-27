@@ -44,6 +44,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.model.WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL;
 import static org.apache.hudi.common.model.WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataPartition;
@@ -125,9 +126,9 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
       throw new HoodieIndexException("Not all index types are valid: " + partitionIndexTypes);
     }
     // ensure lock provider configured
-    if (!config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl() || StringUtils.isNullOrEmpty(config.getLockProviderClass())) {
-      throw new HoodieIndexException(String.format("Need to set %s as %s and configure lock provider class",
-          WRITE_CONCURRENCY_MODE.key(), OPTIMISTIC_CONCURRENCY_CONTROL.name()));
+    if (!config.getWriteConcurrencyMode().supportsConcurrencyControl() || StringUtils.isNullOrEmpty(config.getLockProviderClass())) {
+      throw new HoodieIndexException(String.format("Need to set %s as %s or %s and configure lock provider class",
+          WRITE_CONCURRENCY_MODE.key(), OPTIMISTIC_CONCURRENCY_CONTROL.name(), NON_BLOCKING_CONCURRENCY_CONTROL.name()));
     }
   }
 

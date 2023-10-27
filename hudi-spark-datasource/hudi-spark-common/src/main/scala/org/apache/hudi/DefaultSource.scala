@@ -165,7 +165,7 @@ class DefaultSource extends RelationProvider
 
   def validateMultiWriterConfigs(options: Map[String, String]) : Unit = {
     if (ConfigUtils.resolveEnum(classOf[WriteConcurrencyMode], options.getOrDefault(WRITE_CONCURRENCY_MODE.key(),
-      WRITE_CONCURRENCY_MODE.defaultValue())) == WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL) {
+      WRITE_CONCURRENCY_MODE.defaultValue())).supportsConcurrencyControl()) {
       // ensure some valid value is set for identifier
       checkState(options.contains(STREAMING_CHECKPOINT_IDENTIFIER.key()), "For multi-writer scenarios, please set "
         + STREAMING_CHECKPOINT_IDENTIFIER.key() + ". Each writer should set different values for this identifier")

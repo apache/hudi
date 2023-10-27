@@ -35,9 +35,15 @@ public enum WriteConcurrencyMode {
   @EnumFieldDescription("Multiple writers can operate on the table with lazy conflict resolution "
       + "using locks. This means that only one writer succeeds if multiple writers write to the "
       + "same file group.")
-  OPTIMISTIC_CONCURRENCY_CONTROL;
+  OPTIMISTIC_CONCURRENCY_CONTROL,
 
-  public boolean supportsOptimisticConcurrencyControl() {
-    return this == OPTIMISTIC_CONCURRENCY_CONTROL;
+  // Multiple writer can perform write ops on a MOR table with simple bucket index, and defer conflict
+  // resolution to compaction phase
+  @EnumFieldDescription("Multiple writer can perform write ops on a MOR table with simple bucket index, "
+      + "and defer conflict resolution to compaction phase.")
+  NON_BLOCKING_CONCURRENCY_CONTROL;
+
+  public boolean supportsConcurrencyControl() {
+    return this == OPTIMISTIC_CONCURRENCY_CONTROL || this == NON_BLOCKING_CONCURRENCY_CONTROL;
   }
 }
