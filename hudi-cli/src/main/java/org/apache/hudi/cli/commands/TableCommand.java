@@ -23,9 +23,13 @@ import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
 
 import org.apache.avro.Schema;
@@ -223,6 +227,55 @@ public class TableCommand {
     Set<String> deleteConfigs = Arrays.stream(csConfigs.split(",")).collect(Collectors.toSet());
     Path metaPathDir = new Path(client.getBasePath(), METAFOLDER_NAME);
     HoodieTableConfig.delete(client.getFs(), metaPathDir, deleteConfigs);
+
+    HoodieCLI.refreshTableMetadata();
+    Map<String, String> newProps = HoodieCLI.getTableMetaClient().getTableConfig().propsMap();
+    return renderOldNewProps(newProps, oldProps);
+  }
+
+  @ShellMethod(key = "table change-table-type", value = "Change hudi table type, COW_TO_MOR or MOR_TO_COW.")
+  public String changeTableType(
+      @ShellOption(value = {"--type"},
+          help = "COW_TO_MOR or MOR_TO_COW stands for changing table from COW to MOR or from MOR to COW respectively.") final String changeType) {
+    HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
+    String tableName = client.getTableConfig().getTableName();
+    String tablePath = client.getBasePathV2().toString();
+    Map<String, String> oldProps = client.getTableConfig().propsMap();
+
+    HoodieTableType currentType = client.getTableType();
+    String targetType;
+    switch (changeType) {
+      case "COW_TO_MOR":
+        if (currentType.equals(HoodieTableType.MERGE_ON_READ)) {
+          return String.format("table %s path %s is already %s", tableName, tablePath, HoodieTableType.MERGE_ON_READ);
+        }
+        targetType = HoodieTableType.MERGE_ON_READ.name();
+        break;
+      case "MOR_TO_COW":
+        if (currentType.equals(HoodieTableType.COPY_ON_WRITE)) {
+          return String.format("table %s path %s is already %s", tableName, tablePath, HoodieTableType.COPY_ON_WRITE);
+        }
+        // TODO check if remain any compaction or deltacommit;
+        Option<HoodieInstant> lastInstant = client.getActiveTimeline().lastInstant();
+        if (lastInstant.isPresent()) {
+          // before changing mor to cow, need to do a full compaction first;
+          if (!lastInstant.get().getAction().equals("compaction") || !lastInstant.get().isCompleted()) {
+            throw new HoodieException(String.format("The last action must be a completed compaction for this operation. "
+                + "But is %s[status=%s]", lastInstant.get().getAction(), lastInstant.get().getState()));
+          }
+        }
+        targetType = HoodieTableType.COPY_ON_WRITE.name();
+        break;
+      default:
+        throw new HoodieException("Unsupported change type " + changeType + ". Only support COW_TO_MOR or MOR_TO_COW.");
+    }
+
+    Properties updatedProps = new Properties();
+    updatedProps.putAll(oldProps);
+    // change the table type to target type
+    updatedProps.put(HoodieTableConfig.TYPE.key(), targetType);
+    Path metaPathDir = new Path(client.getBasePath(), METAFOLDER_NAME);
+    HoodieTableConfig.update(client.getFs(), metaPathDir, updatedProps);
 
     HoodieCLI.refreshTableMetadata();
     Map<String, String> newProps = HoodieCLI.getTableMetaClient().getTableConfig().propsMap();
