@@ -79,6 +79,10 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
       isFullKey = keySpecOpt.get().isFullKey();
     }
 
+    if (dataBlock.containsPartialUpdates()) {
+      enablePartialMerging = true;
+    }
+    
     // Extract positions from data block.
     List<Long> recordPositions = extractRecordPositions(dataBlock);
 

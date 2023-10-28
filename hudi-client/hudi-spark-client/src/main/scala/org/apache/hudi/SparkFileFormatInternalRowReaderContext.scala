@@ -28,9 +28,8 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.util.collection.ClosableIterator
 import org.apache.hudi.io.storage.HoodieSparkParquetReader
 import org.apache.hudi.util.CloseableInternalRowIterator
-import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS
+import org.apache.parquet.format.converter.ParquetMetadataConverter
 import org.apache.spark.TaskContext
-import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
@@ -38,6 +37,7 @@ import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Pa
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils, PartitionedFile, RecordReaderIterator}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.{HoodieInternalRowUtils, SparkSession}
 
 import scala.collection.mutable
 
@@ -51,7 +51,8 @@ import scala.collection.mutable
  * @param partitionSchema The partition schema in {@link StructType}.
  * @param partitionValues The values for a partition in which the file group lives.
  */
-class SparkFileFormatInternalRowReaderContext(baseFileReader: PartitionedFile => Iterator[InternalRow],
+class SparkFileFormatInternalRowReaderContext(sparkSession: SparkSession,
+                                              baseFileReader: PartitionedFile => Iterator[InternalRow],
                                               partitionSchema: StructType,
                                               partitionValues: InternalRow) extends BaseSparkInternalRowReaderContext {
   lazy val sparkAdapter = SparkAdapterSupport.sparkAdapter
@@ -63,6 +64,8 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: PartitionedFile =>
                                      dataSchema: Schema,
                                      requiredSchema: Schema,
                                      conf: Configuration): ClosableIterator[InternalRow] = {
+    val fileInfo = sparkAdapter.getSparkPartitionedFileUtils
+      .createPartitionedFile(partitionValues, filePath, start, length)
     if (FSUtils.isLogFile(filePath)) {
       val sqlConf = SQLConf.get
       if (sqlConf.parquetVectorizedReaderEnabled) {
@@ -74,7 +77,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: PartitionedFile =>
         val int96RebaseModeInRead = parquetOptions.int96RebaseModeInRead
 
         lazy val footerFileMetaData =
-          ParquetFooterReader.readFooter(conf, filePath, SKIP_ROW_GROUPS).getFileMetaData
+          ParquetFooterReader.readFooter(conf, filePath, ParquetMetadataConverter.SKIP_ROW_GROUPS).getFileMetaData
 
         // PARQUET_INT96_TIMESTAMP_CONVERSION says to apply timezone conversions to int96 timestamps'
         // *only* if the file was created by something other than "parquet-mr", so check the actual
@@ -124,7 +127,6 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: PartitionedFile =>
         new HoodieSparkParquetReader(conf, filePath).getInternalRowIterator(dataSchema, dataSchema)
       }
     } else {
-      val fileInfo = sparkAdapter.getSparkPartitionedFileUtils.createPartitionedFile(partitionValues, filePath, start, length)
       new CloseableInternalRowIterator(baseFileReader.apply(fileInfo))
     }
   }

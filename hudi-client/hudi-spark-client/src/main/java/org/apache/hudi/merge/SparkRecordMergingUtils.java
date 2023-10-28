@@ -34,10 +34,11 @@ import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -47,32 +48,34 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SparkRecordMergingUtils {
   private static final Map<Schema, Map<Integer, StructField>> FIELD_ID_TO_FIELD_MAPPING_CACHE = new ConcurrentHashMap<>();
   private static final Map<Schema, Map<String, Integer>> FIELD_NAME_TO_ID_MAPPING_CACHE = new ConcurrentHashMap<>();
-  private static final Map<Pair<Schema, Schema>,
+  private static final Map<Pair<Pair<Schema, Schema>, Schema>,
       Pair<Map<Integer, StructField>, Pair<StructType, Schema>>> MERGED_SCHEMA_CACHE = new ConcurrentHashMap<>();
 
   /**
    * Merges records which can contain partial updates.
    *
-   * @param older     Older {@link HoodieSparkRecord}.
-   * @param oldSchema Old schema.
-   * @param newer     Newer {@link HoodieSparkRecord}.
-   * @param newSchema New schema.
-   * @param props     Configuration in {@link TypedProperties}.
+   * @param older        Older {@link HoodieSparkRecord}.
+   * @param oldSchema    Old schema.
+   * @param newer        Newer {@link HoodieSparkRecord}.
+   * @param newSchema    New schema.
+   * @param readerSchema Reader schema containing all the fields to read.
+   * @param props        Configuration in {@link TypedProperties}.
    * @return The merged record.
    */
   public static Pair<HoodieRecord, Schema> mergeCompleteOrPartialRecords(HoodieSparkRecord older,
                                                                          Schema oldSchema,
                                                                          HoodieSparkRecord newer,
                                                                          Schema newSchema,
+                                                                         Schema readerSchema,
                                                                          TypedProperties props) {
-    Pair<Map<Integer, StructField>, Pair<StructType, Schema>> mappingSchemaPair =
-        getCachedMergedSchema(oldSchema, newSchema);
-    boolean isNewerPartial = isPartial(newSchema, mappingSchemaPair.getRight().getRight());
+    Pair<Map<Integer, StructField>, Pair<StructType, Schema>> mergedSchemaPair =
+        getCachedMergedSchema(oldSchema, newSchema, readerSchema);
+    boolean isNewerPartial = isPartial(newSchema, mergedSchemaPair.getRight().getRight());
     if (isNewerPartial) {
       InternalRow oldRow = older.getData();
       InternalRow newPartialRow = newer.getData();
 
-      Map<Integer, StructField> mergedIdToFieldMapping = mappingSchemaPair.getLeft();
+      Map<Integer, StructField> mergedIdToFieldMapping = mergedSchemaPair.getLeft();
       Map<String, Integer> newPartialNameToIdMapping = getCachedFieldNameToIdMapping(newSchema);
       List<Object> values = new ArrayList<>(mergedIdToFieldMapping.size());
       for (int fieldId = 0; fieldId < mergedIdToFieldMapping.size(); fieldId++) {
@@ -89,8 +92,8 @@ public class SparkRecordMergingUtils {
       InternalRow mergedRow = new GenericInternalRow(values.toArray());
 
       HoodieSparkRecord mergedSparkRecord = new HoodieSparkRecord(
-          mergedRow, mappingSchemaPair.getRight().getLeft());
-      return Pair.of(mergedSparkRecord, mappingSchemaPair.getRight().getRight());
+          mergedRow, mergedSchemaPair.getRight().getLeft());
+      return Pair.of(mergedSparkRecord, mergedSchemaPair.getRight().getRight());
     } else {
       return Pair.of(newer, newSchema);
     }
@@ -144,41 +147,35 @@ public class SparkRecordMergingUtils {
    * {@link StructType} and Avro schema of the merged schema.
    */
   public static Pair<Map<Integer, StructField>, Pair<StructType, Schema>> getCachedMergedSchema(Schema oldSchema,
-                                                                                                Schema newSchema) {
-    return MERGED_SCHEMA_CACHE.computeIfAbsent(Pair.of(oldSchema, newSchema), schemaPair -> {
-      Schema schema1 = schemaPair.getLeft();
-      Schema schema2 = schemaPair.getRight();
-      Map<Integer, StructField> idToFieldMapping1 = getCachedFieldIdToFieldMapping(schema1);
-      Map<Integer, StructField> idToFieldMapping2 = getCachedFieldIdToFieldMapping(schema2);
-      Map<String, Integer> nameToIdMapping1 = getCachedFieldNameToIdMapping(schema1);
-      Map<String, Integer> nameToIdMapping2 = getCachedFieldNameToIdMapping(schema2);
-      List<Integer> newFieldIdList = new ArrayList<>();
-      for (String name : nameToIdMapping2.keySet()) {
-        if (!nameToIdMapping1.containsKey(name)) {
-          newFieldIdList.add(nameToIdMapping2.get(name));
-        }
-      }
-
-      if (newFieldIdList.isEmpty()) {
-        return Pair.of(idToFieldMapping1, Pair.of(HoodieInternalRowUtils.getCachedSchema(oldSchema), schema1));
-      } else {
-        Map<Integer, StructField> mergedMapping = new HashMap<>(idToFieldMapping1);
-        int newFieldId = mergedMapping.size();
-        newFieldIdList.sort(Comparator.naturalOrder());
-        for (Integer fieldId : newFieldIdList) {
-          mergedMapping.put(newFieldId, idToFieldMapping2.get(fieldId));
-          newFieldId++;
-        }
-        StructField[] fields = new StructField[mergedMapping.size()];
-        for (int i = 0; i < fields.length; i++) {
-          fields[i] = mergedMapping.get(i);
-        }
-        StructType mergedStructType = new StructType(fields);
-        Schema mergedSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
-            mergedStructType, schema2.getName(), schema2.getNamespace());
-        return Pair.of(mergedMapping, Pair.of(mergedStructType, mergedSchema));
-      }
-    });
+                                                                                                Schema newSchema,
+                                                                                                Schema readerSchema) {
+    return MERGED_SCHEMA_CACHE.computeIfAbsent(
+        Pair.of(Pair.of(oldSchema, newSchema), readerSchema), schemaPair -> {
+          Schema schema1 = schemaPair.getLeft().getLeft();
+          Schema schema2 = schemaPair.getLeft().getRight();
+          Schema refSchema = schemaPair.getRight();
+          Map<String, Integer> nameToIdMapping1 = getCachedFieldNameToIdMapping(schema1);
+          Map<String, Integer> nameToIdMapping2 = getCachedFieldNameToIdMapping(schema2);
+          Map<Integer, StructField> refFieldIdToFieldMapping = getCachedFieldIdToFieldMapping(refSchema);
+          Set<String> fieldNameSet = new HashSet<>();
+          fieldNameSet.addAll(nameToIdMapping1.keySet());
+          fieldNameSet.addAll(nameToIdMapping2.keySet());
+          int fieldId = 0;
+          Map<Integer, StructField> mergedMapping = new HashMap<>();
+          List<StructField> mergedFieldList = new ArrayList<>();
+          for (int i = 0; i < refFieldIdToFieldMapping.size(); i++) {
+            StructField field = refFieldIdToFieldMapping.get(i);
+            if (fieldNameSet.contains(field.name())) {
+              mergedMapping.put(fieldId, field);
+              mergedFieldList.add(field);
+              fieldId++;
+            }
+          }
+          StructType mergedStructType = new StructType(mergedFieldList.toArray(new StructField[0]));
+          Schema mergedSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
+              mergedStructType, readerSchema.getName(), readerSchema.getNamespace());
+          return Pair.of(mergedMapping, Pair.of(mergedStructType, mergedSchema));
+        });
   }
 
   /**

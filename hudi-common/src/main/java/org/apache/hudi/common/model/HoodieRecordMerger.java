@@ -18,13 +18,15 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
+
+import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -46,6 +48,9 @@ public interface HoodieRecordMerger extends Serializable {
    */
   Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException;
 
+  default Option<Pair<HoodieRecord, Schema>> partialMerge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, Schema readerSchema, TypedProperties props) throws IOException {
+    throw new HoodieException("Partial merging logic is not implemented.");
+  }
 
   /**
    * In some cases a business logic does some checks before flushing a merged record to the disk.

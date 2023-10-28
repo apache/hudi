@@ -60,6 +60,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   protected ClosableIterator<T> baseFileIterator;
   protected Iterator<Pair<Option<T>, Map<String, Object>>> logRecordIterator;
   protected T nextRecord;
+  protected boolean enablePartialMerging = false;
 
   public HoodieBaseFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                          Schema readerSchema,
@@ -124,14 +125,25 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
       // Merge and store the combined record
       // Note that the incoming `record` is from an older commit, so it should be put as
       // the `older` in the merge API
-
-      HoodieRecord<T> combinedRecord = (HoodieRecord<T>) recordMerger.merge(
-          readerContext.constructHoodieRecord(Option.of(record), metadata),
-          (Schema) metadata.get(INTERNAL_META_SCHEMA),
-          readerContext.constructHoodieRecord(
-              existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight()),
-          (Schema) existingRecordMetadataPair.getRight().get(INTERNAL_META_SCHEMA),
-          payloadProps).get().getLeft();
+      HoodieRecord<T> combinedRecord;
+      if (enablePartialMerging) {
+        combinedRecord = (HoodieRecord<T>) recordMerger.partialMerge(
+            readerContext.constructHoodieRecord(Option.of(record), metadata),
+            (Schema) metadata.get(INTERNAL_META_SCHEMA),
+            readerContext.constructHoodieRecord(
+                existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight()),
+            (Schema) existingRecordMetadataPair.getRight().get(INTERNAL_META_SCHEMA),
+            readerSchema,
+            payloadProps).get().getLeft();
+      } else {
+        combinedRecord = (HoodieRecord<T>) recordMerger.merge(
+            readerContext.constructHoodieRecord(Option.of(record), metadata),
+            (Schema) metadata.get(INTERNAL_META_SCHEMA),
+            readerContext.constructHoodieRecord(
+                existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight()),
+            (Schema) existingRecordMetadataPair.getRight().get(INTERNAL_META_SCHEMA),
+            payloadProps).get().getLeft();
+      }
       // If pre-combine returns existing record, no need to update it
       if (combinedRecord.getData() != existingRecordMetadataPair.getLeft().get()) {
         return Option.of(combinedRecord.getData());
@@ -213,9 +225,17 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
       return newer;
     }
 
-    Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.merge(
-        readerContext.constructHoodieRecord(older, olderInfoMap), (Schema) olderInfoMap.get(INTERNAL_META_SCHEMA),
-        readerContext.constructHoodieRecord(newer, newerInfoMap), (Schema) newerInfoMap.get(INTERNAL_META_SCHEMA), payloadProps);
+    Option<Pair<HoodieRecord, Schema>> mergedRecord;
+    if (enablePartialMerging) {
+      mergedRecord = recordMerger.partialMerge(
+          readerContext.constructHoodieRecord(older, olderInfoMap), (Schema) olderInfoMap.get(INTERNAL_META_SCHEMA),
+          readerContext.constructHoodieRecord(newer, newerInfoMap), (Schema) newerInfoMap.get(INTERNAL_META_SCHEMA),
+          readerSchema, payloadProps);
+    } else {
+      mergedRecord = recordMerger.merge(
+          readerContext.constructHoodieRecord(older, olderInfoMap), (Schema) olderInfoMap.get(INTERNAL_META_SCHEMA),
+          readerContext.constructHoodieRecord(newer, newerInfoMap), (Schema) newerInfoMap.get(INTERNAL_META_SCHEMA), payloadProps);
+    }
     if (mergedRecord.isPresent()) {
       return Option.ofNullable((T) mergedRecord.get().getLeft().getData());
     }
