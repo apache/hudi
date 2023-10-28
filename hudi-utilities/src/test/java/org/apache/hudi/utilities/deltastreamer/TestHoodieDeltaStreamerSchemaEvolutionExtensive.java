@@ -24,7 +24,6 @@ import org.apache.hudi.TestHoodieSparkUtils;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.DataTypes;
 import org.junit.jupiter.api.Disabled;
@@ -93,7 +92,8 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
       Column col = df.col(colName);
       df = df.withColumn(colName, col.cast(colType));
     }
-    df.write().format("parquet").mode(isFirst ? SaveMode.Overwrite : SaveMode.Append).save(PARQUET_SOURCE_ROOT);
+
+    addData(df, isFirst);
     deltaStreamer.sync();
   }
 

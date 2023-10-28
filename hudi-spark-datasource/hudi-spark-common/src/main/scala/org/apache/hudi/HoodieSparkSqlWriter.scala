@@ -27,7 +27,7 @@ import org.apache.hudi.DataSourceOptionsHelper.fetchMissingWriteConfigsFromTable
 import org.apache.hudi.DataSourceUtils.tryOverrideParquetWriteLegacyFormatProperty
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
-import org.apache.hudi.HoodieSparkSqlWriter.{CANONICALIZE_NULLABLE, SQL_MERGE_INTO_WRITES, StreamingWriteParams}
+import org.apache.hudi.HoodieSparkSqlWriter.{CANONICALIZE_SCHEMA, SQL_MERGE_INTO_WRITES, StreamingWriteParams}
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.avro.AvroSchemaUtils.{isCompatibleProjectionOf, isSchemaCompatible, isValidEvolutionOf, resolveNullableSchema}
 import org.apache.hudi.avro.HoodieAvroUtils
@@ -143,6 +143,13 @@ object HoodieSparkSqlWriter {
                          internalSchemaOpt: Option[InternalSchema],
                          opts: Map[String, String]): Schema = {
     new HoodieSparkSqlWriterInternal().deduceWriterSchema(sourceSchema, latestTableSchemaOpt, internalSchemaOpt, opts)
+  }
+
+  def deduceWriterSchema(sourceSchema: Schema,
+                         latestTableSchemaOpt: Option[Schema],
+                         internalSchemaOpt: Option[InternalSchema],
+                         props: TypedProperties): Schema = {
+    deduceWriterSchema(sourceSchema, latestTableSchemaOpt, internalSchemaOpt, props.toMap)
   }
 
   def cleanup(): Unit = {
@@ -532,13 +539,6 @@ class HoodieSparkSqlWriterInternal {
       }
       operation
     }
-  }
-
-  def deduceWriterSchema(sourceSchema: Schema,
-                         latestTableSchemaOpt: Option[Schema],
-                         internalSchemaOpt: Option[InternalSchema],
-                         props: TypedProperties): Schema = {
-    deduceWriterSchema(sourceSchema, latestTableSchemaOpt, internalSchemaOpt, props.toMap)
   }
 
   /**

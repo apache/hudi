@@ -19,24 +19,47 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.HoodieSparkUtils;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.sources.AvroKafkaSource;
 import org.apache.hudi.utilities.sources.ParquetDFSSource;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.streaming.kafka010.KafkaTestUtils;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Properties;
 
+import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
+import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -56,6 +79,14 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
   protected Boolean hasTransformer;
   protected String sourceSchemaFile;
   protected String targetSchemaFile;
+  protected boolean useKafkaSource;
+  protected boolean useTransformer;
+  protected boolean userProvidedSchema;
+
+  @BeforeAll
+  public static void initKafka() {
+    defaultSchemaProviderClassName = TestSchemaProvider.class.getName();
+  }
 
   @BeforeEach
   public void resetTest() {
@@ -63,6 +94,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     hasTransformer = false;
     sourceSchemaFile = "";
     targetSchemaFile = "";
+    topicName = "topic" + testNum;
   }
 
   protected HoodieStreamer deltaStreamer;
@@ -98,15 +130,65 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
       extraProps.setProperty(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key(), "_row_key");
     }
 
-    prepareParquetDFSSource(useSchemaProvider, hasTransformer, sourceSchemaFile, targetSchemaFile, PROPS_FILENAME_TEST_PARQUET,
-        PARQUET_SOURCE_ROOT, false, "partition_path", "", extraProps);
-    HoodieDeltaStreamer.Config cfg = TestHoodieDeltaStreamer.TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, ParquetDFSSource.class.getName(),
-        null, PROPS_FILENAME_TEST_PARQUET, false,
-        useSchemaProvider, 100000, false, null, tableType, "timestamp", null);
+    List<String> transformerClassNames = new ArrayList<>();
+    if (useTransformer) {
+      transformerClassNames.add(TestHoodieDeltaStreamer.TestIdentityTransformer.class.getName());
+    }
+    HoodieDeltaStreamer.Config cfg;
+    if (useKafkaSource) {
+      prepareAvroKafkaDFSSource(PROPS_FILENAME_TEST_AVRO_KAFKA, null, topicName,"partition_path", extraProps);
+      cfg = TestHoodieDeltaStreamer.TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, AvroKafkaSource.class.getName(),
+          transformerClassNames, PROPS_FILENAME_TEST_AVRO_KAFKA, false,  useSchemaProvider, 100000, false, null, tableType, "timestamp", null);
+    } else {
+      prepareParquetDFSSource(false, hasTransformer, sourceSchemaFile, targetSchemaFile, PROPS_FILENAME_TEST_PARQUET,
+          PARQUET_SOURCE_ROOT, false, "partition_path", "", extraProps);
+      cfg = TestHoodieDeltaStreamer.TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, ParquetDFSSource.class.getName(),
+          transformerClassNames, PROPS_FILENAME_TEST_PARQUET, false,
+          useSchemaProvider, 100000, false, null, tableType, "timestamp", null);
+    }
     cfg.forceDisableCompaction = !shouldCompact;
     return cfg;
   }
 
+  protected void addData(Dataset<Row> df, Boolean isFirst) {
+    if (useSchemaProvider) {
+      TestSchemaProvider.schema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema(), HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE);
+    }
+    if (useKafkaSource) {
+      addKafkaData(df, isFirst);
+    } else {
+      addParquetData(df, isFirst);
+    }
+  }
+
+  protected void addParquetData(Dataset<Row> df, Boolean isFirst) {
+    df.write().format("parquet").mode(isFirst ? SaveMode.Overwrite : SaveMode.Append).save(PARQUET_SOURCE_ROOT);
+  }
+
+  protected void addKafkaData(Dataset<Row> df, Boolean isFirst) {
+    if (isFirst) {
+      testUtils.createTopic(topicName);
+    }
+    List<GenericRecord> records = HoodieSparkUtils.createRdd(df, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, false, Option.empty()).toJavaRDD().collect();
+    try (Producer<String, byte[]> producer = new KafkaProducer<>(getProducerProperties())) {
+      for (GenericRecord record : records) {
+        producer.send(new ProducerRecord<>(topicName, 0, "key", HoodieAvroUtils.avroToBytes(record)));
+      }
+    }
+  }
+
+  protected Properties getProducerProperties() {
+    Properties props = new Properties();
+    props.put("bootstrap.servers", testUtils.brokerAddress());
+    props.put("value.serializer", ByteArraySerializer.class.getName());
+    props.put("value.deserializer", ByteArraySerializer.class.getName());
+    // Key serializer is required.
+    props.put("key.serializer", StringSerializer.class.getName());
+    props.put("auto.register.schemas", "false");
+    // wait for all in-sync replicas to ack sends
+    props.put("acks", "all");
+    return props;
+  }
 
   /**
    * see how many files are read from in the latest commit. This verification is for making sure the test scenarios
@@ -148,5 +230,19 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     }
     return DataTypes.createStructType(new StructField[]{new StructField("amount", amountType, true, Metadata.empty()),
         new StructField("currency", DataTypes.StringType, true, Metadata.empty())});
+  }
+
+
+  public static class TestSchemaProvider extends SchemaProvider {
+
+    public static Schema schema;
+    public TestSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
+      super(props, jssc);
+    }
+
+    @Override
+    public Schema getSourceSchema() {
+      return schema;
+    }
   }
 }

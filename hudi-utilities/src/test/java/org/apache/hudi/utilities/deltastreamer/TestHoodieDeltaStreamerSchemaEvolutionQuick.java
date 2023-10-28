@@ -22,7 +22,6 @@ package org.apache.hudi.utilities.deltastreamer;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.Metadata;
@@ -74,6 +73,9 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     this.rowWriterEnable = rowWriterEnable;
     this.addFilegroups = addFilegroups;
     this.multiLogFiles = multiLogFiles;
+    this.useKafkaSource = true;
+    this.useSchemaProvider = true;
+    this.useTransformer = true;
     boolean isCow = tableType.equals("COPY_ON_WRITE");
     PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + testNum++;
     tableBasePath = basePath + "test_parquet_table" + testNum;
@@ -82,7 +84,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     //first write
     String datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
     Dataset<Row> df = sparkSession.read().json(datapath);
-    df.write().format("parquet").mode(SaveMode.Overwrite).save(PARQUET_SOURCE_ROOT);
+    addData(df, true);
     deltaStreamer.sync();
     int numRecords = 6;
     int numFiles = 3;
@@ -94,7 +96,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     if (multiLogFiles) {
       datapath = String.class.getResource("/data/schema-evolution/extraLogFilesTestEverything.json").getPath();
       df = sparkSession.read().json(datapath);
-      df.write().format("parquet").mode(SaveMode.Append).save(PARQUET_SOURCE_ROOT);
+      addData(df, false);
       deltaStreamer.sync();
       //this write contains updates for the 6 records from the first write, so
       //although we have 2 files for each filegroup, we only see the log files
@@ -107,7 +109,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     if (addFilegroups) {
       datapath = String.class.getResource("/data/schema-evolution/newFileGroupsTestEverything.json").getPath();
       df = sparkSession.read().json(datapath);
-      df.write().format("parquet").mode(SaveMode.Append).save(PARQUET_SOURCE_ROOT);
+      addData(df, false);
       deltaStreamer.sync();
       numRecords += 3;
       numFiles += 3;
@@ -135,7 +137,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     df = df.withColumn("distance_in_meters", col.cast(DataTypes.FloatType));
     col = df.col("seconds_since_epoch");
     df = df.withColumn("seconds_since_epoch", col.cast(DataTypes.StringType));
-    df.write().format("parquet").mode(SaveMode.Append).save(PARQUET_SOURCE_ROOT);
+    addData(df, false);
     deltaStreamer.sync();
     if (shouldCluster) {
       //everything combines into 1 file per partition
