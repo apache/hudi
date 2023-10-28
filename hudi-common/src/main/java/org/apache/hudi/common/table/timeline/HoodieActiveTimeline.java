@@ -304,7 +304,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
         if (result) {
           LOG.info("Removed instant " + instant);
         } else {
-          throw new HoodieIOException("Could not delete instant " + instant);
+          throw new HoodieIOException("Could not delete instant " + instant + " and path is " + commitFilePath);
         }
       } else {
         LOG.warn("The commit " + commitFilePath + " to remove does not exist");
