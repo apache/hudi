@@ -24,7 +24,7 @@ import org.apache.avro.generic.IndexedRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.engine.HoodieReaderContext
-import org.apache.hudi.common.model.HoodieLogFile
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.util.collection.ClosableIterator
 import org.apache.hudi.io.storage.HoodieSparkParquetReader
 import org.apache.hudi.util.CloseableInternalRowIterator
@@ -39,8 +39,6 @@ import org.apache.spark.sql.execution.datasources.{DataSourceUtils, PartitionedF
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 
-import java.time.ZoneId
-import java.util.TimeZone
 import scala.collection.mutable
 
 /**
@@ -65,7 +63,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: PartitionedFile =>
                                      dataSchema: Schema,
                                      requiredSchema: Schema,
                                      conf: Configuration): ClosableIterator[InternalRow] = {
-    if (filePath.toString.contains(HoodieLogFile.DELTA_EXTENSION)) {
+    if (FSUtils.isLogFile(filePath)) {
       val sqlConf = SQLConf.get
       if (sqlConf.parquetVectorizedReaderEnabled) {
         val enableOffHeapColumnVector = sqlConf.offHeapColumnVectorEnabled
@@ -99,7 +97,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: PartitionedFile =>
           footerFileMetaData.getKeyValueMetaData.get,
           datetimeRebaseModeInRead)
         val taskContext = Option(TaskContext.get())
-        /*
+
         val vectorizedReader = new VectorizedParquetRecordReader(
           convertTz.orNull,
           datetimeRebaseSpec.mode.toString,
@@ -107,17 +105,8 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: PartitionedFile =>
           int96RebaseSpec.mode.toString,
           int96RebaseSpec.timeZone,
           enableOffHeapColumnVector && taskContext.isDefined,
-          capacity)*/
+          capacity)
 
-        val vectorizedReader = new VectorizedParquetRecordReader(
-          DateTimeUtils.getZoneId(TimeZone.getDefault().getID()),
-          "CORRECTED",
-          "UTC",
-          "LEGACY",
-          ZoneId.systemDefault().getId(),
-          false,
-          4096
-        )
         val iter = new RecordReaderIterator(vectorizedReader)
         try {
           vectorizedReader.initialize(filePath.toUri.toString, null)
