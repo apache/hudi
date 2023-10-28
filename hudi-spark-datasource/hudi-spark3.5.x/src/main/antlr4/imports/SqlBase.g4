@@ -755,6 +755,34 @@ functionIdentifier
     : (db=errorCapturingIdentifier '.')? function=errorCapturingIdentifier
     ;
 
+multipartIdentifierPropertyList
+    : multipartIdentifierProperty (COMMA multipartIdentifierProperty)*
+    ;
+
+multipartIdentifierProperty
+    : multipartIdentifier (OPTIONS options=propertyList)?
+    ;
+
+propertyList
+    : LEFT_PAREN property (COMMA property)* RIGHT_PAREN
+    ;
+
+property
+    : key=propertyKey (EQ? value=propertyValue)?
+    ;
+
+propertyKey
+    : identifier (DOT identifier)*
+    | STRING
+    ;
+
+propertyValue
+    : INTEGER_VALUE
+    | DECIMAL_VALUE
+    | booleanValue
+    | STRING
+    ;
+
 namedExpression
     : expression (AS? (name=errorCapturingIdentifier | identifierList))?
     ;
