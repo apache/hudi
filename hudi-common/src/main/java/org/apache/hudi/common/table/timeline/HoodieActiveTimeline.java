@@ -322,7 +322,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       if (result) {
         LOG.info("Removed instant " + instant);
       } else {
-        throw new HoodieIOException("Could not delete instant " + instant);
+        throw new HoodieIOException("Could not delete instant " + instant + " and path is " + inFlightCommitFilePath);
       }
     } catch (IOException e) {
       throw new HoodieIOException("Could not remove inflight commit " + inFlightCommitFilePath, e);
