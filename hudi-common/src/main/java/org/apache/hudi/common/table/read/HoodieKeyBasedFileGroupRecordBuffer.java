@@ -67,6 +67,8 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
     Pair<ClosableIterator<T>, Schema> recordsIteratorSchemaPair =
         getRecordsIterator(dataBlock, keySpecOpt);
     if (dataBlock.containsPartialUpdates()) {
+      // When a data block contains partial updates, subsequent record merging must always use
+      // partial merging.
       enablePartialMerging = true;
     }
 

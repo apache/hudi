@@ -132,10 +132,10 @@ class SparkFileFormatInternalRowReaderContext(sparkSession: SparkSession,
   }
 
   /**
-   * Converts an Avro record, e.g., serialized in the log files, to an engine-specific record.
+   * Converts an Avro record, e.g., serialized in the log files, to an [[InternalRow]].
    *
    * @param avroRecord The Avro record.
-   * @return An engine-specific record in Type {@link T}.
+   * @return An [[InternalRow]].
    */
   override def convertAvroRecord(avroRecord: IndexedRecord): InternalRow = {
     val schema = avroRecord.getSchema

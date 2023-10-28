@@ -93,7 +93,6 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     writeConfigs.put("hoodie.delete.shuffle.parallelism", "1");
     writeConfigs.put("hoodie.merge.small.file.group.candidates.limit", "0");
     writeConfigs.put("hoodie.compact.inline", "false");
-    writeConfigs.put(HoodieMetadataConfig.ENABLE.key(), "false");
 
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
       // One commit; reading one file group containing a base file only

@@ -80,6 +80,8 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
     }
 
     if (dataBlock.containsPartialUpdates()) {
+      // When a data block contains partial updates, subsequent record merging must always use
+      // partial merging.
       enablePartialMerging = true;
     }
     

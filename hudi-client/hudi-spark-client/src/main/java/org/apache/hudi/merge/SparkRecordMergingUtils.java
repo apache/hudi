@@ -43,7 +43,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Util class to merge records that may contain partial updates.
- * This can be plugged into any Spark {@link HoodieRecordMerger} implementation.
+ * This can be used by any Spark {@link HoodieRecordMerger} implementation.
  */
 public class SparkRecordMergingUtils {
   private static final Map<Schema, Map<Integer, StructField>> FIELD_ID_TO_FIELD_MAPPING_CACHE = new ConcurrentHashMap<>();
@@ -55,19 +55,21 @@ public class SparkRecordMergingUtils {
    * Merges records which can contain partial updates.
    *
    * @param older        Older {@link HoodieSparkRecord}.
-   * @param oldSchema    Old schema.
+   * @param oldSchema    Schema of the older record.
    * @param newer        Newer {@link HoodieSparkRecord}.
-   * @param newSchema    New schema.
-   * @param readerSchema Reader schema containing all the fields to read.
+   * @param newSchema    Schema of the newer record.
+   * @param readerSchema Reader schema containing all the fields to read. This is used to maintain
+   *                     the ordering of the fields of the merged record.
    * @param props        Configuration in {@link TypedProperties}.
-   * @return The merged record.
+   * @return The merged record and schema.
    */
-  public static Pair<HoodieRecord, Schema> mergeCompleteOrPartialRecords(HoodieSparkRecord older,
-                                                                         Schema oldSchema,
-                                                                         HoodieSparkRecord newer,
-                                                                         Schema newSchema,
-                                                                         Schema readerSchema,
-                                                                         TypedProperties props) {
+  public static Pair<HoodieRecord, Schema> mergePartialRecords(HoodieSparkRecord older,
+                                                               Schema oldSchema,
+                                                               HoodieSparkRecord newer,
+                                                               Schema newSchema,
+                                                               Schema readerSchema,
+                                                               TypedProperties props) {
+    // The merged schema contains fields that only appear in either older and/or newer record
     Pair<Map<Integer, StructField>, Pair<StructType, Schema>> mergedSchemaPair =
         getCachedMergedSchema(oldSchema, newSchema, readerSchema);
     boolean isNewerPartial = isPartial(newSchema, mergedSchemaPair.getRight().getRight());
@@ -82,10 +84,10 @@ public class SparkRecordMergingUtils {
         StructField structField = mergedIdToFieldMapping.get(fieldId);
         Integer ordInPartialUpdate = newPartialNameToIdMapping.get(structField.name());
         if (ordInPartialUpdate != null) {
-          // pick from new
+          // The field exists in the newer record; picks the value from newer record
           values.add(newPartialRow.get(ordInPartialUpdate, structField.dataType()));
         } else {
-          // pick from old
+          // The field does not exist in the newer record; picks the value from older record
           values.add(oldRow.get(fieldId, structField.dataType()));
         }
       }
@@ -139,10 +141,11 @@ public class SparkRecordMergingUtils {
 
   /**
    * Merges the two schemas so the merged schema contains all the fields from the two schemas,
-   * with the same ordering of fields, and the fields of the old schema comes first.
+   * with the same ordering of fields based on the provided reader schema.
    *
-   * @param oldSchema Old schema.
-   * @param newSchema New schema.
+   * @param oldSchema    Old schema.
+   * @param newSchema    New schema.
+   * @param readerSchema Reader schema containing all the fields to read.
    * @return The ID to {@link StructField} instance mapping of the merged schema, and the
    * {@link StructType} and Avro schema of the merged schema.
    */
@@ -156,13 +159,18 @@ public class SparkRecordMergingUtils {
           Schema refSchema = schemaPair.getRight();
           Map<String, Integer> nameToIdMapping1 = getCachedFieldNameToIdMapping(schema1);
           Map<String, Integer> nameToIdMapping2 = getCachedFieldNameToIdMapping(schema2);
+          // Mapping of field ID/position to the StructField instance of the readerSchema
           Map<Integer, StructField> refFieldIdToFieldMapping = getCachedFieldIdToFieldMapping(refSchema);
+          // This field name set contains all the fields that appear
+          // either in the oldSchema and/or the newSchema
           Set<String> fieldNameSet = new HashSet<>();
           fieldNameSet.addAll(nameToIdMapping1.keySet());
           fieldNameSet.addAll(nameToIdMapping2.keySet());
           int fieldId = 0;
           Map<Integer, StructField> mergedMapping = new HashMap<>();
           List<StructField> mergedFieldList = new ArrayList<>();
+          // Iterates over the fields based on the original ordering of the fields of the
+          // readerSchema using the field ID/position from 0
           for (int i = 0; i < refFieldIdToFieldMapping.size(); i++) {
             StructField field = refFieldIdToFieldMapping.get(i);
             if (fieldNameSet.contains(field.name())) {

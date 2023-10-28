@@ -437,15 +437,17 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     // NOTE: [[HoodieSparkRecord]] is expected to hold either
     //          - Instance of [[UnsafeRow]] or
     //          - Instance of [[HoodieInternalRow]] or
+    //          - Instance of [[GenericInternalRow]]
     //          - Instance of [[ColumnarBatchRow]]
     //
     //       In case provided row is anything but [[UnsafeRow]], it's expected that the
     //       corresponding schema has to be provided as well so that it could be properly
     //       serialized (in case it would need to be)
     boolean isValid = data == null || data instanceof UnsafeRow
-        || schema != null && (data instanceof HoodieInternalRow
-        || data instanceof GenericInternalRow
-        || SparkAdapterSupport$.MODULE$.sparkAdapter().isColumnarBatchRow(data));
+        || schema != null && (
+        data instanceof HoodieInternalRow
+            || data instanceof GenericInternalRow
+            || SparkAdapterSupport$.MODULE$.sparkAdapter().isColumnarBatchRow(data));
 
     ValidationUtils.checkState(isValid);
   }

@@ -24,7 +24,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.Schema;
 
@@ -45,11 +44,26 @@ public interface HoodieRecordMerger extends Serializable {
    * This method converges combineAndGetUpdateValue and precombine from HoodiePayload.
    * It'd be associative operation: f(a, f(b, c)) = f(f(a, b), c) (which we can translate as having 3 versions A, B, C
    * of the single record, both orders of operations applications have to yield the same result)
+   * This method takes only full records for merging.
    */
   Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException;
 
+  /**
+   * Merges records which can contain partial updates, i.e., only subset of fields and values are
+   * present in the record representing the updates, and absent fields are not updated.
+   *
+   * @param older        Older record.
+   * @param oldSchema    Schema of the older record.
+   * @param newer        Newer record.
+   * @param newSchema    Schema of the newer record.
+   * @param readerSchema Reader schema containing all the fields to read. This is used to maintain
+   *                     the ordering of the fields of the merged record.
+   * @param props        Configuration in {@link TypedProperties}.
+   * @return The merged record and schema.
+   * @throws IOException upon merging error.
+   */
   default Option<Pair<HoodieRecord, Schema>> partialMerge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, Schema readerSchema, TypedProperties props) throws IOException {
-    throw new HoodieException("Partial merging logic is not implemented.");
+    throw new UnsupportedOperationException("Partial merging logic is not implemented.");
   }
 
   /**

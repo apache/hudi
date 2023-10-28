@@ -108,10 +108,10 @@ public class HoodieSparkRecordMerger implements HoodieRecordMerger {
       }
     }
     if (older.getOrderingValue(oldSchema, props).compareTo(newer.getOrderingValue(newSchema, props)) > 0) {
-      return Option.of(SparkRecordMergingUtils.mergeCompleteOrPartialRecords(
+      return Option.of(SparkRecordMergingUtils.mergePartialRecords(
           (HoodieSparkRecord) newer, newSchema, (HoodieSparkRecord) older, oldSchema, readerSchema, props));
     } else {
-      return Option.of(SparkRecordMergingUtils.mergeCompleteOrPartialRecords(
+      return Option.of(SparkRecordMergingUtils.mergePartialRecords(
           (HoodieSparkRecord) older, oldSchema, (HoodieSparkRecord) newer, newSchema, readerSchema, props));
     }
   }
