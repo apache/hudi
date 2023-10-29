@@ -81,7 +81,7 @@ public abstract class WriteMarkers implements Serializable {
    */
   public Option<Path> create(String partitionPath, String fileName, IOType type, HoodieWriteConfig writeConfig,
                              String fileId, HoodieActiveTimeline activeTimeline) {
-    if (writeConfig.getWriteConcurrencyMode().supportsConcurrencyControl()
+    if (writeConfig.getWriteConcurrencyMode().supportsMultiWriter()
         && writeConfig.isEarlyConflictDetectionEnable()) {
       HoodieTimeline pendingCompactionTimeline = activeTimeline.filterPendingCompactionTimeline();
       HoodieTimeline pendingReplaceTimeline = activeTimeline.filterPendingReplaceTimeline();
@@ -122,7 +122,7 @@ public abstract class WriteMarkers implements Serializable {
   public Option<Path> createIfNotExists(String partitionPath, String fileName, IOType type, HoodieWriteConfig writeConfig,
                              String fileId, HoodieActiveTimeline activeTimeline) {
     if (writeConfig.isEarlyConflictDetectionEnable()
-        && writeConfig.getWriteConcurrencyMode().supportsConcurrencyControl()) {
+        && writeConfig.getWriteConcurrencyMode().supportsMultiWriter()) {
       HoodieTimeline pendingCompactionTimeline = activeTimeline.filterPendingCompactionTimeline();
       HoodieTimeline pendingReplaceTimeline = activeTimeline.filterPendingReplaceTimeline();
       // TODO If current is compact or clustering then create marker directly without early conflict detection.

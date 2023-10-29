@@ -306,15 +306,14 @@ public class OptionsResolver {
    * Returns whether the writer txn should be guarded by lock.
    */
   public static boolean isLockRequired(Configuration conf) {
-    return conf.getBoolean(FlinkOptions.METADATA_ENABLED) || isConcurrencyControl(conf);
+    return conf.getBoolean(FlinkOptions.METADATA_ENABLED) || isMultiWriter(conf);
   }
 
   /**
-   * Returns whether CC is enabled, including OCC and NB-CC.
+   * Returns whether multi-writer is enabled.
    */
-  public static boolean isConcurrencyControl(Configuration conf) {
-    WriteConcurrencyMode mode = WriteConcurrencyMode.valueOf(conf.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()).toUpperCase());
-    return mode.supportsConcurrencyControl();
+  public static boolean isMultiWriter(Configuration conf) {
+    return WriteConcurrencyMode.supportsMultiWriter(conf.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()));
   }
 
   /**

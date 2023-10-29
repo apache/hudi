@@ -247,7 +247,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
 
   private HoodieInstant validateAndGetIndexInstant() {
     // ensure lock provider configured
-    if (!config.getWriteConcurrencyMode().supportsConcurrencyControl() || StringUtils.isNullOrEmpty(config.getLockProviderClass())) {
+    if (!config.getWriteConcurrencyMode().supportsMultiWriter() || StringUtils.isNullOrEmpty(config.getLockProviderClass())) {
       throw new HoodieIndexException(String.format("Need to set %s as %s or %s and configure lock provider class",
           WRITE_CONCURRENCY_MODE.key(), OPTIMISTIC_CONCURRENCY_CONTROL.name(), NON_BLOCKING_CONCURRENCY_CONTROL.name()));
     }

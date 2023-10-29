@@ -530,7 +530,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
     conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
 
-    if (isCowAndNonBlockingConcurrencyControl(writeConcurrencyMode)) {
+    if (OptionsResolver.isCowTable(conf) && OptionsResolver.isNonBlockingConcurrencyControl(conf)) {
       validateNonBlockingConcurrencyControlConditions();
     } else {
       TestHarness pipeline1 = preparePipeline(conf)
@@ -584,7 +584,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
     conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
 
-    if (isCowAndNonBlockingConcurrencyControl(writeConcurrencyMode)) {
+    if (OptionsResolver.isCowTable(conf) && OptionsResolver.isNonBlockingConcurrencyControl(conf)) {
       validateNonBlockingConcurrencyControlConditions();
     } else {
       TestHarness pipeline1 = preparePipeline(conf)
@@ -660,9 +660,5 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
 
   protected HoodieTableType getTableType() {
     return COPY_ON_WRITE;
-  }
-
-  private boolean isCowAndNonBlockingConcurrencyControl(String writeConcurrencyMode) {
-    return getTableType() == COPY_ON_WRITE && writeConcurrencyMode.equals("NON_BLOCKING_CONCURRENCY_CONTROL");
   }
 }

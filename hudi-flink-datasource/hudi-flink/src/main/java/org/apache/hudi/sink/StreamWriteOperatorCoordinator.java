@@ -202,7 +202,7 @@ public class StreamWriteOperatorCoordinator
       initHiveSync();
     }
     // start client id heartbeats for optimistic concurrency control
-    if (OptionsResolver.isConcurrencyControl(conf)) {
+    if (OptionsResolver.isMultiWriter(conf)) {
       initClientIds(conf);
     }
   }

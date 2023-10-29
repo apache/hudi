@@ -2597,7 +2597,7 @@ public class HoodieWriteConfig extends HoodieConfig {
    * Returns whether the explicit guard of lock is required.
    */
   public boolean isLockRequired() {
-    return !isDefaultLockProvider() || getWriteConcurrencyMode().supportsConcurrencyControl();
+    return !isDefaultLockProvider() || getWriteConcurrencyMode().supportsMultiWriter();
   }
 
   /**
@@ -2639,22 +2639,17 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean needResolveWriteConflict(WriteOperationType operationType) {
     WriteConcurrencyMode mode = getWriteConcurrencyMode();
-    boolean needResolveConflict;
     switch (mode) {
       case SINGLE_WRITER:
-        needResolveConflict = false;
-        break;
+        return false;
       case OPTIMISTIC_CONCURRENCY_CONTROL:
-        needResolveConflict = true;
-        break;
+        return true;
       case NON_BLOCKING_CONCURRENCY_CONTROL:
         // NB-CC don't need to resolve write conflict except bulk insert operation
-        needResolveConflict = WriteOperationType.BULK_INSERT == operationType;
-        break;
+        return WriteOperationType.BULK_INSERT == operationType;
       default:
         throw new IllegalArgumentException("Invalid WriteOperationType " + mode);
     }
-    return needResolveConflict;
   }
 
   public static class Builder {
@@ -3223,7 +3218,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       // needed to guard against any concurrent table write operations. If user has
       // not configured any lock provider, let's use the InProcess lock provider.
       return writeConfig.isMetadataTableEnabled() && writeConfig.areAnyTableServicesAsync()
-          && !writeConfig.getWriteConcurrencyMode().supportsConcurrencyControl();
+          && !writeConfig.getWriteConcurrencyMode().supportsMultiWriter();
     }
 
     private void autoAdjustConfigsForConcurrencyMode(boolean isLockProviderPropertySet) {
@@ -3242,7 +3237,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       // We check if "hoodie.cleaner.policy.failed.writes"
       // is properly set to LAZY for optimistic concurrency control
       WriteConcurrencyMode writeConcurrencyMode = writeConfig.getWriteConcurrencyMode();
-      if (writeConcurrencyMode.supportsConcurrencyControl()) {
+      if (writeConcurrencyMode.supportsMultiWriter()) {
         // In this case, we assume that the user takes care of setting the lock provider used
         writeConfig.setValue(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(),
             HoodieFailedWritesCleaningPolicy.LAZY.name());
@@ -3264,7 +3259,7 @@ public class HoodieWriteConfig extends HoodieConfig {
             "To use early conflict detection, set hoodie.write.concurrency.mode=OPTIMISTIC_CONCURRENCY_CONTROL");
       }
       WriteConcurrencyMode writeConcurrencyMode = writeConfig.getWriteConcurrencyMode();
-      if (writeConcurrencyMode.supportsConcurrencyControl()) {
+      if (writeConcurrencyMode.supportsMultiWriter()) {
         checkArgument(!writeConfig.getString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY)
             .equals(HoodieFailedWritesCleaningPolicy.EAGER.name()), "To enable concurrency control, set hoodie.cleaner.policy.failed.writes=LAZY");
       }

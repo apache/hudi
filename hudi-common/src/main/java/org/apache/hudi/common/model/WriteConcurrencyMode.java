@@ -21,6 +21,8 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
 
+import java.util.Locale;
+
 /**
  * Different concurrency modes for write operations.
  */
@@ -37,13 +39,17 @@ public enum WriteConcurrencyMode {
       + "same file group.")
   OPTIMISTIC_CONCURRENCY_CONTROL,
 
-  // Multiple writer can perform write ops on a MOR table with simple bucket index, and defer conflict
-  // resolution to compaction phase
-  @EnumFieldDescription("Multiple writer can perform write ops on a MOR table with simple bucket index, "
-      + "and defer conflict resolution to compaction phase.")
+  // Multiple writer can perform write ops on a MOR table with non-blocking conflict resolution
+  @EnumFieldDescription("Multiple writers can operate on the table with non-blocking conflict resolution. "
+      + "The writers can write into the same file group with the conflicts resolved automatically "
+      + "by the query reader and the compactor.")
   NON_BLOCKING_CONCURRENCY_CONTROL;
 
-  public boolean supportsConcurrencyControl() {
+  public boolean supportsMultiWriter() {
     return this == OPTIMISTIC_CONCURRENCY_CONTROL || this == NON_BLOCKING_CONCURRENCY_CONTROL;
+  }
+
+  public static boolean supportsMultiWriter(String name) {
+    return WriteConcurrencyMode.valueOf(name.toUpperCase(Locale.ROOT)).supportsMultiWriter();
   }
 }
