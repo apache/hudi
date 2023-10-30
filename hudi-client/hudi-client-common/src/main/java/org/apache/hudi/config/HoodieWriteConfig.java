@@ -3255,7 +3255,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       Objects.requireNonNull(writeConfig.getString(BASE_PATH));
       WriteConcurrencyMode writeConcurrencyMode = writeConfig.getWriteConcurrencyMode();
       if (writeConfig.isEarlyConflictDetectionEnable()) {
-        checkArgument(writeConcurrencyMode == WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL,
+        checkArgument(writeConcurrencyMode.isOptimisticConcurrencyControl(),
             "To use early conflict detection, set hoodie.write.concurrency.mode=OPTIMISTIC_CONCURRENCY_CONTROL");
       }
       if (writeConcurrencyMode.supportsMultiWriter()) {

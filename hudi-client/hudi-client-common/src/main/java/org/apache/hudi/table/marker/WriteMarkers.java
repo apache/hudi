@@ -21,7 +21,6 @@ package org.apache.hudi.table.marker;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
-import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -82,8 +81,7 @@ public abstract class WriteMarkers implements Serializable {
    */
   public Option<Path> create(String partitionPath, String fileName, IOType type, HoodieWriteConfig writeConfig,
                              String fileId, HoodieActiveTimeline activeTimeline) {
-    if (writeConfig.getWriteConcurrencyMode() == WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL
-        && writeConfig.isEarlyConflictDetectionEnable()) {
+    if (writeConfig.getWriteConcurrencyMode().isOptimisticConcurrencyControl() && writeConfig.isEarlyConflictDetectionEnable()) {
       HoodieTimeline pendingCompactionTimeline = activeTimeline.filterPendingCompactionTimeline();
       HoodieTimeline pendingReplaceTimeline = activeTimeline.filterPendingReplaceTimeline();
       // TODO If current is compact or clustering then create marker directly without early conflict detection.
@@ -123,7 +121,7 @@ public abstract class WriteMarkers implements Serializable {
   public Option<Path> createIfNotExists(String partitionPath, String fileName, IOType type, HoodieWriteConfig writeConfig,
                              String fileId, HoodieActiveTimeline activeTimeline) {
     if (writeConfig.isEarlyConflictDetectionEnable()
-        && writeConfig.getWriteConcurrencyMode() == WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL) {
+        && writeConfig.getWriteConcurrencyMode().isOptimisticConcurrencyControl()) {
       HoodieTimeline pendingCompactionTimeline = activeTimeline.filterPendingCompactionTimeline();
       HoodieTimeline pendingReplaceTimeline = activeTimeline.filterPendingReplaceTimeline();
       // TODO If current is compact or clustering then create marker directly without early conflict detection.

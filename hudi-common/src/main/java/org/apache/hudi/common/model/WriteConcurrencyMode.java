@@ -52,4 +52,8 @@ public enum WriteConcurrencyMode {
   public static boolean supportsMultiWriter(String name) {
     return WriteConcurrencyMode.valueOf(name.toUpperCase(Locale.ROOT)).supportsMultiWriter();
   }
+
+  public boolean isOptimisticConcurrencyControl() {
+    return this == OPTIMISTIC_CONCURRENCY_CONTROL;
+  }
 }
