@@ -514,7 +514,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       HoodieMetadataConfig.ENABLE.key -> enableMetadataTable.toString,
       RECORDKEY_FIELD.key -> "id",
-      PARTITIONPATH_FIELD.key -> "region_code,dt"
+      PARTITIONPATH_FIELD.key -> "region_code,timestamp"
     )
 
     val readerOpts: Map[String, String] = queryOpts ++ Map(
@@ -532,7 +532,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     // ("200", "2023/01/01"), ("200", "2023/01/02")
     val inputDF1 = (for (i <- 0 until 100) yield
       (i, s"a$i", 10 + i, s"${if (i < 50) 1 else 2}" + "0" * (i % 3), s"2023/01/0${i % 2 + 1}"))
-      .toDF("id", "name", "price", "region_code", "dt")
+      .toDF("id", "name", "price", "region_code", "timestamp")
 
     inputDF1.write.format("hudi")
       .options(writerOpts)
@@ -570,15 +570,15 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
         enablePartitionPathPrefixAnalysis,
         Seq(("1", "2023/01/01"), ("1", "2023/01/02"))),
       // prefix pruning does not kick in and fall back to full listing
-      (Seq(EqualTo(attribute("dt"), literal("2023/01/01"))),
-        "dt = '2023/01/01'",
+      (Seq(EqualTo(attribute("timestamp"), literal("2023/01/01"))),
+        "timestamp = '2023/01/01'",
         false,
         Seq(("1", "2023/01/01"), ("10", "2023/01/01"), ("100", "2023/01/01"),
           ("2", "2023/01/01"), ("20", "2023/01/01"), ("200", "2023/01/01"))),
       // Exact matching should kick in
-      (Seq(EqualTo(attribute("dt"), literal("2023/01/01")),
+      (Seq(EqualTo(attribute("timestamp"), literal("2023/01/01")),
         EqualTo(attribute("region_code"), literal("1"))),
-        "dt = '2023/01/01' and region_code = '1'",
+        "timestamp = '2023/01/01' and region_code = '1'",
         enablePartitionPathPrefixAnalysis,
         Seq(("1", "2023/01/01"))),
       // no partition matched
@@ -611,7 +611,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       assertEquals(
         testCase._4,
         readDF.filter(testCase._2)
-          .select("region_code", "dt").distinct().collect()
+          .select("region_code", "timestamp").distinct().collect()
           .map(row => (row.getString(0), row.getString(1))).sorted.toSeq)
     })
   }
