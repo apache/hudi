@@ -45,9 +45,6 @@ import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.sql.parser.hive.ddl.SqlAlterHiveDatabase;
-import org.apache.flink.sql.parser.hive.ddl.SqlAlterHiveDatabaseOwner;
-import org.apache.flink.sql.parser.hive.ddl.SqlCreateHiveDatabase;
 import org.apache.flink.table.catalog.AbstractCatalog;
 import org.apache.flink.table.catalog.CatalogBaseTable;
 import org.apache.flink.table.catalog.CatalogDatabase;
@@ -72,6 +69,7 @@ import org.apache.flink.table.catalog.exceptions.TableAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
 import org.apache.flink.table.catalog.exceptions.TableNotPartitionedException;
 import org.apache.flink.table.catalog.exceptions.TablePartitionedException;
+import org.apache.flink.table.catalog.hive.util.AlterHiveDatabaseOp;
 import org.apache.flink.table.catalog.stats.CatalogColumnStatistics;
 import org.apache.flink.table.catalog.stats.CatalogTableStatistics;
 import org.apache.flink.table.expressions.Expression;
@@ -104,9 +102,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.flink.sql.parser.hive.ddl.SqlAlterHiveDatabase.ALTER_DATABASE_OP;
-import static org.apache.flink.sql.parser.hive.ddl.SqlAlterHiveDatabaseOwner.DATABASE_OWNER_NAME;
-import static org.apache.flink.sql.parser.hive.ddl.SqlAlterHiveDatabaseOwner.DATABASE_OWNER_TYPE;
+import static org.apache.flink.table.catalog.hive.util.Constants.ALTER_DATABASE_OP;
+import static org.apache.flink.table.catalog.hive.util.Constants.DATABASE_OWNER_NAME;
+import static org.apache.flink.table.catalog.hive.util.Constants.DATABASE_OWNER_TYPE;
+import static org.apache.flink.table.catalog.hive.util.Constants.DATABASE_LOCATION_URI;
+import static org.apache.flink.table.catalog.hive.util.Constants.ROLE_OWNER;
+import static org.apache.flink.table.catalog.hive.util.Constants.USER_OWNER;
 import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
 import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
@@ -216,7 +217,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
 
     Map<String, String> properties = new HashMap<>(hiveDatabase.getParameters());
 
-    properties.put(SqlCreateHiveDatabase.DATABASE_LOCATION_URI, hiveDatabase.getLocationUri());
+    properties.put(DATABASE_LOCATION_URI, hiveDatabase.getLocationUri());
 
     return new CatalogDatabaseImpl(properties, hiveDatabase.getDescription());
   }
@@ -245,7 +246,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
 
     Map<String, String> properties = database.getProperties();
 
-    String dbLocationUri = properties.remove(SqlCreateHiveDatabase.DATABASE_LOCATION_URI);
+    String dbLocationUri = properties.remove(DATABASE_LOCATION_URI);
     if (dbLocationUri == null && this.catalogPath != null) {
       // infer default location uri
       dbLocationUri = new Path(this.catalogPath, databaseName).toString();
@@ -315,11 +316,10 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     String opStr = newParams.remove(ALTER_DATABASE_OP);
     if (opStr == null) {
       // by default is to alter db properties
-      opStr = SqlAlterHiveDatabase.AlterHiveDatabaseOp.CHANGE_PROPS.name();
+      opStr = AlterHiveDatabaseOp.CHANGE_PROPS.name();
     }
-    String newLocation = newParams.remove(SqlCreateHiveDatabase.DATABASE_LOCATION_URI);
-    SqlAlterHiveDatabase.AlterHiveDatabaseOp op =
-        SqlAlterHiveDatabase.AlterHiveDatabaseOp.valueOf(opStr);
+    String newLocation = newParams.remove(DATABASE_LOCATION_URI);
+    AlterHiveDatabaseOp op = AlterHiveDatabaseOp.valueOf(opStr);
     switch (op) {
       case CHANGE_PROPS:
         hiveDB.setParameters(newParams);
@@ -332,10 +332,10 @@ public class HoodieHiveCatalog extends AbstractCatalog {
         String ownerType = newParams.remove(DATABASE_OWNER_TYPE);
         hiveDB.setOwnerName(ownerName);
         switch (ownerType) {
-          case SqlAlterHiveDatabaseOwner.ROLE_OWNER:
+          case ROLE_OWNER:
             hiveDB.setOwnerType(PrincipalType.ROLE);
             break;
-          case SqlAlterHiveDatabaseOwner.USER_OWNER:
+          case USER_OWNER:
             hiveDB.setOwnerType(PrincipalType.USER);
             break;
           default:
