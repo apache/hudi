@@ -74,7 +74,7 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
     if (!supportBatchCalled) {
       supportBatchCalled = true
-      supportBatchResult = !isMOR && super.supportBatch(sparkSession, schema)
+      supportBatchResult = !isMOR && !isIncremental && super.supportBatch(sparkSession, schema)
     }
     supportBatchResult
   }
