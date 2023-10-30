@@ -110,6 +110,10 @@
                   <pattern>org.objenesis.</pattern>
                   <shadedPattern>org.apache.hudi.org.objenesis.</shadedPattern>
                 </relocation>
+                <relocation>
+                  <pattern>org.apache.avro.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.avro.</shadedPattern>
+                </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
               <filters>
