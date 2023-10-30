@@ -22,6 +22,7 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.config.HoodieCleanConfig;
@@ -41,14 +42,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -524,9 +524,9 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   //      |----------- txn1 -----------|
   //              | ----- txn2 ----- |
   @ParameterizedTest
-  @ValueSource(strings = {"OPTIMISTIC_CONCURRENCY_CONTROL", "NON_BLOCKING_CONCURRENCY_CONTROL"})
-  public void testWriteMultiWriterInvolved(String writeConcurrencyMode) throws Exception {
-    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), writeConcurrencyMode);
+  @EnumSource(value = WriteConcurrencyMode.class, names = {"OPTIMISTIC_CONCURRENCY_CONTROL", "NON_BLOCKING_CONCURRENCY_CONTROL"})
+  public void testWriteMultiWriterInvolved(WriteConcurrencyMode writeConcurrencyMode) throws Exception {
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), writeConcurrencyMode.name());
     conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
     conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
 
@@ -578,9 +578,9 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   //      |----------- txn1 -----------|
   //                       | ----- txn2 ----- |
   @ParameterizedTest
-  @ValueSource(strings = {"OPTIMISTIC_CONCURRENCY_CONTROL", "NON_BLOCKING_CONCURRENCY_CONTROL"})
-  public void testWriteMultiWriterPartialOverlapping(String writeConcurrencyMode) throws Exception {
-    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), writeConcurrencyMode);
+  @EnumSource(value = WriteConcurrencyMode.class, names = {"OPTIMISTIC_CONCURRENCY_CONTROL", "NON_BLOCKING_CONCURRENCY_CONTROL"})
+  public void testWriteMultiWriterPartialOverlapping(WriteConcurrencyMode writeConcurrencyMode) throws Exception {
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), writeConcurrencyMode.name());
     conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
     conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
 
@@ -659,6 +659,6 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   }
 
   protected HoodieTableType getTableType() {
-    return COPY_ON_WRITE;
+    return HoodieTableType.COPY_ON_WRITE;
   }
 }
