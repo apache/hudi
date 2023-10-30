@@ -130,11 +130,7 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
 
           if (partitioned) {
             val executionPlan = df.queryExecution.executedPlan
-            val expectedPhysicalPlanPartitionFiltersClause = tableType match {
-              case "cow" => s"PartitionFilters: [isnotnull($attr), ($attr = 2021-01-05)]"
-              case "mor" => s"PushedFilters: [IsNotNull(partition), EqualTo(partition,2021-01-05)]"
-            }
-
+            val expectedPhysicalPlanPartitionFiltersClause = s"PartitionFilters: [isnotnull($attr), ($attr = 2021-01-05)]"
             Assertions.assertTrue(executionPlan.toString().contains(expectedPhysicalPlanPartitionFiltersClause))
           }
 
