@@ -53,6 +53,43 @@ public class SparkRecordMergingUtils {
 
   /**
    * Merges records which can contain partial updates.
+   * <p>
+   * For example, the reader schema is
+   * {[
+   * {"name":"id", "type":"string"},
+   * {"name":"ts", "type":"long"},
+   * {"name":"name", "type":"string"},
+   * {"name":"price", "type":"double"},
+   * {"name":"tags", "type":"string"}
+   * ]}
+   * The older and newer records can be (omitting Hudi meta fields):
+   * <p>
+   * (1) older (complete record update):
+   * id | ts | name  | price | tags
+   * 1 | 10 | apple |  2.3  | fruit
+   * <p>
+   * newer (partial record update):
+   * ts | price
+   * 16 |  2.8
+   * <p>
+   * The merging result is (updated values from newer replaces the ones in the older):
+   * <p>
+   * id | ts | name  | price | tags
+   * 1 | 16 | apple |  2.8  | fruit
+   * <p>
+   * (2) older (partial record update):
+   * ts | price
+   * 10 | 2.8
+   * <p>
+   * newer (partial record update):
+   * ts | tag
+   * 16 | fruit,juicy
+   * <p>
+   * The merging result is (two partial updates are merged together, and values of overlapped
+   * fields come from the newer):
+   * <p>
+   * ts | price | tags
+   * 16 |  2.8  | fruit,juicy
    *
    * @param older        Older {@link HoodieSparkRecord}.
    * @param oldSchema    Schema of the older record.
