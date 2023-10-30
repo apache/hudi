@@ -99,7 +99,7 @@ public class RowDataKeyGen implements Serializable {
       this.recordKeyProjection = null;
     } else {
       this.recordKeyFields = recordKeys.get().split(",");
-      if (this.recordKeyFields.length == 1  && this.partitionPathFields.length == 1) {
+      if (this.recordKeyFields.length == 1) {
         // efficient code path
         this.simpleRecordKey = true;
         int recordKeyIdx = fieldNames.indexOf(this.recordKeyFields[0]);
