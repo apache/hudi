@@ -142,7 +142,7 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
                 val hoodieBaseFile = fileSlice.getBaseFile.get()
                 val bootstrapFileOpt = hoodieBaseFile.getBootstrapBaseFile
                 val partitionValues = fileSliceMapping.getPartitionValues
-                val logFiles = getLogFilesFromSlice(fileSlice)
+                val logFiles = if (isMOR) getLogFilesFromSlice(fileSlice) else List.empty
                 if (requiredSchemaWithMandatory.isEmpty) {
                   val baseFile = createPartitionedFile(partitionValues, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen)
                   baseFileReader(baseFile)

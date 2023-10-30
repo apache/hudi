@@ -1207,8 +1207,9 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commit2Time)
       .option(DataSourceReadOptions.END_INSTANTTIME.key, commit3Time)
       .load(basePath)
-    assertEquals(incrementalQueryRes.where("partition = '2022-01-01'").count, 0)
-    assertEquals(incrementalQueryRes.where("partition = '2022-01-02'").count, 20)
+    incrementalQueryRes.show(100, false)
+    assertEquals(0, incrementalQueryRes.where("partition = '2022-01-01'").count)
+    assertEquals(20, incrementalQueryRes.where("partition = '2022-01-02'").count)
   }
 
   /**
