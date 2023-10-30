@@ -2648,7 +2648,7 @@ public class HoodieWriteConfig extends HoodieConfig {
         // NB-CC don't need to resolve write conflict except bulk insert operation
         return WriteOperationType.BULK_INSERT == operationType;
       default:
-        throw new IllegalArgumentException("Invalid WriteOperationType " + mode);
+        throw new IllegalArgumentException("Invalid WriteConcurrencyMode " + mode);
     }
   }
 
@@ -3253,15 +3253,17 @@ public class HoodieWriteConfig extends HoodieConfig {
       // Ensure Layout Version is good
       new TimelineLayoutVersion(Integer.parseInt(layoutVersion));
       Objects.requireNonNull(writeConfig.getString(BASE_PATH));
+      WriteConcurrencyMode writeConcurrencyMode = writeConfig.getWriteConcurrencyMode();
       if (writeConfig.isEarlyConflictDetectionEnable()) {
-        checkArgument(writeConfig.getString(WRITE_CONCURRENCY_MODE)
-                .equalsIgnoreCase(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name()),
+        checkArgument(writeConcurrencyMode == WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL,
             "To use early conflict detection, set hoodie.write.concurrency.mode=OPTIMISTIC_CONCURRENCY_CONTROL");
       }
-      WriteConcurrencyMode writeConcurrencyMode = writeConfig.getWriteConcurrencyMode();
       if (writeConcurrencyMode.supportsMultiWriter()) {
         checkArgument(!writeConfig.getString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY)
-            .equals(HoodieFailedWritesCleaningPolicy.EAGER.name()), "To enable concurrency control, set hoodie.cleaner.policy.failed.writes=LAZY");
+            .equals(HoodieFailedWritesCleaningPolicy.EAGER.name()),
+            String.format(
+                "To enable %s, set hoodie.cleaner.policy.failed.writes=LAZY",
+                writeConcurrencyMode.name()));
       }
       if (writeConcurrencyMode == WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL) {
         checkArgument(

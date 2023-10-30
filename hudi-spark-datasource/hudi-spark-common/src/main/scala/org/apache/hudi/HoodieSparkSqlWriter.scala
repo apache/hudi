@@ -180,8 +180,8 @@ class HoodieSparkSqlWriterInternal {
         succeeded = true
       } catch {
         case e: HoodieWriteConflictException =>
-          val writeConcurrencyMode = optParams.getOrElse(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()).toUpperCase
-          if (WriteConcurrencyMode.valueOf(writeConcurrencyMode).supportsMultiWriter() && counter < maxRetry) {
+          val writeConcurrencyMode = optParams.getOrElse(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue())
+          if (WriteConcurrencyMode.supportsMultiWriter(writeConcurrencyMode) && counter < maxRetry) {
             counter += 1
             log.warn(s"Conflict found. Retrying again for attempt no $counter")
           } else {
