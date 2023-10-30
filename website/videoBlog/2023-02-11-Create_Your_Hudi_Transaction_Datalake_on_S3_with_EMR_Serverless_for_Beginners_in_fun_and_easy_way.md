@@ -8,5 +8,8 @@ image: /assets/images/hudi-video-page-default.png
 navigate: "https://www.youtube.com/watch?v=oBoCPaw_kjE"
 tags:
 - guide
+- amazon emr serverless
+- amazon s3
 - apache hudi
+- beginner
 ---

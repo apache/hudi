@@ -8,5 +8,9 @@ image: /assets/images/hudi-video-page-default.png
 navigate: "https://www.youtube.com/watch?v=yPmdCdPT8jo"
 tags:
 - guide
+- access restriction
+- compliance
+- aws lake formation
 - apache hudi
+- amazon athena
 ---

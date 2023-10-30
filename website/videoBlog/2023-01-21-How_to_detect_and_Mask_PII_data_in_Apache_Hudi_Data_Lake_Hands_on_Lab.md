@@ -8,5 +8,13 @@ image: /assets/images/hudi-video-page-default.png
 navigate: "https://www.youtube.com/watch?v=l4RG9CP5LTM"
 tags:
 - guide
+- mask pii
+- hipaa
+- gdpr
+- masking
+- compliance
+- amazon s3
+- aws glue
 - apache hudi
+- amazon athena
 ---

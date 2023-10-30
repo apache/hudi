@@ -8,5 +8,8 @@ image: /assets/images/hudi-video-page-default.png
 navigate: "https://www.youtube.com/watch?v=dX5ENGnL4cA"
 tags:
 - guide
+- commit notification
+- event notification
+- HTTP endpoint
 - apache hudi
 ---
