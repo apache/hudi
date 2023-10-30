@@ -104,9 +104,6 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
 
   override def commitToTable(recordList: util.List[String], operation: String, options: util.Map[String, String]): Unit = {
     val inputDF: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(recordList.toList, 2))
-    //.drop("height", "trip_type", "nation", "city_to_state", "fare", "tip_history")
-    //val writeSchema = AvroConversionUtils.convertStructTypeToAvroSchema(inputDF.schema, "triprec")
-    //options.put("hoodie.write.schema", writeSchema.toString())
 
     inputDF.write.format("hudi")
       .options(options)
