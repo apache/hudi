@@ -317,7 +317,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
         return;
       }
     }
-    boolean complexHoodieKey = pks.length > 1 || partitions.length > 1;
+    boolean complexHoodieKey = pks.length > 1;
     if (complexHoodieKey && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.KEYGEN_CLASS_NAME)) {
       conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
       LOG.info("Table option [{}] is reset to {} because record key or partition path has two or more fields",
