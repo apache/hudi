@@ -67,10 +67,12 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: PartitionedFile =>
       new CloseableMappingIterator[InternalRow, UnsafeRow](
         sparkFileReaderFactory.newParquetFileReader(conf, filePath).asInstanceOf[HoodieSparkParquetReader]
           .getInternalRowIterator(dataSchema, dataSchema),
-        (data: InternalRow) => {
-          // NOTE: We have to do [[UnsafeProjection]] of incoming [[InternalRow]] to convert
-          //       it to [[UnsafeRow]] holding just raw bytes
-          projection.apply(data)
+        new java.util.function.Function[InternalRow, UnsafeRow] {
+          override def apply(data: InternalRow): UnsafeRow = {
+            // NOTE: We have to do [[UnsafeProjection]] of incoming [[InternalRow]] to convert
+            //       it to [[UnsafeRow]] holding just raw bytes
+            projection.apply(data)
+          }
         }).asInstanceOf[ClosableIterator[InternalRow]]
     } else {
       new CloseableInternalRowIterator(baseFileReader.apply(fileInfo))
