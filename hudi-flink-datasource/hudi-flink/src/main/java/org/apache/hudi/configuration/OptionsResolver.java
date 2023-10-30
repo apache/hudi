@@ -273,6 +273,13 @@ public class OptionsResolver {
   }
 
   /**
+   * Returns whether the read commits limit is specified.
+   */
+  public static boolean hasReadCommitsLimit(Configuration conf) {
+    return conf.contains(FlinkOptions.READ_COMMITS_LIMIT);
+  }
+
+  /**
    * Returns the supplemental logging mode.
    */
   public static HoodieCDCSupplementalLoggingMode getCDCSupplementalLoggingMode(Configuration conf) {
