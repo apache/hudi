@@ -383,15 +383,78 @@ CREATE CATALOG hoodie_catalog
 The following is an example of creating a Flink table. Read the [Flink Quick Start](/docs/flink-quick-start-guide) guide for more examples.
 
 ```sql 
-CREATE TABLE hudi_table2(
+CREATE TABLE hudi_table(
   id int, 
   name string, 
   price double
 )
 WITH (
 'connector' = 'hudi',
-'path' = 's3://bucket-name/hudi/',
+'path' = 'file:///tmp/hudi_table',
 'table.type' = 'MERGE_ON_READ' -- this creates a MERGE_ON_READ table, default is COPY_ON_WRITE
+);
+```
+
+### Create partitioned table
+
+The following is an example of creating a Flink partitioned table.
+
+```sql 
+CREATE TABLE hudi_table(
+  id BIGINT,
+  name STRING,
+  dt STRING,
+  hh STRING
+)
+PARTITIONED BY (`dt`)
+WITH (
+'connector' = 'hudi',
+'path' = 'file:///tmp/hudi_table',
+'table.type' = 'MERGE_ON_READ'
+);
+```
+
+### Create table with record keys and ordering fields
+
+The following is an example of creating a Flink table with record key and ordering field similarly to spark.
+
+```sql 
+CREATE TABLE hudi_table(
+  id BIGINT PRIMARY KEY NOT ENFORCED,
+  name STRING,
+  dt STRING,
+  hh STRING
+)
+PARTITIONED BY (`dt`)
+WITH (
+'connector' = 'hudi',
+'path' = 'file:///tmp/hudi_table',
+'table.type' = 'MERGE_ON_READ',
+'precombine.field' = 'hh'
+);
+```
+
+### Create table with Hive Sync
+
+The tables created with Flink SQL are temporary. To create the persistent table you need to use some sync.
+The following is an example of creating a Flink table with hive sync enabled.
+
+```sql 
+CREATE TABLE hudi_table(
+  id BIGINT PRIMARY KEY NOT ENFORCED,
+  name STRING,
+  dt STRING,
+  hh STRING
+)
+PARTITIONED BY (`dt`)
+WITH (
+'connector' = 'hudi',
+'path' = 'file:///tmp/hudi_table',
+'table.type' = 'MERGE_ON_READ', -- this creates a MERGE_ON_READ table, default is COPY_ON_WRITE
+'precombine.field' = 'hh',
+'hive_sync.enable' = 'true',
+'hive_sync.mode' = 'hms', 
+'hive_sync.metastore.uris' = 'thrift://${ip}:9083',
 );
 ```
 

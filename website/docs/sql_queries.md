@@ -116,7 +116,7 @@ mode by setting option `read.streaming.enabled` as `true`. Sets up option `read.
 value as `earliest` if you want to consume all the history data set.
 
 ```sql
--- Show an example query.
+select * from t_user/*+ OPTIONS('read.streaming.enabled'='true', 'read.start-commit'='earliest')*/;
 ```
 
 #### Options

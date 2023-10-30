@@ -149,7 +149,7 @@ WITH (
   'table.type' = 'COPY_ON_WRITE',  -- If MERGE_ON_READ, hive query will not have output until the parquet file is generated
   'hive_sync.enable' = 'true',     -- Required. To enable hive synchronization
   'hive_sync.mode' = 'hms',        -- Required. Setting hive sync mode to hms, default hms. (Before 0.13, the default sync mode was jdbc.)
-  'hive_sync.metastore.uris' = 'thrift://${ip}:9083' -- Required. The port need set on hive-site.xml
+  'hive_sync.metastore.uris' = 'thrift://${ip}:9083' 
 );
 
 

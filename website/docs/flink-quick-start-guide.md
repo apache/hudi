@@ -7,9 +7,21 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 This page introduces Flink-Hudi integration. We can feel the unique charm of how Flink brings in the power of streaming into Hudi.
-This guide helps you quickly start using Flink on Hudi, and learn different modes for reading/writing Hudi by Flink.
 
 ## Setup
+
+
+### Flink Support Matrix
+
+
+| Hudi            | Supported Flink version                 |
+|:----------------|:----------------------------------------|
+| 0.14.x          | 1.13.x, 1.14.x, 1.15.x, 1.16.x, 1.17.x  |
+| 0.13.x          | 1.13.x, 1.14.x, 1.15.x, 1.16.x          |
+| 0.12.x          | 1.13.x, 1.14.x, 1.15.x                  |
+| 0.11.x          | 1.13.x, 1.14.x                          |
+
+
 <Tabs
 defaultValue="flinksql"
 values={[
@@ -53,18 +65,6 @@ export HUDI_VERSION=0.14.0
 wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-flink${FLINK_VERSION}-bundle/${HUDI_VERSION}/hudi-flink${FLINK_VERSION}-bundle-${HUDI_VERSION}.jar -P $FLINK_HOME/lib/
 ./bin/sql-client.sh embedded -j lib/hudi-flink${FLINK_VERSION}-bundle-${HUDI_VERSION}.jar shell
 ```
-
-
-### Flink Support Matrix
-
-
-| Hudi            | Supported Flink version                 |
-|:----------------|:----------------------------------------|
-| 0.14.x          | 1.13.x, 1.14.x, 1.15.x, 1.16.x, 1.17.x  |
-| 0.13.x          | 1.13.x, 1.14.x, 1.15.x, 1.16.x          |
-| 0.12.x          | 1.13.x, 1.14.x, 1.15.x                  |
-| 0.11.x          | 1.13.x, 1.14.x                          |
-
 
 <div className="notice--info">
   <h4>Please note the following: </h4>
@@ -215,9 +215,9 @@ HoodiePipeline.Builder builder = HoodiePipeline.builder(targetTable)
 
 builder.sink(dataStream, false); // The second parameter indicating whether the input data stream is bounded
 env.execute("Api_Sink");
-
-// Full Quickstart Example - https://gist.github.com/ad1happy2go/1716e2e8aef6dcfe620792d6e6d86d36
 ```
+Refer Full Quickstart Example [here](https://github.com/ad1happy2go/hudi-examples/blob/main/flink/src/main/java/com/hudi/flink/quickstart/HudiDataStreamWriter.java)
+
 </TabItem>
 
 </Tabs
@@ -275,6 +275,8 @@ DataStream<RowData> rowDataDataStream = builder.source(env);
 rowDataDataStream.print();
 env.execute("Api_Source");
 ```
+Refer Full Quickstart Insert Example [here](https://github.com/ad1happy2go/hudi-examples/blob/main/flink/src/main/java/com/hudi/flink/quickstart/HudiDataStreamReader.java)
+
 </TabItem>
 
 </Tabs
@@ -287,10 +289,37 @@ Refers to [Table types and queries](/docs/concepts#table-types--queries) for mor
 
 This is similar to inserting new data.
 
+<Tabs
+defaultValue="flinksql"
+values={[
+{ label: 'Flink SQL', value: 'flinksql', },
+{ label: 'DataStream API', value: 'dataStream', },
+]}
+>
+
+<TabItem value="flinksql">
+
+Creates a Flink Hudi table first and insert data into the Hudi table using SQL `VALUES` as below.
+
 ```sql
+-- Update Queries only works with batch execution mode
 SET 'execution.runtime-mode' = 'batch';
 UPDATE hudi_table SET fare = 25.0 WHERE uuid = '334e26e9-8355-45cc-97c6-c31daf0df330';
 ```
+</TabItem>
+
+<TabItem value="dataStream">
+
+Creates a Flink Hudi table first and insert data into the Hudi table using DataStream API as below.
+When new rows with the same primary key arrive in stream, then it will be be updated.
+In the insert example incoming row with same record id will be updated.
+
+Refer Update Example [here](https://github.com/ad1happy2go/hudi-examples/blob/main/flink/src/main/java/com/hudi/flink/quickstart/HudiDataStreamReader.java)
+
+</TabItem>
+
+</Tabs
+>
 
 Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
 [Querying](#query-data) the data again will now show updated records. Each write operation generates a new [commit](/docs/concepts) 
@@ -302,7 +331,15 @@ Only **batch** queries on Hudi table with primary key work correctly.
 :::
 
 ## Delete Data {#deletes}
+<Tabs
+defaultValue="flinksql"
+values={[
+{ label: 'Flink SQL', value: 'flinksql', },
+{ label: 'DataStream API', value: 'dataStream', },
+]}
+>
 
+<TabItem value="flinksql">
 ### Row-level Delete
 When consuming data in streaming query, Hudi Flink source can also accept the change logs from the upstream data source if the `RowKind` is set up per-row,
 it can then apply the UPDATE and DELETE in row level. You can then sync a NEAR-REAL-TIME snapshot on Hudi for all kinds
@@ -321,6 +358,20 @@ DELETE FROM t1 WHERE age > 23;
 The `DELETE` statement is supported since Flink 1.17, so only Hudi Flink bundle compiled with Flink 1.17+ supplies this functionality.
 Only **batch** queries on Hudi table with primary key work correctly.
 :::
+
+</TabItem>
+
+<TabItem value="dataStream">
+
+Creates a Flink Hudi table first and insert data into the Hudi table using DataStream API as below.
+When new rows with the same primary key and Row Kind as Delete arrive in stream, then it will be be deleted.
+
+Refer Delete Example [here](https://github.com/ad1happy2go/hudi-examples/blob/main/flink/src/main/java/com/hudi/flink/quickstart/HudiDataStreamReader.java)
+
+</TabItem>
+
+</Tabs
+>
 
 ## Streaming Query
 
