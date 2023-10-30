@@ -8,5 +8,7 @@ image: /assets/images/hudi-video-page-default.png
 navigate: "https://youtu.be/mUvRhJDoO3w"
 tags:
 - guide
+- cleaner service
+- storage cost
 - apache hudi
 ---

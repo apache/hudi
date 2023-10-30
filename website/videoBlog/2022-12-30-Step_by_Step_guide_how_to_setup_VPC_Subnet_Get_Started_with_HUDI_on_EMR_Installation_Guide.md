@@ -8,5 +8,9 @@ image: /assets/images/hudi-video-page-default.png
 navigate: "https://youtu.be/-e1-Zsk17Ss"
 tags:
 - guide
+- amazon emr
+- vpc
+- subnet
+- internet gateway
 - apache hudi
 ---

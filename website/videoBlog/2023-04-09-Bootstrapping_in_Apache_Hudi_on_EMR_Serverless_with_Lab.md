@@ -8,5 +8,7 @@ image: /assets/images/hudi-video-page-default.png
 navigate: "https://www.youtube.com/watch?v=iTNLqbW3YYA"
 tags:
 - guide
+- bootstrapping
+- amazon emr serverless
 - apache hudi
 ---

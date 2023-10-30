@@ -8,5 +8,8 @@ image: /assets/images/hudi-video-page-default.png
 navigate: "https://www.youtube.com/watch?v=USYa8qXsqBQ"
 tags:
 - guide
+- amazon emr cli
+- apache spark
+- amazon emr serverless
 - apache hudi
 ---

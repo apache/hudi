@@ -8,5 +8,10 @@ image: /assets/images/hudi-video-page-default.png
 navigate: "https://www.youtube.com/watch?v=d9jIvQYTc6k"
 tags:
 - guide
+- deltastreamer
+- hoodie streamer
+- alerting
+- event bridge
+- amazon sns
 - apache hudi
 ---
