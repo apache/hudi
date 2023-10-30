@@ -434,30 +434,6 @@ WITH (
 );
 ```
 
-### Create table with Hive Sync
-
-The tables created with Flink SQL are temporary. To create the persistent table you need to use some sync.
-The following is an example of creating a Flink table with hive sync enabled.
-
-```sql 
-CREATE TABLE hudi_table(
-  id BIGINT PRIMARY KEY NOT ENFORCED,
-  name STRING,
-  dt STRING,
-  hh STRING
-)
-PARTITIONED BY (`dt`)
-WITH (
-'connector' = 'hudi',
-'path' = 'file:///tmp/hudi_table',
-'table.type' = 'MERGE_ON_READ', -- this creates a MERGE_ON_READ table, default is COPY_ON_WRITE
-'precombine.field' = 'hh',
-'hive_sync.enable' = 'true',
-'hive_sync.mode' = 'hms', 
-'hive_sync.metastore.uris' = 'thrift://${ip}:9083',
-);
-```
-
 ### Alter Table
 ```sql
 ALTER TABLE tableA RENAME TO tableB;
