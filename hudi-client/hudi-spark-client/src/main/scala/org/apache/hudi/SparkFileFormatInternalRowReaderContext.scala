@@ -28,13 +28,13 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.util.collection.{ClosableIterator, CloseableMappingIterator}
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
 import org.apache.hudi.util.CloseableInternalRowIterator
+import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{UnsafeProjection, UnsafeRow}
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{HoodieInternalRowUtils, SparkSession}
 
 import scala.collection.mutable
 
@@ -45,12 +45,9 @@ import scala.collection.mutable
  * This uses Spark parquet reader to read parquet data files or parquet log blocks.
  *
  * @param baseFileReader  A reader that transforms a {@link PartitionedFile} to an iterator of {@link InternalRow}.
- * @param partitionSchema The partition schema in {@link StructType}.
  * @param partitionValues The values for a partition in which the file group lives.
  */
-class SparkFileFormatInternalRowReaderContext(sparkSession: SparkSession,
-                                              baseFileReader: PartitionedFile => Iterator[InternalRow],
-                                              partitionSchema: StructType,
+class SparkFileFormatInternalRowReaderContext(baseFileReader: PartitionedFile => Iterator[InternalRow],
                                               partitionValues: InternalRow) extends BaseSparkInternalRowReaderContext {
   lazy val sparkAdapter = SparkAdapterSupport.sparkAdapter
   lazy val sparkFileReaderFactory = new HoodieSparkFileReaderFactory

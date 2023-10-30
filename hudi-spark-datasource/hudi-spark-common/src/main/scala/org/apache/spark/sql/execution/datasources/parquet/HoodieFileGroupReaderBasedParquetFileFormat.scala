@@ -52,7 +52,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                                                   isMOR: Boolean,
                                                   isBootstrap: Boolean,
                                                   shouldUseRecordPosition: Boolean
-                                                 ) extends ParquetFileFormat with SparkAdapterSupport {
+                                           ) extends ParquetFileFormat with SparkAdapterSupport {
   var isProjected = false
 
   /**
@@ -122,8 +122,6 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                         + "since it has no log or data files")
                   }
                   buildFileGroupIterator(
-                    sparkSession,
-                    partitionSchema,
                     preMergeBaseFileReader,
                     partitionValues,
                     hoodieBaseFile,
@@ -145,9 +143,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     }
   }
 
-  protected def buildFileGroupIterator(sparkSession: SparkSession,
-                                       partitionSchema: StructType,
-                                       preMergeBaseFileReader: PartitionedFile => Iterator[InternalRow],
+  protected def buildFileGroupIterator(preMergeBaseFileReader: PartitionedFile => Iterator[InternalRow],
                                        partitionValues: InternalRow,
                                        baseFile: HoodieBaseFile,
                                        logFiles: List[HoodieLogFile],
@@ -157,7 +153,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                                        length: Long,
                                        shouldUseRecordPosition: Boolean): Iterator[InternalRow] = {
     val readerContext: HoodieReaderContext[InternalRow] = new SparkFileFormatInternalRowReaderContext(
-      sparkSession, preMergeBaseFileReader, partitionSchema, partitionValues)
+      preMergeBaseFileReader, partitionValues)
     val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
       .builder().setConf(hadoopConf).setBasePath(tableState.tablePath).build
     val reader = new HoodieFileGroupReader[InternalRow](
