@@ -671,6 +671,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     private final Schema readerSchema;
 
     private IndexedRecord next = null;
+    private boolean eof = false;
 
     RecordIterator(HFile.Reader reader, HFileScanner scanner, Schema writerSchema, Schema readerSchema) {
       this.reader = reader;
@@ -683,6 +684,10 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     public boolean hasNext() {
       try {
         // NOTE: This is required for idempotency
+        if (eof) {
+          return false;
+        }
+
         if (next != null) {
           return true;
         }
@@ -695,6 +700,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
         }
 
         if (!hasRecords) {
+          eof = true;
           return false;
         }
 
