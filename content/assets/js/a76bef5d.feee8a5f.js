@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[18500],{43219:e=>{e.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/aws-glue-concurrency","name":"aws glue concurrency","count":1,"permalink":"/videos/tags/aws-glue-concurrency"}')}}]);

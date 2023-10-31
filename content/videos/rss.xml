@@ -236,12 +236,6 @@
             <pubDate>Tue, 11 Apr 2023 00:00:00 GMT</pubDate>
         </item>
         <item>
-            <title><![CDATA[Podcast: Unleashing the Power of Data: The Epic Story Behind Apache Hudi's Creation by Uber]]></title>
-            <link>https://hudi.apache.org/videos/2023/04/11/Podcast_Unleashing_the_Power_of_Data_The_Epic_Story_Behind_Apache_Hudi_s_Creation_by_Uber</link>
-            <guid>/2023/04/11/Podcast_Unleashing_the_Power_of_Data_The_Epic_Story_Behind_Apache_Hudi_s_Creation_by_Uber</guid>
-            <pubDate>Tue, 11 Apr 2023 00:00:00 GMT</pubDate>
-        </item>
-        <item>
             <title><![CDATA[Bootstrapping in Apache Hudi on EMR Serverless with Lab]]></title>
             <link>https://hudi.apache.org/videos/2023/04/09/Bootstrapping_in_Apache_Hudi_on_EMR_Serverless_with_Lab</link>
             <guid>/2023/04/09/Bootstrapping_in_Apache_Hudi_on_EMR_Serverless_with_Lab</guid>
@@ -294,12 +288,6 @@
             <link>https://hudi.apache.org/videos/2023/03/31/Project_Using_Apache_Hudi_Deltastreamer_and_AWS_DMS_Hands_on_Lab_Part_5</link>
             <guid>/2023/03/31/Project_Using_Apache_Hudi_Deltastreamer_and_AWS_DMS_Hands_on_Lab_Part_5</guid>
             <pubDate>Fri, 31 Mar 2023 00:00:00 GMT</pubDate>
-        </item>
-        <item>
-            <title><![CDATA[Podcast Uber's Game-Changing Data Management with Apache Hudi Delta Streamer]]></title>
-            <link>https://hudi.apache.org/videos/2023/03/30/Podcast_Uber_s_GameChanging_Data_Management_with_Apache_Hudi_Delta_Streamer</link>
-            <guid>/2023/03/30/Podcast_Uber_s_GameChanging_Data_Management_with_Apache_Hudi_Delta_Streamer</guid>
-            <pubDate>Thu, 30 Mar 2023 00:00:00 GMT</pubDate>
         </item>
         <item>
             <title><![CDATA[Project: Using Apache Hudi Deltastreamer and AWS DMS Hands on Lab# Part 1]]></title>
@@ -359,54 +347,6 @@
             <title><![CDATA[Build CDC Pipeline from Microsoft SQL Server into Apache Hudi with AWS DMS | PART 5]]></title>
             <link>https://hudi.apache.org/videos/2023/03/25/Build_CDC_Pipeline_from_Microsoft_SQL_Server_into_Apache_Hudi_with_AWS_DMS_PART_5</link>
             <guid>/2023/03/25/Build_CDC_Pipeline_from_Microsoft_SQL_Server_into_Apache_Hudi_with_AWS_DMS_PART_5</guid>
-            <pubDate>Sat, 25 Mar 2023 00:00:00 GMT</pubDate>
-        </item>
-        <item>
-            <title><![CDATA[Podcast 1: What is Apache Hudi]]></title>
-            <link>https://hudi.apache.org/videos/2023/03/25/Podcast_1_What_is_Apache_Hudi</link>
-            <guid>/2023/03/25/Podcast_1_What_is_Apache_Hudi</guid>
-            <pubDate>Sat, 25 Mar 2023 00:00:00 GMT</pubDate>
-        </item>
-        <item>
-            <title><![CDATA[Podcast 2: Why Lake house architecture is being adopted by businesses, and how hudi can assist you]]></title>
-            <link>https://hudi.apache.org/videos/2023/03/25/Podcast_2_Why_Lake_house_architecture_is_being_adopted_by_businesses_and_how_hudi_can_assist_you</link>
-            <guid>/2023/03/25/Podcast_2_Why_Lake_house_architecture_is_being_adopted_by_businesses_and_how_hudi_can_assist_you</guid>
-            <pubDate>Sat, 25 Mar 2023 00:00:00 GMT</pubDate>
-        </item>
-        <item>
-            <title><![CDATA[Podcast 3 : Benefits of Using a Transactional Data Lake and How Apache Hudi Can Help]]></title>
-            <link>https://hudi.apache.org/videos/2023/03/25/Podcast_3_Benefits_of_Using_a_Transactional_Data_Lake_and_How_Apache_Hudi_Can_Help</link>
-            <guid>/2023/03/25/Podcast_3_Benefits_of_Using_a_Transactional_Data_Lake_and_How_Apache_Hudi_Can_Help</guid>
-            <pubDate>Sat, 25 Mar 2023 00:00:00 GMT</pubDate>
-        </item>
-        <item>
-            <title><![CDATA[Podcast: Exploring Copy on Write Table Type in Apache Hudi: Benefits and Use Cases]]></title>
-            <link>https://hudi.apache.org/videos/2023/03/25/Podcast_Exploring_Copy_on_Write_Table_Type_in_Apache_Hudi_Benefits_and_Use_Cases</link>
-            <guid>/2023/03/25/Podcast_Exploring_Copy_on_Write_Table_Type_in_Apache_Hudi_Benefits_and_Use_Cases</guid>
-            <pubDate>Sat, 25 Mar 2023 00:00:00 GMT</pubDate>
-        </item>
-        <item>
-            <title><![CDATA[Podcast: Importance of Data Governance and Apache Hudi in Managing a Data Lake: The Case of Grofers]]></title>
-            <link>https://hudi.apache.org/videos/2023/03/25/Podcast_Importance_of_Data_Governance_and_Apache_Hudi_in_Managing_a_Data_Lake_The_Case_of_Grofers</link>
-            <guid>/2023/03/25/Podcast_Importance_of_Data_Governance_and_Apache_Hudi_in_Managing_a_Data_Lake_The_Case_of_Grofers</guid>
-            <pubDate>Sat, 25 Mar 2023 00:00:00 GMT</pubDate>
-        </item>
-        <item>
-            <title><![CDATA[Podcast: Maximizing Data Management Efficiency with Apache Hudi's Clustering Feature]]></title>
-            <link>https://hudi.apache.org/videos/2023/03/25/Podcast_Maximizing_Data_Management_Efficiency_with_Apache_Hudi_s_Clustering_Feature</link>
-            <guid>/2023/03/25/Podcast_Maximizing_Data_Management_Efficiency_with_Apache_Hudi_s_Clustering_Feature</guid>
-            <pubDate>Sat, 25 Mar 2023 00:00:00 GMT</pubDate>
-        </item>
-        <item>
-            <title><![CDATA[Podcast: Maximizing Efficiency with Merge on Read Table Type in Apache Hudi: Benefits and Use Cases]]></title>
-            <link>https://hudi.apache.org/videos/2023/03/25/Podcast_Maximizing_Efficiency_with_Merge_on_Read_Table_Type_in_Apache_Hudi_Benefits_and_Use_Cases</link>
-            <guid>/2023/03/25/Podcast_Maximizing_Efficiency_with_Merge_on_Read_Table_Type_in_Apache_Hudi_Benefits_and_Use_Cases</guid>
-            <pubDate>Sat, 25 Mar 2023 00:00:00 GMT</pubDate>
-        </item>
-        <item>
-            <title><![CDATA[Podcast: Optimizing Data Lake Performance with Apache Hudi Compaction: Strategies and Benefits]]></title>
-            <link>https://hudi.apache.org/videos/2023/03/25/Podcast_Optimizing_Data_Lake_Performance_with_Apache_Hudi_Compaction_Strategies_and_Benefits</link>
-            <guid>/2023/03/25/Podcast_Optimizing_Data_Lake_Performance_with_Apache_Hudi_Compaction_Strategies_and_Benefits</guid>
             <pubDate>Sat, 25 Mar 2023 00:00:00 GMT</pubDate>
         </item>
         <item>
