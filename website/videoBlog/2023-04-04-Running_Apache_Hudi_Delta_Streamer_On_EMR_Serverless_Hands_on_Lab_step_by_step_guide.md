@@ -8,5 +8,9 @@ image: /assets/images/hudi-video-page-default.png
 navigate: "https://www.youtube.com/watch?v=jvbHUl9A4tQ"
 tags:
 - guide
+- deltastreamer
+- hoodie streamer
+- amazon emr serverless
+- amazon s3
 - apache hudi
 ---
