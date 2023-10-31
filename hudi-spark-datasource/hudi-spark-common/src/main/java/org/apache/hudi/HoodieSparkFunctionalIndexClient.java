@@ -20,28 +20,21 @@
 package org.apache.hudi;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieFunctionalIndexConfig;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieFunctionalIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.config.HoodieCompactionConfig;
-import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieFunctionalIndexException;
-import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.action.index.functional.BaseHoodieFunctionalIndexClient;
 
-import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -111,23 +104,6 @@ public class HoodieSparkFunctionalIndexClient extends BaseHoodieFunctionalIndexC
     }
   }
 
-  private static SparkRDDWriteClient<HoodieRecordPayload> createHoodieClient(JavaSparkContext jsc, String basePath, String schemaStr,
-                                                                             int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) {
-    HoodieCompactionConfig compactionConfig = compactionStrategyClass
-        .map(strategy -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false)
-            .withCompactionStrategy(ReflectionUtils.loadClass(strategy)).build())
-        .orElse(HoodieCompactionConfig.newBuilder().withInlineCompaction(false).build());
-    HoodieWriteConfig config =
-        HoodieWriteConfig.newBuilder().withPath(basePath)
-            .withParallelism(parallelism, parallelism)
-            .withBulkInsertParallelism(parallelism)
-            .withDeleteParallelism(parallelism)
-            .withSchema(schemaStr).combineInput(true, true).withCompactionConfig(compactionConfig)
-            .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
-            .withProps(properties).build();
-    return new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jsc), config);
-  }
-
   private static Option<String> doSchedule(SparkRDDWriteClient<HoodieRecordPayload> client, HoodieTableMetaClient metaClient) {
     List<MetadataPartitionType> partitionTypes = Collections.singletonList(MetadataPartitionType.FUNCTIONAL_INDEX);
     checkArgument(partitionTypes.size() == 1, "Currently, only one index type can be scheduled at a time.");
@@ -146,7 +122,7 @@ public class HoodieSparkFunctionalIndexClient extends BaseHoodieFunctionalIndexC
     if (metaClient.getTableConfig().isMetadataTableAvailable()) {
       if (!writeConfig.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key())) {
         writeConfig.put(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
-        writeConfig.putAll(JavaConverters.mapAsJavaMap(HoodieCLIUtils.getLockOptions(metaClient.getBasePathV2().toString())));
+        writeConfig.putAll(JavaConverters.mapAsJavaMapConverter(HoodieCLIUtils.getLockOptions(metaClient.getBasePathV2().toString())).asJava());
       }
     }
     HoodieFunctionalIndexConfig.fromIndexDefinition(indexDefinition).getProps().forEach((key, value) -> writeConfig.put(key.toString(), value.toString()));
