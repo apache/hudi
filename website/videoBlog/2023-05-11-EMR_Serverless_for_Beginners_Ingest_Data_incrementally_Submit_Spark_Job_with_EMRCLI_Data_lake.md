@@ -9,8 +9,8 @@ navigate: "https://www.youtube.com/watch?v=jx1_r6E8V7I"
 tags:
 - guide
 - apache hudi
-- Amazon EMR
-- EMR Serverless
+- amazon emr
+- emr Serverless
 - apache spark
 - data lake
 - incremental data processing

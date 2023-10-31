@@ -13,8 +13,8 @@ tags:
 - insert
 - update
 - delete
-- amazon s3
-- pyspark
 - data integration
 - analytics
+- amazon s3
+- pyspark
 ---

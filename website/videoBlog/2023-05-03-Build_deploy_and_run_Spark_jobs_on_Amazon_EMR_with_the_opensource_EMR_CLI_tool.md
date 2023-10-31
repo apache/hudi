@@ -12,8 +12,6 @@ tags:
 - apache spark
 - amazon emr serverless
 - apache hudi
-- Amazon EMR
-- apache spark
-- EMR CLI
+- amazon emr
 - command line interface
 ---

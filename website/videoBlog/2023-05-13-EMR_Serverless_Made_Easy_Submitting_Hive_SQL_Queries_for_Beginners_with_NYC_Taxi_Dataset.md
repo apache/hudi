@@ -10,7 +10,7 @@ tags:
 - guide
 - apache hudi
 - apache hive
-- Amazon EMR
-- EMR Serverless
-- Hive SQL
+- amazon emr
+- emr serverless
+- hive sql
 ---

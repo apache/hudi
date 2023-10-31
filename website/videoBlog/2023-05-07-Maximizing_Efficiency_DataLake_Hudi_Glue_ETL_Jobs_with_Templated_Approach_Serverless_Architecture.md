@@ -9,8 +9,8 @@ navigate: "https://www.youtube.com/watch?v=DhMlFgn8UU4"
 tags:
 - guide
 - apache hudi
-- AWS Glue
-- ETL jobs
+- aws glue
+- etl jobs
 - templated architecture
 - Serverless
 ---

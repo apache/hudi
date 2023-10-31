@@ -9,7 +9,7 @@ navigate: "https://www.youtube.com/watch?v=Pe9tHOfq2z8"
 tags:
 - guide
 - apache hudi
-- AWS Glue
+- aws glue
 - incremental processing
 - glue bookmarks
 ---
