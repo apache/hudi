@@ -18,16 +18,12 @@
 
 package org.apache.hudi.table.action.compact.strategy;
 
-import org.apache.hudi.avro.model.HoodieCompactionOperation;
-import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
-import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -45,27 +41,12 @@ public class BoundedPartitionAwareCompactionStrategy extends DayBasedCompactionS
       ThreadLocal.withInitial(() -> new SimpleDateFormat(DayBasedCompactionStrategy.DATE_PARTITION_FORMAT));
 
   @Override
-  public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig,
-      List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
-    // The earliest partition to compact - current day minus the target partitions limit
-    String earliestPartitionPathToCompact =
-        dateFormat.get().format(getDateAtOffsetFromToday(-1 * writeConfig.getTargetPartitionsPerDayBasedCompaction()));
-    // Filter out all partitions greater than earliestPartitionPathToCompact
-
-    return operations.stream().collect(Collectors.groupingBy(HoodieCompactionOperation::getPartitionPath)).entrySet()
-        .stream().sorted(Map.Entry.comparingByKey(DayBasedCompactionStrategy.comparator))
-        .filter(e -> DayBasedCompactionStrategy.comparator.compare(earliestPartitionPathToCompact, e.getKey()) >= 0)
-        .flatMap(e -> e.getValue().stream()).collect(Collectors.toList());
-  }
-
-  @Override
   public List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> partitionPaths) {
     // The earliest partition to compact - current day minus the target partitions limit
     String earliestPartitionPathToCompact =
         dateFormat.get().format(getDateAtOffsetFromToday(-1 * writeConfig.getTargetPartitionsPerDayBasedCompaction()));
     // Get all partitions and sort them
-    return partitionPaths.stream().map(partition -> partition.replace("/", "-"))
-        .sorted(Comparator.reverseOrder()).map(partitionPath -> partitionPath.replace("-", "/"))
+    return partitionPaths.stream().sorted(DayBasedCompactionStrategy.comparator)
         .filter(e -> DayBasedCompactionStrategy.comparator.compare(earliestPartitionPathToCompact, e) >= 0).collect(Collectors.toList());
   }
 

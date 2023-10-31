@@ -190,18 +190,24 @@ public class TestHoodieCompactionStrategy {
     HoodieWriteConfig writeConfig =
         HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withCompactionStrategy(strategy).withTargetPartitionsPerDayBasedCompaction(2).build()).build();
-    List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap, keyToPartitionMap);
-    List<HoodieCompactionOperation> returned = strategy.orderAndFilter(writeConfig, operations, new ArrayList<>());
 
-    assertTrue(returned.size() < operations.size(),
-        "BoundedPartitionAwareCompactionStrategy should have resulted in fewer compactions");
-    assertEquals(5, returned.size(),
-        "BoundedPartitionAwareCompactionStrategy should have resulted in fewer compactions");
+    List<String> allPartitionPaths = new ArrayList<>(
+        Arrays.asList(currentDay, currentDayMinus1, currentDayMinus2, currentDayMinus3, currentDayPlus1, currentDayPlus5));
 
-    int comparison = strategy.getComparator().compare(returned.get(returned.size() - 1).getPartitionPath(),
-        returned.get(0).getPartitionPath());
-    // Either the partition paths are sorted in descending order or they are equal
+    List<String> filterPartitions = strategy.filterPartitionPaths(writeConfig, allPartitionPaths);
+    assertEquals(5, filterPartitions.size(),
+        "BoundedPartitionAwareCompactionStrategy should have resulted in fewer partitions");
+    int comparison = strategy.getComparator().compare(filterPartitions.get(filterPartitions.size() - 1), filterPartitions.get(0));
     assertTrue(comparison >= 0, "BoundedPartitionAwareCompactionStrategy should sort partitions in descending order");
+
+    List<HoodieCompactionOperation> operations = createCompactionOperationsForPartition(writeConfig, sizesMap, keyToPartitionMap, filterPartitions);
+    assertEquals(5, operations.size(),
+        "BoundedPartitionAwareCompactionStrategy should generate 5 HoodieCompactionOperation for other five partition except currentDayMinus3");
+
+    List<String> operationPartitions = operations.stream().collect(Collectors.groupingBy(HoodieCompactionOperation::getPartitionPath))
+        .entrySet().stream().map(e -> e.getKey()).sorted(strategy.getComparator()).collect(Collectors.toList());
+    assertTrue(operationPartitions.size() == filterPartitions.size(),
+        "BoundedPartitionAwareCompactionStrategy should have resulted same partitions");
   }
 
   @Test
