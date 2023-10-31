@@ -296,7 +296,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     String bootstrapBasePath = tableConfig.getBootstrapBasePath().orElse(null);
     Option<String[]> partitionFields = tableConfig.getPartitionFields();
 
-    int readParallelism = Math.min(writeConfig.getClusteringParallelism(), clusteringOps.size());
+    int readParallelism = Math.min(writeConfig.getClusteringRddReadParallelism(), clusteringOps.size());
 
     return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, readParallelism).mapPartitions(clusteringOpsPartition -> {
       List<Iterator<HoodieRecord<T>>> recordIterators = new ArrayList<>();
@@ -354,7 +354,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     String bootstrapBasePath = tableConfig.getBootstrapBasePath().orElse(null);
     Option<String[]> partitionFields = tableConfig.getPartitionFields();
 
-    int readParallelism = Math.min(writeConfig.getClusteringParallelism(), clusteringOps.size());
+    int readParallelism = Math.min(writeConfig.getClusteringRddReadParallelism(), clusteringOps.size());
 
     return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, readParallelism)
         .mapPartitions(clusteringOpsPartition -> {
