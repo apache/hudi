@@ -72,12 +72,10 @@
                             </transformers>
                             <artifactSet>
                                 <includes combine.children="append">
-                                    <include>org.apache.hudi:hudi-common</include>
                                     <include>org.apache.hudi:hudi-hadoop-mr</include>
                                     <include>org.apache.hudi:hudi-sync-common</include>
                                     <include>org.apache.hudi:hudi-hive-sync</include>
                                     <include>org.apache.hudi:hudi-aws</include>
-                                    <include>org.apache.parquet:parquet-avro</include>
                                     <include>org.reactivestreams:reactive-streams</include>
                                     <include>com.amazonaws:dynamodb-lock-client</include>
                                     <include>org.apache.httpcomponents:httpclient</include>
@@ -88,7 +86,6 @@
                                     <include>com.beust:jcommander</include>
                                     <include>commons-io:commons-io</include>
                                     <include>org.openjdk.jol:jol-core</include>
-                                    <include>org.apache.avro:avro</include>
                                 </includes>
                             </artifactSet>
                             <relocations combine.children="append">
@@ -115,10 +112,6 @@
                                 <relocation>
                                     <pattern>org.apache.httpcomponents.</pattern>
                                     <shadedPattern>org.apache.hudi.aws.org.apache.httpcomponents.</shadedPattern>
-                                </relocation>
-                                <relocation>
-                                    <pattern>org.apache.avro.</pattern>
-                                    <shadedPattern>org.apache.hudi.org.apache.avro.</shadedPattern>
                                 </relocation>
                             </relocations>
                             <createDependencyReducedPom>false</createDependencyReducedPom>
