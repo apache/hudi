@@ -1825,6 +1825,10 @@ TIMESTAMP: 'TIMESTAMP';
 //============================
 // End of the keywords list
 //============================
+LEFT_PAREN: '(';
+RIGHT_PAREN: ')';
+COMMA: ',';
+DOT: '.';
 
 EQ  : '=' | '==';
 NSEQ: '<=>';
