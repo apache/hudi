@@ -20,6 +20,7 @@ package org.apache.hudi.common.fs;
 
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -244,7 +245,9 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String logFile = FSUtils.makeLogFileName(fileName, ".log", "100", 2, "1-0-1");
     System.out.println("Log File =" + logFile);
     Path rlPath = new Path(new Path(partitionPath), logFile);
+    Path inlineFsPath = InLineFSUtils.getInlineFilePath(rlPath, "file", 0, 100);
     assertTrue(FSUtils.isLogFile(rlPath));
+    assertTrue(FSUtils.isLogFile(inlineFsPath));
     assertEquals(fileName, FSUtils.getFileIdFromLogPath(rlPath));
     assertEquals("100", FSUtils.getDeltaCommitTimeFromLogPath(rlPath));
     assertEquals(2, FSUtils.getFileVersionFromLog(rlPath));

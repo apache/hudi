@@ -46,6 +46,7 @@ class CloseableInternalRowIterator(iterator: Iterator[_]) extends ClosableIterat
 
   override def next: InternalRow = {
     if (!entryTypeKnown) {
+      entryTypeKnown = true
       // First entry
       val nextVal = iterator.next
       seqInBatch = 0
