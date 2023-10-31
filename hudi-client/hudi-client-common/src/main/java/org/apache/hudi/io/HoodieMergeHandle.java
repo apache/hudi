@@ -395,12 +395,14 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   }
 
   @Override
-  public boolean tryCleanWrittenFiles() {
+  public void tryCleanWrittenFiles() {
     try {
-      LOG.warn("Cleaning file " + newFilePath);
-      return fs.delete(newFilePath, false);
+      if (newFilePath != null) {
+        LOG.warn("Cleaning file " + newFilePath);
+        fs.delete(newFilePath, false);
+      }
     } catch (IOException e) {
-      return false;
+      // No ops.
     }
   }
 

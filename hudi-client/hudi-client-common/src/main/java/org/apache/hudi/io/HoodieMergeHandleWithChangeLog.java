@@ -109,13 +109,13 @@ public class HoodieMergeHandleWithChangeLog<T, I, K, O> extends HoodieMergeHandl
   }
 
   @Override
-  public boolean tryCleanWrittenFiles() {
+  public void tryCleanWrittenFiles() {
     try {
-      boolean succeed = super.tryCleanWrittenFiles();
+      super.tryCleanWrittenFiles();
       LOG.warn("Cleaning cdcLogger file " + cdcLogger.getPath());
-      return fs.delete(cdcLogger.getPath(), false) && succeed;
+      fs.delete(cdcLogger.getPath(), false);
     } catch (IOException e) {
-      return false;
+      // No ops.
     }
   }
 

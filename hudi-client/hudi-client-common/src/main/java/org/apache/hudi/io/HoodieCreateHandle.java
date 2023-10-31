@@ -173,12 +173,12 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   @Override
-  public boolean tryCleanWrittenFiles() {
+  public void tryCleanWrittenFiles() {
     try {
       LOG.warn("Cleaning file " + path);
-      return fs.delete(path, false);
+      fs.delete(path, false);
     } catch (IOException e) {
-      return false;
+      // No ops.
     }
   }
 

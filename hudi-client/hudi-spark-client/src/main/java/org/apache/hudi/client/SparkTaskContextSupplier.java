@@ -97,6 +97,6 @@ public class SparkTaskContextSupplier extends TaskContextSupplier implements Ser
 
   @Override
   public boolean isAborted() {
-    return TaskContext.get().isInterrupted();
+    return TaskContext.get() != null && TaskContext.get().isInterrupted();
   }
 }

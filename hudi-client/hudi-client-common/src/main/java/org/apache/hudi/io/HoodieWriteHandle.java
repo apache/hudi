@@ -193,9 +193,9 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   public abstract List<WriteStatus> close();
 
   /**
-   * Try to clean written files if called, return false if failed.
+   * Try to clean written files if called, ignore exceptions if meet.
    */
-  public abstract boolean tryCleanWrittenFiles();
+  public abstract void tryCleanWrittenFiles();
 
   public List<WriteStatus> writeStatuses() {
     return Collections.singletonList(writeStatus);

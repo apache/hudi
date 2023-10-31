@@ -224,7 +224,11 @@ public class HoodieCDCLogger implements Closeable {
   }
 
   public Path getPath() {
-    return cdcWriter.getLogFile().getPath();
+    if (cdcWriter.getLogFile() != null) {
+      return cdcWriter.getLogFile().getPath();
+    }
+
+    return null;
   }
 
   @Override
