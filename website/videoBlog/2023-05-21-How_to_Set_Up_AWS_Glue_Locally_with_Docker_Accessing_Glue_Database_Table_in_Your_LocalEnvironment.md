@@ -10,7 +10,7 @@ tags:
 - guide
 - apache hudi
 - docker
-- AWS Glue
+- aws glue
 - development setup
 - database
 ---
