@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[95278],{44685:s=>{s.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/amazon-quicksight","name":"amazon quicksight","count":2,"permalink":"/videos/tags/amazon-quicksight"}')}}]);

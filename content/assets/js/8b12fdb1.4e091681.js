@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[1964],{66633:s=>{s.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/windows-10","name":"windows 10","count":1,"permalink":"/videos/tags/windows-10"}')}}]);

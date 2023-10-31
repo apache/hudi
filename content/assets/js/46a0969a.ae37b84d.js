@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[67549],{28202:a=>{a.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/amazon-dynamodb","name":"amazon dynamodb","count":8,"permalink":"/videos/tags/amazon-dynamodb"}')}}]);
