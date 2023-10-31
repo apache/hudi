@@ -90,12 +90,11 @@ public class TestSparkBuildClusteringGroupsForPartition {
     List<FileSlice> fileSliceGroups = new ArrayList<>();
     String partition = "par0";
     String fileId;
-    for (int i = 1 ; i <= 4; i++) {
+    for (int i = 1; i <= 4; i++) {
       fileId = "fg-" + i;
       fileSliceGroups.add(generateFileSliceWithLen(partition, fileId, String.valueOf(i), 100));
     }
-    HoodieWriteConfig writeConfig = hoodieWriteConfigBuilder.
-        withClusteringConfig(
+    HoodieWriteConfig writeConfig = hoodieWriteConfigBuilder.withClusteringConfig(
             HoodieClusteringConfig.newBuilder()
                 .withClusteringPlanPartitionFilterMode(ClusteringPlanPartitionFilterMode.NONE)
                 .withClusteringMaxNumGroups(2)
