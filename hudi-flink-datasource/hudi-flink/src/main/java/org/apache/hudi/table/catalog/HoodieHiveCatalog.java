@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.catalog;
 
+import org.apache.hudi.adapter.HiveCatalogConstants.AlterHiveDatabaseOp;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.fs.FSUtils;
@@ -69,7 +70,6 @@ import org.apache.flink.table.catalog.exceptions.TableAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
 import org.apache.flink.table.catalog.exceptions.TableNotPartitionedException;
 import org.apache.flink.table.catalog.exceptions.TablePartitionedException;
-import org.apache.flink.table.catalog.hive.util.AlterHiveDatabaseOp;
 import org.apache.flink.table.catalog.stats.CatalogColumnStatistics;
 import org.apache.flink.table.catalog.stats.CatalogTableStatistics;
 import org.apache.flink.table.expressions.Expression;
@@ -102,12 +102,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.flink.table.catalog.hive.util.Constants.ALTER_DATABASE_OP;
-import static org.apache.flink.table.catalog.hive.util.Constants.DATABASE_OWNER_NAME;
-import static org.apache.flink.table.catalog.hive.util.Constants.DATABASE_OWNER_TYPE;
-import static org.apache.flink.table.catalog.hive.util.Constants.DATABASE_LOCATION_URI;
-import static org.apache.flink.table.catalog.hive.util.Constants.ROLE_OWNER;
-import static org.apache.flink.table.catalog.hive.util.Constants.USER_OWNER;
+import static org.apache.hudi.adapter.HiveCatalogConstants.ALTER_DATABASE_OP;
+import static org.apache.hudi.adapter.HiveCatalogConstants.DATABASE_OWNER_NAME;
+import static org.apache.hudi.adapter.HiveCatalogConstants.DATABASE_OWNER_TYPE;
+import static org.apache.hudi.adapter.HiveCatalogConstants.DATABASE_LOCATION_URI;
+import static org.apache.hudi.adapter.HiveCatalogConstants.ROLE_OWNER;
+import static org.apache.hudi.adapter.HiveCatalogConstants.USER_OWNER;
 import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
 import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
