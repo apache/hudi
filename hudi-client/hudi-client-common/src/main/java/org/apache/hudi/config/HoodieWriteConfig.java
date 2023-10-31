@@ -3235,7 +3235,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       }
 
       // We check if "hoodie.cleaner.policy.failed.writes"
-      // is properly set to LAZY for optimistic concurrency control
+      // is properly set to LAZY for multi-writers
       WriteConcurrencyMode writeConcurrencyMode = writeConfig.getWriteConcurrencyMode();
       if (writeConcurrencyMode.supportsMultiWriter()) {
         // In this case, we assume that the user takes care of setting the lock provider used
