@@ -281,6 +281,8 @@ class HoodieMergeOnReadIncrementalHadoopFsRelationFactory(override val sqlContex
                                                           isBootstrap: Boolean)
   extends HoodieMergeOnReadSnapshotHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
 
+  override val mandatoryFields: Seq[String] = Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD) ++ mandatoryFieldsForMerging
+
   override val fileIndex = new HoodieIncrementalFileIndex(
     sparkSession, metaClient, schemaSpec, options, FileStatusCache.getOrCreate(sparkSession), true, true)
 
@@ -306,6 +308,9 @@ class HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(override val sqlContext: 
                                                         override val schemaSpec: Option[StructType],
                                                         isBootstrap: Boolean)
   extends HoodieMergeOnReadSnapshotHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
+
+  override val mandatoryFields: Seq[String] = Seq.empty
+
   override val fileIndex: HoodieFileIndex = HoodieFileIndex(
     sparkSession,
     metaClient,
@@ -334,6 +339,9 @@ class HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(override val sqlContex
                                                           override val schemaSpec: Option[StructType],
                                                           isBootstrap: Boolean)
   extends HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
+
+  override val mandatoryFields: Seq[String] = Seq(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.COMMIT_TIME_METADATA_FIELD) ++
+    preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
 
   override val fileIndex = new HoodieIncrementalFileIndex(
     sparkSession, metaClient, schemaSpec, options, FileStatusCache.getOrCreate(sparkSession), false, isBootstrap)

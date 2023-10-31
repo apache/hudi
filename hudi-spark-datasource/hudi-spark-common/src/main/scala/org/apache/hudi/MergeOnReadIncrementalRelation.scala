@@ -150,7 +150,11 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
   }
 
   def getRequiredFilters: Seq[Filter] = {
-    incrementalSpanRecordFilters
+    if (includedCommits.isEmpty) {
+      Seq.empty
+    } else {
+      incrementalSpanRecordFilters
+    }
   }
 
   private def filterFileSlices(fileSlices: Seq[FileSlice], pathGlobPattern: String): Seq[FileSlice] = {

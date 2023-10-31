@@ -89,9 +89,7 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
 
     val outputSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
 
-    val requiredSchemaWithMandatory = if (isIncremental) {
-      StructType(dataSchema.toArray ++ partitionSchema.fields)
-    } else if (!isMOR || MergeOnReadSnapshotRelation.isProjectionCompatible(tableState.value)) {
+    val requiredSchemaWithMandatory = if (!isMOR || MergeOnReadSnapshotRelation.isProjectionCompatible(tableState.value)) {
       //add mandatory fields to required schema
       val added: mutable.Buffer[StructField] = mutable.Buffer[StructField]()
       for (field <- mandatoryFields) {
@@ -169,9 +167,13 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
                     //baseFileReader(baseFile)
                   }
                 }
+              case _ if isIncremental =>
+                 projectSchema(baseFileReader(file), StructType(requiredSchemaWithMandatory.fields ++ partitionSchema.fields), outputSchema)
               case _ => baseFileReader(file)
             }
           }
+        case _ if isIncremental =>
+          projectSchema(baseFileReader(file), StructType(requiredSchemaWithMandatory.fields ++ partitionSchema.fields), outputSchema)
         case _ => baseFileReader(file)
       }
     }
@@ -190,10 +192,16 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
     PartitionedFile => Iterator[InternalRow]) = {
 
     //file reader when you just read a hudi parquet file and don't do any merging
-    val baseFileReader = super.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema,
-      filters ++ requiredFilters, options, new Configuration(hadoopConf))
+    val baseFileReader = if (isIncremental) {
+      super.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchemaWithMandatory,
+        filters ++ requiredFilters, options, new Configuration(hadoopConf))
+    } else {
+      super.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema,
+        filters ++ requiredFilters, options, new Configuration(hadoopConf))
+    }
 
-    //file reader for reading a hudi base file that needs to be merged with log files
+
+   //file reader for reading a hudi base file that needs to be merged with log files
     val preMergeBaseFileReader = if (isMOR) {
       super.buildReaderWithPartitionValues(sparkSession, dataSchema, StructType(Seq.empty),
         requiredSchemaWithMandatory, requiredFilters, options, new Configuration(hadoopConf))
