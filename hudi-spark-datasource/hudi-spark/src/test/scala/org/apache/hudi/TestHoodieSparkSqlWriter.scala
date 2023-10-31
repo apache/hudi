@@ -30,7 +30,9 @@ import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieIndexConfig, HoodieW
 import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.functional.TestBootstrap
+import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
+import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
 import org.apache.spark.SparkContext
@@ -49,7 +51,6 @@ import org.mockito.Mockito.{spy, times, verify}
 import org.scalatest.Assertions.assertThrows
 import org.scalatest.Matchers.{be, convertToAnyShouldWrapper, intercept}
 
-import java.io.IOException
 import java.time.format.DateTimeFormatterBuilder
 import java.time.temporal.ChronoField
 import java.time.{Instant, ZoneId}
@@ -1336,6 +1337,69 @@ class TestHoodieSparkSqlWriter {
     } finally {
       TimeZone.setDefault(defaultTimezone)
     }
+  }
+
+
+  /**
+   * Test case for setting HIVE_SYNC_TABLE_STRATEGY to RO/RT.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = Array("RO", "RT"))
+  def testMergeOnReadWithSyncStrategyRefreshCache(strategy: String): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+    val df = Seq((1, "a1", 10, 1000L, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
+    val df2 = Seq((2, "a2", 20, 2000L, "2021-10-17")).toDF("id", "name", "value", "ts", "dt")
+    val (tableName1, tablePath1) = ("hoodie_test_refresh", tempBasePath)
+    val options = Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL,
+      HiveSyncConfigHolder.HIVE_SYNC_TABLE_STRATEGY.key() -> strategy,
+      HoodieSyncConfig.META_SYNC_TABLE_NAME.key -> tableName1,
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt"
+    )
+    val hoodieConfig = HoodieWriterUtils.convertMapToHoodieConfig(options)
+    spark.sql(
+      s"""
+         | create table $tableName1 (
+         |   id int,
+         |   name string,
+         |   value int,
+         |   ts long,
+         |   dt string
+         | ) using hudi
+         | partitioned by (dt)
+         | options (
+         |  primaryKey = 'id',
+         |  preCombineField = 'ts',
+         |  type = 'mor'
+         | )
+         | location '$tablePath1'
+       """.stripMargin)
+
+    df.write.format("hudi")
+      .options(options)
+      .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
+      .mode(SaveMode.Append).save(tablePath1)
+
+    assert(spark.sql(s"select id from $tableName1").count() == 1)
+
+    df2.write.format("hudi")
+      .options(options)
+      .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
+      .mode(SaveMode.Append).save(tablePath1)
+
+    HoodieSparkSqlWriter.getHiveTableNames(hoodieConfig).foreach(name => {
+      val syncDb = hoodieConfig.getStringOrDefault(HIVE_DATABASE)
+      val qualifiedTableName = String.join(".", syncDb, name)
+      if (spark.catalog.databaseExists(syncDb) && spark.catalog.tableExists(qualifiedTableName)) {
+        spark.catalog.refreshTable(qualifiedTableName)
+      }
+    })
+    // If we don't refresh spark catalog, we can't get the latest data.
+    assert(spark.sql(s"select id from $tableName1").count() == 2)
+
   }
 
   private def fetchActualSchema(): Schema = {
