@@ -125,6 +125,17 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
     }
   }
 
+  void sendMessagesToKafkaWithNullKafkaValue(String topic, int count, int numPartitions) {
+    List<GenericRecord> genericRecords = dataGen.generateGenericRecords(count);
+    Properties config = getProducerProperties();
+    try (Producer<String, byte[]> producer = new KafkaProducer<>(config)) {
+      for (int i = 0; i < genericRecords.size(); i++) {
+        // null kafka key
+        producer.send(new ProducerRecord<>(topic, i % numPartitions, "key", null));
+      }
+    }
+  }
+
   private Properties getProducerProperties() {
     Properties props = new Properties();
     props.put("bootstrap.servers", testUtils.brokerAddress());
@@ -185,6 +196,9 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
     int numMessages = 30;
     testUtils.createTopic(topic,numPartitions);
     sendMessagesToKafka(topic, numMessages, numPartitions);
+    // send some null value records
+    sendMessagesToKafkaWithNullKafkaValue(topic, numMessages, numPartitions);
+
     AvroKafkaSource avroKafkaSource = new AvroKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(avroKafkaSource);
     Dataset<Row> c = kafkaSource.fetchNewDataInRowFormat(Option.empty(),Long.MAX_VALUE)
@@ -214,6 +228,5 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
     Dataset<Row> nullKafkaKeyDataset = kafkaSourceWithNullKafkaKey.fetchNewDataInRowFormat(Option.empty(),Long.MAX_VALUE)
             .getBatch().get();
     assertEquals(numMessages, nullKafkaKeyDataset.toDF().filter("_hoodie_kafka_source_key is null").count());
-
   }
 }
