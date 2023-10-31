@@ -45,6 +45,8 @@ import java.util.List;
 import java.util.Random;
 import java.util.UUID;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getJavaVersion;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -166,7 +168,17 @@ public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
     fileNames.add(handle.getFileName());
     // verify write status
     assertNotNull(writeStatus.getGlobalError());
-    assertTrue(writeStatus.getGlobalError().getMessage().contains("java.lang.String cannot be cast to org.apache.spark.unsafe.types.UTF8String"));
+
+    String expectedError = getJavaVersion() == 11 || getJavaVersion() == 17
+        ? "class java.lang.String cannot be cast to class org.apache.spark.unsafe.types.UTF8String"
+        : "java.lang.String cannot be cast to org.apache.spark.unsafe.types.UTF8String";
+
+    try {
+      assertTrue(writeStatus.getGlobalError().getMessage().contains(expectedError));
+    } catch (Throwable e) {
+      fail("Expected error to contain: " + expectedError + ", the actual error message: " + writeStatus.getGlobalError().getMessage());
+    }
+
     assertEquals(writeStatus.getFileId(), fileId);
     assertEquals(writeStatus.getPartitionPath(), partitionPath);
 
