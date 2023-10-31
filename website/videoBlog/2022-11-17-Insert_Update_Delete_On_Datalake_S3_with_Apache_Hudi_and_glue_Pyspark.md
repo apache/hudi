@@ -8,5 +8,9 @@ image: /assets/images/hudi-video-page-default.png
 navigate: "https://youtu.be/94DPKkzDm-8"
 tags:
 - guide
+- aws glue
 - apache hudi
+- amazon s3
+- pyspark
+- beginner
 ---

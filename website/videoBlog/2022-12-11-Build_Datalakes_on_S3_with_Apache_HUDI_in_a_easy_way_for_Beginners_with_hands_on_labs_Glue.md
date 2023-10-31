@@ -8,5 +8,10 @@ image: /assets/images/hudi-video-page-default.png
 navigate: "https://youtu.be/5zF4jc_3rFs"
 tags:
 - guide
+- aws glue
+- amazon athena
 - apache hudi
+- spark-sql
+- amazon s3
+- beginner
 ---

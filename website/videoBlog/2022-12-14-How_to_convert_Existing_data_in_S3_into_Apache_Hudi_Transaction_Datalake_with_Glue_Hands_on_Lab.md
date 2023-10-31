@@ -8,5 +8,7 @@ image: /assets/images/hudi-video-page-default.png
 navigate: "https://youtu.be/HKfg3l2tywg"
 tags:
 - guide
+- aws glue
 - apache hudi
+- amazon s3
 ---
