@@ -1380,11 +1380,11 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
           HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(jsc.hadoopConfiguration()).build();
           metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants().forEach(entry -> assertValidSchemaInCommitMetadata(entry, metaClient));
         }
-        testNum++;
       }
     } finally {
       deltaStreamer.shutdownGracefully();
     }
+    testNum++;
   }
 
   @Test
@@ -1449,6 +1449,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       inputGenerationFuture.cancel(true);
       UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
     }
+    testNum++;
   }
 
   /**
