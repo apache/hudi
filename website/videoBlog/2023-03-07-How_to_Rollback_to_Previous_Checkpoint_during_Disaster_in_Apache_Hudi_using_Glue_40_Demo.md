@@ -8,5 +8,9 @@ image: /assets/images/hudi-video-page-default.png
 navigate: "https://www.youtube.com/watch?v=Vi25q4vzogs"
 tags:
 - guide
+- savepoint
+- rollback
+- disaster recovery
+- aws glue
 - apache hudi
 ---
