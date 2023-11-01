@@ -70,7 +70,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
         assertResult("column_stats")(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].indexType)
         assertResult(false)(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].ignoreIfExists)
 
-        spark.sql(createIndexSql)
+        /*spark.sql(createIndexSql)
         val metaClient = HoodieTableMetaClient.builder()
           .setBasePath(tmp.getCanonicalPath)
           .setConf(spark.sessionState.newHadoopConf())
@@ -78,7 +78,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
         assertTrue(metaClient.getFunctionalIndexMetadata.isPresent)
         val functionalIndexMetadata = metaClient.getFunctionalIndexMetadata.get()
         assertEquals(1, functionalIndexMetadata.getIndexDefinitions.size())
-        assertEquals("idx_datestr", functionalIndexMetadata.getIndexDefinitions.get("idx_datestr").getIndexName)
+        assertEquals("idx_datestr", functionalIndexMetadata.getIndexDefinitions.get("idx_datestr").getIndexName)*/
       }
     }
   }

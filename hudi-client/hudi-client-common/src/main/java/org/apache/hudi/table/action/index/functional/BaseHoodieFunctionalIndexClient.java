@@ -37,6 +37,10 @@ public abstract class BaseHoodieFunctionalIndexClient {
 
   /**
    * Register a functional index.
+   * Index definitions are stored in user-specified path or, by default, in .hoodie/.index_defs/index.json.
+   * For the first time, the index definition file will be created if not exists.
+   * For the second time, the index definition file will be updated if exists.
+   * Table Config is updated if necessary.
    */
   public void register(HoodieTableMetaClient metaClient, String indexName, String indexType, Map<String, Map<String, String>> columns, Map<String, String> options) {
     LOG.info("Registering index {} of using {}", indexName, indexType);

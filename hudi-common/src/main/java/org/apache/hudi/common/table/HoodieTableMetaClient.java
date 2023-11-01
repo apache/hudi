@@ -20,7 +20,6 @@ package org.apache.hudi.common.table;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.config.HoodieFunctionalIndexConfig;
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
@@ -140,7 +139,6 @@ public class HoodieTableMetaClient implements Serializable {
   private FileSystemRetryConfig fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().build();
   protected HoodieMetaserverConfig metaserverConfig;
   private HoodieTimeGeneratorConfig timeGeneratorConfig;
-  protected Option<HoodieFunctionalIndexConfig> functionalIndexConfig = Option.empty();
   private Option<HoodieFunctionalIndexMetadata> functionalIndexMetadata = Option.empty();
 
 
@@ -202,12 +200,18 @@ public class HoodieTableMetaClient implements Serializable {
                                              String indexType,
                                              Map<String, Map<String, String>> columns,
                                              Map<String, String> options) {
-    ValidationUtils.checkState(!functionalIndexMetadata.isPresent(), "Functional index metadata is already present");
+    ValidationUtils.checkState(
+        !functionalIndexMetadata.isPresent() || !functionalIndexMetadata.get().getIndexDefinitions().containsKey(indexName),
+        "Functional index metadata is already present");
     List<String> columnNames = new ArrayList<>(columns.keySet());
     HoodieFunctionalIndexDefinition functionalIndexDefinition = new HoodieFunctionalIndexDefinition(indexName, indexType, options.get("func"), columnNames, options);
-    functionalIndexMetadata = Option.of(new HoodieFunctionalIndexMetadata(Collections.singletonMap(indexName, functionalIndexDefinition)));
+    if (functionalIndexMetadata.isPresent()) {
+      functionalIndexMetadata.get().getIndexDefinitions().put(indexName, functionalIndexDefinition);
+    } else {
+      functionalIndexMetadata = Option.of(new HoodieFunctionalIndexMetadata(Collections.singletonMap(indexName, functionalIndexDefinition)));
+    }
     try {
-      fs.mkdirs(new Path(indexMetaPath).getParent());
+      //fs.mkdirs(new Path(indexMetaPath).getParent());
       FileIOUtils.createFileInPath(fs, new Path(indexMetaPath), Option.of(functionalIndexMetadata.get().toJson().getBytes(StandardCharsets.UTF_8)));
     } catch (IOException e) {
       throw new HoodieIOException("Could not write functional index metadata at path: " + indexMetaPath, e);
@@ -232,8 +236,14 @@ public class HoodieTableMetaClient implements Serializable {
     return Option.empty();
   }
 
-  public Option<HoodieFunctionalIndexConfig> getFunctionalIndexConfig() {
-    return functionalIndexConfig;
+  public void updateFunctionalIndexMetadata(HoodieFunctionalIndexMetadata newFunctionalIndexMetadata, String indexMetaPath) {
+    this.functionalIndexMetadata = Option.of(newFunctionalIndexMetadata);
+    try {
+      // update the index metadata file as well
+      FileIOUtils.createFileInPath(fs, new Path(indexMetaPath), Option.of(functionalIndexMetadata.get().toJson().getBytes(StandardCharsets.UTF_8)));
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not write functional index metadata at path: " + indexMetaPath, e);
+    }
   }
 
   public static HoodieTableMetaClient reload(HoodieTableMetaClient oldMetaClient) {
