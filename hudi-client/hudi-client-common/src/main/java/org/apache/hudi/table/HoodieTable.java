@@ -170,10 +170,6 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     return viewManager;
   }
 
-  public HoodieTableMetadata getMetadata() {
-    return metadata;
-  }
-
   /**
    * Upsert a batch of new records into Hoodie table at the supplied instantTime.
    * @param context    HoodieEngineContext
