@@ -2597,7 +2597,7 @@ public class HoodieWriteConfig extends HoodieConfig {
    * Returns whether the explicit guard of lock is required.
    */
   public boolean isLockRequired() {
-    return !isDefaultLockProvider() || getWriteConcurrencyMode().supportsOptimisticConcurrencyControl();
+    return !isDefaultLockProvider() || getWriteConcurrencyMode().supportsMultiWriter();
   }
 
   /**
@@ -2638,19 +2638,18 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean needResolveWriteConflict(WriteOperationType operationType) {
-    if (getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
-      // NB-CC don't need to resolve write conflict except bulk insert operation
-      return WriteOperationType.BULK_INSERT == operationType || !isNonBlockingConcurrencyControl();
-    } else {
-      // SINGLE_WRITER case don't need to resolve write conflict
-      return false;
+    WriteConcurrencyMode mode = getWriteConcurrencyMode();
+    switch (mode) {
+      case SINGLE_WRITER:
+        return false;
+      case OPTIMISTIC_CONCURRENCY_CONTROL:
+        return true;
+      case NON_BLOCKING_CONCURRENCY_CONTROL:
+        // NB-CC don't need to resolve write conflict except bulk insert operation
+        return WriteOperationType.BULK_INSERT == operationType;
+      default:
+        throw new IllegalArgumentException("Invalid WriteConcurrencyMode " + mode);
     }
-  }
-
-  public boolean isNonBlockingConcurrencyControl() {
-    return getTableType().equals(HoodieTableType.MERGE_ON_READ)
-        && getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()
-        && isSimpleBucketIndex();
   }
 
   public static class Builder {
@@ -3219,7 +3218,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       // needed to guard against any concurrent table write operations. If user has
       // not configured any lock provider, let's use the InProcess lock provider.
       return writeConfig.isMetadataTableEnabled() && writeConfig.areAnyTableServicesAsync()
-          && !writeConfig.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl();
+          && !writeConfig.getWriteConcurrencyMode().supportsMultiWriter();
     }
 
     private void autoAdjustConfigsForConcurrencyMode(boolean isLockProviderPropertySet) {
@@ -3236,16 +3235,16 @@ public class HoodieWriteConfig extends HoodieConfig {
       }
 
       // We check if "hoodie.cleaner.policy.failed.writes"
-      // is properly set to LAZY for optimistic concurrency control
-      String writeConcurrencyMode = writeConfig.getString(WRITE_CONCURRENCY_MODE);
-      if (WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name()
-          .equalsIgnoreCase(writeConcurrencyMode)) {
+      // is properly set to LAZY for multi-writers
+      WriteConcurrencyMode writeConcurrencyMode = writeConfig.getWriteConcurrencyMode();
+      if (writeConcurrencyMode.supportsMultiWriter()) {
         // In this case, we assume that the user takes care of setting the lock provider used
         writeConfig.setValue(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(),
             HoodieFailedWritesCleaningPolicy.LAZY.name());
-        LOG.info(String.format("Automatically set %s=%s since optimistic concurrency control is used",
+        LOG.info(String.format("Automatically set %s=%s since %s is used",
             HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(),
-            HoodieFailedWritesCleaningPolicy.LAZY.name()));
+            HoodieFailedWritesCleaningPolicy.LAZY.name(),
+            writeConcurrencyMode.name()));
       }
     }
 
@@ -3254,15 +3253,22 @@ public class HoodieWriteConfig extends HoodieConfig {
       // Ensure Layout Version is good
       new TimelineLayoutVersion(Integer.parseInt(layoutVersion));
       Objects.requireNonNull(writeConfig.getString(BASE_PATH));
+      WriteConcurrencyMode writeConcurrencyMode = writeConfig.getWriteConcurrencyMode();
       if (writeConfig.isEarlyConflictDetectionEnable()) {
-        checkArgument(writeConfig.getString(WRITE_CONCURRENCY_MODE)
-                .equalsIgnoreCase(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name()),
+        checkArgument(writeConcurrencyMode.isOptimisticConcurrencyControl(),
             "To use early conflict detection, set hoodie.write.concurrency.mode=OPTIMISTIC_CONCURRENCY_CONTROL");
       }
-      if (writeConfig.getString(WRITE_CONCURRENCY_MODE)
-          .equalsIgnoreCase(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name())) {
+      if (writeConcurrencyMode.supportsMultiWriter()) {
         checkArgument(!writeConfig.getString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY)
-            .equals(HoodieFailedWritesCleaningPolicy.EAGER.name()), "To enable optimistic concurrency control, set hoodie.cleaner.policy.failed.writes=LAZY");
+            .equals(HoodieFailedWritesCleaningPolicy.EAGER.name()),
+            String.format(
+                "To enable %s, set hoodie.cleaner.policy.failed.writes=LAZY",
+                writeConcurrencyMode.name()));
+      }
+      if (writeConcurrencyMode == WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL) {
+        checkArgument(
+            writeConfig.getTableType().equals(HoodieTableType.MERGE_ON_READ) && writeConfig.isSimpleBucketIndex(),
+            "Non-blocking concurrency control requires the MOR table with simple bucket index");
       }
 
       HoodieCleaningPolicy cleaningPolicy = HoodieCleaningPolicy.valueOf(writeConfig.getString(CLEANER_POLICY));

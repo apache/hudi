@@ -306,15 +306,14 @@ public class OptionsResolver {
    * Returns whether the writer txn should be guarded by lock.
    */
   public static boolean isLockRequired(Configuration conf) {
-    return conf.getBoolean(FlinkOptions.METADATA_ENABLED) || isOptimisticConcurrencyControl(conf);
+    return conf.getBoolean(FlinkOptions.METADATA_ENABLED) || isMultiWriter(conf);
   }
 
   /**
-   * Returns whether OCC is enabled.
+   * Returns whether multi-writer is enabled.
    */
-  public static boolean isOptimisticConcurrencyControl(Configuration conf) {
-    return conf.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue())
-        .equalsIgnoreCase(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
+  public static boolean isMultiWriter(Configuration conf) {
+    return WriteConcurrencyMode.supportsMultiWriter(conf.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()));
   }
 
   /**
@@ -371,7 +370,8 @@ public class OptionsResolver {
    * Returns whether this is non-blocking concurrency control.
    */
   public static boolean isNonBlockingConcurrencyControl(Configuration config) {
-    return isMorTable(config) && isSimpleBucketIndexType(config) && isOptimisticConcurrencyControl(config);
+    return config.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue())
+        .equalsIgnoreCase(WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL.name());
   }
 
   public static boolean isLazyFailedWritesCleanPolicy(Configuration conf) {
