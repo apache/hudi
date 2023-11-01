@@ -16,7 +16,7 @@
 #
 
 ARG IMAGE_TAG=spark313hive313
-FROM apachehudi/hudi-ci-bundle-validation-base:$IMAGE_TAG
+FROM ctty/hudi-test:$IMAGE_TAG
 
 # configure the stack
 ADD . .
