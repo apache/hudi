@@ -270,11 +270,39 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
             // stop at first savepoint commit
             return !firstSavepoint.isPresent() || compareTimestamps(s.getTimestamp(), LESSER_THAN, firstSavepoint.get().getTimestamp());
           }
-        }).filter(s -> earliestInstantToRetain
-            .map(instant -> compareTimestamps(s.getTimestamp(), LESSER_THAN, instant.getTimestamp()))
+        })
+        .filter(s -> earliestInstantToRetain.map(
+            instant -> compareTimestamps(s.getTimestamp(), LESSER_THAN, instant.getTimestamp())
+                // for the compaction c2 in metadata table triggered by commit c1 in data table,
+                // c2.getTimestamp() > c1.getTimestamp() because: c2 happens before c1 completes,
+                // and we are generating new instant time for c2 after c1 has started. Effectively,
+                // c1 is a commit that completes after compaction c2 in metadata table but the start time of c1 < c2.
+                // So, simply checking c1.getTimestamp() < c2.getTimestamp() is not enough. We need to check
+                // whether c1 is one of those instants that complete after compaction in metadata table.
+                && (table.isMetadataTable() || !isInstantModifiedAfterCompactionInMetadataTable(s)))
             .orElse(true));
     return instantToArchiveStream.limit(completedCommitsTimeline.countInstants() - minInstantsToKeep)
         .collect(Collectors.toList());
+  }
+
+  private boolean isInstantModifiedAfterCompactionInMetadataTable(HoodieInstant instant) {
+    return table.getMetaClient().getTableConfig().isMetadataTableAvailable() && getMetadataActiveTimeline()
+        .findInstantsModifiedAfterByCompletionTime(table.getMetadataTable().getLatestCompactionTime().get())
+        .getInstantsAsStream()
+        .anyMatch(i -> i.getTimestamp().equals(instant.getTimestamp()));
+  }
+
+  private HoodieActiveTimeline getMetadataActiveTimeline() {
+    if (table.isMetadataTable()) {
+      return table.getActiveTimeline();
+    }
+
+    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
+        .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(config.getBasePath()))
+        .setConf(metaClient.getHadoopConf())
+        .build();
+
+    return metadataMetaClient.getActiveTimeline();
   }
 
   private Stream<ActiveAction> getInstantsToArchive() throws IOException {
