@@ -96,9 +96,7 @@ public class RDDSimpleBucketBulkInsertPartitioner<T extends HoodieRecordPayload>
           // Generate a file that does not exist
           for (int i = 0; i < numBuckets; i++) {
             if (!existsBucketID.contains(i)) {
-              String fileIdPrefix = isNonBlockingConcurrencyControl
-                  ? BucketIdentifier.newBucketFileIdFixedSuffix(i)
-                  : BucketIdentifier.newBucketFileIdPrefix(i);
+              String fileIdPrefix = BucketIdentifier.newBucketFileIdPrefix(i, isNonBlockingConcurrencyControl);
               fileIdPrefixToBucketIndex.put(fileIdPrefix, fileIdPfxList.size());
               fileIdPfxList.add(fileIdPrefix);
               doAppend.add(false);
@@ -109,4 +107,3 @@ public class RDDSimpleBucketBulkInsertPartitioner<T extends HoodieRecordPayload>
         }));
   }
 }
-

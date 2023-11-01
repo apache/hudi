@@ -85,7 +85,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Tag("functional")
-public class TestHoodieSparkNBCC extends SparkClientFunctionalTestHarness {
+public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctionalTestHarness {
 
   String jsonSchema = "{\n"
       + "  \"type\": \"record\",\n"

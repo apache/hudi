@@ -90,6 +90,14 @@ public class BucketIdentifier implements Serializable {
     return String.format("%08d", n);
   }
 
+  public static String newBucketFileIdPrefix(int bucketId, boolean fixed) {
+    return fixed ? newBucketFileIdFixedSuffix(bucketId) : newBucketFileIdPrefix(bucketId);
+  }
+
+  public static String newBucketFileIdPrefix(String bucketId, boolean fixed) {
+    return fixed ? newBucketFileIdFixedSuffix(bucketId) : newBucketFileIdPrefix(bucketId);
+  }
+
   public static String newBucketFileIdPrefix(int bucketId) {
     return newBucketFileIdPrefix(bucketIdStr(bucketId));
   }
@@ -102,11 +110,11 @@ public class BucketIdentifier implements Serializable {
     return FSUtils.createNewFileIdPfx().replaceFirst(".{8}", bucketId);
   }
 
-  public static String newBucketFileIdFixedSuffix(String bucketId) {
+  private static String newBucketFileIdFixedSuffix(String bucketId) {
     return bucketId + CONSTANT_FILE_ID_SUFFIX;
   }
 
-  public static String newBucketFileIdFixedSuffix(int bucketId) {
+  private static String newBucketFileIdFixedSuffix(int bucketId) {
     return newBucketFileIdFixedSuffix(bucketIdStr(bucketId));
   }
 

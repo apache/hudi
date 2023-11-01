@@ -127,17 +127,9 @@ public class SparkBucketIndexPartitioner<T> extends
     if (fileIdOption.isPresent()) {
       return new BucketInfo(BucketType.UPDATE, fileIdOption.get(), partitionPath);
     } else {
-      BucketType bucketType;
-      String fileIdPrefix;
-      if (isNonBlockingConcurrencyControl) {
-        // Always write into log file instead of base file if using NB-CC
-        bucketType = BucketType.UPDATE;
-        // Creates new file group id with fixed suffix if using NB-CC
-        fileIdPrefix = BucketIdentifier.newBucketFileIdFixedSuffix(bucketId);
-      } else {
-        bucketType = BucketType.INSERT;
-        fileIdPrefix = BucketIdentifier.newBucketFileIdPrefix(bucketId);
-      }
+      // Always write into log file instead of base file if using NB-CC
+      BucketType bucketType = isNonBlockingConcurrencyControl ? BucketType.UPDATE : BucketType.INSERT;
+      String fileIdPrefix = BucketIdentifier.newBucketFileIdPrefix(bucketId, isNonBlockingConcurrencyControl);
       return new BucketInfo(bucketType, fileIdPrefix, partitionPath);
     }
   }

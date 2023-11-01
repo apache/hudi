@@ -377,8 +377,7 @@ public class OptionsResolver {
    * Returns whether this is non-blocking concurrency control.
    */
   public static boolean isNonBlockingConcurrencyControl(Configuration config) {
-    return config.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue())
-        .equalsIgnoreCase(WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL.name());
+    return WriteConcurrencyMode.isNonBlockingConcurrencyControl(config.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()));
   }
 
   public static boolean isLazyFailedWritesCleanPolicy(Configuration conf) {
