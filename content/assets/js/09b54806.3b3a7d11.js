@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[66652],{61745:i=>{i.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/commit-notification","name":"commit notification","count":1,"permalink":"/videos/tags/commit-notification"}')}}]);
