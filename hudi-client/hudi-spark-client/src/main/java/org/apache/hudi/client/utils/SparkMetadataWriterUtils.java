@@ -102,13 +102,13 @@ public class SparkMetadataWriterUtils {
     return sqlContext.baseRelationToDataFrame(relation);
   }
 
-  public static <T extends Comparable<T>> HoodieColumnRangeMetadata<Comparable> computeColumnRangeMetadata(Dataset<Row> baseFileDf,
+  public static <T extends Comparable<T>> HoodieColumnRangeMetadata<Comparable> computeColumnRangeMetadata(Dataset<Row> rowDataset,
                                                                                                            String columnName,
                                                                                                            String filePath,
                                                                                                            long fileSize) {
     long totalSize = fileSize;
     // Get nullCount, minValue, and maxValue
-    Dataset<Row> aggregated = baseFileDf.agg(
+    Dataset<Row> aggregated = rowDataset.agg(
         functions.count(functions.when(functions.col(columnName).isNull(), 1)).alias("nullCount"),
         functions.min(columnName).alias("minValue"),
         functions.max(columnName).alias("maxValue"),

@@ -41,6 +41,7 @@ import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieFunctionalIndexDefinition;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -1856,5 +1857,11 @@ public class HoodieTableMetadataUtil {
         }
       };
     });
+  }
+
+  public static Schema getProjectedSchemaForFunctionalIndex(HoodieFunctionalIndexDefinition indexDefinition, HoodieTableMetaClient metaClient) throws Exception {
+    TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
+    Schema tableSchema = schemaResolver.getTableAvroSchema();
+    return HoodieAvroUtils.getSchemaForFields(tableSchema, indexDefinition.getSourceFields());
   }
 }
