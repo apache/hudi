@@ -246,8 +246,6 @@ public class TableCommand {
           help = "Valid in MOR to COW case. Before changing to COW, need to perform a full compaction to compact all log files. Default true") final boolean enableCompaction,
       @ShellOption(value = {"--parallelism"}, defaultValue = "3",
           help = "Valid in MOR to COW case. Parallelism for hoodie compaction") final String parallelism,
-      @ShellOption(value = "--schemaFilePath", defaultValue = "",
-          help = "Valid in MOR to COW case. Path for Avro schema file") final String schemaFilePath,
       @ShellOption(value = "--sparkMaster", defaultValue = "local",
           help = "Valid in MOR to COW case. Spark Master") String master,
       @ShellOption(value = "--sparkMemory", defaultValue = "4G",
@@ -303,7 +301,7 @@ public class TableCommand {
         for (int i = 0; i < pendingCompactionInstants.size(); i++) {
           HoodieInstant compactionInstant = pendingCompactionInstants.get(i);
           LOG.info("compact {} instant {}", i + 1, compactionInstant);
-          String result = new CompactionCommand().compact(parallelism, schemaFilePath, master, sparkMemory, retry, compactionInstant.getTimestamp(), propsFilePath, configs);
+          String result = new CompactionCommand().compact(parallelism, "", master, sparkMemory, retry, compactionInstant.getTimestamp(), propsFilePath, configs);
           LOG.info("compact instant {} result: {}", compactionInstant, result);
           if (!result.startsWith(CompactionCommand.COMPACTION_EXE_SUCCESSFUL)) {
             throw new HoodieException(String.format("Compact %s failed", compactionInstant));
@@ -336,7 +334,7 @@ public class TableCommand {
             if (!compactionNumDeltaExist) {
               newConfigs.add(String.format("%s=%s", HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1"));
             }
-            String result = new CompactionCommand().compact(parallelism, schemaFilePath, master, sparkMemory, retry, propsFilePath, newConfigs.toArray(new String[0]));
+            String result = new CompactionCommand().compact(parallelism, "", master, sparkMemory, retry, propsFilePath, newConfigs.toArray(new String[0]));
             LOG.info("Full compaction result: {}", result);
             if (!result.equals(CompactionCommand.COMPACTION_SCH_EXE_SUCCESSFUL)) {
               throw new HoodieException("Change table type to COW: schedule and execute the full compaction failed");
