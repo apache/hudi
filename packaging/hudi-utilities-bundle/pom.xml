@@ -123,6 +123,7 @@
                   <include>com.github.davidmoten:guava-mini</include>
                   <include>com.github.davidmoten:hilbert-curve</include>
                   <include>com.github.ben-manes.caffeine:caffeine</include>
+                  <!-- SPARK-43489 Spark 3.5+ has marked protobuf as provided -->
                   <include>com.google.protobuf:protobuf-java</include>
                   <include>com.twitter:bijection-avro_${scala.binary.version}</include>
                   <include>com.twitter:bijection-core_${scala.binary.version}</include>
@@ -226,6 +227,10 @@
                 <relocation>
                   <pattern>org.apache.httpcomponents.</pattern>
                   <shadedPattern>org.apache.hudi.aws.org.apache.httpcomponents.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.google.protobuf.</pattern>
+                  <shadedPattern>org.apache.hudi.com.google.protobuf.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.roaringbitmap.</pattern>
