@@ -85,55 +85,57 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
   }
 
   test("Test Create Functional Index") {
-    withTempDir { tmp =>
-      Seq("cow", "mor").foreach { tableType =>
-        val databaseName = "default"
-        val tableName = generateTableName
-        val basePath = s"${tmp.getCanonicalPath}/$tableName"
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  ts long
-             |) using hudi
-             | options (
-             |  primaryKey ='id',
-             |  type = '$tableType',
-             |  preCombineField = 'ts'
-             | )
-             | partitioned by(ts)
-             | location '$basePath'
+    if (HoodieSparkUtils.gteqSpark3_2) {
+      withTempDir { tmp =>
+        Seq("cow", "mor").foreach { tableType =>
+          val databaseName = "default"
+          val tableName = generateTableName
+          val basePath = s"${tmp.getCanonicalPath}/$tableName"
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | options (
+               |  primaryKey ='id',
+               |  type = '$tableType',
+               |  preCombineField = 'ts'
+               | )
+               | partitioned by(ts)
+               | location '$basePath'
        """.stripMargin)
-        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
-        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
+          spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+          spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
+          spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
 
-        val sqlParser: ParserInterface = spark.sessionState.sqlParser
-        val analyzer: Analyzer = spark.sessionState.analyzer
+          val sqlParser: ParserInterface = spark.sessionState.sqlParser
+          val analyzer: Analyzer = spark.sessionState.analyzer
 
-        var logicalPlan = sqlParser.parsePlan(s"show indexes from default.$tableName")
-        var resolvedLogicalPlan = analyzer.execute(logicalPlan)
-        assertTableIdentifier(resolvedLogicalPlan.asInstanceOf[ShowIndexesCommand].table, databaseName, tableName)
+          var logicalPlan = sqlParser.parsePlan(s"show indexes from default.$tableName")
+          var resolvedLogicalPlan = analyzer.execute(logicalPlan)
+          assertTableIdentifier(resolvedLogicalPlan.asInstanceOf[ShowIndexesCommand].table, databaseName, tableName)
 
-        val createIndexSql = s"create index idx_datestr on $tableName using column_stats(ts) options(func='from_unixtime', format='yyyy-MM-dd')"
-        logicalPlan = sqlParser.parsePlan(createIndexSql)
-        resolvedLogicalPlan = analyzer.execute(logicalPlan)
-        assertTableIdentifier(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].table, databaseName, tableName)
-        assertResult("idx_datestr")(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].indexName)
-        assertResult("column_stats")(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].indexType)
-        assertResult(false)(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].ignoreIfExists)
+          val createIndexSql = s"create index idx_datestr on $tableName using column_stats(ts) options(func='from_unixtime', format='yyyy-MM-dd')"
+          logicalPlan = sqlParser.parsePlan(createIndexSql)
+          resolvedLogicalPlan = analyzer.execute(logicalPlan)
+          assertTableIdentifier(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].table, databaseName, tableName)
+          assertResult("idx_datestr")(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].indexName)
+          assertResult("column_stats")(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].indexType)
+          assertResult(false)(resolvedLogicalPlan.asInstanceOf[CreateIndexCommand].ignoreIfExists)
 
-        spark.sql(createIndexSql)
-        val metaClient = HoodieTableMetaClient.builder()
-          .setBasePath(basePath)
-          .setConf(spark.sessionState.newHadoopConf())
-          .build()
-        assertTrue(metaClient.getFunctionalIndexMetadata.isPresent)
-        val functionalIndexMetadata = metaClient.getFunctionalIndexMetadata.get()
-        assertEquals(1, functionalIndexMetadata.getIndexDefinitions.size())
-        assertEquals("func_index_idx_datestr", functionalIndexMetadata.getIndexDefinitions.get("func_index_idx_datestr").getIndexName)
+          spark.sql(createIndexSql)
+          val metaClient = HoodieTableMetaClient.builder()
+            .setBasePath(basePath)
+            .setConf(spark.sessionState.newHadoopConf())
+            .build()
+          assertTrue(metaClient.getFunctionalIndexMetadata.isPresent)
+          val functionalIndexMetadata = metaClient.getFunctionalIndexMetadata.get()
+          assertEquals(1, functionalIndexMetadata.getIndexDefinitions.size())
+          assertEquals("func_index_idx_datestr", functionalIndexMetadata.getIndexDefinitions.get("func_index_idx_datestr").getIndexName)
+        }
       }
     }
   }
