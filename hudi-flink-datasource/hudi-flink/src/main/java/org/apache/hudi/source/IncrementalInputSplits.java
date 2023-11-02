@@ -269,13 +269,14 @@ public class IncrementalInputSplits implements Serializable {
     Result hollowSplits = getHollowInputSplits(metaClient, metaClient.getHadoopConf(), issuedInstant, issuedOffset, commitTimeline, cdcEnabled);
 
     List<HoodieInstant> instants = filterInstantsWithRange(commitTimeline, issuedInstant);
+    final String startInstant = instants.size() == 0 ? null : instants.get(0).getTimestamp();
     // get the latest instant that satisfies condition
     final String endInstant = instants.size() == 0 ? null : instants.get(instants.size() - 1).getTimestamp();
     final InstantRange instantRange;
     if (endInstant != null) {
       // when cdc is enabled, returns instant range with nullable boundary
       // to filter the reading instants on the timeline
-      instantRange = getInstantRange(issuedInstant, endInstant, cdcEnabled);
+      instantRange = getInstantRange(issuedInstant, startInstant, endInstant, cdcEnabled);
     } else if (hollowSplits.isEmpty()) {
       LOG.info("No new instant found for the table under path " + path + ", skip reading");
       return Result.EMPTY;
@@ -407,21 +408,22 @@ public class IncrementalInputSplits implements Serializable {
   }
 
   @Nullable
-  private InstantRange getInstantRange(String issuedInstant, String instantToIssue, boolean nullableBoundary) {
+  private InstantRange getInstantRange(String issuedInstant, String startInstant, String instantToIssue, boolean nullableBoundary) {
     if (issuedInstant != null) {
       // the streaming reader may record the last issued instant, if the issued instant is present,
       // the instant range should be: (issued instant, the latest instant].
       return InstantRange.builder().startInstant(issuedInstant).endInstant(instantToIssue)
           .nullableBoundary(nullableBoundary).rangeType(InstantRange.RangeType.OPEN_CLOSE).build();
     } else if (this.conf.getOptional(FlinkOptions.READ_START_COMMIT).isPresent()) {
-      // first time consume and has a start commit
+      // first time consume , consumes form the earliest commit or consumes from a start commit.
       final String startCommit = this.conf.getString(FlinkOptions.READ_START_COMMIT);
       return startCommit.equalsIgnoreCase(FlinkOptions.START_COMMIT_EARLIEST)
-          ? null
+          ? InstantRange.builder().startInstant(startInstant).endInstant(instantToIssue)
+           .nullableBoundary(nullableBoundary).rangeType(InstantRange.RangeType.CLOSE_CLOSE).build()
           : InstantRange.builder().startInstant(startCommit).endInstant(instantToIssue)
-          .nullableBoundary(nullableBoundary).rangeType(InstantRange.RangeType.CLOSE_CLOSE).build();
+           .nullableBoundary(nullableBoundary).rangeType(InstantRange.RangeType.CLOSE_CLOSE).build();
     } else {
-      // first time consume and no start commit, consumes the latest incremental data set.
+      // first time consume, consumes form the latest commit.
       return InstantRange.builder().startInstant(instantToIssue).endInstant(instantToIssue)
           .nullableBoundary(nullableBoundary).rangeType(InstantRange.RangeType.CLOSE_CLOSE).build();
     }
