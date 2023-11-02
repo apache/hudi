@@ -179,6 +179,12 @@ public class HoodieSparkFunctionalIndex implements HoodieFunctionalIndex<Column,
           throw new IllegalArgumentException("SPLIT requires 1 column");
         }
         return functions.split(columns.get(0), options.get("pattern"));
+      }),
+      Pair.of("identity", (columns, options) -> {
+        if (columns.size() != 1) {
+          throw new IllegalArgumentException("IDENTITY requires 1 column");
+        }
+        return columns.get(0);
       })
   );
 

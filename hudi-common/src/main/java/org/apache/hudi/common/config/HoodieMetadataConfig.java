@@ -320,7 +320,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".index.functional.file.group.count")
       .defaultValue(2)
       .markAdvanced()
-      .sinceVersion("0.11.0")
+      .sinceVersion("1.0.0")
       .withDocumentation("Metadata functional index partition file group count.");
 
   public static final ConfigProperty<Integer> FUNCTIONAL_INDEX_PARALLELISM = ConfigProperty
