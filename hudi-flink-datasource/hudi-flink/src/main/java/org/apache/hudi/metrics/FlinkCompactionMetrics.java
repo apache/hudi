@@ -70,7 +70,7 @@ public class FlinkCompactionMetrics extends FlinkWriteMetrics {
    * Flag saying whether the compaction is completed or been rolled back.
    *
    */
-  private long compactionFailedState;
+  private long compactionStateSignal;
 
   public FlinkCompactionMetrics(MetricGroup metricGroup) {
     super(metricGroup, HoodieTimeline.COMPACTION_ACTION);
@@ -82,7 +82,7 @@ public class FlinkCompactionMetrics extends FlinkWriteMetrics {
     metricGroup.gauge(getMetricsName(actionType, "pendingCompactionCount"), () -> pendingCompactionCount);
     metricGroup.gauge(getMetricsName(actionType, "compactionDelay"), () -> compactionDelay);
     metricGroup.gauge(getMetricsName(actionType, "compactionCost"), () -> compactionCost);
-    metricGroup.gauge(getMetricsName(actionType, "compactionFailedState"), () -> compactionFailedState);
+    metricGroup.gauge(getMetricsName(actionType, "compactionStateSignal"), () -> compactionStateSignal);
   }
 
   public void setPendingCompactionCount(int pendingCompactionCount) {
@@ -111,11 +111,11 @@ public class FlinkCompactionMetrics extends FlinkWriteMetrics {
   }
 
   public void markCompactionCompleted() {
-    this.compactionFailedState = 0L;
+    this.compactionStateSignal = 0L;
   }
 
   public void markCompactionRolledBack() {
-    this.compactionFailedState = 1L;
+    this.compactionStateSignal = 1L;
   }
 
 }
