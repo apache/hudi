@@ -714,6 +714,61 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
+  test("Test Call run_clustering with limit parameter") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  c1 int,
+           |  c2 string,
+           |  c3 double
+           |) using hudi
+           | options (
+           |  primaryKey = 'c1',
+           |  type = 'cow',
+           |  hoodie.metadata.enable = 'true',
+           |  hoodie.metadata.index.column.stats.enable = 'true',
+           |  hoodie.enable.data.skipping = 'true',
+           |  hoodie.datasource.write.operation = 'insert'
+           | )
+           | location '$basePath'
+     """.stripMargin)
+
+      val conf = new Configuration
+      val metaClient = HoodieTableMetaClient.builder.setConf(conf).setBasePath(basePath).build
+      assert(0 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
+      assert(metaClient.getActiveTimeline.filterPendingReplaceTimeline().empty())
+
+      writeRecords(2, 4, 0, basePath, Map("hoodie.avro.schema.validate" -> "false"))
+      spark.sql(s"call run_clustering(table => '$tableName', op => 'schedule')")
+
+      writeRecords(2, 4, 0, basePath, Map("hoodie.avro.schema.validate" -> "false"))
+      spark.sql(s"call run_clustering(table => '$tableName', op => 'schedule')")
+
+      metaClient.reloadActiveTimeline()
+      assert(0 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
+      assert(2 == metaClient.getActiveTimeline.filterPendingReplaceTimeline().getInstants.size())
+
+      spark.sql(s"call run_clustering(table => '$tableName', op => 'execute')")
+      metaClient.reloadActiveTimeline()
+      assert(2 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
+      assert(0 == metaClient.getActiveTimeline.filterPendingReplaceTimeline().getInstants.size())
+
+      writeRecords(2, 4, 0, basePath, Map("hoodie.avro.schema.validate" -> "false"))
+      spark.sql(s"call run_clustering(table => '$tableName', op => 'schedule')")
+
+      writeRecords(2, 4, 0, basePath, Map("hoodie.avro.schema.validate" -> "false"))
+      spark.sql(s"call run_clustering(table => '$tableName', op => 'schedule')")
+
+      spark.sql(s"call run_clustering(table => '$tableName', op => 'execute', limit => 1)")
+      metaClient.reloadActiveTimeline()
+      assert(3 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
+      assert(1 == metaClient.getActiveTimeline.filterPendingReplaceTimeline().getInstants.size())
+    }
+  }
+
   def avgRecord(commitTimeline: HoodieTimeline): Long = {
     var totalByteSize = 0L
     var totalRecordsCount = 0L
