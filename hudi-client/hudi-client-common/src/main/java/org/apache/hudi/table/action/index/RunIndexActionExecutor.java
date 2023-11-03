@@ -49,6 +49,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -71,6 +72,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.RESTORE_ACTIO
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataPartition;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightAndCompletedMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetadataPartitions;
@@ -170,7 +172,8 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
               .map(info -> new HoodieIndexPartitionInfo(
                   info.getVersion(),
                   info.getMetadataPartitionPath(),
-                  currentCaughtupInstant))
+                  currentCaughtupInstant,
+                  Collections.emptyMap()))
               .collect(Collectors.toList());
         } catch (Exception e) {
           throw new HoodieMetadataException("Failed to index partition " + Arrays.toString(indexPartitionInfos.stream()
@@ -187,7 +190,8 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
             .map(info -> new HoodieIndexPartitionInfo(
                 info.getVersion(),
                 info.getMetadataPartitionPath(),
-                indexUptoInstant))
+                indexUptoInstant,
+                Collections.emptyMap()))
             .collect(Collectors.toList());
       }
 
@@ -315,7 +319,10 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
   }
 
   private void updateMetadataPartitionsTableConfig(HoodieTableMetaClient metaClient, Set<String> metadataPartitions) {
-    metadataPartitions.forEach(metadataPartition -> metaClient.getTableConfig().setMetadataPartitionState(
-        metaClient, MetadataPartitionType.valueOf(metadataPartition.toUpperCase(Locale.ROOT)), true));
+    metadataPartitions.forEach(metadataPartition -> {
+      MetadataPartitionType partitionType = metadataPartition.startsWith(PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX) ? MetadataPartitionType.FUNCTIONAL_INDEX :
+          MetadataPartitionType.valueOf(metadataPartition.toUpperCase(Locale.ROOT));
+      metaClient.getTableConfig().setMetadataPartitionState(metaClient, partitionType, true);
+    });
   }
 }
