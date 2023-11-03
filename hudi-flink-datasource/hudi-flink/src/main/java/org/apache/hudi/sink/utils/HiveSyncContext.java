@@ -78,12 +78,9 @@ public class HiveSyncContext {
   public HiveSyncTool hiveSyncTool() {
     HiveSyncMode syncMode = HiveSyncMode.of(props.getProperty(HIVE_SYNC_MODE.key()));
     if (syncMode == HiveSyncMode.GLUE) {
-      if (ReflectionUtils.hasConstructor(AWS_GLUE_CATALOG_SYNC_TOOL_CLASS,
-          new Class<?>[] {Properties.class, org.apache.hadoop.conf.Configuration.class})) {
-        return ((HiveSyncTool) ReflectionUtils.loadClass(AWS_GLUE_CATALOG_SYNC_TOOL_CLASS,
-            new Class<?>[] {Properties.class, org.apache.hadoop.conf.Configuration.class},
-            props, hiveConf));
-      }
+      return ((HiveSyncTool) ReflectionUtils.loadClass(AWS_GLUE_CATALOG_SYNC_TOOL_CLASS,
+          new Class<?>[] {Properties.class, org.apache.hadoop.conf.Configuration.class},
+          props, hiveConf));
     }
     return new HiveSyncTool(props, hiveConf);
   }
