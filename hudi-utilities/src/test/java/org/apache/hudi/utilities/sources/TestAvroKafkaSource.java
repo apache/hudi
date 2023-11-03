@@ -126,11 +126,10 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
   }
 
   void sendMessagesToKafkaWithNullKafkaValue(String topic, int count, int numPartitions) {
-    List<GenericRecord> genericRecords = dataGen.generateGenericRecords(count);
     Properties config = getProducerProperties();
     try (Producer<String, byte[]> producer = new KafkaProducer<>(config)) {
-      for (int i = 0; i < genericRecords.size(); i++) {
-        // null kafka key
+      for (int i = 0; i < count; i++) {
+        // null kafka value
         producer.send(new ProducerRecord<>(topic, i % numPartitions, "key", null));
       }
     }
