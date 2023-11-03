@@ -18,9 +18,9 @@
 
 package org.apache.hudi.sink.utils;
 
-import org.apache.hudi.aws.sync.AwsGlueCatalogSyncTool;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.hive.HiveSyncTool;
@@ -75,9 +75,15 @@ public class HiveSyncContext {
   public HiveSyncTool hiveSyncTool() {
     HiveSyncMode syncMode = HiveSyncMode.of(props.getProperty(HIVE_SYNC_MODE.key()));
     if (syncMode == HiveSyncMode.GLUE) {
-      return new AwsGlueCatalogSyncTool(props, hiveConf);
+      return loadAwsGlueCatalogSyncTool();
     }
     return new HiveSyncTool(props, hiveConf);
+  }
+
+  private HiveSyncTool loadAwsGlueCatalogSyncTool() {
+    Class<?>[] argTypes = {Properties.class, org.apache.hadoop.conf.Configuration.class};
+    return (HiveSyncTool) ReflectionUtils.loadClass("org.apache.hudi.aws.sync.AwsGlueCatalogSyncTool",
+            argTypes, props, hiveConf);
   }
 
   public static HiveSyncContext create(Configuration conf, SerializableConfiguration serConf) {
