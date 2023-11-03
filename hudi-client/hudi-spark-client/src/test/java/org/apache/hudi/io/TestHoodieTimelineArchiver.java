@@ -571,7 +571,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
 
     // do ingestion and trigger archive actions here.
     for (int i = 1; i < 19; i++) {
-      testTable.doWriteOperation("0000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+      testTable.doWriteOperation(
+          metaClient.createNewInstantTime(), WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
       archiveAndGetCommitsList(writeConfig);
     }
     // now we have version 6, 7, 8, 9 version of snapshots
@@ -1219,35 +1220,6 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
         getActiveCommitInstants(
             Arrays.asList("00000011", "00000012", "00000013", "00000014")),
         commitsAfterArchival);
-  }
-
-  @Test
-  public void testArchiveCommitsWithCompactionCommitInMetadataTableTimeline() throws Exception {
-    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 4, 5, 20);
-    int startInstantTime = 100;
-    int numCommits = 15;
-    int numExpectedArchived = 6; // "100" till "105" should be archived in this case
-
-    for (int i = startInstantTime; i < startInstantTime + numCommits; i++) {
-      HoodieTestDataGenerator.createCommitFile(basePath, Integer.toString(i), wrapperFs.getConf());
-    }
-    // Simulate a compaction commit in metadata table timeline
-    // so the archival in data table can happen
-    createCompactionCommitInMetadataTable(hadoopConf, wrapperFs, basePath, "105");
-
-    HoodieTable table = HoodieSparkTable.create(writeConfig, context);
-    HoodieTimelineArchiver archiveLog = new HoodieTimelineArchiver(writeConfig, table);
-
-    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-    assertEquals(numCommits, timeline.countInstants(), String.format("Loaded %d commits and the count should match", numCommits));
-    assertTrue(archiveLog.archiveIfRequired(context));
-    timeline = metaClient.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
-    assertEquals(numCommits - numExpectedArchived, timeline.countInstants(),
-        "Since we have a compaction commit of 105 in metadata table timeline, we should never archive any commit after that");
-    for (int i = startInstantTime + numExpectedArchived; i < startInstantTime + numCommits; i++) {
-      assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, Integer.toString(i))),
-          String.format("Commit %d should not be archived", i));
-    }
   }
 
   @ParameterizedTest

@@ -56,7 +56,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.client.utils.ArchivalUtils.getMinAndMaxInstantsToKeep;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.compareTimestamps;
 
@@ -213,8 +212,12 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
           return Collections.emptyList();
         } else {
           LOG.info("Limiting archiving of instants to latest compaction on metadata table at " + latestCompactionTime.get());
-          earliestInstantToRetainCandidates.add(Option.of(new HoodieInstant(
-              HoodieInstant.State.COMPLETED, COMPACTION_ACTION, latestCompactionTime.get())));
+          HoodieInstant earliestInstantAfterCompactionInMetadataTable =
+              getMetadataActiveTimeline().findInstantsModifiedAfterByCompletionTime(latestCompactionTime.get()).firstInstant().get();
+          earliestInstantToRetainCandidates.add(
+              completedCommitsTimeline.getInstantsAsStream()
+                  .filter(instant -> instant.getTimestamp().equals(earliestInstantAfterCompactionInMetadataTable.getTimestamp()))
+                  .findAny().map(Option::of).orElse(Option.empty()));
         }
       } catch (Exception e) {
         throw new HoodieException("Error limiting instant archival based on metadata table", e);
@@ -272,24 +275,10 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
           }
         })
         .filter(s -> earliestInstantToRetain.map(
-            instant -> compareTimestamps(s.getTimestamp(), LESSER_THAN, instant.getTimestamp())
-                // for the compaction c2 in metadata table triggered by commit c1 in data table,
-                // c2.getTimestamp() > c1.getTimestamp() because: c2 happens before c1 completes,
-                // and we are generating new instant time for c2 after c1 has started. Effectively,
-                // c1 is a commit that completes after compaction c2 in metadata table but the start time of c1 < c2.
-                // So, simply checking c1.getTimestamp() < c2.getTimestamp() is not enough. We need to check
-                // whether c1 is one of those instants that complete after compaction in metadata table.
-                && (table.isMetadataTable() || !isInstantModifiedAfterCompactionInMetadataTable(s)))
+            instant -> compareTimestamps(s.getTimestamp(), LESSER_THAN, instant.getTimestamp()))
             .orElse(true));
     return instantToArchiveStream.limit(completedCommitsTimeline.countInstants() - minInstantsToKeep)
         .collect(Collectors.toList());
-  }
-
-  private boolean isInstantModifiedAfterCompactionInMetadataTable(HoodieInstant instant) {
-    return table.getMetaClient().getTableConfig().isMetadataTableAvailable() && getMetadataActiveTimeline()
-        .findInstantsModifiedAfterByCompletionTime(table.getMetadataTable().getLatestCompactionTime().get())
-        .getInstantsAsStream()
-        .anyMatch(i -> i.getTimestamp().equals(instant.getTimestamp()));
   }
 
   private HoodieActiveTimeline getMetadataActiveTimeline() {
