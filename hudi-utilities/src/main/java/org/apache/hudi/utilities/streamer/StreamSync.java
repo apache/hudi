@@ -292,7 +292,8 @@ public class StreamSync implements Serializable, Closeable {
     this.transformer = UtilHelpers.createTransformer(Option.ofNullable(cfg.transformerClassNames),
         Option.ofNullable(schemaProvider).map(SchemaProvider::getSourceSchema), this.errorTableWriter.isPresent());
     if (this.cfg.operation == WriteOperationType.BULK_INSERT && source.getSourceType() == Source.SourceType.ROW
-        && this.props.getBoolean("hoodie.datasource.write.row.writer.enable", false)) {
+        && this.props.getBoolean(DataSourceWriteOptions.ENABLE_ROW_WRITER().key(), false)) {
+      // enable row writer only when operation is BULK_INSERT, and source is ROW type and if row writer is not explicitly disabled.
       this.useRowWriter = true;
       if (props.getBoolean(HoodieStreamerConfig.SAMPLE_WRITES_ENABLED.key(), SAMPLE_WRITES_ENABLED.defaultValue())) {
         throw new HoodieException("Sample writes estimation is not yet supported with row writer");
