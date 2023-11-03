@@ -18,18 +18,14 @@
 package org.apache.spark.sql.execution.datasources.parquet
 
 import kotlin.NotImplementedError
-import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.MergeOnReadSnapshotRelation.createPartitionedFile
-import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieLogFile, HoodieRecord, HoodieRecordMerger}
-import org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGER_STRATEGY
+import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieLogFile, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.read.{HoodieFileGroupReader, HoodieFileGroupRecordBuffer, HoodieKeyBasedFileGroupRecordBuffer, HoodiePositionBasedFileGroupRecordBuffer}
-import org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys
+import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.{HoodieBaseRelation, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, MergeOnReadSnapshotRelation, PartitionFileSliceMapping, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.spark.sql.SparkSession
@@ -160,22 +156,6 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
       preMergeBaseFileReader, partitionValues)
     val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
       .builder().setConf(hadoopConf).setBasePath(tableState.tablePath).build
-    val avroSchema: Schema = HoodieBaseRelation.convertToAvroSchema(requiredSchemaWithMandatory, tableName)
-    val filePath: String = if (baseFile != null) baseFile.getPath else logFiles.head.toString
-    val partitionNameOpt: HOption[String] = HOption.of(FSUtils.getRelativePartitionPath(
-      new Path(tableState.tablePath), new Path(filePath).getParent))
-    val partitionPathFieldOpt = metaClient.getTableConfig.getPartitionFields
-    val recordMerger: HoodieRecordMerger = readerContext.getRecordMerger(getStringWithAltKeys(
-      new TypedProperties, RECORD_MERGER_STRATEGY, RECORD_MERGER_STRATEGY.defaultValue))
-    val recordBuffer: HoodieFileGroupRecordBuffer[InternalRow] = if (shouldUseRecordPosition) {
-      new HoodiePositionBasedFileGroupRecordBuffer[InternalRow](
-        readerContext, avroSchema, avroSchema, partitionNameOpt, partitionPathFieldOpt,
-        recordMerger, new TypedProperties, metaClient)
-    } else {
-      new HoodieKeyBasedFileGroupRecordBuffer[InternalRow](
-        readerContext, avroSchema, avroSchema, partitionNameOpt, partitionPathFieldOpt,
-        recordMerger, new TypedProperties, metaClient)
-    }
     val reader = new HoodieFileGroupReader[InternalRow](
       readerContext,
       hadoopConf,
@@ -184,11 +164,10 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
       HOption.of(baseFile),
       HOption.of(logFiles.map(f => f.getPath.toString).asJava),
       HoodieBaseRelation.convertToAvroSchema(requiredSchemaWithMandatory, tableName),
-      new TypedProperties(),
+      metaClient.getTableConfig.getProps,
       start,
       length,
-      recordBuffer
-    )
+      shouldUseRecordPosition)
     reader.initRecordIterators()
     reader.getClosableIterator.asInstanceOf[java.util.Iterator[InternalRow]].asScala
   }

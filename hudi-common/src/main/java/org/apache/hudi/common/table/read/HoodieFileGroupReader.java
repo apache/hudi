@@ -23,13 +23,17 @@ import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.EmptyIterator;
 import org.apache.hudi.exception.HoodieIOException;
@@ -41,9 +45,12 @@ import org.apache.hadoop.fs.Path;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGER_STRATEGY;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
@@ -82,19 +89,14 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                                HoodieTableQueryType queryType,
                                Option<String> instantTime,
                                Option<String> startInstantTime,
-                               HoodieFileGroupRecordBuffer<T> recordBuffer) {
+                               boolean shouldUseRecordPosition) throws Exception {
     // This constructor is a placeholder now to allow automatically fetching the correct list of
     // base and log files for a file group.
     // Derive base and log files and call the corresponding constructor.
-    this.readerContext = readerContext;
-    this.hadoopConf = metaClient.getHadoopConf();
-    this.baseFilePath = Option.empty();
-    this.logFilePathList = Option.empty();
-    this.props = props;
-    this.start = 0;
-    this.length = Long.MAX_VALUE;
-    this.baseFileIterator = new EmptyIterator<>();
-    this.recordBuffer = recordBuffer;
+    this(readerContext, metaClient.getHadoopConf(), metaClient.getBasePathV2().toString(),
+        instantTime.get(), Option.empty(), Option.empty(),
+        new TableSchemaResolver(metaClient).getTableAvroSchema(),
+        props, 0, Long.MAX_VALUE, shouldUseRecordPosition);
   }
 
   public HoodieFileGroupReader(HoodieReaderContext<T> readerContext,
@@ -107,7 +109,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                                TypedProperties props,
                                long start,
                                long length,
-                               HoodieFileGroupRecordBuffer<T> recordBuffer) {
+                               boolean shouldUseRecordPosition) {
     this.readerContext = readerContext;
     this.hadoopConf = hadoopConf;
     this.baseFilePath = baseFilePath;
@@ -122,7 +124,25 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.readerState.baseFileAvroSchema = avroSchema;
     this.readerState.logRecordAvroSchema = avroSchema;
     this.readerState.mergeProps.putAll(props);
-    this.recordBuffer = recordBuffer;
+    String filePath = baseFilePath.isPresent()
+        ? baseFilePath.get().getPath()
+        : logFilePathList.get().get(0);
+    String partitionPath = FSUtils.getRelativePartitionPath(
+        new Path(tablePath), new Path(filePath).getParent());
+    Option<String> partitionNameOpt = StringUtils.isNullOrEmpty(partitionPath)
+        ? Option.empty() : Option.of(partitionPath);
+    Option<Object> partitionConfigValue = ConfigUtils.getRawValueWithAltKeys(props, PARTITION_FIELDS);
+    Option<String[]> partitionPathFieldOpt = partitionConfigValue.isPresent()
+        ? Option.of(Arrays.stream(partitionConfigValue.get().toString().split(","))
+        .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[] {}))
+        : Option.empty();
+    this.recordBuffer = shouldUseRecordPosition
+        ? new HoodiePositionBasedFileGroupRecordBuffer<>(
+        readerContext, avroSchema, avroSchema, partitionNameOpt, partitionPathFieldOpt,
+        recordMerger, props)
+        : new HoodieKeyBasedFileGroupRecordBuffer<>(
+        readerContext, avroSchema, avroSchema, partitionNameOpt, partitionPathFieldOpt,
+        recordMerger, props);
   }
 
   /**

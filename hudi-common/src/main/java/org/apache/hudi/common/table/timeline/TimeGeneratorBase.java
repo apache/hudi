@@ -82,7 +82,7 @@ public abstract class TimeGeneratorBase implements TimeGenerator, Serializable {
     maxRetries = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY,
         Integer.parseInt(DEFAULT_LOCK_ACQUIRE_NUM_RETRIES));
     lockAcquireWaitTimeInMs = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,
-        Integer.parseInt(DEFAULT_LOCK_ACQUIRE_WAIT_TIMEOUT_MS));
+        DEFAULT_LOCK_ACQUIRE_WAIT_TIMEOUT_MS);
     maxWaitTimeInMs = lockConfiguration.getConfig().getLong(LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY,
         Long.parseLong(DEFAULT_LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS));
     lockRetryHelper = new RetryHelper<>(maxWaitTimeInMs, maxRetries, maxWaitTimeInMs,

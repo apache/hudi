@@ -20,6 +20,7 @@ package org.apache.hudi.common.fs;
 
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -244,7 +245,9 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String logFile = FSUtils.makeLogFileName(fileName, ".log", "100", 2, "1-0-1");
     System.out.println("Log File =" + logFile);
     Path rlPath = new Path(new Path(partitionPath), logFile);
+    Path inlineFsPath = InLineFSUtils.getInlineFilePath(rlPath, "file", 0, 100);
     assertTrue(FSUtils.isLogFile(rlPath));
+    assertTrue(FSUtils.isLogFile(inlineFsPath));
     assertEquals(fileName, FSUtils.getFileIdFromLogPath(rlPath));
     assertEquals("100", FSUtils.getDeltaCommitTimeFromLogPath(rlPath));
     assertEquals(2, FSUtils.getFileVersionFromLog(rlPath));
@@ -543,6 +546,33 @@ public class TestFSUtils extends HoodieCommonTestHarness {
             .map(FileStatus::getPath)
             .filter(filePath -> filePath.getName().endsWith(".txt"))
             .collect(Collectors.toSet()));
+  }
+
+  @Test
+  public void testGetFileExtension() {
+    String pathWithExtension = "/path/to/some/file/sample.parquet";
+    String pathWithoutExtension = "/path/to/some/file/sample";
+    String justFileNameWithExtension = "sample.orc";
+    String justFileNameWithoutExtension = "sample";
+
+    // file with extension
+    String result1 = FSUtils.getFileExtension(pathWithExtension);
+    assertEquals(".parquet", result1);
+
+    // file without extension
+    String result2 = FSUtils.getFileExtension(pathWithoutExtension);
+    assertEquals("", result2);
+
+    // just a file name with extension
+    String result3 = FSUtils.getFileExtension(justFileNameWithExtension);
+    assertEquals(".orc", result3);
+
+    // just a file name without extension
+    String result4 = FSUtils.getFileExtension(justFileNameWithoutExtension);
+    assertEquals("", result4);
+
+    // null input
+    assertThrows(NullPointerException.class, () -> FSUtils.getFileExtension(null));
   }
 
   private Path getHoodieTempDir() {

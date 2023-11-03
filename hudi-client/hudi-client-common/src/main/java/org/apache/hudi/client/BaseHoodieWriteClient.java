@@ -383,7 +383,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public void bootstrap(Option<Map<String, String>> extraMetadata) {
     // TODO : MULTIWRITER -> check if failed bootstrap files can be cleaned later
-    if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
+    if (config.getWriteConcurrencyMode().supportsMultiWriter()) {
       throw new HoodieException("Cannot bootstrap the table in multi-writer mode");
     }
     HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UPSERT, Option.ofNullable(HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS));

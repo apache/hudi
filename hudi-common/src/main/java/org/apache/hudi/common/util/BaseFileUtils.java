@@ -25,7 +25,6 @@ import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -63,10 +62,6 @@ public abstract class BaseFileUtils {
       return new OrcUtils();
     }
     throw new UnsupportedOperationException(fileFormat.name() + " format not supported yet.");
-  }
-
-  public static BaseFileUtils getInstance(HoodieTableMetaClient metaClient) {
-    return getInstance(metaClient.getTableConfig().getBaseFileFormat());
   }
 
   /**

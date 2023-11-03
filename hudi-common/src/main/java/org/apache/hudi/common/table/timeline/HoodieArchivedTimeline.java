@@ -150,31 +150,34 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
     return new HoodieArchivedTimeline(metaClient);
   }
 
-  private HoodieInstant readCommit(String instantTime, GenericRecord record, LoadMode loadMode) {
+  private HoodieInstant readCommit(String instantTime, GenericRecord record, Option<BiConsumer<String, GenericRecord>> instantDetailsConsumer) {
     final String action = record.get(ACTION_ARCHIVED_META_FIELD).toString();
     final String completionTime = record.get(COMPLETION_TIME_ARCHIVED_META_FIELD).toString();
-    loadInstantDetails(record, instantTime, loadMode);
+    instantDetailsConsumer.ifPresent(consumer -> consumer.accept(instantTime, record));
     return new HoodieInstant(HoodieInstant.State.COMPLETED, action, instantTime, completionTime);
   }
 
-  private void loadInstantDetails(GenericRecord record, String instantTime, LoadMode loadMode) {
+  @Nullable
+  private BiConsumer<String, GenericRecord> getInstantDetailsFunc(LoadMode loadMode) {
     switch (loadMode) {
       case METADATA:
-        ByteBuffer commitMeta = (ByteBuffer) record.get(METADATA_ARCHIVED_META_FIELD);
-        if (commitMeta != null) {
-          // in case the entry comes from an empty completed meta file
-          this.readCommits.put(instantTime, commitMeta.array());
-        }
-        break;
+        return (instant, record) -> {
+          ByteBuffer commitMeta = (ByteBuffer) record.get(METADATA_ARCHIVED_META_FIELD);
+          if (commitMeta != null) {
+            // in case the entry comes from an empty completed meta file
+            this.readCommits.put(instant, commitMeta.array());
+          }
+        };
       case PLAN:
-        ByteBuffer plan = (ByteBuffer) record.get(PLAN_ARCHIVED_META_FIELD);
-        if (plan != null) {
-          // in case the entry comes from an empty completed meta file
-          this.readCommits.put(instantTime, plan.array());
-        }
-        break;
+        return (instant, record) -> {
+          ByteBuffer plan = (ByteBuffer) record.get(PLAN_ARCHIVED_META_FIELD);
+          if (plan != null) {
+            // in case the entry comes from an empty completed meta file
+            this.readCommits.put(instant, plan.array());
+          }
+        };
       default:
-        // no operation
+        return null;
     }
   }
 
@@ -201,7 +204,8 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
       LoadMode loadMode,
       Function<GenericRecord, Boolean> commitsFilter) {
     Map<String, HoodieInstant> instantsInRange = new ConcurrentHashMap<>();
-    loadInstants(metaClient, filter, loadMode, commitsFilter, (instantTime, avroRecord) -> instantsInRange.putIfAbsent(instantTime, readCommit(instantTime, avroRecord, loadMode)));
+    Option<BiConsumer<String, GenericRecord>> instantDetailsConsumer = Option.ofNullable(getInstantDetailsFunc(loadMode));
+    loadInstants(metaClient, filter, loadMode, commitsFilter, (instantTime, avroRecord) -> instantsInRange.putIfAbsent(instantTime, readCommit(instantTime, avroRecord, instantDetailsConsumer)));
     ArrayList<HoodieInstant> result = new ArrayList<>(instantsInRange.values());
     Collections.sort(result);
     return result;

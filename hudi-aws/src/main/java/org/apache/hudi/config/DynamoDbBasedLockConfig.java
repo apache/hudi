@@ -127,7 +127,7 @@ public class DynamoDbBasedLockConfig extends HoodieConfig {
 
   public static final ConfigProperty<Integer> LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY = ConfigProperty
       .key(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY)
-      .defaultValue(LockConfiguration.DEFAULT_ACQUIRE_LOCK_WAIT_TIMEOUT_MS)
+      .defaultValue(LockConfiguration.DEFAULT_LOCK_ACQUIRE_WAIT_TIMEOUT_MS)
       .markAdvanced()
       .sinceVersion("0.10.0")
       .withDocumentation("Lock Acquire Wait Timeout in milliseconds");

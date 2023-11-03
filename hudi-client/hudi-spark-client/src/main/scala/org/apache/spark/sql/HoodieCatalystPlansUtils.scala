@@ -22,7 +22,6 @@ import org.apache.spark.sql.catalyst.catalog.CatalogStorageFormat
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan}
-import org.apache.spark.sql.execution.datasources.HadoopFsRelation
 import org.apache.spark.sql.internal.SQLConf
 
 trait HoodieCatalystPlansUtils {
@@ -79,6 +78,25 @@ trait HoodieCatalystPlansUtils {
    */
   def unapplyMergeIntoTable(plan: LogicalPlan): Option[(LogicalPlan, LogicalPlan, Expression)]
 
+  /**
+   * Decomposes [[MatchCreateIndex]] into its arguments with accommodation.
+   */
+  def unapplyCreateIndex(plan: LogicalPlan): Option[(LogicalPlan, String, String, Boolean, Seq[(Seq[String], Map[String, String])], Map[String, String])]
+
+  /**
+   * Decomposes [[MatchDropIndex]] into its arguments with accommodation.
+   */
+  def unapplyDropIndex(plan: LogicalPlan): Option[(LogicalPlan, String, Boolean)]
+
+  /**
+   * Decomposes [[MatchShowIndexes]] into its arguments with accommodation.
+   */
+  def unapplyShowIndexes(plan: LogicalPlan): Option[(LogicalPlan, Seq[Attribute])]
+
+  /**
+   * Decomposes [[MatchRefreshIndex]] into its arguments with accommodation.
+   */
+  def unapplyRefreshIndex(plan: LogicalPlan): Option[(LogicalPlan, String)]
 
   /**
    * Spark requires file formats to append the partition path fields to the end of the schema.

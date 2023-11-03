@@ -57,6 +57,15 @@ public abstract class InstantRange implements Serializable {
 
   public abstract boolean isInRange(String instant);
 
+  @Override
+  public String toString() {
+    return "InstantRange{"
+        + "startInstant='" + startInstant == null ? "null" : startInstant + '\''
+        + ", endInstant='" + endInstant == null ? "null" : endInstant + '\''
+        + ", rangeType='" + this.getClass().getSimpleName() + '\''
+        + '}';
+  }
+
   // -------------------------------------------------------------------------
   //  Inner Class
   // -------------------------------------------------------------------------

@@ -74,16 +74,21 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     tempDir.toAbsolutePath.toUri.toString
   }
 
-  override def getHoodieReaderContext(partitionValues: Array[String]): HoodieReaderContext[InternalRow] = {
+  override def getHoodieReaderContext(tablePath: String,
+                                      partitionValues: Array[String]): HoodieReaderContext[InternalRow] = {
     val parquetFileFormat = new ParquetFileFormat
-    val metaClient = HoodieTableMetaClient.builder.setConf(getHadoopConf).setBasePath(getBasePath).build
+    val metaClient = HoodieTableMetaClient.builder.setConf(getHadoopConf).setBasePath(tablePath).build
     val avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema
     val structTypeSchema = AvroConversionUtils.convertAvroSchemaToStructType(avroSchema)
     val partitionFields = metaClient.getTableConfig.getPartitionFields
-    val partitionSchema = new StructType(structTypeSchema.fields.filter(f => partitionFields.get().contains(f.name)))
+    val partitionSchema = if (partitionFields.isPresent) {
+      new StructType(structTypeSchema.fields.filter(f => partitionFields.get().contains(f.name)))
+    } else {
+      new StructType()
+    }
 
     val recordReaderIterator = parquetFileFormat.buildReaderWithPartitionValues(
-    spark, structTypeSchema, partitionSchema, structTypeSchema, Seq.empty, Map.empty, getHadoopConf)
+      spark, structTypeSchema, partitionSchema, structTypeSchema, Seq.empty, Map.empty, getHadoopConf)
     val numPartitionFields = if (partitionFields.isPresent) partitionFields.get().length else 0
     assertEquals(numPartitionFields, partitionValues.length)
 
@@ -98,6 +103,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
 
   override def commitToTable(recordList: util.List[String], operation: String, options: util.Map[String, String]): Unit = {
     val inputDF: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(recordList.toList, 2))
+
     inputDF.write.format("hudi")
       .options(options)
       .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
@@ -108,11 +114,12 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
       .save(getBasePath)
   }
 
-  override def validateRecordsInFileGroup(actualRecordList: util.List[InternalRow],
+  override def validateRecordsInFileGroup(basePath: String,
+                                          actualRecordList: util.List[InternalRow],
                                           schema: Schema,
                                           fileGroupId: String): Unit = {
     val expectedDf = spark.read.format("hudi")
-      .load(getBasePath)
+      .load(basePath)
       .where(col(HoodieRecord.FILENAME_METADATA_FIELD).contains(fileGroupId))
     assertEquals(expectedDf.count, actualRecordList.size)
     val actualDf = HoodieUnsafeUtils.createDataFrameFromInternalRows(

@@ -21,12 +21,13 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.{DataSourceReadOptions, DefaultSource, SparkAdapterSupport}
 import org.apache.spark.sql.HoodieSpark3CatalystPlanUtils.MatchResolvedTable
 import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer.resolveExpressionByPlanChildren
-import org.apache.spark.sql.catalyst.analysis.{AnalysisErrorAt, EliminateSubqueryAliases, NamedRelation, UnresolvedAttribute, UnresolvedPartitionSpec}
+import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, NamedRelation, ResolvedFieldName, UnresolvedAttribute, UnresolvedFieldName, UnresolvedPartitionSpec}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogUtils}
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.plans.logcal.{HoodieQuery, HoodieTableChanges, HoodieTableChangesOptionsParser}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.catalyst.trees.Origin
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.connector.catalog.{Table, V1Table}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
@@ -201,6 +202,12 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
             matchedActions = newMatchedActions,
             notMatchedActions = newNotMatchedActions)
       }
+
+    case cmd: CreateIndex if cmd.table.resolved && cmd.columns.exists(_._1.isInstanceOf[UnresolvedFieldName]) =>
+      cmd.copy(columns = cmd.columns.map {
+        case (u: UnresolvedFieldName, prop) => resolveFieldNames(cmd.table, u.name, u) -> prop
+        case other => other
+      })
   }
 
   def resolveAssignments(
@@ -242,6 +249,35 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
     } catch {
       case x: AnalysisException => throw x
     }
+  }
+
+  /**
+   * Returns the resolved field name if the field can be resolved, returns None if the column is
+   * not found. An error will be thrown in CheckAnalysis for columns that can't be resolved.
+   */
+  private def resolveFieldNames(table: LogicalPlan,
+                                fieldName: Seq[String],
+                                context: Expression): ResolvedFieldName = {
+    resolveFieldNamesOpt(table, fieldName, context)
+      .getOrElse(throw missingFieldError(fieldName, table, context.origin))
+  }
+
+  private def resolveFieldNamesOpt(table: LogicalPlan,
+                                   fieldName: Seq[String],
+                                   context: Expression): Option[ResolvedFieldName] = {
+    table.schema.findNestedField(
+      fieldName, includeCollections = true, conf.resolver, context.origin
+    ).map {
+      case (path, field) => ResolvedFieldName(path, field)
+    }
+  }
+
+  private def missingFieldError(fieldName: Seq[String], table: LogicalPlan, context: Origin): Throwable = {
+    throw new AnalysisException(
+      s"Missing field ${fieldName.mkString(".")} with schema:\n" +
+        table.schema.treeString,
+      context.line,
+      context.startPosition)
   }
 
   private[sql] object MatchMergeIntoTable {

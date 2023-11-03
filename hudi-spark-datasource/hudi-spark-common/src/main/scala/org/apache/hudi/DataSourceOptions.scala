@@ -553,6 +553,15 @@ object DataSourceWriteOptions {
       "look up as well. If you may use INSERT_INTO for mutable dataset, then you may have to set this config value to \"upsert\". With upsert, you will " +
       "get both precombine and updates to existing records on storage is also honored. If not, you may see duplicates. ")
 
+  val ENABLE_MERGE_INTO_PARTIAL_UPDATES: ConfigProperty[Boolean] = ConfigProperty
+    .key("hoodie.spark.sql.merge.into.partial.updates")
+    .defaultValue(false)
+    .markAdvanced()
+    .sinceVersion("1.0.0")
+    .withDocumentation("Whether to write partial updates to the data blocks containing updates "
+      + "in MOR tables with Spark SQL MERGE INTO statement. The data blocks containing partial "
+      + "updates have a schema with a subset of fields compared to the full schema of the table.")
+
   val NONE_INSERT_DUP_POLICY = "none"
   val DROP_INSERT_DUP_POLICY = "drop"
   val FAIL_INSERT_DUP_POLICY = "fail"

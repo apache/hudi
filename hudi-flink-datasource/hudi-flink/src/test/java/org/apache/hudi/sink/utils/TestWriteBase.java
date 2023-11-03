@@ -306,6 +306,31 @@ public class TestWriteBase {
     }
 
     /**
+     * Flush data and commit using endInput. Asserts the commit would fail.
+     */
+    public void endInputThrows(Class<?> cause, String msg) {
+      // this triggers the data write and event send
+      this.pipeline.endInput();
+      final OperatorEvent nextEvent = this.pipeline.getNextEvent();
+      this.pipeline.getCoordinator().handleEventFromOperator(0, nextEvent);
+      assertTrue(this.pipeline.getCoordinatorContext().isJobFailed(), "Job should have been failed");
+      Throwable throwable = this.pipeline.getCoordinatorContext().getJobFailureReason().getCause();
+      assertThat(throwable, instanceOf(cause));
+      assertThat(throwable.getMessage(), containsString(msg));
+    }
+
+    /**
+     * Flush data and commit using endInput.
+     */
+    public TestHarness endInput() {
+      // this triggers the data write and event send
+      this.pipeline.endInput();
+      final OperatorEvent nextEvent = this.pipeline.getNextEvent();
+      this.pipeline.getCoordinator().handleEventFromOperator(0, nextEvent);
+      return this;
+    }
+
+    /**
      * Asserts the checkpoint with id {@code checkpointId} throws when completes .
      */
     public TestHarness checkpointCompleteThrows(long checkpointId, Class<?> cause, String msg) {
@@ -526,7 +551,7 @@ public class TestWriteBase {
     protected String lastCompleteInstant() {
       // If using optimistic concurrency control, fetch last complete instant of current writer from ckp metadata
       // because there are multiple write clients commit to the timeline.
-      if (OptionsResolver.isOptimisticConcurrencyControl(conf)) {
+      if (OptionsResolver.isMultiWriter(conf)) {
         return this.ckpMetadata.lastCompleteInstant();
       } else {
         // fetch the instant from timeline.
