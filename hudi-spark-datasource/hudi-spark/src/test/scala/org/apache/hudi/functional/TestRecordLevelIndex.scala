@@ -26,13 +26,15 @@ import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.config._
 import org.apache.hudi.exception.HoodieWriteConflictException
+import org.apache.hudi.functional.TestCOWDataSourceStorage.{SQL_DRIVER_IS_NOT_NULL, SQL_DRIVER_IS_NULL, SQL_QUERY_EQUALITY_VALIDATOR_CLASS_NAME, SQL_QUERY_INEQUALITY_VALIDATOR_CLASS_NAME, SQL_RIDER_IS_NOT_NULL, SQL_RIDER_IS_NULL}
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, MetadataPartitionType}
 import org.apache.hudi.util.JavaConversions
 import org.apache.spark.sql._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api._
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
+import org.junit.jupiter.params.provider.Arguments.arguments
+import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, MethodSource}
 
 import java.util.Collections
 import java.util.concurrent.Executors
@@ -57,6 +59,18 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
   @EnumSource(classOf[HoodieTableType])
   def testRLIUpsert(tableType: HoodieTableType): Unit = {
     val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
+    doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite)
+    doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+  }
+
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieTableType])
+  def testRLIUpsertNonPartitioned(tableType: HoodieTableType): Unit = {
+    val hudiOpts = commonOpts - PARTITIONPATH_FIELD.key + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite)
@@ -335,11 +349,15 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
   }
 
   @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testEnableDisableRLI(tableType: HoodieTableType): Unit = {
+  @MethodSource(Array("testEnableDisableRLIParams"))
+  def testEnableDisableRLI(tableType: HoodieTableType, isPartitioned: Boolean): Unit = {
     var hudiOpts = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name()
     )
+
+    if (!isPartitioned) {
+      hudiOpts = hudiOpts - PARTITIONPATH_FIELD.key
+    }
 
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
@@ -468,5 +486,17 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     assertTrue(f1.value.get.get || f2.value.get.get)
     executor.shutdownNow()
     validateDataAndRecordIndices(hudiOpts)
+  }
+}
+
+object TestRecordLevelIndex {
+
+  def testEnableDisableRLIParams(): java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      arguments(HoodieTableType.COPY_ON_WRITE, new java.lang.Boolean(false)),
+      arguments(HoodieTableType.COPY_ON_WRITE, new java.lang.Boolean(true)),
+      arguments(HoodieTableType.MERGE_ON_READ, new java.lang.Boolean(false)),
+      arguments(HoodieTableType.MERGE_ON_READ, new java.lang.Boolean(true))
+    )
   }
 }

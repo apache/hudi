@@ -1736,7 +1736,7 @@ public class HoodieTableMetadataUtil {
       final String partition = partitionAndBaseFile.getKey();
       final HoodieBaseFile baseFile = partitionAndBaseFile.getValue();
       final String filename = baseFile.getFileName();
-      Path dataFilePath = new Path(basePath, partition + Path.SEPARATOR + filename);
+      Path dataFilePath = new Path(basePath, StringUtils.isNullOrEmpty(partition) ? filename : (partition + Path.SEPARATOR) + filename);
 
       final String fileId = baseFile.getFileId();
       final String instantTime = baseFile.getCommitTime();
