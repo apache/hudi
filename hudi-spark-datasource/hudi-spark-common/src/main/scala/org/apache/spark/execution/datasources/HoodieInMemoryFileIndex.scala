@@ -67,7 +67,7 @@ class HoodieInMemoryFileIndex(sparkSession: SparkSession,
           PartitionDirectory(values, files)
       }
     }
-    logTrace("sdfSelected files after partition pruning:\n\t" + selectedPartitions.mkString("\n\t"))
+    logTrace("Selected files after partition pruning:\n\t" + selectedPartitions.mkString("\n\t"))
     selectedPartitions
   }
 
