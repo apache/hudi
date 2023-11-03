@@ -36,8 +36,10 @@ class HoodieInMemoryFileIndex(sparkSession: SparkSession,
                               rootPathsSpecified: Seq[Path],
                               parameters: Map[String, String],
                               userSpecifiedSchema: Option[StructType],
-                              fileStatusCache: FileStatusCache = NoopCache)
-  extends InMemoryFileIndex(sparkSession, rootPathsSpecified, parameters, userSpecifiedSchema, fileStatusCache)
+                              fileStatusCache: FileStatusCache = NoopCache,
+                              userSpecifiedPartitionSpec: Option[PartitionSpec] = None)
+  extends InMemoryFileIndex(sparkSession, rootPathsSpecified, parameters, userSpecifiedSchema, fileStatusCache,
+    userSpecifiedPartitionSpec)
   with SparkAdapterSupport {
 
   /**
