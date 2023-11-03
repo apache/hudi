@@ -20,16 +20,22 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.HoodieJavaWriteClient;
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieFunctionalIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
+import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 
 import java.util.Collections;
@@ -109,5 +115,11 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   @Override
   protected void preWrite(String instantTime) {
     metadataMetaClient.getActiveTimeline().transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instantTime);
+  }
+
+  @Override
+  protected HoodieData<HoodieRecord> getFunctionalIndexRecords(List<Pair<String, FileSlice>> partitionFileSlicePairs, HoodieFunctionalIndexDefinition indexDefinition, HoodieTableMetaClient metaClient,
+                                                               int parallelism, Schema readerSchema, SerializableConfiguration hadoopConf) {
+    throw new HoodieNotSupportedException("Functional index not supported for Java metadata table writer yet.");
   }
 }

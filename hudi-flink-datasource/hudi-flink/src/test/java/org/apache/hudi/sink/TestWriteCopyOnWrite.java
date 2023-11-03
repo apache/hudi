@@ -41,6 +41,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -49,6 +51,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Test cases for stream write.
@@ -520,27 +523,39 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   // case1: txn2's time range is involved in txn1
   //      |----------- txn1 -----------|
   //              | ----- txn2 ----- |
-  @Test
-  public void testWriteMultiWriterInvolved() throws Exception {
-    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
+  @ParameterizedTest
+  @EnumSource(value = WriteConcurrencyMode.class, names = {"OPTIMISTIC_CONCURRENCY_CONTROL", "NON_BLOCKING_CONCURRENCY_CONTROL"})
+  public void testWriteMultiWriterInvolved(WriteConcurrencyMode writeConcurrencyMode) throws Exception {
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), writeConcurrencyMode.name());
     conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
     conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
 
-    TestHarness pipeline1 = preparePipeline(conf)
-        .consume(TestData.DATA_SET_INSERT_DUPLICATES)
-        .assertEmptyDataFiles();
-    // now start pipeline2 and commit the txn
-    Configuration conf2 = conf.clone();
-    conf2.setString(FlinkOptions.WRITE_CLIENT_ID, "2");
-    preparePipeline(conf2)
-        .consume(TestData.DATA_SET_INSERT_DUPLICATES)
-        .assertEmptyDataFiles()
-        .checkpoint(1)
-        .assertNextEvent()
-        .checkpointComplete(1)
-        .checkWrittenData(EXPECTED3, 1);
-    // step to commit the 2nd txn
-    validateConcurrentCommit(pipeline1);
+    if (OptionsResolver.isCowTable(conf) && OptionsResolver.isNonBlockingConcurrencyControl(conf)) {
+      validateNonBlockingConcurrencyControlConditions();
+    } else {
+      TestHarness pipeline1 = preparePipeline(conf)
+          .consume(TestData.DATA_SET_INSERT_DUPLICATES)
+          .assertEmptyDataFiles();
+      // now start pipeline2 and commit the txn
+      Configuration conf2 = conf.clone();
+      conf2.setString(FlinkOptions.WRITE_CLIENT_ID, "2");
+      preparePipeline(conf2)
+          .consume(TestData.DATA_SET_INSERT_DUPLICATES)
+          .assertEmptyDataFiles()
+          .checkpoint(1)
+          .assertNextEvent()
+          .checkpointComplete(1)
+          .checkWrittenData(EXPECTED3, 1);
+      // step to commit the 2nd txn
+      validateConcurrentCommit(pipeline1);
+    }
+  }
+
+  protected void validateNonBlockingConcurrencyControlConditions() {
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> preparePipeline(conf),
+        "Non-blocking concurrency control requires the MOR table with simple bucket index");
   }
 
   private void validateConcurrentCommit(TestHarness pipeline) throws Exception {
@@ -562,32 +577,37 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   // case2: txn2's time range has partial overlap with txn1
   //      |----------- txn1 -----------|
   //                       | ----- txn2 ----- |
-  @Test
-  public void testWriteMultiWriterPartialOverlapping() throws Exception {
-    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
+  @ParameterizedTest
+  @EnumSource(value = WriteConcurrencyMode.class, names = {"OPTIMISTIC_CONCURRENCY_CONTROL", "NON_BLOCKING_CONCURRENCY_CONTROL"})
+  public void testWriteMultiWriterPartialOverlapping(WriteConcurrencyMode writeConcurrencyMode) throws Exception {
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), writeConcurrencyMode.name());
     conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
     conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
 
-    TestHarness pipeline1 = preparePipeline(conf)
-        .consume(TestData.DATA_SET_INSERT_DUPLICATES)
-        .assertEmptyDataFiles();
-    // now start pipeline2 and suspend the txn commit
-    Configuration conf2 = conf.clone();
-    conf2.setString(FlinkOptions.WRITE_CLIENT_ID, "2");
-    TestHarness pipeline2 = preparePipeline(conf2)
-        .consume(TestData.DATA_SET_INSERT_DUPLICATES)
-        .assertEmptyDataFiles();
+    if (OptionsResolver.isCowTable(conf) && OptionsResolver.isNonBlockingConcurrencyControl(conf)) {
+      validateNonBlockingConcurrencyControlConditions();
+    } else {
+      TestHarness pipeline1 = preparePipeline(conf)
+          .consume(TestData.DATA_SET_INSERT_DUPLICATES)
+          .assertEmptyDataFiles();
+      // now start pipeline2 and suspend the txn commit
+      Configuration conf2 = conf.clone();
+      conf2.setString(FlinkOptions.WRITE_CLIENT_ID, "2");
+      TestHarness pipeline2 = preparePipeline(conf2)
+          .consume(TestData.DATA_SET_INSERT_DUPLICATES)
+          .assertEmptyDataFiles();
 
-    // step to commit the 1st txn, should succeed
-    pipeline1.checkpoint(1)
-        .assertNextEvent()
-        .checkpointComplete(1)
-        .checkWrittenData(EXPECTED3, 1);
+      // step to commit the 1st txn, should succeed
+      pipeline1.checkpoint(1)
+          .assertNextEvent()
+          .checkpointComplete(1)
+          .checkWrittenData(EXPECTED3, 1);
 
-    // step to commit the 2nd txn
-    // should success for concurrent modification of same fileGroups if using non-blocking concurrency control
-    // should throw exception otherwise
-    validateConcurrentCommit(pipeline2);
+      // step to commit the 2nd txn
+      // should success for concurrent modification of same fileGroups if using non-blocking concurrency control
+      // should throw exception otherwise
+      validateConcurrentCommit(pipeline2);
+    }
   }
 
   @Test

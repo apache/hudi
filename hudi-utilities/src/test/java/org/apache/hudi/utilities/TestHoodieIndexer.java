@@ -118,7 +118,8 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
         .setIndexPartitionInfos(Arrays.asList(new HoodieIndexPartitionInfo(
             1,
             COLUMN_STATS.getPartitionPath(),
-            "0000")))
+            "0000",
+            Collections.emptyMap())))
         .build();
     assertFalse(indexer.isIndexBuiltForAllRequestedTypes(commitMetadata.getIndexPartitionInfos()));
 
