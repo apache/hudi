@@ -61,7 +61,6 @@ class NewHoodieInMemoryFileIndex(sparkSession: SparkSession,
     specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant()).map(_.getTimestamp))
   private lazy val basePath: Path = metaClient.getBasePathV2
   private def timeline: HoodieTimeline = metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants
-  protected lazy val partitionColumns: Array[String] = metaClient.getTableConfig.getPartitionFields.orElse(Array.empty)
 
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
     val partitions = queryTimestamp match {
