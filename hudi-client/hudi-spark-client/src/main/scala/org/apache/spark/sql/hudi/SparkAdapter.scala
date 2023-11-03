@@ -222,8 +222,14 @@ trait SparkAdapter extends Serializable {
    */
   def toAttributes(struct: StructType): Seq[Attribute]
 
+  /**
+   * SPARK-43039 FileIndex#PartitionDirectory refactored in Spark 3.5.0
+   */
   def toFileStatuses(partitionDirs: Seq[PartitionDirectory]): Seq[FileStatus]
 
+  /**
+   * SPARK-43039 FileIndex#PartitionDirectory refactored in Spark 3.5.0
+   */
   def newPartitionDirectory(internalRow: InternalRow, statuses: Seq[FileStatus]): PartitionDirectory
 
   /**
