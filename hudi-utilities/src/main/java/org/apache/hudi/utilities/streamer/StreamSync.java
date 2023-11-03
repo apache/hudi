@@ -142,6 +142,7 @@ import scala.Tuple2;
 import scala.collection.JavaConversions;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
+import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.HoodieTableConfig.DROP_PARTITION_COLUMNS;
 import static org.apache.hudi.common.table.HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE;
@@ -517,7 +518,7 @@ public class StreamSync implements Serializable, Closeable {
 
   private Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchFromSource(Option<String> resumeCheckpointStr, String instantTime) {
     HoodieRecordType recordType = createRecordMerger(props).getRecordType();
-    if (recordType == HoodieRecordType.SPARK && HoodieTableType.valueOf(cfg.tableType) == HoodieTableType.MERGE_ON_READ
+    if (recordType == HoodieRecordType.SPARK && HoodieTableType.valueOf(cfg.tableType) == MERGE_ON_READ
         && HoodieLogBlockType.fromId(props.getProperty(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "avro"))
         != HoodieLogBlockType.PARQUET_DATA_BLOCK) {
       throw new UnsupportedOperationException("Spark record only support parquet log.");
@@ -684,8 +685,9 @@ public class StreamSync implements Serializable, Closeable {
     // try get checkpoint from commits(including commit and deltacommit)
     // in COW migrating to MOR case, the first batch of the deltastreamer will lost the checkpoint from COW table, cause the dataloss
     HoodieTimeline deltaCommitTimeline = commitsTimelineOpt.get().filter(instant -> instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION));
-    // has deltacommit means this is a MOR table, we should get .deltacommit as before
-    if (!deltaCommitTimeline.empty()) {
+    // has deltacommit and this is a MOR table, then we should get checkpoint from .deltacommit
+    // if changing from mor to cow, before changing we must do a full compaction, so we can only consider .commit in such case
+    if (cfg.tableType.equals(MERGE_ON_READ.name()) && !deltaCommitTimeline.empty()) {
       commitsTimelineOpt = Option.of(deltaCommitTimeline);
     }
     Option<HoodieInstant> lastCommit = commitsTimelineOpt.get().lastInstant();
