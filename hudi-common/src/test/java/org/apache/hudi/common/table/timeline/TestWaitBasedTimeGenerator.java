@@ -26,7 +26,6 @@ import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -63,11 +62,11 @@ public class TestWaitBasedTimeGenerator {
           throw new HoodieLockException(e);
         }
       }
-      boolean locked = super.tryLock(time, unit);
-      if (locked) {
+      boolean isLocked = super.tryLock(time, unit);
+      if (isLocked) {
         SIGNAL.countDown();
       }
-      return locked;
+      return isLocked;
     }
   }
 
@@ -105,7 +104,6 @@ public class TestWaitBasedTimeGenerator {
    *    3> whereas t1's timestamp > t2's timestamp
    * So no matter which thread firstly acquires lock, the first acquired thread's timestamp should be earlier.
    */
-  @Disabled("This test is flaky, disable it for now. Fix in review -> https://github.com/apache/hudi/pull/9972")
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testSlowerThreadLaterAcquiredLock(boolean slowerThreadAcquiredLockLater) throws InterruptedException {
