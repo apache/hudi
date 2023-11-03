@@ -64,7 +64,9 @@ public class TestWaitBasedTimeGenerator {
         }
       }
       boolean locked = super.tryLock(time, unit);
-      SIGNAL.countDown();
+      if (locked) {
+        SIGNAL.countDown();
+      }
       return locked;
     }
   }
@@ -79,7 +81,7 @@ public class TestWaitBasedTimeGenerator {
   @BeforeEach
   public void initialize() {
     timeGeneratorConfig = HoodieTimeGeneratorConfig.newBuilder()
-        .withPath("")
+        .withPath("test_wait_based")
         .withMaxExpectedClockSkewMs(25L)
         .withTimeGeneratorType(TimeGeneratorType.WAIT_TO_ADJUST_SKEW)
         .build();
