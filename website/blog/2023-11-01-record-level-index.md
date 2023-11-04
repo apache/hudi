@@ -27,7 +27,7 @@ a generally performant index capable of facilitating both writes and reads with 
 Starting from [Hudi 0.14.0](https://hudi.apache.org/releases/release-0.14.0), we are thrilled to announce a 
 general purpose index for Apache Hudi - the Record Level Index (RLI). This innovation not only dramatically boosts
 write efficiency but also improves read efficiency for relevant queries. Integrated seamlessly within the table storage layer,
-the RLI can easily work without any additional operational efforts.
+RLI can easily work without any additional operational efforts.
 
 In the subsequent sections of this blog, we will give a brief introduction to Hudi's metadata table, a pre-requisite for discussing RLI.
 Following that, we will delve into the design and workflows of RLI, and then show performance analysis and index type comparisons. The blog 
@@ -123,7 +123,7 @@ latency. In a later section, we will demonstrate the Record Level Index performa
 
 The Record Level Index is also integrated on the query side[^3]. In queries that involve equality check (e.g., EqualTo or IN) 
 against the record key column, Hudi’s file index implementation optimizes the file pruning process. This optimization is 
-achieved by leveraging the RLI to precisely locate the file groups that need to be read for completing the queries.
+achieved by leveraging RLI to precisely locate the file groups that need to be read for completing the queries.
 
 ### Storage
 
@@ -190,7 +190,7 @@ we observed a significant improvement in query time. **With RLI enabled, the que
 
 RLI demonstrates outstanding performance in general, elevating update and delete efficiency to a new level and 
 fast-tracking reads when executing key-matching queries. Enabling RLI is also as simple as setting some configuration flags.
-Below, we have summarized a comparison table highlighting some important characteristics of RLI in contrast to other common Hudi index types.
+Below, we have summarized a comparison table highlighting these important characteristics of RLI in contrast to other common Hudi index types.
 
 |                               | Record Level Index | Global Simple Index | Global Bloom Index | HBase Index                          | Bucket Index   |
 |-------------------------------|--------------------|---------------------|--------------------|--------------------------------------|----------------|
@@ -198,7 +198,14 @@ Below, we have summarized a comparison table highlighting some important charact
 | Boost both writes and reads   | Yes                | No, write-only      | No, write-only     | No, write-only                       | No, write-only |
 | Easy to enable                | Yes                | Yes                 | Yes                | No, require HBase server             | Yes            |
 
-While RLI holds advantages over all other index types based on the three criteria, it is important to consider certain
+A real-world application that stands to significantly benefit from RLI is fulfilling the GDPR requirements. 
+Typically, when users make requests, a set of IDs will be provided to identify the to-be-deleted records, 
+which will either be updated (columns being nullified) or permanently removed. 
+By enabling RLI, offline jobs performing such changes will become notably more efficient, resulting in cost savings. 
+On the read side, analysts or engineers collecting historical events through certain tracing IDs will also 
+experience blazing fast responses from the key-matching queries.
+
+While RLI holds the above-mentioned advantages over all other index types, it is important to consider certain
 aspects when using it. Similar to any other global index, RLI requires record-key uniqueness across all partitions in a table.
 As RLI keeps track of all record keys and locations, the initialization process may take time for large tables.
 In scenarios with extremely skewed large workloads, RLI might not achieve the desired performance due to limitations in the current design.
