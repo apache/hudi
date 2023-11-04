@@ -81,6 +81,10 @@ public class CompactionCommand {
 
   private static final String TMP_DIR = "/tmp/";
 
+  public static final String COMPACTION_SCH_SUCCESSFUL = "Attempted to schedule compaction for ";
+  public static final String COMPACTION_EXE_SUCCESSFUL = "Compaction successfully completed for ";
+  public static final String COMPACTION_SCH_EXE_SUCCESSFUL = "Schedule and execute compaction successfully completed";
+
   private HoodieTableMetaClient checkAndGetMetaClient() {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     if (client.getTableType() != HoodieTableType.MERGE_ON_READ) {
@@ -212,7 +216,7 @@ public class CompactionCommand {
     if (exitCode != 0) {
       return "Failed to run compaction for " + compactionInstantTime;
     }
-    return "Attempted to schedule compaction for " + compactionInstantTime;
+    return COMPACTION_SCH_SUCCESSFUL + compactionInstantTime;
   }
 
   @ShellMethod(key = "compaction run", value = "Run Compaction for given instant time")
@@ -261,7 +265,7 @@ public class CompactionCommand {
     if (exitCode != 0) {
       return "Failed to run compaction for " + compactionInstantTime;
     }
-    return "Compaction successfully completed for " + compactionInstantTime;
+    return COMPACTION_EXE_SUCCESSFUL + compactionInstantTime;
   }
 
   @ShellMethod(key = "compaction scheduleAndExecute", value = "Schedule compaction plan and execute this plan")
@@ -296,7 +300,7 @@ public class CompactionCommand {
     if (exitCode != 0) {
       return "Failed to schedule and execute compaction ";
     }
-    return "Schedule and execute compaction successfully completed";
+    return COMPACTION_SCH_EXE_SUCCESSFUL;
   }
 
   /**
