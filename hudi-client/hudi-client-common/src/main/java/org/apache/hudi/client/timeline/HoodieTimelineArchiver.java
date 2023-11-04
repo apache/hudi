@@ -212,12 +212,8 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
           return Collections.emptyList();
         } else {
           LOG.info("Limiting archiving of instants to latest compaction on metadata table at " + latestCompactionTime.get());
-          HoodieInstant earliestInstantAfterCompactionInMetadataTable =
-              getMetadataActiveTimeline().findInstantsModifiedAfterByCompletionTime(latestCompactionTime.get()).firstInstant().get();
           earliestInstantToRetainCandidates.add(
-              completedCommitsTimeline.getInstantsAsStream()
-                  .filter(instant -> instant.getTimestamp().equals(earliestInstantAfterCompactionInMetadataTable.getTimestamp()))
-                  .findAny().map(Option::of).orElse(Option.empty()));
+              completedCommitsTimeline.findInstantsModifiedAfterByCompletionTime(latestCompactionTime.get()).firstInstant());
         }
       } catch (Exception e) {
         throw new HoodieException("Error limiting instant archival based on metadata table", e);
@@ -273,25 +269,11 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
             // stop at first savepoint commit
             return !firstSavepoint.isPresent() || compareTimestamps(s.getTimestamp(), LESSER_THAN, firstSavepoint.get().getTimestamp());
           }
-        })
-        .filter(s -> earliestInstantToRetain.map(
-            instant -> compareTimestamps(s.getTimestamp(), LESSER_THAN, instant.getTimestamp()))
+        }).filter(s -> earliestInstantToRetain
+            .map(instant -> compareTimestamps(s.getTimestamp(), LESSER_THAN, instant.getTimestamp()))
             .orElse(true));
     return instantToArchiveStream.limit(completedCommitsTimeline.countInstants() - minInstantsToKeep)
         .collect(Collectors.toList());
-  }
-
-  private HoodieActiveTimeline getMetadataActiveTimeline() {
-    if (table.isMetadataTable()) {
-      return table.getActiveTimeline();
-    }
-
-    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
-        .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(config.getBasePath()))
-        .setConf(metaClient.getHadoopConf())
-        .build();
-
-    return metadataMetaClient.getActiveTimeline();
   }
 
   private Stream<ActiveAction> getInstantsToArchive() throws IOException {

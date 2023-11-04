@@ -289,25 +289,17 @@ public class CompactionUtils {
         .filterCompletedInstants().lastInstant();
     HoodieTimeline deltaCommits = activeTimeline.getDeltaCommitTimeline();
 
-    HoodieInstant latestInstant;
+    final HoodieInstant latestInstant;
     if (lastCompaction.isPresent()) {
       latestInstant = lastCompaction.get();
       // timeline containing the delta commits after the latest completed compaction commit,
       // and the completed compaction commit instant
-      if (deltaCommits.findInstantsAfter(latestInstant.getTimestamp(), Integer.MAX_VALUE).countInstants() > 0) {
-        return Option.of(Pair.of(deltaCommits.findInstantsAfter(
-            latestInstant.getTimestamp(), Integer.MAX_VALUE), lastCompaction.get()));
-      }
-      // check instants by completion time if there were no instants found by start time
-      return Option.of(Pair.of(
-          deltaCommits.findInstantsModifiedAfterByCompletionTime(latestInstant.getTimestamp()),
-          lastCompaction.get()));
+      return Option.of(Pair.of(deltaCommits.findInstantsModifiedAfterByCompletionTime(latestInstant.getTimestamp()), latestInstant));
     } else {
       if (deltaCommits.countInstants() > 0) {
         latestInstant = deltaCommits.firstInstant().get();
         // timeline containing all the delta commits, and the first delta commit instant
-        return Option.of(Pair.of(deltaCommits.findInstantsAfterOrEquals(
-            latestInstant.getTimestamp(), Integer.MAX_VALUE), latestInstant));
+        return Option.of(Pair.of(deltaCommits, latestInstant));
       } else {
         return Option.empty();
       }
