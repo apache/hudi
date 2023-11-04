@@ -79,7 +79,6 @@ import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig;
 import org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallback;
 import org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallbackConfig;
-import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaFetchException;
 import org.apache.hudi.utilities.exception.HoodieSourceTimeoutException;
@@ -147,7 +146,6 @@ import static org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.getK
 import static org.apache.hudi.sync.common.util.SyncUtilHelpers.getHoodieMetaSyncException;
 import static org.apache.hudi.utilities.UtilHelpers.createRecordMerger;
 import static org.apache.hudi.utilities.config.HoodieStreamerConfig.CHECKPOINT_FORCE_SKIP;
-import static org.apache.hudi.utilities.config.HoodieStreamerConfig.SAMPLE_WRITES_ENABLED;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_RESET_KEY;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
@@ -295,9 +293,6 @@ public class StreamSync implements Serializable, Closeable {
         && this.props.getBoolean(DataSourceWriteOptions.ENABLE_ROW_WRITER().key(), false)) {
       // enable row writer only when operation is BULK_INSERT, and source is ROW type and if row writer is not explicitly disabled.
       this.useRowWriter = true;
-      if (props.getBoolean(HoodieStreamerConfig.SAMPLE_WRITES_ENABLED.key(), SAMPLE_WRITES_ENABLED.defaultValue())) {
-        throw new HoodieException("Sample writes estimation is not yet supported with row writer");
-      }
     } else {
       this.useRowWriter = false;
     }
