@@ -55,8 +55,11 @@ public class AvroSchemaUtils {
   }
 
   /**
-   * Establishes whether {@code prevSchema} is compatible w/ {@code newSchema}, as
-   * defined by Avro's {@link AvroSchemaCompatibility}
+   * Establishes whether {@code newSchema} is compatible w/ {@code prevSchema}, as
+   * defined by Avro's {@link AvroSchemaCompatibility}.
+   * From avro's compatability standpoint, prevSchema is writer schema and new schema is reader schema.
+   * {@code newSchema} is considered compatible to {@code prevSchema}, iff data written using {@code prevSchema}
+   * could be read by {@code newSchema}
    *
    * @param prevSchema previous instance of the schema
    * @param newSchema new instance of the schema
@@ -126,10 +129,19 @@ public class AvroSchemaUtils {
         AvroSchemaUtils::isAtomicSchemasCompatibleEvolution);
   }
 
-  private static boolean isAtomicSchemasCompatibleEvolution(Schema oneAtomicType, Schema anotherAtomicType) {
+  /**
+   * Establishes whether {@code newReaderSchema} is compatible w/ {@code prevWriterSchema}, as
+   * defined by Avro's {@link AvroSchemaCompatibility}.
+   * {@code newReaderSchema} is considered compatible to {@code prevWriterSchema}, iff data written using {@code prevWriterSchema}
+   * could be read by {@code newReaderSchema}
+   * @param newReaderSchema new reader schema instance.
+   * @param prevWriterSchema prev writer schema instance.
+   * @return true if its compatible. else false.
+   */
+  private static boolean isAtomicSchemasCompatibleEvolution(Schema newReaderSchema, Schema prevWriterSchema) {
     // NOTE: Checking for compatibility of atomic types, we should ignore their
     //       corresponding fully-qualified names (as irrelevant)
-    return isSchemaCompatible(anotherAtomicType, oneAtomicType, false, true);
+    return isSchemaCompatible(prevWriterSchema, newReaderSchema, false, true);
   }
 
   /**

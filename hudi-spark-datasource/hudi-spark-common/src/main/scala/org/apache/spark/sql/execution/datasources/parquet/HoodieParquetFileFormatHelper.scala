@@ -30,6 +30,7 @@ object HoodieParquetFileFormatHelper {
     val convert = new ParquetToSparkSchemaConverter(hadoopConf)
     val fileStruct = convert.convert(parquetFileMetaData.getSchema)
     val fileStructMap = fileStruct.fields.map(f => (f.name, f.dataType)).toMap
+    // if there are missing fields or if field's data type needs to be changed while reading, we handle it here.
     val sparkRequestStructFields = requiredSchema.map(f => {
       val requiredType = f.dataType
       if (fileStructMap.contains(f.name) && !isDataTypeEqual(requiredType, fileStructMap(f.name))) {

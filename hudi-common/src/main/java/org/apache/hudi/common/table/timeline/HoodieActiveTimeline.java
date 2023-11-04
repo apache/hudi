@@ -360,8 +360,8 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     return Option.fromJavaOptional(
         getCommitMetadataStream()
             .filter(instantCommitMetadataPair ->
-                !StringUtils.isNullOrEmpty(instantCommitMetadataPair.getValue().getMetadata(HoodieCommitMetadata.SCHEMA_KEY))
-            && !WriteOperationType.schemaCantChange(instantCommitMetadataPair.getRight().getOperationType()))
+                WriteOperationType.canUpdateSchema(instantCommitMetadataPair.getRight().getOperationType())
+                    && !StringUtils.isNullOrEmpty(instantCommitMetadataPair.getValue().getMetadata(HoodieCommitMetadata.SCHEMA_KEY)))
             .findFirst()
     );
   }

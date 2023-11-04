@@ -81,12 +81,12 @@ public class HoodieCommonConfig extends HoodieConfig {
           + " operation will fail schema compatibility check. Set this option to true will make the newly added "
           + " column nullable to successfully complete the write operation.");
 
-  public static final ConfigProperty<String> ADD_NULL_FOR_DELETED_COLUMNS = ConfigProperty
-      .key("hoodie.datasource.add.null.for.deleted.columns")
+  public static final ConfigProperty<String> SET_NULL_FOR_MISSING_COLUMNS = ConfigProperty
+      .key("hoodie.write.set.null.for.missing.columns")
       .defaultValue("false")
       .markAdvanced()
-      .withDocumentation("When a non-nullable column is deleted in datasource during a write operation, the write "
-          + " operation will fail schema compatibility check. Set this option to true will make the deleted "
+      .withDocumentation("When a non-nullable column is missing from incoming batch during a write operation, the write "
+          + " operation will fail schema compatibility check. Set this option to true will make the missing "
           + " column be filled with null values to successfully complete the write operation.");
 
   public static final ConfigProperty<ExternalSpillableMap.DiskMapType> SPILLABLE_DISK_MAP_TYPE = ConfigProperty

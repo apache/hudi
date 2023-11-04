@@ -139,11 +139,11 @@ public enum WriteOperationType {
         || operation == WriteOperationType.BOOTSTRAP;
   }
 
-  public static boolean schemaCantChange(WriteOperationType operation) {
-    return operation == WriteOperationType.CLUSTER
+  public static boolean canUpdateSchema(WriteOperationType operation) {
+    return !(operation == WriteOperationType.CLUSTER
         || operation == WriteOperationType.COMPACT
         || operation == WriteOperationType.INDEX
-        || operation == WriteOperationType.LOG_COMPACT;
+        || operation == WriteOperationType.LOG_COMPACT);
   }
 
   public static boolean isInsert(WriteOperationType operation) {

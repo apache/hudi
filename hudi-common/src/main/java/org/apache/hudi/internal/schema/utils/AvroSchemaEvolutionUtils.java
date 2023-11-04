@@ -23,6 +23,7 @@ import org.apache.hudi.internal.schema.action.TableChanges;
 
 import org.apache.avro.Schema;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -124,7 +125,14 @@ public class AvroSchemaEvolutionUtils {
   /**
    * Reconciles nullability and datatype requirements b/w {@code source} and {@code target} schemas,
    * by adjusting these of the {@code source} schema to be in-line with the ones of the
-   * {@code target} one
+   * {@code target} one. Source is considered to be new incoming schema, while target could refer to prev table schema.
+   * For example,
+   * if colA in source is non-nullable, but is nullable in target, output schema will have colA as nullable.
+   * if "hoodie.datasource.write.new.columns.nullable" is set to true and if colB is not present in source, but
+   * is present in target, output schema will have colB as nullable.
+   * if colC has different data type in source schema compared to target schema and if its promotable, (say source is int,
+   * and target is long and since int can be promoted to long), colC will be long data type in output schema.
+   *
    *
    * @param sourceSchema source schema that needs reconciliation
    * @param targetSchema target schema that source schema will be reconciled against
@@ -141,16 +149,23 @@ public class AvroSchemaEvolutionUtils {
 
     List<String> colNamesSourceSchema = sourceInternalSchema.getAllColsFullName();
     List<String> colNamesTargetSchema = targetInternalSchema.getAllColsFullName();
-    List<String> nullableUpdateCols = colNamesSourceSchema.stream()
-        .filter(f -> (("true".equals(opts.get(MAKE_NEW_COLUMNS_NULLABLE.key())) && !colNamesTargetSchema.contains(f))
-                || colNamesTargetSchema.contains(f) && sourceInternalSchema.findField(f).isOptional() != targetInternalSchema.findField(f).isOptional()
-            )
-        ).collect(Collectors.toList());
-    List<String> typeUpdateCols = colNamesSourceSchema.stream()
-        .filter(f -> (colNamesTargetSchema.contains(f) && SchemaChangeUtils.shouldPromoteType(sourceInternalSchema.findType(f), targetInternalSchema.findType(f)))
-        ).collect(Collectors.toList());
+    boolean makeNewColsNullable = "true".equals(opts.get(MAKE_NEW_COLUMNS_NULLABLE.key()));
 
-    if (nullableUpdateCols.isEmpty() && typeUpdateCols.isEmpty()) {
+    List<String> nullableUpdateColsInSource = new ArrayList<>();
+    List<String> typeUpdateColsInSource = new ArrayList<>();
+    colNamesSourceSchema.forEach(field -> {
+      // handle columns that needs to be made nullable
+      if ((makeNewColsNullable && !colNamesTargetSchema.contains(field))
+          || colNamesTargetSchema.contains(field) && sourceInternalSchema.findField(field).isOptional() != targetInternalSchema.findField(field).isOptional()) {
+        nullableUpdateColsInSource.add(field);
+      }
+      // handle columns that needs type to be updated
+      if (colNamesTargetSchema.contains(field) && SchemaChangeUtils.shouldPromoteType(sourceInternalSchema.findType(field), targetInternalSchema.findType(field))) {
+        typeUpdateColsInSource.add(field);
+      }
+    });
+
+    if (nullableUpdateColsInSource.isEmpty() && typeUpdateColsInSource.isEmpty()) {
       //standardize order of unions
       return convert(sourceInternalSchema, sourceSchema.getFullName());
     }
@@ -158,14 +173,14 @@ public class AvroSchemaEvolutionUtils {
     TableChanges.ColumnUpdateChange schemaChange = TableChanges.ColumnUpdateChange.get(sourceInternalSchema);
 
     // Reconcile nullability constraints (by executing phony schema change)
-    if (!nullableUpdateCols.isEmpty()) {
-      schemaChange = reduce(nullableUpdateCols, schemaChange,
+    if (!nullableUpdateColsInSource.isEmpty()) {
+      schemaChange = reduce(nullableUpdateColsInSource, schemaChange,
           (change, field) -> change.updateColumnNullability(field, true));
     }
 
     // Reconcile type promotions
-    if (!typeUpdateCols.isEmpty()) {
-      schemaChange = reduce(typeUpdateCols, schemaChange,
+    if (!typeUpdateColsInSource.isEmpty()) {
+      schemaChange = reduce(typeUpdateColsInSource, schemaChange,
           (change, field) -> change.updateColumnType(field, targetInternalSchema.findType(field)));
     }
 

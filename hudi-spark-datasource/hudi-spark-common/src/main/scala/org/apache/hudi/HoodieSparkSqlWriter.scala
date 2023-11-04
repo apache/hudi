@@ -142,7 +142,7 @@ object HoodieSparkSqlWriter {
                          latestTableSchemaOpt: Option[Schema],
                          internalSchemaOpt: Option[InternalSchema],
                          opts: Map[String, String]): Schema = {
-    new HoodieSparkSqlWriterInternal().deduceWriterSchema(sourceSchema, latestTableSchemaOpt, internalSchemaOpt, opts)
+    HoodieSchemaUtils.deduceWriterSchema(sourceSchema, latestTableSchemaOpt, internalSchemaOpt, opts)
   }
 
   def deduceWriterSchema(sourceSchema: Schema,
@@ -422,7 +422,7 @@ class HoodieSparkSqlWriterInternal {
             // NOTE: Target writer's schema is deduced based on
             //         - Source's schema
             //         - Existing table's schema (including its Hudi's [[InternalSchema]] representation)
-            val writerSchema = deduceWriterSchema(sourceSchema, latestTableSchemaOpt, internalSchemaOpt, parameters)
+            val writerSchema = HoodieSchemaUtils.deduceWriterSchema(sourceSchema, latestTableSchemaOpt, internalSchemaOpt, parameters)
 
             validateSchemaForHoodieIsDeleted(writerSchema)
             mayBeValidateParamsForAutoGenerationOfRecordKeys(parameters, hoodieConfig)
@@ -548,12 +548,12 @@ class HoodieSparkSqlWriterInternal {
    *   <li>Target table's schema (including Hudi's [[InternalSchema]] representation)</li>
    * </ul>
    */
-  def deduceWriterSchema(sourceSchema: Schema,
+  /*def deduceWriterSchema(sourceSchema: Schema,
                          latestTableSchemaOpt: Option[Schema],
                          internalSchemaOpt: Option[InternalSchema],
                          opts: Map[String, String]): Schema = {
-    val addNullForDeletedColumns = opts.getOrDefault(DataSourceWriteOptions.ADD_NULL_FOR_DELETED_COLUMNS.key(),
-      DataSourceWriteOptions.ADD_NULL_FOR_DELETED_COLUMNS.defaultValue).toBoolean
+    val setNullForMissingColumns = opts.getOrDefault(DataSourceWriteOptions.SET_NULL_FOR_MISSING_COLUMNS.key(),
+      DataSourceWriteOptions.SET_NULL_FOR_MISSING_COLUMNS.defaultValue).toBoolean
     val shouldReconcileSchema = opts(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
     val shouldValidateSchemasCompatibility = opts.getOrDefault(HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key,
       HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.defaultValue).toBoolean
@@ -638,7 +638,7 @@ class HoodieSparkSqlWriterInternal {
               if (allowAutoEvolutionColumnDrop) {
                 canonicalizedSourceSchema
               } else {
-                val reconciledSchema = if (addNullForDeletedColumns) {
+                val reconciledSchema = if (setNullForMissingColumns) {
                   AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema, latestTableSchema)
                 } else {
                   canonicalizedSourceSchema
@@ -669,7 +669,7 @@ class HoodieSparkSqlWriterInternal {
             }
         }
     }
-  }
+  }*/
 
   /**
    * Resolve wildcards in partitions
@@ -741,45 +741,6 @@ class HoodieSparkSqlWriterInternal {
     parameters ++ Map(HoodieWriteConfig.INTERNAL_SCHEMA_STRING.key() -> SerDeHelper.toJson(correctInternalSchema.getOrElse(null)),
       HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key() -> schemaEvolutionEnable,
       HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key()  -> schemaValidateEnable)
-  }
-
-  private def reconcileSchemasLegacy(tableSchema: Schema, newSchema: Schema): (Schema, Boolean) = {
-    // Legacy reconciliation implements following semantic
-    //    - In case new-schema is a "compatible" projection of the existing table's one (projection allowing
-    //      permitted type promotions), table's schema would be picked as (reconciled) writer's schema;
-    //    - Otherwise, we'd fall back to picking new (batch's) schema as a writer's schema;
-    //
-    // Philosophically, such semantic aims at always choosing a "wider" schema, ie the one containing
-    // the other one (schema A contains schema B, if schema B is a projection of A). This enables us,
-    // to always "extend" the schema during schema evolution and hence never lose the data (when, for ex
-    // existing column is being dropped in a new batch)
-    //
-    // NOTE: By default Hudi doesn't allow automatic schema evolution to drop the columns from the target
-    //       table. However, when schema reconciliation is turned on, we would allow columns to be dropped
-    //       in the incoming batch (as these would be reconciled in anyway)
-    if (isCompatibleProjectionOf(tableSchema, newSchema)) {
-      // Picking table schema as a writer schema we need to validate that we'd be able to
-      // rewrite incoming batch's data (written in new schema) into it
-      (tableSchema, isSchemaCompatible(newSchema, tableSchema))
-    } else {
-      // Picking new schema as a writer schema we need to validate that we'd be able to
-      // rewrite table's data into it
-      (newSchema, isSchemaCompatible(tableSchema, newSchema))
-    }
-  }
-
-  /**
-   * Canonicalizes [[sourceSchema]] by reconciling it w/ [[latestTableSchema]] in following
-   *
-   * <ol>
-   *  <li>Nullability: making sure that nullability of the fields in the source schema is matching
-   *  that of the latest table's ones</li>
-   * </ol>
-   *
-   * TODO support casing reconciliation
-   */
-  private def canonicalizeSchema(sourceSchema: Schema, latestTableSchema: Schema, opts : Map[String, String]): Schema = {
-    reconcileSchemaRequirements(sourceSchema, latestTableSchema, opts)
   }
 
   private def registerAvroSchemasWithKryo(sparkContext: SparkContext, targetAvroSchemas: Schema*): Unit = {

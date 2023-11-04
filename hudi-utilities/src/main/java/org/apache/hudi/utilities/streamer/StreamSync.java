@@ -411,7 +411,7 @@ public class StreamSync implements Serializable, Closeable {
         .build();
     String instantTime = metaClient.createNewInstantTime();
 
-    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> srcRecordsWithCkpt = readFromSource(instantTime);
+    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> srcRecordsWithCkpt = readFromSource(instantTime, metaClient);
 
     if (srcRecordsWithCkpt != null) {
       final JavaRDD<HoodieRecord> recordsFromSource = srcRecordsWithCkpt.getRight().getRight();
@@ -483,7 +483,7 @@ public class StreamSync implements Serializable, Closeable {
    * of schemaProvider, checkpointStr and hoodieRecord
    * @throws Exception in case of any Exception
    */
-  public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> readFromSource(String instantTime) throws IOException {
+  public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> readFromSource(String instantTime, HoodieTableMetaClient metaClient) throws IOException {
     // Retrieve the previous round checkpoints, if any
     Option<String> resumeCheckpointStr = Option.empty();
     if (commitsTimelineOpt.isPresent()) {
@@ -501,7 +501,7 @@ public class StreamSync implements Serializable, Closeable {
     Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> sourceDataToSync = null;
     while (curRetryCount++ < maxRetryCount && sourceDataToSync == null) {
       try {
-        sourceDataToSync = fetchFromSource(resumeCheckpointStr, instantTime);
+        sourceDataToSync = fetchFromSource(resumeCheckpointStr, instantTime, metaClient);
       } catch (HoodieSourceTimeoutException e) {
         if (curRetryCount >= maxRetryCount) {
           throw e;
@@ -518,18 +518,14 @@ public class StreamSync implements Serializable, Closeable {
     return sourceDataToSync;
   }
 
-  private Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchFromSource(Option<String> resumeCheckpointStr, String instantTime) {
+  private Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchFromSource(Option<String> resumeCheckpointStr, String instantTime,
+                                                                                    HoodieTableMetaClient metaClient) {
     HoodieRecordType recordType = createRecordMerger(props).getRecordType();
     if (recordType == HoodieRecordType.SPARK && HoodieTableType.valueOf(cfg.tableType) == HoodieTableType.MERGE_ON_READ
         && HoodieLogBlockType.fromId(props.getProperty(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "avro"))
         != HoodieLogBlockType.PARQUET_DATA_BLOCK) {
       throw new UnsupportedOperationException("Spark record only support parquet log.");
     }
-
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(new Configuration(fs.getConf()))
-        .setBasePath(cfg.targetBasePath)
-        .setPayloadClassName(cfg.payloadClassName)
-        .build();
 
     final Option<JavaRDD<GenericRecord>> avroRDDOptional;
     final String checkpointStr;
@@ -591,7 +587,8 @@ public class StreamSync implements Serializable, Closeable {
       // Rewrite transformed records into the expected target schema
       schemaProvider = getDeducedSchemaProvider(dataAndCheckpoint.getSchemaProvider().getSourceSchema(), dataAndCheckpoint.getSchemaProvider(), metaClient);
       String serializedTargetSchema = schemaProvider.getTargetSchema().toString();
-      avroRDDOptional = dataAndCheckpoint.getBatch().map(t -> t.mapPartitions(iterator -> new LazyCastingIterator(iterator, serializedTargetSchema)));
+      avroRDDOptional = dataAndCheckpoint.getBatch().map(t -> t.mapPartitions(iterator ->
+          new LazyCastingIterator(iterator, serializedTargetSchema)));
     }
 
     if (!cfg.allowCommitOnNoCheckpointChange && Objects.equals(checkpointStr, resumeCheckpointStr.orElse(null))) {
