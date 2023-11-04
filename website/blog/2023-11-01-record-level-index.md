@@ -198,7 +198,7 @@ Below, we have summarized a comparison table highlighting these important charac
 | Boost both writes and reads   | Yes                | No, write-only      | No, write-only     | No, write-only                       | No, write-only |
 | Easy to enable                | Yes                | Yes                 | Yes                | No, require HBase server             | Yes            |
 
-A real-world application that stands to significantly benefit from RLI is fulfilling the GDPR requirements. 
+Many real-world applications will significantly benefit from using RLI. A common example is fulfilling the GDPR requirements. 
 Typically, when users make requests, a set of IDs will be provided to identify the to-be-deleted records, 
 which will either be updated (columns being nullified) or permanently removed. 
 By enabling RLI, offline jobs performing such changes will become notably more efficient, resulting in cost savings. 
