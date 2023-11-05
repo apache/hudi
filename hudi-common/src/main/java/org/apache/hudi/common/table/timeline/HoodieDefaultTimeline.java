@@ -228,9 +228,10 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   @Override
   public HoodieDefaultTimeline findInstantsModifiedAfterByCompletionTime(String instantTime) {
     return new HoodieDefaultTimeline(instants.stream()
-        .filter(s -> s.getCompletionTime() != null
-            && HoodieTimeline.compareTimestamps(s.getCompletionTime(), GREATER_THAN, instantTime)
-            && !s.getTimestamp().equals(instantTime)), details);
+        // either pending or completionTime greater than instantTime
+        .filter(s -> (s.getCompletionTime() == null && compareTimestamps(s.getTimestamp(), GREATER_THAN, instantTime))
+            || (compareTimestamps(s.getCompletionTime(), GREATER_THAN, instantTime) && !s.getTimestamp().equals(instantTime))),
+        details);
   }
 
   @Override
