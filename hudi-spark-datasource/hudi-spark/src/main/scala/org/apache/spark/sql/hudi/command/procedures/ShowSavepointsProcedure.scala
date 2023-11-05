@@ -29,7 +29,8 @@ import java.util.stream.Collectors
 class ShowSavepointsProcedure extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.optional(0, "table", DataTypes.StringType),
-    ProcedureParameter.optional(1, "path", DataTypes.StringType)
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
+    ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 100)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -45,6 +46,7 @@ class ShowSavepointsProcedure extends BaseProcedure with ProcedureBuilder {
 
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
     val tablePath = getArgValueOrDefault(args, PARAMETERS(1))
+    val limit = getArgValueOrDefault(args, PARAMETERS(2))
 
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
@@ -54,7 +56,11 @@ class ShowSavepointsProcedure extends BaseProcedure with ProcedureBuilder {
     val commits: util.List[HoodieInstant] = timeline.getReverseOrderedInstants.collect(Collectors.toList[HoodieInstant])
 
     if (commits.isEmpty) Seq.empty[Row] else {
-      commits.toArray.map(instant => instant.asInstanceOf[HoodieInstant].getTimestamp).map(p => Row(p)).toSeq
+      if (limit.isDefined) {
+        commits.stream().limit(limit.get.asInstanceOf[Int]).toArray.map(instant => instant.asInstanceOf[HoodieInstant].getTimestamp).map(p => Row(p)).toSeq
+      } else {
+        commits.toArray.map(instant => instant.asInstanceOf[HoodieInstant].getTimestamp).map(p => Row(p)).toSeq
+      }
     }
   }
 

@@ -30,7 +30,8 @@ import scala.collection.JavaConversions._
 
 class ShowMetadataTableStatsProcedure() extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType)
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -46,6 +47,7 @@ class ShowMetadataTableStatsProcedure() extends BaseProcedure with ProcedureBuil
     super.checkArgs(PARAMETERS, args)
 
     val table = getArgValueOrDefault(args, PARAMETERS(0))
+    val limit = getArgValueOrDefault(args, PARAMETERS(1))
 
     val basePath = getBasePath(table)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
@@ -57,7 +59,11 @@ class ShowMetadataTableStatsProcedure() extends BaseProcedure with ProcedureBuil
     for (entry <- stats.entrySet) {
       rows.add(Row(entry.getKey, entry.getValue))
     }
-    rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList
+    if (limit.isDefined) {
+      rows.stream().limit(limit.get.asInstanceOf[Int]).toArray().map(r => r.asInstanceOf[Row]).toList
+    } else {
+      rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList
+    }
   }
 
   override def build: Procedure = new ShowMetadataTableStatsProcedure()

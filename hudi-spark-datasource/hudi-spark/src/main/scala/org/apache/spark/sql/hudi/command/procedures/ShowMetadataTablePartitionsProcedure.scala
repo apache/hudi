@@ -33,7 +33,8 @@ import scala.collection.JavaConverters.asScalaIteratorConverter
 
 class ShowMetadataTablePartitionsProcedure() extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType)
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 100)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -48,6 +49,7 @@ class ShowMetadataTablePartitionsProcedure() extends BaseProcedure with Procedur
     super.checkArgs(PARAMETERS, args)
 
     val table = getArgValueOrDefault(args, PARAMETERS(0))
+    val limit = getArgValueOrDefault(args, PARAMETERS(1))
 
     val basePath = getBasePath(table)
     val config = HoodieMetadataConfig.newBuilder.enable(true).build
@@ -65,7 +67,11 @@ class ShowMetadataTablePartitionsProcedure() extends BaseProcedure with Procedur
     partitions.stream.iterator().asScala.foreach((p: String) => {
         rows.add(Row(p))
     })
-    rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList
+    if (limit.isDefined) {
+      rows.stream().limit(limit.get.asInstanceOf[Int]).toArray().map(r => r.asInstanceOf[Row]).toList
+    } else {
+      rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList
+    }
   }
 
   override def build: Procedure = new ShowMetadataTablePartitionsProcedure()
