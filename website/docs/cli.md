@@ -670,7 +670,7 @@ upgrade table
 
 ### Change Hudi Table Type
 There are cases we want to change the hudi table type. For example, change COW table to MOR for more efficient and 
-lower latency writing; change MOR to COW for for better read performance or something else.
+lower latency ingestion; change MOR to COW for better read performance and compatibility with downstream engines.
 So we offer the table command to perform this modification conveniently. 
 
 Changing **COW to MOR**, we can simply modify the `hoodie.table.type` in `hoodie.properties` to MERGE_ON_READ.
