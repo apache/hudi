@@ -34,7 +34,8 @@ class CopyToTempViewProcedure extends BaseProcedure with ProcedureBuilder with L
     ProcedureParameter.optional(4, "end_instance_time", DataTypes.StringType, ""),
     ProcedureParameter.optional(5, "as_of_instant", DataTypes.StringType, ""),
     ProcedureParameter.optional(6, "replace", DataTypes.BooleanType, false),
-    ProcedureParameter.optional(7, "global", DataTypes.BooleanType, false)
+    ProcedureParameter.optional(7, "global", DataTypes.BooleanType, false),
+    ProcedureParameter.optional(8, "cache", DataTypes.BooleanType, false)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -56,6 +57,7 @@ class CopyToTempViewProcedure extends BaseProcedure with ProcedureBuilder with L
     val asOfInstant = getArgValueOrDefault(args, PARAMETERS(5)).get.asInstanceOf[String]
     val replace = getArgValueOrDefault(args, PARAMETERS(6)).get.asInstanceOf[Boolean]
     val global = getArgValueOrDefault(args, PARAMETERS(7)).get.asInstanceOf[Boolean]
+    val cache = getArgValueOrDefault(args, PARAMETERS(8)).get.asInstanceOf[Boolean]
 
     val tablePath = getBasePath(tableName)
 
@@ -85,6 +87,9 @@ class CopyToTempViewProcedure extends BaseProcedure with ProcedureBuilder with L
           .format("org.apache.hudi")
           .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
           .load(tablePath)
+    }
+    if (cache) {
+      sourceDataFrame.cache
     }
     if (global) {
       if (replace) {

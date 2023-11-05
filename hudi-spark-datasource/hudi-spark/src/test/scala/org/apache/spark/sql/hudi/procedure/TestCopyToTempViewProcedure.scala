@@ -114,6 +114,43 @@ class TestCopyToTempViewProcedure extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test Call copy_to_temp_view Procedure with cache") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      // insert data to table
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
+      spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
+      spark.sql(s"insert into $tableName select 4, 'a4', 40, 2500")
+
+      // Check required fields
+      checkExceptionContain(s"call copy_to_temp_view(table=>'$tableName')")(s"Argument: view_name is required")
+
+      val viewName = generateTableName
+
+      val row = spark.sql(s"""call copy_to_temp_view(table=>'$tableName',view_name=>'$viewName',cache=>true)""").collectAsList()
+      assert(row.size() == 1 && row.get(0).get(0) == 0)
+      val copyTableCount = spark.sql(s"""select count(1) from $viewName""").collectAsList()
+      assert(copyTableCount.size() == 1 && copyTableCount.get(0).get(0) == 4)
+    }
+  }
+
   test("Test Call copy_to_temp_view Procedure with global params") {
     withTempDir { tmp =>
       val tableName = generateTableName
