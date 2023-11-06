@@ -2663,6 +2663,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
   }
 
+  public boolean isNonBlockingConcurrencyControl() {
+    return getWriteConcurrencyMode().isNonBlockingConcurrencyControl();
+  }
+
   public static class Builder {
 
     protected final HoodieWriteConfig writeConfig = new HoodieWriteConfig();

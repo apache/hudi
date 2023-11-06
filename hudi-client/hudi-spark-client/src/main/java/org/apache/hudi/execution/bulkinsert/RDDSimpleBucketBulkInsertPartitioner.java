@@ -37,9 +37,12 @@ import java.util.stream.Collectors;
 
 public class RDDSimpleBucketBulkInsertPartitioner<T extends HoodieRecordPayload> extends RDDBucketIndexPartitioner<T> {
 
+  private final boolean isNonBlockingConcurrencyControl;
+
   public RDDSimpleBucketBulkInsertPartitioner(HoodieTable table) {
     super(table, null, false);
     ValidationUtils.checkArgument(table.getIndex() instanceof HoodieSimpleBucketIndex);
+    this.isNonBlockingConcurrencyControl = table.getConfig().isNonBlockingConcurrencyControl();
   }
 
   @Override
@@ -93,7 +96,7 @@ public class RDDSimpleBucketBulkInsertPartitioner<T extends HoodieRecordPayload>
           // Generate a file that does not exist
           for (int i = 0; i < numBuckets; i++) {
             if (!existsBucketID.contains(i)) {
-              String fileIdPrefix = BucketIdentifier.newBucketFileIdPrefix(i);
+              String fileIdPrefix = BucketIdentifier.newBucketFileIdPrefix(i, isNonBlockingConcurrencyControl);
               fileIdPrefixToBucketIndex.put(fileIdPrefix, fileIdPfxList.size());
               fileIdPfxList.add(fileIdPrefix);
               doAppend.add(false);
@@ -104,4 +107,3 @@ public class RDDSimpleBucketBulkInsertPartitioner<T extends HoodieRecordPayload>
         }));
   }
 }
-

@@ -56,4 +56,12 @@ public enum WriteConcurrencyMode {
   public boolean isOptimisticConcurrencyControl() {
     return this == OPTIMISTIC_CONCURRENCY_CONTROL;
   }
+
+  public boolean isNonBlockingConcurrencyControl() {
+    return this == NON_BLOCKING_CONCURRENCY_CONTROL;
+  }
+
+  public static boolean isNonBlockingConcurrencyControl(String name) {
+    return WriteConcurrencyMode.valueOf(name.toUpperCase()).isNonBlockingConcurrencyControl();
+  }
 }
