@@ -199,5 +199,52 @@ You can control the behavior of these operations using various configuration opt
 
 ## Flink 
 
-Flink SQL also provides several Data Manipulation Language (DML) actions for interacting with Hudi tables. All these operations are already 
-showcased in the [Flink Quickstart](/docs/flink-quick-start-guide).
+Flink SQL provides several Data Manipulation Language (DML) actions for interacting with Hudi tables. These operations allow you to insert, update and delete data from your Hudi tables. Let's explore them one by one.
+
+### Insert Data
+
+You can utilize the INSERT INTO statement to incorporate data into a Hudi table using Flink SQL. Here are a few illustrative examples:
+
+```sql
+INSERT INTO <table> 
+SELECT <columns> FROM <source>;
+```
+
+Examples:
+
+```sql
+-- Insert into a Hudi table
+INSERT INTO hudi_table SELECT 1, 'a1', 20;
+```
+
+If the `write.operation` is 'upsert,' the INSERT INTO statement will not only insert new records but also update existing rows with the same record key.
+
+### Update Data
+With Flink SQL, you can use update command to update the hudi table. Here are a few illustrative examples:
+
+```sql
+UPDATE tableIdentifier SET column = EXPRESSION(,column = EXPRESSION) [ WHERE boolExpression]
+```
+
+```sql
+UPDATE hudi_table SET price = price * 2, ts = 1111 WHERE id = 1;
+```
+
+:::note Key requirements
+Update query only work with batch excution mode.
+:::
+
+### Delete Data
+With Flink SQL, you can use delete command to delete the rows from hudi table. Here are a few illustrative examples:
+
+```sql
+DELETE FROM tableIdentifier [ WHERE boolExpression ]
+```
+
+```sql
+DELETE FROM hudi_table WHERE price < 100;
+```
+
+:::note Key requirements
+Delete query only work with batch excution mode.
+:::
