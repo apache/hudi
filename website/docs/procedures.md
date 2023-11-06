@@ -1233,7 +1233,8 @@ call show_fsview_latest(table => 'test_hudi_table');
 ## Optimization table
 
 ### run_clustering
-Trigger clustering on a hoodie table. By using partition predicates, clustering table can be run
+
+Trigger clustering on a hoodie table. By using partition predicates, clustering table can be run 
 with specified partitions, and you can also specify the order columns to sort data.
 
 :::note
