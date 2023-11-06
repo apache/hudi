@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -109,7 +110,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
     config.setValue("hoodie.clustering.plan.strategy.max.bytes.per.group", String.valueOf(2 * 1024 * 1024));
 
     int numRecords = 1000;
-    writeData(writeClient.createNewInstantTime(), numRecords, true);
+    writeData(HoodieActiveTimeline.createNewInstantTime(), numRecords, true);
 
     String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
     HoodieClusteringPlan plan = ClusteringUtils.getClusteringPlan(

@@ -403,7 +403,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     }
   }
 
-  static List<String> getAsyncServicesConfigs(int totalRecords, String autoClean, String inlineCluster,
+  static List<String> getTableServicesConfigs(int totalRecords, String autoClean, String inlineCluster,
                                               String inlineClusterMaxCommit, String asyncCluster, String asyncClusterMaxCommit) {
     List<String> configs = new ArrayList<>();
     configs.add(String.format("%s=%d", SourceTestConfig.MAX_UNIQUE_RECORDS_PROP.key(), totalRecords));
@@ -638,7 +638,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
         boolean ret = false;
         while (!ret && !dsFuture.isDone()) {
           try {
-            Thread.sleep(3000);
+            Thread.sleep(2000);
             ret = condition.apply(true);
           } catch (Throwable error) {
             LOG.warn("Got error :", error);
