@@ -61,7 +61,7 @@ public class TestHoodieDeltaStreamerDAGExecution extends HoodieDeltaStreamerTest
     // Configure 3 transformers of same type. 2nd transformer has no suffix
     StageListener stageListener = new StageListener("org.apache.hudi.table.action.commit.BaseCommitActionExecutor.executeClustering");
     sparkSession.sparkContext().addSparkListener(stageListener);
-    List<String> configs = getAsyncServicesConfigs(100, "false", "true", "1", "", "");
+    List<String> configs = getTableServicesConfigs(100, "false", "true", "1", "", "");
     runDeltaStreamer(WriteOperationType.UPSERT, false, Option.of(configs));
     assertEquals(1, stageListener.triggerCount);
   }
