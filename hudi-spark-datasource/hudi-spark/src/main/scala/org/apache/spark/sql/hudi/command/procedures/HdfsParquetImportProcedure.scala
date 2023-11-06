@@ -58,10 +58,10 @@ class HdfsParquetImportProcedure extends BaseProcedure with ProcedureBuilder wit
     val rowKey = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String]
     val partitionKey = getArgValueOrDefault(args, PARAMETERS(5)).get.asInstanceOf[String]
     val schemaFilePath = getArgValueOrDefault(args, PARAMETERS(6)).get.asInstanceOf[String]
-    val command = getArgValueOrDefault(args, PARAMETERS(8)).get.asInstanceOf[String]
-    val retry = getArgValueOrDefault(args, PARAMETERS(9)).get.asInstanceOf[Int]
-    val parallelism = getArgValueOrDefault(args, PARAMETERS(10)).get.asInstanceOf[Int]
-    val propsFilePath = getArgValueOrDefault(args, PARAMETERS(11)).get.asInstanceOf[String]
+    val command = getArgValueOrDefault(args, PARAMETERS(7)).get.asInstanceOf[String]
+    val retry = getArgValueOrDefault(args, PARAMETERS(8)).get.asInstanceOf[Int]
+    val parallelism = getArgValueOrDefault(args, PARAMETERS(9)).get.asInstanceOf[Int]
+    val propsFilePath = getArgValueOrDefault(args, PARAMETERS(10)).get.asInstanceOf[String]
 
     val parquetImporterUtils: HDFSParquetImporterUtils = new HDFSParquetImporterUtils(command, srcPath, targetPath,
       tableName, tableType, rowKey, partitionKey, parallelism, schemaFilePath, retry, propsFilePath)
