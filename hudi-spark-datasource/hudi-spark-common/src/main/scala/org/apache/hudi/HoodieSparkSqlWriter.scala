@@ -27,7 +27,7 @@ import org.apache.hudi.DataSourceOptionsHelper.fetchMissingWriteConfigsFromTable
 import org.apache.hudi.DataSourceUtils.tryOverrideParquetWriteLegacyFormatProperty
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
-import org.apache.hudi.HoodieSparkSqlWriter.{CANONICALIZE_NULLABLE, SQL_MERGE_INTO_WRITES, StreamingWriteParams}
+import org.apache.hudi.HoodieSparkSqlWriter.{CANONICALIZE_NULLABLE, SQL_MERGE_INTO_WRITES, StreamingWriteParams, getHiveTableNames}
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.avro.AvroSchemaUtils.{canProject, isCompatibleProjectionOf, isSchemaCompatible, resolveNullableSchema}
 import org.apache.hudi.avro.HoodieAvroUtils
@@ -149,6 +149,26 @@ object HoodieSparkSqlWriter {
     Metrics.shutdownAllMetrics()
   }
 
+  def getHiveTableNames(hoodieConfig: HoodieConfig): List[String] = {
+    val tableName = hoodieConfig.getStringOrDefault(HIVE_TABLE)
+    val tableType = hoodieConfig.getStringOrDefault(TABLE_TYPE)
+
+    if (tableType.equals(COW_TABLE_TYPE_OPT_VAL)) {
+      List(tableName)
+    } else {
+      if (!hoodieConfig.getStringOrDefault(HiveSyncConfigHolder.HIVE_SYNC_TABLE_STRATEGY).equals(HoodieSyncTableStrategy.ALL.name())) {
+        List(tableName)
+      } else {
+        val roSuffix = if (hoodieConfig.getBooleanOrDefault(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE)) {
+          ""
+        } else {
+          HiveSyncTool.SUFFIX_READ_OPTIMIZED_TABLE
+        }
+        List(tableName + roSuffix,
+          tableName + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE)
+      }
+    }
+  }
 }
 
 class HoodieSparkSqlWriterInternal {
@@ -1069,23 +1089,6 @@ class HoodieSparkSqlWriterInternal {
       })
     }
     true
-  }
-
-  private def getHiveTableNames(hoodieConfig: HoodieConfig): List[String] = {
-    val tableName = hoodieConfig.getStringOrDefault(HIVE_TABLE)
-    val tableType = hoodieConfig.getStringOrDefault(TABLE_TYPE)
-
-    if (tableType.equals(COW_TABLE_TYPE_OPT_VAL)) {
-      List(tableName)
-    } else {
-      val roSuffix = if (hoodieConfig.getBooleanOrDefault(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE)) {
-        ""
-      } else {
-        HiveSyncTool.SUFFIX_READ_OPTIMIZED_TABLE
-      }
-      List(tableName + roSuffix,
-        tableName + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE)
-    }
   }
 
   /**
