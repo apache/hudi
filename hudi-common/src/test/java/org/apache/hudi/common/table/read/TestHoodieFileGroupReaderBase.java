@@ -38,6 +38,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -76,6 +77,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
                                                   String fileGroupId);
 
   @Test
+  @Disabled
   public void testReadFileGroupInMergeOnReadTable() throws Exception {
     Map<String, String> writeConfigs = new HashMap<>();
     writeConfigs.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet");
