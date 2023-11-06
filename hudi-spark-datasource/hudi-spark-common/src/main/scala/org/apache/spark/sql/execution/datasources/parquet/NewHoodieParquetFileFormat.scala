@@ -56,6 +56,9 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
                                  requiredFilters: Seq[Filter]
                                 ) extends ParquetFileFormat with SparkAdapterSupport {
 
+
+  private val legacyFF = sparkAdapter.createLegacyHoodieParquetFileFormat(true).get
+
   override def isSplitable(sparkSession: SparkSession,
                            options: Map[String, String],
                            path: Path): Boolean = {
@@ -74,7 +77,7 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
     if (!supportBatchCalled) {
       supportBatchCalled = true
-      supportBatchResult = !isMOR && !isIncremental && super.supportBatch(sparkSession, schema)
+      supportBatchResult = !isMOR && !isIncremental && legacyFF.supportBatch(sparkSession, schema)
     }
     supportBatchResult
   }
@@ -179,6 +182,20 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
     }
   }
 
+  private def wrapWithBatchConverter(reader: PartitionedFile => Iterator[InternalRow]): PartitionedFile => Iterator[InternalRow] = {
+    if (supportBatchCalled && !supportBatchResult) {
+      file: PartitionedFile => {
+        val iter = reader(file).asInstanceOf[Iterator[Any]]
+        iter.flatMap {
+          case r: InternalRow => Seq(r)
+          case b: ColumnarBatch => b.rowIterator().asScala
+        }
+      }
+    } else {
+      reader
+    }
+  }
+
   /**
    * Build file readers to read individual physical files
    */
@@ -191,19 +208,20 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
     PartitionedFile => Iterator[InternalRow],
     PartitionedFile => Iterator[InternalRow]) = {
 
+
     //file reader when you just read a hudi parquet file and don't do any merging
     val baseFileReader = if (isIncremental) {
-      super.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchemaWithMandatory,
+      legacyFF.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchemaWithMandatory,
         filters ++ requiredFilters, options, new Configuration(hadoopConf))
     } else {
-      super.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema,
+      legacyFF.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema,
         filters ++ requiredFilters, options, new Configuration(hadoopConf))
     }
 
 
    //file reader for reading a hudi base file that needs to be merged with log files
     val preMergeBaseFileReader = if (isMOR) {
-      super.buildReaderWithPartitionValues(sparkSession, dataSchema, StructType(Seq.empty),
+      legacyFF.buildReaderWithPartitionValues(sparkSession, dataSchema, StructType(Seq.empty),
         requiredSchemaWithMandatory, requiredFilters, options, new Configuration(hadoopConf))
     } else {
       _: PartitionedFile => Iterator.empty
@@ -222,11 +240,11 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
     val skeletonReader = if (needMetaCols && isBootstrap) {
       if (needDataCols || isMOR) {
         // no filter and no append
-        super.buildReaderWithPartitionValues(sparkSession, HoodieSparkUtils.getMetaSchema, StructType(Seq.empty),
+        legacyFF.buildReaderWithPartitionValues(sparkSession, HoodieSparkUtils.getMetaSchema, StructType(Seq.empty),
           requiredMeta, Seq.empty, options, new Configuration(hadoopConf))
       } else {
         // filter and append
-        super.buildReaderWithPartitionValues(sparkSession, HoodieSparkUtils.getMetaSchema, partitionSchema,
+        legacyFF.buildReaderWithPartitionValues(sparkSession, HoodieSparkUtils.getMetaSchema, partitionSchema,
           requiredMeta, filters, options, new Configuration(hadoopConf))
       }
     } else {
@@ -238,22 +256,25 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
       val dataSchemaWithoutMeta = StructType(dataSchema.fields.filterNot(sf => isMetaField(sf.name)))
       if (isMOR) {
         // no filter and no append
-        super.buildReaderWithPartitionValues(sparkSession, dataSchemaWithoutMeta, StructType(Seq.empty), requiredWithoutMeta,
+        legacyFF.buildReaderWithPartitionValues(sparkSession, dataSchemaWithoutMeta, StructType(Seq.empty), requiredWithoutMeta,
           Seq.empty, options, new Configuration(hadoopConf))
       } else if (needMetaCols) {
         // no filter but append
-        super.buildReaderWithPartitionValues(sparkSession, dataSchemaWithoutMeta, partitionSchema, requiredWithoutMeta,
+        legacyFF.buildReaderWithPartitionValues(sparkSession, dataSchemaWithoutMeta, partitionSchema, requiredWithoutMeta,
           Seq.empty, options, new Configuration(hadoopConf))
       } else {
         // filter and append
-        super.buildReaderWithPartitionValues(sparkSession, dataSchemaWithoutMeta, partitionSchema, requiredWithoutMeta,
+        legacyFF.buildReaderWithPartitionValues(sparkSession, dataSchemaWithoutMeta, partitionSchema, requiredWithoutMeta,
           filters ++ requiredFilters, options, new Configuration(hadoopConf))
       }
     } else {
       _: PartitionedFile => Iterator.empty
     }
 
-    (baseFileReader, preMergeBaseFileReader, skeletonReader, bootstrapBaseReader)
+    (wrapWithBatchConverter(baseFileReader),
+      wrapWithBatchConverter(preMergeBaseFileReader),
+      wrapWithBatchConverter(skeletonReader),
+      wrapWithBatchConverter(bootstrapBaseReader))
   }
 
   /**
