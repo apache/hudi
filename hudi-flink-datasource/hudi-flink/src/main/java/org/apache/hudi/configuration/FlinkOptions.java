@@ -343,12 +343,20 @@ public class FlinkOptions extends HoodieConfig {
       .noDefaultValue()
       .withDescription("End commit instant for reading, the commit time format should be 'yyyyMMddHHmmss'");
 
+  public static final ConfigOption<Integer> READ_COMMITS_LIMIT = ConfigOptions
+      .key("read.commits.limit")
+      .intType()
+      .noDefaultValue()
+      .withDescription("The maximum number of commits allowed to read in each instant check, if it is streaming read, "
+          + "the avg read instants number per-second would be 'read.commits.limit'/'read.streaming.check-interval', by "
+          + "default no limit");
+
   @AdvancedConfig
   public static final ConfigOption<Boolean> READ_DATA_SKIPPING_ENABLED = ConfigOptions
       .key("read.data.skipping.enabled")
       .booleanType()
       .defaultValue(false)
-      .withDescription("Enables data-skipping allowing queries to leverage indexes to reduce the search space by"
+      .withDescription("Enables data-skipping allowing queries to leverage indexes to reduce the search space by "
           + "skipping over files");
 
   // ------------------------------------------------------------------------

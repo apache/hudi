@@ -56,7 +56,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.client.utils.ArchivalUtils.getMinAndMaxInstantsToKeep;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.compareTimestamps;
 
@@ -213,8 +212,8 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
           return Collections.emptyList();
         } else {
           LOG.info("Limiting archiving of instants to latest compaction on metadata table at " + latestCompactionTime.get());
-          earliestInstantToRetainCandidates.add(Option.of(new HoodieInstant(
-              HoodieInstant.State.COMPLETED, COMPACTION_ACTION, latestCompactionTime.get())));
+          earliestInstantToRetainCandidates.add(
+              completedCommitsTimeline.findInstantsModifiedAfterByCompletionTime(latestCompactionTime.get()).firstInstant());
         }
       } catch (Exception e) {
         throw new HoodieException("Error limiting instant archival based on metadata table", e);

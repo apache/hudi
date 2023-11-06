@@ -19,12 +19,11 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
-import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.LockConfiguration;
+import org.apache.hudi.exception.HoodieLockException;
 
 import org.apache.hadoop.conf.Configuration;
-
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -63,9 +62,11 @@ public class TestWaitBasedTimeGenerator {
           throw new HoodieLockException(e);
         }
       }
-      boolean locked = super.tryLock(time, unit);
-      SIGNAL.countDown();
-      return locked;
+      boolean isLocked = super.tryLock(time, unit);
+      if (isLocked) {
+        SIGNAL.countDown();
+      }
+      return isLocked;
     }
   }
 
@@ -79,7 +80,7 @@ public class TestWaitBasedTimeGenerator {
   @BeforeEach
   public void initialize() {
     timeGeneratorConfig = HoodieTimeGeneratorConfig.newBuilder()
-        .withPath("")
+        .withPath("test_wait_based")
         .withMaxExpectedClockSkewMs(25L)
         .withTimeGeneratorType(TimeGeneratorType.WAIT_TO_ADJUST_SKEW)
         .build();

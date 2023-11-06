@@ -316,6 +316,20 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Initializes the metadata table by reading from the file system when the table is first created. Enabled by default. "
           + "Warning: This should only be disabled when manually constructing the metadata table outside of typical Hudi writer flows.");
 
+  public static final ConfigProperty<Integer> FUNCTIONAL_INDEX_FILE_GROUP_COUNT = ConfigProperty
+      .key(METADATA_PREFIX + ".index.functional.file.group.count")
+      .defaultValue(2)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Metadata functional index partition file group count.");
+
+  public static final ConfigProperty<Integer> FUNCTIONAL_INDEX_PARALLELISM = ConfigProperty
+      .key(METADATA_PREFIX + ".index.functional.parallelism")
+      .defaultValue(200)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Parallelism to use, when generating functional index.");
+
   public long getMaxLogFileSize() {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
   }
@@ -442,6 +456,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean shouldAutoInitialize() {
     return getBoolean(AUTO_INITIALIZE);
+  }
+
+  public int getFunctionalIndexFileGroupCount() {
+    return getInt(FUNCTIONAL_INDEX_FILE_GROUP_COUNT);
+  }
+
+  public int getFunctionalIndexParallelism() {
+    return getInt(FUNCTIONAL_INDEX_PARALLELISM);
   }
 
   public static class Builder {
@@ -614,6 +636,16 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withMaxLogFileSizeBytes(long sizeInBytes) {
       metadataConfig.setValue(MAX_LOG_FILE_SIZE_BYTES_PROP, String.valueOf(sizeInBytes));
+      return this;
+    }
+
+    public Builder withFunctionalIndexFileGroupCount(int fileGroupCount) {
+      metadataConfig.setValue(FUNCTIONAL_INDEX_FILE_GROUP_COUNT, String.valueOf(fileGroupCount));
+      return this;
+    }
+
+    public Builder withFunctionalIndexParallelism(int parallelism) {
+      metadataConfig.setValue(FUNCTIONAL_INDEX_PARALLELISM, String.valueOf(parallelism));
       return this;
     }
 
