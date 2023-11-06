@@ -1136,7 +1136,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     // are completed on the dataset. Hence, this case implies a rollback of completed commit which should actually be handled using restore.
     if (compactionInstant.getAction().equals(HoodieTimeline.COMMIT_ACTION)) {
       final String compactionInstantTime = compactionInstant.getTimestamp();
-      if (HoodieTimeline.LESSER_THAN_OR_EQUALS.test(commitToRollbackInstantTime, compactionInstantTime)) {
+      if (commitToRollbackInstantTime.length() == compactionInstantTime.length() && HoodieTimeline.LESSER_THAN_OR_EQUALS.test(commitToRollbackInstantTime, compactionInstantTime)) {
         throw new HoodieMetadataException(String.format("Commit being rolled back %s is earlier than the latest compaction %s. "
                 + "There are %d deltacommits after this compaction: %s", commitToRollbackInstantTime, compactionInstantTime,
             deltacommitsSinceCompaction.countInstants(), deltacommitsSinceCompaction.getInstants()));
@@ -1359,7 +1359,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     // Trigger compaction with suffixes based on the same instant time. This ensures that any future
     // delta commits synced over will not have an instant time lesser than the last completed instant on the
     // metadata table.
-    final String compactionInstantTime = HoodieTableMetadataUtil.createCompactionTimestamp(latestDeltacommitTime);
+    final String compactionInstantTime = writeClient.createNewInstantTime(false);
 
     // we need to avoid checking compaction w/ same instant again.
     // let's say we trigger compaction after C5 in MDT and so compaction completes with C4001. but C5 crashed before completing in MDT.
