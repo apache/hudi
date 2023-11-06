@@ -141,12 +141,6 @@
         <!-- Flink -->
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-connector-hive_2.12</artifactId>
-            <version>${flink.version}</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.flink</groupId>
             <artifactId>${flink.streaming.java.artifactId}</artifactId>
             <version>${flink.version}</version>
             <scope>compile</scope>
