@@ -155,6 +155,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
 
     // wait for the other bootstrap tasks finish bootstrapping.
     waitForBootstrapReady(getRuntimeContext().getIndexOfThisSubtask());
+    hoodieTable = null;
   }
 
   /**

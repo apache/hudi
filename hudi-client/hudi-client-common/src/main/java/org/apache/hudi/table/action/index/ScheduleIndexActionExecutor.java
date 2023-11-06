@@ -39,11 +39,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.model.WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL;
 import static org.apache.hudi.common.model.WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataPartition;
@@ -101,7 +103,7 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
       if (indexUptoInstant.isPresent()) {
         // for each partitionToIndex add that time to the plan
         List<HoodieIndexPartitionInfo> indexPartitionInfos = finalPartitionsToIndex.stream()
-            .map(p -> new HoodieIndexPartitionInfo(LATEST_INDEX_PLAN_VERSION, p.getPartitionPath(), indexUptoInstant.get().getTimestamp()))
+            .map(p -> buildIndexPartitionInfo(p, indexUptoInstant.get()))
             .collect(Collectors.toList());
         HoodieIndexPlan indexPlan = new HoodieIndexPlan(LATEST_INDEX_PLAN_VERSION, indexPartitionInfos);
         // update data timeline with requested instant
@@ -120,14 +122,20 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
     return Option.empty();
   }
 
+  private HoodieIndexPartitionInfo buildIndexPartitionInfo(MetadataPartitionType partitionType, HoodieInstant indexUptoInstant) {
+    // for functional index, we need to pass the index name as the partition name
+    String partitionName = MetadataPartitionType.FUNCTIONAL_INDEX.equals(partitionType) ? config.getFunctionalIndexConfig().getIndexName() : partitionType.getPartitionPath();
+    return new HoodieIndexPartitionInfo(LATEST_INDEX_PLAN_VERSION, partitionName, indexUptoInstant.getTimestamp(), Collections.emptyMap());
+  }
+
   private void validateBeforeScheduling() {
     if (!EnumSet.allOf(MetadataPartitionType.class).containsAll(partitionIndexTypes)) {
       throw new HoodieIndexException("Not all index types are valid: " + partitionIndexTypes);
     }
     // ensure lock provider configured
-    if (!config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl() || StringUtils.isNullOrEmpty(config.getLockProviderClass())) {
-      throw new HoodieIndexException(String.format("Need to set %s as %s and configure lock provider class",
-          WRITE_CONCURRENCY_MODE.key(), OPTIMISTIC_CONCURRENCY_CONTROL.name()));
+    if (!config.getWriteConcurrencyMode().supportsMultiWriter() || StringUtils.isNullOrEmpty(config.getLockProviderClass())) {
+      throw new HoodieIndexException(String.format("Need to set %s as %s or %s and configure lock provider class",
+          WRITE_CONCURRENCY_MODE.key(), OPTIMISTIC_CONCURRENCY_CONTROL.name(), NON_BLOCKING_CONCURRENCY_CONTROL.name()));
     }
   }
 
