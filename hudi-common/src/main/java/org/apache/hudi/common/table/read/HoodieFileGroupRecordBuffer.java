@@ -100,7 +100,7 @@ public interface HoodieFileGroupRecordBuffer<T> {
    *
    * @param baseFileIterator
    */
-  void setBaseFileIteraotr(ClosableIterator<T> baseFileIterator);
+  void setBaseFileIterator(ClosableIterator<T> baseFileIterator);
 
   /**
    * Check if next merged record exists.

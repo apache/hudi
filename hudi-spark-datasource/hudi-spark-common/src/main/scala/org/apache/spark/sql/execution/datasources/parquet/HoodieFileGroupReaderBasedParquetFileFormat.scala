@@ -33,8 +33,10 @@ import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.{HoodieBaseRelation, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping,
   HoodieSparkUtils, HoodieTableSchema, HoodieTableState, MergeOnReadSnapshotRelation, HoodiePartitionFileSliceMapping,
   SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.sources.Filter
@@ -42,6 +44,7 @@ import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.util.SerializableConfiguration
 import org.apache.hudi.common.model.HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD
 
+import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.jdk.CollectionConverters.asScalaIteratorConverter
@@ -89,6 +92,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                                               filters: Seq[Filter],
                                               options: Map[String, String],
                                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
+    val outputSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
     val requiredSchemaWithMandatory = generateRequiredSchemaWithMandatory(requiredSchema, dataSchema, partitionSchema)
     val requiredSchemaSplits = requiredSchemaWithMandatory.fields.partition(f => HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(f.name))
     val requiredMeta = StructType(requiredSchemaSplits._1)
@@ -117,7 +121,6 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                 val logFiles = getLogFilesFromSlice(fileSlice)
                 if (requiredSchemaWithMandatory.isEmpty) {
                   val baseFile = createPartitionedFile(partitionValues, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen)
-                  // TODO: Use FileGroupReader here: HUDI-6942.
                   baseFileReader(baseFile)
                 } else if (bootstrapFileOpt.isPresent) {
                   // TODO: Use FileGroupReader here: HUDI-6942.
@@ -134,9 +137,11 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                     hoodieBaseFile,
                     logFiles,
                     requiredSchemaWithMandatory,
+                    outputSchema,
+                    partitionSchema,
                     broadcastedHadoopConf.value.value,
-                    file.start,
-                    file.length,
+                    0,
+                    hoodieBaseFile.getFileLen,
                     shouldUseRecordPosition
                   )
                 }
@@ -180,6 +185,8 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                                        baseFile: HoodieBaseFile,
                                        logFiles: List[HoodieLogFile],
                                        requiredSchemaWithMandatory: StructType,
+                                       outputSchema: StructType,
+                                       partitionSchema: StructType,
                                        hadoopConf: Configuration,
                                        start: Long,
                                        length: Long,
@@ -201,19 +208,65 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
       length,
       shouldUseRecordPosition)
     reader.initRecordIterators()
-    reader.getClosableIterator.asInstanceOf[java.util.Iterator[InternalRow]].asScala
+    // Append partition values to rows and project to output schema
+    appendPartitionAndProject(
+      reader.getClosableIterator.asInstanceOf[java.util.Iterator[InternalRow]].asScala,
+      requiredSchemaWithMandatory,
+      partitionSchema,
+      outputSchema,
+      partitionValues)
   }
 
-  def generateRequiredSchemaWithMandatory(requiredSchema: StructType,
-                                          dataSchema: StructType,
-                                          partitionSchema: StructType): StructType = {
+  private def appendPartitionAndProject(iter: Iterator[InternalRow],
+                                        inputSchema: StructType,
+                                        partitionSchema: StructType,
+                                        to: StructType,
+                                        partitionValues: InternalRow): Iterator[InternalRow] = {
+    if (partitionSchema.isEmpty) {
+      projectSchema(iter, inputSchema, to)
+    } else {
+      val unsafeProjection = generateUnsafeProjection(StructType(inputSchema.fields ++ partitionSchema.fields), to)
+      val joinedRow = new JoinedRow()
+      iter.map(d => unsafeProjection(joinedRow(d, partitionValues)))
+    }
+  }
+
+  private def projectSchema(iter: Iterator[InternalRow],
+                            from: StructType,
+                            to: StructType): Iterator[InternalRow] = {
+    val unsafeProjection = generateUnsafeProjection(from, to)
+    iter.map(d => unsafeProjection(d))
+  }
+
+  private def generateRequiredSchemaWithMandatory(requiredSchema: StructType,
+                                                  dataSchema: StructType,
+                                                  partitionSchema: StructType): StructType = {
+    // Helper method to get the StructField for nested fields
+    @tailrec
+    def findNestedField(schema: StructType, fieldParts: Array[String]): Option[StructField] = {
+      fieldParts.toList match {
+        case head :: Nil => schema.fields.find(_.name == head) // If it's the last part, find and return the field
+        case head :: tail => // If there are more parts, find the field and its nested fields
+          schema.fields.find(_.name == head) match {
+            case Some(StructField(_, nested: StructType, _, _)) => findNestedField(nested, tail.toArray)
+            case _ => None // The path is not valid
+          }
+        case _ => None // Empty path, should not happen if the input is correct
+      }
+    }
+
+    // If not MergeOnRead or if projection is compatible
     if (isIncremental) {
       StructType(dataSchema.toArray ++ partitionSchema.fields)
     } else if (!isMOR || MergeOnReadSnapshotRelation.isProjectionCompatible(tableState)) {
       val added: mutable.Buffer[StructField] = mutable.Buffer[StructField]()
       for (field <- mandatoryFields) {
         if (requiredSchema.getFieldIndex(field).isEmpty) {
-          val fieldToAdd = dataSchema.fields(dataSchema.getFieldIndex(field).get)
+          // Support for nested fields
+          val fieldParts = field.split("\\.")
+          val fieldToAdd = findNestedField(dataSchema, fieldParts).getOrElse(
+            throw new IllegalArgumentException(s"Field $field does not exist in the data schema")
+          )
           added.append(fieldToAdd)
         }
       }

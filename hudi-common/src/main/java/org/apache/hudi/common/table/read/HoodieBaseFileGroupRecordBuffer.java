@@ -80,7 +80,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   }
 
   @Override
-  public void setBaseFileIteraotr(ClosableIterator<T> baseFileIterator) {
+  public void setBaseFileIterator(ClosableIterator<T> baseFileIterator) {
     this.baseFileIterator = baseFileIterator;
   }
 
