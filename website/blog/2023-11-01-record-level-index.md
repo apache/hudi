@@ -6,11 +6,8 @@ category: blog
 image: /assets/images/blog/record-level-index/03.RLI_bulkinsert.png
 tags:
 - design
-- index
-- speedup
+- indexing
 - metadata
-- improve write latency
-- improve read latency
 - apache hudi
 ---
 
