@@ -480,6 +480,9 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   protected def getPartitionColumnsAsInternalRow(file: FileStatus): InternalRow =
     getPartitionColumnsAsInternalRowInternal(file, metaClient.getBasePathV2, shouldExtractPartitionValuesFromPartitionPath)
 
+  protected def getPartitionColumnValuesAsInternalRow(file: FileStatus): InternalRow =
+    getPartitionColumnsAsInternalRowInternal(file, metaClient.getBasePathV2, extractPartitionValuesFromPartitionPath = true)
+
   protected def getPartitionColumnsAsInternalRowInternal(file: FileStatus, basePath: Path,
                                                          extractPartitionValuesFromPartitionPath: Boolean): InternalRow = {
     if (extractPartitionValuesFromPartitionPath) {
