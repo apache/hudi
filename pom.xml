@@ -2220,7 +2220,6 @@
       <id>m1-mac</id>
       <properties>
         <spark2.version>2.4.8</spark2.version>
-        <rocksdbjni.version>6.29.4.1</rocksdbjni.version>
       </properties>
       <activation>
         <os>
