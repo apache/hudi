@@ -2504,7 +2504,7 @@ public class HoodieTableMetadataUtil {
       final String partition = partitionAndBaseFile.getKey();
       final HoodieBaseFile baseFile = partitionAndBaseFile.getValue();
       final String filename = baseFile.getFileName();
-      StoragePath dataFilePath = filePath(basePath, partition, filename);
+      StoragePath dataFilePath = FSUtils.getFilePath(basePath, partition, filename);
 
       final String fileId = baseFile.getFileId();
       final String instantTime = baseFile.getCommitTime();
@@ -2560,7 +2560,7 @@ public class HoodieTableMetadataUtil {
       }
       final HoodieBaseFile baseFile = fileSlice.getBaseFile().get();
       final String filename = baseFile.getFileName();
-      StoragePath dataFilePath = filePath(basePath, partition, filename);
+      StoragePath dataFilePath = FSUtils.getFilePath(basePath, partition, filename);
 
       final String fileId = baseFile.getFileId();
       final String instantTime = baseFile.getCommitTime();
@@ -2581,14 +2581,6 @@ public class HoodieTableMetadataUtil {
     mergedFields.addAll(partitionFields);
     mergedFields.addAll(sourceFields);
     return HoodieSchemaUtils.addMetadataFields(HoodieSchemaUtils.projectSchema(tableSchema, mergedFields));
-  }
-
-  public static StoragePath filePath(StoragePath basePath, String partition, String filename) {
-    if (partition.isEmpty()) {
-      return new StoragePath(basePath, filename);
-    } else {
-      return new StoragePath(basePath, partition + StoragePath.SEPARATOR + filename);
-    }
   }
 
   private static ClosableIterator<HoodieRecord> getHoodieRecordIterator(ClosableIterator<String> recordKeyIterator,
