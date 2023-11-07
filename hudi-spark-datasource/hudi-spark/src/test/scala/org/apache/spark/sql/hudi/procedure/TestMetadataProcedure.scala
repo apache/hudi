@@ -146,8 +146,13 @@ class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
 
       // collect metadata partitions for table
-      val partitions = spark.sql(s"""call show_metadata_table_partitions(table => '$tableName')""").collect()
+      var partitions = spark.sql(s"""call show_metadata_table_partitions(table => '$tableName')""").collect()
       assertResult(2) {
+        partitions.length
+      }
+
+      partitions = spark.sql(s"""call show_metadata_table_partitions(table => '$tableName'), limit => 1""").collect()
+      assertResult(1) {
         partitions.length
       }
     }
@@ -184,8 +189,13 @@ class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
 
       // collect metadata files for a partition of a table
       val partition = partitions(0).get(0).toString
-      val filesResult = spark.sql(s"""call show_metadata_table_files(table => '$tableName', partition => '$partition')""").collect()
+      var filesResult = spark.sql(s"""call show_metadata_table_files(table => '$tableName', partition => '$partition')""").collect()
       assertResult(1) {
+        filesResult.length
+      }
+
+      filesResult = spark.sql(s"""call show_metadata_table_files(table => '$tableName', partition => '$partition', limit => 0)""").collect()
+      assertResult(0) {
         filesResult.length
       }
     }

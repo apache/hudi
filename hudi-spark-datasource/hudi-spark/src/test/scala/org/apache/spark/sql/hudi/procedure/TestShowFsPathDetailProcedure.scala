@@ -43,8 +43,13 @@ class TestShowFsPathDetailProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
       spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
 
-      val result = spark.sql(s"""call show_fs_path_detail(path => '$tablePath')""").collect()
+      var result = spark.sql(s"""call show_fs_path_detail(path => '$tablePath')""").collect()
       assertResult(1) {
+        result.length
+      }
+
+      result = spark.sql(s"""call show_fs_path_detail(path => '$tablePath', limit => 0)""").collect()
+      assertResult(0) {
         result.length
       }
     }
