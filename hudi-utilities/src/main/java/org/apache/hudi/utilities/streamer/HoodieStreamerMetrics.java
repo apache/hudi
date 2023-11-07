@@ -19,11 +19,13 @@
 
 package org.apache.hudi.utilities.streamer;
 
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 
 import com.codahale.metrics.Timer;
+import org.apache.hadoop.conf.Configuration;
 
 public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
 
@@ -39,7 +41,7 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
   public HoodieStreamerMetrics(HoodieWriteConfig writeConfig) {
     super(writeConfig);
     if (writeConfig.isMetricsOn()) {
-      metrics = Metrics.getInstance(writeConfig);
+      metrics = Metrics.getInstance(writeConfig, new SerializableConfiguration(new Configuration()));
       this.overallTimerName = getMetricsName("timer", "deltastreamer");
       this.hiveSyncTimerName = getMetricsName("timer", "deltastreamerHiveSync");
       this.metaSyncTimerName = getMetricsName("timer", "deltastreamerMetaSync");

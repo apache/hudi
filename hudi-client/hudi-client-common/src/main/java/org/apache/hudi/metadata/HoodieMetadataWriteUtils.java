@@ -186,6 +186,7 @@ public class HoodieMetadataWriteUtils {
         case CONSOLE:
         case INMEMORY:
         case CLOUDWATCH:
+        case FILESYSTEM:
           break;
         default:
           throw new HoodieMetadataException("Unsupported Metrics Reporter type " + writeConfig.getMetricsReporterType());

@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.multitable;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 import org.apache.hudi.utilities.HoodieCompactor;
 import org.apache.hudi.utilities.IdentitySplitter;
@@ -249,6 +250,8 @@ public class HoodieMultiTableServicesMain {
     JavaSparkContext jsc = UtilHelpers.buildSparkContext(cfg.appName, cfg.sparkMaster, cfg.sparkMemory);
     try {
       new HoodieMultiTableServicesMain(jsc, cfg).startServices();
+      Metrics.shutdownAllMetrics();
+      System.out.println("success");
     } catch (Throwable throwable) {
       LOG.error("Fail to run table services, ", throwable);
     } finally {

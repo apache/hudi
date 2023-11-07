@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
@@ -27,6 +28,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.Timer;
+import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -86,12 +88,17 @@ public class HoodieMetrics {
   private Counter conflictResolutionFailureCounter = null;
   private Counter compactionRequestedCounter = null;
   private Counter compactionCompletedCounter = null;
+  private SerializableConfiguration hadoopConf;
 
   public HoodieMetrics(HoodieWriteConfig config) {
+    this(config, new SerializableConfiguration(new Configuration()));
+  }
+
+  public HoodieMetrics(HoodieWriteConfig config, SerializableConfiguration hadoopConf) {
     this.config = config;
     this.tableName = config.getTableName();
     if (config.isMetricsOn()) {
-      metrics = Metrics.getInstance(config);
+      metrics = Metrics.getInstance(config, hadoopConf);
       this.rollbackTimerName = getMetricsName("timer", HoodieTimeline.ROLLBACK_ACTION);
       this.cleanTimerName = getMetricsName("timer", HoodieTimeline.CLEAN_ACTION);
       this.commitTimerName = getMetricsName("timer", HoodieTimeline.COMMIT_ACTION);
@@ -209,7 +216,7 @@ public class HoodieMetrics {
   }
 
   public void updateCommitMetrics(long commitEpochTimeInMs, long durationInMs, HoodieCommitMetadata metadata,
-      String actionType) {
+                                  String actionType) {
     updateCommitTimingMetrics(commitEpochTimeInMs, durationInMs, metadata, actionType);
     if (config.isMetricsOn()) {
       long totalPartitionsWritten = metadata.fetchTotalPartitionsWritten();
@@ -250,7 +257,7 @@ public class HoodieMetrics {
   }
 
   private void updateCommitTimingMetrics(long commitEpochTimeInMs, long durationInMs, HoodieCommitMetadata metadata,
-      String actionType) {
+                                         String actionType) {
     if (config.isMetricsOn()) {
       Pair<Option<Long>, Option<Long>> eventTimePairMinMax = metadata.getMinAndMaxEventTime();
       if (eventTimePairMinMax.getLeft().isPresent()) {

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -43,7 +44,7 @@ public class MetricsReporterFactory {
 
   private static final Logger LOG = LoggerFactory.getLogger(MetricsReporterFactory.class);
 
-  public static Option<MetricsReporter> createReporter(HoodieWriteConfig config, MetricRegistry registry) {
+  public static Option<MetricsReporter> createReporter(HoodieWriteConfig config, MetricRegistry registry, SerializableConfiguration hadoopConf) {
     String reporterClassName = config.getMetricReporterClassName();
 
     if (!StringUtils.isNullOrEmpty(reporterClassName)) {
@@ -88,6 +89,9 @@ public class MetricsReporterFactory {
         break;
       case CLOUDWATCH:
         reporter = new CloudWatchMetricsReporter(config, registry);
+        break;
+      case FILESYSTEM:
+        reporter = new MetricsFileSystemReporter(config, registry, hadoopConf);
         break;
       default:
         LOG.error("Reporter type[" + type + "] is not supported.");

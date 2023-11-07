@@ -59,7 +59,7 @@ public abstract class SparkPreCommitValidator<T, I, K, O extends HoodieData<Writ
     this.table = table;
     this.engineContext = engineContext;
     this.writeConfig = writeConfig;
-    this.metrics = new HoodieMetrics(writeConfig);
+    this.metrics = new HoodieMetrics(writeConfig, engineContext.getHadoopConf());
   }
   
   protected Set<String> getPartitionsModified(HoodieWriteMetadata<O> writeResult) {

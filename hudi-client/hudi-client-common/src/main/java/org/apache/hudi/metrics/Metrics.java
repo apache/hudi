@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.util.Option;
@@ -51,14 +52,14 @@ public class Metrics {
   private final String commonMetricPrefix;
   private boolean initialized = false;
 
-  public Metrics(HoodieWriteConfig metricConfig) {
+  public Metrics(HoodieWriteConfig metricConfig, SerializableConfiguration hadoopConf) {
     registry = new MetricRegistry();
     commonMetricPrefix = metricConfig.getMetricReporterMetricsNamePrefix();
     reporters = new ArrayList<>();
-    Option<MetricsReporter> defaultReporter = MetricsReporterFactory.createReporter(metricConfig, registry);
+    Option<MetricsReporter> defaultReporter = MetricsReporterFactory.createReporter(metricConfig, registry, hadoopConf);
     defaultReporter.ifPresent(reporters::add);
     if (StringUtils.nonEmpty(metricConfig.getMetricReporterFileBasedConfigs())) {
-      reporters.addAll(addAdditionalMetricsExporters(metricConfig));
+      reporters.addAll(addAdditionalMetricsExporters(metricConfig, hadoopConf));
     }
     if (reporters.size() == 0) {
       throw new RuntimeException("Cannot initialize Reporters.");
@@ -73,13 +74,13 @@ public class Metrics {
     registerGauges(Registry.getAllMetrics(true, true), Option.of(commonMetricPrefix));
   }
 
-  public static synchronized Metrics getInstance(HoodieWriteConfig metricConfig) {
+  public static synchronized Metrics getInstance(HoodieWriteConfig metricConfig, SerializableConfiguration hadoopConf) {
     String basePath = metricConfig.getBasePath();
     if (METRICS_INSTANCE_PER_BASEPATH.containsKey(basePath)) {
       return METRICS_INSTANCE_PER_BASEPATH.get(basePath);
     }
 
-    Metrics metrics = new Metrics(metricConfig);
+    Metrics metrics = new Metrics(metricConfig, hadoopConf);
     METRICS_INSTANCE_PER_BASEPATH.put(basePath, metrics);
     return metrics;
   }
@@ -88,14 +89,14 @@ public class Metrics {
     METRICS_INSTANCE_PER_BASEPATH.values().forEach(Metrics::shutdown);
   }
 
-  private List<MetricsReporter> addAdditionalMetricsExporters(HoodieWriteConfig metricConfig) {
+  private List<MetricsReporter> addAdditionalMetricsExporters(HoodieWriteConfig metricConfig, SerializableConfiguration hadoopConf) {
     List<MetricsReporter> reporterList = new ArrayList<>();
     List<String> propPathList = StringUtils.split(metricConfig.getMetricReporterFileBasedConfigs(), ",");
     try (FileSystem fs = FSUtils.getFs(propPathList.get(0), new Configuration())) {
       for (String propPath : propPathList) {
         HoodieWriteConfig secondarySourceConfig = HoodieWriteConfig.newBuilder().fromInputStream(
             fs.open(new Path(propPath))).withPath(metricConfig.getBasePath()).build();
-        Option<MetricsReporter> reporter = MetricsReporterFactory.createReporter(secondarySourceConfig, registry);
+        Option<MetricsReporter> reporter = MetricsReporterFactory.createReporter(secondarySourceConfig, registry, hadoopConf);
         if (reporter.isPresent()) {
           reporterList.add(reporter.get());
         } else {

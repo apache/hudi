@@ -66,6 +66,7 @@ import org.apache.hudi.common.util.queue.ExecutorType;
 import org.apache.hudi.config.metrics.HoodieMetricsCloudWatchConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsDatadogConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsFileSystemConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsPrometheusConfig;
@@ -2315,6 +2316,26 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getMetricReporterFileBasedConfigs() {
     return getStringOrDefault(HoodieMetricsConfig.METRICS_REPORTER_FILE_BASED_CONFIGS_PATH);
+  }
+
+  public String getMetricsFileSystemReporterPath() {
+    return getString(HoodieMetricsFileSystemConfig.FILESYSTEM_METRICS_REPORTER_PATH);
+  }
+
+  public String getMetricsFileSystemNamePrefix() {
+    return getString(HoodieMetricsFileSystemConfig.METRICS_FILE_NAME_PREFIX);
+  }
+
+  public Boolean getMetricsFileSystemOverwrite() {
+    return getBoolean(HoodieMetricsFileSystemConfig.OVERWRITE_FILE);
+  }
+
+  public Boolean getMetricsFileSystemSchedule() {
+    return getBoolean(HoodieMetricsFileSystemConfig.FILESYSTEM_REPORT_SCHEDULE_ENABLE);
+  }
+
+  public int getFileSystemReportPeriodSeconds() {
+    return getInt(HoodieMetricsFileSystemConfig.FILESYSTEM_REPORT_PERIOD_IN_SECONDS);
   }
 
   /**

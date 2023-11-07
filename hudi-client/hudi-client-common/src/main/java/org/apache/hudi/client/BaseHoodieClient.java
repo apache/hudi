@@ -24,6 +24,7 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.TransactionUtils;
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -97,7 +98,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     shouldStopTimelineServer = !timelineServer.isPresent();
     this.heartbeatClient = new HoodieHeartbeatClient(this.fs, this.basePath,
         clientConfig.getHoodieClientHeartbeatIntervalInMs(), clientConfig.getHoodieClientHeartbeatTolerableMisses());
-    this.metrics = new HoodieMetrics(config);
+    this.metrics = new HoodieMetrics(config, new SerializableConfiguration(hadoopConf));
     this.txnManager = new TransactionManager(config, fs);
     this.timeGenerator = TimeGenerators.getTimeGenerator(config.getTimeGeneratorConfig(), hadoopConf);
     startEmbeddedServerView();
