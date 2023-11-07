@@ -151,7 +151,7 @@ class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
         partitions.length
       }
 
-      partitions = spark.sql(s"""call show_metadata_table_partitions(table => '$tableName'), limit => 1""").collect()
+      partitions = spark.sql(s"""call show_metadata_table_partitions(table => '$tableName', limit => 1)""").collect()
       assertResult(1) {
         partitions.length
       }
