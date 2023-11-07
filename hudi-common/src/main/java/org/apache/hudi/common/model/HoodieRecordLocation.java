@@ -61,13 +61,12 @@ public class HoodieRecordLocation implements Serializable, KryoSerializable {
       return false;
     }
     HoodieRecordLocation otherLoc = (HoodieRecordLocation) o;
-    return Objects.equals(instantTime, otherLoc.instantTime) && Objects.equals(fileId, otherLoc.fileId)
-        && Objects.equals(position, otherLoc.position);
+    return Objects.equals(instantTime, otherLoc.instantTime) && Objects.equals(fileId, otherLoc.fileId);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(instantTime, fileId, position);
+    return Objects.hash(instantTime, fileId);
   }
 
   @Override
