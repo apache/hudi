@@ -169,7 +169,7 @@ We also isolated the index look-up step using HoodieReadClient to accurately gau
 experiments involving the look-up of 400,000 records (0.02%) in a 1TB dataset of 2 billion records, **RLI showcased a 
 72% improvement over GSI, consistent with the end-to-end write latency results**.
 
-<img src="/assets/images/blog/record-level-index/write-latency.png" alt="index-latency" width="600" align="middle"/>
+<img src="/assets/images/blog/record-level-index/index-latency.png" alt="index-latency" width="600" align="middle"/>
 
 #### Data shuffling
 
