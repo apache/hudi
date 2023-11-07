@@ -30,9 +30,7 @@ import org.apache.hudi.cdc.{CDCFileGroupIterator, CDCRelation, HoodieCDCFileGrou
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.HoodieFileGroupId
 import org.apache.hudi.common.util.{Option => HOption}
-import org.apache.hudi.{HoodieBaseRelation, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping,
-  HoodieSparkUtils, HoodieTableSchema, HoodieTableState, MergeOnReadSnapshotRelation, HoodiePartitionFileSliceMapping,
-  SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.{HoodieBaseRelation, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, MergeOnReadSnapshotRelation, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
@@ -41,6 +39,7 @@ import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.util.SerializableConfiguration
 import org.apache.hudi.common.model.HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD
+import org.apache.spark.sql.vectorized.ColumnarBatch
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -63,6 +62,21 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                                            ) extends ParquetFileFormat with SparkAdapterSupport {
   var isProjected = false
 
+  private val legacyFF = sparkAdapter.createLegacyHoodieParquetFileFormat(true).get
+
+  private def wrapWithBatchConverter(reader: PartitionedFile => Iterator[InternalRow]): PartitionedFile => Iterator[InternalRow] = {
+    if (supportBatchCalled && !supportBatchResult) {
+      file: PartitionedFile => {
+        val iter = reader(file).asInstanceOf[Iterator[Any]]
+        iter.flatMap {
+          case r: InternalRow => Seq(r)
+          case b: ColumnarBatch => b.rowIterator().asScala
+        }
+      }
+    } else {
+      reader
+    }
+  }
   /**
    * Support batch needs to remain consistent, even if one side of a bootstrap merge can support
    * while the other side can't
@@ -73,7 +87,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
     if (!supportBatchCalled) {
       supportBatchCalled = true
-      supportBatchResult = !isMOR && super.supportBatch(sparkSession, schema)
+      supportBatchResult = !isMOR && legacyFF.supportBatch(sparkSession, schema)
     }
     supportBatchResult
   }
@@ -233,13 +247,13 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     PartitionedFile => Iterator[InternalRow],
     PartitionedFile => Iterator[InternalRow]) = {
 
-    val baseFileReader = super.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema,
+    val baseFileReader = legacyFF.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema,
       filters ++ requiredFilters, options, new Configuration(hadoopConf))
 
     //file reader for reading a hudi base file that needs to be merged with log files
     val preMergeBaseFileReader = if (isMOR) {
       // Add support for reading files using inline file system.
-      super.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema,
+      legacyFF.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema,
         requiredSchemaWithMandatory, requiredFilters, options, new Configuration(hadoopConf))
     } else {
       _: PartitionedFile => Iterator.empty
@@ -257,11 +271,11 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     val skeletonReader = if (needMetaCols && isBootstrap) {
       if (needDataCols || isMOR) {
         // no filter and no append
-        super.buildReaderWithPartitionValues(sparkSession, HoodieSparkUtils.getMetaSchema, StructType(Seq.empty),
+        legacyFF.buildReaderWithPartitionValues(sparkSession, HoodieSparkUtils.getMetaSchema, StructType(Seq.empty),
           requiredMeta, Seq.empty, options, new Configuration(hadoopConf))
       } else {
         // filter and append
-        super.buildReaderWithPartitionValues(sparkSession, HoodieSparkUtils.getMetaSchema, partitionSchema,
+        legacyFF.buildReaderWithPartitionValues(sparkSession, HoodieSparkUtils.getMetaSchema, partitionSchema,
           requiredMeta, filters ++ requiredFilters, options, new Configuration(hadoopConf))
       }
     } else {
@@ -273,22 +287,25 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
       val dataSchemaWithoutMeta = StructType(dataSchema.fields.filterNot(sf => isMetaField(sf.name)))
       if (isMOR) {
         // no filter and no append
-        super.buildReaderWithPartitionValues(sparkSession, dataSchemaWithoutMeta, StructType(Seq.empty), requiredWithoutMeta,
+        legacyFF.buildReaderWithPartitionValues(sparkSession, dataSchemaWithoutMeta, StructType(Seq.empty), requiredWithoutMeta,
           Seq.empty, options, new Configuration(hadoopConf))
       } else if (needMetaCols) {
         // no filter but append
-        super.buildReaderWithPartitionValues(sparkSession, dataSchemaWithoutMeta, partitionSchema, requiredWithoutMeta,
+        legacyFF.buildReaderWithPartitionValues(sparkSession, dataSchemaWithoutMeta, partitionSchema, requiredWithoutMeta,
           Seq.empty, options, new Configuration(hadoopConf))
       } else {
         // filter and append
-        super.buildReaderWithPartitionValues(sparkSession, dataSchemaWithoutMeta, partitionSchema, requiredWithoutMeta,
+        legacyFF.buildReaderWithPartitionValues(sparkSession, dataSchemaWithoutMeta, partitionSchema, requiredWithoutMeta,
           filters ++ requiredFilters, options, new Configuration(hadoopConf))
       }
     } else {
       _: PartitionedFile => Iterator.empty
     }
 
-    (baseFileReader, preMergeBaseFileReader, skeletonReader, bootstrapBaseReader)
+    (wrapWithBatchConverter(baseFileReader),
+      wrapWithBatchConverter(preMergeBaseFileReader),
+      wrapWithBatchConverter(skeletonReader),
+      wrapWithBatchConverter(bootstrapBaseReader))
   }
 
   protected def getLogFilesFromSlice(fileSlice: FileSlice): List[HoodieLogFile] = {
