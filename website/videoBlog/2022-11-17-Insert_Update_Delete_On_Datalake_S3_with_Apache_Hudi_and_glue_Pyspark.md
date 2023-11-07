@@ -10,7 +10,11 @@ tags:
 - guide
 - aws glue
 - apache hudi
+- insert
+- update
+- delete
+- data integration
+- analytics
 - amazon s3
 - pyspark
-- beginner
 ---
