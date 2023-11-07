@@ -244,15 +244,22 @@ public class TestHoodieCompactionStrategy {
     UnBoundedPartitionAwareCompactionStrategy strategy = new UnBoundedPartitionAwareCompactionStrategy();
     HoodieWriteConfig writeConfig =
         HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .withCompactionStrategy(strategy).withTargetPartitionsPerDayBasedCompaction(2).build()).build();
-    List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap, keyToPartitionMap);
-    List<HoodieCompactionOperation> returned = strategy.orderAndFilter(writeConfig, operations, new ArrayList<>());
+            .withCompactionStrategy(strategy).withTargetPartitionsPerDayBasedCompaction(1).build()).build();
 
-    assertTrue(returned.size() < operations.size(),
-        "UnBoundedPartitionAwareCompactionStrategy should not include last "
-            + writeConfig.getTargetPartitionsPerDayBasedCompaction() + " partitions or later partitions from today");
-    assertEquals(1, returned.size(),
-        "BoundedPartitionAwareCompactionStrategy should have resulted in 1 compaction");
+    List<String> allPartitionPaths = new ArrayList<>(
+        Arrays.asList(currentDay, currentDayMinus1, currentDayMinus2, currentDayMinus3, currentDayPlus1, currentDayPlus5));
+    List<String> filterPartitions = strategy.filterPartitionPaths(writeConfig, allPartitionPaths);
+    assertEquals(2, filterPartitions.size(),
+        "UnBoundedPartitionAwareCompactionStrategy should have resulted in fewer partitions");
+
+    List<HoodieCompactionOperation> operations = createCompactionOperationsForPartition(writeConfig, sizesMap, keyToPartitionMap, filterPartitions);
+    assertEquals(2, operations.size(),
+        "UnBoundedPartitionAwareCompactionStrategy should generate 2 HoodieCompactionOperation for other five partition except currentDayMinus3");
+
+    List<String> operationPartitions = operations.stream().collect(Collectors.groupingBy(HoodieCompactionOperation::getPartitionPath))
+        .entrySet().stream().map(e -> e.getKey()).collect(Collectors.toList());
+    assertTrue(operationPartitions.size() == filterPartitions.size(),
+        "UnBoundedPartitionAwareCompactionStrategy should have resulted same partitions");
   }
 
   @Test

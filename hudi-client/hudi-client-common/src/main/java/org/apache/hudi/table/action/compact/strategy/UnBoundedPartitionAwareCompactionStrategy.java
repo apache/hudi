@@ -18,11 +18,8 @@
 
 package org.apache.hudi.table.action.compact.strategy;
 
-import org.apache.hudi.avro.model.HoodieCompactionOperation;
-import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -37,18 +34,6 @@ import java.util.stream.Collectors;
  * @see CompactionStrategy
  */
 public class UnBoundedPartitionAwareCompactionStrategy extends CompactionStrategy {
-
-  @Override
-  public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig config,
-      final List<HoodieCompactionOperation> operations, final List<HoodieCompactionPlan> pendingCompactionWorkloads) {
-    BoundedPartitionAwareCompactionStrategy boundedPartitionAwareCompactionStrategy =
-        new BoundedPartitionAwareCompactionStrategy();
-    List<HoodieCompactionOperation> operationsToExclude =
-        boundedPartitionAwareCompactionStrategy.orderAndFilter(config, operations, pendingCompactionWorkloads);
-    List<HoodieCompactionOperation> allOperations = new ArrayList<>(operations);
-    allOperations.removeAll(operationsToExclude);
-    return allOperations;
-  }
 
   @Override
   public List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> partitionPaths) {
