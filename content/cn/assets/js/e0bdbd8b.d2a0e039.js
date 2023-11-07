@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[93916],{24964:e=>{e.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/apache-hive","name":"apache hive","count":1,"permalink":"/cn/videos/tags/apache-hive"}')}}]);
