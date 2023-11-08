@@ -2634,6 +2634,74 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @Test
+  public void testResumeCheckpointAfterChangingMOR2COW() throws Exception {
+    String tableBasePath = basePath + "/test_resume_checkpoint_after_changing_mor_to_cow";
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
+    // change table type to MOR
+    cfg.tableType = HoodieTableType.MERGE_ON_READ.name();
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+    assertRecordCount(1000, tableBasePath, sqlContext);
+    TestHelpers.assertCommitMetadata("00000", tableBasePath, fs, 1);
+    TestHelpers.assertAtLeastNCommits(1, tableBasePath, fs);
+
+    // sync once, make one deltacommit and do a full compaction
+    cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
+    cfg.tableType = HoodieTableType.MERGE_ON_READ.name();
+    cfg.configs.add("hoodie.compaction.strategy=org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy");
+    cfg.configs.add("hoodie.compact.inline.max.delta.commits=1");
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+    // out of 1000 new records, 500 are inserts, 450 are updates and 50 are deletes.
+    assertRecordCount(1450, tableBasePath, sqlContext);
+    // totalCommits: 1 deltacommit(bulk_insert) + 1 deltacommit(upsert) + 1 commit(compaction)
+    // there is no checkpoint in the compacted commit metadata, the latest checkpoint 00001 is in the upsert deltacommit
+    TestHelpers.assertCommitMetadata(null, tableBasePath, fs, 3);
+    List<Row> counts = countsPerCommit(tableBasePath, sqlContext);
+    assertEquals(1450, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
+    TestHelpers.assertAtLeastNCommits(3, tableBasePath, fs);
+    // currently there should be 2 deltacommits now
+    TestHelpers.assertAtleastNDeltaCommits(2, tableBasePath, fs);
+
+    // change mor to cow
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(new Configuration(fs.getConf()))
+        .setBasePath(cfg.targetBasePath)
+        .setLoadActiveTimelineOnLoad(false)
+        .build();
+    Properties hoodieProps = new Properties();
+    hoodieProps.load(fs.open(new Path(cfg.targetBasePath + "/.hoodie/hoodie.properties")));
+    LOG.info("old props: " + hoodieProps);
+    hoodieProps.put("hoodie.table.type", HoodieTableType.COPY_ON_WRITE.name());
+    LOG.info("new props: " + hoodieProps);
+    Path metaPathDir = new Path(metaClient.getBasePathV2(), ".hoodie");
+    HoodieTableConfig.create(metaClient.getFs(), metaPathDir, hoodieProps);
+
+    // continue deltastreamer
+    cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
+    cfg.tableType = HoodieTableType.COPY_ON_WRITE.name();
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+    // out of 1000 new records, 500 are inserts, 450 are updates and 50 are deletes.
+    assertRecordCount(1900, tableBasePath, sqlContext);
+    // the checkpoint now should be 00002
+    TestHelpers.assertCommitMetadata("00002", tableBasePath, fs, 4);
+    counts = countsPerCommit(tableBasePath, sqlContext);
+    assertEquals(1900, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
+    TestHelpers.assertAtLeastNCommits(4, tableBasePath, fs);
+
+    // test the table type is already cow
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+    // out of 1000 new records, 500 are inserts, 450 are updates and 50 are deletes.
+    // total records should be 2350 now
+    assertRecordCount(2350, tableBasePath, sqlContext);
+    TestHelpers.assertCommitMetadata("00003", tableBasePath, fs, 5);
+    counts = countsPerCommit(tableBasePath, sqlContext);
+    assertEquals(2350, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
+    TestHelpers.assertAtLeastNCommits(5, tableBasePath, fs);
+
+    // clean up
+    UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
+  }
+
+  @Test
   public void testAutoGenerateRecordKeys() throws Exception {
     boolean useSchemaProvider = false;
     List<String> transformerClassNames = null;

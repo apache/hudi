@@ -691,8 +691,9 @@ public class StreamSync implements Serializable, Closeable {
     // try get checkpoint from commits(including commit and deltacommit)
     // in COW migrating to MOR case, the first batch of the deltastreamer will lost the checkpoint from COW table, cause the dataloss
     HoodieTimeline deltaCommitTimeline = commitsTimelineOpt.get().filter(instant -> instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION));
-    // has deltacommit means this is a MOR table, we should get .deltacommit as before
-    if (!deltaCommitTimeline.empty()) {
+    // has deltacommit and this is a MOR table, then we should get checkpoint from .deltacommit
+    // if changing from mor to cow, before changing we must do a full compaction, so we can only consider .commit in such case
+    if (cfg.tableType.equals(HoodieTableType.MERGE_ON_READ.name()) && !deltaCommitTimeline.empty()) {
       commitsTimelineOpt = Option.of(deltaCommitTimeline);
     }
     Option<HoodieInstant> lastCommit = commitsTimelineOpt.get().lastInstant();
