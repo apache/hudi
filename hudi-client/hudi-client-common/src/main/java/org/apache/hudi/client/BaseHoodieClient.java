@@ -98,7 +98,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     shouldStopTimelineServer = !timelineServer.isPresent();
     this.heartbeatClient = new HoodieHeartbeatClient(this.fs, this.basePath,
         clientConfig.getHoodieClientHeartbeatIntervalInMs(), clientConfig.getHoodieClientHeartbeatTolerableMisses());
-    this.metrics = new HoodieMetrics(config, new SerializableConfiguration(hadoopConf));
+    this.metrics = new HoodieMetrics(config);
     this.txnManager = new TransactionManager(config, fs);
     this.timeGenerator = TimeGenerators.getTimeGenerator(config.getTimeGeneratorConfig(), hadoopConf);
     startEmbeddedServerView();
