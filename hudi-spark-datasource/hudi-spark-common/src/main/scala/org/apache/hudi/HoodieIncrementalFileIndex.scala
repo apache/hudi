@@ -36,9 +36,10 @@ class HoodieIncrementalFileIndex(override val spark: SparkSession,
                                  override val schemaSpec: Option[StructType],
                                  override val options: Map[String, String],
                                  @transient override val fileStatusCache: FileStatusCache = NoopCache,
-                                 override val includeLogFiles: Boolean)
+                                 override val includeLogFiles: Boolean,
+                                 override val shouldEmbedFileSlices: Boolean)
   extends HoodieFileIndex(
-    spark, metaClient, schemaSpec, options, fileStatusCache, includeLogFiles
+    spark, metaClient, schemaSpec, options, fileStatusCache, includeLogFiles, shouldEmbedFileSlices
   ) with FileIndex {
   val mergeOnReadIncrementalRelation: MergeOnReadIncrementalRelation = MergeOnReadIncrementalRelation(
     spark.sqlContext, options, metaClient, schemaSpec, schemaSpec)
@@ -47,52 +48,52 @@ class HoodieIncrementalFileIndex(override val spark: SparkSession,
     val fileSlices = mergeOnReadIncrementalRelation.listFileSplits(partitionFilters, dataFilters)
     if (fileSlices.isEmpty) {
       Seq.empty
-    }
-
-    val prunedPartitionsAndFilteredFileSlices = fileSlices.map {
-      case (partitionValues, fileSlices) =>
-        if (shouldEmbedFileSlices) {
-          val baseFileStatusesAndLogFileOnly: Seq[FileStatus] = fileSlices.map(slice => {
-            if (slice.getBaseFile.isPresent) {
-              slice.getBaseFile.get().getFileStatus
-            } else if (slice.getLogFiles.findAny().isPresent) {
-              slice.getLogFiles.findAny().get().getFileStatus
-            } else {
-              null
-            }
-          }).filter(slice => slice != null)
-          val c = fileSlices.filter(f => f.getLogFiles.findAny().isPresent
-              || (f.getBaseFile.isPresent && f.getBaseFile.get().getBootstrapBaseFile.isPresent)).
-            foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
-          if (c.nonEmpty) {
-            PartitionDirectory(new HoodiePartitionFileSliceMapping(partitionValues, c), baseFileStatusesAndLogFileOnly)
-          } else {
-            PartitionDirectory(partitionValues, baseFileStatusesAndLogFileOnly)
-          }
-        } else {
-          val allCandidateFiles: Seq[FileStatus] = fileSlices.flatMap(fs => {
-            val baseFileStatusOpt = getBaseFileStatus(Option.apply(fs.getBaseFile.orElse(null)))
-            val logFilesStatus = if (includeLogFiles) {
-              fs.getLogFiles.map[FileStatus](JFunction.toJavaFunction[HoodieLogFile, FileStatus](lf => lf.getFileStatus))
-            } else {
-              java.util.stream.Stream.empty()
-            }
-            val files = logFilesStatus.collect(Collectors.toList[FileStatus]).asScala
-            baseFileStatusOpt.foreach(f => files.append(f))
-            files
-          })
-          PartitionDirectory(partitionValues, allCandidateFiles)
-        }
-    }.toSeq
-
-    hasPushedDownPartitionPredicates = true
-    if (shouldReadAsPartitionedTable()) {
-      prunedPartitionsAndFilteredFileSlices
-    } else if (shouldEmbedFileSlices) {
-      assert(partitionSchema.isEmpty)
-      prunedPartitionsAndFilteredFileSlices
     } else {
-      Seq(PartitionDirectory(InternalRow.empty, prunedPartitionsAndFilteredFileSlices.flatMap(_.files)))
+      val prunedPartitionsAndFilteredFileSlices = fileSlices.map {
+        case (partitionValues, fileSlices) =>
+          if (shouldEmbedFileSlices) {
+            val baseFileStatusesAndLogFileOnly: Seq[FileStatus] = fileSlices.map(slice => {
+              if (slice.getBaseFile.isPresent) {
+                slice.getBaseFile.get().getFileStatus
+              } else if (slice.getLogFiles.findAny().isPresent) {
+                slice.getLogFiles.findAny().get().getFileStatus
+              } else {
+                null
+              }
+            }).filter(slice => slice != null)
+            val c = fileSlices.filter(f => f.getLogFiles.findAny().isPresent
+              || (f.getBaseFile.isPresent && f.getBaseFile.get().getBootstrapBaseFile.isPresent)).
+              foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
+            if (c.nonEmpty) {
+              PartitionDirectory(new HoodiePartitionFileSliceMapping(partitionValues, c), baseFileStatusesAndLogFileOnly)
+            } else {
+              PartitionDirectory(partitionValues, baseFileStatusesAndLogFileOnly)
+            }
+          } else {
+            val allCandidateFiles: Seq[FileStatus] = fileSlices.flatMap(fs => {
+              val baseFileStatusOpt = getBaseFileStatus(Option.apply(fs.getBaseFile.orElse(null)))
+              val logFilesStatus = if (includeLogFiles) {
+                fs.getLogFiles.map[FileStatus](JFunction.toJavaFunction[HoodieLogFile, FileStatus](lf => lf.getFileStatus))
+              } else {
+                java.util.stream.Stream.empty()
+              }
+              val files = logFilesStatus.collect(Collectors.toList[FileStatus]).asScala
+              baseFileStatusOpt.foreach(f => files.append(f))
+              files
+            })
+            PartitionDirectory(partitionValues, allCandidateFiles)
+          }
+      }.toSeq
+
+      hasPushedDownPartitionPredicates = true
+      if (shouldReadAsPartitionedTable()) {
+        prunedPartitionsAndFilteredFileSlices
+      } else if (shouldEmbedFileSlices) {
+        assert(partitionSchema.isEmpty)
+        prunedPartitionsAndFilteredFileSlices
+      } else {
+        Seq(PartitionDirectory(InternalRow.empty, prunedPartitionsAndFilteredFileSlices.flatMap(_.files)))
+      }
     }
   }
 

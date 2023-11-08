@@ -86,7 +86,7 @@ class HoodieMultipleBaseFileFormat(tableState: Broadcast[HoodieTableState],
     if (!supportBatchCalled) {
       supportBatchCalled = true
       supportBatchResult =
-        !isMOR && parquetFormat.supportBatch(sparkSession, schema) && orcFormat.supportBatch(sparkSession, schema)
+        !isMOR && !isIncremental && parquetFormat.supportBatch(sparkSession, schema) && orcFormat.supportBatch(sparkSession, schema)
     }
     supportBatchResult
   }
