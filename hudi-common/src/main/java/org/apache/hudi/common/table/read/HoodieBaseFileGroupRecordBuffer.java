@@ -118,35 +118,39 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
    * @return
    * @throws IOException
    */
-  protected Option<T> doProcessNextDataRecord(T record,
-                                              Map<String, Object> metadata,
-                                              Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair) throws IOException {
+  protected Option<Pair<T, Map<String, Object>>> doProcessNextDataRecord(T record,
+                                                                         Map<String, Object> metadata,
+                                                                         Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair) throws IOException {
     if (existingRecordMetadataPair != null) {
       // Merge and store the combined record
       // Note that the incoming `record` is from an older commit, so it should be put as
       // the `older` in the merge API
-      HoodieRecord<T> combinedRecord;
-      if (enablePartialMerging) {
-        combinedRecord = (HoodieRecord<T>) recordMerger.partialMerge(
-            readerContext.constructHoodieRecord(Option.of(record), metadata),
-            (Schema) metadata.get(INTERNAL_META_SCHEMA),
-            readerContext.constructHoodieRecord(
-                existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight()),
-            (Schema) existingRecordMetadataPair.getRight().get(INTERNAL_META_SCHEMA),
-            readerSchema,
-            payloadProps).get().getLeft();
-      } else {
-        combinedRecord = (HoodieRecord<T>) recordMerger.merge(
-            readerContext.constructHoodieRecord(Option.of(record), metadata),
-            (Schema) metadata.get(INTERNAL_META_SCHEMA),
-            readerContext.constructHoodieRecord(
-                existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight()),
-            (Schema) existingRecordMetadataPair.getRight().get(INTERNAL_META_SCHEMA),
-            payloadProps).get().getLeft();
-      }
+      Pair<HoodieRecord, Schema> combinedRecordAndSchema = enablePartialMerging
+          ? recordMerger.partialMerge(
+          readerContext.constructHoodieRecord(Option.of(record), metadata),
+          (Schema) metadata.get(INTERNAL_META_SCHEMA),
+          readerContext.constructHoodieRecord(
+              existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight()),
+          (Schema) existingRecordMetadataPair.getRight().get(INTERNAL_META_SCHEMA),
+          readerSchema,
+          payloadProps).get()
+          : recordMerger.merge(
+          readerContext.constructHoodieRecord(Option.of(record), metadata),
+          (Schema) metadata.get(INTERNAL_META_SCHEMA),
+          readerContext.constructHoodieRecord(
+              existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight()),
+          (Schema) existingRecordMetadataPair.getRight().get(INTERNAL_META_SCHEMA),
+          payloadProps).get();
+
+      HoodieRecord<T> combinedRecord = combinedRecordAndSchema.getLeft();
+
       // If pre-combine returns existing record, no need to update it
       if (combinedRecord.getData() != existingRecordMetadataPair.getLeft().get()) {
-        return Option.of(combinedRecord.getData());
+        return Option.of(Pair.of(
+            combinedRecord.getData(),
+            enablePartialMerging
+                ? readerContext.updateSchemaAndResetOrderingValInMetadata(metadata, combinedRecordAndSchema.getRight())
+                : metadata));
       }
       return Option.empty();
     } else {
@@ -154,7 +158,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
       // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
       //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
       //       it since these records will be put into records(Map).
-      return Option.of(record);
+      return Option.of(Pair.of(record, metadata));
     }
   }
 

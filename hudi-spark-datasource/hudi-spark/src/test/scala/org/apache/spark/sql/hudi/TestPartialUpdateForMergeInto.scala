@@ -37,92 +37,124 @@ import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATE
 import org.apache.hudi.metadata.HoodieTableMetadata
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
-import java.io.File
 import java.util.{Collections, List}
 import scala.collection.JavaConverters._
 
 class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
 
-  test("Test Partial Update") {
-    withTempDir { tmp =>
-      testPartialUpdate(tmp, "cow", "avro")
-      testPartialUpdate(tmp, "mor", "avro")
-      testPartialUpdate(tmp, "mor", "parquet")
-    }
+  test("Test Partial Update with COW and Avro log format") {
+    testPartialUpdate("cow", "avro")
   }
 
-  def testPartialUpdate(tmp: File,
-                        tableType: String,
+  test("Test Partial Update with MOR and Avro log format") {
+    testPartialUpdate("mor", "avro")
+  }
+
+  test("Test Partial Update with MOR and Parquet log format") {
+    testPartialUpdate("mor", "parquet")
+  }
+
+  def testPartialUpdate(tableType: String,
                         logDataBlockFormat: String): Unit = {
-    val tableName = generateTableName
-    val basePath = tmp.getCanonicalPath + "/" + tableName
-    spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
-    spark.sql(s"set ${ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
-    spark.sql(s"set ${LOGFILE_DATA_BLOCK_FORMAT.key} = $logDataBlockFormat")
-    spark.sql(s"set ${FILE_GROUP_READER_ENABLED.key} = true")
-    spark.sql(s"set ${USE_NEW_HUDI_PARQUET_FILE_FORMAT.key} = true")
-    spark.sql(
-      s"""
-         |create table $tableName (
-         | id int,
-         | name string,
-         | price double,
-         | _ts long
-         |) using hudi
-         |tblproperties(
-         | type ='$tableType',
-         | primaryKey = 'id',
-         | preCombineField = '_ts'
-         |)
-         |location '$basePath'
-        """.stripMargin)
-    spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = tmp.getCanonicalPath + "/" + tableName
+      spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
+      spark.sql(s"set ${ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
+      spark.sql(s"set ${LOGFILE_DATA_BLOCK_FORMAT.key} = $logDataBlockFormat")
+      spark.sql(s"set ${FILE_GROUP_READER_ENABLED.key} = true")
+      spark.sql(s"set ${USE_NEW_HUDI_PARQUET_FILE_FORMAT.key} = true")
 
-    spark.sql(
-      s"""
-         |merge into $tableName t0
-         |using ( select 1 as id, 'a1' as name, 12 as price, 1001 as ts ) s0
-         |on t0.id = s0.id
-         |when matched then update set price = s0.price, _ts = s0.ts
-         |""".stripMargin)
-
-    checkAnswer(s"select id, name, price, _ts from $tableName")(
-      Seq(1, "a1", 12.0, 1001)
-    )
-
-    if (tableType.equals("mor")) {
-      validateLogBlock(basePath, 1, Seq("price", "_ts"))
-    }
-
-    if (tableType.equals("cow")) {
-      // No preCombine field
-      val tableName2 = generateTableName
+      // Create a table with five data fields
       spark.sql(
         s"""
-           |create table $tableName2 (
+           |create table $tableName (
            | id int,
            | name string,
-           | price double
+           | price double,
+           | _ts long,
+           | description string
            |) using hudi
            |tblproperties(
            | type ='$tableType',
-           | primaryKey = 'id'
+           | primaryKey = 'id',
+           | preCombineField = '_ts'
            |)
-           |location '${tmp.getCanonicalPath}/$tableName2'
+           |location '$basePath'
         """.stripMargin)
-      spark.sql(s"insert into $tableName2 values(1, 'a1', 10)")
+      spark.sql(s"insert into $tableName values (1, 'a1', 10, 1000, 'a1: desc1')," +
+        "(2, 'a2', 20, 1200, 'a2: desc2'), (3, 'a3', 30, 1250, 'a3: desc3')")
 
+      // Partial updates using MERGE INTO statement with changed fields: "price" and "_ts"
       spark.sql(
         s"""
-           |merge into $tableName2 t0
-           |using ( select 1 as id, 'a1' as name, 12 as price) s0
+           |merge into $tableName t0
+           |using ( select 1 as id, 'a1' as name, 12 as price, 1001 as ts
+           |union select 3 as id, 'a3' as name, 25 as price, 1260 as ts) s0
            |on t0.id = s0.id
-           |when matched then update set price = s0.price
+           |when matched then update set price = s0.price, _ts = s0.ts
            |""".stripMargin)
 
-      checkAnswer(s"select id, name, price from $tableName2")(
-        Seq(1, "a1", 12.0)
+      checkAnswer(s"select id, name, price, _ts, description from $tableName")(
+        Seq(1, "a1", 12.0, 1001, "a1: desc1"),
+        Seq(2, "a2", 20.0, 1200, "a2: desc2"),
+        Seq(3, "a3", 25.0, 1260, "a3: desc3")
       )
+
+      if (tableType.equals("mor")) {
+        validateLogBlock(basePath, 1, Seq(Seq("price", "_ts")))
+      }
+
+      // Partial updates using MERGE INTO statement with changed fields: "description" and "_ts"
+      spark.sql(
+        s"""
+           |merge into $tableName t0
+           |using ( select 1 as id, 'a1' as name, 'a1: updated desc1' as description, 1023 as ts
+           |union select 2 as id, 'a2' as name, 'a2: updated desc2' as description, 1270 as ts) s0
+           |on t0.id = s0.id
+           |when matched then update set description = s0.description, _ts = s0.ts
+           |""".stripMargin)
+
+      checkAnswer(s"select id, name, price, _ts, description from $tableName")(
+        Seq(1, "a1", 12.0, 1023, "a1: updated desc1"),
+        Seq(2, "a2", 20.0, 1270, "a2: updated desc2"),
+        Seq(3, "a3", 25.0, 1260, "a3: desc3")
+      )
+
+      if (tableType.equals("mor")) {
+        validateLogBlock(basePath, 2, Seq(Seq("price", "_ts"), Seq("_ts", "description")))
+      }
+
+      if (tableType.equals("cow")) {
+        // No preCombine field
+        val tableName2 = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName2 (
+             | id int,
+             | name string,
+             | price double
+             |) using hudi
+             |tblproperties(
+             | type ='$tableType',
+             | primaryKey = 'id'
+             |)
+             |location '${tmp.getCanonicalPath}/$tableName2'
+        """.stripMargin)
+        spark.sql(s"insert into $tableName2 values(1, 'a1', 10)")
+
+        spark.sql(
+          s"""
+             |merge into $tableName2 t0
+             |using ( select 1 as id, 'a1' as name, 12 as price) s0
+             |on t0.id = s0.id
+             |when matched then update set price = s0.price
+             |""".stripMargin)
+
+        checkAnswer(s"select id, name, price from $tableName2")(
+          Seq(1, "a1", 12.0)
+        )
+      }
     }
   }
 
@@ -174,7 +206,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
 
   def validateLogBlock(basePath: String,
                        expectedNumLogFile: Int,
-                       changedFields: Seq[String]): Unit = {
+                       changedFields: Seq[Seq[String]]): Unit = {
     val hadoopConf = getDefaultHadoopConf
     val metaClient: HoodieTableMetaClient =
       HoodieTableMetaClient.builder.setConf(hadoopConf).setBasePath(basePath).build
@@ -197,18 +229,20 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
     assertEquals(expectedNumLogFile, logFilePathList.size)
 
     val avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema
-    val logReader = new HoodieLogFileReader(
-      metaClient.getFs, new HoodieLogFile(logFilePathList.get(0)),
-      avroSchema, 1024 * 1024, true, false, false,
-      "id", null)
-    assertTrue(logReader.hasNext)
-    val logBlockHeader = logReader.next().getLogBlockHeader
-    assertTrue(logBlockHeader.containsKey(HeaderMetadataType.SCHEMA))
-    assertTrue(logBlockHeader.containsKey(HeaderMetadataType.IS_PARTIAL))
-    val partialSchema = new Schema.Parser().parse(logBlockHeader.get(HeaderMetadataType.SCHEMA))
-    val expectedPartialSchema = HoodieAvroUtils.addMetadataFields(HoodieAvroUtils.generateProjectionSchema(
-      avroSchema, changedFields.asJava), false)
-    assertEquals(expectedPartialSchema, partialSchema)
-    assertTrue(logBlockHeader.get(HeaderMetadataType.IS_PARTIAL).toBoolean)
+    for (i <- 0 until expectedNumLogFile) {
+      val logReader = new HoodieLogFileReader(
+        metaClient.getFs, new HoodieLogFile(logFilePathList.get(i)),
+        avroSchema, 1024 * 1024, true, false, false,
+        "id", null)
+      assertTrue(logReader.hasNext)
+      val logBlockHeader = logReader.next().getLogBlockHeader
+      assertTrue(logBlockHeader.containsKey(HeaderMetadataType.SCHEMA))
+      assertTrue(logBlockHeader.containsKey(HeaderMetadataType.IS_PARTIAL))
+      val partialSchema = new Schema.Parser().parse(logBlockHeader.get(HeaderMetadataType.SCHEMA))
+      val expectedPartialSchema = HoodieAvroUtils.addMetadataFields(HoodieAvroUtils.generateProjectionSchema(
+        avroSchema, changedFields(i).asJava), false)
+      assertEquals(expectedPartialSchema, partialSchema)
+      assertTrue(logBlockHeader.get(HeaderMetadataType.IS_PARTIAL).toBoolean)
+    }
   }
 }

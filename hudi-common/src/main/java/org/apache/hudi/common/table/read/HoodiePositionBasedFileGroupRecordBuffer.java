@@ -114,9 +114,12 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
   @Override
   public void processNextDataRecord(T record, Map<String, Object> metadata, Object recordPosition) throws IOException {
     Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordPosition);
-    Option<T> mergedRecord = doProcessNextDataRecord(record, metadata, existingRecordMetadataPair);
-    if (mergedRecord.isPresent()) {
-      records.put(recordPosition, Pair.of(Option.ofNullable(readerContext.seal(mergedRecord.get())), metadata));
+    Option<Pair<T, Map<String, Object>>> mergedRecordAndMetadata =
+        doProcessNextDataRecord(record, metadata, existingRecordMetadataPair);
+    if (mergedRecordAndMetadata.isPresent()) {
+      records.put(recordPosition, Pair.of(
+          Option.ofNullable(readerContext.seal(mergedRecordAndMetadata.get().getLeft())),
+          mergedRecordAndMetadata.get().getRight()));
     }
   }
 
