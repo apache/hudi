@@ -59,7 +59,7 @@ class HoodieCDCFileIndex (override val spark: SparkSession,
         }}.toList
         val partitionValues: InternalRow = new GenericInternalRow(doParsePartitionColumnValues(
           metaClient.getTableConfig.getPartitionFields.get(), partitionPath).asInstanceOf[Array[Any]])
-        PartitionDirectory(
+        sparkAdapter.newPartitionDirectory(
           new HoodiePartitionCDCFileGroupMapping(
             partitionValues, fileGroups.map(kv => kv._1 -> kv._2.asScala.toList).toMap),
           fileGroupIds
