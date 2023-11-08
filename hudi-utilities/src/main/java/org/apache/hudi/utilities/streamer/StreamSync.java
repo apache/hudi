@@ -585,7 +585,7 @@ public class StreamSync implements Serializable, Closeable {
       InputBatch<JavaRDD<GenericRecord>> dataAndCheckpoint = formatAdapter.fetchNewDataInAvroFormat(resumeCheckpointStr, cfg.sourceLimit);
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
       // Rewrite transformed records into the expected target schema
-      schemaProvider = getDeducedSchemaProvider(dataAndCheckpoint.getSchemaProvider().getSourceSchema(), dataAndCheckpoint.getSchemaProvider(), metaClient);
+      schemaProvider = getDeducedSchemaProvider(dataAndCheckpoint.getSchemaProvider().getTargetSchema(), dataAndCheckpoint.getSchemaProvider(), metaClient);
       String serializedTargetSchema = schemaProvider.getTargetSchema().toString();
       avroRDDOptional = dataAndCheckpoint.getBatch().map(t -> t.mapPartitions(iterator ->
           new LazyCastingIterator(iterator, serializedTargetSchema)));

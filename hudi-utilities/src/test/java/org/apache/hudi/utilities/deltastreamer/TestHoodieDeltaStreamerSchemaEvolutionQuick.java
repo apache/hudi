@@ -19,37 +19,94 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.SchemaCompatibilityException;
+import org.apache.hudi.utilities.UtilHelpers;
+import org.apache.hudi.utilities.streamer.HoodieStreamer;
+
+import org.apache.avro.Schema;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructField;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.IOException;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDeltaStreamerSchemaEvolutionBase {
+
+  @AfterEach
+  public void teardown() throws Exception {
+    super.teardown();
+    TestSchemaProvider.resetTargetSchema();
+  }
 
   protected static Stream<Arguments> testArgs() {
     Stream.Builder<Arguments> b = Stream.builder();
     //only testing row-writer enabled for now
-    for (Boolean rowWriterEnable : new Boolean[]{true}) {
-      for (Boolean addFilegroups : new Boolean[]{false, true}) {
-        for (Boolean multiLogFiles : new Boolean[]{false, true}) {
-          for (Boolean shouldCluster : new Boolean[]{false, true}) {
-            for (String tableType : new String[]{"COPY_ON_WRITE", "MERGE_ON_READ"}) {
-              if (!multiLogFiles || tableType.equals("MERGE_ON_READ")) {
-                b.add(Arguments.of(tableType, shouldCluster, false, rowWriterEnable, addFilegroups, multiLogFiles));
+    for (Boolean rowWriterEnable : new Boolean[] {true}) {
+      for (Boolean nullForDeletedCols : new Boolean[] {false, true}) {
+        for (Boolean useKafkaSource : new Boolean[] {false, true}) {
+          for (Boolean addFilegroups : new Boolean[] {false, true}) {
+            for (Boolean multiLogFiles : new Boolean[] {false, true}) {
+              for (Boolean shouldCluster : new Boolean[] {false, true}) {
+                for (String tableType : new String[] {"COPY_ON_WRITE", "MERGE_ON_READ"}) {
+                  if (!multiLogFiles || tableType.equals("MERGE_ON_READ")) {
+                    b.add(Arguments.of(tableType, shouldCluster, false, rowWriterEnable, addFilegroups, multiLogFiles, useKafkaSource, nullForDeletedCols));
+                  }
+                }
+              }
+              b.add(Arguments.of("MERGE_ON_READ", false, true, rowWriterEnable, addFilegroups, multiLogFiles, useKafkaSource, nullForDeletedCols));
+            }
+          }
+        }
+      }
+    }
+    return b.build();
+  }
+
+  protected static Stream<Arguments> testReorderedColumn() {
+    Stream.Builder<Arguments> b = Stream.builder();
+    for (Boolean rowWriterEnable : new Boolean[] {true}) {
+      for (Boolean nullForDeletedCols : new Boolean[] {false, true}) {
+        for (Boolean useKafkaSource : new Boolean[] {false, true}) {
+          for (String tableType : new String[] {"COPY_ON_WRITE", "MERGE_ON_READ"}) {
+            b.add(Arguments.of(tableType, rowWriterEnable, useKafkaSource, nullForDeletedCols));
+          }
+        }
+      }
+    }
+    return b.build();
+  }
+
+  protected static Stream<Arguments> testParamsWithSchemaTransformer() {
+    Stream.Builder<Arguments> b = Stream.builder();
+    for (Boolean useTransformer : new Boolean[] {false, true}) {
+      for (Boolean setSchema : new Boolean[] {false, true}) {
+        for (Boolean rowWriterEnable : new Boolean[] {true}) {
+          for (Boolean nullForDeletedCols : new Boolean[] {false, true}) {
+            for (Boolean useKafkaSource : new Boolean[] {false, true}) {
+              for (String tableType : new String[] {"COPY_ON_WRITE", "MERGE_ON_READ"}) {
+                b.add(Arguments.of(tableType, rowWriterEnable, useKafkaSource, nullForDeletedCols, useTransformer, setSchema));
               }
             }
           }
-          b.add(Arguments.of("MERGE_ON_READ", false, true, rowWriterEnable, addFilegroups, multiLogFiles));
         }
       }
     }
@@ -66,20 +123,24 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
                           Boolean shouldCompact,
                           Boolean rowWriterEnable,
                           Boolean addFilegroups,
-                          Boolean multiLogFiles) throws Exception {
+                          Boolean multiLogFiles,
+                          Boolean useKafkaSource,
+                          Boolean allowNullForDeletedCols) throws Exception {
     this.tableType = tableType;
     this.shouldCluster = shouldCluster;
     this.shouldCompact = shouldCompact;
     this.rowWriterEnable = rowWriterEnable;
     this.addFilegroups = addFilegroups;
     this.multiLogFiles = multiLogFiles;
-    this.useKafkaSource = true;
-    this.useSchemaProvider = true;
+    this.useKafkaSource = useKafkaSource;
+    if (useKafkaSource) {
+      this.useSchemaProvider = true;
+    }
     this.useTransformer = true;
     boolean isCow = tableType.equals("COPY_ON_WRITE");
-    PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + testNum++;
+    PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + ++testNum;
     tableBasePath = basePath + "test_parquet_table" + testNum;
-    this.deltaStreamer = new HoodieDeltaStreamer(getDeltaStreamerConfig(), jsc);
+    this.deltaStreamer = new HoodieDeltaStreamer(getDeltaStreamerConfig(allowNullForDeletedCols), jsc);
 
     //first write
     String datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
@@ -90,7 +151,6 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     int numFiles = 3;
     assertRecordCount(numRecords);
     assertFileNumber(numFiles, isCow);
-
 
     //add extra log files
     if (multiLogFiles) {
@@ -137,8 +197,17 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     df = df.withColumn("distance_in_meters", col.cast(DataTypes.FloatType));
     col = df.col("seconds_since_epoch");
     df = df.withColumn("seconds_since_epoch", col.cast(DataTypes.StringType));
-    addData(df, false);
-    deltaStreamer.sync();
+
+    try {
+      addData(df, false);
+      deltaStreamer.sync();
+      assertTrue(allowNullForDeletedCols);
+    } catch (SchemaCompatibilityException e) {
+      assertTrue(e.getMessage().contains("Incoming batch schema is not compatible with the table's one"));
+      assertFalse(allowNullForDeletedCols);
+      return;
+    }
+
     if (shouldCluster) {
       //everything combines into 1 file per partition
       assertBaseFileOnlyNumber(3);
@@ -170,6 +239,346 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     assertCondition(df, "size(zcomplex_array) > 0", 2);
     assertCondition(df, "extra_col_regular is NULL", 2);
     assertCondition(df, "fare.extra_col_struct is NULL", 2);
+  }
+
+
+  /**
+   * Main testing logic for non-type promotion tests
+   */
+  @ParameterizedTest
+  @MethodSource("testReorderedColumn")
+  public void testReorderingColumn(String tableType,
+                       Boolean rowWriterEnable,
+                       Boolean useKafkaSource,
+                       Boolean allowNullForDeletedCols) throws Exception {
+    this.tableType = tableType;
+    this.rowWriterEnable = rowWriterEnable;
+    this.useKafkaSource = useKafkaSource;
+    this.shouldCluster = false;
+    this.shouldCompact = false;
+    this.addFilegroups = false;
+    this.multiLogFiles = false;
+    this.useTransformer = true;
+    if (useKafkaSource) {
+      this.useSchemaProvider = true;
+    }
+
+    boolean isCow = tableType.equals("COPY_ON_WRITE");
+    PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + ++testNum;
+    tableBasePath = basePath + "test_parquet_table" + testNum;
+
+    //first write
+    String datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
+    Dataset<Row> df = sparkSession.read().json(datapath);
+    resetTopicAndDeltaStreamer(allowNullForDeletedCols);
+    addData(df, true);
+    deltaStreamer.sync();
+    int numRecords = 6;
+    int numFiles = 3;
+    assertRecordCount(numRecords);
+    assertFileNumber(numFiles, isCow);
+
+    //add extra log files
+    if (tableType.equals("MERGE_ON_READ")) {
+      datapath = String.class.getResource("/data/schema-evolution/extraLogFilesTestEverything.json").getPath();
+      df = sparkSession.read().json(datapath);
+      addData(df, false);
+      deltaStreamer.sync();
+      //this write contains updates for the 6 records from the first write, so
+      //although we have 2 files for each filegroup, we only see the log files
+      //represented in the read. So that is why numFiles is 3, not 6
+      assertRecordCount(numRecords);
+      assertFileNumber(numFiles, false);
+    }
+
+    assertRecordCount(numRecords);
+    resetTopicAndDeltaStreamer(allowNullForDeletedCols);
+
+    HoodieStreamer.Config dsConfig = deltaStreamer.getConfig();
+    HoodieTableMetaClient metaClient = getMetaClient(dsConfig);
+    HoodieInstant lastInstant = metaClient.getActiveTimeline().lastInstant().get();
+
+    //test reordering column
+    datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
+    df = sparkSession.read().json(datapath);
+    df = df.drop("rider").withColumn("rider", functions.lit("rider-003"));
+
+    addData(df, false);
+    deltaStreamer.sync();
+
+    Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, fs, dsConfig.targetBasePath, metaClient);
+    assertTrue(latestTableSchemaOpt.get().getField("rider").schema().getTypes()
+        .stream().anyMatch(t -> t.getType().equals(Schema.Type.STRING)));
+    assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
+  }
+
+  @ParameterizedTest
+  @MethodSource("testParamsWithSchemaTransformer")
+  public void testDroppedColumn(String tableType,
+                                           Boolean rowWriterEnable,
+                                           Boolean useKafkaSource,
+                                           Boolean allowNullForDeletedCols,
+                                           Boolean useTransformer,
+                                           Boolean targetSchemaSameAsTableSchema) throws Exception {
+    this.tableType = tableType;
+    this.rowWriterEnable = rowWriterEnable;
+    this.useKafkaSource = useKafkaSource;
+    this.shouldCluster = false;
+    this.shouldCompact = false;
+    this.addFilegroups = false;
+    this.multiLogFiles = false;
+    this.useTransformer = useTransformer;
+    if (useKafkaSource || targetSchemaSameAsTableSchema) {
+      this.useSchemaProvider = true;
+    }
+
+    boolean isCow = tableType.equals("COPY_ON_WRITE");
+    PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + ++testNum;
+    tableBasePath = basePath + "test_parquet_table" + testNum;
+
+    //first write
+    String datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
+    Dataset<Row> df = sparkSession.read().json(datapath);
+    resetTopicAndDeltaStreamer(allowNullForDeletedCols);
+    addData(df, true);
+    deltaStreamer.sync();
+    int numRecords = 6;
+    int numFiles = 3;
+    assertRecordCount(numRecords);
+    assertFileNumber(numFiles, isCow);
+
+    //add extra log files
+    if (tableType.equals("MERGE_ON_READ")) {
+      datapath = String.class.getResource("/data/schema-evolution/extraLogFilesTestEverything.json").getPath();
+      df = sparkSession.read().json(datapath);
+      addData(df, false);
+      deltaStreamer.sync();
+      //this write contains updates for the 6 records from the first write, so
+      //although we have 2 files for each filegroup, we only see the log files
+      //represented in the read. So that is why numFiles is 3, not 6
+      assertRecordCount(numRecords);
+      assertFileNumber(numFiles, false);
+    }
+
+    if (targetSchemaSameAsTableSchema) {
+      TestSchemaProvider.setTargetSchema(TestSchemaProvider.sourceSchema);
+    }
+    resetTopicAndDeltaStreamer(allowNullForDeletedCols);
+
+    HoodieStreamer.Config dsConfig = deltaStreamer.getConfig();
+    HoodieTableMetaClient metaClient = getMetaClient(dsConfig);
+    HoodieInstant lastInstant = metaClient.getActiveTimeline().lastInstant().get();
+
+    // drop column
+    datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
+    df = sparkSession.read().json(datapath);
+    Dataset<Row> droppedColumnDf = df.drop("rider");
+    try {
+      addData(droppedColumnDf, true);
+      deltaStreamer.sync();
+      assertTrue(allowNullForDeletedCols || targetSchemaSameAsTableSchema);
+
+      Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, fs, dsConfig.targetBasePath, metaClient);
+      assertTrue(latestTableSchemaOpt.get().getField("rider").schema().getTypes()
+          .stream().anyMatch(t -> t.getType().equals(Schema.Type.STRING)));
+      assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
+    } catch (SchemaCompatibilityException e) {
+      assertFalse(allowNullForDeletedCols || targetSchemaSameAsTableSchema);
+      assertTrue(e.getMessage().contains("Incoming batch schema is not compatible with the table's one"));
+      assertFalse(allowNullForDeletedCols);
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("testParamsWithSchemaTransformer")
+  public void testTypePromotion(String tableType,
+                                Boolean rowWriterEnable,
+                                Boolean useKafkaSource,
+                                Boolean allowNullForDeletedCols,
+                                Boolean useTransformer,
+                                Boolean targetSchemaSameAsTableSchema) throws Exception {
+    this.tableType = tableType;
+    this.rowWriterEnable = rowWriterEnable;
+    this.useKafkaSource = useKafkaSource;
+    this.shouldCluster = false;
+    this.shouldCompact = false;
+    this.addFilegroups = false;
+    this.multiLogFiles = false;
+    this.useTransformer = useTransformer;
+    if (useKafkaSource || targetSchemaSameAsTableSchema) {
+      this.useSchemaProvider = true;
+    }
+
+    boolean isCow = tableType.equals("COPY_ON_WRITE");
+    PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + ++testNum;
+    tableBasePath = basePath + "test_parquet_table" + testNum;
+
+    //first write
+    String datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
+    Dataset<Row> df = sparkSession.read().json(datapath);
+    resetTopicAndDeltaStreamer(allowNullForDeletedCols);
+    addData(df, true);
+    deltaStreamer.sync();
+    int numRecords = 6;
+    int numFiles = 3;
+    assertRecordCount(numRecords);
+    assertFileNumber(numFiles, isCow);
+
+    //add extra log files
+    if (tableType.equals("MERGE_ON_READ")) {
+      datapath = String.class.getResource("/data/schema-evolution/extraLogFilesTestEverything.json").getPath();
+      df = sparkSession.read().json(datapath);
+      addData(df, false);
+      deltaStreamer.sync();
+      //this write contains updates for the 6 records from the first write, so
+      //although we have 2 files for each filegroup, we only see the log files
+      //represented in the read. So that is why numFiles is 3, not 6
+      assertRecordCount(numRecords);
+      assertFileNumber(numFiles, false);
+    }
+
+    if (targetSchemaSameAsTableSchema) {
+      TestSchemaProvider.setTargetSchema(TestSchemaProvider.sourceSchema);
+    }
+    resetTopicAndDeltaStreamer(allowNullForDeletedCols);
+
+    HoodieStreamer.Config dsConfig = deltaStreamer.getConfig();
+    HoodieTableMetaClient metaClient = getMetaClient(dsConfig);
+    HoodieInstant lastInstant = metaClient.getActiveTimeline().lastInstant().get();
+
+    // type promotion for dataset (int -> long)
+    datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
+    df = sparkSession.read().json(datapath);
+    Column col = df.col("distance_in_meters");
+    Dataset<Row> typePromotionDf = df.withColumn("distance_in_meters", col.cast(DataTypes.DoubleType));
+    try {
+      addData(typePromotionDf, true);
+      deltaStreamer.sync();
+      assertFalse(targetSchemaSameAsTableSchema);
+
+      Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, fs, dsConfig.targetBasePath, metaClient);
+      assertTrue(latestTableSchemaOpt.get().getField("distance_in_meters").schema().getTypes()
+          .stream().anyMatch(t -> t.getType().equals(Schema.Type.DOUBLE)), latestTableSchemaOpt.get().getField("distance_in_meters").schema().toString());
+      assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
+    } catch (Exception e) {
+      assertTrue(targetSchemaSameAsTableSchema);
+      if (!useKafkaSource) {
+        assertTrue(containsErrorMessage(e, "Incoming batch schema is not compatible with the table's one",
+                "org.apache.spark.sql.catalyst.expressions.MutableDouble cannot be cast to org.apache.spark.sql.catalyst.expressions.MutableLong",
+                "cannot support rewrite value for schema type: \"long\" since the old schema type is: \"double\""),
+            e.getMessage());
+      } else {
+        assertTrue(containsErrorMessage(e, "Incoming batch schema is not compatible with the table's one",
+                "cannot support rewrite value for schema type: \"long\" since the old schema type is: \"double\""),
+            e.getMessage());
+      }
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("testParamsWithSchemaTransformer")
+  public void testTypeDemotion(String tableType,
+                                Boolean rowWriterEnable,
+                                Boolean useKafkaSource,
+                                Boolean allowNullForDeletedCols,
+                                Boolean useTransformer,
+                                Boolean targetSchemaSameAsTableSchema) throws Exception {
+    this.tableType = tableType;
+    this.rowWriterEnable = rowWriterEnable;
+    this.useKafkaSource = useKafkaSource;
+    this.shouldCluster = false;
+    this.shouldCompact = false;
+    this.addFilegroups = false;
+    this.multiLogFiles = false;
+    this.useTransformer = useTransformer;
+    if (useKafkaSource || targetSchemaSameAsTableSchema) {
+      this.useSchemaProvider = true;
+    }
+
+    boolean isCow = tableType.equals("COPY_ON_WRITE");
+    PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + ++testNum;
+    tableBasePath = basePath + "test_parquet_table" + testNum;
+
+    //first write
+    String datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
+    Dataset<Row> df = sparkSession.read().json(datapath);
+    resetTopicAndDeltaStreamer(allowNullForDeletedCols);
+    addData(df, true);
+    deltaStreamer.sync();
+    int numRecords = 6;
+    int numFiles = 3;
+    assertRecordCount(numRecords);
+    assertFileNumber(numFiles, isCow);
+
+    //add extra log files
+    if (tableType.equals("MERGE_ON_READ")) {
+      datapath = String.class.getResource("/data/schema-evolution/extraLogFilesTestEverything.json").getPath();
+      df = sparkSession.read().json(datapath);
+      addData(df, false);
+      deltaStreamer.sync();
+      //this write contains updates for the 6 records from the first write, so
+      //although we have 2 files for each filegroup, we only see the log files
+      //represented in the read. So that is why numFiles is 3, not 6
+      assertRecordCount(numRecords);
+      assertFileNumber(numFiles, false);
+    }
+
+    if (targetSchemaSameAsTableSchema) {
+      TestSchemaProvider.setTargetSchema(TestSchemaProvider.sourceSchema);
+    }
+    resetTopicAndDeltaStreamer(allowNullForDeletedCols);
+
+    HoodieStreamer.Config dsConfig = deltaStreamer.getConfig();
+    HoodieTableMetaClient metaClient = getMetaClient(dsConfig);
+    HoodieInstant lastInstant = metaClient.getActiveTimeline().lastInstant().get();
+
+    // type demotion
+    datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
+    df = sparkSession.read().json(datapath);
+    Column col = df.col("current_ts");
+    Dataset<Row> typeDemotionDf = df.withColumn("current_ts", col.cast(DataTypes.IntegerType));
+    addData(typeDemotionDf, true);
+    deltaStreamer.sync();
+
+    Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, fs, dsConfig.targetBasePath, metaClient);
+    assertTrue(latestTableSchemaOpt.get().getField("current_ts").schema().getTypes()
+        .stream().anyMatch(t -> t.getType().equals(Schema.Type.LONG)));
+    assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
+  }
+
+  private static HoodieTableMetaClient getMetaClient(HoodieStreamer.Config dsConfig) {
+    return HoodieTableMetaClient.builder()
+        .setConf(new Configuration(fs.getConf()))
+        .setBasePath(dsConfig.targetBasePath)
+        .setPayloadClassName(dsConfig.payloadClassName)
+        .build();
+  }
+
+  private void resetTopicAndDeltaStreamer(Boolean allowNullForDeletedCols) throws IOException {
+    topicName = "topic" + ++testNum;
+    if (this.deltaStreamer != null) {
+      this.deltaStreamer.shutdownGracefully();
+    }
+    String[] transformerClassNames = useTransformer ? new String[] {TestHoodieDeltaStreamer.TripsWithDistanceTransformer.class.getName()}
+        : new String[0];
+    TypedProperties extraProps = new TypedProperties();
+    extraProps.setProperty("hoodie.streamer.checkpoint.force.skip", "true");
+    HoodieDeltaStreamer.Config deltaStreamerConfig = getDeltaStreamerConfig(transformerClassNames, allowNullForDeletedCols, extraProps);
+    deltaStreamerConfig.checkpoint = "0";
+    this.deltaStreamer = new HoodieDeltaStreamer(deltaStreamerConfig, jsc);
+  }
+
+  private boolean containsErrorMessage(Throwable e, String... messages) {
+    while (e != null) {
+      for (String msg : messages) {
+        if (e.getMessage().contains(msg)) {
+          return true;
+        }
+      }
+      e = e.getCause();
+    }
+
+    return false;
   }
 
   protected void assertDataType(Dataset<Row> df, String colName, DataType expectedType) {
