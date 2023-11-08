@@ -306,6 +306,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     addData(df, false);
     deltaStreamer.sync();
 
+    metaClient.reloadActiveTimeline();
     Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, fs, dsConfig.targetBasePath, metaClient);
     assertTrue(latestTableSchemaOpt.get().getField("rider").schema().getTypes()
         .stream().anyMatch(t -> t.getType().equals(Schema.Type.STRING)));
@@ -378,6 +379,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
       deltaStreamer.sync();
       assertTrue(allowNullForDeletedCols || targetSchemaSameAsTableSchema);
 
+      metaClient.reloadActiveTimeline();
       Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, fs, dsConfig.targetBasePath, metaClient);
       assertTrue(latestTableSchemaOpt.get().getField("rider").schema().getTypes()
           .stream().anyMatch(t -> t.getType().equals(Schema.Type.STRING)));
@@ -456,6 +458,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
       deltaStreamer.sync();
       assertFalse(targetSchemaSameAsTableSchema);
 
+      metaClient.reloadActiveTimeline();
       Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, fs, dsConfig.targetBasePath, metaClient);
       assertTrue(latestTableSchemaOpt.get().getField("distance_in_meters").schema().getTypes()
           .stream().anyMatch(t -> t.getType().equals(Schema.Type.DOUBLE)), latestTableSchemaOpt.get().getField("distance_in_meters").schema().toString());
@@ -540,6 +543,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     addData(typeDemotionDf, true);
     deltaStreamer.sync();
 
+    metaClient.reloadActiveTimeline();
     Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, fs, dsConfig.targetBasePath, metaClient);
     assertTrue(latestTableSchemaOpt.get().getField("current_ts").schema().getTypes()
         .stream().anyMatch(t -> t.getType().equals(Schema.Type.LONG)));
