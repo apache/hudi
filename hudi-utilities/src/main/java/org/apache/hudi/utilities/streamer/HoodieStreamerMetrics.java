@@ -41,7 +41,7 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
   public HoodieStreamerMetrics(HoodieWriteConfig writeConfig) {
     super(writeConfig);
     if (writeConfig.isMetricsOn()) {
-      metrics = Metrics.getInstance(writeConfig, new SerializableConfiguration(new Configuration()));
+      metrics = Metrics.getInstance(writeConfig);
       this.overallTimerName = getMetricsName("timer", "deltastreamer");
       this.hiveSyncTimerName = getMetricsName("timer", "deltastreamerHiveSync");
       this.metaSyncTimerName = getMetricsName("timer", "deltastreamerMetaSync");

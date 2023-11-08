@@ -38,6 +38,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLayoutConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -309,6 +310,8 @@ class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implement
     configs.add(String.format("%s=%s", HoodieCleanConfig.AUTO_CLEAN.key(), "false"));
     configs.add(String.format("%s=%s", HoodieCleanConfig.CLEANER_FILE_VERSIONS_RETAINED.key(), "1"));
     configs.add(String.format("%s=%s", HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "0"));
+    configs.add(String.format("%s=%s", HoodieMetricsConfig.TURN_METRICS_ON.key(), "true"));
+    configs.add(String.format("%s=%s", HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key(), "FILESYSTEM"));
     cfg.configs = configs;
     cfg.compactionRunningMode = HoodieCompactor.SCHEDULE_AND_EXECUTE;
     cfg.compactionStrategyClassName = LogFileSizeBasedCompactionStrategy.class.getName();

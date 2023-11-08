@@ -74,6 +74,10 @@ public class Metrics {
     registerGauges(Registry.getAllMetrics(true, true), Option.of(commonMetricPrefix));
   }
 
+  public static synchronized Metrics getInstance(HoodieWriteConfig metricConfig) {
+    return getInstance(metricConfig, new SerializableConfiguration(new Configuration()));
+  }
+
   public static synchronized Metrics getInstance(HoodieWriteConfig metricConfig, SerializableConfiguration hadoopConf) {
     String basePath = metricConfig.getBasePath();
     if (METRICS_INSTANCE_PER_BASEPATH.containsKey(basePath)) {

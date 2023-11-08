@@ -19,14 +19,12 @@
 
 package org.apache.hudi.metrics;
 
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.custom.CustomizableMetricsReporter;
 
 import com.codahale.metrics.MetricRegistry;
-import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -51,7 +49,7 @@ public class TestMetricsReporterFactory {
   @Test
   public void metricsReporterFactoryShouldReturnReporter() {
     when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.INMEMORY);
-    MetricsReporter reporter = MetricsReporterFactory.createReporter(config, registry, new SerializableConfiguration(new Configuration())).get();
+    MetricsReporter reporter = MetricsReporterFactory.createReporter(config, registry).get();
     assertTrue(reporter instanceof InMemoryMetricsReporter);
   }
 
@@ -63,7 +61,7 @@ public class TestMetricsReporterFactory {
     props.setProperty("testKey", "testValue");
 
     when(config.getProps()).thenReturn(props);
-    MetricsReporter reporter = MetricsReporterFactory.createReporter(config, registry, new SerializableConfiguration(new Configuration())).get();
+    MetricsReporter reporter = MetricsReporterFactory.createReporter(config, registry).get();
     assertTrue(reporter instanceof CustomizableMetricsReporter);
     assertEquals(props, ((DummyMetricsReporter) reporter).getProps());
     assertEquals(registry, ((DummyMetricsReporter) reporter).getRegistry());
@@ -73,7 +71,7 @@ public class TestMetricsReporterFactory {
   public void metricsReporterFactoryShouldThrowExceptionWhenMetricsReporterClassIsIllegal() {
     when(config.getMetricReporterClassName()).thenReturn(IllegalTestMetricsReporter.class.getName());
     when(config.getProps()).thenReturn(new TypedProperties());
-    assertThrows(HoodieException.class, () -> MetricsReporterFactory.createReporter(config, registry, new SerializableConfiguration(new Configuration())));
+    assertThrows(HoodieException.class, () -> MetricsReporterFactory.createReporter(config, registry));
   }
 
   public static class DummyMetricsReporter extends CustomizableMetricsReporter {

@@ -32,6 +32,7 @@ import org.apache.hudi.metrics.prometheus.PrometheusReporter;
 import org.apache.hudi.metrics.prometheus.PushGatewayMetricsReporter;
 
 import com.codahale.metrics.MetricRegistry;
+import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,6 +44,10 @@ import java.util.Properties;
 public class MetricsReporterFactory {
 
   private static final Logger LOG = LoggerFactory.getLogger(MetricsReporterFactory.class);
+
+  public static Option<MetricsReporter> createReporter(HoodieWriteConfig config, MetricRegistry registry) {
+    return createReporter(config, registry, new SerializableConfiguration(new Configuration()));
+  }
 
   public static Option<MetricsReporter> createReporter(HoodieWriteConfig config, MetricRegistry registry, SerializableConfiguration hadoopConf) {
     String reporterClassName = config.getMetricReporterClassName();

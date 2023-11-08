@@ -60,7 +60,7 @@ public class MetricsFileSystemReporter extends MetricsReporter {
       this.metricsPath = this.config.getBasePath() + META_FOLDER_NAME + METRICS_FOLDER_NAME;
     }
     this.fs = getFs();
-    executor =  Executors.newSingleThreadScheduledExecutor();
+    this.executor = Executors.newSingleThreadScheduledExecutor();
   }
 
   @Override
@@ -112,11 +112,12 @@ public class MetricsFileSystemReporter extends MetricsReporter {
     }
   }
 
-  private String getFileName(String tableName) {
-    if (StringUtils.isNullOrEmpty(tableName)) {
-      tableName = getTableName(config.getBasePath());
+  private String getFileName(String fileNamePrefix) {
+    String tableName = getTableName(config.getBasePath());
+    if (StringUtils.isNullOrEmpty(fileNamePrefix)) {
+      return tableName + METRICS_FILE_NAME;
     }
-    return tableName + METRICS_FILE_NAME;
+    return fileNamePrefix + "_" + tableName + METRICS_FILE_NAME;
   }
 
   public static String getTableName(String basePath) {
@@ -128,6 +129,6 @@ public class MetricsFileSystemReporter extends MetricsReporter {
   }
 
   private FileSystem getFs() {
-    return FSUtils.getFs(metricsPath, hadoopConf.newCopy());
+    return FSUtils.getFs(metricsPath, hadoopConf.get());
   }
 }
