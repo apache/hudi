@@ -440,7 +440,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
     // Check for older timestamp which have sec granularity and an extension of DEFAULT_MILLIS_EXT may have been added via Timeline operations
     if (ts.length() == HoodieInstantTimeGenerator.MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH && ts.endsWith(HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT)) {
       final String actualOlderFormatTs = ts.substring(0, ts.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
-      return containsOrBeforeTimelineStarts(actualOlderFormatTs);
+      return containsInstant(actualOlderFormatTs);
     }
 
     return false;
