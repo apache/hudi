@@ -129,7 +129,7 @@ function BlogPostItem(props) {
                     {!isBlogPostPage && image && (
                         <div className="col blogThumbnail" itemProp="blogThumbnail">
                             {
-                            location.pathname === '/blog' ? <Link itemProp="url" to={permalink}>
+                            location.pathname.startsWith('/blog') ? <Link itemProp="url" to={permalink}>
                                 <img
                                     src={withBaseUrl(image, {
                                         absolute: true,
@@ -153,7 +153,7 @@ function BlogPostItem(props) {
                                 {title}
                             </TitleHeading>
                         ) : (
-                        location.pathname === '/blog' ?
+                        location.pathname.startsWith('/blog') ?
                             <Link itemProp="url" to={permalink}>
                                 <TitleHeading className={styles.blogPostTitle} itemProp="headline">
                                     {title}
