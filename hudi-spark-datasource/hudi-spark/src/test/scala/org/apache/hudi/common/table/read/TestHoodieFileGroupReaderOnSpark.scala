@@ -21,6 +21,8 @@ package org.apache.hudi.common.table.read
 
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
+import org.apache.hudi.DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT
+import org.apache.hudi.common.config.HoodieReaderConfig.FILE_GROUP_READER_ENABLED
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
@@ -98,7 +100,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     }
 
     val partitionValueRow = new GenericInternalRow(partitionValuesEncoded.toArray[Any])
-    new SparkFileFormatInternalRowReaderContext(recordReaderIterator, partitionValueRow)
+    new SparkFileFormatInternalRowReaderContext(Option(recordReaderIterator), partitionValueRow)
   }
 
   override def commitToTable(recordList: util.List[String], operation: String, options: util.Map[String, String]): Unit = {
@@ -119,6 +121,8 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
                                           schema: Schema,
                                           fileGroupId: String): Unit = {
     val expectedDf = spark.read.format("hudi")
+      .option(USE_NEW_HUDI_PARQUET_FILE_FORMAT.key(), "false")
+      .option(FILE_GROUP_READER_ENABLED.key(), "false")
       .load(basePath)
       .where(col(HoodieRecord.FILENAME_METADATA_FIELD).contains(fileGroupId))
     assertEquals(expectedDf.count, actualRecordList.size)
