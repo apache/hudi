@@ -60,7 +60,7 @@ public class MetricsFileSystemReporter extends MetricsReporter {
       this.metricsPath = this.config.getBasePath() + META_FOLDER_NAME + METRICS_FOLDER_NAME;
     }
     this.fs = getFs();
-    executor = Executors.newScheduledThreadPool(1);
+    executor =  Executors.newSingleThreadScheduledExecutor();
   }
 
   @Override

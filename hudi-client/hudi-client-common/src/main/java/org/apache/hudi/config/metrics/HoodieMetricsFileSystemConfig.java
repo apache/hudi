@@ -26,6 +26,11 @@ import org.apache.hudi.common.config.HoodieConfig;
 
 import java.util.Properties;
 
+/**
+ * Configs for FILESYSTEM reporter type.
+ * <p>
+ * {@link org.apache.hudi.metrics.MetricsReporterType#FILESYSTEM}
+ */
 @ConfigClassProperty(
     name = "Metrics Configurations for file system",
     groupName = ConfigGroups.Names.METRICS,
