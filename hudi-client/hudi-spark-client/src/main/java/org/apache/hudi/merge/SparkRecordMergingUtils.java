@@ -115,6 +115,7 @@ public class SparkRecordMergingUtils {
       InternalRow newPartialRow = newer.getData();
 
       Map<Integer, StructField> mergedIdToFieldMapping = mergedSchemaPair.getLeft();
+      Map<String, Integer> oldNameToIdMapping = getCachedFieldNameToIdMapping(oldSchema);
       Map<String, Integer> newPartialNameToIdMapping = getCachedFieldNameToIdMapping(newSchema);
       List<Object> values = new ArrayList<>(mergedIdToFieldMapping.size());
       for (int fieldId = 0; fieldId < mergedIdToFieldMapping.size(); fieldId++) {
@@ -125,7 +126,7 @@ public class SparkRecordMergingUtils {
           values.add(newPartialRow.get(ordInPartialUpdate, structField.dataType()));
         } else {
           // The field does not exist in the newer record; picks the value from older record
-          values.add(oldRow.get(fieldId, structField.dataType()));
+          values.add(oldRow.get(oldNameToIdMapping.get(structField.name()), structField.dataType()));
         }
       }
       InternalRow mergedRow = new GenericInternalRow(values.toArray());
