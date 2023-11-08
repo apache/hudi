@@ -37,9 +37,10 @@ class HoodieCDCFileIndex (override val spark: SparkSession,
                           override val schemaSpec: Option[StructType],
                           override val options: Map[String, String],
                           @transient override val fileStatusCache: FileStatusCache = NoopCache,
-                          override val includeLogFiles: Boolean)
+                          override val includeLogFiles: Boolean,
+                          override val shouldEmbedFileSlices: Boolean)
   extends HoodieIncrementalFileIndex(
-    spark, metaClient, schemaSpec, options, fileStatusCache, includeLogFiles
+    spark, metaClient, schemaSpec, options, fileStatusCache, includeLogFiles, shouldEmbedFileSlices
   ) with FileIndex {
   val cdcRelation: CDCRelation = CDCRelation.getCDCRelation(spark.sqlContext, metaClient, options)
   val cdcExtractor: HoodieCDCExtractor = cdcRelation.cdcExtractor
