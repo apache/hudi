@@ -250,8 +250,8 @@ public class HoodieMultiTableServicesMain {
     JavaSparkContext jsc = UtilHelpers.buildSparkContext(cfg.appName, cfg.sparkMaster, cfg.sparkMemory);
     try {
       new HoodieMultiTableServicesMain(jsc, cfg).startServices();
+      // When finishing a Table Service task, actively report Metrics.
       Metrics.shutdownAllMetrics();
-      System.out.println("success");
     } catch (Throwable throwable) {
       LOG.error("Fail to run table services, ", throwable);
     } finally {

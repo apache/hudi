@@ -63,7 +63,7 @@ public class TestMetricsReporterFactory {
     props.setProperty("testKey", "testValue");
 
     when(config.getProps()).thenReturn(props);
-    MetricsReporter reporter = MetricsReporterFactory.createReporter(config, registry, null).get();
+    MetricsReporter reporter = MetricsReporterFactory.createReporter(config, registry, new SerializableConfiguration(new Configuration())).get();
     assertTrue(reporter instanceof CustomizableMetricsReporter);
     assertEquals(props, ((DummyMetricsReporter) reporter).getProps());
     assertEquals(registry, ((DummyMetricsReporter) reporter).getRegistry());
@@ -73,7 +73,7 @@ public class TestMetricsReporterFactory {
   public void metricsReporterFactoryShouldThrowExceptionWhenMetricsReporterClassIsIllegal() {
     when(config.getMetricReporterClassName()).thenReturn(IllegalTestMetricsReporter.class.getName());
     when(config.getProps()).thenReturn(new TypedProperties());
-    assertThrows(HoodieException.class, () -> MetricsReporterFactory.createReporter(config, registry, null));
+    assertThrows(HoodieException.class, () -> MetricsReporterFactory.createReporter(config, registry, new SerializableConfiguration(new Configuration())));
   }
 
   public static class DummyMetricsReporter extends CustomizableMetricsReporter {

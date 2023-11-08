@@ -22,6 +22,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
@@ -35,12 +36,12 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import java.util.Map;
 
 /**
- * Test for the Jmx metrics report.
+ * Test for the file system metrics report.
  */
 @ExtendWith(MockitoExtension.class)
 public class TestHoodieFileSystemMetrics extends HoodieCommonTestHarness {
@@ -75,18 +76,16 @@ public class TestHoodieFileSystemMetrics extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testRegisterGauge() {
-    metrics.registerGauge("file_metrics1", 123L);
-    assertEquals("123", metrics.getRegistry().getGauges()
-        .get("file_metrics1").getValue().toString());
-  }
-
-  @Test
-  public void testFileExists() {
+  public void testFileGauge() throws IOException {
     metrics.registerGauge("file_metrics1", 123L);
     Metrics.shutdownAllMetrics();
     String filePath = config.getBasePath() + "/.hoodie/metrics/foo_metrics.json";
     File file = new File(filePath);
     Assertions.assertTrue(file.exists());
+    FileInputStream fis = new FileInputStream(file);
+    byte[] buffer = new byte[(int) file.length()];
+    fis.read(buffer);
+    Map result = JsonUtils.getObjectMapper().readValue(buffer, Map.class);
+    Assertions.assertEquals(123L, Long.parseLong(result.get("file_metrics1").toString()));
   }
 }
