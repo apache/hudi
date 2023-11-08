@@ -130,7 +130,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
   private final boolean external;
 
   public HoodieHiveCatalog(String catalogName, Configuration options) {
-    this(catalogName, options, HoodieCatalogUtil.createHiveConf(options.getString(CatalogOptions.HIVE_CONF_DIR)), false);
+    this(catalogName, options, HoodieCatalogUtil.createHiveConf(options.getString(CatalogOptions.HIVE_CONF_DIR), options), false);
   }
 
   public HoodieHiveCatalog(

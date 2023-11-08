@@ -40,6 +40,7 @@ public class HoodieCatalogFactory implements CatalogFactory {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieCatalogFactory.class);
 
   public static final String IDENTIFIER = "hudi";
+  public static final String HADOOP_PREFIX = "hadoop.";
 
   @Override
   public String factoryIdentifier() {
@@ -50,7 +51,7 @@ public class HoodieCatalogFactory implements CatalogFactory {
   public Catalog createCatalog(Context context) {
     final FactoryUtil.CatalogFactoryHelper helper =
         FactoryUtil.createCatalogFactoryHelper(this, context);
-    helper.validate();
+    helper.validateExcept(HADOOP_PREFIX);
     String mode = helper.getOptions().get(CatalogOptions.MODE);
     switch (mode.toLowerCase(Locale.ROOT)) {
       case "hms":
