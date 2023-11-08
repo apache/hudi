@@ -554,6 +554,27 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     assertFalse(timeline.empty());
     assertFalse(HoodieIndexUtils.checkIfValidCommit(timeline, instantTimestamp));
     assertFalse(HoodieIndexUtils.checkIfValidCommit(timeline, instantTimestampSec));
+
+    // Check the completed delta commit instant which is end with DEFAULT_MILLIS_EXT timestamp
+    // Timestamp not contain in inflight timeline, checkContainsInstant() should return false
+    // Timestamp contain in inflight timeline, checkContainsInstant() should return true
+    String checkInstantTimestampSec = instantTimestamp.substring(0, instantTimestamp.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
+    String checkInstantTimestamp = checkInstantTimestampSec + HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT;
+    Thread.sleep(2000); // sleep required so that new timestamp differs in the seconds rather than msec
+    String newTimestamp = writeClient.createNewInstantTime();
+    String newTimestampSec = newTimestamp.substring(0, newTimestamp.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
+    final HoodieInstant instant5 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, newTimestamp);
+    timeline = new HoodieDefaultTimeline(Stream.of(instant5), metaClient.getActiveTimeline()::getInstantDetails);
+    assertFalse(timeline.empty());
+    assertFalse(timeline.containsInstant(checkInstantTimestamp));
+    assertFalse(timeline.containsInstant(checkInstantTimestampSec));
+
+    final HoodieInstant instant6 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, newTimestampSec + HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT);
+    timeline = new HoodieDefaultTimeline(Stream.of(instant6), metaClient.getActiveTimeline()::getInstantDetails);
+    assertFalse(timeline.empty());
+    assertFalse(timeline.containsInstant(newTimestamp));
+    assertFalse(timeline.containsInstant(checkInstantTimestamp));
+    assertTrue(timeline.containsInstant(instant6.getTimestamp()));
   }
 
   @Test
