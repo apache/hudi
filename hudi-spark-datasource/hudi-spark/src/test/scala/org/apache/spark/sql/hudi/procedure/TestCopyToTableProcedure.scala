@@ -93,6 +93,14 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
       val copyTableCount = spark.sql(s"""select count(1) from $copyTableName""").collectAsList()
       assert(copyTableCount.size() == 1 && copyTableCount.get(0).get(0) == 4)
 
+      val patitialTable = generateTableName
+      spark.sql(s"""call copy_to_table(table=>'$tableName',new_table=>'$patitialTable',columns=>'id,name')""").collectAsList()
+      checkAnswer(s"select * from $patitialTable")(
+        Seq(1, "a1"),
+        Seq(2, "a2"),
+        Seq(3, "a3"),
+        Seq(4, "a4")
+      )
 
     }
   }
@@ -153,14 +161,6 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
       val ids: util.List[Row] = df.selectExpr("id").collectAsList()
       assert(ids.containsAll(util.Arrays.asList(Row(1), Row(2), Row(3), Row(4), Row(5))))
 
-      val patitialTable = generateTableName
-      spark.sql(s"""call copy_to_table(table=>'$tableName',new_table=>'$patitialTable',columns=>'id,name')""").collectAsList()
-      checkAnswer(s"select * from $patitialTable")(
-        Seq(1, "a1"),
-        Seq(2, "a2"),
-        Seq(3, "a3"),
-        Seq(4, "a4")
-      )
     }
   }
 
