@@ -264,12 +264,7 @@ object DefaultSource {
         case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
              (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
              (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
-          if (fileFormatUtils.isDefined) {
-            new HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
-          } else {
-            resolveBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
-          }
+          resolveBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
 
         case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
           new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
