@@ -621,13 +621,26 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     if (extractPartitionValuesFromPartitionPath) {
       val partitionSchema = filterInPartitionColumns(tableSchema.structTypeSchema)
       val prunedDataStructSchema = prunePartitionColumns(tableSchema.structTypeSchema)
-      val prunedRequiredSchema = prunePartitionColumns(requiredSchema.structTypeSchema)
+      val prunedDataInternalSchema = pruneInternalSchema(tableSchema, prunedDataStructSchema)
+      val prunedRequiredStructSchema = prunePartitionColumns(requiredSchema.structTypeSchema)
+      val prunedRequiredInternalSchema = pruneInternalSchema(requiredSchema, prunedRequiredStructSchema)
 
       (partitionSchema,
-        HoodieTableSchema(prunedDataStructSchema, convertToAvroSchema(prunedDataStructSchema, tableName).toString),
-        HoodieTableSchema(prunedRequiredSchema, convertToAvroSchema(prunedRequiredSchema, tableName).toString))
+        HoodieTableSchema(prunedDataStructSchema,
+          convertToAvroSchema(prunedDataStructSchema, tableName).toString, prunedDataInternalSchema),
+        HoodieTableSchema(prunedRequiredStructSchema,
+          convertToAvroSchema(prunedRequiredStructSchema, tableName).toString, prunedRequiredInternalSchema))
     } else {
       (StructType(Nil), tableSchema, requiredSchema)
+    }
+  }
+
+  private def pruneInternalSchema(hoodieTableSchema: HoodieTableSchema, prunedStructSchema: StructType): Option[InternalSchema] = {
+    if (hoodieTableSchema.internalSchema.isEmpty || hoodieTableSchema.internalSchema.get.isEmptySchema) {
+      Option.empty[InternalSchema]
+    } else {
+      Some(InternalSchemaUtils.pruneInternalSchema(hoodieTableSchema.internalSchema.get,
+        prunedStructSchema.fields.map(_.name).toList.asJava))
     }
   }
 
