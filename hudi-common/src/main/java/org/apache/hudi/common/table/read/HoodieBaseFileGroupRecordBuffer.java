@@ -84,9 +84,18 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     this.baseFileIterator = baseFileIterator;
   }
 
+  protected abstract boolean doHasNext() throws IOException;
+
   @Override
-  public T next() {
-    return nextRecord;
+  public final boolean hasNext() throws IOException {
+    return nextRecord != null || doHasNext();
+  }
+
+  @Override
+  public final T next() {
+    T record = nextRecord;
+    nextRecord = null;
+    return record;
   }
 
   @Override

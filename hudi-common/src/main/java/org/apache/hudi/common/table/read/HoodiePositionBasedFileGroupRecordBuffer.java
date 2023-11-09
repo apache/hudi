@@ -163,7 +163,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
   }
 
   @Override
-  public boolean hasNext() throws IOException {
+  protected boolean doHasNext() throws IOException {
     ValidationUtils.checkState(baseFileIterator != null, "Base file iterator has not been set yet");
 
     // Handle merging.
