@@ -84,9 +84,23 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     this.baseFileIterator = baseFileIterator;
   }
 
+  /**
+   * This allows hasNext() to be called multiple times without incrementing the iterator by more than 1
+   * record. It does come with the caveat that hasNext() must be called every time before next(). But
+   * that is pretty expected behavior and every user should be doing that anyway.
+   */
+  protected abstract boolean doHasNext() throws IOException;
+
   @Override
-  public T next() {
-    return nextRecord;
+  public final boolean hasNext() throws IOException {
+    return nextRecord != null || doHasNext();
+  }
+
+  @Override
+  public final T next() {
+    T record = nextRecord;
+    nextRecord = null;
+    return record;
   }
 
   @Override
