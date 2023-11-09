@@ -42,6 +42,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
 /**
  * A buffer that is used to store log records by {@link org.apache.hudi.common.table.log.HoodieMergedLogRecordReader}
  * by calling the {@link #processDataBlock} and {@link #processDeleteBlock} methods into record position based map.
@@ -126,6 +127,13 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
   @Override
   public void processDeleteBlock(HoodieDeleteBlock deleteBlock) throws IOException {
     List<Long> recordPositions = extractRecordPositions(deleteBlock);
+    if (recordMerger.getMergingStrategy().equals(DEFAULT_MERGER_STRATEGY_UUID)) {
+      for (Long recordPosition : recordPositions) {
+        records.put(recordPosition,
+            Pair.of(Option.empty(), readerContext.generateMetadataForRecord(null, "", 0)));
+      }
+      return;
+    }
 
     int recordIndex = 0;
     Iterator<DeleteRecord> it = Arrays.stream(deleteBlock.getRecordsToDelete()).iterator();
