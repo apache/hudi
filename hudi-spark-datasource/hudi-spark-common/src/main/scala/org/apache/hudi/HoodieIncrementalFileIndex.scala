@@ -45,6 +45,8 @@ class HoodieIncrementalFileIndex(override val spark: SparkSession,
     spark.sqlContext, options, metaClient, schemaSpec, schemaSpec)
 
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
+    hasPushedDownPartitionPredicates = true
+
     val fileSlices = mergeOnReadIncrementalRelation.listFileSplits(partitionFilters, dataFilters)
     if (fileSlices.isEmpty) {
       Seq.empty
@@ -55,13 +57,13 @@ class HoodieIncrementalFileIndex(override val spark: SparkSession,
             val baseFileStatusesAndLogFileOnly: Seq[FileStatus] = fileSlices.map(slice => {
               if (slice.getBaseFile.isPresent) {
                 slice.getBaseFile.get().getFileStatus
-              } else if (slice.getLogFiles.findAny().isPresent) {
+              } else if (includeLogFiles && slice.getLogFiles.findAny().isPresent) {
                 slice.getLogFiles.findAny().get().getFileStatus
               } else {
                 null
               }
             }).filter(slice => slice != null)
-            val c = fileSlices.filter(f => f.getLogFiles.findAny().isPresent
+            val c = fileSlices.filter(f => (includeLogFiles && f.getLogFiles.findAny().isPresent)
               || (f.getBaseFile.isPresent && f.getBaseFile.get().getBootstrapBaseFile.isPresent)).
               foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
             if (c.nonEmpty) {
@@ -85,7 +87,6 @@ class HoodieIncrementalFileIndex(override val spark: SparkSession,
           }
       }.toSeq
 
-      hasPushedDownPartitionPredicates = true
       if (shouldReadAsPartitionedTable()) {
         prunedPartitionsAndFilteredFileSlices
       } else if (shouldEmbedFileSlices) {
