@@ -49,6 +49,7 @@ import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 
@@ -93,12 +94,19 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
   }
 
   @BeforeEach
-  public void resetTest() {
+  public void setupTest() {
+    super.setupTest();
     useSchemaProvider = false;
     hasTransformer = false;
     sourceSchemaFile = "";
     targetSchemaFile = "";
     topicName = "topic" + testNum;
+  }
+
+  @AfterEach
+  public void teardown() throws Exception {
+    super.teardown();
+    TestSchemaProvider.resetTargetSchema();
   }
 
   protected HoodieStreamer deltaStreamer;
