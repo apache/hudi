@@ -125,7 +125,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
       // Merge and store the combined record
       // Note that the incoming `record` is from an older commit, so it should be put as
       // the `older` in the merge API
-      Pair<HoodieRecord, Schema> combinedRecordAndSchema = enablePartialMerging
+      Option<Pair<HoodieRecord, Schema>> combinedRecordAndSchemaOpt = enablePartialMerging
           ? recordMerger.partialMerge(
           readerContext.constructHoodieRecord(Option.of(record), metadata),
           (Schema) metadata.get(INTERNAL_META_SCHEMA),
@@ -133,15 +133,20 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
               existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight()),
           (Schema) existingRecordMetadataPair.getRight().get(INTERNAL_META_SCHEMA),
           readerSchema,
-          payloadProps).get()
+          payloadProps)
           : recordMerger.merge(
           readerContext.constructHoodieRecord(Option.of(record), metadata),
           (Schema) metadata.get(INTERNAL_META_SCHEMA),
           readerContext.constructHoodieRecord(
               existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight()),
           (Schema) existingRecordMetadataPair.getRight().get(INTERNAL_META_SCHEMA),
-          payloadProps).get();
+          payloadProps);
 
+      if (!combinedRecordAndSchemaOpt.isPresent()) {
+        return Option.empty();
+      }
+      
+      Pair<HoodieRecord, Schema> combinedRecordAndSchema = combinedRecordAndSchemaOpt.get();
       HoodieRecord<T> combinedRecord = combinedRecordAndSchema.getLeft();
 
       // If pre-combine returns existing record, no need to update it
