@@ -59,6 +59,44 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
+  test("Test Call copy_to_table Procedure with columns") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      // insert data to table
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
+      spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
+      spark.sql(s"insert into $tableName select 4, 'a4', 40, 2500")
+
+      val copyTableName = generateTableName
+      // Check required fields
+      checkExceptionContain(s"call copy_to_table(table=>'$tableName')")(s"Argument: new_table is required")
+
+      val row = spark.sql(s"""call copy_to_table(table=>'$tableName',new_table=>'$copyTableName')""").collectAsList()
+      assert(row.size() == 1 && row.get(0).get(0) == 0)
+      val copyTableCount = spark.sql(s"""select count(1) from $copyTableName""").collectAsList()
+      assert(copyTableCount.size() == 1 && copyTableCount.get(0).get(0) == 4)
+
+
+    }
+  }
+
   test("Test Call copy_to_table Procedure with snapshot") {
     withTempDir { tmp =>
       val tableName = generateTableName
@@ -115,6 +153,14 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
       val ids: util.List[Row] = df.selectExpr("id").collectAsList()
       assert(ids.containsAll(util.Arrays.asList(Row(1), Row(2), Row(3), Row(4), Row(5))))
 
+      val patitialTable = generateTableName
+      spark.sql(s"""call copy_to_table(table=>'$tableName',new_table=>'$patitialTable',columns=>'id,name')""").collectAsList()
+      checkAnswer(s"select * from $patitialTable")(
+        Seq(1, "a1"),
+        Seq(2, "a2"),
+        Seq(3, "a3"),
+        Seq(4, "a4")
+      )
     }
   }
 
