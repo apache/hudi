@@ -119,7 +119,7 @@ jobs:
         include:
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.2"
-            flinkProfile: "flink1.17"
+            flinkProfile: "flink1.18"
 
     steps:
       - uses: actions/checkout@v3
@@ -210,6 +210,7 @@ jobs:
           - flinkProfile: "flink1.15"
           - flinkProfile: "flink1.16"
           - flinkProfile: "flink1.17"
+          - flinkProfile: "flink1.18"
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK 8
@@ -234,7 +235,7 @@ jobs:
         env:
           SCALA_PROFILE: 'scala-2.12'
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
-        if: ${{ endsWith(env.FLINK_PROFILE, '1.17') }}
+        if: ${{ endsWith(env.FLINK_PROFILE, '1.18') }}
         run: |
           mvn clean install -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink -am -Davro.version=1.10.0 -DskipTests=true $MVN_ARGS
           mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink $MVN_ARGS
@@ -244,7 +245,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - flinkProfile: 'flink1.17'
+          - flinkProfile: 'flink1.18'
             sparkProfile: 'spark3.4'
             sparkRuntime: 'spark3.4.0'
 
@@ -272,9 +273,12 @@ jobs:
     strategy:
       matrix:
         include:
-          - flinkProfile: 'flink1.17'
+          - flinkProfile: 'flink1.18'
             sparkProfile: 'spark3.4'
             sparkRuntime: 'spark3.4.0'
+          - flinkProfile: 'flink1.18'
+            sparkProfile: 'spark3.3'
+            sparkRuntime: 'spark3.3.2'
           - flinkProfile: 'flink1.17'
             sparkProfile: 'spark3.3'
             sparkRuntime: 'spark3.3.2'

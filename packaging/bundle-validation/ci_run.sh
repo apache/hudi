@@ -162,6 +162,8 @@ else
     HUDI_FLINK_BUNDLE_NAME=hudi-flink1.16-bundle
   elif [[ ${FLINK_PROFILE} == 'flink1.17' ]]; then
     HUDI_FLINK_BUNDLE_NAME=hudi-flink1.17-bundle
+  elif [[ ${FLINK_PROFILE} == 'flink1.18' ]]; then
+    HUDI_FLINK_BUNDLE_NAME=hudi-flink1.18-bundle
   fi
 
   echo "Downloading bundle jars from staging repo orgapachehudi-$STAGING_REPO_NUM ..."
