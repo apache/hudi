@@ -57,6 +57,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -453,11 +454,15 @@ public class IncrementalInputSplits implements Serializable {
                   .filter(logPath -> !logPath.endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
                   .collect(Collectors.toList()));
               String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
+              // the latest commit is used as the limit of the log reader instant upper threshold,
+              // it must be at least the latest instant time of the file slice to avoid data loss.
+              String latestCommit = HoodieTimeline.minInstant(fileSlice.getLatestInstantTime(), endInstant);
               return new MergeOnReadInputSplit(cnt.getAndAdd(1),
-                  basePath, logPaths, endInstant,
+                  basePath, logPaths, latestCommit,
                   metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType, instantRange, fileSlice.getFileId());
             }).collect(Collectors.toList()))
         .flatMap(Collection::stream)
+        .sorted(Comparator.comparing(MergeOnReadInputSplit::getLatestCommit))
         .collect(Collectors.toList());
   }
 
