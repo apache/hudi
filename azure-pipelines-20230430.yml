@@ -108,7 +108,6 @@ stages:
   - stage: test
     jobs:
       - job: UT_FT_1
-        condition: false
         displayName: UT FT common & flink & UT client/spark-client
         timeoutInMinutes: '150'
         steps:
@@ -142,7 +141,6 @@ stages:
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
       - job: UT_FT_2
-        condition: false
         displayName: FT client/spark-client
         timeoutInMinutes: '150'
         steps:
@@ -167,7 +165,6 @@ stages:
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
       - job: UT_FT_3
-        condition: false
         displayName: UT spark-datasource
         timeoutInMinutes: '240'
         steps:
