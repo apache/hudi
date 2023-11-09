@@ -171,7 +171,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
 
   protected lazy val fileGroupReaderEnabled: Boolean = checkIfAConfigurationEnabled(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
 
-  protected lazy val shouldUseRecordPosition: Boolean = checkIfAConfigurationEnabled(HoodieWriteConfig.WRITE_RECORD_POSITIONS)
+  protected lazy val shouldUseRecordPosition: Boolean = checkIfAConfigurationEnabled(HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS)
 
   protected def queryTimestamp: Option[String] =
     specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant()).map(_.getTimestamp))
