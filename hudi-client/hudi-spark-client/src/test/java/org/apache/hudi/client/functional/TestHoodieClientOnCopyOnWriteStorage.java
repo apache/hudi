@@ -1200,7 +1200,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     dataGen = new HoodieTestDataGenerator(new String[] {testPartitionPath});
     SparkRDDWriteClient client = getHoodieWriteClient(config);
-    BaseFileUtils fileUtils = BaseFileUtils.getInstance(metaClient);
+    BaseFileUtils fileUtils = getFileUtilsInstance(metaClient);
 
     // Inserts => will write file1
     String commitTime1 = "001";
@@ -1313,7 +1313,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieWriteConfig config = getSmallInsertWriteConfig(insertSplitLimit, false, mergeAllowDuplicateInserts); // hold upto 200 records max
     dataGen = new HoodieTestDataGenerator(new String[] {testPartitionPath});
     SparkRDDWriteClient client = getHoodieWriteClient(config);
-    BaseFileUtils fileUtils = BaseFileUtils.getInstance(metaClient);
+    BaseFileUtils fileUtils = getFileUtilsInstance(metaClient);
 
     // Inserts => will write file1
     String commitTime1 = "001";
@@ -1410,9 +1410,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     assertEquals(1, statuses.size(), "Just 1 file needs to be added.");
     String file1 = statuses.get(0).getFileId();
-    assertEquals(100,
-        BaseFileUtils.getInstance(metaClient).readRowKeys(hadoopConf, new Path(basePath, statuses.get(0).getStat().getPath()))
-            .size(), "file should contain 100 records");
+    assertEquals(100, getFileUtilsInstance(metaClient).readRowKeys(hadoopConf, new Path(basePath, statuses.get(0).getStat().getPath())).size(), "file should contain 100 records");
 
     // Delete 20 among 100 inserted
     testDeletes(client, inserts1, 20, file1, "002", 80, keysSoFar);
@@ -2091,7 +2089,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   private Set<String> verifyRecordKeys(List<HoodieRecord> expectedRecords, List<WriteStatus> allStatus, List<GenericRecord> records) {
     for (WriteStatus status : allStatus) {
       Path filePath = new Path(basePath, status.getStat().getPath());
-      records.addAll(BaseFileUtils.getInstance(metaClient).readAvroRecords(jsc.hadoopConfiguration(), filePath));
+      records.addAll(getFileUtilsInstance(metaClient).readAvroRecords(jsc.hadoopConfiguration(), filePath));
     }
     Set<String> expectedKeys = recordsToRecordKeySet(expectedRecords);
     assertEquals(records.size(), expectedKeys.size());
@@ -2180,10 +2178,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     Path newFile = new Path(basePath, statuses.get(0).getStat().getPath());
     assertEquals(expectedRecords,
-        BaseFileUtils.getInstance(metaClient).readRowKeys(hadoopConf, newFile).size(),
+        getFileUtilsInstance(metaClient).readRowKeys(hadoopConf, newFile).size(),
         "file should contain 110 records");
 
-    List<GenericRecord> records = BaseFileUtils.getInstance(metaClient).readAvroRecords(hadoopConf, newFile);
+    List<GenericRecord> records = getFileUtilsInstance(metaClient).readAvroRecords(hadoopConf, newFile);
     for (GenericRecord record : records) {
       String recordKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
       assertTrue(keys.contains(recordKey), "key expected to be part of " + instantTime);

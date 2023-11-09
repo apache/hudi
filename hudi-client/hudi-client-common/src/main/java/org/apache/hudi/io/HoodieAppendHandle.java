@@ -528,8 +528,10 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       appendDataAndDeleteBlocks(header, true);
       recordItr = null;
 
-      writer.close();
-
+      if (writer != null) {
+        writer.close();
+        writer = null;
+      }
       // update final size, once for all log files
       // TODO we can actually deduce file size purely from AppendResult (based on offset and size
       //      of the appended block)

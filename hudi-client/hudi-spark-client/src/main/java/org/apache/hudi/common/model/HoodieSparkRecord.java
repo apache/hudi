@@ -18,10 +18,6 @@
 
 package org.apache.hudi.common.model;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
-import org.apache.avro.Schema;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -32,22 +28,30 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.SparkKeyGeneratorInterface;
+
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
+import org.apache.avro.Schema;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils.NestedFieldPath;
 import org.apache.spark.sql.catalyst.CatalystTypeConverters;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.catalyst.expressions.JoinedRow;
+import org.apache.spark.sql.catalyst.expressions.SpecificInternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
-import scala.Function1;
 
 import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
+
+import scala.Function1;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedUnsafeProjection;
@@ -434,13 +438,18 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     // NOTE: [[HoodieSparkRecord]] is expected to hold either
     //          - Instance of [[UnsafeRow]] or
     //          - Instance of [[HoodieInternalRow]] or
+    //          - Instance of [[GenericInternalRow]]
     //          - Instance of [[ColumnarBatchRow]]
     //
     //       In case provided row is anything but [[UnsafeRow]], it's expected that the
     //       corresponding schema has to be provided as well so that it could be properly
     //       serialized (in case it would need to be)
     boolean isValid = data == null || data instanceof UnsafeRow
-        || schema != null && (data instanceof HoodieInternalRow || SparkAdapterSupport$.MODULE$.sparkAdapter().isColumnarBatchRow(data));
+        || schema != null && (
+        data instanceof HoodieInternalRow
+            || data instanceof GenericInternalRow
+            || data instanceof SpecificInternalRow
+            || SparkAdapterSupport$.MODULE$.sparkAdapter().isColumnarBatchRow(data));
 
     ValidationUtils.checkState(isValid);
   }

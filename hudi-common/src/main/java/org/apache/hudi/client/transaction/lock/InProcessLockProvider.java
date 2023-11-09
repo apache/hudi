@@ -61,7 +61,7 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
     ValidationUtils.checkArgument(basePath != null);
     lock = LOCK_INSTANCE_PER_BASEPATH.computeIfAbsent(basePath, (ignore) -> new ReentrantReadWriteLock());
     maxWaitTimeMillis = typedProperties.getLong(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,
-        LockConfiguration.DEFAULT_ACQUIRE_LOCK_WAIT_TIMEOUT_MS);
+        LockConfiguration.DEFAULT_LOCK_ACQUIRE_WAIT_TIMEOUT_MS);
   }
 
   @Override

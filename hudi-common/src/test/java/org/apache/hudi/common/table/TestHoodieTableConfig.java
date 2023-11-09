@@ -40,6 +40,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -141,7 +142,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
       config.getProps().store(out, "");
     }
 
-    HoodieTableConfig.recoverIfNeeded(fs, cfgPath, backupCfgPath);
+    recoverIfNeeded(fs, cfgPath, backupCfgPath);
     assertTrue(fs.exists(cfgPath));
     assertFalse(fs.exists(backupCfgPath));
     config = new HoodieTableConfig(fs, metaPath.toString(), null, null);

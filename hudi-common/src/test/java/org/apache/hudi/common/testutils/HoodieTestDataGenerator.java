@@ -519,7 +519,19 @@ public class HoodieTestDataGenerator implements AutoCloseable {
 
   private static void createCommitFile(String basePath, String instantTime, Configuration configuration, HoodieCommitMetadata commitMetadata) {
     Arrays.asList(HoodieTimeline.makeCommitFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()), HoodieTimeline.makeInflightCommitFileName(instantTime),
-        HoodieTimeline.makeRequestedCommitFileName(instantTime))
+            HoodieTimeline.makeRequestedCommitFileName(instantTime))
+        .forEach(f -> createMetadataFile(f, basePath, configuration, commitMetadata));
+  }
+
+  public static void createDeltaCommitFile(String basePath, String instantTime, Configuration configuration) {
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    createDeltaCommitFile(basePath, instantTime, configuration, commitMetadata);
+  }
+
+  private static void createDeltaCommitFile(String basePath, String instantTime, Configuration configuration, HoodieCommitMetadata commitMetadata) {
+    Arrays.asList(HoodieTimeline.makeDeltaFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
+            HoodieTimeline.makeInflightDeltaFileName(instantTime),
+            HoodieTimeline.makeRequestedDeltaFileName(instantTime))
         .forEach(f -> createMetadataFile(f, basePath, configuration, commitMetadata));
   }
 

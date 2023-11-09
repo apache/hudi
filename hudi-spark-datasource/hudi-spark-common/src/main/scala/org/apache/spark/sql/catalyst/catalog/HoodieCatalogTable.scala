@@ -126,9 +126,9 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   lazy val partitionFields: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
 
   /**
-   * BaseFileFormat
+   * For multiple base file formats
    */
-  lazy val baseFileFormat: String = metaClient.getTableConfig.getBaseFileFormat.name()
+  lazy val isMultipleBaseFileFormatsEnabled: Boolean = tableConfig.isMultipleBaseFileFormatsEnabled
 
   /**
    * Firstly try to load table schema from meta directory on filesystem.
@@ -319,7 +319,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
 
   private def loadTableSchemaByMetaClient(): Option[StructType] = {
     val resolver = spark.sessionState.conf.resolver
-    getTableSqlSchema(metaClient, includeMetadataFields = true).map(originSchema => {
+    try getTableSqlSchema(metaClient, includeMetadataFields = true).map(originSchema => {
       // Load table schema from meta on filesystem, and fill in 'comment'
       // information from Spark catalog.
       // Hoodie newly added columns are positioned after partition columns,
@@ -335,6 +335,11 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
       }.partition(f => partitionFields.contains(f.name))
       StructType(dataFields ++ partFields)
     })
+    catch {
+      case cause: Throwable =>
+        logWarning("Failed to load table schema from meta client.", cause)
+        None
+    }
   }
 
   // This code is forked from org.apache.spark.sql.hive.HiveExternalCatalog#verifyDataSchema

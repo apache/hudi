@@ -170,10 +170,6 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     return viewManager;
   }
 
-  public HoodieTableMetadata getMetadata() {
-    return metadata;
-  }
-
   /**
    * Upsert a batch of new records into Hoodie table at the supplied instantTime.
    * @param context    HoodieEngineContext
@@ -217,7 +213,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   public abstract HoodieWriteMetadata<O> delete(HoodieEngineContext context, String instantTime, K keys);
 
   /**
-   * Delete records from Hoodie table based on {@link HoodieKey} and {@link HoodieRecordLocation} specified in
+   * Delete records from Hoodie table based on {@link HoodieKey} and {@link org.apache.hudi.common.model.HoodieRecordLocation} specified in
    * preppedRecords.
    *
    * @param context {@link HoodieEngineContext}.
@@ -874,11 +870,11 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   }
 
   public HoodieFileFormat getBaseFileFormat() {
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    if (tableConfig.isMultipleBaseFileFormatsEnabled() && config.contains(HoodieWriteConfig.BASE_FILE_FORMAT)) {
+      return config.getBaseFileFormat();
+    }
     return metaClient.getTableConfig().getBaseFileFormat();
-  }
-
-  public HoodieFileFormat getLogFileFormat() {
-    return metaClient.getTableConfig().getLogFileFormat();
   }
 
   public Option<HoodieFileFormat> getPartitionMetafileFormat() {

@@ -36,9 +36,9 @@ public class WaitBasedTimeGenerator extends TimeGeneratorBase {
   }
 
   @Override
-  public long currentTimeMillis(boolean locked) {
+  public long currentTimeMillis(boolean skipLocking) {
     try {
-      if (!locked) {
+      if (!skipLocking) {
         lock();
       }
       long ts = System.currentTimeMillis();
@@ -47,22 +47,22 @@ public class WaitBasedTimeGenerator extends TimeGeneratorBase {
     } catch (InterruptedException e) {
       throw new HoodieException("Interrupted when get the current time", e);
     } finally {
-      if (!locked) {
+      if (!skipLocking) {
         unlock();
       }
     }
   }
 
   @Override
-  public void consumeTimestamp(boolean locked, Consumer<Long> func) {
+  public void consumeTimestamp(boolean skipLocking, Consumer<Long> func) {
     try {
-      if (!locked) {
+      if (!skipLocking) {
         lock();
       }
       long currentTimeMillis = currentTimeMillis(true);
       func.accept(currentTimeMillis);
     } finally {
-      if (!locked) {
+      if (!skipLocking) {
         unlock();
       }
     }

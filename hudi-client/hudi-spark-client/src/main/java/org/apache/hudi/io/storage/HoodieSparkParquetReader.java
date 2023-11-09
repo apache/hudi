@@ -115,7 +115,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     });
   }
 
-  private ClosableIterator<InternalRow> getInternalRowIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
+  public ClosableIterator<InternalRow> getInternalRowIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
     if (requestedSchema == null) {
       requestedSchema = readerSchema;
     }

@@ -95,7 +95,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
       context.setJobStatus(this.getClass().getSimpleName(), "Creating Listing Rollback Plan: " + config.getTableName());
 
       HoodieTableType tableType = table.getMetaClient().getTableType();
-      String baseFileExtension = getBaseFileExtension(metaClient);
+      String baseFileExtension = table.getBaseFileExtension();
       Option<HoodieCommitMetadata> commitMetadataOptional = getHoodieCommitMetadata(metaClient, instantToRollback);
       Boolean isCommitMetadataCompleted = checkCommitMetadataCompleted(instantToRollback, commitMetadataOptional);
       AtomicBoolean isCompaction = new AtomicBoolean(false);
@@ -189,10 +189,6 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
       return false;
     };
     return metaClient.getFs().listStatus(FSUtils.getPartitionPath(config.getBasePath(), partitionPath), filter);
-  }
-
-  private String getBaseFileExtension(HoodieTableMetaClient metaClient) {
-    return metaClient.getTableConfig().getBaseFileFormat().getFileExtension();
   }
 
   @NotNull

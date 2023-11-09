@@ -103,14 +103,14 @@ public class AvroKafkaSource extends KafkaSource<GenericRecord> {
       //Don't want kafka offsets here so we use originalSchemaProvider
       AvroConvertor convertor = new AvroConvertor(originalSchemaProvider.getSourceSchema());
       kafkaRDD = KafkaUtils.<String, byte[]>createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
-          LocationStrategies.PreferConsistent()).map(obj ->
+          LocationStrategies.PreferConsistent()).filter(obj -> obj.value() != null).map(obj ->
           new ConsumerRecord<>(obj.topic(), obj.partition(), obj.offset(),
               obj.key(), convertor.fromAvroBinary(obj.value())));
     } else {
       kafkaRDD = KafkaUtils.createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
           LocationStrategies.PreferConsistent());
     }
-    return maybeAppendKafkaOffsets(kafkaRDD);
+    return maybeAppendKafkaOffsets(kafkaRDD.filter(consemerRec -> consemerRec.value() != null));
   }
 
   protected JavaRDD<GenericRecord> maybeAppendKafkaOffsets(JavaRDD<ConsumerRecord<Object, Object>> kafkaRDD) {

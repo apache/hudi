@@ -89,7 +89,7 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
 
   @Test
   public void testNonBlockingConcurrencyControlWithPartialUpdatePayload() throws Exception {
-    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL.name());
     conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
     conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, PartialUpdateAvroPayload.class.getName());
     // disable schedule compaction in writers
@@ -133,7 +133,7 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
     // There is no base file in partition dir because there is no compaction yet.
     pipeline1.assertEmptyDataFiles();
 
-    // schedule compaction outside of all writers
+    // schedule compaction outside all writers
     try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
       Option<String> scheduleInstant = writeClient.scheduleCompaction(Option.empty());
       assertNotNull(scheduleInstant.get());
@@ -163,7 +163,7 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
 
   @Test
   public void testNonBlockingConcurrencyControlWithInflightInstant() throws Exception {
-    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL.name());
     conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
     // disable schedule compaction in writers
     conf.setBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
@@ -199,7 +199,7 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
     pipeline2.checkpoint(1)
         .assertNextEvent();
 
-    // schedule compaction outside of all writers
+    // schedule compaction outside all writers
     try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
       Option<String> scheduleInstant = writeClient.scheduleCompaction(Option.empty());
       assertNotNull(scheduleInstant.get());
@@ -234,8 +234,8 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
   //                       |----- txn2 ------|
   // the txn2 would fail to commit caused by conflict
   @Test
-  public void testBulkInsertInMultiWriter() throws Exception {
-    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
+  public void testBulkInsertWithNonBlockingConcurrencyControl() throws Exception {
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL.name());
     conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
     conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, PartialUpdateAvroPayload.class.getName());
     // disable schedule compaction in writers
@@ -276,8 +276,8 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
   //      |----------- txn2 -----------|
   // both two txn would success to commit
   @Test
-  public void testBulkInsertInSequence() throws Exception {
-    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
+  public void testBulkInsertInSequenceWithNonBlockingConcurrencyControl() throws Exception {
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL.name());
     conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
     conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, PartialUpdateAvroPayload.class.getName());
     // disable schedule compaction in writers
@@ -316,7 +316,7 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
     Map<String, String> tmpSnapshotResult = Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,2,par1]");
     pipeline2.checkWrittenData(tmpSnapshotResult, 1);
 
-    // schedule compaction outside of all writers
+    // schedule compaction outside all writers
     try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
       Option<String> scheduleInstant = writeClient.scheduleCompaction(Option.empty());
       assertNotNull(scheduleInstant.get());

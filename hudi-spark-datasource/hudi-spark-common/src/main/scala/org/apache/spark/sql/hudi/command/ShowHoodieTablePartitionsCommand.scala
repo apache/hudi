@@ -17,14 +17,13 @@
 
 package org.apache.spark.sql.hudi.command
 
+import org.apache.hudi.common.table.timeline.TimelineUtils
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
-
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.datasources.PartitioningUtils
 import org.apache.spark.sql.types.StringType
 
@@ -47,17 +46,17 @@ case class ShowHoodieTablePartitionsCommand(
     val partitionColumnNamesOpt = hoodieCatalogTable.tableConfig.getPartitionFields
 
     if (partitionColumnNamesOpt.isPresent && partitionColumnNamesOpt.get.nonEmpty && schemaOpt.nonEmpty) {
-      if (specOpt.isEmpty) {
-        hoodieCatalogTable.getPartitionPaths.map(Row(_))
-      } else {
-        val spec = specOpt.get
+      specOpt.map { spec =>
         hoodieCatalogTable.getPartitionPaths.filter { partitionPath =>
           val part = PartitioningUtils.parsePathFragment(partitionPath)
           spec.forall { case (col, value) =>
             PartitionPathEncodeUtils.escapePartitionValue(value) == part.getOrElse(col, null)
           }
-        }.map(Row(_))
+        }
       }
+        .getOrElse(hoodieCatalogTable.getPartitionPaths)
+        .filter(!TimelineUtils.getDroppedPartitions(hoodieCatalogTable.metaClient.getActiveTimeline).contains(_))
+        .map(Row(_))
     } else {
       Seq.empty[Row]
     }

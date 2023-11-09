@@ -679,13 +679,9 @@ public class HoodieStreamer implements Serializable {
           // This will guarantee there is no surprise with table type
           checkArgument(tableType.equals(HoodieTableType.valueOf(cfg.tableType)), "Hoodie table is of type " + tableType + " but passed in CLI argument is " + cfg.tableType);
 
-          // Load base file format
-          // This will guarantee there is no surprise with base file type
-          String baseFileFormat = meta.getTableConfig().getBaseFileFormat().toString();
-          checkArgument(baseFileFormat.equals(cfg.baseFileFormat) || cfg.baseFileFormat == null,
-              format("Hoodie table's base file format is of type %s but passed in CLI argument is %s", baseFileFormat, cfg.baseFileFormat));
-          cfg.baseFileFormat = baseFileFormat;
-          this.cfg.baseFileFormat = baseFileFormat;
+          if (cfg.baseFileFormat == null) {
+            cfg.baseFileFormat = "PARQUET"; // default for backward compatibility
+          }
           Map<String, String> propsToValidate = new HashMap<>();
           properties.get().forEach((k, v) -> propsToValidate.put(k.toString(), v.toString()));
           HoodieWriterUtils.validateTableConfig(this.sparkSession, org.apache.hudi.HoodieConversionUtils.mapAsScalaImmutableMap(propsToValidate), meta.getTableConfig());

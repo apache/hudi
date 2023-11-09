@@ -152,7 +152,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
   protected <T> ClosableIterator<T> deserializeRecords(HoodieReaderContext<T> readerContext, byte[] content) throws IOException {
     checkState(this.readerSchema != null, "Reader's schema has to be non-null");
     RecordIterator iterator = RecordIterator.getInstance(this, content);
-    return new CloseableMappingIterator<>(iterator, data -> (T) data);
+    return new CloseableMappingIterator<>(iterator, data -> readerContext.convertAvroRecord(data));
   }
 
   private static class RecordIterator implements ClosableIterator<IndexedRecord> {

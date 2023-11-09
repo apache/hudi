@@ -42,8 +42,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.hudi.common.util.ValidationUtils.checkState;
-
 /**
  * A buffer that is used to store log records by {@link org.apache.hudi.common.table.log.HoodieMergedLogRecordReader}
  * by calling the {@link #processDataBlock} and {@link #processDeleteBlock} methods into record position based map.
@@ -71,9 +69,6 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
 
   @Override
   public void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException {
-    checkState(partitionNameOverrideOpt.isPresent() || partitionPathFieldOpt.isPresent(),
-        "Either partition-name override or partition-path field had to be present");
-
     // Prepare key filters.
     Set<String> keys = new HashSet<>();
     boolean isFullKey = true;
@@ -84,6 +79,12 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
       isFullKey = keySpecOpt.get().isFullKey();
     }
 
+    if (dataBlock.containsPartialUpdates()) {
+      // When a data block contains partial updates, subsequent record merging must always use
+      // partial merging.
+      enablePartialMerging = true;
+    }
+    
     // Extract positions from data block.
     List<Long> recordPositions = extractRecordPositions(dataBlock);
 
@@ -113,9 +114,12 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
   @Override
   public void processNextDataRecord(T record, Map<String, Object> metadata, Object recordPosition) throws IOException {
     Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordPosition);
-    Option<T> mergedRecord = doProcessNextDataRecord(record, metadata, existingRecordMetadataPair);
-    if (mergedRecord.isPresent()) {
-      records.put(recordPosition, Pair.of(Option.ofNullable(readerContext.seal(mergedRecord.get())), metadata));
+    Option<Pair<T, Map<String, Object>>> mergedRecordAndMetadata =
+        doProcessNextDataRecord(record, metadata, existingRecordMetadataPair);
+    if (mergedRecordAndMetadata.isPresent()) {
+      records.put(recordPosition, Pair.of(
+          Option.ofNullable(readerContext.seal(mergedRecordAndMetadata.get().getLeft())),
+          mergedRecordAndMetadata.get().getRight()));
     }
   }
 
@@ -159,9 +163,12 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
       T baseRecord = baseFileIterator.next();
       Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(nextRecordPosition++);
 
+      Map<String, Object> metadata = readerContext.generateMetadataForRecord(
+          baseRecord, baseFileSchema);
+
       Option<T> resultRecord = logRecordInfo != null
-          ? merge(Option.of(baseRecord), Collections.emptyMap(), logRecordInfo.getLeft(), logRecordInfo.getRight())
-          : merge(Option.empty(), Collections.emptyMap(), Option.of(baseRecord), Collections.emptyMap());
+          ? merge(Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight())
+          : merge(Option.empty(), Collections.emptyMap(), Option.of(baseRecord), metadata);
       if (resultRecord.isPresent()) {
         nextRecord = readerContext.seal(resultRecord.get());
         return true;

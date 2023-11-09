@@ -296,7 +296,9 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     String bootstrapBasePath = tableConfig.getBootstrapBasePath().orElse(null);
     Option<String[]> partitionFields = tableConfig.getPartitionFields();
 
-    return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, clusteringOps.size()).mapPartitions(clusteringOpsPartition -> {
+    int readParallelism = Math.min(writeConfig.getClusteringGroupReadParallelism(), clusteringOps.size());
+
+    return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, readParallelism).mapPartitions(clusteringOpsPartition -> {
       List<Iterator<HoodieRecord<T>>> recordIterators = new ArrayList<>();
       clusteringOpsPartition.forEachRemaining(clusteringOp -> {
         long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), config);
@@ -352,7 +354,9 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     String bootstrapBasePath = tableConfig.getBootstrapBasePath().orElse(null);
     Option<String[]> partitionFields = tableConfig.getPartitionFields();
 
-    return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, clusteringOps.size())
+    int readParallelism = Math.min(writeConfig.getClusteringGroupReadParallelism(), clusteringOps.size());
+
+    return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, readParallelism)
         .mapPartitions(clusteringOpsPartition -> {
           List<Iterator<HoodieRecord<T>>> iteratorsForPartition = new ArrayList<>();
           clusteringOpsPartition.forEachRemaining(clusteringOp -> {

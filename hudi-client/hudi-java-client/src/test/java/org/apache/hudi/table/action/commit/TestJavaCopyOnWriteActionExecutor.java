@@ -129,7 +129,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
     writeClient.startCommitWithTime(firstCommitTime);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    BaseFileUtils fileUtils = BaseFileUtils.getInstance(metaClient);
+    BaseFileUtils fileUtils = getFileUtilsInstance(metaClient);
 
     String partitionPath = "2016/01/31";
 
@@ -476,7 +476,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
     writeClient.startCommitWithTime(firstCommitTime);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    BaseFileUtils fileUtils = BaseFileUtils.getInstance(metaClient);
+    BaseFileUtils fileUtils = getFileUtilsInstance(metaClient);
 
     String partitionPath = "2022/04/09";
 

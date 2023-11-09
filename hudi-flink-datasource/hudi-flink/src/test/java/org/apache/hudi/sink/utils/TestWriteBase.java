@@ -551,7 +551,7 @@ public class TestWriteBase {
     protected String lastCompleteInstant() {
       // If using optimistic concurrency control, fetch last complete instant of current writer from ckp metadata
       // because there are multiple write clients commit to the timeline.
-      if (OptionsResolver.isOptimisticConcurrencyControl(conf)) {
+      if (OptionsResolver.isMultiWriter(conf)) {
         return this.ckpMetadata.lastCompleteInstant();
       } else {
         // fetch the instant from timeline.

@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.secondary.index;
+package org.apache.hudi.index.secondary;
 
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -38,8 +38,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
-
-import static org.apache.hudi.secondary.index.SecondaryIndexUtils.getSecondaryIndexes;
 
 /**
  * Manages secondary index.
@@ -84,7 +82,7 @@ public class SecondaryIndexManager {
       boolean ignoreIfExists,
       LinkedHashMap<String, Map<String, String>> columns,
       Map<String, String> options) {
-    Option<List<HoodieSecondaryIndex>> secondaryIndexes = getSecondaryIndexes(metaClient);
+    Option<List<HoodieSecondaryIndex>> secondaryIndexes = SecondaryIndexUtils.getSecondaryIndexes(metaClient);
     Set<String> colNames = columns.keySet();
     Schema avroSchema;
     try {
@@ -140,7 +138,7 @@ public class SecondaryIndexManager {
    * @param ignoreIfNotExists Whether ignore drop if the specific secondary index no exists
    */
   public void drop(HoodieTableMetaClient metaClient, String indexName, boolean ignoreIfNotExists) {
-    Option<List<HoodieSecondaryIndex>> secondaryIndexes = getSecondaryIndexes(metaClient);
+    Option<List<HoodieSecondaryIndex>> secondaryIndexes = SecondaryIndexUtils.getSecondaryIndexes(metaClient);
     if (!indexExists(secondaryIndexes, indexName, Option.empty(), Option.empty())) {
       if (ignoreIfNotExists) {
         return;
@@ -175,7 +173,7 @@ public class SecondaryIndexManager {
    * @return Indexes in this table
    */
   public Option<List<HoodieSecondaryIndex>> show(HoodieTableMetaClient metaClient) {
-    return getSecondaryIndexes(metaClient);
+    return SecondaryIndexUtils.getSecondaryIndexes(metaClient);
   }
 
   /**

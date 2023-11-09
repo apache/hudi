@@ -273,6 +273,13 @@ public class OptionsResolver {
   }
 
   /**
+   * Returns whether the read commits limit is specified.
+   */
+  public static boolean hasReadCommitsLimit(Configuration conf) {
+    return conf.contains(FlinkOptions.READ_COMMITS_LIMIT);
+  }
+
+  /**
    * Returns the supplemental logging mode.
    */
   public static HoodieCDCSupplementalLoggingMode getCDCSupplementalLoggingMode(Configuration conf) {
@@ -306,15 +313,14 @@ public class OptionsResolver {
    * Returns whether the writer txn should be guarded by lock.
    */
   public static boolean isLockRequired(Configuration conf) {
-    return conf.getBoolean(FlinkOptions.METADATA_ENABLED) || isOptimisticConcurrencyControl(conf);
+    return conf.getBoolean(FlinkOptions.METADATA_ENABLED) || isMultiWriter(conf);
   }
 
   /**
-   * Returns whether OCC is enabled.
+   * Returns whether multi-writer is enabled.
    */
-  public static boolean isOptimisticConcurrencyControl(Configuration conf) {
-    return conf.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue())
-        .equalsIgnoreCase(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
+  public static boolean isMultiWriter(Configuration conf) {
+    return WriteConcurrencyMode.supportsMultiWriter(conf.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()));
   }
 
   /**
@@ -371,7 +377,7 @@ public class OptionsResolver {
    * Returns whether this is non-blocking concurrency control.
    */
   public static boolean isNonBlockingConcurrencyControl(Configuration config) {
-    return isMorTable(config) && isSimpleBucketIndexType(config) && isOptimisticConcurrencyControl(config);
+    return WriteConcurrencyMode.isNonBlockingConcurrencyControl(config.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()));
   }
 
   public static boolean isLazyFailedWritesCleanPolicy(Configuration conf) {

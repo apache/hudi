@@ -143,6 +143,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
       } finally {
         // remove commitBuffer to avoid obsolete metadata commit
         reset(instant);
+        this.compactionMetrics.markCompactionRolledBack();
       }
       return;
     }
@@ -152,6 +153,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
     } catch (Throwable throwable) {
       // make it fail-safe
       LOG.error("Error while committing compaction instant: " + instant, throwable);
+      this.compactionMetrics.markCompactionRolledBack();
     } finally {
       // reset the status
       reset(instant);
@@ -173,6 +175,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
           + "option '{}' is configured as false,"
           + "rolls back the compaction", numErrorRecords, instant, FlinkOptions.IGNORE_FAILED.key());
       CompactionUtil.rollbackCompaction(table, instant);
+      this.compactionMetrics.markCompactionRolledBack();
       return;
     }
 
@@ -183,6 +186,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
     this.writeClient.commitCompaction(instant, metadata, Option.empty());
 
     this.compactionMetrics.updateCommitMetrics(instant, metadata);
+    this.compactionMetrics.markCompactionCompleted();
 
     // Whether to clean up the old log file when compaction
     if (!conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED) && !isCleaning) {

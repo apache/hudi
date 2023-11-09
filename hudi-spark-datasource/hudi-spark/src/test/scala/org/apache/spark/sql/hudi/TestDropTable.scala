@@ -325,30 +325,35 @@ class TestDropTable extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Drop an MANAGED table which path is lost.") {
-    val tableName = generateTableName
-    spark.sql(
-      s"""
-         |create table $tableName (
-         |id int,
-         |ts int,
-         |value string
-         |)using hudi
-         | tblproperties (
-         |  primaryKey = 'id',
-         |  preCombineField = 'ts'
-         | )
-         |""".stripMargin)
+  test("Drop a MANAGED table whose path is lost when schema evolution is applied/unapplied.") {
+    Seq("true", "false").foreach { enableSchemaEvolution =>
+      withSQLConf("hoodie.schema.on.read.enable" -> enableSchemaEvolution) {
+        withTable(generateTableName) { tableName =>
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |id int,
+               |ts int,
+               |value string
+               |)using hudi
+               | tblproperties (
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts'
+               | )
+               |""".stripMargin)
 
-    val tablePath = new Path(
-      spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName)).location)
+          val tablePath = new Path(
+            spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName)).location)
 
-    val filesystem = FSUtils.getFs(tablePath, spark.sparkContext.hadoopConfiguration);
-    assert(filesystem.exists(tablePath), s"Table path doesn't exists ($tablePath).")
+          val filesystem = FSUtils.getFs(tablePath, spark.sparkContext.hadoopConfiguration);
+          assert(filesystem.exists(tablePath), s"Table path doesn't exists ($tablePath).")
 
-    filesystem.delete(tablePath, true)
-    spark.sql(s"drop table ${tableName}")
-    checkAnswer("show tables")()
+          filesystem.delete(tablePath, true)
+          spark.sql(s"drop table $tableName")
+          checkAnswer("show tables")()
+        }
+      }
+    }
   }
 
   test("Drop local temporary view should not fail") {

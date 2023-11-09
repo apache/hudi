@@ -514,7 +514,8 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       HoodieMetadataConfig.ENABLE.key -> enableMetadataTable.toString,
       RECORDKEY_FIELD.key -> "id",
-      PARTITIONPATH_FIELD.key -> "region_code,dt"
+      PARTITIONPATH_FIELD.key -> "region_code,dt",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "price"
     )
 
     val readerOpts: Map[String, String] = queryOpts ++ Map(

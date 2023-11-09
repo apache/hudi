@@ -101,6 +101,7 @@ import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEPRECATED_DE
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_FILES;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
@@ -555,7 +556,8 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
         PARTITION_NAME_FILES,
         PARTITION_NAME_COLUMN_STATS,
         PARTITION_NAME_BLOOM_FILTERS,
-        PARTITION_NAME_RECORD_INDEX
+        PARTITION_NAME_RECORD_INDEX,
+        PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX
     );
     assertTrue(Files.exists(recordIndexPartitionPath), "record index partition should exist.");
     assertEquals(allPartitions, metaClient.getTableConfig().getMetadataPartitions(),

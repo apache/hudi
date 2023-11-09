@@ -64,7 +64,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | (3, 'a3', 30, 3000, "2021-01-07")
               """.stripMargin)
 
-      checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+      checkAnswer(s"select id, name, price, ts, dt from $tableName where year(dt) > '2020' and lower(name) > 'a0'")(
         Seq(1, "a1", 10.0, 1000, "2021-01-05"),
         Seq(2, "a2", 20.0, 2000, "2021-01-06"),
         Seq(3, "a3", 30.0, 3000, "2021-01-07")

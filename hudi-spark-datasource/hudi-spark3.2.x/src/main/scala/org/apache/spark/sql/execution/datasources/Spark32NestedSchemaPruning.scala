@@ -19,6 +19,7 @@ package org.apache.spark.sql.execution.datasources
 
 import org.apache.hudi.{HoodieBaseRelation, SparkAdapterSupport}
 import org.apache.spark.sql.HoodieSpark3CatalystPlanUtils
+import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, AttributeSet, Expression, NamedExpression, ProjectionOverSchema}
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LogicalPlan, Project}
@@ -52,7 +53,7 @@ class Spark32NestedSchemaPruning extends Rule[LogicalPlan] {
       // NOTE: This is modified to accommodate for Hudi's custom relations, given that original
       //       [[NestedSchemaPruning]] rule is tightly coupled w/ [[HadoopFsRelation]]
       // TODO generalize to any file-based relation
-      l @ LogicalRelation(relation: HoodieBaseRelation, _, _, _))
+      l @ LogicalRelation(relation: HoodieBaseRelation, _, catalogTable: Option[HoodieCatalogTable], _))
         if relation.canPruneRelationSchema =>
 
         prunePhysicalColumns(l.output, projects, filters, relation.dataSchema,

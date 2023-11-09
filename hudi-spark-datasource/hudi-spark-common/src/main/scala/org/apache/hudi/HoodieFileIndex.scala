@@ -37,7 +37,7 @@ import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndex
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{Column, SparkSession}
+import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.text.SimpleDateFormat
@@ -76,7 +76,8 @@ case class HoodieFileIndex(spark: SparkSession,
                            schemaSpec: Option[StructType],
                            options: Map[String, String],
                            @transient fileStatusCache: FileStatusCache = NoopCache,
-                           includeLogFiles: Boolean = false)
+                           includeLogFiles: Boolean = false,
+                           shouldEmbedFileSlices: Boolean = false)
   extends SparkHoodieTableFileIndex(
     spark = spark,
     metaClient = metaClient,
@@ -88,7 +89,7 @@ case class HoodieFileIndex(spark: SparkSession,
   )
     with FileIndex {
 
-  @transient private var hasPushedDownPartitionPredicates: Boolean = false
+  @transient protected var hasPushedDownPartitionPredicates: Boolean = false
 
   /**
    * NOTE: [[ColumnStatsIndexSupport]] is a transient state, since it's only relevant while logical plan
@@ -102,9 +103,13 @@ case class HoodieFileIndex(spark: SparkSession,
    */
   @transient private lazy val recordLevelIndex = new RecordLevelIndexSupport(spark, metadataConfig, metaClient)
 
-  override def rootPaths: Seq[Path] = getQueryPaths.asScala
+  /**
+   * NOTE: [[FunctionalIndexSupport]] is a transient state, since it's only relevant while logical plan
+   * is handled by the Spark's driver
+   */
+  @transient private lazy val functionalIndex = new FunctionalIndexSupport(spark, metadataConfig, metaClient)
 
-  var shouldEmbedFileSlices: Boolean = false
+  override def rootPaths: Seq[Path] = getQueryPaths.asScala
 
   /**
    * Returns the FileStatus for all the base files (excluding log files). This should be used only for
@@ -152,17 +157,17 @@ case class HoodieFileIndex(spark: SparkSession,
           val baseFileStatusesAndLogFileOnly: Seq[FileStatus] = fileSlices.map(slice => {
             if (slice.getBaseFile.isPresent) {
               slice.getBaseFile.get().getFileStatus
-            } else if (slice.getLogFiles.findAny().isPresent) {
+            } else if (includeLogFiles && slice.getLogFiles.findAny().isPresent) {
               slice.getLogFiles.findAny().get().getFileStatus
             } else {
               null
             }
           }).filter(slice => slice != null)
-          val c = fileSlices.filter(f => f.getLogFiles.findAny().isPresent
+          val c = fileSlices.filter(f => (includeLogFiles && f.getLogFiles.findAny().isPresent)
             || (f.getBaseFile.isPresent && f.getBaseFile.get().getBootstrapBaseFile.isPresent)).
             foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
           if (c.nonEmpty) {
-            PartitionDirectory(new PartitionFileSliceMapping(InternalRow.fromSeq(partitionOpt.get.values), c), baseFileStatusesAndLogFileOnly)
+            PartitionDirectory(new HoodiePartitionFileSliceMapping(InternalRow.fromSeq(partitionOpt.get.values), c), baseFileStatusesAndLogFileOnly)
           } else {
             PartitionDirectory(InternalRow.fromSeq(partitionOpt.get.values), baseFileStatusesAndLogFileOnly)
           }
@@ -287,7 +292,7 @@ case class HoodieFileIndex(spark: SparkSession,
    * In the fast bootstrap read code path, it gets the file status for the bootstrap base file instead of
    * skeleton file. Returns file status for the base file if available.
    */
-  private def getBaseFileStatus(baseFileOpt: Option[HoodieBaseFile]): Option[FileStatus] = {
+  protected def getBaseFileStatus(baseFileOpt: Option[HoodieBaseFile]): Option[FileStatus] = {
     baseFileOpt.map(baseFile => {
       if (shouldFastBootstrap) {
         if (baseFile.getBootstrapBaseFile.isPresent) {
@@ -337,6 +342,10 @@ case class HoodieFileIndex(spark: SparkSession,
       Option.empty
     } else if (recordKeys.nonEmpty) {
       Option.apply(recordLevelIndex.getCandidateFiles(getAllFiles(), recordKeys))
+    } else if (functionalIndex.isIndexAvailable && !queryFilters.isEmpty) {
+      val shouldReadInMemory = functionalIndex.shouldReadInMemory(this, queryReferencedColumns)
+      val indexDf = functionalIndex.loadFunctionalIndexDataFrame("", shouldReadInMemory)
+      Some(getCandidateFiles(indexDf, queryFilters))
     } else if (!columnStatsIndex.isIndexAvailable || queryFilters.isEmpty || queryReferencedColumns.isEmpty) {
       validateConfig()
       Option.empty
@@ -348,38 +357,37 @@ case class HoodieFileIndex(spark: SparkSession,
       //       on-cluster: total number of rows of the expected projected portion of the index has to be below the
       //       threshold (of 100k records)
       val shouldReadInMemory = columnStatsIndex.shouldReadInMemory(this, queryReferencedColumns)
-
       columnStatsIndex.loadTransposed(queryReferencedColumns, shouldReadInMemory) { transposedColStatsDF =>
-        val indexSchema = transposedColStatsDF.schema
-        val indexFilter =
-          queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexSchema))
-            .reduce(And)
-
-        val allIndexedFileNames =
-          transposedColStatsDF.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
-            .collect()
-            .map(_.getString(0))
-            .toSet
-
-        val prunedCandidateFileNames =
-          transposedColStatsDF.where(new Column(indexFilter))
-            .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
-            .collect()
-            .map(_.getString(0))
-            .toSet
-
-        // NOTE: Col-Stats Index isn't guaranteed to have complete set of statistics for every
-        //       base-file or log file: since it's bound to clustering, which could occur asynchronously
-        //       at arbitrary point in time, and is not likely to be touching all of the base files.
-        //
-        //       To close that gap, we manually compute the difference b/w all indexed (by col-stats-index)
-        //       files and all outstanding base-files or log files, and make sure that all base files and
-        //       log file not represented w/in the index are included in the output of this method
-        val notIndexedFileNames = lookupFileNamesMissingFromIndex(allIndexedFileNames)
-
-        Some(prunedCandidateFileNames ++ notIndexedFileNames)
+        Some(getCandidateFiles(transposedColStatsDF, queryFilters))
       }
     }
+  }
+
+  private def getCandidateFiles(indexDf: DataFrame, queryFilters: Seq[Expression]): Set[String] = {
+    val indexSchema = indexDf.schema
+    val indexFilter = queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexSchema)).reduce(And)
+    val prunedCandidateFileNames =
+      indexDf.where(new Column(indexFilter))
+        .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+        .collect()
+        .map(_.getString(0))
+        .toSet
+
+    // NOTE: Col-Stats Index isn't guaranteed to have complete set of statistics for every
+    //       base-file or log file: since it's bound to clustering, which could occur asynchronously
+    //       at arbitrary point in time, and is not likely to be touching all of the base files.
+    //
+    //       To close that gap, we manually compute the difference b/w all indexed (by col-stats-index)
+    //       files and all outstanding base-files or log files, and make sure that all base files and
+    //       log file not represented w/in the index are included in the output of this method
+    val allIndexedFileNames =
+    indexDf.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+      .collect()
+      .map(_.getString(0))
+      .toSet
+    val notIndexedFileNames = lookupFileNamesMissingFromIndex(allIndexedFileNames)
+
+    prunedCandidateFileNames ++ notIndexedFileNames
   }
 
   override def refresh(): Unit = {
@@ -409,11 +417,13 @@ case class HoodieFileIndex(spark: SparkSession,
 
   private def isRecordIndexEnabled: Boolean = recordLevelIndex.isIndexAvailable
 
-  private def isIndexEnabled: Boolean = isColumnStatsIndexEnabled || isRecordIndexEnabled
+  private def isFunctionalIndexEnabled: Boolean = functionalIndex.isIndexAvailable
+
+  private def isIndexEnabled: Boolean = isColumnStatsIndexEnabled || isRecordIndexEnabled || isFunctionalIndexEnabled
 
   private def validateConfig(): Unit = {
     if (isDataSkippingEnabled && (!isMetadataTableEnabled || !isIndexEnabled)) {
-      logWarning("Data skipping requires both Metadata Table and at least one of Column Stats Index or Record Level Index" +
+      logWarning("Data skipping requires both Metadata Table and at least one of Column Stats Index, Record Level Index, or Functional Index" +
         " to be enabled as well! " + s"(isMetadataTableEnabled = $isMetadataTableEnabled, isColumnStatsIndexEnabled = $isColumnStatsIndexEnabled"
         + s", isRecordIndexApplicable = $isRecordIndexEnabled)")
     }
@@ -487,8 +497,18 @@ object HoodieFileIndex extends Logging {
           partitionFilters.toArray.map {
             _.transformDown {
               case Literal(value, dataType) if dataType.isInstanceOf[StringType] =>
-                val converted = outDateFormat.format(inDateFormat.parse(value.toString))
-                Literal(UTF8String.fromString(converted), StringType)
+                try {
+                  val converted = outDateFormat.format(inDateFormat.parse(value.toString))
+                  Literal(UTF8String.fromString(converted), StringType)
+                } catch {
+                  case _: java.text.ParseException =>
+                    try {
+                      outDateFormat.parse(value.toString)
+                    } catch {
+                      case e: Exception => throw new HoodieException("Partition filter for TimestampKeyGenerator cannot be converted to format " + outDateFormat.toString, e)
+                    }
+                    Literal(UTF8String.fromString(value.toString), StringType)
+                }
             }
           }
         } catch {
