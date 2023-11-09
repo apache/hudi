@@ -44,10 +44,12 @@ import scala.collection.mutable
  *
  * This uses Spark parquet reader to read parquet data files or parquet log blocks.
  *
- * @param baseFileReader  A reader that transforms a {@link PartitionedFile} to an iterator of {@link InternalRow}.
+ * @param baseFileReader  A reader that transforms a {@link PartitionedFile} to an iterator of
+ *                        {@link InternalRow}. This is required for reading the base file and
+ *                        not required for reading a file group with only log files.
  * @param partitionValues The values for a partition in which the file group lives.
  */
-class SparkFileFormatInternalRowReaderContext(baseFileReader: PartitionedFile => Iterator[InternalRow],
+class SparkFileFormatInternalRowReaderContext(baseFileReader: Option[PartitionedFile => Iterator[InternalRow]],
                                               partitionValues: InternalRow) extends BaseSparkInternalRowReaderContext {
   lazy val sparkAdapter = SparkAdapterSupport.sparkAdapter
   lazy val sparkFileReaderFactory = new HoodieSparkFileReaderFactory
@@ -62,11 +64,11 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: PartitionedFile =>
     val fileInfo = sparkAdapter.getSparkPartitionedFileUtils
       .createPartitionedFile(partitionValues, filePath, start, length)
     if (FSUtils.isLogFile(filePath)) {
-      val structType: StructType = HoodieInternalRowUtils.getCachedSchema(dataSchema)
+      val structType: StructType = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
       val projection: UnsafeProjection = HoodieInternalRowUtils.getCachedUnsafeProjection(structType, structType)
       new CloseableMappingIterator[InternalRow, UnsafeRow](
         sparkFileReaderFactory.newParquetFileReader(conf, filePath).asInstanceOf[HoodieSparkParquetReader]
-          .getInternalRowIterator(dataSchema, dataSchema),
+          .getInternalRowIterator(dataSchema, requiredSchema),
         new java.util.function.Function[InternalRow, UnsafeRow] {
           override def apply(data: InternalRow): UnsafeRow = {
             // NOTE: We have to do [[UnsafeProjection]] of incoming [[InternalRow]] to convert
@@ -75,7 +77,11 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: PartitionedFile =>
           }
         }).asInstanceOf[ClosableIterator[InternalRow]]
     } else {
-      new CloseableInternalRowIterator(baseFileReader.apply(fileInfo))
+      if (baseFileReader.isEmpty) {
+        throw new IllegalArgumentException("Base file reader is missing when instantiating "
+          + "SparkFileFormatInternalRowReaderContext.");
+      }
+      new CloseableInternalRowIterator(baseFileReader.get.apply(fileInfo))
     }
   }
 

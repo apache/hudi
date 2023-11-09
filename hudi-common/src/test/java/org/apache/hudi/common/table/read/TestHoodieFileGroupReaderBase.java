@@ -40,8 +40,9 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -78,40 +79,71 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
                                                   Schema schema,
                                                   String fileGroupId);
 
-  @Test
-  public void testReadFileGroupInMergeOnReadTable() throws Exception {
-    Map<String, String> writeConfigs = new HashMap<>();
-    writeConfigs.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet");
-    writeConfigs.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
-    writeConfigs.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
-    writeConfigs.put("hoodie.datasource.write.precombine.field", "timestamp");
-    writeConfigs.put("hoodie.payload.ordering.field", "timestamp");
-    writeConfigs.put(HoodieTableConfig.HOODIE_TABLE_NAME_KEY, "hoodie_test");
-    writeConfigs.put("hoodie.insert.shuffle.parallelism", "4");
-    writeConfigs.put("hoodie.upsert.shuffle.parallelism", "4");
-    writeConfigs.put("hoodie.bulkinsert.shuffle.parallelism", "2");
-    writeConfigs.put("hoodie.delete.shuffle.parallelism", "1");
-    writeConfigs.put("hoodie.merge.small.file.group.candidates.limit", "0");
-    writeConfigs.put("hoodie.compact.inline", "false");
+  @ParameterizedTest
+  @ValueSource(strings = {"avro", "parquet"})
+  public void testReadFileGroupInMergeOnReadTable(String logDataBlockFormat) throws Exception {
+    Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs());
+    writeConfigs.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logDataBlockFormat);
 
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
       // One commit; reading one file group containing a base file only
       commitToTable(recordsToStrings(dataGen.generateInserts("001", 100)), INSERT.value(), writeConfigs);
-      validateOutputFromFileGroupReader(getHadoopConf(), getBasePath(), dataGen.getPartitionPaths(), 0);
+      validateOutputFromFileGroupReader(
+          getHadoopConf(), getBasePath(), dataGen.getPartitionPaths(), true, 0);
 
       // Two commits; reading one file group containing a base file and a log file
       commitToTable(recordsToStrings(dataGen.generateUpdates("002", 100)), UPSERT.value(), writeConfigs);
-      validateOutputFromFileGroupReader(getHadoopConf(), getBasePath(), dataGen.getPartitionPaths(), 1);
+      validateOutputFromFileGroupReader(
+          getHadoopConf(), getBasePath(), dataGen.getPartitionPaths(), true, 1);
 
       // Three commits; reading one file group containing a base file and two log files
       commitToTable(recordsToStrings(dataGen.generateUpdates("003", 100)), UPSERT.value(), writeConfigs);
-      validateOutputFromFileGroupReader(getHadoopConf(), getBasePath(), dataGen.getPartitionPaths(), 2);
+      validateOutputFromFileGroupReader(
+          getHadoopConf(), getBasePath(), dataGen.getPartitionPaths(), true, 2);
     }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"avro", "parquet"})
+  public void testReadLogFilesOnlyInMergeOnReadTable(String logDataBlockFormat) throws Exception {
+    Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs());
+    writeConfigs.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logDataBlockFormat);
+    // Use InMemoryIndex to generate log only mor table
+    writeConfigs.put("hoodie.index.type", "INMEMORY");
+
+    try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
+      // One commit; reading one file group containing a base file only
+      commitToTable(recordsToStrings(dataGen.generateInserts("001", 100)), INSERT.value(), writeConfigs);
+      validateOutputFromFileGroupReader(
+          getHadoopConf(), getBasePath(), dataGen.getPartitionPaths(), false, 1);
+
+      // Two commits; reading one file group containing a base file and a log file
+      commitToTable(recordsToStrings(dataGen.generateUpdates("002", 100)), UPSERT.value(), writeConfigs);
+      validateOutputFromFileGroupReader(
+          getHadoopConf(), getBasePath(), dataGen.getPartitionPaths(), false, 2);
+    }
+  }
+
+  private Map<String, String> getCommonConfigs() {
+    Map<String, String> configMapping = new HashMap<>();
+    configMapping.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
+    configMapping.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
+    configMapping.put("hoodie.datasource.write.precombine.field", "timestamp");
+    configMapping.put("hoodie.payload.ordering.field", "timestamp");
+    configMapping.put(HoodieTableConfig.HOODIE_TABLE_NAME_KEY, "hoodie_test");
+    configMapping.put("hoodie.insert.shuffle.parallelism", "4");
+    configMapping.put("hoodie.upsert.shuffle.parallelism", "4");
+    configMapping.put("hoodie.bulkinsert.shuffle.parallelism", "2");
+    configMapping.put("hoodie.delete.shuffle.parallelism", "1");
+    configMapping.put("hoodie.merge.small.file.group.candidates.limit", "0");
+    configMapping.put("hoodie.compact.inline", "false");
+    return configMapping;
   }
 
   private void validateOutputFromFileGroupReader(Configuration hadoopConf,
                                                  String tablePath,
                                                  String[] partitionPaths,
+                                                 boolean containsBaseFile,
                                                  int expectedLogFileNum) throws Exception {
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
         .setConf(hadoopConf).setBasePath(tablePath).build();
@@ -138,6 +170,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       props.setProperty(PARTITION_FIELDS.key(), metaClient.getTableConfig().getString(PARTITION_FIELDS));
     }
     String[] partitionValues = partitionPaths[0].isEmpty() ? new String[] {} : new String[] {partitionPaths[0]};
+    assertEquals(containsBaseFile, fileSlice.getBaseFile().isPresent());
     HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
         getHoodieReaderContext(tablePath, partitionValues),
         hadoopConf,
