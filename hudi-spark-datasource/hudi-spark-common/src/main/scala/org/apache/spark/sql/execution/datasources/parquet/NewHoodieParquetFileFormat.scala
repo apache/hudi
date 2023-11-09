@@ -189,7 +189,6 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
     PartitionedFile => Iterator[InternalRow],
     PartitionedFile => Iterator[InternalRow]) = {
 
-
     //file reader when you just read a hudi parquet file and don't do any merging
     val baseFileReader = super.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema,
       filters ++ requiredFilters, options, new Configuration(hadoopConf))
