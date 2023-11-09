@@ -80,7 +80,7 @@ public final class HoodieSparkQuickstart {
     assert snapshotAfterUpdate.except(updateDf).except(snapshotBeforeUpdate).count() == 0;
 
     incrementalQuery(spark, tablePath, tableName);
-    pointInTimeQuery(spark, tablePath, tableName);
+    // pointInTimeQuery(spark, tablePath, tableName);
 
     Dataset<Row> snapshotBeforeDelete = snapshotAfterUpdate;
     Dataset<Row> deleteDf = delete(spark, tablePath, tableName);

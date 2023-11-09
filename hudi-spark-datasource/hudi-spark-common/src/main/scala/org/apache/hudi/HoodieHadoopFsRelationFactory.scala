@@ -22,6 +22,7 @@ import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
+import org.apache.hudi.DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT
 import org.apache.hudi.HoodieBaseRelation.{convertToAvroSchema, isSchemaEvolutionEnabledOnRead}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieFileIndex.getConfigProperties
@@ -244,10 +245,12 @@ class HoodieMergeOnReadSnapshotHadoopFsRelationFactory(override val sqlContext: 
     sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
     metaClient.getTableConfig.getTableName, mergeType, mandatoryFields, true, false, Seq.empty)
 
+  private val isTimeTravelQuery: Boolean = options.contains(TIME_TRAVEL_AS_OF_INSTANT.key())
+
   override def buildFileIndex(): FileIndex = fileIndex
 
   override def buildFileFormat(): FileFormat = {
-    if (fileGroupReaderEnabled) {
+    if (fileGroupReaderEnabled && !isTimeTravelQuery & !isBootstrap) {
       fileGroupReaderBasedFileFormat
     } else if (metaClient.getTableConfig.isMultipleBaseFileFormatsEnabled && !isBootstrap) {
       multipleBaseFileFormat
