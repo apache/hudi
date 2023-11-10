@@ -506,12 +506,10 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    *         {@code false} otherwise.
    */
   private def areAllFieldsUpdated(updatedFieldSet: Set[Attribute]): Boolean = {
-    mergeInto.targetTable.output
-      .filterNot(attr => isMetaField(attr.name))
-      .filter { tableAttr =>
-        !updatedFieldSet.exists(attr => attributeEquals(attr, tableAttr))
-      }
-      .isEmpty
+    !mergeInto.targetTable.output
+      .filterNot(attr => isMetaField(attr.name)).exists { tableAttr =>
+      !updatedFieldSet.exists(attr => attributeEquals(attr, tableAttr))
+    }
   }
 
   /**
