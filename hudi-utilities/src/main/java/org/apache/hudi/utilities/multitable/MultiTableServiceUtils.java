@@ -22,9 +22,11 @@ package org.apache.hudi.utilities.multitable;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.utilities.UtilHelpers;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -166,6 +168,8 @@ public class MultiTableServiceUtils {
                                                                HoodieMultiTableServicesMain.Config cfg,
                                                                TypedProperties props) {
     TableServicePipeline pipeline = new TableServicePipeline();
+    HoodieTableMetaClient metaClient = UtilHelpers.createMetaClient(jsc, basePath, true);
+    props.putAll(metaClient.getTableConfig().getProps());
     if (cfg.enableCompaction) {
       pipeline.add(CompactionTask.newBuilder()
           .withJsc(jsc)
@@ -175,6 +179,7 @@ public class MultiTableServiceUtils {
           .withCompactionStrategyName(cfg.compactionStrategyClassName)
           .withProps(props)
           .withRetry(cfg.retry)
+          .withMetaclient(metaClient)
           .build());
     }
     if (cfg.enableClustering) {
@@ -185,6 +190,7 @@ public class MultiTableServiceUtils {
           .withClusteringRunningMode(cfg.clusteringRunningMode)
           .withProps(props)
           .withRetry(cfg.retry)
+          .withMetaclient(metaClient)
           .build());
     }
     if (cfg.enableClean) {

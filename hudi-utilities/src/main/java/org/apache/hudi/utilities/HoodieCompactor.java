@@ -59,14 +59,15 @@ public class HoodieCompactor {
   private final HoodieTableMetaClient metaClient;
 
   public HoodieCompactor(JavaSparkContext jsc, Config cfg) {
-    this(jsc, cfg, UtilHelpers.buildProperties(jsc.hadoopConfiguration(), cfg.propsFilePath, cfg.configs));
+    this(jsc, cfg, UtilHelpers.buildProperties(jsc.hadoopConfiguration(), cfg.propsFilePath, cfg.configs),
+        UtilHelpers.createMetaClient(jsc, cfg.basePath, true));
   }
 
-  public HoodieCompactor(JavaSparkContext jsc, Config cfg, TypedProperties props) {
+  public HoodieCompactor(JavaSparkContext jsc, Config cfg, TypedProperties props, HoodieTableMetaClient metaClient) {
     this.cfg = cfg;
     this.jsc = jsc;
     this.props = props;
-    this.metaClient = UtilHelpers.createMetaClient(jsc, cfg.basePath, true);
+    this.metaClient = metaClient;
     // Disable async cleaning, will trigger synchronous cleaning manually.
     this.props.put(HoodieCleanConfig.ASYNC_CLEAN.key(), false);
     if (this.metaClient.getTableConfig().isMetadataTableAvailable()) {
