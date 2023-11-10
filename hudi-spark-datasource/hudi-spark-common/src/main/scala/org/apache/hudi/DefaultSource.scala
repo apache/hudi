@@ -235,8 +235,8 @@ object DefaultSource {
       Option(schema)
     }
 
-    val useNewPaquetFileFormat = parameters.getOrElse(
-      USE_NEW_HUDI_PARQUET_FILE_FORMAT.key, USE_NEW_HUDI_PARQUET_FILE_FORMAT.defaultValue).toBoolean
+    val useNewPaquetFileFormat =  parameters.getOrElse(USE_NEW_HUDI_PARQUET_FILE_FORMAT.key,
+      USE_NEW_HUDI_PARQUET_FILE_FORMAT.defaultValue).toBoolean && !metaClient.isMetadataTable
     if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
       new EmptyRelation(sqlContext, resolveSchema(metaClient, parameters, Some(schema)))
     } else if (isCdcQuery) {
