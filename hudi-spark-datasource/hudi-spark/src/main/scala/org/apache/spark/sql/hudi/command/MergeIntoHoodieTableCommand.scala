@@ -410,19 +410,27 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       (DataSourceWriteOptions.TABLE_TYPE.key -> targetTableType)
 
     // Only enable writing partial updates to data blocks for upserts to MOR tables,
-    // when ENABLE_MERGE_INTO_PARTIAL_UPDATES is set to true
-    val writePartialUpdates = (targetTableType == MOR_TABLE_TYPE_OPT_VAL
+    // when ENABLE_MERGE_INTO_PARTIAL_UPDATES is set to true,
+    // and not all fields are updated
+    val writePartialUpdates = if (targetTableType == MOR_TABLE_TYPE_OPT_VAL
       && operation == UPSERT_OPERATION_OPT_VAL
       && parameters.getOrElse(
       ENABLE_MERGE_INTO_PARTIAL_UPDATES.key,
-      ENABLE_MERGE_INTO_PARTIAL_UPDATES.defaultValue.toString).toBoolean)
-
-    if (writePartialUpdates) {
-      val updatedFieldSeq = getUpdatedFields(updatingActions.map(a => a.assignments))
-      writeParams ++= Seq(
-        WRITE_PARTIAL_UPDATE_SCHEMA.key ->
-          HoodieAvroUtils.generateProjectionSchema(fullSchema, updatedFieldSeq.asJava).toString
-      )
+      ENABLE_MERGE_INTO_PARTIAL_UPDATES.defaultValue.toString).toBoolean) {
+      val updatedFieldSet = getUpdatedFields(updatingActions.map(a => a.assignments))
+      // Only enable partial updates if not all fields are updated
+      if (!areAllFieldsUpdated(updatedFieldSet)) {
+        val orderedUpdatedFieldSeq = getOrderedUpdatedFields(updatedFieldSet)
+        writeParams ++= Seq(
+          WRITE_PARTIAL_UPDATE_SCHEMA.key ->
+            HoodieAvroUtils.generateProjectionSchema(fullSchema, orderedUpdatedFieldSeq.asJava).toString
+        )
+        true
+      } else {
+        false
+      }
+    } else {
+      false
     }
 
     writeParams ++= Seq(
@@ -474,8 +482,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * @param conditionalAssignments Conditional assignments.
    * @return Updated fields based on the conditional assignments in the MERGE INTO statement.
    */
-  private def getUpdatedFields(conditionalAssignments: Seq[Seq[Assignment]]): Seq[String] = {
-    val updatedFieldsSeq = {
+  private def getUpdatedFields(conditionalAssignments: Seq[Seq[Assignment]]): Set[Attribute] = {
+    {
       conditionalAssignments.flatMap {
         case assignments =>
           // Extract all fields that are updated through the assignments
@@ -490,12 +498,32 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
           }
       }
     }.toSet
+  }
 
+  /**
+   * @param updatedFieldSet Updated fields based on the conditional assignments in the MERGE INTO statement.
+   * @return {@code true} if the updated fields covers all fields in the table schema;
+   *         {@code false} otherwise.
+   */
+  private def areAllFieldsUpdated(updatedFieldSet: Set[Attribute]): Boolean = {
+    mergeInto.targetTable.output
+      .filterNot(attr => isMetaField(attr.name))
+      .filter { tableAttr =>
+        !updatedFieldSet.exists(attr => attributeEquals(attr, tableAttr))
+      }
+      .isEmpty
+  }
+
+  /**
+   * @param updatedFieldSet Set of fields updated.
+   * @return Ordered updated fields based on the target table schema.
+   */
+  private def getOrderedUpdatedFields(updatedFieldSet: Set[Attribute]): Seq[String] = {
     // Reorder the assignments to follow the ordering of the target table
     mergeInto.targetTable.output
       .filterNot(attr => isMetaField(attr.name))
       .filter { tableAttr =>
-        updatedFieldsSeq.exists(attr => attributeEquals(attr, tableAttr))
+        updatedFieldSet.exists(attr => attributeEquals(attr, tableAttr))
       }
       .map(attr => attr.name)
   }
