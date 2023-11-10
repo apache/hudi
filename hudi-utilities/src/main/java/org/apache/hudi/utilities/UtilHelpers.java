@@ -605,7 +605,10 @@ public class UtilHelpers {
         ret = supplier.get();
       } while (ret != 0 && maxRetryCount-- > 0);
     } catch (Throwable t) {
-      LOG.error(errorMessage, t);
+      LOG.error(errorMessage);
+      if (t instanceof HoodieException) {
+        throw new HoodieException(errorMessage, t);
+      }
     }
     return ret;
   }
