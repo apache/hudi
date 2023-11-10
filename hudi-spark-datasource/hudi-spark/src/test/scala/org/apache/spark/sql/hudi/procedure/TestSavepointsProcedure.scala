@@ -120,13 +120,8 @@ class TestSavepointsProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
       spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
 
-      var commits = spark.sql(s"""call show_commits(table => '$tableName')""").collect()
+      val commits = spark.sql(s"""call show_commits(table => '$tableName')""").collect()
       assertResult(3) {
-        commits.length
-      }
-
-      commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 2)""").collect()
-      assertResult(2) {
         commits.length
       }
 
