@@ -281,7 +281,7 @@ object DefaultSource {
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, true) =>
           if (fileFormatUtils.isDefined) {
             new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
+              sqlContext, metaClient, parameters, userSchema, isBootstrap = true).build()
           } else {
             HoodieBootstrapMORRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
           }
