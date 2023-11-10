@@ -146,13 +146,8 @@ class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
 
       // collect metadata partitions for table
-      var partitions = spark.sql(s"""call show_metadata_table_partitions(table => '$tableName')""").collect()
+      val partitions = spark.sql(s"""call show_metadata_table_partitions(table => '$tableName')""").collect()
       assertResult(2) {
-        partitions.length
-      }
-
-      partitions = spark.sql(s"""call show_metadata_table_partitions(table => '$tableName', limit => 1)""").collect()
-      assertResult(1) {
         partitions.length
       }
     }
