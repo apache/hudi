@@ -219,7 +219,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     }
     assertRecordCount(numRecords);
 
-    df = sparkSession.read().format("hudi").load(tableBasePath);
+    df = sparkSession.read().format("hudi").options(readOpts).load(tableBasePath);
     df.show(100,false);
     df.cache();
     assertDataType(df, "tip_history", DataTypes.createArrayType(DataTypes.LongType));
