@@ -38,6 +38,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.apache.hudi.DataSourceReadOptions.BEGIN_INSTANTTIME;
 import static org.apache.hudi.DataSourceReadOptions.END_INSTANTTIME;
@@ -128,9 +130,15 @@ public class HoodieIncrSource extends RowSource {
         HoodieIncrSourceConfig.HOODIE_DROP_ALL_META_FIELDS_FROM_SOURCE.defaultValue();
   }
 
+  private final Map<String, String> readOpts = new HashMap<>();
+
   public HoodieIncrSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
                           SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
+
+    for (Object key : props.keySet()) {
+      readOpts.put(key.toString(), props.getString(key.toString()));
+    }
 
     this.snapshotLoadQuerySplitter = Option.ofNullable(props.getString(SNAPSHOT_LOAD_QUERY_SPLITTER_CLASS_NAME, null))
         .map(className -> (SnapshotLoadQuerySplitter) ReflectionUtils.loadClass(className,
@@ -181,6 +189,7 @@ public class HoodieIncrSource extends RowSource {
     // Do Incr pull. Set end instant if available
     if (queryInfo.isIncremental()) {
       source = sparkSession.read().format("org.apache.hudi")
+          .options(readOpts)
           .option(QUERY_TYPE().key(), QUERY_TYPE_INCREMENTAL_OPT_VAL())
           .option(BEGIN_INSTANTTIME().key(), queryInfo.getStartInstant())
           .option(END_INSTANTTIME().key(), queryInfo.getEndInstant())
@@ -192,6 +201,7 @@ public class HoodieIncrSource extends RowSource {
     } else {
       // if checkpoint is missing from source table, and if strategy is set to READ_UPTO_LATEST_COMMIT, we have to issue snapshot query
       Dataset<Row> snapshot = sparkSession.read().format("org.apache.hudi")
+          .options(readOpts)
           .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL())
           .load(srcPath);
       if (snapshotLoadQuerySplitter.isPresent()) {

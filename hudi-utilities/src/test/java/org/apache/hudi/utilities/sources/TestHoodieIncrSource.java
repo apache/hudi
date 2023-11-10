@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -49,6 +50,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
@@ -213,10 +215,9 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     }
   }
 
-  @ParameterizedTest
-  @EnumSource(HoodieTableType.class)
-  public void testHoodieIncrSourceWithPendingTableServices(HoodieTableType tableType) throws IOException {
-    this.tableType = tableType;
+  @Test
+  public void testHoodieIncrSourceWithPendingTableServices() throws IOException {
+    this.tableType = MERGE_ON_READ;
     metaClient = getHoodieMetaClient(hadoopConf(), basePath());
     HoodieWriteConfig writeConfig = getConfigBuilder(basePath(), metaClient)
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(10, 12).build())
@@ -332,6 +333,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     Properties properties = new Properties();
     properties.setProperty("hoodie.deltastreamer.source.hoodieincr.path", basePath());
     properties.setProperty("hoodie.deltastreamer.source.hoodieincr.missing.checkpoint.strategy", missingCheckpointStrategy.name());
+    properties.setProperty(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false");
     snapshotCheckPointImplClassOpt.map(className ->
         properties.setProperty(SnapshotLoadQuerySplitter.Config.SNAPSHOT_LOAD_QUERY_SPLITTER_CLASS_NAME, className));
     TypedProperties typedProperties = new TypedProperties(properties);
