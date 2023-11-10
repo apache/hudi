@@ -55,8 +55,11 @@ public class AvroSchemaUtils {
   }
 
   /**
-   * Establishes whether {@code prevSchema} is compatible w/ {@code newSchema}, as
-   * defined by Avro's {@link AvroSchemaCompatibility}
+   * Establishes whether {@code newSchema} is compatible w/ {@code prevSchema}, as
+   * defined by Avro's {@link AvroSchemaCompatibility}.
+   * From avro's compatability standpoint, prevSchema is writer schema and new schema is reader schema.
+   * {@code newSchema} is considered compatible to {@code prevSchema}, iff data written using {@code prevSchema}
+   * could be read by {@code newSchema}
    *
    * @param prevSchema previous instance of the schema
    * @param newSchema new instance of the schema
@@ -117,8 +120,32 @@ public class AvroSchemaUtils {
   }
 
   /**
+   * Validate whether the {@code targetSchema} is a valid evolution of {@code sourceSchema}.
+   * Basically {@link #isCompatibleProjectionOf(Schema, Schema)} but type promotion in the
+   * opposite direction
+   */
+  public static boolean isValidEvolutionOf(Schema sourceSchema, Schema targetSchema) {
+    return (sourceSchema.getType() == Schema.Type.NULL) || isProjectionOfInternal(sourceSchema, targetSchema,
+        AvroSchemaUtils::isAtomicSchemasCompatibleEvolution);
+  }
+
+  /**
+   * Establishes whether {@code newReaderSchema} is compatible w/ {@code prevWriterSchema}, as
+   * defined by Avro's {@link AvroSchemaCompatibility}.
+   * {@code newReaderSchema} is considered compatible to {@code prevWriterSchema}, iff data written using {@code prevWriterSchema}
+   * could be read by {@code newReaderSchema}
+   * @param newReaderSchema new reader schema instance.
+   * @param prevWriterSchema prev writer schema instance.
+   * @return true if its compatible. else false.
+   */
+  private static boolean isAtomicSchemasCompatibleEvolution(Schema newReaderSchema, Schema prevWriterSchema) {
+    // NOTE: Checking for compatibility of atomic types, we should ignore their
+    //       corresponding fully-qualified names (as irrelevant)
+    return isSchemaCompatible(prevWriterSchema, newReaderSchema, false, true);
+  }
+
+  /**
    * Validate whether the {@code targetSchema} is a "compatible" projection of {@code sourceSchema}.
-   *
    * Only difference of this method from {@link #isStrictProjectionOf(Schema, Schema)} is
    * the fact that it allows some legitimate type promotions (like {@code int -> long},
    * {@code decimal(3, 2) -> decimal(5, 2)}, etc) that allows projection to have a "wider"

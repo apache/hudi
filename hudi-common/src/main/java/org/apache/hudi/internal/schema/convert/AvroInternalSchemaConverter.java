@@ -69,6 +69,27 @@ public class AvroInternalSchemaConverter {
   }
 
   /**
+   * Converting from avro -> internal schema -> avro
+   * causes null to always be first in unions.
+   * if we compare a schema that has not been converted to internal schema
+   * at any stage, the difference in ordering can cause issues. To resolve this,
+   * we order null to be first for any avro schema that enters into hudi.
+   * AvroSchemaUtils.isProjectionOfInternal uses index based comparison for unions.
+   * Spark and flink don't support complex unions so this would not be an issue
+   * but for the metadata table HoodieMetadata.avsc uses a trick where we have a bunch of
+   * different types wrapped in record for col stats.
+   *
+   * @param Schema avro schema.
+   * @return an avro Schema where null is the first.
+   */
+  public static Schema fixNullOrdering(Schema schema) {
+    if (schema.getType() == Schema.Type.NULL) {
+      return schema;
+    }
+    return convert(convert(schema), schema.getFullName());
+  }
+
+  /**
    * Convert RecordType to avro Schema.
    *
    * @param type internal schema.
