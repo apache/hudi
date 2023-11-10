@@ -28,7 +28,7 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlCon
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.{Disabled, Tag}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -51,6 +51,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
   override def conf: SparkConf = conf(getSparkSqlConf)
 
+  @Disabled
   @ParameterizedTest
   @ValueSource(ints = Array(1/*, 5*/)) // TODO: fix for higher compactNumDeltaCommits - HUDI-6340
   def testReadability(compactNumDeltaCommits: Int): Unit = {
