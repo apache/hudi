@@ -106,7 +106,7 @@ public class CompactHelpers<T, I, K, O> {
   }
 
   public Option<InstantRange> getInstantRange(HoodieTableMetaClient metaClient) {
-    return HoodieTableMetadata.isMetadataTable(metaClient.getBasePathV2().toString())
+    return metaClient.isMetadataTable()
         ? Option.of(getMetadataLogReaderInstantRange(metaClient)) : Option.empty();
   }
 
