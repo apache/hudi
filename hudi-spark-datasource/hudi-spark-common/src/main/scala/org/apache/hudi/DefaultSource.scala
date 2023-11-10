@@ -244,7 +244,6 @@ object DefaultSource {
     } else {
       lazy val fileFormatUtils = if ((isMultipleBaseFileFormatsEnabled && !isBootstrappedTable)
         || (useNewPaquetFileFormat
-        && (globPaths == null || globPaths.isEmpty)
         && parameters.getOrElse(REALTIME_MERGE.key(), REALTIME_MERGE.defaultValue())
         .equalsIgnoreCase(REALTIME_PAYLOAD_COMBINE_OPT_VAL))) {
         val formatUtils = new HoodieSparkFileFormatUtils(sqlContext, metaClient, parameters, userSchema)
@@ -273,7 +272,7 @@ object DefaultSource {
           val isTimeTravelQuery = parameters.contains(TIME_TRAVEL_AS_OF_INSTANT.key())
           if (fileFormatUtils.isDefined && !isTimeTravelQuery) {
             new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
+              sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = false).build()
           } else {
             new MergeOnReadSnapshotRelation(sqlContext, parameters, metaClient, globPaths, userSchema)
           }
@@ -281,7 +280,7 @@ object DefaultSource {
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, true) =>
           if (fileFormatUtils.isDefined) {
             new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, isBootstrap = true).build()
+              sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = true).build()
           } else {
             HoodieBootstrapMORRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
           }
@@ -292,7 +291,7 @@ object DefaultSource {
         case (_, _, true) =>
           if (fileFormatUtils.isDefined) {
             new HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, isBootstrap = true).build()
+              sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = true).build()
           } else {
             resolveHoodieBootstrapRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
           }

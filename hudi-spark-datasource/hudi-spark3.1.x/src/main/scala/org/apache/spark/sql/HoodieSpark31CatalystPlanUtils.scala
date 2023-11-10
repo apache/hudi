@@ -18,7 +18,7 @@
 
 package org.apache.spark.sql
 
-import org.apache.hudi.SparkHoodieTableFileIndex
+import org.apache.hudi.HoodieFileIndexTrait
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.ResolvedTable
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression, ProjectionOverSchema}
@@ -27,7 +27,7 @@ import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, MergeIntoTable,
 import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
 import org.apache.spark.sql.execution.command.AlterTableRecoverPartitionsCommand
 import org.apache.spark.sql.execution.datasources.parquet.NewHoodieParquetFileFormat
-import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
+import org.apache.spark.sql.execution.datasources.{FileIndex, HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.types.StructType
 
 object HoodieSpark31CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
@@ -51,7 +51,7 @@ object HoodieSpark31CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
       case s@ScanOperation(_, _,
       l@LogicalRelation(fs: HadoopFsRelation, _, _, _)) if fs.fileFormat.isInstanceOf[NewHoodieParquetFileFormat] && !fs.fileFormat.asInstanceOf[NewHoodieParquetFileFormat].isProjected =>
         fs.fileFormat.asInstanceOf[NewHoodieParquetFileFormat].isProjected = true
-        Project(l.resolve(fs.location.asInstanceOf[SparkHoodieTableFileIndex].schema, fs.sparkSession.sessionState.analyzer.resolver), s)
+        Project(l.resolve(fs.location.asInstanceOf[FileIndex with HoodieFileIndexTrait].schema, fs.sparkSession.sessionState.analyzer.resolver), s)
       case _ => plan
     }
   }
