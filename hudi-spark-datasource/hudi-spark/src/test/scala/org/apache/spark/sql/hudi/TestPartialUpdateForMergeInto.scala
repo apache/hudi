@@ -38,6 +38,7 @@ import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATE
 import org.apache.hudi.metadata.HoodieTableMetadata
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
+import java.util.function.Predicate
 import java.util.{Collections, List, Optional}
 import scala.collection.JavaConverters._
 
@@ -400,7 +401,11 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
     )
     val fsView: SyncableFileSystemView = viewManager.getFileSystemView(metaClient)
     val fileSlice: Optional[FileSlice] = fsView.getAllFileSlices("")
-      .filter(e => getLogFileListFromFileSlice(e).size() == expectedNumLogFile)
+      .filter(new Predicate[FileSlice] {
+        override def test(fileSlice: FileSlice): Boolean = {
+          getLogFileListFromFileSlice(fileSlice).size() == expectedNumLogFile
+        }
+      })
       .findFirst()
     assertTrue(fileSlice.isPresent)
     val logFilePathList: List[String] = getLogFileListFromFileSlice(fileSlice.get)
