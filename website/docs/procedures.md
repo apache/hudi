@@ -711,6 +711,8 @@ copy table to a new table.
 | end_instance_time                                                 | String | N        | ""            | End instance time                                                                                                                                                                                                                           |
 | as_of_instant                                                     | String | N        | ""            | As of instant time                                                                                                                                                                                                                          |
 | save_mode                                                         | String | N        | "overwrite"   | Save mode                                                                                                                                                                                                                                   |
+| columns                                                           | String | N        | ""            | Columns of source table which should copy to new table                                                                                                                                                                                      |
+
 
 **Output**
 
