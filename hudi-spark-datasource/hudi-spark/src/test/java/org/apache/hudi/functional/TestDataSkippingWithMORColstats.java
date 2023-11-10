@@ -37,7 +37,6 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -71,7 +70,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * If we want to prove the file is not read, we expect the read to
  * successfully execute.
  */
-@Disabled
 public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
 
   private static String matchCond = "trip_type = 'UBERX'";

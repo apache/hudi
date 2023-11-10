@@ -18,7 +18,6 @@
 package org.apache.spark.sql.hudi
 
 class TestQueryMergeOnReadOptimizedTable extends HoodieSparkSqlTestBase {
-  /*
   test("Test Query Merge_On_Read Read_Optimized table") {
     withTempDir { tmp =>
       val tableName = generateTableName
@@ -79,5 +78,5 @@ class TestQueryMergeOnReadOptimizedTable extends HoodieSparkSqlTestBase {
                         tablePath: String): Unit = {
     val actual = spark.read.format("org.apache.hudi").option("hoodie.datasource.query.type", "read_optimized").load(tablePath).count()
     assertResult(expected)(actual)
-  }*/
+  }
 }
