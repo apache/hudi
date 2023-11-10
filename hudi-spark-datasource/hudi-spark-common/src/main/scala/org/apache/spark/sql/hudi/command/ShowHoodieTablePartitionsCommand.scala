@@ -17,8 +17,8 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.common.table.timeline.TimelineUtils
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
+
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
@@ -55,7 +55,6 @@ case class ShowHoodieTablePartitionsCommand(
         }
       }
         .getOrElse(hoodieCatalogTable.getPartitionPaths)
-        .filter(!TimelineUtils.getDroppedPartitions(hoodieCatalogTable.metaClient.getActiveTimeline).contains(_))
         .map(Row(_))
     } else {
       Seq.empty[Row]
