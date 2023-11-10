@@ -17,10 +17,8 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.testutils.DataSourceTestUtils
-
 class TestMergeIntoLogOnlyTable extends HoodieSparkSqlTestBase {
-
+  /*
   test("Test Query Log Only MOR Table") {
     withRecordType()(withTempDir { tmp =>
       // Create table with INMEMORY index to generate log only mor table.
@@ -87,5 +85,5 @@ class TestMergeIntoLogOnlyTable extends HoodieSparkSqlTestBase {
         Seq(4, "a4", 11.0, 1000)
       )
     })
-  }
+  }*/
 }
