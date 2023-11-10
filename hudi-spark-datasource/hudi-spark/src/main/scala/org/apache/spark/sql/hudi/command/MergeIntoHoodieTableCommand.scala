@@ -416,7 +416,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       && operation == UPSERT_OPERATION_OPT_VAL
       && parameters.getOrElse(
       ENABLE_MERGE_INTO_PARTIAL_UPDATES.key,
-      ENABLE_MERGE_INTO_PARTIAL_UPDATES.defaultValue.toString).toBoolean) {
+      ENABLE_MERGE_INTO_PARTIAL_UPDATES.defaultValue.toString).toBoolean
+      && updatingActions.nonEmpty) {
       val updatedFieldSet = getUpdatedFields(updatingActions.map(a => a.assignments))
       // Only enable partial updates if not all fields are updated
       if (!areAllFieldsUpdated(updatedFieldSet)) {
