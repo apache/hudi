@@ -274,9 +274,11 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
         if (requiredSchema.getFieldIndex(field).isEmpty) {
           // Support for nested fields
           val fieldParts = field.split("\\.")
-          val fieldToAdd = findNestedField(dataSchema, fieldParts).getOrElse(
-            throw new IllegalArgumentException(s"Field $field does not exist in the data schema")
-          )
+          val fieldToAdd = findNestedField(dataSchema, fieldParts)
+            .orElse(findNestedField(partitionSchema, fieldParts))
+            .getOrElse(
+              throw new IllegalArgumentException(s"Field $field does not exist in the data schema")
+            )
           added.append(fieldToAdd)
         }
       }
