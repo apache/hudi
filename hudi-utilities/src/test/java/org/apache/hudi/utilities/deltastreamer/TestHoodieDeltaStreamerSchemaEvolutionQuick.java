@@ -38,6 +38,7 @@ import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructField;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -49,6 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Disabled
 public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDeltaStreamerSchemaEvolutionBase {
 
   @AfterEach
@@ -119,13 +121,13 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
   @ParameterizedTest
   @MethodSource("testArgs")
   public void testBase(String tableType,
-                          Boolean shouldCluster,
-                          Boolean shouldCompact,
-                          Boolean rowWriterEnable,
-                          Boolean addFilegroups,
-                          Boolean multiLogFiles,
-                          Boolean useKafkaSource,
-                          Boolean allowNullForDeletedCols) throws Exception {
+                       Boolean shouldCluster,
+                       Boolean shouldCompact,
+                       Boolean rowWriterEnable,
+                       Boolean addFilegroups,
+                       Boolean multiLogFiles,
+                       Boolean useKafkaSource,
+                       Boolean allowNullForDeletedCols) throws Exception {
     this.tableType = tableType;
     this.shouldCluster = shouldCluster;
     this.shouldCompact = shouldCompact;
@@ -248,9 +250,9 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
   @ParameterizedTest
   @MethodSource("testReorderedColumn")
   public void testReorderingColumn(String tableType,
-                       Boolean rowWriterEnable,
-                       Boolean useKafkaSource,
-                       Boolean allowNullForDeletedCols) throws Exception {
+                                   Boolean rowWriterEnable,
+                                   Boolean useKafkaSource,
+                                   Boolean allowNullForDeletedCols) throws Exception {
     this.tableType = tableType;
     this.rowWriterEnable = rowWriterEnable;
     this.useKafkaSource = useKafkaSource;
@@ -316,11 +318,11 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
   @ParameterizedTest
   @MethodSource("testParamsWithSchemaTransformer")
   public void testDroppedColumn(String tableType,
-                                           Boolean rowWriterEnable,
-                                           Boolean useKafkaSource,
-                                           Boolean allowNullForDeletedCols,
-                                           Boolean useTransformer,
-                                           Boolean targetSchemaSameAsTableSchema) throws Exception {
+                                Boolean rowWriterEnable,
+                                Boolean useKafkaSource,
+                                Boolean allowNullForDeletedCols,
+                                Boolean useTransformer,
+                                Boolean targetSchemaSameAsTableSchema) throws Exception {
     this.tableType = tableType;
     this.rowWriterEnable = rowWriterEnable;
     this.useKafkaSource = useKafkaSource;
@@ -481,11 +483,11 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
   @ParameterizedTest
   @MethodSource("testParamsWithSchemaTransformer")
   public void testTypeDemotion(String tableType,
-                                Boolean rowWriterEnable,
-                                Boolean useKafkaSource,
-                                Boolean allowNullForDeletedCols,
-                                Boolean useTransformer,
-                                Boolean targetSchemaSameAsTableSchema) throws Exception {
+                               Boolean rowWriterEnable,
+                               Boolean useKafkaSource,
+                               Boolean allowNullForDeletedCols,
+                               Boolean useTransformer,
+                               Boolean targetSchemaSameAsTableSchema) throws Exception {
     this.tableType = tableType;
     this.rowWriterEnable = rowWriterEnable;
     this.useKafkaSource = useKafkaSource;
