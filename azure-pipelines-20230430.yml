@@ -54,29 +54,7 @@ parameters:
   - name: job4UTModules
     type: object
     default:
-      - '!hudi-hadoop-mr'
-      - '!hudi-client/hudi-java-client'
-      - '!hudi-client/hudi-spark-client'
-      - '!hudi-common'
-      - '!hudi-examples'
-      - '!hudi-examples/hudi-examples-common'
-      - '!hudi-examples/hudi-examples-flink'
-      - '!hudi-examples/hudi-examples-java'
-      - '!hudi-examples/hudi-examples-spark'
-      - '!hudi-flink-datasource'
-      - '!hudi-flink-datasource/hudi-flink'
-      - '!hudi-flink-datasource/hudi-flink1.13.x'
-      - '!hudi-flink-datasource/hudi-flink1.14.x'
-      - '!hudi-flink-datasource/hudi-flink1.15.x'
-      - '!hudi-flink-datasource/hudi-flink1.16.x'
-      - '!hudi-flink-datasource/hudi-flink1.17.x'
-      - '!hudi-flink-datasource/hudi-flink1.18.x'
-      - '!hudi-spark-datasource'
-      - '!hudi-spark-datasource/hudi-spark'
-      - '!hudi-spark-datasource/hudi-spark3.2.x'
-      - '!hudi-spark-datasource/hudi-spark3.2plus-common'
-      - '!hudi-spark-datasource/hudi-spark3-common'
-      - '!hudi-spark-datasource/hudi-spark-common'
+      - 'hudi-cli'
   - name: job4FTModules
     type: object
     default:
