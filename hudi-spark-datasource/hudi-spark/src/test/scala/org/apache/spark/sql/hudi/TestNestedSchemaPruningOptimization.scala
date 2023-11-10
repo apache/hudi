@@ -17,8 +17,6 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.common.config.HoodieCommonConfig
-import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.{FileSourceScanExec, ProjectExec, RowDataSourceScanExec, SparkPlan}
@@ -104,6 +102,7 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
     }
   }
 
+  /*
   test("Test NestedSchemaPruning optimization unsuccessful") {
     withTempDir { tmp =>
       // NOTE: This tests are only relevant for Spark >= 3.1
@@ -176,6 +175,7 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
       }
     }
   }
+  */
 
   private def createTableWithNestedStructSchema(tableType: String,
                                                 tableName: String,

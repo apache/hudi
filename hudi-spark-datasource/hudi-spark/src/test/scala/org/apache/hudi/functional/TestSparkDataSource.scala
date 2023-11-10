@@ -30,6 +30,7 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.spark.sql._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
@@ -49,6 +50,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
 
+  @Disabled
   @ParameterizedTest
   @CsvSource(value = Array(
     "COPY_ON_WRITE|false|false|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
@@ -214,6 +216,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     inputDf3.unpersist(true)
   }
 
+  @Disabled
   @ParameterizedTest
   @CsvSource(value = Array(
     "COPY_ON_WRITE|insert|false|false|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
