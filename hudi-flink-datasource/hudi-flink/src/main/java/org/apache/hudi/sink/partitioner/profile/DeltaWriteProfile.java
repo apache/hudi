@@ -50,7 +50,7 @@ public class DeltaWriteProfile extends WriteProfile {
     List<SmallFile> smallFileLocations = new ArrayList<>();
 
     // Init here since this class (and member variables) might not have been initialized
-    HoodieTimeline commitTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
+    HoodieTimeline commitTimeline = metaClient.getCommitsTimeline().filterCompletedAndCompactionInstants();
 
     // Find out all eligible small file slices
     if (!commitTimeline.empty()) {

@@ -99,7 +99,7 @@ public class HoodieMergedReadHandle<T, I, K, O> extends HoodieReadHandle<T, I, K
         && hoodieTable.getMetaClient().getCommitsTimeline().filterCompletedInstants().lastInstant().isPresent()) {
       return Option.fromJavaOptional(hoodieTable
           .getHoodieView()
-          .getLatestMergedFileSlicesBeforeOrOn(partitionPathFileIDPair.getLeft(), instantTime)
+          .getLatestFileSlices(partitionPathFileIDPair.getLeft())
           .filter(fileSlice -> fileSlice.getFileId().equals(partitionPathFileIDPair.getRight()))
           .findFirst());
     }

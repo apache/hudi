@@ -36,6 +36,9 @@ import org.apache.flink.core.fs.Path;
 
 import javax.annotation.Nullable;
 
+import java.io.IOException;
+import java.nio.file.Files;
+
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -132,5 +135,13 @@ public class TestUtils {
   public static void saveInstantAsComplete(HoodieTableMetaClient metaClient, HoodieInstant instant, HoodieCommitMetadata metadata) throws Exception {
     metaClient.getActiveTimeline().saveAsComplete(new HoodieInstant(true, instant.getAction(), instant.getTimestamp()),
         serializeCommitMetadata(metadata));
+  }
+
+  public static void amendCompletionTimeToLatest(HoodieTableMetaClient metaClient, java.nio.file.Path sourcePath, String instantTime) throws IOException {
+    String fileExt = sourcePath.getFileName().toString().split("\\.")[1];
+    String newFileName = instantTime + "_" + metaClient.createNewInstantTime() + "." + fileExt;
+
+    java.nio.file.Path newFilePath = sourcePath.getParent().resolve(newFileName);
+    Files.move(sourcePath, newFilePath);
   }
 }
