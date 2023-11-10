@@ -9,6 +9,7 @@ tags:
 - indexing
 - metadata
 - apache hudi
+- blog
 ---
 
 ## Introduction
