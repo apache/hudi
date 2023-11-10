@@ -141,7 +141,6 @@
     <flink1.16.version>1.16.2</flink1.16.version>
     <flink1.15.version>1.15.1</flink1.15.version>
     <flink1.14.version>1.14.5</flink1.14.version>
-    <flink1.13.version>1.13.6</flink1.13.version>
     <flink.version>${flink1.18.version}</flink.version>
     <hudi.flink.module>hudi-flink1.18.x</hudi.flink.module>
     <flink.bundle.version>1.18</flink.bundle.version>
@@ -2663,33 +2662,6 @@
       <activation>
         <property>
           <name>flink1.14</name>
-        </property>
-      </activation>
-    </profile>
-    <profile>
-      <id>flink1.13</id>
-      <properties>
-        <flink.version>${flink1.13.version}</flink.version>
-        <hudi.flink.module>hudi-flink1.13.x</hudi.flink.module>
-        <flink.bundle.version>1.13</flink.bundle.version>
-        <orc.flink.version>1.5.6</orc.flink.version>
-        <flink.avro.version>1.11.1</flink.avro.version>
-        <flink.runtime.artifactId>flink-runtime_${scala.binary.version}</flink.runtime.artifactId>
-        <flink.table.runtime.artifactId>flink-table-runtime-blink_${scala.binary.version}</flink.table.runtime.artifactId>
-        <flink.table.planner.artifactId>flink-table-planner-blink_${scala.binary.version}</flink.table.planner.artifactId>
-        <flink.parquet.artifactId>flink-parquet_${scala.binary.version}</flink.parquet.artifactId>
-        <flink.statebackend.rocksdb.artifactId>flink-statebackend-rocksdb_${scala.binary.version}</flink.statebackend.rocksdb.artifactId>
-        <flink.test.utils.artifactId>flink-test-utils_${scala.binary.version}</flink.test.utils.artifactId>
-        <flink.streaming.java.artifactId>flink-streaming-java_${scala.binary.version}</flink.streaming.java.artifactId>
-        <flink.clients.artifactId>flink-clients_${scala.binary.version}</flink.clients.artifactId>
-        <flink.connector.kafka.artifactId>flink-connector-kafka_${scala.binary.version}</flink.connector.kafka.artifactId>
-        <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_${scala.binary.version}</flink.hadoop.compatibility.artifactId>
-        <flink.connector.kafka.version>${flink1.13.version}</flink.connector.kafka.version>
-        <skipITs>true</skipITs>
-      </properties>
-      <activation>
-        <property>
-          <name>flink1.13</name>
         </property>
       </activation>
     </profile>
