@@ -727,7 +727,7 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     df2.printSchema()
     df2.show(false)
     // upsert
-    upsertData(df2, tempRecordPath, isCow)
+    upsertData(df2, tempRecordPath, isCow, true)
 
     // read out the table
     val readDf = spark.read.format("hudi").load(tempRecordPath)

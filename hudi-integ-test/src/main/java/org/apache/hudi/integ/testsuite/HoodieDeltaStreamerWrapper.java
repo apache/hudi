@@ -28,6 +28,7 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.streamer.StreamSync;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
@@ -80,8 +81,12 @@ public class HoodieDeltaStreamerWrapper extends HoodieDeltaStreamer {
   public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchSource() throws Exception {
     StreamSync service = getDeltaSync();
     service.refreshTimeline();
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(new Configuration(service.getFs().getConf()))
+        .setBasePath(service.getCfg().targetBasePath)
+        .build();
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
-    InputBatch inputBatch = service.readFromSource(instantTime).getLeft();
+    InputBatch inputBatch = service.readFromSource(instantTime, metaClient).getLeft();
     return Pair.of(inputBatch.getSchemaProvider(), Pair.of(inputBatch.getCheckpointForNextBatch(), (JavaRDD<HoodieRecord>) inputBatch.getBatch().get()));
   }
 
