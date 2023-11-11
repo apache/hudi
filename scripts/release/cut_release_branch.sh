@@ -113,7 +113,7 @@ if [[ $confirmation != "y" ]]; then
   exit
 fi
 
-git commit -am "[MINOR] Moving to ${NEXT_VERSION_IN_BASE_BRANCH}-SNAPSHOT on master branch."
+#git commit -am "[MINOR] Moving to ${NEXT_VERSION_IN_BASE_BRANCH}-SNAPSHOT on master branch."
 
 echo "==============================================================="
 echo "!!Please open a PR based on ${NEXT_VERSION_BRANCH} branch for approval!! [Press ENTER to continue]"
