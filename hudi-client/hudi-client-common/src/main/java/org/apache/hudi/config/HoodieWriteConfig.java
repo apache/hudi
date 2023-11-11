@@ -751,7 +751,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> WRITE_RECORD_POSITIONS = ConfigProperty
       .key("hoodie.write.record.positions")
-      .defaultValue(false)
+      .defaultValue(true)
       .markAdvanced()
       .sinceVersion("1.0.0")
       .withDocumentation("Whether to write record positions to the block header for data blocks containing updates and delete blocks. "
