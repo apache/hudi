@@ -29,8 +29,6 @@ import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.stream.Collectors;
 
 /**
  * Helper functions around FileStatus and HoodieFileStatus.
@@ -105,13 +103,6 @@ public class FileStatusUtils {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
     return fStatus;
-  }
-
-  public static HoodieFileStatus[] fromFileStatuses(FileStatus[] statuses) {
-    return Arrays.stream(statuses)
-        .map(status -> fromFileStatus(status))
-        .collect(Collectors.toList())
-        .toArray(new HoodieFileStatus[statuses.length]);
   }
 
   /**
