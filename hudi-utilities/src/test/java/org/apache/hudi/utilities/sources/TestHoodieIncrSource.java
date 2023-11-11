@@ -50,7 +50,6 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
@@ -215,9 +214,10 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     }
   }
 
-  @Test
-  public void testHoodieIncrSourceWithPendingTableServices() throws IOException {
-    this.tableType = MERGE_ON_READ;
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testHoodieIncrSourceWithPendingTableServices(HoodieTableType tableType) throws IOException {
+    this.tableType = tableType;
     metaClient = getHoodieMetaClient(hadoopConf(), basePath());
     HoodieWriteConfig writeConfig = getConfigBuilder(basePath(), metaClient)
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(10, 12).build())

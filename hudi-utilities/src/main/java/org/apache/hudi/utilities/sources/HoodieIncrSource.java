@@ -19,9 +19,11 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.DataSourceReadOptions;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -40,6 +42,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.hudi.DataSourceReadOptions.BEGIN_INSTANTTIME;
 import static org.apache.hudi.DataSourceReadOptions.END_INSTANTTIME;
@@ -60,6 +63,10 @@ import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getHoll
 public class HoodieIncrSource extends RowSource {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieIncrSource.class);
+  public static final Set<String> HOODIE_INCR_SOURCE_READ_OPT_KEYS =
+      CollectionUtils.createImmutableSet(
+          "hoodie.datasource.read.use.new.parquet.file.format",
+          HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key());
   private final Option<SnapshotLoadQuerySplitter> snapshotLoadQuerySplitter;
 
   public static class Config {
@@ -137,7 +144,10 @@ public class HoodieIncrSource extends RowSource {
     super(props, sparkContext, sparkSession, schemaProvider);
 
     for (Object key : props.keySet()) {
-      readOpts.put(key.toString(), props.getString(key.toString()));
+      String keyString = key.toString();
+      if (HOODIE_INCR_SOURCE_READ_OPT_KEYS.contains(keyString)) {
+        readOpts.put(keyString, props.getString(key.toString()));
+      }
     }
 
     this.snapshotLoadQuerySplitter = Option.ofNullable(props.getString(SNAPSHOT_LOAD_QUERY_SPLITTER_CLASS_NAME, null))
