@@ -20,7 +20,7 @@ package org.apache.hudi.common.fs;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -43,7 +43,7 @@ import java.util.List;
  * Test the if {@link HoodieSerializableFileStatus} is serializable
  */
 @TestInstance(Lifecycle.PER_CLASS)
-public class TestHoodieSerializableFileStatus extends HoodieClientTestHarness {
+public class TestHoodieSerializableFileStatus extends HoodieSparkClientTestHarness {
 
   HoodieEngineContext engineContext;
   List<Path> testPaths;

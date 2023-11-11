@@ -20,10 +20,13 @@ package org.apache.hudi.common.fs;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.permission.FsPermission;
 
 import java.io.Serializable;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.stream.Collectors;
+
 
 /**
  * A serializable file status implementation
@@ -41,19 +44,14 @@ public class HoodieSerializableFileStatus implements Serializable {
   private long blockSize;
   private long modificationTime;
   private long accessTime;
-
-  HoodieSerializableFileStatus(FileStatus fileStatus) {
-    this(fileStatus.getPath(),
-        fileStatus.getLen(),
-        fileStatus.isDirectory(),
-        fileStatus.getReplication(),
-        fileStatus.getBlockSize(),
-        fileStatus.getModificationTime(),
-        fileStatus.getAccessTime());
-  }
+  private FsPermission permission;
+  private String owner;
+  private String group;
+  private Path symlink;
 
   HoodieSerializableFileStatus(Path path, long length, boolean isDir, short blockReplication,
-                               long blockSize, long modificationTime, long accessTime) {
+                               long blockSize, long modificationTime, long accessTime,
+                               FsPermission permission, String owner, String group, Path symlink) {
     this.path = path;
     this.length = length;
     this.isDir = isDir;
@@ -61,6 +59,10 @@ public class HoodieSerializableFileStatus implements Serializable {
     this.blockSize = blockSize;
     this.modificationTime = modificationTime;
     this.accessTime = accessTime;
+    this.permission = permission;
+    this.owner = owner;
+    this.group = group;
+    this.symlink = symlink;
   }
 
   public Path getPath() {
@@ -91,8 +93,34 @@ public class HoodieSerializableFileStatus implements Serializable {
     return accessTime;
   }
 
+  public FsPermission getPermission() {
+    return permission;
+  }
+
+  public String getOwner() {
+    return owner;
+  }
+
+  public String getGroup() {
+    return group;
+  }
+
+  public Path getSymlink() {
+    return symlink;
+  }
+
   public static HoodieSerializableFileStatus fromFileStatus(FileStatus status) {
-    return new HoodieSerializableFileStatus(status);
+    Path symlink;
+    try {
+      symlink = status.getSymlink();
+    } catch (IOException ioe) {
+      // status is not symlink
+      symlink = null;
+    }
+
+    return new HoodieSerializableFileStatus(status.getPath(), status.getLen(), status.isDir(),
+        status.getReplication(), status.getBlockSize(), status.getModificationTime(),
+        status.getAccessTime(), status.getPermission(), status.getOwner(), status.getGroup(), symlink);
   }
 
   public static HoodieSerializableFileStatus[] fromFileStatuses(FileStatus[] statuses) {
@@ -100,5 +128,18 @@ public class HoodieSerializableFileStatus implements Serializable {
         .map(status -> HoodieSerializableFileStatus.fromFileStatus(status))
         .collect(Collectors.toList())
         .toArray(new HoodieSerializableFileStatus[statuses.length]);
+  }
+
+  public static FileStatus toFileStatus(HoodieSerializableFileStatus status) {
+    return new FileStatus(status.getLen(), status.isDirectory(), status.getReplication(),
+        status.getBlockSize(), status.getModificationTime(), status.getAccessTime(), status.getPermission(),
+        status.getOwner(), status.getGroup(), status.getSymlink(), status.getPath());
+  }
+
+  public static FileStatus[] toFileStatuses(HoodieSerializableFileStatus[] statuses) {
+    return Arrays.stream(statuses)
+        .map(status -> HoodieSerializableFileStatus.toFileStatus(status))
+        .collect(Collectors.toList())
+        .toArray(new FileStatus[statuses.length]);
   }
 }

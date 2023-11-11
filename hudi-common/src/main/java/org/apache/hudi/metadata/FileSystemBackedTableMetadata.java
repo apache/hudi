@@ -232,13 +232,13 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
     int parallelism = Math.min(DEFAULT_LISTING_PARALLELISM, partitionPaths.size());
 
     engineContext.setJobStatus(this.getClass().getSimpleName(), "Listing all files in " + partitionPaths.size() + " partitions");
-    List<Pair<String, FileStatus[]>> partitionToFiles = engineContext.map(new ArrayList<>(partitionPaths), partitionPathStr -> {
+    List<Pair<String, HoodieSerializableFileStatus[]>> partitionToFiles = engineContext.map(new ArrayList<>(partitionPaths), partitionPathStr -> {
       Path partitionPath = new Path(partitionPathStr);
       FileSystem fs = partitionPath.getFileSystem(hadoopConf.get());
-      return Pair.of(partitionPathStr, FSUtils.getAllDataFilesInPartition(fs, partitionPath));
+      return Pair.of(partitionPathStr, HoodieSerializableFileStatus.fromFileStatuses(FSUtils.getAllDataFilesInPartition(fs, partitionPath)));
     }, parallelism);
 
-    return partitionToFiles.stream().collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
+    return partitionToFiles.stream().collect(Collectors.toMap(Pair::getLeft, pair -> HoodieSerializableFileStatus.toFileStatuses(pair.getRight())));
   }
 
   @Override
