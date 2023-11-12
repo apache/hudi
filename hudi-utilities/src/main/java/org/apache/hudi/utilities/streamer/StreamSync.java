@@ -990,6 +990,7 @@ public class StreamSync implements Serializable, Closeable {
       LOG.info("When set --enable-hive-sync will use HiveSyncTool for backward compatibility");
     }
     if (cfg.enableMetaSync) {
+      LOG.debug("[MetaSync] Starting sync");
       FileSystem fs = FSUtils.getFs(cfg.targetBasePath, hoodieSparkContext.hadoopConfiguration());
 
       TypedProperties metaProps = new TypedProperties();
@@ -1003,14 +1004,19 @@ public class StreamSync implements Serializable, Closeable {
       Map<String, HoodieException> failedMetaSyncs = new HashMap<>();
       for (String impl : syncClientToolClasses) {
         Timer.Context syncContext = metrics.getMetaSyncTimerContext();
+        boolean success = false;
         try {
           SyncUtilHelpers.runHoodieMetaSync(impl.trim(), metaProps, conf, fs, cfg.targetBasePath, cfg.baseFileFormat);
+          success = true;
         } catch (HoodieMetaSyncException e) {
-          LOG.warn("SyncTool class " + impl.trim() + " failed with exception", e);
+          LOG.error("SyncTool class " + impl.trim() + " failed with exception", e);
           failedMetaSyncs.put(impl, e);
         }
         long metaSyncTimeMs = syncContext != null ? syncContext.stop() : 0;
         metrics.updateStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeMs);
+        if (success) {
+          LOG.info("[MetaSync] SyncTool class " + impl.trim() + " completed successfully and took " + metaSyncTimeMs);
+        }
       }
       if (!failedMetaSyncs.isEmpty()) {
         throw getHoodieMetaSyncException(failedMetaSyncs);
