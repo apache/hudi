@@ -160,6 +160,7 @@ public class StreamSync implements Serializable, Closeable {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(StreamSync.class);
+  private static final String NULL_PLACEHOLDER = "[null]";
 
   /**
    * Delta Sync Config.
@@ -421,14 +422,19 @@ public class StreamSync implements Serializable, Closeable {
       } else {
         Schema newSourceSchema = inputBatchIsEmptyPair.getKey().getSchemaProvider().getSourceSchema();
         Schema newTargetSchema = inputBatchIsEmptyPair.getKey().getSchemaProvider().getTargetSchema();
-        if (!(processedSchema.isSchemaPresent(newSourceSchema))
-            || !(processedSchema.isSchemaPresent(newTargetSchema))) {
-          LOG.info("Seeing new schema. Source :" + newSourceSchema.toString(true)
-              + ", Target :" + newTargetSchema.toString(true));
+        if ((newSourceSchema != null && !processedSchema.isSchemaPresent(newSourceSchema))
+            || (newTargetSchema != null && !processedSchema.isSchemaPresent(newTargetSchema))) {
+          String sourceStr = newSourceSchema == null ? NULL_PLACEHOLDER : newSourceSchema.toString(true);
+          String targetStr = newTargetSchema == null ? NULL_PLACEHOLDER : newTargetSchema.toString(true);
+          LOG.info("Seeing new schema. Source: " + sourceStr + ", Target: " + targetStr);
           // We need to recreate write client with new schema and register them.
           reInitWriteClient(newSourceSchema, newTargetSchema, recordsFromSource);
-          processedSchema.addSchema(newSourceSchema);
-          processedSchema.addSchema(newTargetSchema);
+          if (newSourceSchema != null) {
+            processedSchema.addSchema(newSourceSchema);
+          }
+          if (newTargetSchema != null) {
+            processedSchema.addSchema(newTargetSchema);
+          }
         }
       }
 
@@ -577,7 +583,8 @@ public class StreamSync implements Serializable, Closeable {
           ErrorEvent.ErrorReason.CUSTOM_TRANSFORMER_FAILURE);
 
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
-      if (this.userProvidedSchemaProvider != null && this.userProvidedSchemaProvider.getTargetSchema() != null) {
+      if (this.userProvidedSchemaProvider != null && this.userProvidedSchemaProvider.getTargetSchema() != null
+          && this.userProvidedSchemaProvider.getTargetSchema() != InputBatch.NULL_SCHEMA) {
         if (useRowWriter) {
           inputBatchForWriter = new InputBatch(transformed, checkpointStr, this.userProvidedSchemaProvider);
         } else {
@@ -1175,13 +1182,14 @@ public class StreamSync implements Serializable, Closeable {
    */
   private void registerAvroSchemas(Schema sourceSchema, Schema targetSchema) {
     // register the schemas, so that shuffle does not serialize the full schemas
-    if (null != sourceSchema) {
-      List<Schema> schemas = new ArrayList<>();
+    List<Schema> schemas = new ArrayList<>();
+    if (sourceSchema != null) {
       schemas.add(sourceSchema);
-      if (targetSchema != null) {
-        schemas.add(targetSchema);
-      }
-
+    }
+    if (targetSchema != null) {
+      schemas.add(targetSchema);
+    }
+    if (!schemas.isEmpty()) {
       if (LOG.isDebugEnabled()) {
         LOG.debug("Registering Schema: " + schemas);
       }
