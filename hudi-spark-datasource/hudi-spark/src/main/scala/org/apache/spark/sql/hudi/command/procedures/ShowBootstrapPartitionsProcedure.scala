@@ -27,8 +27,7 @@ import java.util.function.Supplier
 
 class ShowBootstrapPartitionsProcedure extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType),
-    ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 100)
+    ProcedureParameter.required(0, "table", DataTypes.StringType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -43,7 +42,6 @@ class ShowBootstrapPartitionsProcedure extends BaseProcedure with ProcedureBuild
     super.checkArgs(PARAMETERS, args)
 
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
-    val limit = getArgValueOrDefault(args, PARAMETERS(1))
 
     val basePath: String = getBasePath(tableName)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
@@ -51,11 +49,7 @@ class ShowBootstrapPartitionsProcedure extends BaseProcedure with ProcedureBuild
     val indexReader = createBootstrapIndexReader(metaClient)
     val indexedPartitions = indexReader.getIndexedPartitionPaths
 
-    if (limit.isDefined) {
-      indexedPartitions.stream().limit(limit.get.asInstanceOf[Int]).toArray.map(r => Row(r)).toList
-    } else {
-      indexedPartitions.stream().toArray.map(r => Row(r)).toList
-    }
+    indexedPartitions.stream().toArray.map(r => Row(r)).toList
   }
 
   private def createBootstrapIndexReader(metaClient: HoodieTableMetaClient) = {

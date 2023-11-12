@@ -79,11 +79,6 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
         result.length
       }
 
-      result = spark.sql(s"""call show_bootstrap_partitions(table => '$tableName',limit => 2)""".stripMargin).collect()
-      assertResult(2) {
-        result.length
-      }
-
       // show bootstrap's index mapping
       result = spark.sql(
         s"""call show_bootstrap_mapping(table => '$tableName')""".stripMargin).collect()
