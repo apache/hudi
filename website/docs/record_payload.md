@@ -174,3 +174,4 @@ Record payloads are tunable to suit many use cases. Please check out the configu
 listed [here](/docs/configurations#RECORD_PAYLOAD). Moreover, if users want to implement their own custom merge logic,
 please check out [this FAQ](/docs/faq/#can-i-implement-my-own-logic-for-how-input-records-are-merged-with-record-on-storage). In a
 separate document, we will talk about a new record merger API for optimized payload handling.
+

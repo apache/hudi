@@ -144,3 +144,8 @@ Refer [here](https://hudi.apache.org/docs/next/configurations#Read-Options) for 
 
 Refer [here](https://hudi.apache.org/docs/next/configurations#Flink-Options) for more details.
 
+## Related Resources
+<h3>Videos</h3>
+
+* [Comparing Apache Hudi's MOR and COW Tables, Use Cases from Uber](https://youtu.be/BiTXyzFNHlA)
+* [Different table types in Apache Hudi, MOR and COW, Deep Dive](https://youtu.be/vyEvlt57L-s)

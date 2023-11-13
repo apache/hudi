@@ -280,3 +280,9 @@ hoodie.cleaner.policy.failed.writes=EAGER
 
 If you are using the `WriteClient` API, please note that multiple writes to the table need to be initiated from 2 different instances of the write client. 
 It is **NOT** recommended to use the same instance of the write client to perform multi writing. 
+
+## Related Resources
+<h3>Videos</h3>
+
+* [Efficient Data Ingestion with Glue Concurrency and Hudi Data Lake](https://www.youtube.com/watch?v=G_Xd1haycqE)
+* [Hands on Lab with using DynamoDB as lock table for Apache Hudi Data Lakes](https://youtu.be/JP0orl9_0yQ)

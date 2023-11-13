@@ -156,3 +156,10 @@ to finally check the incoming updates against all files. The `SIMPLE` Index will
 
 When using a global index, users should also consider setting `hoodie.bloom.index.update.partition.path=true` or `hoodie.simple.index.update.partition.path=true` to deal with cases where the
 partition path value could change due to an update e.g users table partitioned by home city; user relocates to a different city. These tables are also excellent candidates for the Merge-On-Read table type.
+
+
+## Related Resources
+<h3>Videos</h3>
+
+* [Global Bloom Index: Remove duplicates & guarantee uniquness - Hudi Labs](https://youtu.be/XlRvMFJ7g9c)
+* [Advantages of Metadata Indexing and Asynchronous Indexing in Hudi - Hands on Lab](https://www.youtube.com/watch?v=TSphQCsY4pY)

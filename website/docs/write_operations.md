@@ -56,7 +56,7 @@ Deletion of specific partitions can be done using the config
 
 
 ## Configs
-Here are thh basic configs relevant to the write operations types mentioned above. Please refer to [Write Options](https://hudi.apache.org/docs/configurations#Write-Options) for more Spark based configs and [Flink options](https://hudi.apache.org/docs/next/configurations#Flink-Options) for Flink based configs.
+Here are the basic configs relevant to the write operations types mentioned above. Please refer to [Write Options](https://hudi.apache.org/docs/configurations#Write-Options) for more Spark based configs and [Flink options](https://hudi.apache.org/docs/next/configurations#Flink-Options) for Flink based configs.
 
 **Spark based configs:**
 
@@ -107,3 +107,11 @@ The following is an inside look on the Hudi write path and the sequence of event
    1. If you are using MOR tables, compaction will either run inline, or be scheduled asynchronously
 10. Archive
     1. Lastly, we perform an archival step which moves old [timeline](/docs/next/timeline) items to an archive folder.
+
+
+## Related Resources
+<h3>Videos</h3>
+
+* [Insert | Update | Delete On Datalake (S3) with Apache Hudi and glue Pyspark](https://youtu.be/94DPKkzDm-8)
+* [Insert|Update|Read|Write|SnapShot| Time Travel |incremental Query on Apache Hudi datalake (S3)](https://youtu.be/hK1G7CPBL2M)
+* [Apache Hudi Bulk Insert Sort Modes a summary of two incredible blogs](https://www.youtube.com/watch?v=AuZoREO8_zs)

@@ -170,5 +170,8 @@ Here are the critical file sizing configurations:
 | clustering.plan.strategy.small.file.limit       | 600 (Optional)       | Files smaller than the size specified here are candidates for clustering, default 600 MB<br /><br /> `Config Param: CLUSTERING_PLAN_STRATEGY_SMALL_FILE_LIMIT`                                 |
 | clustering.plan.strategy.target.file.max.bytes  | 1073741824 (Optional)| Each group can produce 'N' (CLUSTERING_MAX_GROUP_SIZE/CLUSTERING_TARGET_FILE_SIZE) output file groups, default 1 GB<br /><br /> `Config Param: CLUSTERING_PLAN_STRATEGY_TARGET_FILE_MAX_BYTES` |
 
+## Related Resources
+<h3>Videos</h3>
 
-
+* [Mastering File Sizing in Hudi: Boosting Performance and Efficiency](https://www.youtube.com/watch?v=qg-2aYyvfts)
+* ["How do I Ingest Extremely Small Files into Hudi Data lake with Glue Incremental data processing](https://www.youtube.com/watch?v=BvoLVeidd-0)

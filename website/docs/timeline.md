@@ -77,3 +77,7 @@ Flink jobs using the SQL can be configured through the options in WITH clause. T
 
 Refer [here](https://hudi.apache.org/docs/next/configurations#Flink-Options) for more details.
 
+## Related Resources
+<h3>Videos</h3>
+
+* [How to Query Hudi Tables in Incremental Fashion and Get only New data on AWS Glue | Hands on Lab](https://www.youtube.com/watch?v=c6DCJR91rBQx)

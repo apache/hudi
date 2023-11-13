@@ -209,3 +209,8 @@ Partition path generated from key generator: "2020040118"
 
 Input field value: "20200401" <br/>
 Partition path generated from key generator: "04/01/2020"
+
+## Related Resources
+<h3>Videos</h3>
+
+* [Precomb Key Overview: Avoid dedupes | Hudi Labs](https://youtu.be/HfEvEf2s4Hk)

@@ -12,5 +12,5 @@ tags:
 - aws glue
 - etl jobs
 - templated architecture
-- Serverless
+- serverless
 ---

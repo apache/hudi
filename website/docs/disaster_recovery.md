@@ -284,9 +284,11 @@ should ensure they delete the savepoints from time to time. If not, the storage 
 
 Note: Savepoint and restore for MOR table is available only from 0.11. 
 
+## Related Resources
+<h3>Videos</h3>
 
-
-
+* [Use Glue 4.0 to take regular save points for your Hudi tables for backup or disaster Recovery](https://www.youtube.com/watch?v=VgIMPSK7rFAa)
+* [How to Rollback to Previous Checkpoint during Disaster in Apache Hudi using Glue 4.0 Demo](https://www.youtube.com/watch?v=Vi25q4vzogs)
 
 
 

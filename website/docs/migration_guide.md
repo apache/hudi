@@ -109,3 +109,9 @@ Here are the basic configs that control bootstrapping.
 | hoodie.bootstrap.mode.selector.regex.mode             | METADATA_ONLY (Optional)                                                                        | When specified, applies one of the possible <u>[Bootstrap Modes](https://github.com/apache/hudi/blob/bc583b4158684c23f35d787de5afda13c2865ad4/hudi-client/hudi-client-common/src/main/java/org/apache/hudi/client/bootstrap/BootstrapMode.java)</u> to the partitions that match the regex provided as part of the `hoodie.bootstrap.mode.selector.regex`. For unmatched partitions the other Bootstrap Mode is applied. This is **applicable only when** `hoodie.bootstrap.mode.selector` equals `org.apache.hudi.client.bootstrap.selector.BootstrapRegexModeSelector`.<br />Possible values: <ul><li><u>[FULL_RECORD](https://github.com/apache/hudi/blob/bc583b4158684c23f35d787de5afda13c2865ad4/hudi-client/hudi-client-common/src/main/java/org/apache/hudi/client/bootstrap/BootstrapMode.java#L36C5-L36C5)</u></li><li><u>[METADATA_ONLY](https://github.com/apache/hudi/blob/bc583b4158684c23f35d787de5afda13c2865ad4/hudi-client/hudi-client-common/src/main/java/org/apache/hudi/client/bootstrap/BootstrapMode.java#L44C4-L44C4)</u></li></ul><br />`Config Param: PARTITION_SELECTOR_REGEX_MODE`<br />`Since Version: 0.6.0`                                                              |
 
 By default, with only `hoodie.bootstrap.base.path` being provided METADATA_ONLY mode is selected. For other options, please refer [bootstrap configs](https://hudi.apache.org/docs/next/configurations#Bootstrap-Configs) for more details.
+
+## Related Resources
+<h3>Videos</h3>
+
+* [Bootstrapping in Apache Hudi on EMR Serverless with Lab](https://www.youtube.com/watch?v=iTNLqbW3YYA)
+  

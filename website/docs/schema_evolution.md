@@ -295,3 +295,8 @@ scala> spark.sql("select rowId, partitionId, preComb, name, versionId, intToLong
 ```
 
 
+## Related Resources
+<h3>Videos</h3>
+
+* [Learn Schema Evolution in Apache Hudi Transaction Datalake with hands on labs](https://youtu.be/s1_-zl3sfLE)
+* [How do I identify Schema Changes in Hudi Tables and Send Email Alert when New Column added/removed](https://www.youtube.com/watch?v=_i5G4ojpwlk)

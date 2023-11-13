@@ -321,3 +321,8 @@ def structuredStreamingWithClustering(): Unit = {
    Await.result(f1, Duration.Inf)
 }
 ```
+
+## Related Resources
+<h3>Videos</h3>
+
+* [Understanding Clustering in Apache Hudi and the Benefits of Asynchronous Clustering](https://www.youtube.com/watch?v=R_sm4wlGXuE)

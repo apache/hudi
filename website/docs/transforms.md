@@ -64,3 +64,9 @@ Set the config as:
 
 ### Custom Transformer Implementation
 You can write your own custom transformer by extending [this class](https://github.com/apache/hudi/tree/master/hudi-utilities/src/main/java/org/apache/hudi/utilities/transform)
+
+## Related Resources
+<h3>Videos</h3>
+
+* [Learn about Apache Hudi Transformers with Hands on Lab](https://www.youtube.com/watch?v=AprlZ8hGdJo)
+* [Apache Hudi with DBT Hands on Lab.Transform Raw Hudi tables with DBT and Glue Interactive Session](https://youtu.be/DH3LEaPG6ss)
