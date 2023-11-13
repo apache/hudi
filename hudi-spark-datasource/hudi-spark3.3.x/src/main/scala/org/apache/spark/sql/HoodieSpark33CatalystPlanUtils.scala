@@ -18,20 +18,17 @@
 
 package org.apache.spark.sql
 
-import org.apache.hudi.SparkFilterHelper.toLiteral
 import org.apache.hudi.SparkHoodieTableFileIndex
+import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{AnalysisErrorAt, ResolvedTable}
-import org.apache.spark.sql.catalyst.expressions.{And, Attribute, AttributeSet, BoundReference, Contains, EndsWith, EqualNullSafe, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, NamedExpression, Not, Or, ProjectionOverSchema, StartsWith}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression, ProjectionOverSchema}
 import org.apache.spark.sql.catalyst.planning.ScanOperation
 import org.apache.spark.sql.catalyst.plans.logical._
-import org.apache.spark.sql.catalyst.{StructFilters, TableIdentifier}
 import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
 import org.apache.spark.sql.execution.command.RepairTableCommand
 import org.apache.spark.sql.execution.datasources.parquet.NewHoodieParquetFileFormat
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
-import org.apache.spark.sql.types.{BooleanType, StructType}
-
-import scala.util.Try
+import org.apache.spark.sql.types.StructType
 
 object HoodieSpark33CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
 
@@ -58,79 +55,11 @@ object HoodieSpark33CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
         val tableSchema = fs.location.asInstanceOf[SparkHoodieTableFileIndex].schema
         val resolvedSchema = l.resolve(tableSchema, fs.sparkSession.sessionState.analyzer.resolver)
         val projection: LogicalPlan = Project(resolvedSchema, s)
-        ff.getRequiredFilters.foldLeft(projection)((plan, filter) => {
-          Filter(filterToExpression(filter, n => toRef(n, tableSchema, resolvedSchema)).get, plan)
-        })
-
+        HoodieSpark3CatalystPlanUtils.applyFiltersToPlan(projection, tableSchema, resolvedSchema, ff.getRequiredFilters)
       case _ => plan
     }
   }
 
-  def filterToExpression(
-                          filter: sources.Filter,
-                          toRef: String => Option[NamedExpression]): Option[Expression] = {
-    def zipAttributeAndValue(name: String, value: Any): Option[(NamedExpression, Literal)] = {
-      zip(toRef(name), toLiteral(value))
-    }
-
-    def translate(filter: sources.Filter): Option[Expression] = filter match {
-      case sources.And(left, right) =>
-        zip(translate(left), translate(right)).map(And.tupled)
-      case sources.Or(left, right) =>
-        zip(translate(left), translate(right)).map(Or.tupled)
-      case sources.Not(child) =>
-        translate(child).map(Not)
-      case sources.EqualTo(attribute, value) =>
-        zipAttributeAndValue(attribute, value).map(EqualTo.tupled)
-      case sources.EqualNullSafe(attribute, value) =>
-        zipAttributeAndValue(attribute, value).map(EqualNullSafe.tupled)
-      case sources.IsNull(attribute) =>
-        toRef(attribute).map(IsNull)
-      case sources.IsNotNull(attribute) =>
-        toRef(attribute).map(IsNotNull)
-      case sources.In(attribute, values) =>
-        val literals = values.toSeq.flatMap(toLiteral)
-        if (literals.length == values.length) {
-          toRef(attribute).map(In(_, literals))
-        } else {
-          None
-        }
-      case sources.GreaterThan(attribute, value) =>
-        zipAttributeAndValue(attribute, value).map(GreaterThan.tupled)
-      case sources.GreaterThanOrEqual(attribute, value) =>
-        zipAttributeAndValue(attribute, value).map(GreaterThanOrEqual.tupled)
-      case sources.LessThan(attribute, value) =>
-        zipAttributeAndValue(attribute, value).map(LessThan.tupled)
-      case sources.LessThanOrEqual(attribute, value) =>
-        zipAttributeAndValue(attribute, value).map(LessThanOrEqual.tupled)
-      case sources.StringContains(attribute, value) =>
-        zipAttributeAndValue(attribute, value).map(Contains.tupled)
-      case sources.StringStartsWith(attribute, value) =>
-        zipAttributeAndValue(attribute, value).map(StartsWith.tupled)
-      case sources.StringEndsWith(attribute, value) =>
-        zipAttributeAndValue(attribute, value).map(EndsWith.tupled)
-      case sources.AlwaysTrue() =>
-        Some(Literal(true, BooleanType))
-      case sources.AlwaysFalse() =>
-        Some(Literal(false, BooleanType))
-    }
-
-    translate(filter)
-  }
-
-  private def zip[A, B](a: Option[A], b: Option[B]): Option[(A, B)] = {
-    a.zip(b).headOption
-  }
-
-  private def toLiteral(value: Any): Option[Literal] = {
-    Try(Literal(value)).toOption
-  }
-
-  private def toRef(attr: String, structSchema: StructType,  attrSchema: Seq[Attribute]): Option[NamedExpression] = {
-    structSchema.getFieldIndex(attr).map { index =>
-      attrSchema(index)
-    }
-  }
 
   override def projectOverSchema(schema: StructType, output: AttributeSet): ProjectionOverSchema =
     ProjectionOverSchema(schema, output)
