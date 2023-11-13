@@ -558,7 +558,7 @@ object DataSourceWriteOptions {
 
   val ENABLE_MERGE_INTO_PARTIAL_UPDATES: ConfigProperty[Boolean] = ConfigProperty
     .key("hoodie.spark.sql.merge.into.partial.updates")
-    .defaultValue(false)
+    .defaultValue(true)
     .markAdvanced()
     .sinceVersion("1.0.0")
     .withDocumentation("Whether to write partial updates to the data blocks containing updates "
