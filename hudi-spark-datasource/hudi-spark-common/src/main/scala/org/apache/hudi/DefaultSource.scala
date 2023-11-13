@@ -267,7 +267,7 @@ object DefaultSource {
           resolveBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
 
         case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-          if (fileFormatUtils.isDefined && HoodieSparkUtils.gteqSpark3_0) {
+          if (fileFormatUtils.isDefined && HoodieSparkUtils.gteqSpark3_3) {
             new HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(
               sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
           } else {
@@ -292,7 +292,7 @@ object DefaultSource {
           }
 
         case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, true) =>
-          if (fileFormatUtils.isDefined && HoodieSparkUtils.gteqSpark3_0) {
+          if (fileFormatUtils.isDefined && HoodieSparkUtils.gteqSpark3_3) {
             new HoodieMergeOnReadIncrementalHadoopFsRelationFactory(
               sqlContext, metaClient, parameters, userSchema, isBootstrap = true).build()
           } else {
@@ -300,7 +300,7 @@ object DefaultSource {
           }
 
         case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, false) =>
-          if (fileFormatUtils.isDefined && HoodieSparkUtils.gteqSpark3_0) {
+          if (fileFormatUtils.isDefined && HoodieSparkUtils.gteqSpark3_3) {
             new HoodieMergeOnReadIncrementalHadoopFsRelationFactory(
               sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
           } else {
