@@ -169,6 +169,7 @@ public class MultiTableServiceUtils {
                                                                TypedProperties props) {
     TableServicePipeline pipeline = new TableServicePipeline();
     HoodieTableMetaClient metaClient = UtilHelpers.createMetaClient(jsc, basePath, true);
+    // Add the table config to the write config.
     props.putAll(metaClient.getTableConfig().getProps());
     if (cfg.enableCompaction) {
       pipeline.add(CompactionTask.newBuilder()
