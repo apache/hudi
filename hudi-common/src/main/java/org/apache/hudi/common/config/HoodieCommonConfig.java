@@ -81,13 +81,15 @@ public class HoodieCommonConfig extends HoodieConfig {
           + " operation will fail schema compatibility check. Set this option to true will make the newly added "
           + " column nullable to successfully complete the write operation.");
 
-  public static final ConfigProperty<String> SET_NULL_FOR_MISSING_COLUMNS = ConfigProperty
-      .key("hoodie.write.set.null.for.missing.columns")
+  public static final ConfigProperty<String> HANDLE_MISSING_COLS_AND_DATATYPE_DEMOTION = ConfigProperty
+      .key("hoodie.write.handle.missing.cols.and.datatype.demotion")
       .defaultValue("false")
       .markAdvanced()
       .withDocumentation("When a non-nullable column is missing from incoming batch during a write operation, the write "
           + " operation will fail schema compatibility check. Set this option to true will make the missing "
-          + " column be filled with null values to successfully complete the write operation.");
+          + " column be filled with null values to successfully complete the write operation. Similarly, when a column's data type " +
+          "is demoted (from long to int), enabling this config will succeed the batch of writes keeping the final table schema in long. " +
+          "If not for this config, the write may fail since long to int is not backwards compatible evolution.");
 
   public static final ConfigProperty<ExternalSpillableMap.DiskMapType> SPILLABLE_DISK_MAP_TYPE = ConfigProperty
       .key("hoodie.common.spillable.diskmap.type")
