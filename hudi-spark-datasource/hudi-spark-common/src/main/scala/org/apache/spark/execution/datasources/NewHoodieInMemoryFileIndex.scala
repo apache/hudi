@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.table.timeline.TimelineUtils.validateTimestampAsOf
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.hadoop.CachingPath
 import org.apache.hudi.{AvroConversionUtils, BaseFileOnlyRelation, DataSourceReadOptions, HoodieFileIndex, HoodieFileIndexTrait, HoodiePartitionFileSliceMapping, SparkAdapterSupport}
 import org.apache.spark.sql.SparkSession
@@ -134,7 +135,7 @@ object NewHoodieInMemoryFileIndex {
     val paths = rootPathsSpecified.map(p => {
       val partitionPathWithoutScheme = CachingPath.getPathWithoutSchemeAndAuthority(p.getParent)
       new URI(tablePathWithoutScheme.toString).relativize(new URI(partitionPathWithoutScheme.toString)).toString
-    }).distinct.map(r =>
+    }).filterNot(isNullOrEmpty).distinct.map(r =>
       PartitionPath(relation.getPartitionColumnsAsInternalRowWithRelativePath(r), new Path(basePath, r)))
     val partitionSpec = Some(PartitionSpec(StructType(schema.fields.filter(f => partitionColumns.contains(f.name))), paths))
 
