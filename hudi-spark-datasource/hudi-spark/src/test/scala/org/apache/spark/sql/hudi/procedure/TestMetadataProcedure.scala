@@ -184,8 +184,13 @@ class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
 
       // collect metadata files for a partition of a table
       val partition = partitions(0).get(0).toString
-      val filesResult = spark.sql(s"""call show_metadata_table_files(table => '$tableName', partition => '$partition')""").collect()
+      var filesResult = spark.sql(s"""call show_metadata_table_files(table => '$tableName', partition => '$partition')""").collect()
       assertResult(1) {
+        filesResult.length
+      }
+
+      filesResult = spark.sql(s"""call show_metadata_table_files(table => '$tableName', partition => '$partition', limit => 0)""").collect()
+      assertResult(0) {
         filesResult.length
       }
     }
