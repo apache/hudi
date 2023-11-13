@@ -22,6 +22,7 @@ package org.apache.hudi.utilities.multitable;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -163,14 +164,17 @@ public class MultiTableServiceUtils {
     }
   }
 
+  public static void addNecessaryTableConfigToWriteConfig(HoodieTableMetaClient metaClient, TypedProperties props) {
+    props.put(HoodieTableConfig.NAME.key(), metaClient.getTableConfig().getTableName());
+  }
+
   public static TableServicePipeline buildTableServicePipeline(JavaSparkContext jsc,
                                                                String basePath,
                                                                HoodieMultiTableServicesMain.Config cfg,
                                                                TypedProperties props) {
     TableServicePipeline pipeline = new TableServicePipeline();
     HoodieTableMetaClient metaClient = UtilHelpers.createMetaClient(jsc, basePath, true);
-    // Add the table config to the write config.
-    props.putAll(metaClient.getTableConfig().getProps());
+    addNecessaryTableConfigToWriteConfig(metaClient, props);
     if (cfg.enableCompaction) {
       pipeline.add(CompactionTask.newBuilder()
           .withJsc(jsc)
