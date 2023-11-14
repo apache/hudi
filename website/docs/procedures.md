@@ -849,6 +849,7 @@ Show files of a hudi table.
 |----------------|--------|----------|---------------|-----------------|
 | table          | String | Y        | None          | Hudi table name |
 | partition      | String | N        | ""            | Partition name  |
+| limit          | Int    | N        | 100           | Limit number    |
 
 **Output**
 
@@ -971,6 +972,7 @@ Show detail of a path.
 | path           | String  | Y        | None          | Hudi table name        |
 | is_sub         | Boolean | N        | false         | Whether to list files  |
 | sort           | Boolean | N        | true          | Sorted by storage_size |
+| limit          | Int     | N        | 100           | Limit number           |
 
 **Output**
 
@@ -1132,6 +1134,7 @@ Show invalid parquet files of a table.
 | Parameter Name | Type    | Required | Default Value | Description                          |
 |----------------|---------|----------|---------------|--------------------------------------|
 | Path           | String  | Y        | None          | Hudi table name                      |
+| limit          | Int     | N        | 100           | Limit number                         |
 
 **Output**
 
