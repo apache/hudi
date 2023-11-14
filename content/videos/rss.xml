@@ -4,9 +4,75 @@
         <title>Apache Hudi Blog</title>
         <link>https://hudi.apache.org/videos</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Wed, 09 Aug 2023 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Wed, 08 Nov 2023 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[A Glide, Skip or a Jump: Efficiently Stream Data into Your Medallion Architecture with Apache Hudi]]></title>
+            <link>https://hudi.apache.org/videos/2023/11/08/A-Glide-Skip-or-a-Jump-Efficiently-Stream-Data-into-Your-Medallion-Architecture-with-Apache-Hudi</link>
+            <guid>/2023/11/08/A-Glide-Skip-or-a-Jump-Efficiently-Stream-Data-into-Your-Medallion-Architecture-with-Apache-Hudi</guid>
+            <pubDate>Wed, 08 Nov 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[How to Unlock Data Insights from Hudi Metrics for Your Data Lake using Elastic Search and Kibana]]></title>
+            <link>https://hudi.apache.org/videos/2023/10/28/How-to-Unlock-Data-Insights-from-Hudi-Metrics-for-Your-Data-Lake-using-Elastic-Search-and-Kibana</link>
+            <guid>/2023/10/28/How-to-Unlock-Data-Insights-from-Hudi-Metrics-for-Your-Data-Lake-using-Elastic-Search-and-Kibana</guid>
+            <pubDate>Sat, 28 Oct 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Full Apache Hudi Course for beginners | Operations Type | Part 5]]></title>
+            <link>https://hudi.apache.org/videos/2023/10/21/Full-Apache-Hudi-Course-for-beginner-Operations-Type-Part-5</link>
+            <guid>/2023/10/21/Full-Apache-Hudi-Course-for-beginner-Operations-Type-Part-5</guid>
+            <pubDate>Sat, 21 Oct 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[[LIVE] Hudi 0.14.0 Deep Dive: Record Level Index]]></title>
+            <link>https://hudi.apache.org/videos/2023/10/16/Hudi-0-14-0-Deep-Dive-Record-Level-Index</link>
+            <guid>/2023/10/16/Hudi-0-14-0-Deep-Dive-Record-Level-Index</guid>
+            <pubDate>Mon, 16 Oct 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Accelerating Data Processing: Leveraging Apache Hudi with DynamoDB for Faster Commit Time Retrieval]]></title>
+            <link>https://hudi.apache.org/videos/2023/10/14/Accelerating-Data-Processing-Leveraging-Apache-Hudi-with-DynamoDB-for-Faster-Commit-Time-Retrieval</link>
+            <guid>/2023/10/14/Accelerating-Data-Processing-Leveraging-Apache-Hudi-with-DynamoDB-for-Faster-Commit-Time-Retrieval</guid>
+            <pubDate>Sat, 14 Oct 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Hudi's Latest Feature: Auto-Generating Primary Keys for Modern Data Lakes]]></title>
+            <link>https://hudi.apache.org/videos/2023/10/07/Hudi-Latest-Feature-Auto-Generating-Primary-Keys-for-Modern-Data-Lakes</link>
+            <guid>/2023/10/07/Hudi-Latest-Feature-Auto-Generating-Primary-Keys-for-Modern-Data-Lakes</guid>
+            <pubDate>Sat, 07 Oct 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Learn How to Use Apache Flink with Kafka & Build Transactional Datalakes on S3 using PyFLink Locally]]></title>
+            <link>https://hudi.apache.org/videos/2023/09/27/Learn-How-to-Use-Apache-Flink-with-Kafka-Build-Transactional-Datalakes-on-S3-using-PyFLink-Locally</link>
+            <guid>/2023/09/27/Learn-How-to-Use-Apache-Flink-with-Kafka-Build-Transactional-Datalakes-on-S3-using-PyFLink-Locally</guid>
+            <pubDate>Wed, 27 Sep 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[How to Ingest Data from PostgreSQL into Hudi Tables on S3 with Apache Flink CDC Connector & Python]]></title>
+            <link>https://hudi.apache.org/videos/2023/09/26/How-to-Ingest-Data-from-PostgreSQL-into-Hudi-Tables-on-S3-with-Apache-Flink-CDC-Connector-Python</link>
+            <guid>/2023/09/26/How-to-Ingest-Data-from-PostgreSQL-into-Hudi-Tables-on-S3-with-Apache-Flink-CDC-Connector-Python</guid>
+            <pubDate>Tue, 26 Sep 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[How to Use Apache Hudi with Flink 1.15 on AWS Managed Apache Flink | Hands on Guide for Beginners]]></title>
+            <link>https://hudi.apache.org/videos/2023/09/25/How-to-Use-Apache-Hudi-with-Flink-1-15-on-AWS-Managed-Apache-Flink-Hands-on-Guide-for-Beginners</link>
+            <guid>/2023/09/25/How-to-Use-Apache-Hudi-with-Flink-1-15-on-AWS-Managed-Apache-Flink-Hands-on-Guide-for-Beginners</guid>
+            <pubDate>Mon, 25 Sep 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Flink (CDC) with POSTGRES RealTime Stream Data Processing with Python Hands on Labs]]></title>
+            <link>https://hudi.apache.org/videos/2023/09/23/Flink-with-POSTGRES-RealTime-Stream-Data-Processing-with-Python-Hands-on-Labs</link>
+            <guid>/2023/09/23/Flink-with-POSTGRES-RealTime-Stream-Data-Processing-with-Python-Hands-on-Labs</guid>
+            <pubDate>Sat, 23 Sep 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[From Zero to Data Hero: Building Dynamic Data Platforms Like a Pro 🚀📊 Final Part Demo]]></title>
+            <link>https://hudi.apache.org/videos/2023/08/29/From-Zero-to-Data-Hero-Building-Dynamic-Data-Platforms-Like-a-Pro-Final-Part-Demo</link>
+            <guid>/2023/08/29/From-Zero-to-Data-Hero-Building-Dynamic-Data-Platforms-Like-a-Pro-Final-Part-Demo</guid>
+            <pubDate>Tue, 29 Aug 2023 00:00:00 GMT</pubDate>
+        </item>
         <item>
             <title><![CDATA[Easy Step by Step Guide for Beginner Ingest CSV Files into Hudi with AWS GLue | Hands on Labs]]></title>
             <link>https://hudi.apache.org/videos/2023/08/09/Easy_Step_by_Step_Guide_for_Beginner_Ingest_CSV_Files_into_Hudi_with_AWS_GLue_Hands_on_Labs</link>
