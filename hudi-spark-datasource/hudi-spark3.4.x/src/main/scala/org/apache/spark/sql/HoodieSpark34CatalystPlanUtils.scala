@@ -18,12 +18,11 @@
 
 package org.apache.spark.sql
 
-import org.apache.hudi.SparkHoodieTableFileIndex
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{AnalysisErrorAt, ResolvedTable}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression, ProjectionOverSchema}
 import org.apache.spark.sql.catalyst.planning.ScanOperation
-import org.apache.spark.sql.catalyst.plans.logical.{CreateIndex, DropIndex, LogicalPlan, MergeIntoTable, Project, RefreshIndex, ShowIndexes}
+import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
 import org.apache.spark.sql.execution.command.RepairTableCommand
 import org.apache.spark.sql.execution.datasources.parquet.NewHoodieParquetFileFormat
@@ -50,12 +49,7 @@ object HoodieSpark34CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
     plan match {
       case s@ScanOperation(_, _, _,
       l@LogicalRelation(fs: HadoopFsRelation, _, _, _)) if fs.fileFormat.isInstanceOf[NewHoodieParquetFileFormat] && !fs.fileFormat.asInstanceOf[NewHoodieParquetFileFormat].isProjected =>
-        val ff = fs.fileFormat.asInstanceOf[NewHoodieParquetFileFormat]
-        ff.isProjected = true
-        val tableSchema = fs.location.asInstanceOf[SparkHoodieTableFileIndex].schema
-        val resolvedSchema = l.resolve(tableSchema, fs.sparkSession.sessionState.analyzer.resolver)
-        val projection: LogicalPlan = Project(resolvedSchema, s)
-        HoodieSpark3CatalystPlanUtils.applyFiltersToPlan(projection, tableSchema, resolvedSchema, ff.getRequiredFilters)
+        HoodieSpark3CatalystPlanUtils.applyNewFileFormatChanges(s, l, fs)
       case _ => plan
     }
   }
