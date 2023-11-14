@@ -279,6 +279,7 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase with ScalaAssertionS
     // Query as of firstCommitTime
     val result1 = spark.read.format("hudi")
       .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key, firstCommit)
+      .option(DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT.key, "false")
       .load(basePath)
       .select("id", "name", "value", "version")
       .take(1)(0)
@@ -290,6 +291,7 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase with ScalaAssertionS
     // Query as of secondCommitTime
     val result2 = spark.read.format("hudi")
       .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key, secondCommit)
+      .option(DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT.key, "false")
       .load(basePath)
       .select("id", "name", "value", "version", "year")
       .take(1)(0)
@@ -301,6 +303,7 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase with ScalaAssertionS
     // Query as of thirdCommitTime
     val result3 = spark.read.format("hudi")
       .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key, thirdCommit)
+      .option(DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT.key, "false")
       .load(basePath)
       .select("id", "name", "value", "version", "year", "month")
       .take(1)(0)
