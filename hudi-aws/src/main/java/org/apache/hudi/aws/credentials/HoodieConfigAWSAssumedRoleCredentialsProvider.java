@@ -40,22 +40,17 @@ public class HoodieConfigAWSAssumedRoleCredentialsProvider implements AwsCredent
   private final StsAssumeRoleCredentialsProvider credentialsProvider;
 
   public HoodieConfigAWSAssumedRoleCredentialsProvider(Properties props) {
-    if (!validConf(props)) {
-      LOG.debug("AWS role ARN not found in the Hudi configuration.");
-      throw new IllegalArgumentException("AWS role ARN not found in the Hudi configuration.");
-    } else {
-      String roleArn = props.getProperty(HoodieAWSConfig.AWS_ASSUME_ROLE_ARN.key());
-      AssumeRoleRequest req = AssumeRoleRequest.builder()
-              .roleArn(roleArn)
-              .roleSessionName("hoodie")
-              .build();
-      StsClient stsClient = StsClient.builder().build();
+    String roleArn = props.getProperty(HoodieAWSConfig.AWS_ASSUME_ROLE_ARN.key());
+    AssumeRoleRequest req = AssumeRoleRequest.builder()
+          .roleArn(roleArn)
+          .roleSessionName("hoodie")
+          .build();
+    StsClient stsClient = StsClient.builder().build();
 
-      this.credentialsProvider = StsAssumeRoleCredentialsProvider.builder()
-              .stsClient(stsClient)
-              .refreshRequest(req)
-              .build();
-    }
+    this.credentialsProvider = StsAssumeRoleCredentialsProvider.builder()
+          .stsClient(stsClient)
+          .refreshRequest(req)
+          .build();
   }
 
   public static boolean validConf(Properties props) {
