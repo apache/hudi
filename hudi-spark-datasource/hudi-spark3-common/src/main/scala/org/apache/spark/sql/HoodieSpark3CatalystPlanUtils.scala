@@ -17,15 +17,17 @@
 
 package org.apache.spark.sql
 
-import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.{SparkAdapterSupport, SparkHoodieTableFileIndex}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.TableOutputResolver
 import org.apache.spark.sql.catalyst.catalog.CatalogStorageFormat
 import org.apache.spark.sql.catalyst.expressions.{And, Attribute, AttributeSet, Contains, EndsWith, EqualNullSafe, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, NamedExpression, Not, Or, ProjectionOverSchema, StartsWith}
 import org.apache.spark.sql.catalyst.plans.JoinType
-import org.apache.spark.sql.catalyst.plans.logical.{Filter, InsertIntoStatement, Join, JoinHint, LogicalPlan}
+import org.apache.spark.sql.catalyst.plans.logical.{Filter, InsertIntoStatement, Join, JoinHint, LogicalPlan, Project}
 import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
 import org.apache.spark.sql.execution.command.{CreateTableLikeCommand, ExplainCommand}
+import org.apache.spark.sql.execution.datasources.HadoopFsRelation
+import org.apache.spark.sql.execution.datasources.parquet.NewHoodieParquetFileFormat
 import org.apache.spark.sql.execution.{ExtendedMode, SimpleMode}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{BooleanType, StructType}
@@ -85,6 +87,15 @@ trait HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
 }
 
 object HoodieSpark3CatalystPlanUtils extends SparkAdapterSupport {
+
+  def applyNewFileFormatChanges(scanOperation: LogicalPlan, logicalRelation: LogicalPlan, fs: HadoopFsRelation): LogicalPlan = {
+    val ff = fs.fileFormat.asInstanceOf[NewHoodieParquetFileFormat]
+    ff.isProjected = true
+    val tableSchema = fs.location.asInstanceOf[SparkHoodieTableFileIndex].schema
+    val resolvedSchema = logicalRelation.resolve(tableSchema, fs.sparkSession.sessionState.analyzer.resolver)
+    val projection: LogicalPlan = Project(resolvedSchema, scanOperation)
+    applyFiltersToPlan(projection, tableSchema, resolvedSchema, ff.getRequiredFilters)
+  }
 
   def applyFiltersToPlan(plan: LogicalPlan, tableSchema: StructType, resolvedSchema: Seq[Attribute], filters: Seq[org.apache.spark.sql.sources.Filter]): LogicalPlan = {
 
