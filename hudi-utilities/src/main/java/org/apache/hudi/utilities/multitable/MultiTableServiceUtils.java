@@ -23,7 +23,6 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
@@ -40,9 +39,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 
@@ -172,12 +169,8 @@ public class MultiTableServiceUtils {
                                                                TypedProperties props) {
     TableServicePipeline pipeline = new TableServicePipeline();
     HoodieTableMetaClient metaClient = UtilHelpers.createMetaClient(jsc, basePath, true);
-    TypedProperties propsWithTableConfig = new TypedProperties();
-    Map<String, String> tableConfigMap = new HashMap<>(metaClient.getTableConfig().propsMap());
-    propsWithTableConfig.putAll(tableConfigMap);
-    props.stringPropertyNames().stream()
-        .filter(key -> !tableConfigMap.containsKey(key) || StringUtils.isNullOrEmpty(tableConfigMap.get(key)))
-        .forEach(key -> propsWithTableConfig.put(key, props.get(key)));
+    TypedProperties propsWithTableConfig = new TypedProperties(metaClient.getTableConfig().getProps());
+    propsWithTableConfig.putAll(props);
 
     if (cfg.enableCompaction) {
       pipeline.add(CompactionTask.newBuilder()
