@@ -174,4 +174,18 @@ public abstract class HoodieReaderContext<T> {
     meta.put(INTERNAL_META_SCHEMA, schema);
     return meta;
   }
+
+  /**
+   * Updates the schema and reset the ordering value in existing metadata mapping of a record.
+   *
+   * @param meta   Metadata in a mapping.
+   * @param schema New schema to set.
+   * @return The input metadata mapping.
+   */
+  public Map<String, Object> updateSchemaAndResetOrderingValInMetadata(Map<String, Object> meta,
+                                                                       Schema schema) {
+    meta.remove(INTERNAL_META_ORDERING_FIELD);
+    meta.put(INTERNAL_META_SCHEMA, schema);
+    return meta;
+  }
 }

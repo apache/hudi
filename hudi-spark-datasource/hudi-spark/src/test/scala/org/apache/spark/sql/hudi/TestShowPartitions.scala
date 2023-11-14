@@ -173,4 +173,37 @@ class TestShowPartitions extends HoodieSparkSqlTestBase {
       Seq("year=%s/month=%s/day=01".format(DEFAULT_PARTITION_PATH, DEFAULT_PARTITION_PATH))
     )
   }
+
+  test("Test alter table show partitions which are dropped before") {
+    Seq("true", "false").foreach { enableMetadata =>
+      withSQLConf("hoodie.metadata.enable" -> enableMetadata) {
+        withTable(generateTableName) { tableName =>
+          spark.sql(
+            s"""
+               | create table $tableName (
+               |   id int,
+               |   name string,
+               |   price double,
+               |   ts long,
+               |   year string,
+               |   month string,
+               |   day string
+               | ) using hudi
+               | partitioned by (year, month, day)
+               | tblproperties (
+               |   primaryKey = 'id',
+               |   preCombineField = 'ts'
+               | )
+             """.stripMargin)
+          spark.sql(s"alter table $tableName add partition(year='2023', month='06', day='06')")
+          checkAnswer(s"show partitions $tableName")(
+            Seq("year=2023/month=06/day=06")
+          )
+          // Lazily drop that partition
+          spark.sql(s"alter table $tableName drop partition(year='2023', month='06', day='06')")
+          checkAnswer(s"show partitions $tableName")(Seq.empty: _*)
+        }
+      }
+    }
+  }
 }

@@ -1010,7 +1010,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     // Only execute metadata table deletion when all the following conditions are met
     // (1) This is data table
     // (2) Metadata table is disabled in HoodieWriteConfig for the writer
-    return !HoodieTableMetadata.isMetadataTable(metaClient.getBasePath())
+    return !metaClient.isMetadataTable()
         && !config.isMetadataTableEnabled();
   }
 

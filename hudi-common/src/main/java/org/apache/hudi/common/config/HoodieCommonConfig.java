@@ -58,10 +58,12 @@ public class HoodieCommonConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("The query instant for time travel. Without specified this option, we query the latest snapshot.");
 
+  @Deprecated
   public static final ConfigProperty<Boolean> RECONCILE_SCHEMA = ConfigProperty
       .key("hoodie.datasource.write.reconcile.schema")
       .defaultValue(false)
       .markAdvanced()
+      .deprecatedAfter("0.14.1")
       .withDocumentation("This config controls how writer's schema will be selected based on the incoming batch's "
           + "schema as well as existing table's one. When schema reconciliation is DISABLED, incoming batch's "
           + "schema will be picked as a writer-schema (therefore updating table's schema). When schema reconciliation "
@@ -78,6 +80,14 @@ public class HoodieCommonConfig extends HoodieConfig {
       .withDocumentation("When a non-nullable column is added to datasource during a write operation, the write "
           + " operation will fail schema compatibility check. Set this option to true will make the newly added "
           + " column nullable to successfully complete the write operation.");
+
+  public static final ConfigProperty<String> SET_NULL_FOR_MISSING_COLUMNS = ConfigProperty
+      .key("hoodie.write.set.null.for.missing.columns")
+      .defaultValue("false")
+      .markAdvanced()
+      .withDocumentation("When a non-nullable column is missing from incoming batch during a write operation, the write "
+          + " operation will fail schema compatibility check. Set this option to true will make the missing "
+          + " column be filled with null values to successfully complete the write operation.");
 
   public static final ConfigProperty<ExternalSpillableMap.DiskMapType> SPILLABLE_DISK_MAP_TYPE = ConfigProperty
       .key("hoodie.common.spillable.diskmap.type")

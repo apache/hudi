@@ -46,7 +46,8 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
     ProcedureParameter.optional(2, "path", DataTypes.StringType),
     ProcedureParameter.optional(3, "timestamp", DataTypes.LongType),
     ProcedureParameter.optional(4, "options", DataTypes.StringType),
-    ProcedureParameter.optional(5, "instants", DataTypes.StringType)
+    ProcedureParameter.optional(5, "instants", DataTypes.StringType),
+    ProcedureParameter.optional(6, "limit", DataTypes.IntegerType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -71,6 +72,7 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
       confs = confs ++ HoodieCLIUtils.extractOptions(getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String])
     }
     var specificInstants = getArgValueOrDefault(args, PARAMETERS(5))
+    val limit = getArgValueOrDefault(args, PARAMETERS(6))
 
     // For old version compatibility
     if (op.equals("run")) {
@@ -97,7 +99,7 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
       .toSeq.sortBy(f => f)
 
     var (filteredPendingCompactionInstants, operation) = HoodieProcedureUtils.filterPendingInstantsAndGetOperation(
-      pendingCompactionInstants, specificInstants.asInstanceOf[Option[String]], Option(op))
+      pendingCompactionInstants, specificInstants.asInstanceOf[Option[String]], Option(op), limit.asInstanceOf[Option[Int]])
 
     var client: SparkRDDWriteClient[_] = null
     try {

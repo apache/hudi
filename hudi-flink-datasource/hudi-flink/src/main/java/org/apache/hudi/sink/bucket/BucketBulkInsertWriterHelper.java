@@ -97,13 +97,7 @@ public class BucketBulkInsertWriterHelper extends BulkInsertWriterHelper {
     String partition = keyGen.getPartitionPath(record);
     final int bucketNum = BucketIdentifier.getBucketId(recordKey, indexKeys, numBuckets);
     String bucketId = partition + bucketNum;
-    return bucketIdToFileId.computeIfAbsent(bucketId, k -> {
-      if (needFixedFileIdSuffix) {
-        return BucketIdentifier.newBucketFileIdFixedSuffix(bucketNum);
-      } else {
-        return BucketIdentifier.newBucketFileIdPrefix(bucketNum);
-      }
-    });
+    return bucketIdToFileId.computeIfAbsent(bucketId, k -> BucketIdentifier.newBucketFileIdPrefix(bucketNum, needFixedFileIdSuffix));
   }
 
   public static RowData rowWithFileId(Map<String, String> bucketIdToFileId, RowDataKeyGen keyGen, RowData record, String indexKeys, int numBuckets, boolean needFixedFileIdSuffix) {

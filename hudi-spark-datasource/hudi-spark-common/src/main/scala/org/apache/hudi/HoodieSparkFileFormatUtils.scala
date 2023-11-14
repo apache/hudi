@@ -178,8 +178,8 @@ class HoodieSparkFileFormatUtils(val sqlContext: SQLContext,
   def hasSchemaOnRead: Boolean = internalSchemaOpt.isDefined
 
   def getHadoopFsRelation(isMOR: Boolean, isBootstrap: Boolean): BaseRelation = {
-
-    val fileIndex = HoodieFileIndex(sparkSession, metaClient, Some(tableStructSchema), optParams, FileStatusCache.getOrCreate(sparkSession), isMOR)
+    val fileIndex = HoodieFileIndex(
+      sparkSession, metaClient, Some(tableStructSchema), optParams, FileStatusCache.getOrCreate(sparkSession), isMOR, shouldEmbedFileSlices = true)
     val recordMergerImpls = ConfigUtils.split2List(getConfigValue(HoodieWriteConfig.RECORD_MERGER_IMPLS)).asScala.toList
     val recordMergerStrategy = getConfigValue(HoodieWriteConfig.RECORD_MERGER_STRATEGY,
       Option(metaClient.getTableConfig.getRecordMergerStrategy))
@@ -205,20 +205,21 @@ class HoodieSparkFileFormatUtils(val sqlContext: SQLContext,
     } else {
       Seq.empty
     }
-    fileIndex.shouldEmbedFileSlices = true
 
     val fileFormat = if (fileGroupReaderEnabled) {
       new HoodieFileGroupReaderBasedParquetFileFormat(
         tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
-        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields, isMOR, isBootstrap, shouldUseRecordPosition)
+        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
+        isMOR, isBootstrap, false, shouldUseRecordPosition, Seq.empty)
     } else if (metaClient.getTableConfig.isMultipleBaseFileFormatsEnabled && !isBootstrap) {
       new HoodieMultipleBaseFileFormat(sparkSession.sparkContext.broadcast(tableState),
         sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
-        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields, isMOR)
+        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields, isMOR, false, Seq.empty)
     } else {
       new NewHoodieParquetFileFormat(sparkSession.sparkContext.broadcast(tableState),
         sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
-        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields, isMOR, isBootstrap)
+        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
+        isMOR, isBootstrap, false, Seq.empty)
     }
 
     HadoopFsRelation(

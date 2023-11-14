@@ -1000,7 +1000,9 @@ public class HoodieTableMetadataUtil {
     if (mergeFileSlices) {
       if (metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().isPresent()) {
         fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(
-            partition, metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().get().getTimestamp());
+            // including pending compaction instant as the last instant so that the finished delta commits
+            // that start earlier than the compaction can be queried.
+            partition, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant().get().getTimestamp());
       } else {
         return Collections.emptyList();
       }
@@ -1571,13 +1573,6 @@ public class HoodieTableMetadataUtil {
 
   public static String createAsyncIndexerTimestamp(String timestamp) {
     return timestamp + OperationSuffix.METADATA_INDEXER.getSuffix();
-  }
-
-  /**
-   * Create the timestamp for a compaction operation on the metadata table.
-   */
-  public static String createCompactionTimestamp(String timestamp) {
-    return timestamp + OperationSuffix.COMPACTION.getSuffix();
   }
 
   /**

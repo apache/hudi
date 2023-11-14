@@ -29,6 +29,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
@@ -117,6 +119,8 @@ import java.util.Properties;
  */
 public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvroPayload {
 
+  private static final Logger LOG = LoggerFactory.getLogger(PartialUpdateAvroPayload.class);
+
   public PartialUpdateAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
   }
@@ -141,6 +145,7 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
             shouldPickOldRecord ? oldValue.orderingVal : this.orderingVal);
       }
     } catch (Exception ex) {
+      LOG.warn("PartialUpdateAvroPayload precombine failed with ", ex);
       return this;
     }
     return this;

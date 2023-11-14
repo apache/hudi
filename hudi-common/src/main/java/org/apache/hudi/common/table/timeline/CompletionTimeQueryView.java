@@ -32,7 +32,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import static org.apache.hudi.common.table.timeline.HoodieArchivedTimeline.COMPLETION_TIME_ARCHIVED_META_FIELD;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.compareTimestamps;
 
 /**
  * Query view for instant completion time.
@@ -81,7 +80,7 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
   public CompletionTimeQueryView(HoodieTableMetaClient metaClient, String cursorInstant) {
     this.metaClient = metaClient;
     this.startToCompletionInstantTimeMap = new ConcurrentHashMap<>();
-    this.cursorInstant = minInstant(cursorInstant, metaClient.getActiveTimeline().firstInstant().map(HoodieInstant::getTimestamp).orElse(""));
+    this.cursorInstant = HoodieTimeline.minInstant(cursorInstant, metaClient.getActiveTimeline().firstInstant().map(HoodieInstant::getTimestamp).orElse(""));
     // Note: use getWriteTimeline() to keep sync with the fs view visibleCommitsAndCompactionTimeline, see AbstractTableFileSystemView.refreshTimeline.
     this.firstNonSavepointCommit = metaClient.getActiveTimeline().getWriteTimeline().getFirstNonSavepointCommit().map(HoodieInstant::getTimestamp).orElse("");
     load();
@@ -133,11 +132,9 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
         // ==============================================================
         // LEGACY CODE
         // ==============================================================
-        // Fixes the completion time to reflect the completion sequence correctly.
-        // The file slice base instant time is not in datetime format in the following scenarios:
-        //   1. many test cases just use integer string as the instant time.
-        //   2. MDT uses compaction instant time with pattern [delta_instant] + "001".
-
+        // Fixes the completion time to reflect the completion sequence correctly
+        // if the file slice base instant time is not in datetime format.
+        // For example, many test cases just use integer string as the instant time.
         // CAUTION: this fix only works for OCC(Optimistic Concurrency Control).
         // for NB-CC(Non-blocking Concurrency Control), the file slicing may be incorrect.
         return Option.of(instantTime);
@@ -207,10 +204,6 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
       completionTime = instantTime;
     }
     this.startToCompletionInstantTimeMap.putIfAbsent(instantTime, completionTime);
-  }
-
-  private static String minInstant(String instant1, String instant2) {
-    return compareTimestamps(instant1, LESSER_THAN, instant2) ? instant1 : instant2;
   }
 
   public String getCursorInstant() {

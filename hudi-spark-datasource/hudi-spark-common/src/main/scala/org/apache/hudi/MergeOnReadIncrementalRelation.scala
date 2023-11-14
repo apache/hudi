@@ -23,7 +23,7 @@ import org.apache.hudi.HoodieSparkConfUtils.getHollowCommitHandling
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
-import org.apache.hudi.common.table.timeline.TimelineUtils.{concatTimeline, HollowCommitHandling, getCommitMetadata, handleHollowCommitIfNeeded}
+import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, concatTimeline, getCommitMetadata, handleHollowCommitIfNeeded}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.StringUtils
@@ -33,6 +33,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.execution.datasources.PartitionDirectory
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.StructType
 
@@ -116,6 +117,43 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
       }
 
       buildSplits(filterFileSlices(fileSlices, globPattern))
+    }
+  }
+
+  def listFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Map[InternalRow, Seq[FileSlice]] = {
+    val slices = if (includedCommits.isEmpty) {
+      List()
+    } else {
+      val fileSlices = if (fullTableScan) {
+        listLatestFileSlices(Seq(), partitionFilters, dataFilters)
+      } else {
+        val latestCommit = includedCommits.last.getTimestamp
+        val fsView = new HoodieTableFileSystemView(metaClient, timeline, affectedFilesInCommits)
+        val modifiedPartitions = getWritePartitionPaths(commitsMetadata)
+
+        fileIndex.listMatchingPartitionPaths(HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilters))
+          .map(p => p.path).filter(p => modifiedPartitions.contains(p))
+          .flatMap { relativePartitionPath =>
+            fsView.getLatestMergedFileSlicesBeforeOrOn(relativePartitionPath, latestCommit).iterator().asScala
+          }
+      }
+      filterFileSlices(fileSlices, globPattern)
+    }
+
+    slices.groupBy(fs => {
+      if (fs.getBaseFile.isPresent) {
+        getPartitionColumnValuesAsInternalRow(fs.getBaseFile.get.getFileStatus)
+      } else {
+        getPartitionColumnValuesAsInternalRow(fs.getLogFiles.findAny.get.getFileStatus)
+      }
+    })
+  }
+
+  def getRequiredFilters: Seq[Filter] = {
+    if (includedCommits.isEmpty) {
+      Seq.empty
+    } else {
+      incrementalSpanRecordFilters
     }
   }
 

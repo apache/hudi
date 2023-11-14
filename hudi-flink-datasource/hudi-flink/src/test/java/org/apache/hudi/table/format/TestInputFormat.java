@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.source.IncrementalInputSplits;
@@ -63,6 +64,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -1105,6 +1107,54 @@ public class TestInputFormat {
     List<RowData> actual = readData(inputFormat1);
     final List<RowData> expected = TestData.dataSetInsert(1, 2, 3, 4, 5, 6);
     TestData.assertRowDataEquals(actual, expected);
+  }
+
+  /**
+   * Test reading file groups with non-blocking concurrency control.
+   * Delta commits started before but finished after pending compaction instant-time
+   * should also be considered valid.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testIncReadWithNonBlockingConcurrencyControl(boolean skipCompaction) throws Exception {
+    Map<String, String> options = new HashMap<>();
+    // compact for each commit
+    options.put(FlinkOptions.COMPACTION_DELTA_COMMITS.key(), "1");
+    options.put(FlinkOptions.COMPACTION_ASYNC_ENABLED.key(), "false");
+    beforeEach(HoodieTableType.MERGE_ON_READ, options);
+
+    // write three commits
+    for (int i = 0; i < 6; i += 2) {
+      List<RowData> dataset = TestData.dataSetInsert(i + 1, i + 2);
+      TestData.writeData(dataset, conf);
+    }
+
+    // now rename the first delta commit metadata file to make it finished after the scheduled compaction
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+
+    Option<HoodieInstant> firstCommit = metaClient.getActiveTimeline().filterCompletedInstants().firstInstant();
+    assertTrue(firstCommit.isPresent());
+    assertThat(firstCommit.get().getAction(), is(HoodieTimeline.DELTA_COMMIT_ACTION));
+
+    java.nio.file.Path metaFilePath = Paths.get(metaClient.getMetaPath(), firstCommit.get().getFileName());
+    TestUtils.amendCompletionTimeToLatest(metaClient, metaFilePath, firstCommit.get().getTimestamp());
+
+    String compactionInstant = metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant().map(HoodieInstant::getTimestamp).get();
+
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat(true);
+    assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
+
+    IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
+        .rowType(TestConfigurations.ROW_TYPE)
+        .conf(conf)
+        .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
+        .skipCompaction(skipCompaction)
+        .build();
+    conf.setString(FlinkOptions.READ_END_COMMIT, compactionInstant);
+    IncrementalInputSplits.Result splits2 = incrementalInputSplits.inputSplits(metaClient, null, null, false);
+    assertFalse(splits2.isEmpty());
+    List<RowData> result2 = readData(inputFormat, splits2.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
+    TestData.assertRowDataEquals(result2, TestData.dataSetInsert(1, 2));
   }
 
   // -------------------------------------------------------------------------
