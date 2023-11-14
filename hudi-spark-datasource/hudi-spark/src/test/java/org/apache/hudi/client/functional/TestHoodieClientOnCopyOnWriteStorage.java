@@ -67,6 +67,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -132,6 +133,7 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_F
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_EVOLVED_1;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
@@ -1169,6 +1171,57 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       // if rollbackPendingClustering is false, two completed RC should be found
       assertEquals(2, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().filter(instant -> instant.getAction().equals(REPLACE_COMMIT_ACTION)).countInstants());
     }
+  }
+
+  @Test
+  public void testWriteSchemaUsageOnPreCommitValidators() throws Exception {
+    // Create first commit on DEFAULT_FIRST_PARTITION_PATH partition with basic schema
+    String schemaStr = TRIP_EXAMPLE_SCHEMA;
+    HoodieWriteConfig writeConfig =
+        getConfigBuilder(schemaStr)
+            .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+                .compactionSmallFileSize(0)
+                .build())
+            .build();
+    SparkRDDWriteClient client = getHoodieWriteClient(writeConfig);
+    HoodieTestDataGenerator dataGen =
+        new HoodieTestDataGenerator(new String[]{DEFAULT_FIRST_PARTITION_PATH});
+    String firstCommit = client.startCommit();
+    List<HoodieRecord> firstBatch = dataGen.generateInsertsAsPerSchema(firstCommit, 10, schemaStr);
+    JavaRDD<HoodieRecord> records = context.getJavaSparkContext().parallelize(firstBatch, 1);
+    JavaRDD<WriteStatus> writeStatuses = client.insert(records, firstCommit);
+    client.commit(firstCommit, writeStatuses);
+
+    // Not create another commit on DEFAULT_SECOND_PARTITION_PATH partition
+    // with schema that contains new columns.
+    String secondCommit = client.startCommit();
+    String latestSchemaStr = TRIP_EXAMPLE_SCHEMA_EVOLVED_1;
+    List<HoodieRecord> secondBatch = dataGen.generateInsertsAsPerSchema(secondCommit, 10, latestSchemaStr);
+    records = context.getJavaSparkContext().parallelize(secondBatch, 1);
+    writeStatuses = client.insert(records, secondCommit);
+    client.commit(secondCommit, writeStatuses);
+
+    // Create cluster commit on DEFAULT_FIRST_PARTITION_PATH partition
+    // Here pass in precommit validator as SqlQueryEqualityPreCommitValidator and check that trip_id is not null.
+    HoodiePreCommitValidatorConfig preCommitValidatorConfig = HoodiePreCommitValidatorConfig
+        .newBuilder()
+        .withPreCommitValidator(SqlQueryEqualityPreCommitValidator.class.getName())
+        .withPrecommitValidatorEqualitySqlQueries(
+            "select " +
+                "sum(hash(driver)) as hash_driver, " +
+                "sum(hash(rider)) as hash_rider, " +
+                "sum(hash(extra_column1)) as hash_extra_column1 " +
+                "from <TABLE_NAME>")
+        .build();
+    HoodieWriteConfig clusteringWriteConfig =
+        getConfigBuilder(latestSchemaStr)
+            .withClusteringConfig(createClusteringBuilder(true, 1).build())
+            .withPreCommitValidatorConfig(preCommitValidatorConfig)
+            .build();
+    SparkRDDWriteClient clusteringWriter = getHoodieWriteClient(clusteringWriteConfig);
+    Option<String> clusteringInstant = clusteringWriter.scheduleClustering(Option.empty());
+    assertTrue(clusteringInstant.isPresent());
+    clusteringWriter.cluster(clusteringInstant.get());
   }
 
   @Test
