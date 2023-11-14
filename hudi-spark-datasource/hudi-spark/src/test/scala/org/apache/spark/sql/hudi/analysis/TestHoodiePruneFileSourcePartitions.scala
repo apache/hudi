@@ -21,7 +21,6 @@ import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.ScalaAssertionSupport
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.util.JFunction
-import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, IsNotNull, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.Filter
 import org.apache.spark.sql.execution.datasources.LogicalRelation
@@ -131,6 +130,7 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
           if (partitioned) {
             val executionPlan = df.queryExecution.executedPlan
             val expectedPhysicalPlanPartitionFiltersClause = s"PartitionFilters: [isnotnull($attr), ($attr = 2021-01-05)]"
+
             Assertions.assertTrue(executionPlan.toString().contains(expectedPhysicalPlanPartitionFiltersClause))
           }
 

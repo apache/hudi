@@ -235,8 +235,8 @@ object DefaultSource {
       Option(schema)
     }
 
-    val useNewPaquetFileFormat = parameters.getOrElse(
-      USE_NEW_HUDI_PARQUET_FILE_FORMAT.key, USE_NEW_HUDI_PARQUET_FILE_FORMAT.defaultValue).toBoolean
+    val useNewPaquetFileFormat =  parameters.getOrElse(USE_NEW_HUDI_PARQUET_FILE_FORMAT.key,
+      USE_NEW_HUDI_PARQUET_FILE_FORMAT.defaultValue).toBoolean && !metaClient.isMetadataTable
     if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
       new EmptyRelation(sqlContext, resolveSchema(metaClient, parameters, Some(schema)))
     } else if (isCdcQuery) {
@@ -285,7 +285,7 @@ object DefaultSource {
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, true) =>
           if (fileFormatUtils.isDefined) {
             new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
+              sqlContext, metaClient, parameters, userSchema, isBootstrap = true).build()
           } else {
             HoodieBootstrapMORRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
           }

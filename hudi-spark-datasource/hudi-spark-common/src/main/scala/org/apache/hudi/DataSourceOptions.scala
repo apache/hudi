@@ -539,7 +539,7 @@ object DataSourceWriteOptions {
   @Deprecated
   val RECONCILE_SCHEMA: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.RECONCILE_SCHEMA
 
-  val SET_NULL_FOR_MISSING_COLUMNS: ConfigProperty[String] = HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS
+  val HANDLE_MISSING_COLUMNS_WITH_LOSSLESS_TYPE_PROMOTIONS: ConfigProperty[String] = HoodieCommonConfig.HANDLE_MISSING_COLUMNS_WITH_LOSSLESS_TYPE_PROMOTIONS
 
   val MAKE_NEW_COLUMNS_NULLABLE: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.MAKE_NEW_COLUMNS_NULLABLE
 
@@ -558,7 +558,7 @@ object DataSourceWriteOptions {
 
   val ENABLE_MERGE_INTO_PARTIAL_UPDATES: ConfigProperty[Boolean] = ConfigProperty
     .key("hoodie.spark.sql.merge.into.partial.updates")
-    .defaultValue(false)
+    .defaultValue(true)
     .markAdvanced()
     .sinceVersion("1.0.0")
     .withDocumentation("Whether to write partial updates to the data blocks containing updates "

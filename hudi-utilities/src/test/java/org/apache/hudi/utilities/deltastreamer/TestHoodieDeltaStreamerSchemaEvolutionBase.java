@@ -20,9 +20,11 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
@@ -58,8 +60,10 @@ import org.junit.jupiter.api.BeforeEach;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
@@ -89,6 +93,13 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
   protected boolean useKafkaSource;
   protected boolean useTransformer;
   protected boolean userProvidedSchema;
+
+  protected Map<String, String> readOpts = new HashMap<String, String>() {
+    {
+      put(DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT().key(), "false");
+      put(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false");
+    }
+  };
 
   @BeforeAll
   public static void initKafka() {
@@ -135,9 +146,11 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
 
   protected HoodieDeltaStreamer.Config getDeltaStreamerConfig(String[] transformerClasses, boolean nullForDeletedCols,
                                                               TypedProperties extraProps) throws IOException {
+    extraProps.setProperty(DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT().key(), "false");
+    extraProps.setProperty(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false");
     extraProps.setProperty("hoodie.datasource.write.table.type", tableType);
     extraProps.setProperty("hoodie.datasource.write.row.writer.enable", rowWriterEnable.toString());
-    extraProps.setProperty(DataSourceWriteOptions.SET_NULL_FOR_MISSING_COLUMNS().key(), Boolean.toString(nullForDeletedCols));
+    extraProps.setProperty(DataSourceWriteOptions.HANDLE_MISSING_COLUMNS_WITH_LOSSLESS_TYPE_PROMOTIONS().key(), Boolean.toString(nullForDeletedCols));
 
     //we set to 0 so that we create new base files on insert instead of adding inserts to existing filegroups via small file handling
     extraProps.setProperty("hoodie.parquet.small.file.limit", "0");
