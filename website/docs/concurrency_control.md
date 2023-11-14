@@ -79,7 +79,7 @@ currently available for preview in version 1.0.0-beta only with following caveat
 
 - It is only supported for Flink writers currently.
 - Conflict resolution is not supported yet between clustering and ingestion. It works for compaction and ingestion, and
-  we can see an example of that in the [Flink quickstart guide](/docs/next/flink-quick-start-guide#non-blocking-concurrency-control).
+  we can see an example of that [here](/docs/next/writing_data#non-blocking-concurrency-control).
 
 ## Enabling Multi Writing
 

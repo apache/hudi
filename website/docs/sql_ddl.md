@@ -178,7 +178,7 @@ TBLPROPERTIES (
 AS SELECT * FROM parquet_table;
 ```
 
-### Create Index
+### Create Index (Experimental)
 
 Hudi supports creating and dropping indexes, including functional indexes, on a table.
 
@@ -216,7 +216,7 @@ some examples of creating a functional index.
 -- Create a functional index on the column `ts` (unix epoch) of the table `hudi_table` using the function `from_unixtime` with the format `yyyy-MM-dd`
 CREATE INDEX IF NOT EXISTS ts_datestr ON hudi_table USING column_stats(ts) OPTIONS(func='from_unixtime', format='yyyy-MM-dd');
 -- Create a functional index on the column `ts` (timestamp in yyyy-MM-dd HH:mm:ss) of the table `hudi_table` using the function `hour`
-CREATE INDEX ts_hour ON hudi_table_func_index USING column_stats(ts) options(func='hour');
+CREATE INDEX ts_hour ON hudi_table USING column_stats(ts) options(func='hour');
 ```
 
 Few things to note:
@@ -247,8 +247,7 @@ Few things to note:
   <summary>Example of creating and using functional index</summary>
 
 ```sql
-DROP TABLE IF EXISTS hudi_table_func_index;
-
+-- create a Hudi table
 CREATE TABLE hudi_table_func_index (
     ts STRING,
     uuid STRING,
