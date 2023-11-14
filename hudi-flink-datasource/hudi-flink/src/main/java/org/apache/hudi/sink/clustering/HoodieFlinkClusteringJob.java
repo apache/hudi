@@ -348,7 +348,8 @@ public class HoodieFlinkClusteringJob {
           .addSink(new ClusteringCommitSink(conf))
           .name("clustering_commit")
           .uid("uid_clustering_commit")
-          .setParallelism(1);
+          .setParallelism(1)
+          .setMaxParallelism(1);
 
       env.execute("flink_hudi_clustering_" + clusteringInstant.getTimestamp());
     }

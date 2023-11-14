@@ -414,6 +414,7 @@ public class Pipelines {
             TypeInformation.of(CompactionPlanEvent.class),
             new CompactionPlanOperator(conf))
         .setParallelism(1) // plan generate must be singleton
+        .setMaxParallelism(1)
         // make the distribution strategy deterministic to avoid concurrent modifications
         // on the same bucket files
         .keyBy(plan -> plan.getOperation().getFileGroupId().getFileId())
@@ -423,7 +424,8 @@ public class Pipelines {
         .setParallelism(conf.getInteger(FlinkOptions.COMPACTION_TASKS))
         .addSink(new CompactionCommitSink(conf))
         .name("compact_commit")
-        .setParallelism(1); // compaction commit should be singleton
+        .setParallelism(1) // compaction commit should be singleton
+        .setMaxParallelism(1);
   }
 
   /**
@@ -452,6 +454,7 @@ public class Pipelines {
             TypeInformation.of(ClusteringPlanEvent.class),
             new ClusteringPlanOperator(conf))
         .setParallelism(1) // plan generate must be singleton
+        .setMaxParallelism(1) // plan generate must be singleton
         .keyBy(plan ->
             // make the distribution strategy deterministic to avoid concurrent modifications
             // on the same bucket files
@@ -467,12 +470,14 @@ public class Pipelines {
     }
     return clusteringStream.addSink(new ClusteringCommitSink(conf))
         .name("clustering_commit")
-        .setParallelism(1); // clustering commit should be singleton
+        .setParallelism(1) // clustering commit should be singleton
+        .setMaxParallelism(1);
   }
 
   public static DataStreamSink<Object> clean(Configuration conf, DataStream<Object> dataStream) {
     return dataStream.addSink(new CleanFunction<>(conf))
         .setParallelism(1)
+        .setMaxParallelism(1)
         .name("clean_commits");
   }
 
