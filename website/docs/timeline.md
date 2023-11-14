@@ -54,6 +54,35 @@ after certain thresholds the archival kicks in to move older timeline events to 
 timeline is never contacted for regular operations of the table and is merely used for book-keeping and debugging purposes.
 Any instants seen under “.hoodie” directory refers to active timeline and those archived goes into “.hoodie/archived” folder.
 
+#### LSM Timeline
+
+As mentioned above, active timeline has limited log history to be fast, while archived timeline is expensive to access
+during reads or writes, especially with high write throughput. To overcome this limitation, Hudi introduced the LSM (
+log-structured merge) tree based timeline. Completed actions, their plans and completion metadata are stored in a more
+scalable LSM tree based timeline organized in an **_archived_** storage location under the `.hoodie` metadata path. It
+consists of Apache Parquet files with action instant data and bookkeeping metadata files, in the following manner.
+
+```bash
+/.hoodie/archived/ 					
+├── _version_      					        <-- stores the manifest version that is current
+├── manifest_1                              <-- manifests store list of files in timeline
+├── manifest_2                              <-- compactions, cleaning, writes produce new manifest files
+├── ...                                      
+├── manifest_<N>                            <-- there can be many manifest files at any given time
+├── <min_time>_<max_time>_<level>.parquet   <-- files storing actual action details
+```
+
+One can read more about the details of LSM timeline in Hudi 1.0 specs. To understand it better, here is an example.
+
+<figure>
+    <img className="docimage" src={require("/assets/images/lsm_tree.png").default} alt="lsm_tree.png" />
+</figure>
+
+In the above figure, each level is a tree sorted by instant times. We can see that for a bunch of commits the metadata
+is stored in a parquet file. As and when more commits are accumulated, they get compacted and pushed down to lower level
+of the tree. Each new operation to the timeline yields a new snapshot version. The advantage of such a structure is that
+we can keep the top level in memory, and still load the remaining levels efficiently from the disk if we need to walk
+back longer history.
 
 ### Archival Configs 
 Basic configurations that control archival.
