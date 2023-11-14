@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
@@ -164,17 +165,18 @@ public class MultiTableServiceUtils {
     }
   }
 
-  public static void addNecessaryTableConfigToWriteConfig(HoodieTableMetaClient metaClient, TypedProperties props) {
-    props.put(HoodieTableConfig.NAME.key(), metaClient.getTableConfig().getTableName());
-  }
-
   public static TableServicePipeline buildTableServicePipeline(JavaSparkContext jsc,
                                                                String basePath,
                                                                HoodieMultiTableServicesMain.Config cfg,
                                                                TypedProperties props) {
     TableServicePipeline pipeline = new TableServicePipeline();
     HoodieTableMetaClient metaClient = UtilHelpers.createMetaClient(jsc, basePath, true);
-    addNecessaryTableConfigToWriteConfig(metaClient, props);
+    TypedProperties propsWithTableConfig = new TypedProperties();
+    propsWithTableConfig.putAll(metaClient.getTableConfig().getProps());
+    props.stringPropertyNames().stream()
+        .filter(key -> !propsWithTableConfig.containsKey(key) || StringUtils.isNullOrEmpty(propsWithTableConfig.get(key).toString()))
+        .forEach(key -> propsWithTableConfig.put(key, props.get(key)));
+
     if (cfg.enableCompaction) {
       pipeline.add(CompactionTask.newBuilder()
           .withJsc(jsc)
@@ -182,7 +184,7 @@ public class MultiTableServiceUtils {
           .withParallelism(cfg.parallelism)
           .withCompactionRunningMode(cfg.compactionRunningMode)
           .withCompactionStrategyName(cfg.compactionStrategyClassName)
-          .withProps(props)
+          .withProps(propsWithTableConfig)
           .withRetry(cfg.retry)
           .withMetaclient(metaClient)
           .build());
@@ -193,7 +195,7 @@ public class MultiTableServiceUtils {
           .withJsc(jsc)
           .withParallelism(cfg.parallelism)
           .withClusteringRunningMode(cfg.clusteringRunningMode)
-          .withProps(props)
+          .withProps(propsWithTableConfig)
           .withRetry(cfg.retry)
           .withMetaclient(metaClient)
           .build());
@@ -203,14 +205,14 @@ public class MultiTableServiceUtils {
           .withBasePath(basePath)
           .withJsc(jsc)
           .withRetry(cfg.retry)
-          .withProps(props)
+          .withProps(propsWithTableConfig)
           .build());
     }
     if (cfg.enableArchive) {
       pipeline.add(ArchiveTask.newBuilder()
           .withBasePath(basePath)
           .withJsc(jsc)
-          .withProps(props)
+          .withProps(propsWithTableConfig)
           .withRetry(cfg.retry)
           .build());
     }
