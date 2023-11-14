@@ -275,8 +275,7 @@ object DefaultSource {
           }
 
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
-          val isTimeTravelQuery = parameters.contains(TIME_TRAVEL_AS_OF_INSTANT.key())
-          if (fileFormatUtils.isDefined && !isTimeTravelQuery) {
+          if (fileFormatUtils.isDefined) {
             new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
               sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
           } else {
