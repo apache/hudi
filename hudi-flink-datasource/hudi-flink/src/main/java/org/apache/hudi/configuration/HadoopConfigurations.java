@@ -29,7 +29,7 @@ import java.util.Map;
  * Utilities for fetching hadoop configurations.
  */
 public class HadoopConfigurations {
-  private static final String HADOOP_PREFIX = "hadoop.";
+  public static final String HADOOP_PREFIX = "hadoop.";
   private static final String PARQUET_PREFIX = "parquet.";
 
   /**
