@@ -103,15 +103,29 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
 
   public HiveSyncTool(Properties props, Configuration hadoopConf) {
     super(props, hadoopConf);
-    String metastoreUris = props.getProperty(METASTORE_URIS.key());
-    // Give precedence to HiveConf.ConfVars.METASTOREURIS if it is set.
-    // Else if user has provided HiveSyncConfigHolder.METASTORE_URIS, then set that in hadoop conf.
-    if (isNullOrEmpty(hadoopConf.get(HiveConf.ConfVars.METASTOREURIS.varname)) && nonEmpty(metastoreUris)) {
-      LOG.info(String.format("Setting %s = %s", HiveConf.ConfVars.METASTOREURIS.varname, metastoreUris));
-      hadoopConf.set(HiveConf.ConfVars.METASTOREURIS.varname, metastoreUris);
+    String configuredMetastoreUris = props.getProperty(METASTORE_URIS.key());
+    String existingHadoopConfMetastoreUris = hadoopConf.get(HiveConf.ConfVars.METASTOREURIS.varname);
+
+    final Configuration hadoopConfForSync; // the configuration to use for this instance of the sync tool
+    if (nonEmpty(configuredMetastoreUris)) {
+      // if the metastore uris from the provided hadoop configuration exist and are equal to the user provided URIs, then we can use the provided configuration
+      if (configuredMetastoreUris.equals(existingHadoopConfMetastoreUris)) {
+        hadoopConfForSync = hadoopConf;
+      } else if (isNullOrEmpty(existingHadoopConfMetastoreUris)) {
+        // if there is no value already set in the provided configuration, update the existing configuration to avoid making copies of the configuration per instance of this tool
+        hadoopConf.set(HiveConf.ConfVars.METASTOREURIS.varname, configuredMetastoreUris);
+        hadoopConfForSync = hadoopConf;
+      } else {
+        // if the metastore uris exist in the provided hadoop configuration but differ from the user provided URIs, then we need to create a new configuration with the value set
+        hadoopConfForSync = new Configuration(hadoopConf);
+        hadoopConfForSync.set(HiveConf.ConfVars.METASTOREURIS.varname, configuredMetastoreUris);
+      }
+    } else {
+      // if the user did not provide any URIs, then we can use the provided configuration
+      hadoopConfForSync = hadoopConf;
     }
-    HiveSyncConfig config = new HiveSyncConfig(props, hadoopConf);
-    this.config = config;
+
+    this.config = new HiveSyncConfig(props, hadoopConfForSync);
     this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
     this.tableName = config.getStringOrDefault(META_SYNC_TABLE_NAME);
     initSyncClient(config);
