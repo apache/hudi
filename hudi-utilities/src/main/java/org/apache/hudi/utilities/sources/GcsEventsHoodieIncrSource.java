@@ -126,7 +126,7 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
 
     this(props, jsc, spark, schemaProvider,
         new GcsObjectMetadataFetcher(props, getSourceFileFormat(props)),
-        new CloudDataFetcher(props, getStringWithAltKeys(props, DATAFILE_FORMAT, true)),
+        new CloudDataFetcher(props, getStringWithAltKeys(props, DATAFILE_FORMAT,true)),
         new QueryRunner(spark, props)
     );
   }

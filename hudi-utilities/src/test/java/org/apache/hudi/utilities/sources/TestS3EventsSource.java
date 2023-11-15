@@ -103,7 +103,6 @@ public class TestS3EventsSource extends AbstractCloudObjectsSourceTestBase {
     props.setProperty(S3_SOURCE_QUEUE_REGION.key(), regionName);
     props.setProperty(S3_SOURCE_QUEUE_FS.key(), "hdfs");
     S3EventsSource dfsSource = new S3EventsSource(props, jsc, sparkSession, schemaProvider);
-    dfsSource.sqs = this.sqs;
     return dfsSource;
   }
 

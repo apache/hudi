@@ -35,8 +35,6 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.types.StructType;
 
-import java.io.Closeable;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -46,12 +44,11 @@ import java.util.List;
  * to check S3 files activity over time. The hudi table created by this source is consumed by
  * {@link S3EventsHoodieIncrSource} to apply changes to the hudi table corresponding to user data.
  */
-public class S3EventsSource extends RowSource implements Closeable {
+public class S3EventsSource extends RowSource {
 
   private final S3EventsMetaSelector pathSelector;
   private final SchemaProvider schemaProvider;
   private final List<Message> processedMessages = new ArrayList<>();
-  SqsClient sqs;
 
   public S3EventsSource(
       TypedProperties props,
@@ -60,7 +57,6 @@ public class S3EventsSource extends RowSource implements Closeable {
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
     this.pathSelector = S3EventsMetaSelector.createSourceSelector(props);
-    this.sqs = this.pathSelector.createAmazonSqsClient();
     this.schemaProvider = schemaProvider;
   }
 
@@ -74,34 +70,32 @@ public class S3EventsSource extends RowSource implements Closeable {
    */
   @Override
   public Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
-    Pair<List<String>, String> selectPathsWithLatestSqsMessage =
-        pathSelector.getNextEventsFromQueue(sqs, lastCkptStr, processedMessages);
-    if (selectPathsWithLatestSqsMessage.getLeft().isEmpty()) {
-      return Pair.of(Option.empty(), selectPathsWithLatestSqsMessage.getRight());
-    } else {
-      Dataset<String> eventRecords = sparkSession.createDataset(selectPathsWithLatestSqsMessage.getLeft(), Encoders.STRING());
-      StructType sourceSchema = UtilHelpers.getSourceSchema(schemaProvider);
-      if (sourceSchema != null) {
-        return Pair.of(
-            Option.of(sparkSession.read().schema(sourceSchema).json(eventRecords)),
-            selectPathsWithLatestSqsMessage.getRight());
+    try (SqsClient sqs = pathSelector.createAmazonSqsClient()) {
+      Pair<List<String>, String> selectPathsWithLatestSqsMessage =
+          pathSelector.getNextEventsFromQueue(sqs, lastCkptStr, processedMessages);
+      if (selectPathsWithLatestSqsMessage.getLeft().isEmpty()) {
+        return Pair.of(Option.empty(), selectPathsWithLatestSqsMessage.getRight());
       } else {
-        return Pair.of(
-            Option.of(sparkSession.read().json(eventRecords)),
-            selectPathsWithLatestSqsMessage.getRight());
+        Dataset<String> eventRecords = sparkSession.createDataset(selectPathsWithLatestSqsMessage.getLeft(), Encoders.STRING());
+        StructType sourceSchema = UtilHelpers.getSourceSchema(schemaProvider);
+        if (sourceSchema != null) {
+          return Pair.of(
+              Option.of(sparkSession.read().schema(sourceSchema).json(eventRecords)),
+              selectPathsWithLatestSqsMessage.getRight());
+        } else {
+          return Pair.of(
+              Option.of(sparkSession.read().json(eventRecords)),
+              selectPathsWithLatestSqsMessage.getRight());
+        }
       }
     }
   }
 
   @Override
-  public void close() throws IOException {
-    // close resource
-    this.sqs.close();
-  }
-
-  @Override
   public void onCommit(String lastCkptStr) {
-    pathSelector.deleteProcessedMessages(sqs, pathSelector.queueUrl, processedMessages);
-    processedMessages.clear();
+    try (SqsClient sqs = pathSelector.createAmazonSqsClient()) {
+      pathSelector.deleteProcessedMessages(sqs, pathSelector.queueUrl, processedMessages);
+      processedMessages.clear();
+    }
   }
 }
