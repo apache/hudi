@@ -68,7 +68,7 @@ With multiple writers using OCC, these are the write guarantees to expect:
 - *INCREMENTAL PULL Guarantee*: Data consumption and checkpoints are NEVER out of order. If there are inflight commits 
   (due to multi-writing), incremental queries will not expose the completed commits following the inflight commits. 
 
-#### Multi Writer Guarantees with Non-Blocking Concurrency Control Mode
+#### Multi Writer Guarantees with Non-Blocking Concurrency Control Mode (Experimental)
 
 `NON_BLOCKING_CONCURRENCY_CONTROL`, offers the same set of guarantees as mentioned in the case of OCC but without
 explicit locks for serializing the writes. Lock is only needed for writing the commit metadata to the Hudi timeline. The

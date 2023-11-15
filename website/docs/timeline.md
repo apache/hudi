@@ -82,27 +82,31 @@ In the above figure, each level is a tree sorted by instant times. We can see th
 is stored in a parquet file. As and when more commits are accumulated, they get compacted and pushed down to lower level
 of the tree. Each new operation to the timeline yields a new snapshot version. The advantage of such a structure is that
 we can keep the top level in memory, and still load the remaining levels efficiently from the disk if we need to walk
-back longer history.
+back longer history. The LSM timeline is enabled by default and the compaction frequency is controlled by
+`hoodie.timeline.compaction.batch.size` i.e. for every _N_ parquet files in the current level, they are merged and flush
+as a compacted file in the next level.
 
 ### Archival Configs 
 Basic configurations that control archival.
 
 #### Spark write client configs 
 
-| Config Name                                                                                | Default       | Description                                                                                                                                                                                                                                             | 
-|--------------------------------------------------------------------------------------------| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | 
-| hoodie.keep.max.commits | 30 (Optional) | Archiving service moves older entries from timeline into an archived log after each write, to keep the metadata overhead constant, even as the table size grows. This config controls the maximum number of instants to retain in the active timeline.  | 
-| hoodie.keep.min.commits | 20 (Optional) | Similar to hoodie.keep.max.commits, but controls the minimum number of instants to retain in the active timeline.                                                                                                                                       | 
+| Config Name                           | Default       | Description                                                                                                                                                                                                                                            | 
+|---------------------------------------|---------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------| 
+| hoodie.keep.max.commits               | 30 (Optional) | Archiving service moves older entries from timeline into an archived log after each write, to keep the metadata overhead constant, even as the table size grows. This config controls the maximum number of instants to retain in the active timeline. | 
+| hoodie.keep.min.commits               | 20 (Optional) | Similar to hoodie.keep.max.commits, but controls the minimum number of instants to retain in the active timeline.                                                                                                                                      |
+| hoodie.timeline.compaction.batch.size | 10 (Optional) | Controls the number of parquet files to compact in a single compaction run at the current level of the LSM tree.                                                                                                                                       |
 
 For more advanced configs refer [here](https://hudi.apache.org/docs/next/configurations#Archival-Configs-advanced-configs).
 
 #### Flink Options
 Flink jobs using the SQL can be configured through the options in WITH clause. The actual datasource level configs are listed below.
 
-| Config Name                                                                                    | Default                                 | Description                                                                                                                                                                                                                                                                                                                                                       | 
-| ---------------------------------------------------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | 
-| archive.max_commits                                                       | 50 (Optional)                           | Max number of commits to keep before archiving older commits into a sequential log, default 50<br /><br /> `Config Param: ARCHIVE_MAX_COMMITS`                                                                                                                                                                                                                    |
-| archive.min_commits                                                      | 40 (Optional)                           | Min number of commits to keep before archiving older commits into a sequential log, default 40<br /><br /> `Config Param: ARCHIVE_MIN_COMMITS`                                                                                                                                                                                                                    |
+| Config Name                           | Default       | Description                                                                                                                                    | 
+|---------------------------------------|---------------|------------------------------------------------------------------------------------------------------------------------------------------------| 
+| archive.max_commits                   | 50 (Optional) | Max number of commits to keep before archiving older commits into a sequential log, default 50<br /><br /> `Config Param: ARCHIVE_MAX_COMMITS` |
+| archive.min_commits                   | 40 (Optional) | Min number of commits to keep before archiving older commits into a sequential log, default 40<br /><br /> `Config Param: ARCHIVE_MIN_COMMITS` |
+| hoodie.timeline.compaction.batch.size | 10 (Optional) | Controls the number of parquet files to compact in a single compaction run at the current level of the LSM tree.                               |
 
 Refer [here](https://hudi.apache.org/docs/next/configurations#Flink-Options) for more details.
 
