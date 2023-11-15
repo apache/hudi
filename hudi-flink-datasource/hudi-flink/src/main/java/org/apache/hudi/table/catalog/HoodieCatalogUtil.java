@@ -63,8 +63,7 @@ public class HoodieCatalogUtil {
    */
   public static HiveConf createHiveConf(@Nullable String hiveConfDir, org.apache.flink.configuration.Configuration flinkConf) {
     // create HiveConf from hadoop configuration with hadoop conf directory configured.
-    final org.apache.flink.configuration.Configuration flinkConfiguration = flinkConf == null ? new org.apache.flink.configuration.Configuration() : flinkConf;
-    Configuration hadoopConf = HadoopConfigurations.getHadoopConf(flinkConfiguration);
+    Configuration hadoopConf = HadoopConfigurations.getHadoopConf(flinkConf);
 
     // ignore all the static conf file URLs that HiveConf may have set
     HiveConf.setHiveSiteLocation(null);
