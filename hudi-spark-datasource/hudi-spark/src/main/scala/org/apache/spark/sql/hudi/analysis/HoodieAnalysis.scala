@@ -103,7 +103,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
     }
 
     if (HoodieSparkUtils.isSpark3) {
-      val resolveAlterTableCommandsClass = {
+      val resolveAlterTableCommandsClass =
         if (HoodieSparkUtils.gteqSpark3_5) {
           "org.apache.spark.sql.hudi.Spark35ResolveHudiAlterTableCommand"
         } else if (HoodieSparkUtils.gteqSpark3_4) {
@@ -119,7 +119,6 @@ object HoodieAnalysis extends SparkAdapterSupport {
         } else {
           throw new IllegalStateException("Unsupported Spark version")
         }
-      }
 
       val resolveAlterTableCommands: RuleBuilder =
         session => instantiateKlass(resolveAlterTableCommandsClass, session)
@@ -160,7 +159,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
     )
 
     if (HoodieSparkUtils.gteqSpark3_0) {
-      val nestedSchemaPruningClass = {
+      val nestedSchemaPruningClass =
         if (HoodieSparkUtils.gteqSpark3_5) {
           "org.apache.spark.sql.execution.datasources.Spark35NestedSchemaPruning"
         } else if (HoodieSparkUtils.gteqSpark3_4) {
@@ -176,7 +175,6 @@ object HoodieAnalysis extends SparkAdapterSupport {
           // spark 3.0
           "org.apache.spark.sql.execution.datasources.Spark30NestedSchemaPruning"
         }
-      }
 
       val nestedSchemaPruningRule = ReflectionUtils.loadClass(nestedSchemaPruningClass).asInstanceOf[Rule[LogicalPlan]]
       rules += (_ => nestedSchemaPruningRule)

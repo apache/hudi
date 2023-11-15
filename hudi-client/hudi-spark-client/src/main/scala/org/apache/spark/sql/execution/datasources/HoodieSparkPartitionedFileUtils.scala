@@ -23,17 +23,18 @@ import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.sql.catalyst.InternalRow
 
 /**
- * Utils on Spark [[PartitionedFile]] to adapt to type changes.
+ * Utils on Spark [[PartitionedFile]] and [[PartitionDirectory]] to adapt to type changes.
  * Before Spark 3.4.0,
  * ```
  * case class PartitionedFile(
- *   partitionValues: InternalRow,
- *   filePath: String,
- *   start: Long,
- *   @transient locations: Array[String] = Array.empty)
- * ```,
- * Since Spark 3.4.0, the filePath is switch to [[SparkPath]] for type safety:
- * ```
+ * partitionValues: InternalRow,
+ * filePath: String,
+ * start: Long,
+ *
+ * @transient   locations: Array[String] = Array.empty)
+ *              ```,
+ *              Since Spark 3.4.0, the filePath is switch to [[SparkPath]] for type safety:
+ *              ```
  * case class PartitionedFile(
  *   partitionValues: InternalRow,
  *   filePath: SparkPath,

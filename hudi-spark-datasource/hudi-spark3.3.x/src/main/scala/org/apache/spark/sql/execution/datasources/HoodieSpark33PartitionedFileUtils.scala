@@ -23,7 +23,7 @@ import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.sql.catalyst.InternalRow
 
 /**
- * Utils on Spark [[PartitionedFile]] for Spark 3.3.
+ * Utils on Spark [[PartitionedFile]] and [[PartitionDirectory]] for Spark 3.3.
  */
 object HoodieSpark33PartitionedFileUtils extends HoodieSparkPartitionedFileUtils {
   override def getPathFromPartitionedFile(partitionedFile: PartitionedFile): Path = {
