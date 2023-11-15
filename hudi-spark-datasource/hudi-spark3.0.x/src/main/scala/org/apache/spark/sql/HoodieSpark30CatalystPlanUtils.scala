@@ -50,12 +50,7 @@ object HoodieSpark30CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
     plan match {
       case s@ScanOperation(_, _,
       l@LogicalRelation(fs: HadoopFsRelation, _, _, _)) if fs.fileFormat.isInstanceOf[NewHoodieParquetFileFormat] && !fs.fileFormat.asInstanceOf[NewHoodieParquetFileFormat].isProjected =>
-        val ff = fs.fileFormat.asInstanceOf[NewHoodieParquetFileFormat]
-        ff.isProjected = true
-        val tableSchema = fs.location.asInstanceOf[SparkHoodieTableFileIndex].schema
-        val resolvedSchema = l.resolve(tableSchema, fs.sparkSession.sessionState.analyzer.resolver)
-        val projection: LogicalPlan = Project(resolvedSchema, s)
-        HoodieSpark3CatalystPlanUtils.applyFiltersToPlan(projection, tableSchema, resolvedSchema, ff.getRequiredFilters)
+        HoodieSpark3CatalystPlanUtils.applyNewFileFormatChanges(s, l, fs)
       case _ => plan
     }
   }
