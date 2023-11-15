@@ -304,7 +304,11 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     val preMergeBaseFileReader = if (isMOR) {
       // Add support for reading files using inline file system.
       super.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchemaWithMandatory,
-        if (shouldUseRecordPosition) requiredFilters else recordKeyRelatedFilters ++ requiredFilters,
+        if (shouldUseRecordPosition && !HoodieSparkUtils.gteqSpark3_5) {
+          requiredFilters
+        } else {
+          recordKeyRelatedFilters ++ requiredFilters
+        },
         options, new Configuration(hadoopConf))
     } else {
       _: PartitionedFile => Iterator.empty
