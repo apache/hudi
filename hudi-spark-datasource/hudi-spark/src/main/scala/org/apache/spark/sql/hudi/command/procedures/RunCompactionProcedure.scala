@@ -146,16 +146,15 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
 
   private def handleResponse(metadata: HoodieCommitMetadata): Unit = {
     // Handle error
-    val writeStats = metadata.getPartitionToWriteStats.entrySet().flatMap(e => e.getValue).toList
-    val errorsCount = writeStats.map { state =>
-      val writeErrors = state.getTotalWriteErrors
-      if (writeErrors > 0) {
-        logError(s"Error occurred while writing the file: ${state.getPath}.")
-      }
-      writeErrors
-    }.sum
-    if (errorsCount > 0) {
-      throw new HoodieException(s" Found $errorsCount when writing record")
+    val writeStatsHasErrors = metadata.getPartitionToWriteStats.entrySet()
+      .flatMap(e => e.getValue)
+      .filter(_.getTotalWriteErrors > 0)
+    if (writeStatsHasErrors.nonEmpty) {
+      val errorsCount = writeStatsHasErrors.map(_.getTotalWriteErrors).sum
+      log.error(s"Found $errorsCount when writing record.\n Printing out the top 100 file path with errors.")
+      writeStatsHasErrors.take(100).foreach(state =>
+        log.error(s"Error occurred while writing the file: ${state.getPath}."))
+      throw new HoodieException(s"Found $errorsCount when writing record")
     }
   }
 
