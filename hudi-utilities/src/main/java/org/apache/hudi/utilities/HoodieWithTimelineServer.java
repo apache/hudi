@@ -91,9 +91,13 @@ public class HoodieWithTimelineServer implements Serializable {
 
     HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
     context.setJobStatus(this.getClass().getSimpleName(), "Sending requests to driver host");
-    List<String> gotMessages = context.map(messages, msg -> sendRequest(driverHost, cfg.serverPort), messages.size());
-    System.out.println("Got Messages :" + gotMessages);
-    ValidationUtils.checkArgument(gotMessages.equals(messages), "Got expected reply from Server");
+    try {
+      List<String> gotMessages = context.map(messages, msg -> sendRequest(driverHost, cfg.serverPort), messages.size());
+      System.out.println("Got Messages :" + gotMessages);
+      ValidationUtils.checkArgument(gotMessages.equals(messages), "Got expected reply from Server");
+    } finally {
+      context.clearJobStatus();
+    }
   }
 
   public String sendRequest(String driverHost, int port) {

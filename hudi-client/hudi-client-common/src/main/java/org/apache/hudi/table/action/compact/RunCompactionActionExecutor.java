@@ -127,6 +127,8 @@ public class RunCompactionActionExecutor<T> extends
       compactionMetadata.setCommitMetadata(Option.of(metadata));
     } catch (Exception e) {
       throw new HoodieCompactionException("Could not compact " + config.getBasePath(), e);
+    } finally {
+      context.clearJobStatus();
     }
 
     LOG.info("Compaction completed. Instant time: {}.", instantTime);

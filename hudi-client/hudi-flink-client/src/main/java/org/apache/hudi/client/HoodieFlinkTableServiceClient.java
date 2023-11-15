@@ -91,6 +91,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
     } finally {
       this.txnManager.endTransaction(Option.of(compactionInstant));
+      context.clearJobStatus();
     }
     WriteMarkersFactory
         .get(config.getMarkersType(), table, compactionCommitTime)
@@ -145,6 +146,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
           "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + clusteringCommitTime, e);
     } finally {
       this.txnManager.endTransaction(Option.of(clusteringInstant));
+      context.clearJobStatus();
     }
 
     WriteMarkersFactory.get(config.getMarkersType(), table, clusteringCommitTime)

@@ -195,6 +195,11 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   }
 
   @Override
+  public void clearJobStatus() {
+    javaSparkContext.clearJobGroup();
+  }
+
+  @Override
   public void putCachedDataIds(HoodieDataCacheKey cacheKey, int... ids) {
     synchronized (cachedRddIds) {
       cachedRddIds.putIfAbsent(cacheKey, new ArrayList<>());

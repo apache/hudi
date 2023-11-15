@@ -338,6 +338,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
           Math.min(completedInstants.size(), config.getArchiveDeleteParallelism())
       );
     }
+    context.clearJobStatus();
 
     return true;
   }

@@ -111,20 +111,24 @@ public class DirectWriteMarkers extends WriteMarkers {
       parallelism = Math.min(subDirectories.size(), parallelism);
       SerializableConfiguration serializedConf = new SerializableConfiguration(fs.getConf());
       context.setJobStatus(this.getClass().getSimpleName(), "Obtaining marker files for all created, merged paths");
-      dataFiles.addAll(context.flatMap(subDirectories, directory -> {
-        Path path = new Path(directory);
-        FileSystem fileSystem = FSUtils.getFs(path, serializedConf.get());
-        RemoteIterator<LocatedFileStatus> itr = fileSystem.listFiles(path, true);
-        List<String> result = new ArrayList<>();
-        while (itr.hasNext()) {
-          FileStatus status = itr.next();
-          String pathStr = status.getPath().toString();
-          if (pathStr.contains(HoodieTableMetaClient.MARKER_EXTN) && !pathStr.endsWith(IOType.APPEND.name())) {
-            result.add(translateMarkerToDataPath(pathStr));
+      try {
+        dataFiles.addAll(context.flatMap(subDirectories, directory -> {
+          Path path = new Path(directory);
+          FileSystem fileSystem = FSUtils.getFs(path, serializedConf.get());
+          RemoteIterator<LocatedFileStatus> itr = fileSystem.listFiles(path, true);
+          List<String> result = new ArrayList<>();
+          while (itr.hasNext()) {
+            FileStatus status = itr.next();
+            String pathStr = status.getPath().toString();
+            if (pathStr.contains(HoodieTableMetaClient.MARKER_EXTN) && !pathStr.endsWith(IOType.APPEND.name())) {
+              result.add(translateMarkerToDataPath(pathStr));
+            }
           }
-        }
-        return result.stream();
-      }, parallelism));
+          return result.stream();
+        }, parallelism));
+      } finally {
+        context.clearJobStatus();
+      }
     }
 
     return dataFiles;

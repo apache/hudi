@@ -754,10 +754,13 @@ public class FSUtils {
 
       hoodieEngineContext.setJobStatus(FSUtils.class.getSimpleName(),
           "Parallel listing paths " + String.join(",", subPaths));
-
-      result = hoodieEngineContext.mapToPair(subPaths,
-          subPath -> new ImmutablePair<>(subPath, pairFunction.apply(new ImmutablePair<>(subPath, conf))),
-          actualParallelism);
+      try {
+        result = hoodieEngineContext.mapToPair(subPaths,
+            subPath -> new ImmutablePair<>(subPath, pairFunction.apply(new ImmutablePair<>(subPath, conf))),
+            actualParallelism);
+      } finally {
+        hoodieEngineContext.clearJobStatus();
+      }
     }
     return result;
   }

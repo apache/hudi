@@ -74,13 +74,17 @@ public class BaseRollbackHelper implements Serializable {
                                                   List<HoodieRollbackRequest> rollbackRequests) {
     int parallelism = Math.max(Math.min(rollbackRequests.size(), config.getRollbackParallelism()), 1);
     context.setJobStatus(this.getClass().getSimpleName(), "Perform rollback actions: " + config.getTableName());
-    // If not for conversion to HoodieRollbackInternalRequests, code fails. Using avro model (HoodieRollbackRequest) within spark.parallelize
-    // is failing with com.esotericsoftware.kryo.KryoException
-    // stack trace: https://gist.github.com/nsivabalan/b6359e7d5038484f8043506c8bc9e1c8
-    // related stack overflow post: https://issues.apache.org/jira/browse/SPARK-3601. Avro deserializes list as GenericData.Array.
-    List<SerializableHoodieRollbackRequest> serializableRequests = rollbackRequests.stream().map(SerializableHoodieRollbackRequest::new).collect(Collectors.toList());
-    return context.reduceByKey(maybeDeleteAndCollectStats(context, instantToRollback, serializableRequests, true, parallelism),
-        RollbackUtils::mergeRollbackStat, parallelism);
+    try {
+      // If not for conversion to HoodieRollbackInternalRequests, code fails. Using avro model (HoodieRollbackRequest) within spark.parallelize
+      // is failing with com.esotericsoftware.kryo.KryoException
+      // stack trace: https://gist.github.com/nsivabalan/b6359e7d5038484f8043506c8bc9e1c8
+      // related stack overflow post: https://issues.apache.org/jira/browse/SPARK-3601. Avro deserializes list as GenericData.Array.
+      List<SerializableHoodieRollbackRequest> serializableRequests = rollbackRequests.stream().map(SerializableHoodieRollbackRequest::new).collect(Collectors.toList());
+      return context.reduceByKey(maybeDeleteAndCollectStats(context, instantToRollback, serializableRequests, true, parallelism),
+          RollbackUtils::mergeRollbackStat, parallelism);
+    } finally {
+      context.clearJobStatus();
+    }
   }
 
   /**
@@ -90,13 +94,17 @@ public class BaseRollbackHelper implements Serializable {
                                                        List<HoodieRollbackRequest> rollbackRequests) {
     int parallelism = Math.max(Math.min(rollbackRequests.size(), config.getRollbackParallelism()), 1);
     context.setJobStatus(this.getClass().getSimpleName(), "Collect rollback stats for upgrade/downgrade: " + config.getTableName());
-    // If not for conversion to HoodieRollbackInternalRequests, code fails. Using avro model (HoodieRollbackRequest) within spark.parallelize
-    // is failing with com.esotericsoftware.kryo.KryoException
-    // stack trace: https://gist.github.com/nsivabalan/b6359e7d5038484f8043506c8bc9e1c8
-    // related stack overflow post: https://issues.apache.org/jira/browse/SPARK-3601. Avro deserializes list as GenericData.Array.
-    List<SerializableHoodieRollbackRequest> serializableRequests = rollbackRequests.stream().map(SerializableHoodieRollbackRequest::new).collect(Collectors.toList());
-    return context.reduceByKey(maybeDeleteAndCollectStats(context, instantToRollback, serializableRequests, false, parallelism),
-        RollbackUtils::mergeRollbackStat, parallelism);
+    try {
+      // If not for conversion to HoodieRollbackInternalRequests, code fails. Using avro model (HoodieRollbackRequest) within spark.parallelize
+      // is failing with com.esotericsoftware.kryo.KryoException
+      // stack trace: https://gist.github.com/nsivabalan/b6359e7d5038484f8043506c8bc9e1c8
+      // related stack overflow post: https://issues.apache.org/jira/browse/SPARK-3601. Avro deserializes list as GenericData.Array.
+      List<SerializableHoodieRollbackRequest> serializableRequests = rollbackRequests.stream().map(SerializableHoodieRollbackRequest::new).collect(Collectors.toList());
+      return context.reduceByKey(maybeDeleteAndCollectStats(context, instantToRollback, serializableRequests, false, parallelism),
+          RollbackUtils::mergeRollbackStat, parallelism);
+    } finally {
+      context.clearJobStatus();
+    }
   }
 
   /**

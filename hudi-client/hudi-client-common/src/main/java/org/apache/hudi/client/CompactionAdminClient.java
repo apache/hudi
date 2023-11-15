@@ -84,14 +84,18 @@ public class CompactionAdminClient extends BaseHoodieClient {
     if (plan.getOperations() != null) {
       List<CompactionOperation> ops = plan.getOperations().stream()
           .map(CompactionOperation::convertFromAvroRecordInstance).collect(Collectors.toList());
-      context.setJobStatus(this.getClass().getSimpleName(), "Validate compaction operations: " + config.getTableName());
-      return context.map(ops, op -> {
-        try {
-          return validateCompactionOperation(metaClient, compactionInstant, op, Option.of(fsView));
-        } catch (IOException e) {
-          throw new HoodieIOException(e.getMessage(), e);
-        }
-      }, parallelism);
+      try {
+        context.setJobStatus(this.getClass().getSimpleName(), "Validate compaction operations: " + config.getTableName());
+        return context.map(ops, op -> {
+          try {
+            return validateCompactionOperation(metaClient, compactionInstant, op, Option.of(fsView));
+          } catch (IOException e) {
+            throw new HoodieIOException(e.getMessage(), e);
+          }
+        }, parallelism);
+      } finally {
+        context.clearJobStatus();
+      }
     }
     return new ArrayList<>();
   }
@@ -297,19 +301,23 @@ public class CompactionAdminClient extends BaseHoodieClient {
     } else {
       LOG.info("The following compaction renaming operations needs to be performed to un-schedule");
       if (!dryRun) {
-        context.setJobStatus(this.getClass().getSimpleName(), "Execute unschedule operations: " + config.getTableName());
-        return context.map(renameActions, lfPair -> {
-          try {
-            LOG.info("RENAME " + lfPair.getLeft().getPath() + " => " + lfPair.getRight().getPath());
-            renameLogFile(metaClient, lfPair.getLeft(), lfPair.getRight());
-            return new RenameOpResult(lfPair, true, Option.empty());
-          } catch (IOException e) {
-            LOG.error("Error renaming log file", e);
-            LOG.error("\n\n\n***NOTE Compaction is in inconsistent state. Try running \"compaction repair "
-                + lfPair.getLeft().getDeltaCommitTime() + "\" to recover from failure ***\n\n\n");
-            return new RenameOpResult(lfPair, false, Option.of(e));
-          }
-        }, parallelism);
+        try {
+          context.setJobStatus(this.getClass().getSimpleName(), "Execute unschedule operations: " + config.getTableName());
+          return context.map(renameActions, lfPair -> {
+            try {
+              LOG.info("RENAME " + lfPair.getLeft().getPath() + " => " + lfPair.getRight().getPath());
+              renameLogFile(metaClient, lfPair.getLeft(), lfPair.getRight());
+              return new RenameOpResult(lfPair, true, Option.empty());
+            } catch (IOException e) {
+              LOG.error("Error renaming log file", e);
+              LOG.error("\n\n\n***NOTE Compaction is in inconsistent state. Try running \"compaction repair "
+                  + lfPair.getLeft().getDeltaCommitTime() + "\" to recover from failure ***\n\n\n");
+              return new RenameOpResult(lfPair, false, Option.of(e));
+            }
+          }, parallelism);
+        } finally {
+          context.clearJobStatus();
+        }
       } else {
         LOG.info("Dry-Run Mode activated for rename operations");
         return renameActions.parallelStream().map(lfPair -> new RenameOpResult(lfPair, false, false, Option.empty()))

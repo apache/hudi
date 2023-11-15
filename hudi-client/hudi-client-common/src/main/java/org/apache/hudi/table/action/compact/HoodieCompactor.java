@@ -126,12 +126,16 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     String maxInstantTime = getMaxInstantTime(metaClient);
 
     context.setJobStatus(this.getClass().getSimpleName(), "Compacting file slices: " + config.getTableName());
-    TaskContextSupplier taskContextSupplier = table.getTaskContextSupplier();
-    // if this is a MDT, set up the instant range of log reader just like regular MDT snapshot reader.
-    Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
-    return context.parallelize(operations).map(operation -> compact(
-        compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime, instantRange, taskContextSupplier, executionHelper))
-        .flatMap(List::iterator);
+    try {
+      TaskContextSupplier taskContextSupplier = table.getTaskContextSupplier();
+      // if this is a MDT, set up the instant range of log reader just like regular MDT snapshot reader.
+      Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
+      return context.parallelize(operations).map(operation -> compact(
+          compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime, instantRange, taskContextSupplier, executionHelper))
+          .flatMap(List::iterator);
+    } finally {
+      context.clearJobStatus();
+    }
   }
 
   /**

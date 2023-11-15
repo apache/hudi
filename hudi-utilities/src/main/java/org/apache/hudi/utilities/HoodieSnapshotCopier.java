@@ -108,36 +108,40 @@ public class HoodieSnapshotCopier implements Serializable {
 
       context.setJobStatus(this.getClass().getSimpleName(), "Creating a snapshot: " + baseDir);
 
-      List<Tuple2<String, String>> filesToCopy = context.flatMap(partitions, partition -> {
-        // Only take latest version files <= latestCommit.
-        FileSystem fs1 = FSUtils.getFs(baseDir, serConf.newCopy());
-        List<Tuple2<String, String>> filePaths = new ArrayList<>();
-        Stream<HoodieBaseFile> dataFiles = fsView.getLatestBaseFilesBeforeOrOn(partition, latestCommitTimestamp);
-        dataFiles.forEach(hoodieDataFile -> filePaths.add(new Tuple2<>(partition, hoodieDataFile.getPath())));
+      try {
+        List<Tuple2<String, String>> filesToCopy = context.flatMap(partitions, partition -> {
+          // Only take latest version files <= latestCommit.
+          FileSystem fs1 = FSUtils.getFs(baseDir, serConf.newCopy());
+          List<Tuple2<String, String>> filePaths = new ArrayList<>();
+          Stream<HoodieBaseFile> dataFiles = fsView.getLatestBaseFilesBeforeOrOn(partition, latestCommitTimestamp);
+          dataFiles.forEach(hoodieDataFile -> filePaths.add(new Tuple2<>(partition, hoodieDataFile.getPath())));
 
-        // also need to copy over partition metadata
-        Path partitionMetaFile = HoodiePartitionMetadata.getPartitionMetafilePath(fs1,
-            FSUtils.getPartitionPath(baseDir, partition)).get();
-        if (fs1.exists(partitionMetaFile)) {
-          filePaths.add(new Tuple2<>(partition, partitionMetaFile.toString()));
-        }
+          // also need to copy over partition metadata
+          Path partitionMetaFile = HoodiePartitionMetadata.getPartitionMetafilePath(fs1,
+              FSUtils.getPartitionPath(baseDir, partition)).get();
+          if (fs1.exists(partitionMetaFile)) {
+            filePaths.add(new Tuple2<>(partition, partitionMetaFile.toString()));
+          }
 
-        return filePaths.stream();
-      }, partitions.size());
+          return filePaths.stream();
+        }, partitions.size());
 
-      context.foreach(filesToCopy, tuple -> {
-        String partition = tuple._1();
-        Path sourceFilePath = new Path(tuple._2());
-        Path toPartitionPath = FSUtils.getPartitionPath(outputDir, partition);
-        FileSystem ifs = FSUtils.getFs(baseDir, serConf.newCopy());
+        context.foreach(filesToCopy, tuple -> {
+          String partition = tuple._1();
+          Path sourceFilePath = new Path(tuple._2());
+          Path toPartitionPath = FSUtils.getPartitionPath(outputDir, partition);
+          FileSystem ifs = FSUtils.getFs(baseDir, serConf.newCopy());
 
-        if (!ifs.exists(toPartitionPath)) {
-          ifs.mkdirs(toPartitionPath);
-        }
-        FileUtil.copy(ifs, sourceFilePath, ifs, new Path(toPartitionPath, sourceFilePath.getName()), false,
-            ifs.getConf());
-      }, filesToCopy.size());
-      
+          if (!ifs.exists(toPartitionPath)) {
+            ifs.mkdirs(toPartitionPath);
+          }
+          FileUtil.copy(ifs, sourceFilePath, ifs, new Path(toPartitionPath, sourceFilePath.getName()), false,
+              ifs.getConf());
+        }, filesToCopy.size());
+      } finally {
+        context.clearJobStatus();
+      }
+
       // Also copy the .commit files
       LOG.info(String.format("Copying .commit files which are no-late-than %s.", latestCommitTimestamp));
       FileStatus[] commitFilesToCopy =

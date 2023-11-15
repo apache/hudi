@@ -50,7 +50,11 @@ public class SparkInsertOverwriteTableCommitActionExecutor<T>
       return Collections.emptyMap();
     }
     context.setJobStatus(this.getClass().getSimpleName(), "Getting ExistingFileIds of all partitions");
-    return HoodieJavaPairRDD.getJavaPairRDD(context.parallelize(partitionPaths, partitionPaths.size()).mapToPair(
-        partitionPath -> Pair.of(partitionPath, getAllExistingFileIds(partitionPath)))).collectAsMap();
+    try {
+      return HoodieJavaPairRDD.getJavaPairRDD(context.parallelize(partitionPaths, partitionPaths.size()).mapToPair(
+          partitionPath -> Pair.of(partitionPath, getAllExistingFileIds(partitionPath)))).collectAsMap();
+    } finally {
+      context.clearJobStatus();
+    }
   }
 }

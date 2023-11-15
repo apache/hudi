@@ -94,6 +94,8 @@ public class FlinkDeletePartitionCommitActionExecutor<T extends HoodieRecordPayl
       return result;
     } catch (Exception e) {
       throw new HoodieDeletePartitionException("Failed to drop partitions for commit time " + instantTime, e);
+    } finally {
+      context.clearJobStatus();
     }
   }
 

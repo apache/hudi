@@ -270,13 +270,17 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
       result = new HashMap<>(keys.size());
       getEngineContext().setJobStatus(this.getClass().getSimpleName(), "Reading keys from metadata table partition " + partitionName);
-      getEngineContext().map(partitionedKeys, keysList -> {
-        if (keysList.isEmpty()) {
-          return Collections.<String, HoodieRecord<HoodieMetadataPayload>>emptyMap();
-        }
-        int shardIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(keysList.get(0), numFileSlices);
-        return lookupKeysFromFileSlice(partitionName, keysList, partitionFileSlices.get(shardIndex));
-      }, partitionedKeys.size()).forEach(result::putAll);
+      try {
+        getEngineContext().map(partitionedKeys, keysList -> {
+          if (keysList.isEmpty()) {
+            return Collections.<String, HoodieRecord<HoodieMetadataPayload>>emptyMap();
+          }
+          int shardIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(keysList.get(0), numFileSlices);
+          return lookupKeysFromFileSlice(partitionName, keysList, partitionFileSlices.get(shardIndex));
+        }, partitionedKeys.size()).forEach(result::putAll);
+      } finally {
+        getEngineContext().clearJobStatus();
+      }
     }
 
     return result;

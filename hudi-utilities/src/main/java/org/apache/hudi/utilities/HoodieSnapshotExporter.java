@@ -181,19 +181,23 @@ public class HoodieSnapshotExporter {
 
     HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
     context.setJobStatus(this.getClass().getSimpleName(), "Exporting as non-HUDI dataset: " + cfg.targetOutputPath);
-    final BaseFileOnlyView fsView = getBaseFileOnlyView(sourceFs, cfg);
-    Iterator<String> exportingFilePaths = jsc
-        .parallelize(partitions, partitions.size())
-        .flatMap(partition -> fsView
-            .getLatestBaseFilesBeforeOrOn(partition, latestCommitTimestamp)
-            .map(HoodieBaseFile::getPath).iterator())
-        .toLocalIterator();
+    try {
+      final BaseFileOnlyView fsView = getBaseFileOnlyView(sourceFs, cfg);
+      Iterator<String> exportingFilePaths = jsc
+          .parallelize(partitions, partitions.size())
+          .flatMap(partition -> fsView
+              .getLatestBaseFilesBeforeOrOn(partition, latestCommitTimestamp)
+              .map(HoodieBaseFile::getPath).iterator())
+          .toLocalIterator();
 
-    Dataset<Row> sourceDataset = new SQLContext(jsc).read().parquet(JavaConversions.asScalaIterator(exportingFilePaths).toSeq());
-    partitioner.partition(sourceDataset)
-        .format(cfg.outputFormat)
-        .mode(SaveMode.ErrorIfExists)
-        .save(cfg.targetOutputPath);
+      Dataset<Row> sourceDataset = new SQLContext(jsc).read().parquet(JavaConversions.asScalaIterator(exportingFilePaths).toSeq());
+      partitioner.partition(sourceDataset)
+          .format(cfg.outputFormat)
+          .mode(SaveMode.ErrorIfExists)
+          .save(cfg.targetOutputPath);
+    } finally {
+      context.clearJobStatus();
+    }
   }
 
   private void exportAsHudi(JavaSparkContext jsc, FileSystem sourceFs,
@@ -203,76 +207,80 @@ public class HoodieSnapshotExporter {
     final HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
     final SerializableConfiguration serConf = context.getHadoopConf();
     context.setJobStatus(this.getClass().getSimpleName(), "Exporting as HUDI dataset");
-    List<Pair<String, String>> partitionAndFileList = context.flatMap(partitions, partition -> {
-      // Only take latest version files <= latestCommit.
-      List<Pair<String, String>> filePaths = fsView
-          .getLatestBaseFilesBeforeOrOn(partition, latestCommitTimestamp)
-          .map(f -> Pair.of(partition, f.getPath()))
-          .collect(Collectors.toList());
-      // also need to copy over partition metadata
-      FileSystem fs = FSUtils.getFs(cfg.sourceBasePath, serConf.newCopy());
-      Path partitionMetaFile = HoodiePartitionMetadata.getPartitionMetafilePath(fs,
-          FSUtils.getPartitionPath(cfg.sourceBasePath, partition)).get();
-      if (fs.exists(partitionMetaFile)) {
-        filePaths.add(Pair.of(partition, partitionMetaFile.toString()));
-      }
-      return filePaths.stream();
-    }, parallelism);
+    try {
+      List<Pair<String, String>> partitionAndFileList = context.flatMap(partitions, partition -> {
+        // Only take latest version files <= latestCommit.
+        List<Pair<String, String>> filePaths = fsView
+            .getLatestBaseFilesBeforeOrOn(partition, latestCommitTimestamp)
+            .map(f -> Pair.of(partition, f.getPath()))
+            .collect(Collectors.toList());
+        // also need to copy over partition metadata
+        FileSystem fs = FSUtils.getFs(cfg.sourceBasePath, serConf.newCopy());
+        Path partitionMetaFile = HoodiePartitionMetadata.getPartitionMetafilePath(fs,
+            FSUtils.getPartitionPath(cfg.sourceBasePath, partition)).get();
+        if (fs.exists(partitionMetaFile)) {
+          filePaths.add(Pair.of(partition, partitionMetaFile.toString()));
+        }
+        return filePaths.stream();
+      }, parallelism);
 
-    context.foreach(partitionAndFileList, partitionAndFile -> {
-      String partition = partitionAndFile.getLeft();
-      Path sourceFilePath = new Path(partitionAndFile.getRight());
-      Path toPartitionPath = FSUtils.getPartitionPath(cfg.targetOutputPath, partition);
-      FileSystem executorSourceFs = FSUtils.getFs(cfg.sourceBasePath, serConf.newCopy());
-      FileSystem executorOutputFs = FSUtils.getFs(cfg.targetOutputPath, serConf.newCopy());
+      context.foreach(partitionAndFileList, partitionAndFile -> {
+        String partition = partitionAndFile.getLeft();
+        Path sourceFilePath = new Path(partitionAndFile.getRight());
+        Path toPartitionPath = FSUtils.getPartitionPath(cfg.targetOutputPath, partition);
+        FileSystem executorSourceFs = FSUtils.getFs(cfg.sourceBasePath, serConf.newCopy());
+        FileSystem executorOutputFs = FSUtils.getFs(cfg.targetOutputPath, serConf.newCopy());
 
-      if (!executorOutputFs.exists(toPartitionPath)) {
-        executorOutputFs.mkdirs(toPartitionPath);
-      }
-      FileUtil.copy(
-          executorSourceFs,
-          sourceFilePath,
-          executorOutputFs,
-          new Path(toPartitionPath, sourceFilePath.getName()),
-          false,
-          false,
-          executorOutputFs.getConf());
-    }, parallelism);
+        if (!executorOutputFs.exists(toPartitionPath)) {
+          executorOutputFs.mkdirs(toPartitionPath);
+        }
+        FileUtil.copy(
+            executorSourceFs,
+            sourceFilePath,
+            executorOutputFs,
+            new Path(toPartitionPath, sourceFilePath.getName()),
+            false,
+            false,
+            executorOutputFs.getConf());
+      }, parallelism);
 
-    // Also copy the .commit files
-    LOG.info(String.format("Copying .commit files which are no-late-than %s.", latestCommitTimestamp));
-    FileStatus[] commitFilesToCopy =
-        Arrays.stream(sourceFs.listStatus(new Path(cfg.sourceBasePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME)))
-            .filter(fileStatus -> {
-              Path path = fileStatus.getPath();
-              if (path.getName().equals(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
-                return true;
-              } else {
-                if (fileStatus.isDirectory()) {
-                  return false;
+      // Also copy the .commit files
+      LOG.info(String.format("Copying .commit files which are no-late-than %s.", latestCommitTimestamp));
+      FileStatus[] commitFilesToCopy =
+          Arrays.stream(sourceFs.listStatus(new Path(cfg.sourceBasePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME)))
+              .filter(fileStatus -> {
+                Path path = fileStatus.getPath();
+                if (path.getName().equals(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
+                  return true;
+                } else {
+                  if (fileStatus.isDirectory()) {
+                    return false;
+                  }
+                  String instantTime = FSUtils.getCommitFromCommitFile(path.getName());
+                  return HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.LESSER_THAN_OR_EQUALS, latestCommitTimestamp);
                 }
-                String instantTime = FSUtils.getCommitFromCommitFile(path.getName());
-                return HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.LESSER_THAN_OR_EQUALS, latestCommitTimestamp);
-              }
-            }).toArray(FileStatus[]::new);
-    context.foreach(Arrays.asList(commitFilesToCopy), commitFile -> {
-      Path targetFilePath =
-          new Path(cfg.targetOutputPath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitFile.getPath().getName());
-      FileSystem executorSourceFs = FSUtils.getFs(cfg.sourceBasePath, serConf.newCopy());
-      FileSystem executorOutputFs = FSUtils.getFs(cfg.targetOutputPath, serConf.newCopy());
+              }).toArray(FileStatus[]::new);
+      context.foreach(Arrays.asList(commitFilesToCopy), commitFile -> {
+        Path targetFilePath =
+            new Path(cfg.targetOutputPath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitFile.getPath().getName());
+        FileSystem executorSourceFs = FSUtils.getFs(cfg.sourceBasePath, serConf.newCopy());
+        FileSystem executorOutputFs = FSUtils.getFs(cfg.targetOutputPath, serConf.newCopy());
 
-      if (!executorOutputFs.exists(targetFilePath.getParent())) {
-        executorOutputFs.mkdirs(targetFilePath.getParent());
-      }
-      FileUtil.copy(
-          executorSourceFs,
-          commitFile.getPath(),
-          executorOutputFs,
-          targetFilePath,
-          false,
-          false,
-          executorOutputFs.getConf());
-    }, parallelism);
+        if (!executorOutputFs.exists(targetFilePath.getParent())) {
+          executorOutputFs.mkdirs(targetFilePath.getParent());
+        }
+        FileUtil.copy(
+            executorSourceFs,
+            commitFile.getPath(),
+            executorOutputFs,
+            targetFilePath,
+            false,
+            false,
+            executorOutputFs.getConf());
+      }, parallelism);
+    } finally {
+      context.clearJobStatus();
+    }
   }
 
   private BaseFileOnlyView getBaseFileOnlyView(FileSystem sourceFs, Config cfg) {

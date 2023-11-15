@@ -606,14 +606,18 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     // Records which save the file listing of each partition
     engineContext.setJobStatus(this.getClass().getSimpleName(), "Creating records for metadata FILES partition");
-    HoodieData<HoodieRecord> fileListRecords = engineContext.parallelize(partitionInfoList, partitionInfoList.size()).map(partitionInfo -> {
-      Map<String, Long> fileNameToSizeMap = partitionInfo.getFileNameToSizeMap();
-      return HoodieMetadataPayload.createPartitionFilesRecord(
-          HoodieTableMetadataUtil.getPartitionIdentifier(partitionInfo.getRelativePath()), fileNameToSizeMap, Collections.emptyList());
-    });
-    ValidationUtils.checkState(fileListRecords.count() == partitions.size());
+    try {
+      HoodieData<HoodieRecord> fileListRecords = engineContext.parallelize(partitionInfoList, partitionInfoList.size()).map(partitionInfo -> {
+        Map<String, Long> fileNameToSizeMap = partitionInfo.getFileNameToSizeMap();
+        return HoodieMetadataPayload.createPartitionFilesRecord(
+            HoodieTableMetadataUtil.getPartitionIdentifier(partitionInfo.getRelativePath()), fileNameToSizeMap, Collections.emptyList());
+      });
+      ValidationUtils.checkState(fileListRecords.count() == partitions.size());
 
-    return Pair.of(fileGroupCount, allPartitionsRecord.union(fileListRecords));
+      return Pair.of(fileGroupCount, allPartitionsRecord.union(fileListRecords));
+    } finally {
+      engineContext.clearJobStatus();
+    }
   }
 
   private boolean anyPendingDataInstant(HoodieTableMetaClient dataMetaClient, Option<String> inflightInstantTimestamp) {
@@ -680,6 +684,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         String relativeDirPath = FSUtils.getRelativePartitionPath(serializableBasePath.get(), path.get());
         return new DirectoryInfo(relativeDirPath, fs.listStatus(path.get()), initializationTime);
       }, numDirsToList);
+      engineContext.clearJobStatus();
 
       pathsToList = new LinkedList<>(pathsToList.subList(numDirsToList, pathsToList.size()));
 
@@ -769,29 +774,33 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         .collect(Collectors.toList());
     ValidationUtils.checkArgument(fileGroupFileIds.size() == fileGroupCount);
     engineContext.setJobStatus(this.getClass().getSimpleName(), msg);
-    engineContext.foreach(fileGroupFileIds, fileGroupFileId -> {
-      try {
-        final Map<HeaderMetadataType, String> blockHeader = Collections.singletonMap(HeaderMetadataType.INSTANT_TIME, instantTime);
+    try {
+      engineContext.foreach(fileGroupFileIds, fileGroupFileId -> {
+        try {
+          final Map<HeaderMetadataType, String> blockHeader = Collections.singletonMap(HeaderMetadataType.INSTANT_TIME, instantTime);
 
-        final HoodieDeleteBlock block = new HoodieDeleteBlock(Collections.emptyList(), false, blockHeader);
+          final HoodieDeleteBlock block = new HoodieDeleteBlock(Collections.emptyList(), false, blockHeader);
 
-        HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
-            .onParentPath(FSUtils.getPartitionPath(metadataWriteConfig.getBasePath(), metadataPartition.getPartitionPath()))
-            .withFileId(fileGroupFileId)
-            .withDeltaCommit(instantTime)
-            .withLogVersion(HoodieLogFile.LOGFILE_BASE_VERSION)
-            .withFileSize(0L)
-            .withSizeThreshold(metadataWriteConfig.getLogFileMaxSize())
-            .withFs(dataMetaClient.getFs())
-            .withRolloverLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
-            .withLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
-            .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
-        writer.appendBlock(block);
-        writer.close();
-      } catch (InterruptedException e) {
-        throw new HoodieException("Failed to created fileGroup " + fileGroupFileId + " for partition " + metadataPartition.getPartitionPath(), e);
-      }
-    }, fileGroupFileIds.size());
+          HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
+              .onParentPath(FSUtils.getPartitionPath(metadataWriteConfig.getBasePath(), metadataPartition.getPartitionPath()))
+              .withFileId(fileGroupFileId)
+              .withDeltaCommit(instantTime)
+              .withLogVersion(HoodieLogFile.LOGFILE_BASE_VERSION)
+              .withFileSize(0L)
+              .withSizeThreshold(metadataWriteConfig.getLogFileMaxSize())
+              .withFs(dataMetaClient.getFs())
+              .withRolloverLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
+              .withLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
+              .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
+          writer.appendBlock(block);
+          writer.close();
+        } catch (InterruptedException e) {
+          throw new HoodieException("Failed to created fileGroup " + fileGroupFileId + " for partition " + metadataPartition.getPartitionPath(), e);
+        }
+      }, fileGroupFileIds.size());
+    } finally {
+      engineContext.clearJobStatus();
+    }
   }
 
   public void dropMetadataPartitions(List<MetadataPartitionType> metadataPartitions) throws IOException {
@@ -1216,6 +1225,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
       writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime);
     }
+    engineContext.clearJobStatus();
 
     metadataMetaClient.reloadActiveTimeline();
 
