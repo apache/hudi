@@ -881,6 +881,12 @@
         <version>${fasterxml.version}</version>
       </dependency>
 
+      <dependency>
+        <groupId>com.fasterxml.jackson.module</groupId>
+        <artifactId>jackson-module-afterburner</artifactId>
+        <version>${fasterxml.jackson.databind.version}</version>
+      </dependency>
+
       <!-- Glassfish -->
       <dependency>
         <groupId>org.glassfish.jersey.core</groupId>
@@ -2182,7 +2188,7 @@
         <avro.version>1.8.2</avro.version>
         <antlr.version>4.7</antlr.version>
         <fasterxml.version>2.6.7</fasterxml.version>
-        <fasterxml.jackson.databind.version>2.6.7.3</fasterxml.jackson.databind.version>
+        <fasterxml.jackson.databind.version>${fasterxml.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>2.6.7.1</fasterxml.jackson.module.scala.version>
         <fasterxml.jackson.dataformat.yaml.version>2.7.4</fasterxml.jackson.dataformat.yaml.version>
         <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
@@ -2214,7 +2220,7 @@
         <avro.version>1.8.2</avro.version>
         <antlr.version>4.7</antlr.version>
         <fasterxml.version>2.6.7</fasterxml.version>
-        <fasterxml.jackson.databind.version>2.6.7.3</fasterxml.jackson.databind.version>
+        <fasterxml.jackson.databind.version>${fasterxml.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>2.6.7.1</fasterxml.jackson.module.scala.version>
         <fasterxml.jackson.dataformat.yaml.version>2.7.4</fasterxml.jackson.dataformat.yaml.version>
         <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
