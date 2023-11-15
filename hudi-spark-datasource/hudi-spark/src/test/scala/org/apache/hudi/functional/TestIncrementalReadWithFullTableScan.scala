@@ -171,29 +171,11 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
 
   private def shouldThrowIfFallbackIsFalse(tableType: HoodieTableType, fn: () => Unit): Unit = {
     val msg = "Should fail with Path does not exist"
-    tableType match {
-      case HoodieTableType.COPY_ON_WRITE =>
-        if (HoodieSparkUtils.gteqSpark3_3) {
-          val exp = assertThrows(classOf[SparkException], new Executable {
-            override def execute(): Unit = {
-              fn()
-            }
-          }, msg)
-          assertTrue(exp.getMessage.contains("FileNotFoundException"))
-        } else {
-          assertThrows(classOf[HoodieIncrementalPathNotFoundException], new Executable {
-            override def execute(): Unit = {
-              fn()
-            }
-          }, msg)
-        }
-      case HoodieTableType.MERGE_ON_READ =>
-        val exp = assertThrows(classOf[SparkException], new Executable {
-          override def execute(): Unit = {
-            fn()
-          }
-        }, msg)
-        assertTrue(exp.getMessage.contains("FileNotFoundException"))
-    }
+    val exp = assertThrows(classOf[SparkException], new Executable {
+      override def execute(): Unit = {
+        fn()
+      }
+    }, msg)
+    assertTrue(exp.getMessage.contains("FileNotFoundException"))
   }
 }
