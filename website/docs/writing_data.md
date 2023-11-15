@@ -534,7 +534,7 @@ INSERT INTO hudi_table select ... from ...;
 
 **Note**: INSERT OVERWRITE is not supported yet but already on the roadmap.
 
-### Non-Blocking Concurrency Control
+### Non-Blocking Concurrency Control (Experimental)
 
 Hudi Flink supports a new non-blocking concurrency control mode, where multiple writer tasks can be executed
 concurrently without blocking each other. One can read more about this mode in

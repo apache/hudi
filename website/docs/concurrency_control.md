@@ -58,7 +58,7 @@ It is not always possible to serialize all write operations to a table (such as 
 Hudi's concurrency model intelligently differentiates actual writing to the table from table services that manage or optimize the table. Hudi offers similar **optimistic concurrency control across multiple writers**, but **table services can still execute completely lock-free and async** as long as they run in the same process as one of the writers.
 For multi-writing, Hudi leverages file level optimistic concurrency control(OCC). For example, when two writers write to non overlapping files, both writes are allowed to succeed. However, when the writes from different writers overlap (touch the same set of files), only one of them will succeed. Please note that this feature is currently experimental and requires external lock providers to acquire locks briefly at critical sections during the write. More on lock providers below.
 
-#### Multi Writer Guarantees with Optimistic Concurrency Control Mode
+#### Multi Writer Guarantees
 
 With multiple writers using OCC, these are the write guarantees to expect:
 
@@ -68,18 +68,16 @@ With multiple writers using OCC, these are the write guarantees to expect:
 - *INCREMENTAL PULL Guarantee*: Data consumption and checkpoints are NEVER out of order. If there are inflight commits 
   (due to multi-writing), incremental queries will not expose the completed commits following the inflight commits. 
 
-#### Multi Writer Guarantees with Non-Blocking Concurrency Control Mode (Experimental)
+#### Non-Blocking Concurrency Control Mode (Experimental)
 
 `NON_BLOCKING_CONCURRENCY_CONTROL`, offers the same set of guarantees as mentioned in the case of OCC but without
 explicit locks for serializing the writes. Lock is only needed for writing the commit metadata to the Hudi timeline. The
 completion time for the commits reflects the serialization order and file slicing is done based on completion time.
 Multiple writers can operate on the table with non-blocking conflict resolution. The writers can write into the same
 file group with the conflicts resolved automatically by the query reader and the compactor. The new concurrency mode is
-currently available for preview in version 1.0.0-beta only with following caveats:
-
-- It is only supported for Flink writers currently.
-- Conflict resolution is not supported yet between clustering and ingestion. It works for compaction and ingestion, and
-  we can see an example of that [here](/docs/next/writing_data#non-blocking-concurrency-control).
+currently available for preview in version 1.0.0-beta only with the caveat that conflict resolution is not supported yet
+between clustering and ingestion. It works for compaction and ingestion, and we can see an example of that with Flink
+writers [here](/docs/next/writing_data#non-blocking-concurrency-control).
 
 ## Enabling Multi Writing
 
