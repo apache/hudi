@@ -37,11 +37,13 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
+import com.codahale.metrics.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,6 +76,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   private final TransactionManager txnManager;
 
   private final LSMTimelineWriter timelineWriter;
+  private final HoodieMetrics metrics;
 
   public HoodieTimelineArchiver(HoodieWriteConfig config, HoodieTable<T, I, K, O> table) {
     this.config = config;
@@ -84,6 +87,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     Pair<Integer, Integer> minAndMaxInstants = getMinAndMaxInstantsToKeep(table, metaClient);
     this.minInstantsToKeep = minAndMaxInstants.getLeft();
     this.maxInstantsToKeep = minAndMaxInstants.getRight();
+    this.metrics = new HoodieMetrics(config);
   }
 
   public boolean archiveIfRequired(HoodieEngineContext context) throws IOException {
@@ -99,6 +103,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         // there is no owner or instant time per se for archival.
         txnManager.beginTransaction(Option.empty(), Option.empty());
       }
+      final Timer.Context timerContext = metrics.getArchiveCtx();
       // Sort again because the cleaning and rollback instants could break the sequence.
       List<ActiveAction> instantsToArchive = getInstantsToArchive().sorted().collect(Collectors.toList());
       boolean success = true;
@@ -116,6 +121,10 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         this.timelineWriter.compactAndClean(context);
       } else {
         LOG.info("No Instants to archive");
+      }
+      if (success && timerContext != null) {
+        long durationMs = metrics.getDurationInMs(timerContext.stop());
+        this.metrics.updateArchiveMetrics(durationMs, instantsToArchive.size());
       }
       return success;
     } finally {
