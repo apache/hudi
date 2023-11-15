@@ -299,6 +299,7 @@ public class HoodieFlinkCompactor {
           .name("compaction_commit")
           .uid("uid_compaction_commit")
           .setParallelism(1)
+          .getTransformation()
           .setMaxParallelism(1);
 
       env.execute("flink_hudi_compaction_" + String.join(",", compactionInstantTimes));
