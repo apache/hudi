@@ -91,6 +91,56 @@ class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
+  test("Test Call show_metadata_table_column_stats Procedure") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  c1 int,
+           |  c2 boolean,
+           |  c3 binary,
+           |  c4 date,
+           |  c5 decimal,
+           |  c6 double,
+           |  c7 float,
+           |  c8 long,
+           |  c9 string,
+           |  c10 timestamp
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  primaryKey = 'c1',
+           |  preCombineField = 'c8',
+           |  hoodie.metadata.enable="true",
+           |  hoodie.metadata.index.column.stats.enable="true"
+           | )
+       """.stripMargin)
+      // insert data to table
+
+      spark.sql(
+        s"""
+           |insert into table $tableName
+           |values (1, true, CAST('binary data' AS BINARY), CAST('2021-01-01' AS DATE), 10.5, 3.14, 2.5, 1000, 'example string', CAST('2021-01-01 00:00:00' AS TIMESTAMP))
+           |""".stripMargin)
+      spark.sql(
+        s"""
+           |insert into table $tableName
+           |values (10, false, CAST('binary data' AS BINARY), CAST('2022-02-02' AS DATE), 20.5, 6.28, 3.14, 2000, 'another string', CAST('2022-02-02 00:00:00' AS TIMESTAMP))
+           |""".stripMargin)
+
+      // collect column stats for table
+      for (i <- 3 to 3) {
+        val columnName = s"c$i"
+        val metadataStats = spark.sql(s"""call show_metadata_table_column_stats(table => '$tableName', targetColumns => '$columnName')""").collect()
+        assertResult(2) {
+          metadataStats.length
+        }
+      }
+    }
+  }
+
   test("Test Call show_metadata_table_stats Procedure") {
     withTempDir { tmp =>
       val tableName = generateTableName
