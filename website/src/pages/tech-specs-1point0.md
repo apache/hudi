@@ -561,7 +561,12 @@ Compaction is the process that efficiently updates a file slice (base and log fi
 
 ### Log Compaction
 
-\[WIP\] See [RFC-48](https://github.com/apache/hudi/blob/master/rfc/rfc-48/rfc-48.md) for now.
+Log compaction is a minor compaction operation that stitches together log files into a single large log file, thus
+reducing write amplification. This process involves introducing a new action in Hudi called `logcompaction`, on the
+timeline. The log-compacted file is written to the same file group as the log files being compacted. Additionally, the
+log-compacted log block header contains the `COMPACTED_BLOCK_TIMES` and the log file reader can skip log blocks that
+have been compacted, thus reducing read amplification as well.
+See [RFC-48](https://github.com/apache/hudi/blob/master/rfc/rfc-48/rfc-48.md) for more details.
 
 ### Re-writing
 
@@ -597,8 +602,22 @@ Apache Hudi provides snapshot isolation between writers and readers by managing 
 
 ### Indexing
 
-\[WIP\] See [RFC-45](https://github.com/apache/hudi/blob/master/rfc/rfc-45/rfc-45.md) for now.
+Indexing is an asynchronous process to create indexes on the table without blocking ingestion writers. The indexing is
+divided into two phases: scheduling and execution. During scheduling, the indexer takes a lock for a short duration and
+generates an indexing plan for data files based off of a snapshot. Index plan is serialized as avro bytes and stored in `[instant].indexing.requested` file in the timeline.
+Here's the schema for index plan
 
+| Field               | Description                                                                                                                                                                      |
+|---------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| version             | Index plan version. Current version is 1. It is updated whenever the index plan format changes                                                                                   |
+| indexPartitionInfos | An array of `HoodieIndexPartitionInfo`s. Each array element consists of metadata partition path, base instant off of which indexer started and an optional map of extra metadata |
+
+During execution, the indexer executes the plan, writing the index base file in the metadata table. Any ongoing commit
+update the index in log files under the same filegroup. After writing the base file, the indexer checks for all
+completed commit instants after `t` to ensure each of them added entries per its indexing plan, otherwise simply abort
+gracefully. Finally, when the indexing is complete, the indexer writes the `[instant].indexing` to the timeline. Indexer
+only takes a lock while adding events to the timeline and not while writing index files.
+See [RFC-45](https://github.com/apache/hudi/blob/master/rfc/rfc-45/rfc-45.md) for now.
 
 
 ## Compatibility
