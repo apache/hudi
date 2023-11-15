@@ -5,6 +5,10 @@
 | Last Updated | Nov 2023 |
 | [Table Version](https://github.com/apache/hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/common/table/HoodieTableVersion.java#L29) | 7 |
 
+:::note
+Hudi version 1.0 is under active development. This document is a work in progress and is subject to change. Please check the specification for versions prior to 1.0 [here](/tech-specs).
+:::
+
 Hudi brings database capabilities (tables, transactions, mutability, indexes, storage layouts) along with an incremental stream processing model (incremental merges, change streams, out-of-order data) over very large collections of files/objects, turning immutable cloud/file storage systems into transactional data lakes.
 
 ## Overview
@@ -203,26 +207,35 @@ Hudi Log format specification is as follows.
 
 ### Versioning
 
-\[WIP\]
+Log file format versioning refers to a set of feature flags associated with a log format. The current version is `1`. Versions are changed when the log format changes.
+The feature flags determine the behavior of the log file reader. The following are the feature flags associated with the log file format.
+
+| Flag              | Version 0 | Version 1 | Default |
+|-------------------|-----------|-----------|---------|
+| hasMagicHeader    | True      | True      | True    |
+| hasContent        | True      | True      | True    |
+| hasContentLength  | True      | True      | True    |
+| hasOrdinal        | True      | True      | True    |
+| hasHeader         | False     | True      | True    |
+| hasFooter         | False     | True      | False   |
+| hasLogBlockLength | False     | True      | False   |
+
 
 ### Headers
 
-Metadata key mapping from Integer to actual metadata is as follows
+Metadata key mapping from Integer to actual metadata is as follows:
 
+| Header Metadata         | Encoding ID | Description                                                                                                                                                                                                                                          |
+|-------------------------|-------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| INSTANT\_TIME           | 1           | Instant time corresponding to commit when the log block is added.                                                                                                                                                                                    |
+| TARGET\_INSTANT\_TIME   | 2           | Target instant to rollback, used in rollback command log block.                                                                                                                                                                                      |
+| SCHEMA                  | 3           | Schema corresponding to data in the data block.                                                                                                                                                                                                      |
+| COMMAND\_BLOCK\_TYPE    | 4           | Command block type for the command block. Currently, \`ROLLBACK\_BLOCK\` is the only command block type.                                                                                                                                             |
+| COMPACTED\_BLOCK\_TIMES | 5           | Instant times corresponding to log blocks compacted due to minor log compaction.                                                                                                                                                                     |
+| RECORD\_POSITIONS       | 6           | Record positions of the records in base file that were updated (data block) or deleted (delete block). Record position is a long type, however, the list of record positions is Base64-encoded bytes of serialized \`Roaring64NavigableMap\` bitmap. |
+| BLOCK\_IDENTIFIER       | 7           | Block sequence number used to detect duplicate log blocks due to task retries for instance.                                                                                                                                                          |
+| IS\_PARTIAL             | 8           | Boolean indicating whether the data block is created with partial updates enabled.                                                                                                                                                                   |
 
-
-
-
-| Header Metadata | Encoding ID | Description |
-| ---| ---| --- |
-| INSTANT\_TIME | 1 | Instant time corresponding to commit when the log block is added. |
-| TARGET\_INSTANT\_TIME | 2 | Target instant to rollback, used in rollback command log block. |
-| SCHEMA | 3 | Schema corresponding to data in the data block. |
-| COMMAND\_BLOCK\_TYPE | 4 | Command block type for the command block. Currently, \`ROLLBACK\_BLOCK\` is the only command block type. |
-| COMPACTED\_BLOCK\_TIMES | 5 | Instant times corresponding to log blocks compacted due to minor log compaction. |
-| RECORD\_POSITIONS | 6 | Record positions of the records in base file that were updated (data block) or deleted (delete block). Record position is a long type, however, the list of record positions is Base64-encoded bytes of serialized \`Roaring64NavigableMap\` bitmap. |
-| BLOCK\_IDENTIFIER | 7 | Block sequence number used to detect duplicate log blocks due to task retries for instance. |
-| IS\_PARTIAL | 8 | Boolean indicating whether the data block is created with partial updates enabled. |
 
 ### Block types
 
@@ -273,42 +286,60 @@ The HFile data block serializes the records using the HFile file format. HFile d
 
 ### Parquet Block (Id: 6)
 
-\[WIP: need to cover partial encoding\]
-
 The Parquet Block serializes the records using the Apache Parquet file format. The serialization layout is similar to the Avro block except for the byte array content encoded in columnar Parquet format. This log block type enables efficient columnar scans and better compression. Different data block types offers different trade-offs and picking the right block is based on the workload requirements and is critical for merge and read performance.
 
 
 
 ### CDC Block (Id: 7)
 
-\[WIP\]
+The CDC block is used for change data capture and it encodes the before and after image of the record as an Avro data block as follows:
+
+| Field              | Description                                              |
+|--------------------|----------------------------------------------------------|
+| HoodieCDCOperation | Type of the CDC operation. Can be INSERT, UPSERT, DELETE |
+| recordKey          | Key of the record being changed                          |
+| oldRecord          | This is the before image                                 |
+| newRecord          | This is the after image                                  |
+
 
 
 
 ## Table Properties
 
-| Table Config | Description |
-| ---| --- |
-| [hoodie.database.name](http://hoodie.database.name) | Database name under which tables will be created |
-| [hoodie.table.name](http://hoodie.table.name) | Table name |
-| hoodie.table.type | Table type - Copy-On-Write or Merge-On-Read |
-| hoodie.table.version | Table format version |
-| hoodie.table.recordkey.fields | Comma-separated list of fields used for record keys. |
-| hoodie.table.partition.fields | Comma-separated list of fields used for partitioning the table |
-| hoodie.table.precombine.field | Field used to break ties when two records have same key value |
-| hoodie.timeline.layout.version | Version of timeline used by the table |
-| hoodie.table.checksum | Table checksum used to guard against partial writes on HDFS |
-| hoodie.table.metadata.partitions | Comma-separated list of metadata partitions that can be used by reader, e.g. files, column\_stats |
-| hoodie.table.index.defs.path | Absolute path where the index definitions are stored for various indexes created by the users |
+As mentioned in the [storage layout](#storage-layout) section, the table properties are stored in the `hoodie.properties` file under the `.hoodie` directory in the table base path.
+Below is the list of properties that are stored in this file.
+
+| Table Config                     | Description                                                                                                               |
+|----------------------------------|---------------------------------------------------------------------------------------------------------------------------|
+| hoodie.database.name             | Database name under which tables will be created                                                                          |
+| hoodie.table.name                | Table name                                                                                                                |
+| hoodie.table.type                | Table type - COPY_ON_WRITE or MERGE_ON_READ                                                                               |
+| hoodie.table.version             | Table format version                                                                                                      |
+| hoodie.table.recordkey.fields    | Comma-separated list of fields used for record keys. This property is optional.                                           |
+| hoodie.table.partition.fields    | Comma-separated list of fields used for partitioning the table. This property is optional.                                |
+| hoodie.table.precombine.field    | Field used to break ties when two records have same value for the record key. This property is optional.                  |
+| hoodie.timeline.layout.version   | Version of timeline used by the table.                                                                                    |
+| hoodie.table.checksum            | Table checksum used to guard against partial writes on HDFS. The value is auto-generated.                                 |
+| hoodie.table.metadata.partitions | Comma-separated list of metadata partitions that can be used by reader, e.g. _files_, _column\_stats_                     |
+| hoodie.table.index.defs.path     | Absolute path where the index definitions are stored for various indexes created by the users. This property is optional. |
+
+The record key, precombine and partition fields are optional but play an important role in modeling data stored in Hudi
+table.
+
+| Field               | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+|---------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Partitioning key(s) | Value of this field defines the directory hierarchy within the table base path. This essentially provides an hierarchy isolation for managing data and related metadata                                                                                                                                                                                                                                                                                                                                      |
+| Record key(s)       | Record keys uniquely identify a record within each partition.                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Ordering field(s)   | Hudi guarantees the uniqueness constraint of record key and the conflict resolution configuration manages strategies on how to disambiguate when multiple records with the same keys are to be merged into the table. The resolution logic can be based on an ordering field or can be custom, specific to the table. To ensure consistent behaviour dealing with duplicate records, the resolution logic should be commutative, associative and idempotent. This is also referred to as ‘precombine field’. |
 
 ## Metadata
 
-Hudi automatically extracts the physical data statistics and stores the metadata along with the data to improve write and query performance. Hudi Metadata is an internally-managed table which organizes the table metadata under the base path _.hoodie/metadata._ The metadata is in itself a Hudi table, organized with the Hudi merge-on-read storage format. Every record stored in the metadata table is a Hudi record and hence has partitioning key and record key specified. Following are the metadata table partitions
+Hudi automatically extracts the physical data statistics and stores the metadata along with the data to improve write and query performance. Hudi Metadata is an internally-managed table which organizes the table metadata under the base path _.hoodie/metadata._ The metadata is in itself a Hudi table, organized with the Hudi merge-on-read storage format. Every record stored in the metadata table is a Hudi record and hence has partitioning key and record key specified. Following metadata is stored in the metadata table.
 
 
 
-*   **files** - Partition path to file name index. Key for the Hudi record is the partition path and the actual record is a map of file name to an instance of HoodieMetadataFileInfo. The files index can be used to do file listing and do filter based pruning of the scanset during query
-*   **column\_stats** - contains statistics of columns for all the records in the table. This enables fine grained file pruning for filters and join conditions in the query. The actual payload is an instance of HoodieMetadataColumnStats.
+*   **files** - Partition path to file name index. Key for the Hudi record is the partition path and the actual record is a map of file name to an instance of `HoodieMetadataFileInfo`. Additionally, a special key `__all_partitions__` holds the list of all partitions. The files index can be used to do file listing and do filter based pruning of the scanset during query
+*   **column\_stats** - contains statistics of columns for all the records in the table. This enables fine-grained file pruning for filters and join conditions in the query. The actual payload is an instance of `HoodieMetadataColumnStats`.
 
 
 
@@ -324,13 +355,18 @@ Apache Hudi platform employs HFile format, to store metadata and indexes, to ens
 
 ### File Listings
 
-\[WIP\] Encode file group ID and instant time along with file metadata
+File listing is an index of partition path to file name stored under the partition `files` in the metadata table. 
+The files index can be used to do file listing and do filter based pruning of the scanset during query.
+Key for the Hudi record is the partition path and the actual record is a map of file name to an instance of `HoodieMetadataFileInfo` that encodes file group ID and instant time along with file metadata. 
+Additionally, a special key `__all_partitions__` holds the list of all partitions.
 
 
 
 ### Column Statistics
 
-\[WIP\]
+Column statistics is stored under the partition `column_stats` in the metadata table. The actual payload is an instance of `HoodieMetadataColumnStats`.
+It contains statistics (min/max/nullCount) of columns for all the records in the table. This enables fine-grained file pruning for filters and join conditions in the query.
+The Hudi key is `str_concat(hash(column name), str_concat(hash(partition name), hash(file name)))` and the actual payload is an instance of `HoodieMetadataColumnStats`.
 
 ### Meta Fields
 
@@ -354,33 +390,41 @@ Within a given file, all records share the same values for `_hoodie_partition_pa
 
 
 
-Need to cover these aspects here and in table properties.
-
-To write a record into a Hudi table, each record must specify the following user fields.
-
-
-
-| User fields | Description |
-| ---| --- |
-| Partitioning key Optional | Value of this field defines the directory hierarchy within the table base path. This essentially provides an hierarchy isolation for managing data and related metadata |
-| Record key(s) | Record keys uniquely identify a record within each partition if partitioning is enabled |
-| Ordering field(s) | Hudi guarantees the uniqueness constraint of record key and the conflict resolution configuration manages strategies on how to disambiguate when multiple records with the same keys are to be merged into the table. The resolution logic can be based on an ordering field or can be custom, specific to the table. To ensure consistent behaviour dealing with duplicate records, the resolution logic should be commutative, associative and idempotent. This is also referred to as ‘precombine field’. |
-
-
-
 ## Indexes
 
 ### Naming
 
 
 
-### Bloom Filter Indexes
+### Bloom Filter Index
 
-**bloom\_filters** - Bloom filter index to help map a record key to the actual file. The Hudi key is `str_concat(hash(partition name), hash(file name))` and the actual payload is an instance of HudiMetadataBloomFilter. Bloom filter is used to accelerate 'presence checks' validating whether particular record is present in the file, which is used during merging, hash-based joins, point-lookup queries, etc.
+Bloom filter index is used to accelerate 'presence checks' validating whether particular record is present in the file, which is used during merging, hash-based joins, point-lookup queries, etc.
+The bloom filter index is stored in Hudi metadata table under the partition `bloom_filters`.
+The Hudi key is `str_concat(hash(partition name), hash(file name))` and the actual payload is an instance of `HudiMetadataBloomFilter` with the following schema:
 
-###   
+| Fields      | Description                                                                                                                                                                                    |
+|-------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| type        | A string that refers to the bloom filter type. Bloom filter type can be simple or dynamic depending on whether the filter is based on a configured size or auto-sized based on number of keys. |
+| bloomFilter | Serialized byte array of the bloom filter content.                                                                                                                                             |
+| timestamp   | A string that refers to instant timestamp when this bloom filter metadata record was created/updated.                                                                                          |
+| isDeleted   | A boolean that represents Bboom filter entry valid/deleted flag.                                                                                                                               |
 
-### Record Indexes
+### Record Index
+
+Record index contains mappings of individual record key and the corresponding file group id.
+The record index not only dramatically boosts write efficiency but also improves read efficiency for keyed lookups.
+The record index is stored in Hudi metadata table under the partition `record_index`. The Hudi key is the value of record key and the actual payload is an instance of `HoodieRecordIndexInfo` with the following schema:
+
+| Fields         | Description                                                                                                                                                                                                                                                  |
+|----------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| partitionName  | A string that refers to the partition name the record belongs to.                                                                                                                                                                                            |
+| fileIdHighBits | A long that refers to high 64 bits if the fileId is based on UUID format. A UUID based fileId is stored as 3 pieces in RLI (fileIdHighBits, fileIdLowBits and fileIndex). FileID format is {UUID}-{fileIndex}.                                               |
+| fileIdLowBits  | A long that refers to low 64 bits if the fileId is based on UUID format.                                                                                                                                                                                     |
+| fileIndex      | An integer that refers to index representing file index which is used to reconstruct UUID based fileID. Applicable when the fileId is based on UUID format.                                                                                                  |
+| fileIdEncoding | An integer that represents fileId encoding. Possible values are 0 and 1. O represents UUID based fileID, and 1 represents raw string format of the fileId. When the encoding is 0, reader can deduce fileID from fileIdLowBits, fileIdLowBits and fileIndex. |
+| fileId         | A string that represents fileId of the location where record belongs to. When the encoding is 1, fileID is stored in raw string format.                                                                                                                      |
+| instantTime    | A long that represents epoch time in millisecond representing the commit time at which record was added.                                                                                                                                                     |
+
 
 ##   
 
@@ -388,7 +432,27 @@ To write a record into a Hudi table, each record must specify the following user
 
 
 
-### Functional Index
+### Functional Indexes
+
+A [functional index](https://github.com/apache/hudi/blob/00ece7bce0a4a8d0019721a28049723821e01842/rfc/rfc-63/rfc-63.md) is an index on a function of a column.
+Hudi supports creating functional indexes for certain unary string and timestamp functions supported by Apache Spark.
+The index definition specified by the user is serialized to JSON format and saved at a path specified by `hoodie.table.index.defs.path` in [table properties](#table-properties).
+Index itself is stored in Hudi metadata table under the partition `func_index_<user_specified_index_name>`.
+
+We covered different [storage layouts](#storage-layout) earlier. Functional index aggregates stats by storage partitions and, as such, partitioning can be absorbed into functional indexes.
+From that perspective, some useful functions that can also be applied as transforms on a field to extract and index partitions are listed below.
+
+| Function   | Description                         |
+|------------|-------------------------------------|
+| `identity` | Identity function, unmodified value |
+| `year`     | Year of the timestamp               |
+| `month`    | Month of the timestamp              |
+| `day`      | Day of the timestamp                |
+| `hour`     | Hour of the timestamp               |
+| `lower`    | Lower case of the string            | 
+
+Full list of supported functions can be found in [HoodieSparkFunctionalIndex](https://github.com/apache/hudi/blob/dcd5a8182a11faab8bfc1ce8aa7787fa590dd395/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/index/functional/HoodieSparkFunctionalIndex.java).
+
 
 
 

@@ -45,7 +45,7 @@ rolling upgrades from older versions to this release.
 #### Log File Format
 
 - In addition to the fields in the log file header, we also store record positions. Refer to the
-  latest [spec](https://hudi.apache.org/tech-specs-1point0/#log-file-format) for more details. This allows us to do
+  latest [spec](/tech-specs-1point0#log-format) for more details. This allows us to do
   position-based merging (apart from key-based merging) and skip pages based on positions.
 - Log file name will now have the deltacommit instant time instead of base commit instant time.
 
