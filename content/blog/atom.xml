@@ -144,19 +144,6 @@ by Hudi metadata tables.</p><hr/><p><sup id="fnref-1"><a href="#fn-1" class="foo
         </author>
     </entry>
     <entry>
-        <title type="html"><![CDATA[Its-Time-for-the-Universal-Data-Lakehouse‍]]></title>
-        <id>/2023/10/20/Its-Time-for-the-Universal-Data-Lakehouse‍</id>
-        <link href="https://hudi.apache.org/blog/2023/10/20/Its-Time-for-the-Universal-Data-Lakehouse‍"/>
-        <updated>2023-10-20T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[title: "It's Time for the Universal Data Lakehouse‍"]]></summary>
-        <content type="html"><![CDATA[<p>title: &quot;It&#x27;s Time for the Universal Data Lakehouse‍&quot;
-excerpt: &quot;Universal Lakehouse&quot;
-author: Vinoth Chandar
-category: blog
-image: /assets/images/blog/2023-10-20-Its-Time-for-the-Universal-Data-Lakehouse.png
-tags:</p><ul><li>data lakehouse</li><li>onehouse</li><li>blog</li><li>apache hudi</li><li>interoperability</li></ul><hr/><div url="https://www.onehouse.ai/blog/its-time-for-the-universal-data-lakehouse">Redirecting... please wait!! </div>s]]></content>
-    </entry>
-    <entry>
         <title type="html"><![CDATA[Load data incrementally from transactional data lakes to data warehouses]]></title>
         <id>/2023/10/19/load-data-incrementally-from-transactional-data-lakes-to-data-warehouses</id>
         <link href="https://hudi.apache.org/blog/2023/10/19/load-data-incrementally-from-transactional-data-lakes-to-data-warehouses"/>
@@ -213,18 +200,6 @@ tags:</p><ul><li>data lakehouse</li><li>onehouse</li><li>blog</li><li>apache hud
         <author>
             <name>Sagar Lakshmipathy</name>
         </author>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[A-Beginners-Guide-to-Apache-Hudi-with-PySpark—Part-1-of-2]]></title>
-        <id>/2023/09/19/A-Beginners-Guide-to-Apache-Hudi-with-PySpark—Part-1-of-2</id>
-        <link href="https://hudi.apache.org/blog/2023/09/19/A-Beginners-Guide-to-Apache-Hudi-with-PySpark—Part-1-of-2"/>
-        <updated>2023-09-19T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[title: "A Beginner’s Guide to Apache Hudi with PySpark — Part 1 of 2"]]></summary>
-        <content type="html"><![CDATA[<p>title: &quot;A Beginner’s Guide to Apache Hudi with PySpark — Part 1 of 2&quot;
-author: Sagar Lakshmipathy
-category: blog
-image: /assets/images/blog/2023-09-19-A-Beginners-Guide-to-Apache-Hudi-with-PySpark—Part-1-of-2.png
-tags:</p><ul><li>pyspark</li><li>apache hudi</li><li>how-to</li><li>medium</li></ul><hr/><div url="https://medium.com/@sagarlakshmipathy/a-beginners-guide-to-apache-hudi-with-pyspark-part-1-of-2-8a4e78f6ad2e">Redirecting... please wait!! </div>]]></content>
     </entry>
     <entry>
         <title type="html"><![CDATA[Simplify operational data processing in data lakes using AWS Glue and Apache Hudi]]></title>

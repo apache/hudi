@@ -49,14 +49,6 @@
             }
         },
         {
-            "id": "/2023/10/20/Its-Time-for-the-Universal-Data-Lakehouse‍",
-            "content_html": "<p>title: &quot;It&#x27;s Time for the Universal Data Lakehouse‍&quot;\nexcerpt: &quot;Universal Lakehouse&quot;\nauthor: Vinoth Chandar\ncategory: blog\nimage: /assets/images/blog/2023-10-20-Its-Time-for-the-Universal-Data-Lakehouse.png\ntags:</p><ul><li>data lakehouse</li><li>onehouse</li><li>blog</li><li>apache hudi</li><li>interoperability</li></ul><hr/><div url=\"https://www.onehouse.ai/blog/its-time-for-the-universal-data-lakehouse\">Redirecting... please wait!! </div>s",
-            "url": "https://hudi.apache.org/blog/2023/10/20/Its-Time-for-the-Universal-Data-Lakehouse‍",
-            "title": "Its-Time-for-the-Universal-Data-Lakehouse‍",
-            "summary": "title: \"It's Time for the Universal Data Lakehouse‍\"",
-            "date_modified": "2023-10-20T00:00:00.000Z"
-        },
-        {
             "id": "/2023/10/19/load-data-incrementally-from-transactional-data-lakes-to-data-warehouses",
             "content_html": "<div url=\"https://aws.amazon.com/blogs/big-data/load-data-incrementally-from-transactional-data-lakes-to-data-warehouses/\">Redirecting... please wait!! </div>",
             "url": "https://hudi.apache.org/blog/2023/10/19/load-data-incrementally-from-transactional-data-lakes-to-data-warehouses",
@@ -110,14 +102,6 @@
             "author": {
                 "name": "Sagar Lakshmipathy"
             }
-        },
-        {
-            "id": "/2023/09/19/A-Beginners-Guide-to-Apache-Hudi-with-PySpark—Part-1-of-2",
-            "content_html": "<p>title: &quot;A Beginner’s Guide to Apache Hudi with PySpark — Part 1 of 2&quot;\nauthor: Sagar Lakshmipathy\ncategory: blog\nimage: /assets/images/blog/2023-09-19-A-Beginners-Guide-to-Apache-Hudi-with-PySpark—Part-1-of-2.png\ntags:</p><ul><li>pyspark</li><li>apache hudi</li><li>how-to</li><li>medium</li></ul><hr/><div url=\"https://medium.com/@sagarlakshmipathy/a-beginners-guide-to-apache-hudi-with-pyspark-part-1-of-2-8a4e78f6ad2e\">Redirecting... please wait!! </div>",
-            "url": "https://hudi.apache.org/blog/2023/09/19/A-Beginners-Guide-to-Apache-Hudi-with-PySpark—Part-1-of-2",
-            "title": "A-Beginners-Guide-to-Apache-Hudi-with-PySpark—Part-1-of-2",
-            "summary": "title: \"A Beginner’s Guide to Apache Hudi with PySpark — Part 1 of 2\"",
-            "date_modified": "2023-09-19T00:00:00.000Z"
         },
         {
             "id": "/2023/09/13/Simplify-operational-data-processing-in-data-lakes-using-AWS-Glue-and-Apache-Hudi",
