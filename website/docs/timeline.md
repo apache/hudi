@@ -34,6 +34,11 @@ in one of the following states
 * `INFLIGHT` - Denotes that the action is currently being performed
 * `COMPLETED` - Denotes completion of an action on the timeline
 
+All the actions in requested/inflight states are stored in the active timeline as files named *
+*_<begin\_instant\_time>.<action\_type>.<requested|inflight>_**. Completed actions are stored along with a time that
+denotes when the action was completed, in a file named *
+*_<begin\_instant\_time>\_<completion\_instant\_time>.<action\_type>._**
+
 <figure>
     <img className="docimage" src={require("/assets/images/hudi_timeline.png").default} alt="hudi_timeline.png" />
 </figure>
@@ -59,8 +64,10 @@ Any instants seen under “.hoodie” directory refers to active timeline and th
 As mentioned above, active timeline has limited log history to be fast, while archived timeline is expensive to access
 during reads or writes, especially with high write throughput. To overcome this limitation, Hudi introduced the LSM (
 log-structured merge) tree based timeline. Completed actions, their plans and completion metadata are stored in a more
-scalable LSM tree based timeline organized in an **_archived_** storage location under the `.hoodie` metadata path. It
-consists of Apache Parquet files with action instant data and bookkeeping metadata files, in the following manner.
+scalable LSM tree based archived timeline organized in an **_archived_** storage location under the `.hoodie` metadata
+path. The new timeline format is enabled by default and going forward, we will refer to the archived timeline as LSM 
+timeline. It consists of Apache Parquet files with action instant data and bookkeeping metadata files, in the following
+manner.
 
 ```bash
 /.hoodie/archived/ 					
@@ -82,9 +89,8 @@ In the above figure, each level is a tree sorted by instant times. We can see th
 is stored in a parquet file. As and when more commits are accumulated, they get compacted and pushed down to lower level
 of the tree. Each new operation to the timeline yields a new snapshot version. The advantage of such a structure is that
 we can keep the top level in memory, and still load the remaining levels efficiently from the disk if we need to walk
-back longer history. The LSM timeline is enabled by default and the compaction frequency is controlled by
-`hoodie.timeline.compaction.batch.size` i.e. for every _N_ parquet files in the current level, they are merged and flush
-as a compacted file in the next level.
+back longer history. The LSM timeline compaction frequency is controlled by`hoodie.timeline.compaction.batch.size` i.e. 
+for every _N_ parquet files in the current level, they are merged and flush as a compacted file in the next level.
 
 ### Archival Configs 
 Basic configurations that control archival.
