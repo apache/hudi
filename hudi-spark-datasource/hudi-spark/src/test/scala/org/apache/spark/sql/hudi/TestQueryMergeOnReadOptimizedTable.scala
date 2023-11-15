@@ -29,9 +29,10 @@ class TestQueryMergeOnReadOptimizedTable extends HoodieSparkSqlTestBase {
            |  id int,
            |  name string,
            |  price double,
-           |  ts long
+           |  ts long,
+           |  partition string
            |) using hudi
-           | partitioned by (ts)
+           | partitioned by (partition)
            | location '$tablePath'
            | tblproperties (
            |  type = 'mor',
@@ -41,10 +42,10 @@ class TestQueryMergeOnReadOptimizedTable extends HoodieSparkSqlTestBase {
        """.stripMargin)
       // insert data to table
       spark.sql("set hoodie.parquet.max.file.size = 10000")
-      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000)")
-      spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000)")
-      spark.sql(s"insert into $tableName values(4, 'a4', 10, 1000)")
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, 'a')")
+      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, 'a')")
+      spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000, 'a')")
+      spark.sql(s"insert into $tableName values(4, 'a4', 10, 1000, 'a')")
       spark.sql(s"update $tableName set price = 11 where id = 1")
       spark.sql(s"update $tableName set price = 21 where id = 2")
       spark.sql(s"update $tableName set price = 31 where id = 3")
@@ -60,7 +61,7 @@ class TestQueryMergeOnReadOptimizedTable extends HoodieSparkSqlTestBase {
       // expect that all complete parquet files can be scanned with a pending compaction job
       assertQueryResult(4, tablePath)
 
-      spark.sql(s"insert into $tableName values(5, 'a5', 10, 1000)")
+      spark.sql(s"insert into $tableName values(5, 'a5', 10, 1000, 'a')")
 
       // expect that all complete parquet files can be scanned with a pending compaction job
       assertQueryResult(5, tablePath)

@@ -46,6 +46,7 @@ import org.apache.hudi.utilities.sources.helpers.TestSnapshotQuerySplitterImpl;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -76,6 +77,11 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
   private HoodieTestDataGenerator dataGen;
   private HoodieTableMetaClient metaClient;
   private HoodieTableType tableType = COPY_ON_WRITE;
+
+  @Override
+  public SparkConf conf() {
+    return conf(SparkClientFunctionalTestHarness.getSparkSqlConf());
+  }
 
   @BeforeEach
   public void setUp() throws IOException {

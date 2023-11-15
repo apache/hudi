@@ -24,6 +24,7 @@ import org.apache.spark.sql.catalyst.catalog.CatalogStorageFormat
 import org.apache.spark.sql.catalyst.expressions.{And, Attribute, AttributeSet, Contains, EndsWith, EqualNullSafe, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, NamedExpression, Not, Or, ProjectionOverSchema, StartsWith}
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, InsertIntoStatement, Join, JoinHint, LogicalPlan, Project}
+import org.apache.spark.sql.catalyst.trees.TreeNode
 import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
 import org.apache.spark.sql.execution.command.{CreateTableLikeCommand, ExplainCommand}
 import org.apache.spark.sql.execution.datasources.HadoopFsRelation
@@ -93,8 +94,12 @@ object HoodieSpark3CatalystPlanUtils extends SparkAdapterSupport {
     ff.isProjected = true
     val tableSchema = fs.location.asInstanceOf[SparkHoodieTableFileIndex].schema
     val resolvedSchema = logicalRelation.resolve(tableSchema, fs.sparkSession.sessionState.analyzer.resolver)
-    val projection: LogicalPlan = Project(resolvedSchema, scanOperation)
-    applyFiltersToPlan(projection, tableSchema, resolvedSchema, ff.getRequiredFilters)
+    val unfilteredPlan = if (scanOperation.sameOutput(logicalRelation)) {
+      Project(resolvedSchema, scanOperation)
+    } else {
+      scanOperation
+    }
+    applyFiltersToPlan(unfilteredPlan, tableSchema, resolvedSchema, ff.getRequiredFilters)
   }
 
   def applyFiltersToPlan(plan: LogicalPlan, tableSchema: StructType, resolvedSchema: Seq[Attribute], filters: Seq[org.apache.spark.sql.sources.Filter]): LogicalPlan = {
