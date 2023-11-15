@@ -55,7 +55,7 @@ Now you can have multiple base files formats in a Hudi table. Even the same file
 formats. We need to set a table config `hoodie.table.multiple.base.file.formats.enable` to use this feature. And
 whenever we need to change the format, then just specify the format in the `hoodie.base.file.format"` config. Currently,
 only Parquet, Orc and HFile formats are supported. This unlocks multiple benefits including choosing file format
-suitable to index, and supporting emerging formats for ML/AI such as [Lance](https://github.com/lancedb/lance) format. 
+suitable to index, and supporting emerging formats for ML/AI. 
 
 ### Concurrency Control
 
@@ -63,8 +63,8 @@ A new concurrency control mode called `NON_BLOCKING_CONCURRENCY_CONTROL` is intr
 OCC, multiple writers can operate on the table with non-blocking conflict resolution. The writers can write into the
 same file group with the conflicts resolved automatically by the query reader and the compactor. The new concurrency
 mode is currently available for preview in version 1.0.0-beta only. You can read more about it under
-section [Model C: Multi-writer](/docs/next/concurrency_control#model-c-multi-writer). A complete example with multiple 
-Flink streaming writers is available [here](/docs/next/writing_data#non-blocking-concurrency-control). You
+section [Model C: Multi-writer](/docs/next/concurrency_control#non-blocking-concurrency-control-mode-experimental). A complete example with multiple 
+Flink streaming writers is available [here](/docs/next/writing_data#non-blocking-concurrency-control-experimental). You
 can follow the [RFC](https://github.com/apache/hudi/blob/master/rfc/rfc-66/rfc-66.md) and
 the [JIRA](https://issues.apache.org/jira/browse/HUDI-6640) for more details.
 
@@ -109,13 +109,19 @@ of the API for more details.
 
 #### New FileGroup Reader
 
-In this release, we have implemented position-based merging and skipping pages based on positions. The new reader has 
-shown impressive performance gains for partial updates. For a Merge-On-Read table of size 1TB with 100 partitions and 
-80% random updates in subsequent commits, the new reader is 5.7x faster than the old reader for snapshot queries.
-The new reader is enabled by default for all new tables. Following configs are used to control the reader:
+In addition to key-based merging of records in log files with base files for queries on MOR table, we have implemented
+position-based merging and skipping pages based on positions. The new reader has shown impressive performance gains for
+**partial updates** with key-based merging. For a MOR table of size 1TB with 100 partitions and 80% random updates in
+subsequent commits, the new reader is **5.7x faster** for snapshot queries with **70x reduced write amplification**.
+However, for position-based merging, the gains are yet to be realized as filter pushdown support
+is [in progress](https://github.com/apache/hudi/pull/10030). The new reader is enabled by default for all new tables.
+Following configs are used to control the reader:
 ```
+# enabled by default
 hoodie.file.group.reader.enabled=true
 hoodie.datasource.read.use.new.parquet.file.format=true
+# need to enable position-based merging if required
+hoodie.merge.use.record.positions=true
 ```
 
 Few things to note for the new reader:
