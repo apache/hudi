@@ -208,20 +208,4 @@ class Spark2Adapter extends SparkAdapter {
     batch.setNumRows(numRows)
     batch
   }
-
-  override def toAttributes(struct: StructType): Seq[Attribute] = {
-    struct.toAttributes
-  }
-
-  override def toFileStatuses(partitionDirs: Seq[PartitionDirectory]): Seq[FileStatus] = {
-    partitionDirs.flatMap(_.files)
-  }
-
-  override def newPartitionDirectory(internalRow: InternalRow, statuses: Seq[FileStatus]): PartitionDirectory = {
-    PartitionDirectory(internalRow, statuses)
-  }
-
-  override def getEncoder(schema: StructType): ExpressionEncoder[Row] = {
-    RowEncoder.apply(schema).resolveAndBind()
-  }
 }

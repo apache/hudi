@@ -68,14 +68,15 @@ object HoodieUnsafeUtils {
    * Creates [[DataFrame]] from the in-memory [[Seq]] of [[Row]]s with provided [[schema]]
    *
    * NOTE: [[DataFrame]] is based on [[LocalRelation]], entailing that most computations with it
-   *       will be executed by Spark locally
+   * will be executed by Spark locally
    *
-   * @param spark spark's session
-   * @param rows collection of rows to base [[DataFrame]] on
+   * @param spark  spark's session
+   * @param rows   collection of rows to base [[DataFrame]] on
    * @param schema target [[DataFrame]]'s schema
    */
   def createDataFrameFromRows(spark: SparkSession, rows: Seq[Row], schema: StructType): DataFrame =
-    Dataset.ofRows(spark, LocalRelation.fromExternalRows(SparkAdapterSupport.sparkAdapter.toAttributes(schema), rows))
+    Dataset.ofRows(spark, LocalRelation.fromExternalRows(
+      SparkAdapterSupport.sparkAdapter.getSchemaUtils.toAttributes(schema), rows))
 
   /**
    * Creates [[DataFrame]] from the in-memory [[Seq]] of [[InternalRow]]s with provided [[schema]]
@@ -88,7 +89,7 @@ object HoodieUnsafeUtils {
    * @param schema target [[DataFrame]]'s schema
    */
   def createDataFrameFromInternalRows(spark: SparkSession, rows: Seq[InternalRow], schema: StructType): DataFrame =
-    Dataset.ofRows(spark, LocalRelation(SparkAdapterSupport.sparkAdapter.toAttributes(schema), rows))
+    Dataset.ofRows(spark, LocalRelation(SparkAdapterSupport.sparkAdapter.getSchemaUtils.toAttributes(schema), rows))
 
 
   /**

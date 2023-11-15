@@ -26,15 +26,14 @@ import org.apache.hudi.spark3.internal.ReflectUtil
 import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieSparkUtils, Spark3RowSerDe}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
-import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
 import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
-import org.apache.spark.sql.{HoodieSpark3CatalogUtils, SQLContext, SparkSession}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
+import org.apache.spark.sql.{HoodieSpark3CatalogUtils, SQLContext, SparkSession}
 import org.apache.spark.storage.StorageLevel
 
 import java.time.ZoneId
@@ -57,7 +56,7 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
   def getCatalogUtils: HoodieSpark3CatalogUtils
 
   override def createSparkRowSerDe(schema: StructType): SparkRowSerDe = {
-    new Spark3RowSerDe(getEncoder(schema))
+    new Spark3RowSerDe(getCatalystExpressionUtils.getEncoder(schema))
   }
 
   override def getAvroSchemaConverters: HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters

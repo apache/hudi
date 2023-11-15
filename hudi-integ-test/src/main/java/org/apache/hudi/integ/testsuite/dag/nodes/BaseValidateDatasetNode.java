@@ -239,6 +239,6 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
   }
 
   private ExpressionEncoder getEncoder(StructType schema) {
-    return SparkAdapterSupport$.MODULE$.sparkAdapter().getEncoder(schema);
+    return SparkAdapterSupport$.MODULE$.sparkAdapter().getCatalystExpressionUtils().getEncoder(schema);
   }
 }

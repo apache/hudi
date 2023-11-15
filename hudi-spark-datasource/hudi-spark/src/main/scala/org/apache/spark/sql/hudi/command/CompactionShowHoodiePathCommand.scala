@@ -42,5 +42,6 @@ case class CompactionShowHoodiePathCommand(path: String, limit: Int)
   }
 
   override val output: Seq[Attribute] =
-    SparkAdapterSupport.sparkAdapter.toAttributes(ShowCompactionProcedure.builder.get().build.outputType)
+    SparkAdapterSupport.sparkAdapter.getSchemaUtils.toAttributes(
+      ShowCompactionProcedure.builder.get().build.outputType)
 }

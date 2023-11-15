@@ -127,20 +127,4 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
     case OFF_HEAP => "OFF_HEAP"
     case _ => throw new IllegalArgumentException(s"Invalid StorageLevel: $level")
   }
-
-  override def toAttributes(struct: StructType): Seq[Attribute] = {
-    DataTypeUtils.toAttributes(struct)
-  }
-
-  override def toFileStatuses(partitionDirs: Seq[PartitionDirectory]): Seq[FileStatus] = {
-    partitionDirs.flatMap(_.files).map(_.fileStatus)
-  }
-
-  override def newPartitionDirectory(internalRow: InternalRow, statuses: Seq[FileStatus]): PartitionDirectory = {
-    PartitionDirectory(internalRow, statuses.toArray)
-  }
-
-  override def getEncoder(schema: StructType): ExpressionEncoder[Row] = {
-    ExpressionEncoder.apply(schema).resolveAndBind()
-  }
 }

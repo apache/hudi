@@ -18,21 +18,23 @@
 
 package org.apache.hudi.testutils;
 
+import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.SparkAdapterSupport$;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.AvroConversionUtils;
-import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.spark.package$;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder;
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema;
 import org.apache.spark.sql.types.StructType;
-import scala.Function1;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+
+import scala.Function1;
 
 public class KeyGeneratorTestUtilities {
 
@@ -95,7 +97,7 @@ public class KeyGeneratorTestUtilities {
   }
 
   private static ExpressionEncoder getEncoder(StructType schema) {
-    return SparkAdapterSupport$.MODULE$.sparkAdapter().getEncoder(schema);
+    return SparkAdapterSupport$.MODULE$.sparkAdapter().getCatalystExpressionUtils().getEncoder(schema);
   }
 
   public static InternalRow getInternalRow(Row row, ExpressionEncoder<Row> encoder) throws ClassNotFoundException, InvocationTargetException, IllegalAccessException, NoSuchMethodException {

@@ -26,7 +26,8 @@ case class CallProcedureHoodieCommand(
    procedure: Procedure,
    args: ProcedureArgs) extends HoodieLeafRunnableCommand {
 
-  override def output: Seq[Attribute] = SparkAdapterSupport.sparkAdapter.toAttributes(procedure.outputType)
+  override def output: Seq[Attribute] =
+    SparkAdapterSupport.sparkAdapter.getSchemaUtils.toAttributes(procedure.outputType)
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     procedure.call(args)

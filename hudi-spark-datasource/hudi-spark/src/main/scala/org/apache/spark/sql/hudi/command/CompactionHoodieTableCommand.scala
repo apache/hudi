@@ -37,5 +37,6 @@ case class CompactionHoodieTableCommand(table: CatalogTable,
   }
 
   override val output: Seq[Attribute] =
-    SparkAdapterSupport.sparkAdapter.toAttributes(RunCompactionProcedure.builder.get().build.outputType)
+    SparkAdapterSupport.sparkAdapter.getSchemaUtils.toAttributes(
+      RunCompactionProcedure.builder.get().build.outputType)
 }

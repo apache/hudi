@@ -215,26 +215,4 @@ trait SparkAdapter extends Serializable {
    * Tries to translate a Catalyst Expression into data source Filter
    */
   def translateFilter(predicate: Expression, supportNestedPredicatePushdown: Boolean = false): Option[Filter]
-
-  /**
-   * SPARK-44353 StructType#toAttributes was removed in Spark 3.5.0
-   * Use DataTypeUtils#toAttributes for Spark 3.5+
-   */
-  def toAttributes(struct: StructType): Seq[Attribute]
-
-  /**
-   * SPARK-43039 FileIndex#PartitionDirectory refactored in Spark 3.5.0
-   */
-  def toFileStatuses(partitionDirs: Seq[PartitionDirectory]): Seq[FileStatus]
-
-  /**
-   * SPARK-43039 FileIndex#PartitionDirectory refactored in Spark 3.5.0
-   */
-  def newPartitionDirectory(internalRow: InternalRow, statuses: Seq[FileStatus]): PartitionDirectory
-
-  /**
-   * SPARK-44531 Encoder inference moved elsewhere in Spark 3.5.0
-   * Mainly used for unit tests
-   */
-  def getEncoder(schema: StructType): ExpressionEncoder[Row]
 }
