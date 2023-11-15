@@ -55,7 +55,11 @@ public class HoodieMetrics {
   public static final String TOTAL_ROLLBACK_LOG_BLOCKS_STR = "totalRollbackLogBlocks";
   public static final String DURATION_STR = "duration";
   public static final String DELETE_FILES_NUM_STR = "numFilesDeleted";
-
+  public static final String FINALIZED_FILES_NUM_STR = "numFilesFinalized";
+  public static final String CONFLICT_RESOLUTION_STR = "conflict_resolution";
+  public static final String COMMIT_LATENCY_STR = "commitLatencyInMs";
+  public static final String COMMIT_FRESHNESS_STR = "commitFreshnessInMs";
+  public static final String COMMIT_TIME_STR = "commitTime";
   public static final String TIMER_ACTION = "timer";
   public static final String COUNTER_ACTION = "counter";
   public static final String ARCHIVE_ACTION = "archive";
@@ -112,11 +116,11 @@ public class HoodieMetrics {
       this.compactionTimerName = getMetricsName(TIMER_ACTION, HoodieTimeline.COMPACTION_ACTION);
       this.logCompactionTimerName = getMetricsName(TIMER_ACTION, HoodieTimeline.LOG_COMPACTION_ACTION);
       this.indexTimerName = getMetricsName(TIMER_ACTION, INDEX_ACTION);
-      this.conflictResolutionTimerName = getMetricsName(TIMER_ACTION, "conflict_resolution");
-      this.conflictResolutionSuccessCounterName = getMetricsName(COUNTER_ACTION, "conflict_resolution.success");
-      this.conflictResolutionFailureCounterName = getMetricsName(COUNTER_ACTION, "conflict_resolution.failure");
-      this.compactionRequestedCounterName = getMetricsName(COUNTER_ACTION, "compaction.requested");
-      this.compactionCompletedCounterName = getMetricsName(COUNTER_ACTION, "compaction.completed");
+      this.conflictResolutionTimerName = getMetricsName(TIMER_ACTION, CONFLICT_RESOLUTION_STR);
+      this.conflictResolutionSuccessCounterName = getMetricsName(COUNTER_ACTION, CONFLICT_RESOLUTION_STR + ".success");
+      this.conflictResolutionFailureCounterName = getMetricsName(COUNTER_ACTION, CONFLICT_RESOLUTION_STR + ".failure");
+      this.compactionRequestedCounterName = getMetricsName(COUNTER_ACTION, HoodieTimeline.COMPACTION_ACTION + ".requested");
+      this.compactionCompletedCounterName = getMetricsName(COUNTER_ACTION, HoodieTimeline.COMPACTION_ACTION + ".completed");
     }
   }
 
@@ -273,13 +277,13 @@ public class HoodieMetrics {
       Pair<Option<Long>, Option<Long>> eventTimePairMinMax = metadata.getMinAndMaxEventTime();
       if (eventTimePairMinMax.getLeft().isPresent()) {
         long commitLatencyInMs = commitEpochTimeInMs + durationInMs - eventTimePairMinMax.getLeft().get();
-        metrics.registerGauge(getMetricsName(actionType, "commitLatencyInMs"), commitLatencyInMs);
+        metrics.registerGauge(getMetricsName(actionType, COMMIT_LATENCY_STR), commitLatencyInMs);
       }
       if (eventTimePairMinMax.getRight().isPresent()) {
         long commitFreshnessInMs = commitEpochTimeInMs + durationInMs - eventTimePairMinMax.getRight().get();
-        metrics.registerGauge(getMetricsName(actionType, "commitFreshnessInMs"), commitFreshnessInMs);
+        metrics.registerGauge(getMetricsName(actionType, COMMIT_FRESHNESS_STR), commitFreshnessInMs);
       }
-      metrics.registerGauge(getMetricsName(actionType, "commitTime"), commitEpochTimeInMs);
+      metrics.registerGauge(getMetricsName(actionType, COMMIT_TIME_STR), commitEpochTimeInMs);
       metrics.registerGauge(getMetricsName(actionType, DURATION_STR), durationInMs);
     }
   }
@@ -316,14 +320,14 @@ public class HoodieMetrics {
       LOG.info(String.format("Sending finalize write metrics (duration=%d, numFilesFinalized=%d)", durationInMs,
           numFilesFinalized));
       metrics.registerGauge(getMetricsName(FINALIZE_ACTION, DURATION_STR), durationInMs);
-      metrics.registerGauge(getMetricsName(FINALIZE_ACTION, "numFilesFinalized"), numFilesFinalized);
+      metrics.registerGauge(getMetricsName(FINALIZE_ACTION, FINALIZED_FILES_NUM_STR), numFilesFinalized);
     }
   }
 
   public void updateIndexMetrics(final String action, final long durationInMs) {
     if (config.isMetricsOn()) {
       LOG.info(String.format("Sending index metrics (%s.duration, %d)", action, durationInMs));
-      metrics.registerGauge(getMetricsName(INDEX_ACTION, String.format("%s.duration", action)), durationInMs);
+      metrics.registerGauge(getMetricsName(INDEX_ACTION, String.format("%s.%s", action, DURATION_STR)), durationInMs);
     }
   }
 
