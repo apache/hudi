@@ -56,17 +56,17 @@ public class HoodieClusteringJob {
   private HoodieTableMetaClient metaClient;
 
   public HoodieClusteringJob(JavaSparkContext jsc, Config cfg) {
-    this(jsc, cfg, UtilHelpers.buildProperties(jsc.hadoopConfiguration(), cfg.propsFilePath, cfg.configs));
+    this(jsc, cfg, UtilHelpers.buildProperties(jsc.hadoopConfiguration(), cfg.propsFilePath, cfg.configs),
+        UtilHelpers.createMetaClient(jsc, cfg.basePath, true));
   }
 
-  public HoodieClusteringJob(JavaSparkContext jsc, Config cfg, TypedProperties props) {
+  public HoodieClusteringJob(JavaSparkContext jsc, Config cfg, TypedProperties props, HoodieTableMetaClient metaClient) {
     this.cfg = cfg;
     this.jsc = jsc;
     this.props = props;
-    this.metaClient = UtilHelpers.createMetaClient(jsc, cfg.basePath, true);
+    this.metaClient = metaClient;
     // Disable async cleaning, will trigger synchronous cleaning manually.
     this.props.put(HoodieCleanConfig.ASYNC_CLEAN.key(), false);
-    this.metaClient = UtilHelpers.createMetaClient(jsc, cfg.basePath, true);
     if (this.metaClient.getTableConfig().isMetadataTableAvailable()) {
       // add default lock config options if MDT is enabled.
       UtilHelpers.addLockOptions(cfg.basePath, this.props);
