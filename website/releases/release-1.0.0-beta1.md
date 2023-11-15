@@ -18,8 +18,8 @@ This release contains major format changes as we will see in highlights below. A
 the release is made generally available (GA). However, we encourage users to try out the features on new tables.
 
 :::caution
-If migrating from an older release (pre 0.14.0), please also check the upgrade instructions from each older release in
-sequence.
+Given that timeline format and log file format has changed in this beta release, it is recommended not to attempt to do
+rolling upgrades from older versions to this release.
 :::
 
 ## Highlights
@@ -40,20 +40,22 @@ sequence.
 - Completed actions, their plans and completion metadata are stored in a more
   scalable [LSM tree](https://en.wikipedia.org/wiki/Log-structured_merge-tree) based timeline organized in an *
   *_archived_** storage location under the .hoodie metadata path. It consists of Apache Parquet files with action
-  instant data and bookkeeping metadata files, in the following manner. Checkout [timeline](/docs/next/timeline) docs for more details.
+  instant data and bookkeeping metadata files, in the following manner. Checkout [timeline](/docs/next/timeline#lsm-timeline) docs for more details.
 
 #### Log File Format
 
-- Now in addition to the fields in the log file header mentioned in the [spec](https://hudi.apache.org/tech-specs/#log-file-format),
-  we also store the record positions in the header. This allows us to do position-based merging (apart from key-based merging) and skip pages based on positions.
+- In addition to the fields in the log file header, we also store record positions. Refer to the
+  latest [spec](https://hudi.apache.org/tech-specs-1point0/#log-file-format) for more details. This allows us to do
+  position-based merging (apart from key-based merging) and skip pages based on positions.
 - Log file name will now have the deltacommit instant time instead of base commit instant time.
 
 #### Multiple base file formats
 
 Now you can have multiple base files formats in a Hudi table. Even the same filegroup can have multiple base file
-formats. We need to set a table config `hoodie.table.multiple.base.file.formats.enable` to use this features. And
+formats. We need to set a table config `hoodie.table.multiple.base.file.formats.enable` to use this feature. And
 whenever we need to change the format, then just specify the format in the `hoodie.base.file.format"` config. Currently,
-only Parquet, Orc and HFile formats are supported.
+only Parquet, Orc and HFile formats are supported. This unlocks multiple benefits including choosing file format
+suitable to index, and supporting emerging formats for ML/AI such as [Lance](https://github.com/lancedb/lance) format. 
 
 ### Concurrency Control
 
@@ -62,7 +64,7 @@ OCC, multiple writers can operate on the table with non-blocking conflict resolu
 same file group with the conflicts resolved automatically by the query reader and the compactor. The new concurrency
 mode is currently available for preview in version 1.0.0-beta only. You can read more about it under
 section [Model C: Multi-writer](/docs/next/concurrency_control#model-c-multi-writer). A complete example with multiple 
-Flink streaming writers is available [here](/docs/next/flink-quick-start-guide#non-blocking-concurrency-control). You
+Flink streaming writers is available [here](/docs/next/writing_data#non-blocking-concurrency-control). You
 can follow the [RFC](https://github.com/apache/hudi/blob/master/rfc/rfc-66/rfc-66.md) and
 the [JIRA](https://issues.apache.org/jira/browse/HUDI-6640) for more details.
 
@@ -115,6 +117,16 @@ The new reader is enabled by default for all new tables. Following configs are u
 hoodie.file.group.reader.enabled=true
 hoodie.datasource.read.use.new.parquet.file.format=true
 ```
+
+Few things to note for the new reader:
+- It is only applicable to COW or MOR tables with base files in Parquet format.
+- Only snapshot queries for COW table, and snapshot queries and read-optimized queries for MOR table are supported.
+- Currently, the reader will not be able to push down the data filters to scan. It is recommended to use key-based
+  merging for now.
+
+You can follow [HUDI-6243](https://issues.apache.org/jira/browse/HUDI-6243)
+and [HUDI-6722](https://issues.apache.org/jira/browse/HUDI-6722) to keep track of ongoing work related to reader/writer
+API changes and performance improvements.
 
 ## Raw Release Notes
 
