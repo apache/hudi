@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[82095],{10239:s=>{s.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/storage-types","name":"storage types","count":1,"permalink":"/blog/tags/storage-types"}')}}]);
