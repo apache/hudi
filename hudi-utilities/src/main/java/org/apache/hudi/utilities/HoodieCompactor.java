@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 
@@ -171,18 +172,20 @@ public class HoodieCompactor {
     JCommander cmd = new JCommander(cfg, null, args);
     if (cfg.help || args.length == 0) {
       cmd.usage();
-      System.exit(1);
+      throw new HoodieException("Fail to run compaction for " + cfg.tableName + ", return code: " + 1);
     }
     final JavaSparkContext jsc = UtilHelpers.buildSparkContext("compactor-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory);
     int ret = 0;
     try {
-      HoodieCompactor compactor = new HoodieCompactor(jsc, cfg);
-      ret = compactor.compact(cfg.retry);
+      ret = new HoodieCompactor(jsc, cfg).compact(cfg.retry);
     } catch (Throwable throwable) {
-      LOG.error("Fail to run compaction for " + cfg.tableName, throwable);
+      throw new HoodieException("Fail to run compaction for " + cfg.tableName + ", return code: " + ret, throwable);
     } finally {
       jsc.stop();
-      System.exit(ret);
+    }
+
+    if (ret != 0) {
+      throw new HoodieException("Fail to run compaction for " + cfg.tableName + ", return code: " + ret);
     }
   }
 
