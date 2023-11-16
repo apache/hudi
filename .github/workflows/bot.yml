@@ -117,6 +117,9 @@ jobs:
         if: ${{ !endsWith(env.SPARK_PROFILE, '3.2') }} # skip test spark 3.2 as it's covered by Azure CI
         run:
           mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+      - name: Test runtime breakdown
+        run:
+          grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr
 
   test-hudi-hadoop-mr-and-hudi-java-client:
     runs-on: ubuntu-latest
@@ -151,6 +154,9 @@ jobs:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
           mvn test -Punit-tests -fae -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"FLINK_PROFILE" -pl hudi-hadoop-mr,hudi-client/hudi-java-client $MVN_ARGS
+      - name: Test runtime breakdown
+        run:
+          grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr
 
   test-spark-java17:
     runs-on: ubuntu-latest
@@ -208,6 +214,9 @@ jobs:
         if: ${{ !endsWith(env.SPARK_PROFILE, '3.2') }} # skip test spark 3.2 as it's covered by Azure CI
         run:
           mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+      - name: Test runtime breakdown
+        run:
+          grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr
 
   test-flink:
     runs-on: ubuntu-latest

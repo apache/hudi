@@ -143,6 +143,9 @@ stages:
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
+          - script: |
+              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr
+            displayName: Test runtime breakdown
       - job: UT_FT_2
         displayName: FT client/spark-client
         timeoutInMinutes: '150'
@@ -167,6 +170,9 @@ stages:
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
+          - script: |
+              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr
+            displayName: Test runtime breakdown
       - job: UT_FT_3
         displayName: UT spark-datasource
         timeoutInMinutes: '240'
@@ -191,6 +197,9 @@ stages:
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
+          - script: |
+              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr
+            displayName: Test runtime breakdown
       - job: UT_FT_4
         displayName: UT FT other modules
         timeoutInMinutes: '240'
@@ -224,3 +233,6 @@ stages:
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
+          - script: |
+              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr
+            displayName: Test runtime breakdown
