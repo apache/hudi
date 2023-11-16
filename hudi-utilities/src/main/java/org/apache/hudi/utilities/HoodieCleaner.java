@@ -26,6 +26,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -103,26 +104,18 @@ public class HoodieCleaner {
     JCommander cmd = new JCommander(cfg, null, args);
     if (cfg.help || args.length == 0) {
       cmd.usage();
-      System.exit(1);
+      throw new HoodieException("Failed to run cleaning for " + cfg.basePath);
     }
 
     String dirName = new Path(cfg.basePath).getName();
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("hoodie-cleaner-" + dirName, cfg.sparkMaster);
-    boolean success = true;
 
     try {
       new HoodieCleaner(cfg, jssc).run();
     } catch (Throwable throwable) {
-      success = false;
-      LOG.error("Failed to run cleaning for " + cfg.basePath, throwable);
+      throw new HoodieException("Failed to run cleaning for " + cfg.basePath, throwable);
     } finally {
       jssc.stop();
-    }
-
-    if (!success) {
-      // Return a non-zero exit code to properly notify any resource manager
-      // that cleaning was not successful
-      System.exit(1);
     }
 
     LOG.info("Cleaner ran successfully");
