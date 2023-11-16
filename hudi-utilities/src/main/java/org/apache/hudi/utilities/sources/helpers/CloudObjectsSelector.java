@@ -200,9 +200,12 @@ public class CloudObjectsSelector {
    * Delete batch of messages from queue.
    */
   protected void deleteBatchOfMessages(SqsClient sqs, String queueUrl, List<Message> messagesToBeDeleted) {
-    DeleteMessageBatchRequest deleteBatchReq =
-        DeleteMessageBatchRequest.builder().queueUrl(queueUrl).build();
-    List<DeleteMessageBatchRequestEntry> deleteEntries = new ArrayList<>(deleteBatchReq.entries());
+    if (messagesToBeDeleted.isEmpty()) {
+      return;
+    }
+    DeleteMessageBatchRequest.Builder builder = DeleteMessageBatchRequest.builder().queueUrl(queueUrl);
+    List<DeleteMessageBatchRequestEntry> deleteEntries = new ArrayList<>();
+
     for (Message message : messagesToBeDeleted) {
       deleteEntries.add(
           DeleteMessageBatchRequestEntry.builder()
@@ -210,7 +213,8 @@ public class CloudObjectsSelector {
                   .receiptHandle(message.receiptHandle())
                   .build());
     }
-    DeleteMessageBatchResponse deleteResponse = sqs.deleteMessageBatch(deleteBatchReq);
+    builder.entries(deleteEntries);
+    DeleteMessageBatchResponse deleteResponse = sqs.deleteMessageBatch(builder.build());
     List<String> deleteFailures =
         deleteResponse.failed().stream()
             .map(BatchResultErrorEntry::id)
