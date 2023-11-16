@@ -131,7 +131,7 @@ class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
            |""".stripMargin)
 
       // collect column stats for table
-      for (i <- 3 to 3) {
+      for (i <- 1 to 10) {
         val columnName = s"c$i"
         val metadataStats = spark.sql(s"""call show_metadata_table_column_stats(table => '$tableName', targetColumns => '$columnName')""").collect()
         assertResult(2) {
