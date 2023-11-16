@@ -19,12 +19,14 @@
 package org.apache.hudi.index.bucket;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.ConsistentHashingNode;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -35,9 +37,12 @@ import org.apache.hudi.table.HoodieTable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.index.HoodieIndexUtils.tagAsNewRecordIfNeeded;
 
 /**
  * Consistent hashing bucket index implementation, with auto-adjust bucket number.
@@ -71,11 +76,28 @@ public class HoodieConsistentBucketIndex extends HoodieBucketIndex {
   }
 
   @Override
-  protected BucketIndexLocationMapper getLocationMapper(HoodieTable table, List<String> partitionPath) {
-    return new ConsistentBucketIndexLocationMapper(table, partitionPath);
+  public <R> HoodieData<HoodieRecord<R>> tagLocation(
+      HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
+      HoodieTable hoodieTable)
+      throws HoodieIndexException {
+    // Get bucket location mapper for the given partitions
+    List<String> partitions = records.map(HoodieRecord::getPartitionPath).distinct().collectAsList();
+    LOG.info("Get BucketIndexLocationMapper for partitions: " + partitions);
+    ConsistentBucketIndexLocationMapper mapper = new ConsistentBucketIndexLocationMapper(hoodieTable, partitions);
+
+    return records.mapPartitions(iterator ->
+            new LazyIterableIterator<HoodieRecord<R>, HoodieRecord<R>>(iterator) {
+      @Override
+      protected HoodieRecord<R> computeNext() {
+        // TODO maybe batch the operation to improve performance
+        HoodieRecord record = inputItr.next();
+        Option<HoodieRecordLocation> loc = mapper.getRecordLocation(record.getKey());
+        return tagAsNewRecordIfNeeded(record, loc);
+      }
+      }, false);
   }
 
-  public class ConsistentBucketIndexLocationMapper implements BucketIndexLocationMapper {
+  public class ConsistentBucketIndexLocationMapper implements Serializable {
 
     /**
      * Mapping from partitionPath -> bucket identifier
@@ -90,7 +112,6 @@ public class HoodieConsistentBucketIndex extends HoodieBucketIndex {
       }));
     }
 
-    @Override
     public Option<HoodieRecordLocation> getRecordLocation(HoodieKey key) {
       String partitionPath = key.getPartitionPath();
       ConsistentHashingNode node = partitionToIdentifier.get(partitionPath).getBucket(key, indexKeyFields);
