@@ -577,9 +577,6 @@ public class StreamSync implements Serializable, Closeable {
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
       if (this.userProvidedSchemaProvider != null && this.userProvidedSchemaProvider.getTargetSchema() != null) {
         if (useRowWriter) {
-          if (errorTableWriter.isPresent()) {
-            throw new HoodieException("Error table is not yet supported with row writer");
-          }
           inputBatchForWriter = new InputBatch(transformed, checkpointStr, this.userProvidedSchemaProvider);
         } else {
           // non row writer path
