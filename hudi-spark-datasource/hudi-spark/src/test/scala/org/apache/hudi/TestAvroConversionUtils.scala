@@ -383,7 +383,7 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
               }
             }
           ]
-        }}
+        }
     """
 
     val expectedAvroSchema = new Schema.Parser().parse(expectedSchemaStr)

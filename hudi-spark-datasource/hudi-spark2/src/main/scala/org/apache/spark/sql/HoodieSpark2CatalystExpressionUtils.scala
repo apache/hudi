@@ -18,10 +18,15 @@
 package org.apache.spark.sql
 
 import HoodieSparkTypeUtils.isCastPreservingOrdering
+import org.apache.spark.sql.catalyst.encoders.{ExpressionEncoder, RowEncoder}
 import org.apache.spark.sql.catalyst.expressions.{Add, And, Attribute, AttributeReference, AttributeSet, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expm1, Expression, FromUTCTimestamp, FromUnixTime, Like, Log, Log10, Log1p, Log2, Lower, Multiply, Or, ParseToDate, ParseToTimestamp, ShiftLeft, ShiftRight, ToUTCTimestamp, ToUnixTimestamp, Upper}
-import org.apache.spark.sql.types.DataType
+import org.apache.spark.sql.types.{DataType, StructType}
 
 object HoodieSpark2CatalystExpressionUtils extends HoodieCatalystExpressionUtils {
+
+  override def getEncoder(schema: StructType): ExpressionEncoder[Row] = {
+    RowEncoder.apply(schema).resolveAndBind()
+  }
 
   // NOTE: This method has been borrowed from Spark 3.1
   override def extractPredicatesWithinOutputSet(condition: Expression,

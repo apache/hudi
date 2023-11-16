@@ -37,7 +37,7 @@ import org.apache.spark.sql.{Dataset, HoodieInternalRowUtils, HoodieUnsafeUtils,
 import org.apache.spark.unsafe.types.UTF8String
 import org.apache.spark.{HoodieSparkKryoRegistrar, SparkConf}
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.{AfterEach, BeforeEach}
 
 import java.util
 import scala.collection.JavaConversions._
@@ -66,6 +66,13 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     sparkConf.set("spark.sql.parquet.enableVectorizedReader", "false")
     HoodieSparkKryoRegistrar.register(sparkConf)
     spark = SparkSession.builder.config(sparkConf).getOrCreate
+  }
+
+  @AfterEach
+  def teardown() {
+    if (spark != null) {
+      spark.stop()
+    }
   }
 
   override def getHadoopConf: Configuration = {

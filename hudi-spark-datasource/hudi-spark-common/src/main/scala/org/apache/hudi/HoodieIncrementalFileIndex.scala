@@ -67,9 +67,11 @@ class HoodieIncrementalFileIndex(override val spark: SparkSession,
               || (f.getBaseFile.isPresent && f.getBaseFile.get().getBootstrapBaseFile.isPresent)).
               foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
             if (c.nonEmpty) {
-              PartitionDirectory(new HoodiePartitionFileSliceMapping(partitionValues, c), baseFileStatusesAndLogFileOnly)
+              sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
+                new HoodiePartitionFileSliceMapping(partitionValues, c), baseFileStatusesAndLogFileOnly)
             } else {
-              PartitionDirectory(partitionValues, baseFileStatusesAndLogFileOnly)
+              sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
+                partitionValues, baseFileStatusesAndLogFileOnly)
             }
           } else {
             val allCandidateFiles: Seq[FileStatus] = fileSlices.flatMap(fs => {
@@ -83,7 +85,8 @@ class HoodieIncrementalFileIndex(override val spark: SparkSession,
               baseFileStatusOpt.foreach(f => files.append(f))
               files
             })
-            PartitionDirectory(partitionValues, allCandidateFiles)
+            sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
+              partitionValues, allCandidateFiles)
           }
       }.toSeq
 

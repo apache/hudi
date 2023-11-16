@@ -537,6 +537,10 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   test("Test insert for uppercase table name") {
     withRecordType()(withTempDir{ tmp =>
       val tableName = s"H_$generateTableName"
+      if (HoodieSparkUtils.gteqSpark3_5) {
+        // [SPARK-44284] Spark 3.5+ requires conf below to be case sensitive
+        spark.sql(s"set spark.sql.caseSensitive=true")
+      }
 
       spark.sql(
         s"""
@@ -557,7 +561,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         .setBasePath(tmp.getCanonicalPath)
         .setConf(spark.sessionState.newHadoopConf())
         .build()
-      assertResult(metaClient.getTableConfig.getTableName)(tableName)
+      assertResult(tableName)(metaClient.getTableConfig.getTableName)
     })
   }
 
@@ -575,7 +579,13 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            | tblproperties (primaryKey = 'id')
            | partitioned by (dt)
        """.stripMargin)
-      val tooManyDataColumnsErrorMsg = if (HoodieSparkUtils.gteqSpark3_4) {
+      val tooManyDataColumnsErrorMsg = if (HoodieSparkUtils.gteqSpark3_5) {
+        s"""
+          |[INSERT_COLUMN_ARITY_MISMATCH.TOO_MANY_DATA_COLUMNS] Cannot write to `spark_catalog`.`default`.`$tableName`, the reason is too many data columns:
+          |Table columns: `id`, `name`, `price`.
+          |Data columns: `1`, `a1`, `10`, `2021-06-20`.
+          |""".stripMargin
+      } else if (HoodieSparkUtils.gteqSpark3_4) {
         """
           |too many data columns:
           |Table columns: 'id', 'name', 'price'.
@@ -591,7 +601,13 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       checkExceptionContain(s"insert into $tableName partition(dt = '2021-06-20') select 1, 'a1', 10, '2021-06-20'")(
         tooManyDataColumnsErrorMsg)
 
-      val notEnoughDataColumnsErrorMsg = if (HoodieSparkUtils.gteqSpark3_4) {
+      val notEnoughDataColumnsErrorMsg = if (HoodieSparkUtils.gteqSpark3_5) {
+        s"""
+          |[INSERT_COLUMN_ARITY_MISMATCH.NOT_ENOUGH_DATA_COLUMNS] Cannot write to `spark_catalog`.`default`.`$tableName`, the reason is not enough data columns:
+          |Table columns: `id`, `name`, `price`, `dt`.
+          |Data columns: `1`, `a1`, `10`.
+          |""".stripMargin
+      } else if (HoodieSparkUtils.gteqSpark3_4) {
         """
           |not enough data columns:
           |Table columns: 'id', 'name', 'price', 'dt'.
