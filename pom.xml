@@ -878,7 +878,7 @@
       <dependency>
         <groupId>com.fasterxml.jackson.module</groupId>
         <artifactId>jackson-module-afterburner</artifactId>
-        <version>${fasterxml.jackson.databind.version}</version>
+        <version>${fasterxml.version}</version>
       </dependency>
 
       <!-- Glassfish -->
