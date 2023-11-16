@@ -151,8 +151,7 @@ public class HoodieClusteringJob {
     }
 
     final JavaSparkContext jsc = UtilHelpers.buildSparkContext("clustering-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory);
-    HoodieClusteringJob clusteringJob = new HoodieClusteringJob(jsc, cfg);
-    int result = clusteringJob.cluster(cfg.retry);
+    int result = new HoodieClusteringJob(jsc, cfg).cluster(cfg.retry);
     String resultMsg = String.format("Clustering with basePath: %s, tableName: %s, runningMode: %s",
         cfg.basePath, cfg.tableName, cfg.runningMode);
     if (result != 0) {
