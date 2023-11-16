@@ -81,7 +81,6 @@ import static org.apache.hudi.hive.util.HiveSchemaUtil.parquetSchemaToMapSchema;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.common.util.TableUtils.tableId;
-import org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory;
 
 /**
  * This class implements all the AWS APIs to enable syncing of a Hudi Table with the
@@ -108,9 +107,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   public AWSGlueCatalogSyncClient(HiveSyncConfig config) {
     super(config);
-    this.awsGlue = GlueAsyncClient.builder()
-            .credentialsProvider(HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(config.getProps()))
-            .build();
+    this.awsGlue = GlueAsyncClient.builder().build();
     this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
     this.skipTableArchive = config.getBooleanOrDefault(GlueCatalogSyncClientConfig.GLUE_SKIP_TABLE_ARCHIVE);
     this.enableMetadataTable = Boolean.toString(config.getBoolean(GLUE_METADATA_FILE_LISTING)).toUpperCase();
