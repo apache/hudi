@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql
 
-import HoodieSparkTypeUtils.isCastPreservingOrdering
+import org.apache.spark.sql.HoodieSparkTypeUtils.isCastPreservingOrdering
 import org.apache.spark.sql.catalyst.encoders.{ExpressionEncoder, RowEncoder}
 import org.apache.spark.sql.catalyst.expressions.{Add, AnsiCast, Attribute, AttributeReference, AttributeSet, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expm1, Expression, FromUTCTimestamp, FromUnixTime, Log, Log10, Log1p, Log2, Lower, Multiply, ParseToDate, ParseToTimestamp, PredicateHelper, ShiftLeft, ShiftRight, ToUTCTimestamp, ToUnixTimestamp, Upper}
 import org.apache.spark.sql.execution.datasources.DataSourceStrategy
@@ -28,7 +28,6 @@ object HoodieSpark33CatalystExpressionUtils extends HoodieSpark3CatalystExpressi
   override def getEncoder(schema: StructType): ExpressionEncoder[Row] = {
     RowEncoder.apply(schema).resolveAndBind()
   }
-
 
   override def normalizeExprs(exprs: Seq[Expression], attributes: Seq[Attribute]): Seq[Expression] =
     DataSourceStrategy.normalizeExprs(exprs, attributes)

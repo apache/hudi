@@ -27,14 +27,13 @@ import org.apache.spark.sql.catalyst.InternalRow
  * Before Spark 3.4.0,
  * ```
  * case class PartitionedFile(
- * partitionValues: InternalRow,
- * filePath: String,
- * start: Long,
- *
- * @transient   locations: Array[String] = Array.empty)
- *              ```,
- *              Since Spark 3.4.0, the filePath is switch to [[SparkPath]] for type safety:
- *              ```
+ *   partitionValues: InternalRow,
+ *   filePath: String,
+ *   start: Long,
+ *   @transient locations: Array[String] = Array.empty)
+ * ```,
+ * Since Spark 3.4.0, the filePath is switch to [[SparkPath]] for type safety:
+ * ```
  * case class PartitionedFile(
  *   partitionValues: InternalRow,
  *   filePath: SparkPath,
