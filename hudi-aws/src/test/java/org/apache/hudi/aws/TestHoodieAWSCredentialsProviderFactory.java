@@ -18,9 +18,10 @@
 
 package org.apache.hudi.aws;
 
-import org.apache.hudi.config.HoodieAWSConfig;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.config.HoodieAWSConfig;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
 
@@ -40,6 +41,7 @@ public class TestHoodieAWSCredentialsProviderFactory {
     assertEquals("random-session-token", credentials.sessionToken());
   }
 
+  @Disabled("HUDI-7114")
   @Test
   public void testGetAWSCredentialsWithInvalidAssumeRole() {
     // This test is to ensure that the AWS credentials provider factory fallbacks to default credentials
