@@ -783,9 +783,14 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       return;
     }
     try {
+      final Timer.Context timerContext = metrics.getArchiveCtx();
       // We cannot have unbounded commit files. Archive commits if we have to archive
       HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(config, table);
-      archiver.archiveIfRequired(context, true);
+      int instantsToArchive = archiver.archiveIfRequired(context, true);
+      if (timerContext != null) {
+        long durationMs = metrics.getDurationInMs(timerContext.stop());
+        this.metrics.updateArchiveMetrics(durationMs, instantsToArchive);
+      }
     } catch (IOException ioe) {
       throw new HoodieIOException("Failed to archive", ioe);
     }

@@ -90,23 +90,21 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     this.metrics = new HoodieMetrics(config);
   }
 
-  public boolean archiveIfRequired(HoodieEngineContext context) throws IOException {
+  public int archiveIfRequired(HoodieEngineContext context) throws IOException {
     return archiveIfRequired(context, false);
   }
 
   /**
    * Check if commits need to be archived. If yes, archive commits.
    */
-  public boolean archiveIfRequired(HoodieEngineContext context, boolean acquireLock) throws IOException {
+  public int archiveIfRequired(HoodieEngineContext context, boolean acquireLock) throws IOException {
     try {
       if (acquireLock) {
         // there is no owner or instant time per se for archival.
         txnManager.beginTransaction(Option.empty(), Option.empty());
       }
-      final Timer.Context timerContext = metrics.getArchiveCtx();
       // Sort again because the cleaning and rollback instants could break the sequence.
       List<ActiveAction> instantsToArchive = getInstantsToArchive().sorted().collect(Collectors.toList());
-      boolean success = true;
       if (!instantsToArchive.isEmpty()) {
         LOG.info("Archiving instants " + instantsToArchive);
         Consumer<Exception> exceptionHandler = e -> {
@@ -116,17 +114,13 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         };
         this.timelineWriter.write(instantsToArchive, Option.of(action -> deleteAnyLeftOverMarkers(context, action)), Option.of(exceptionHandler));
         LOG.info("Deleting archived instants " + instantsToArchive);
-        success = deleteArchivedInstants(instantsToArchive, context);
+        deleteArchivedInstants(instantsToArchive, context);
         // triggers compaction and cleaning only after archiving action
         this.timelineWriter.compactAndClean(context);
       } else {
         LOG.info("No Instants to archive");
       }
-      if (success && timerContext != null) {
-        long durationMs = metrics.getDurationInMs(timerContext.stop());
-        this.metrics.updateArchiveMetrics(durationMs, instantsToArchive.size());
-      }
-      return success;
+      return instantsToArchive.size();
     } finally {
       if (acquireLock) {
         txnManager.endTransaction(Option.empty());
