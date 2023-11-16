@@ -18,8 +18,8 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -268,7 +268,8 @@ public class TestWriteBase {
      * Stop the timeline server.
      */
     public TestHarness stopTimelineServer() {
-      pipeline.getCoordinator().getWriteClient().getTimelineServer().ifPresent(EmbeddedTimelineService::stop);
+      HoodieFlinkWriteClient<?> client = pipeline.getCoordinator().getWriteClient();
+      client.getTimelineServer().ifPresent(embeddedTimelineService -> embeddedTimelineService.stopForBasePath(client.getConfig().getBasePath()));
       return this;
     }
 

@@ -18,9 +18,11 @@
 
 package org.apache.hudi.client.embedded;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -29,35 +31,93 @@ import org.apache.hudi.common.util.NetworkUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.timeline.service.TimelineService;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Timeline Service that runs as part of write client.
  */
 public class EmbeddedTimelineService {
+  // lock used when starting/stopping/modifying embedded services
+  private static final Object SERVICE_LOCK = new Object();
 
   private static final Logger LOG = LoggerFactory.getLogger(EmbeddedTimelineService.class);
-
+  private static final AtomicInteger NUM_SERVERS_RUNNING = new AtomicInteger(0);
+  // Map of port to existing timeline service running on that port
+  private static final Map<Integer, EmbeddedTimelineService> RUNNING_SERVICES = new HashMap<>();
+  private static final Registry METRICS_REGISTRY = Registry.getRegistry("TimelineService");
+  private static final String NUM_EMBEDDED_TIMELINE_SERVERS = "numEmbeddedTimelineServers";
   private int serverPort;
   private String hostAddr;
-  private HoodieEngineContext context;
+  private final HoodieEngineContext context;
   private final SerializableConfiguration hadoopConf;
   private final HoodieWriteConfig writeConfig;
-  private final String basePath;
+  private TimelineService.Config serviceConfig;
+  private final Set<String> basePaths; // the set of base paths using this EmbeddedTimelineService
 
   private transient FileSystemViewManager viewManager;
   private transient TimelineService server;
 
-  public EmbeddedTimelineService(HoodieEngineContext context, String embeddedTimelineServiceHostAddr, HoodieWriteConfig writeConfig) {
+  private EmbeddedTimelineService(HoodieEngineContext context, String embeddedTimelineServiceHostAddr, HoodieWriteConfig writeConfig) {
     setHostAddr(embeddedTimelineServiceHostAddr);
     this.context = context;
     this.writeConfig = writeConfig;
-    this.basePath = writeConfig.getBasePath();
+    this.basePaths = new HashSet<>();
+    this.basePaths.add(writeConfig.getBasePath());
     this.hadoopConf = context.getHadoopConf();
     this.viewManager = createViewManager();
+  }
+
+  /**
+   * Returns an existing embedded timeline service if one is running for the given configuration and reuse is enabled, or starts a new one.
+   * @param context The {@link HoodieEngineContext} for the client
+   * @param embeddedTimelineServiceHostAddr The host address to use for the service (nullable)
+   * @param writeConfig The {@link HoodieWriteConfig} for the client
+   * @return A running {@link EmbeddedTimelineService}
+   * @throws IOException if an error occurs while starting the service
+   */
+  public static EmbeddedTimelineService getOrStartEmbeddedTimelineService(HoodieEngineContext context, String embeddedTimelineServiceHostAddr, HoodieWriteConfig writeConfig) throws IOException {
+    return getOrStartEmbeddedTimelineService(context, embeddedTimelineServiceHostAddr, writeConfig, TimelineService::new);
+  }
+
+  static EmbeddedTimelineService getOrStartEmbeddedTimelineService(HoodieEngineContext context, String embeddedTimelineServiceHostAddr, HoodieWriteConfig writeConfig,
+                                                                   TimelineServiceCreator timelineServiceCreator) throws IOException {
+    // if reuse is enabled, check if any existing instances are compatible
+    if (writeConfig.isEmbeddedTimelineServerReuseEnabled()) {
+      synchronized (SERVICE_LOCK) {
+        for (EmbeddedTimelineService service : RUNNING_SERVICES.values()) {
+          if (service.canReuseFor(writeConfig, embeddedTimelineServiceHostAddr)) {
+            service.addBasePath(writeConfig.getBasePath());
+            LOG.info("Reusing existing embedded timeline server with configuration: " + service.serviceConfig);
+            return service;
+          }
+        }
+        // if no compatible instance is found, create a new one
+        EmbeddedTimelineService service = createAndStartService(context, embeddedTimelineServiceHostAddr, writeConfig, timelineServiceCreator);
+        RUNNING_SERVICES.put(service.serverPort, service);
+        return service;
+      }
+    }
+    // if not, create a new instance. If reuse is not enabled, there is no need to add it to RUNNING_SERVICES
+    return createAndStartService(context, embeddedTimelineServiceHostAddr, writeConfig, timelineServiceCreator);
+  }
+
+  private static EmbeddedTimelineService createAndStartService(HoodieEngineContext context, String embeddedTimelineServiceHostAddr, HoodieWriteConfig writeConfig,
+                                                               TimelineServiceCreator timelineServiceCreator) throws IOException {
+    EmbeddedTimelineService service = new EmbeddedTimelineService(context, embeddedTimelineServiceHostAddr, writeConfig);
+    service.startServer(timelineServiceCreator);
+    METRICS_REGISTRY.set(NUM_EMBEDDED_TIMELINE_SERVERS, NUM_SERVERS_RUNNING.incrementAndGet());
+    return service;
   }
 
   private FileSystemViewManager createViewManager() {
@@ -73,7 +133,7 @@ public class EmbeddedTimelineService {
     return FileSystemViewManager.createViewManagerWithTableMetadata(context, writeConfig.getMetadataConfig(), builder.build(), writeConfig.getCommonConfig());
   }
 
-  public void startServer() throws IOException {
+  private void startServer(TimelineServiceCreator timelineServiceCreator) throws IOException {
     TimelineService.Config.Builder timelineServiceConfBuilder = TimelineService.Config.builder()
         .serverPort(writeConfig.getEmbeddedTimelineServerPort())
         .numThreads(writeConfig.getEmbeddedTimelineServerThreads())
@@ -88,28 +148,18 @@ public class EmbeddedTimelineService {
           .markerBatchIntervalMs(writeConfig.getMarkersTimelineServerBasedBatchIntervalMs())
           .markerParallelism(writeConfig.getMarkersDeleteParallelism());
     }
+    this.serviceConfig = timelineServiceConfBuilder.build();
 
-    if (writeConfig.isEarlyConflictDetectionEnable()) {
-      timelineServiceConfBuilder.earlyConflictDetectionEnable(true)
-          .earlyConflictDetectionStrategy(writeConfig.getEarlyConflictDetectionStrategyClassName())
-          .earlyConflictDetectionCheckCommitConflict(writeConfig.earlyConflictDetectionCheckCommitConflict())
-          .asyncConflictDetectorInitialDelayMs(writeConfig.getAsyncConflictDetectorInitialDelayMs())
-          .asyncConflictDetectorPeriodMs(writeConfig.getAsyncConflictDetectorPeriodMs())
-          .earlyConflictDetectionMaxAllowableHeartbeatIntervalInMs(
-              writeConfig.getHoodieClientHeartbeatIntervalInMs()
-                  * writeConfig.getHoodieClientHeartbeatTolerableMisses());
-    }
-
-    if (writeConfig.isTimelineServerBasedInstantStateEnabled()) {
-      timelineServiceConfBuilder
-          .instantStateForceRefreshRequestNumber(writeConfig.getTimelineServerBasedInstantStateForceRefreshRequestNumber())
-          .enableInstantStateRequests(true);
-    }
-
-    server = new TimelineService(context, hadoopConf.newCopy(), timelineServiceConfBuilder.build(),
-        FSUtils.getFs(basePath, hadoopConf.newCopy()), viewManager);
+    server = timelineServiceCreator.create(context, hadoopConf.newCopy(), serviceConfig,
+        FSUtils.getFs(writeConfig.getBasePath(), hadoopConf.newCopy()), createViewManager());
     serverPort = server.startService();
     LOG.info("Started embedded timeline server at " + hostAddr + ":" + serverPort);
+  }
+
+  @FunctionalInterface
+  interface TimelineServiceCreator {
+    TimelineService create(HoodieEngineContext context, Configuration hadoopConf, TimelineService.Config timelineServerConf,
+                           FileSystem fileSystem, FileSystemViewManager globalFileSystemViewManager) throws IOException;
   }
 
   private void setHostAddr(String embeddedTimelineServiceHostAddr) {
@@ -146,16 +196,62 @@ public class EmbeddedTimelineService {
     return viewManager;
   }
 
-  public boolean canReuseFor(String basePath) {
-    return this.server != null
-        && this.viewManager != null
-        && this.basePath.equals(basePath);
+  /**
+   * Adds a new base path to the set that are managed by this instance.
+   * @param basePath the new base path to add
+   */
+  private void addBasePath(String basePath) {
+    basePaths.add(basePath);
   }
 
-  public void stop() {
-    if (null != server) {
+  private boolean canReuseFor(HoodieWriteConfig newWriteConfig, String newHostAddr) {
+    if (server == null || viewManager == null) {
+      return false; // service is not running
+    }
+    if (basePaths.contains(newWriteConfig.getBasePath())) {
+      return true; // already running for this base path
+    }
+    if (newHostAddr != null && !newHostAddr.equals(this.hostAddr)) {
+      return false; // different host address
+    }
+    if (writeConfig.getMarkersType() != newWriteConfig.getMarkersType()) {
+      return false; // different marker type
+    }
+    return metadataConfigsAreEquivalent(writeConfig.getMetadataConfig().getProps(), newWriteConfig.getMetadataConfig().getProps());
+  }
+
+  private boolean metadataConfigsAreEquivalent(Properties properties1, Properties properties2) {
+    Set<Object> metadataConfigs = new HashSet<>(properties1.keySet());
+    metadataConfigs.addAll(properties2.keySet());
+    return metadataConfigs.stream()
+        .filter(key -> ((String) key).startsWith(HoodieMetadataConfig.METADATA_PREFIX))
+        .allMatch(key -> {
+          String value1 = properties1.getProperty((String) key, "");
+          String value2 = properties2.getProperty((String) key, "");
+          return value1.equals(value2);
+        });
+
+  }
+
+  /**
+   * Stops the embedded timeline service for the given base path. If a timeline service is managing multiple tables, it will only be shutdown once all tables have been stopped.
+   * @param basePath For the table to stop the service for
+   */
+  public void stopForBasePath(String basePath) {
+    synchronized (SERVICE_LOCK) {
+      basePaths.remove(basePath);
+      if (basePaths.isEmpty()) {
+        RUNNING_SERVICES.remove(serverPort);
+      }
+    }
+    if (this.server != null) {
+      this.server.unregisterBasePath(basePath);
+    }
+    // continue rest of shutdown outside of the synchronized block to avoid excess blocking
+    if (basePaths.isEmpty() && null != server) {
       LOG.info("Closing Timeline server");
       this.server.close();
+      METRICS_REGISTRY.set(NUM_EMBEDDED_TIMELINE_SERVERS, NUM_SERVERS_RUNNING.decrementAndGet());
       this.server = null;
       this.viewManager = null;
       LOG.info("Closed Timeline server");

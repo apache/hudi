@@ -52,8 +52,8 @@ public class TimelineService {
   private static final int DEFAULT_NUM_THREADS = 250;
 
   private int serverPort;
-  private Config timelineServerConf;
-  private Configuration conf;
+  private final Config timelineServerConf;
+  private final Configuration conf;
   private transient HoodieEngineContext context;
   private transient FileSystem fs;
   private transient Javalin app = null;
@@ -432,6 +432,10 @@ public class TimelineService {
     }
     this.fsViewsManager.close();
     LOG.info("Closed Timeline Service");
+  }
+
+  public void unregisterBasePath(String basePath) {
+    fsViewsManager.clearFileSystemView(basePath);
   }
 
   public Configuration getConf() {
