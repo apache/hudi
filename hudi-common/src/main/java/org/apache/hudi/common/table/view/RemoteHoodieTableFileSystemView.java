@@ -43,6 +43,7 @@ import org.apache.hudi.exception.HoodieRemoteException;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
 import org.apache.http.Consts;
 import org.apache.http.client.fluent.Request;
 import org.apache.http.client.fluent.Response;
@@ -146,7 +147,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   private static final TypeReference<List<BaseFileDTO>> BASE_FILE_DTOS_REFERENCE = new TypeReference<List<BaseFileDTO>>() {};
   private static final TypeReference<Map<String, List<BaseFileDTO>>> BASE_FILE_MAP_REFERENCE = new TypeReference<Map<String, List<BaseFileDTO>>>() {};
   private static final TypeReference<Map<String, List<FileSliceDTO>>> FILE_SLICE_MAP_REFERENCE = new TypeReference<Map<String, List<FileSliceDTO>>>() {};
-  private static final ObjectMapper MAPPER = new ObjectMapper();
+  private static final ObjectMapper MAPPER = new ObjectMapper().registerModule(new AfterburnerModule());
 
   private final String serverHost;
   private final int serverPort;

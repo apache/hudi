@@ -23,6 +23,7 @@ import org.apache.hudi.exception.HoodieException;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
 import org.apache.http.client.fluent.Request;
 import org.apache.http.client.fluent.Response;
 import org.apache.http.client.utils.URIBuilder;
@@ -37,7 +38,7 @@ import java.util.Map;
  */
 public class HttpRequestClient {
   private static final Logger LOG = LoggerFactory.getLogger(HttpRequestClient.class);
-  private static final ObjectMapper MAPPER = new ObjectMapper();
+  private static final ObjectMapper MAPPER = new ObjectMapper().registerModule(new AfterburnerModule());
   private final String serverHost;
   private final int serverPort;
   private final int timeoutSecs;
