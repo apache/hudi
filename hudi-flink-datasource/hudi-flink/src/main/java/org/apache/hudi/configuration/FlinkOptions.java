@@ -665,7 +665,9 @@ public class FlinkOptions extends HoodieConfig {
       .key("compaction.trigger.strategy")
       .stringType()
       .defaultValue(NUM_COMMITS) // default true for MOR write
-      .withDescription("Strategy to trigger compaction, options are 'num_commits': trigger compaction when reach N delta commits;\n"
+      .withDescription("Strategy to trigger compaction, options are "
+          + "'num_commits': trigger compaction when there are at least N delta commits after last completed compaction;\n"
+          + "'num_commits_after_last_request': trigger compaction when there are at least N delta commits after last completed/requested compaction;\n"
           + "'time_elapsed': trigger compaction when time elapsed > N seconds since last compaction;\n"
           + "'num_and_time': trigger compaction when both NUM_COMMITS and TIME_ELAPSED are satisfied;\n"
           + "'num_or_time': trigger compaction when NUM_COMMITS or TIME_ELAPSED is satisfied.\n"
