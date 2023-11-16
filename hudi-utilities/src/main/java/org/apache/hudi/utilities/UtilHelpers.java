@@ -605,7 +605,7 @@ public class UtilHelpers {
         ret = supplier.get();
       } while (ret != 0 && maxRetryCount-- > 0);
     } catch (Throwable t) {
-      LOG.error(errorMessage);
+      LOG.error(errorMessage, t);
     }
     return ret;
   }
