@@ -54,18 +54,15 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
                                  isBootstrap: Boolean,
                                  isIncremental: Boolean,
                                  requiredFilters: Seq[Filter]
-                                ) extends ParquetFileFormat with SparkAdapterSupport {
+                                ) extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait {
 
-  def getRequiredFilters: Seq[Filter] = requiredFilters
+  override def getRequiredFilters: Seq[Filter] = requiredFilters
 
   override def isSplitable(sparkSession: SparkSession,
                            options: Map[String, String],
                            path: Path): Boolean = {
     false
   }
-
-  //Used so that the planner only projects once and does not stack overflow
-  var isProjected = false
 
   /**
    * Support batch needs to remain consistent, even if one side of a bootstrap merge can support

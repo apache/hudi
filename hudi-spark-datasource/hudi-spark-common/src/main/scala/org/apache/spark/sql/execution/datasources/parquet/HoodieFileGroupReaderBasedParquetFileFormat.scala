@@ -45,6 +45,13 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.jdk.CollectionConverters.asScalaIteratorConverter
 
+
+trait HoodieFormatTrait {
+
+  var isProjected: Boolean = false
+  def getRequiredFilters: Seq[Filter]
+}
+
 /**
  * This class utilizes {@link HoodieFileGroupReader} and its related classes to support reading
  * from Parquet formatted base files and their log files.
@@ -59,8 +66,9 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                                                   isIncremental: Boolean,
                                                   shouldUseRecordPosition: Boolean,
                                                   requiredFilters: Seq[Filter]
-                                           ) extends ParquetFileFormat with SparkAdapterSupport {
-  var isProjected = false
+                                           ) extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait {
+
+  override def getRequiredFilters: Seq[Filter] = requiredFilters
 
   /**
    * Support batch needs to remain consistent, even if one side of a bootstrap merge can support
