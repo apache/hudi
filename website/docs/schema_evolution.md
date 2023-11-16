@@ -22,7 +22,10 @@ the previous schema (e.g., renaming a column).
 Furthermore, the evolved schema is queryable across high-performance engines like Presto and Spark SQL without additional overhead for column ID translations or
 type reconciliations. The following table summarizes the schema changes compatible with different Hudi table types.
 
-The incoming schema will automatically have missing columns from the table schema added with null value
+The incoming schema will automatically have missing columns added with null values from the table schema.
+For this we need to enable the following config
+`hoodie.write.handle.missing.cols.with.lossless.type.promotion`, otherwise the pipeline will fail. Note: This particular config will also do best effort to solve some of the backward incompatible
+type promotions eg., 'long' to 'int'.
 
 | Schema Change                                                   | COW | MOR | Remarks                                                                                                                                                                                                                                                                                       |
 |:----------------------------------------------------------------|:----|:----|:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
