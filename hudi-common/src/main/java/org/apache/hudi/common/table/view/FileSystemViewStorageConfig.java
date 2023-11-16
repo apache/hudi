@@ -173,6 +173,12 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
       .withDocumentation("Config to control whether backup needs to be configured if clients were not able to reach"
           + " timeline service.");
 
+  public static final ConfigProperty<String> REMOTE_VIEW_FIRST = ConfigProperty
+      .key("hoodie.filesystem.view.remote.first")
+      .defaultValue("true")
+      .markAdvanced()
+      .withDocumentation("Controls whether or not the file system view is remote first or secondary first.");
+
   public static FileSystemViewStorageConfig.Builder newBuilder() {
     return new Builder();
   }
@@ -272,6 +278,10 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
 
   public String getRocksdbBasePath() {
     return getString(ROCKSDB_BASE_PATH);
+  }
+
+  public boolean isRemoteViewFirst() {
+    return getBoolean(REMOTE_VIEW_FIRST);
   }
 
   /**

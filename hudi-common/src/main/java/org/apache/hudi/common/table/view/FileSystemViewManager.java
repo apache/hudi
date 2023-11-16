@@ -260,7 +260,6 @@ public class FileSystemViewManager {
         return new FileSystemViewManager(context, config, (metaClient, viewConfig) -> createRemoteFileSystemView(conf,
             viewConfig, metaClient));
       case REMOTE_FIRST:
-        LOG.info("Creating remote first table view");
         return new FileSystemViewManager(context, config, (metaClient, viewConfig) -> {
           RemoteHoodieTableFileSystemView remoteFileSystemView =
               createRemoteFileSystemView(conf, viewConfig, metaClient);
@@ -279,7 +278,13 @@ public class FileSystemViewManager {
               throw new IllegalArgumentException("Secondary Storage type can only be in-memory or spillable. Was :"
                   + viewConfig.getSecondaryStorageType());
           }
-          return new PriorityBasedFileSystemView(remoteFileSystemView, secondaryView);
+          if (config.isRemoteViewFirst()) {
+            LOG.info("Creating remote table view first");
+            return new PriorityBasedFileSystemView(remoteFileSystemView, secondaryView);
+          } else {
+            LOG.info("Creating secondary table view first");
+            return new PriorityBasedFileSystemView(secondaryView, remoteFileSystemView);
+          }
         });
       default:
         throw new IllegalArgumentException("Unknown file system view type :" + config.getStorageType());
