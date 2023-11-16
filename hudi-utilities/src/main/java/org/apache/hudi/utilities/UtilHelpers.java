@@ -606,9 +606,6 @@ public class UtilHelpers {
       } while (ret != 0 && maxRetryCount-- > 0);
     } catch (Throwable t) {
       LOG.error(errorMessage);
-      if (t instanceof HoodieException) {
-        throw new HoodieException(errorMessage, t);
-      }
     }
     return ret;
   }
