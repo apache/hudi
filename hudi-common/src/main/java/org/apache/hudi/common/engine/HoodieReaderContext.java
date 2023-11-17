@@ -33,6 +33,7 @@ import org.apache.hadoop.fs.Path;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.UnaryOperator;
 
 /**
  * An abstract reader context class for {@code HoodieFileGroupReader} to use, containing APIs for
@@ -188,4 +189,9 @@ public abstract class HoodieReaderContext<T> {
     meta.put(INTERNAL_META_SCHEMA, schema);
     return meta;
   }
+
+  public abstract ClosableIterator<T> mergeBootstrapReaders(ClosableIterator<T> skeletonFileIterator, ClosableIterator<T> dataFileIterator);
+
+
+  public abstract UnaryOperator<T> projectRecord(Schema from, Schema to);
 }

@@ -22,6 +22,7 @@ import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -29,6 +30,8 @@ import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * HoodieMerge defines how to merge two records. It is a stateless component.
@@ -120,6 +123,17 @@ public interface HoodieRecordMerger extends Serializable {
    **/
   default boolean shouldFlush(HoodieRecord record, Schema schema, TypedProperties props) throws IOException {
     return true;
+  }
+
+  default String[] getMandatoryFieldsForMerging(HoodieTableConfig cfg) {
+    ArrayList<String> requiredFields = new ArrayList<>();
+    if (cfg.populateMetaFields()) {
+      requiredFields.add(HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    } else {
+      cfg.getRecordKeyFieldStream().forEach(requiredFields::add);
+    }
+    requiredFields.add(cfg.getPreCombineField());
+    return (String[]) requiredFields.toArray();
   }
 
   /**

@@ -23,19 +23,23 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.IndexedRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection.{ClosableIterator, CloseableMappingIterator}
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
 import org.apache.hudi.util.CloseableInternalRowIterator
-import org.apache.spark.sql.HoodieInternalRowUtils
+import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieInternalRowUtils}
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{UnsafeProjection, UnsafeRow}
+import org.apache.spark.sql.catalyst.expressions.{JoinedRow, UnsafeProjection, UnsafeRow}
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 
+import java.util.function.UnaryOperator
 import scala.collection.mutable
 
 /**
@@ -98,5 +102,55 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: Option[Partitioned
       sparkAdapter.createAvroDeserializer(schema, structType)
     })
     deserializer.deserialize(avroRecord).get.asInstanceOf[InternalRow]
+  }
+
+  override def mergeBootstrapReaders(skeletonFileIterator: ClosableIterator[InternalRow],
+                                     dataFileIterator: ClosableIterator[InternalRow]): ClosableIterator[InternalRow] = {
+    doBootstrapMerge(skeletonFileIterator.asInstanceOf[ClosableIterator[Any]],
+      dataFileIterator.asInstanceOf[ClosableIterator[Any]])
+  }
+
+
+  protected def doBootstrapMerge(skeletonFileIterator: ClosableIterator[Any], dataFileIterator: ClosableIterator[Any]): ClosableIterator[InternalRow] = {
+    new ClosableIterator[Any] {
+      val combinedRow = new JoinedRow()
+
+      override def hasNext: Boolean = {
+        checkState(dataFileIterator.hasNext == skeletonFileIterator.hasNext,
+          "Bootstrap data-file iterator and skeleton-file iterator have to be in-sync!")
+        dataFileIterator.hasNext && skeletonFileIterator.hasNext
+      }
+
+      override def next(): Any = {
+        (skeletonFileIterator.next(), dataFileIterator.next()) match {
+          case (s: ColumnarBatch, d: ColumnarBatch) =>
+            val numCols = s.numCols() + d.numCols()
+            val vecs: Array[ColumnVector] = new Array[ColumnVector](numCols)
+            for (i <- 0 until numCols) {
+              if (i < s.numCols()) {
+                vecs(i) = s.column(i)
+              } else {
+                vecs(i) = d.column(i - s.numCols())
+              }
+            }
+            assert(s.numRows() == d.numRows())
+            sparkAdapter.makeColumnarBatch(vecs, s.numRows())
+          case (_: ColumnarBatch, _: InternalRow) => throw new IllegalStateException("InternalRow ColumnVector mismatch")
+          case (_: InternalRow, _: ColumnarBatch) => throw new IllegalStateException("InternalRow ColumnVector mismatch")
+          case (s: InternalRow, d: InternalRow) => combinedRow(s, d)
+        }
+      }
+
+      override def close(): Unit = {
+        skeletonFileIterator.close()
+        dataFileIterator.close()
+      }
+    }.asInstanceOf[ClosableIterator[InternalRow]]
+  }
+
+  override def projectRecord(from: Schema, to: Schema): UnaryOperator[InternalRow] = {
+        val projection = HoodieCatalystExpressionUtils.generateUnsafeProjection(AvroConversionUtils.convertAvroSchemaToStructType(from),
+          AvroConversionUtils.convertAvroSchemaToStructType(to))
+    u: InternalRow => projection(u)
   }
 }
