@@ -20,6 +20,7 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
+import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.timeline.LSMTimelineWriter;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
@@ -56,10 +57,12 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
@@ -109,6 +112,9 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.createCompactionC
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.config.HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
+import static org.apache.hudi.metrics.HoodieMetrics.ARCHIVE_ACTION;
+import static org.apache.hudi.metrics.HoodieMetrics.DELETE_INSTANTS_NUM_STR;
+import static org.apache.hudi.metrics.HoodieMetrics.DURATION_STR;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -251,7 +257,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
   public void testArchiveEmptyTable() throws Exception {
     init();
     HoodieWriteConfig cfg =
-        HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        HoodieWriteConfig.newBuilder().withPath(basePath)
+            .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
             .withParallelism(2, 2).forTable("test-trip-table").build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
@@ -959,6 +966,25 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     assertEquals(new HashSet<>(archivedInstants),
         archivedTimeline.filterCompletedInstants().getInstantsAsStream().collect(Collectors.toSet()));
     assertFalse(wrapperFs.exists(markerPath));
+  }
+
+  @Test
+  public void testArchiveMetrics() throws Exception {
+    init();
+    HoodieWriteConfig cfg =
+        HoodieWriteConfig.newBuilder().withPath(basePath)
+            .withMetricsConfig(HoodieMetricsConfig
+                .newBuilder()
+                .on(true)
+                .withReporterType("INMEMORY")
+                .build())
+            .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+            .withParallelism(2, 2).forTable("test-trip-table").build();
+    HoodieMetrics metrics = new HoodieMetrics(cfg);
+    BaseHoodieWriteClient client = getHoodieWriteClient(cfg);
+    client.archive();
+    assertTrue(metrics.getMetrics().getRegistry().getNames().contains(metrics.getMetricsName(ARCHIVE_ACTION, DURATION_STR)));
+    assertTrue(metrics.getMetrics().getRegistry().getNames().contains(metrics.getMetricsName(ARCHIVE_ACTION, DELETE_INSTANTS_NUM_STR)));
   }
 
   private void verifyInflightInstants(HoodieTableMetaClient metaClient, int expectedTotalInstants) {
