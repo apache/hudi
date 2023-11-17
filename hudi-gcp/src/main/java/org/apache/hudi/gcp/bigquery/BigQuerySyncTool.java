@@ -107,7 +107,6 @@ public class BigQuerySyncTool extends HoodieSyncTool {
       case MERGE_ON_READ:
         syncTable(bqSyncClient);
         break;
-
       default:
         throw new UnsupportedOperationException(bqSyncClient.getTableType() + " table type is not supported yet.");
     }
