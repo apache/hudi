@@ -20,8 +20,8 @@
 package org.apache.hudi.gcp.bigquery;
 
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.sync.common.HoodieSyncClient;
+import org.apache.hudi.sync.common.util.ManifestFileWriter;
 
 import com.google.cloud.bigquery.BigQuery;
 import com.google.cloud.bigquery.BigQueryException;
@@ -51,9 +51,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_BIG_LAKE_CONNECTION_ID;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_LOCATION;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_NAME;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_PROJECT_ID;
+import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_REQUIRE_PARTITION_FILTER;
 
 public class HoodieBigQuerySyncClient extends HoodieSyncClient {
 
@@ -61,24 +63,29 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
 
   protected final BigQuerySyncConfig config;
   private final String projectId;
+  private final String bigLakeConnectionId;
   private final String datasetName;
+  private final boolean requirePartitionFilter;
   private transient BigQuery bigquery;
 
   public HoodieBigQuerySyncClient(final BigQuerySyncConfig config) {
     super(config);
     this.config = config;
     this.projectId = config.getString(BIGQUERY_SYNC_PROJECT_ID);
+    this.bigLakeConnectionId = config.getString(BIGQUERY_SYNC_BIG_LAKE_CONNECTION_ID);
     this.datasetName = config.getString(BIGQUERY_SYNC_DATASET_NAME);
+    this.requirePartitionFilter = config.getBoolean(BIGQUERY_SYNC_REQUIRE_PARTITION_FILTER);
     this.createBigQueryConnection();
   }
 
-  @VisibleForTesting
   HoodieBigQuerySyncClient(final BigQuerySyncConfig config, final BigQuery bigquery) {
     super(config);
     this.config = config;
     this.projectId = config.getString(BIGQUERY_SYNC_PROJECT_ID);
     this.datasetName = config.getString(BIGQUERY_SYNC_DATASET_NAME);
+    this.requirePartitionFilter = config.getBoolean(BIGQUERY_SYNC_REQUIRE_PARTITION_FILTER);
     this.bigquery = bigquery;
+    this.bigLakeConnectionId = config.getString(BIGQUERY_SYNC_BIG_LAKE_CONNECTION_ID);
   }
 
   private void createBigQueryConnection() {
@@ -94,19 +101,22 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
     }
   }
 
-  public void createTableUsingBqManifestFile(String tableName, String bqManifestFileUri, String sourceUriPrefix, Schema schema) {
+  public void createOrUpdateTableUsingBqManifestFile(String tableName, String bqManifestFileUri, String sourceUriPrefix, Schema schema) {
     try {
       String withClauses = String.format("( %s )", BigQuerySchemaResolver.schemaToSqlString(schema));
       String extraOptions = "enable_list_inference=true,";
       if (!StringUtils.isNullOrEmpty(sourceUriPrefix)) {
         withClauses += " WITH PARTITION COLUMNS";
-        extraOptions += String.format(" hive_partition_uri_prefix=\"%s\",", sourceUriPrefix);
+        extraOptions += String.format(" hive_partition_uri_prefix=\"%s\", require_hive_partition_filter=%s,", sourceUriPrefix, requirePartitionFilter);
+      }
+      if (!StringUtils.isNullOrEmpty(bigLakeConnectionId)) {
+        withClauses += String.format(" WITH CONNECTION `%s`", bigLakeConnectionId);
       }
 
       String query =
           String.format(
-              "CREATE EXTERNAL TABLE `%s.%s.%s` %s OPTIONS (%s "
-              + "uris=[\"%s\"], format=\"PARQUET\", file_set_spec_type=\"NEW_LINE_DELIMITED_MANIFEST\")",
+              "CREATE OR REPLACE EXTERNAL TABLE `%s.%s.%s` %s OPTIONS (%s "
+                  + "uris=[\"%s\"], format=\"PARQUET\", file_set_spec_type=\"NEW_LINE_DELIMITED_MANIFEST\")",
               projectId,
               datasetName,
               tableName,
@@ -125,7 +135,7 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
       if (queryJob == null) {
         LOG.error("Job for table creation no longer exists");
       } else if (queryJob.getStatus().getError() != null) {
-        LOG.error("Job for table creation failed: " + queryJob.getStatus().getError().toString());
+        LOG.error("Job for table creation failed: {}", queryJob.getStatus().getError().toString());
       } else {
         LOG.info("External table created using manifest file.");
       }
@@ -176,13 +186,21 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
         .collect(Collectors.toList());
     updatedTableFields.addAll(schema.getFields());
     Schema finalSchema = Schema.of(updatedTableFields);
-    if (definition.getSchema() != null && definition.getSchema().equals(finalSchema)) {
+    boolean sameSchema = definition.getSchema() != null && definition.getSchema().equals(finalSchema);
+    boolean samePartitionFilter = partitionFields.isEmpty()
+        || (requirePartitionFilter == (definition.getHivePartitioningOptions().getRequirePartitionFilter() != null && definition.getHivePartitioningOptions().getRequirePartitionFilter()));
+    if (sameSchema && samePartitionFilter) {
       return; // No need to update schema.
     }
+    ExternalTableDefinition.Builder builder = definition.toBuilder();
+    builder.setSchema(finalSchema);
+    builder.setAutodetect(false);
+    if (definition.getHivePartitioningOptions() != null) {
+      builder.setHivePartitioningOptions(definition.getHivePartitioningOptions().toBuilder().setRequirePartitionFilter(requirePartitionFilter).build());
+    }
     Table updatedTable = existingTable.toBuilder()
-        .setDefinition(definition.toBuilder().setSchema(finalSchema).setAutodetect(false).build())
+        .setDefinition(builder.build())
         .build();
-
     bigquery.update(updatedTable);
   }
 
@@ -262,6 +280,28 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
     TableId tableId = TableId.of(projectId, datasetName, tableName);
     Table table = bigquery.getTable(tableId, BigQuery.TableOption.fields());
     return table != null && table.exists();
+  }
+
+  /**
+   * Checks for the existence of a table that uses the manifest file approach and matches other requirements.
+   * @param tableName name of the table
+   * @return Returns true if the table does not exist or if the table does exist but does not use the manifest file. False otherwise.
+   */
+  public boolean tableNotExistsOrDoesNotMatchSpecification(String tableName) {
+    TableId tableId = TableId.of(projectId, datasetName, tableName);
+    Table table = bigquery.getTable(tableId);
+    if (table == null || !table.exists()) {
+      return true;
+    }
+    ExternalTableDefinition externalTableDefinition = table.getDefinition();
+    boolean manifestDoesNotExist =
+        externalTableDefinition.getSourceUris() == null
+            || externalTableDefinition.getSourceUris().stream().noneMatch(uri -> uri.contains(ManifestFileWriter.ABSOLUTE_PATH_MANIFEST_FOLDER_NAME));
+    if (!StringUtils.isNullOrEmpty(config.getString(BIGQUERY_SYNC_BIG_LAKE_CONNECTION_ID))) {
+      // If bigLakeConnectionId is present and connectionId is not present in table definition, we need to replace the table.
+      return manifestDoesNotExist || externalTableDefinition.getConnectionId() == null;
+    }
+    return manifestDoesNotExist;
   }
 
   @Override
