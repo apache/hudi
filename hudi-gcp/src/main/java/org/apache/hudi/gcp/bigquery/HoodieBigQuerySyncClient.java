@@ -20,6 +20,7 @@
 package org.apache.hudi.gcp.bigquery;
 
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.util.ManifestFileWriter;
 
@@ -78,6 +79,7 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
     this.createBigQueryConnection();
   }
 
+  @VisibleForTesting
   HoodieBigQuerySyncClient(final BigQuerySyncConfig config, final BigQuery bigquery) {
     super(config);
     this.config = config;
