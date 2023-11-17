@@ -247,7 +247,7 @@ class HoodieMergeOnReadSnapshotHadoopFsRelationFactory(override val sqlContext: 
   override def buildFileIndex(): FileIndex = fileIndex
 
   override def buildFileFormat(): FileFormat = {
-    if (fileGroupReaderEnabled && !isBootstrap) {
+    if (fileGroupReaderEnabled) {
       fileGroupReaderBasedFileFormat
     } else if (metaClient.getTableConfig.isMultipleBaseFileFormatsEnabled && !isBootstrap) {
       multipleBaseFileFormat

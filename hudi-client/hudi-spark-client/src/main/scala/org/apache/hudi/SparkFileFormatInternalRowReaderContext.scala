@@ -53,7 +53,7 @@ import scala.collection.mutable
  *                        not required for reading a file group with only log files.
  * @param partitionValues The values for a partition in which the file group lives.
  */
-class SparkFileFormatInternalRowReaderContext(baseFileReader: Option[PartitionedFile => Iterator[InternalRow]],
+class SparkFileFormatInternalRowReaderContext(readerMaps: mutable.Map[Long, PartitionedFile => Iterator[InternalRow]],
                                               partitionValues: InternalRow) extends BaseSparkInternalRowReaderContext {
   lazy val sparkAdapter = SparkAdapterSupport.sparkAdapter
   lazy val sparkFileReaderFactory = new HoodieSparkFileReaderFactory
@@ -81,12 +81,16 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: Option[Partitioned
           }
         }).asInstanceOf[ClosableIterator[InternalRow]]
     } else {
-      if (baseFileReader.isEmpty) {
-        throw new IllegalArgumentException("Base file reader is missing when instantiating "
-          + "SparkFileFormatInternalRowReaderContext.");
+      val key = generateKey(dataSchema, requiredSchema)
+      if (!readerMaps.contains(key)) {
+        throw new IllegalStateException("schemas don't hash to a known reader")
       }
-      new CloseableInternalRowIterator(baseFileReader.get.apply(fileInfo))
+      new CloseableInternalRowIterator(readerMaps(key).apply(fileInfo))
     }
+  }
+
+  private def generateKey(dataSchema: Schema, requestedSchema: Schema): Long = {
+    dataSchema.hashCode() + requestedSchema.hashCode()
   }
 
   /**

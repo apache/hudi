@@ -91,7 +91,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     val requiredMeta = StructType(requiredSchemaSplits._1)
     val requiredWithoutMeta = StructType(requiredSchemaSplits._2)
     val augmentedHadoopConf = FSUtils.buildInlineConf(hadoopConf)
-    val (baseFileReader, preMergeBaseFileReader, skeletonReader, bootstrapBaseReader) = buildFileReaders(
+    val (baseFileReader, readerMaps) = buildFileReaders(
       spark, dataSchema, partitionSchema, if (isIncremental) requiredSchemaWithMandatory else requiredSchema,
       filters, options, augmentedHadoopConf, requiredSchemaWithMandatory, requiredWithoutMeta, requiredMeta)
 
@@ -114,7 +114,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
           fileSliceMapping.getSlice(filegroupName) match {
             case Some(fileSlice) =>
               val readerContext: HoodieReaderContext[InternalRow] = new SparkFileFormatInternalRowReaderContext(
-                Some(preMergeBaseFileReader), fileSliceMapping.getPartitionValues)
+                readerMaps, fileSliceMapping.getPartitionValues)
               val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
                 .builder().setConf(hadoopConf).setBasePath(tableState.tablePath).build
               val reader = new HoodieFileGroupReader[InternalRow](
@@ -143,11 +143,12 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
           }
         // CDC queries.
         case hoodiePartitionCDCFileGroupSliceMapping: HoodiePartitionCDCFileGroupMapping =>
-          val filePath: Path = sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(file)
-          val fileGroupId: HoodieFileGroupId = new HoodieFileGroupId(filePath.getParent.toString, filePath.getName)
-          val fileSplits = hoodiePartitionCDCFileGroupSliceMapping.getFileSplitsFor(fileGroupId).get.toArray
-          val fileGroupSplit: HoodieCDCFileGroupSplit = HoodieCDCFileGroupSplit(fileSplits)
-          buildCDCRecordIterator(fileGroupSplit, preMergeBaseFileReader, broadcastedHadoopConf.value.value, requiredSchema, props)
+//          val filePath: Path = sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(file)
+//          val fileGroupId: HoodieFileGroupId = new HoodieFileGroupId(filePath.getParent.toString, filePath.getName)
+//          val fileSplits = hoodiePartitionCDCFileGroupSliceMapping.getFileSplitsFor(fileGroupId).get.toArray
+//          val fileGroupSplit: HoodieCDCFileGroupSplit = HoodieCDCFileGroupSplit(fileSplits)
+//          buildCDCRecordIterator(fileGroupSplit, preMergeBaseFileReader, broadcastedHadoopConf.value.value, requiredSchema, props)
+            baseFileReader(file)
         // TODO: Use FileGroupReader here: HUDI-6942.
         case _ => baseFileReader(file)
       }
@@ -237,22 +238,21 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                                  hadoopConf: Configuration, requiredSchemaWithMandatory: StructType,
                                  requiredWithoutMeta: StructType, requiredMeta: StructType):
   (PartitionedFile => Iterator[InternalRow],
-    PartitionedFile => Iterator[InternalRow],
-    PartitionedFile => Iterator[InternalRow],
-    PartitionedFile => Iterator[InternalRow]) = {
+   mutable.Map[Long, PartitionedFile => Iterator[InternalRow]]) = {
+
+    val m = scala.collection.mutable.Map[Long, PartitionedFile => Iterator[InternalRow]]()
 
     val recordKeyRelatedFilters = getRecordKeyRelatedFilters(filters, tableState.recordKeyField)
     val baseFileReader = super.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema,
       filters ++ requiredFilters, options, new Configuration(hadoopConf))
 
     //file reader for reading a hudi base file that needs to be merged with log files
-    val preMergeBaseFileReader = if (isMOR) {
+    if (isMOR) {
       // Add support for reading files using inline file system.
-      super.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchemaWithMandatory,
+      m.put(generateKey(dataSchema, requiredSchemaWithMandatory), super.buildReaderWithPartitionValues(sparkSession, dataSchema, StructType(Seq.empty), requiredSchemaWithMandatory,
         if (shouldUseRecordPosition) requiredFilters else recordKeyRelatedFilters ++ requiredFilters,
-        options, new Configuration(hadoopConf))
-    } else {
-      _: PartitionedFile => Iterator.empty
+        options, new Configuration(hadoopConf)))
+
     }
 
     //Rules for appending partitions and filtering in the bootstrap readers:
@@ -264,41 +264,40 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     val needDataCols = requiredWithoutMeta.nonEmpty
 
     //file reader for bootstrap skeleton files
-    val skeletonReader = if (needMetaCols && isBootstrap) {
+    if (needMetaCols && isBootstrap) {
+      val key = generateKey(HoodieSparkUtils.getMetaSchema, requiredMeta)
       if (needDataCols || isMOR) {
         // no filter and no append
-        super.buildReaderWithPartitionValues(sparkSession, HoodieSparkUtils.getMetaSchema, StructType(Seq.empty),
-          requiredMeta, Seq.empty, options, new Configuration(hadoopConf))
+        m.put(key, super.buildReaderWithPartitionValues(sparkSession, HoodieSparkUtils.getMetaSchema, StructType(Seq.empty),
+          requiredMeta, Seq.empty, options, new Configuration(hadoopConf)))
       } else {
-        // filter and append
-        super.buildReaderWithPartitionValues(sparkSession, HoodieSparkUtils.getMetaSchema, partitionSchema,
-          requiredMeta, filters ++ requiredFilters, options, new Configuration(hadoopConf))
+        // filter
+        m.put(key, super.buildReaderWithPartitionValues(sparkSession, HoodieSparkUtils.getMetaSchema, StructType(Seq.empty),
+          requiredMeta, filters ++ requiredFilters, options, new Configuration(hadoopConf)))
       }
-    } else {
-      _: PartitionedFile => Iterator.empty
     }
 
     //file reader for bootstrap base files
-    val bootstrapBaseReader = if (needDataCols && isBootstrap) {
+    if (needDataCols && isBootstrap) {
       val dataSchemaWithoutMeta = StructType(dataSchema.fields.filterNot(sf => isMetaField(sf.name)))
-      if (isMOR) {
+      val key = generateKey(dataSchemaWithoutMeta, requiredWithoutMeta)
+      if (isMOR || needMetaCols) {
+        m.put(key, super.buildReaderWithPartitionValues(sparkSession, dataSchemaWithoutMeta, StructType(Seq.empty), requiredWithoutMeta,
+          Seq.empty, options, new Configuration(hadoopConf)))
         // no filter and no append
-        super.buildReaderWithPartitionValues(sparkSession, dataSchemaWithoutMeta, StructType(Seq.empty), requiredWithoutMeta,
-          Seq.empty, options, new Configuration(hadoopConf))
-      } else if (needMetaCols) {
-        // no filter but append
-        super.buildReaderWithPartitionValues(sparkSession, dataSchemaWithoutMeta, partitionSchema, requiredWithoutMeta,
-          Seq.empty, options, new Configuration(hadoopConf))
+
       } else {
-        // filter and append
-        super.buildReaderWithPartitionValues(sparkSession, dataSchemaWithoutMeta, partitionSchema, requiredWithoutMeta,
-          filters ++ requiredFilters, options, new Configuration(hadoopConf))
+        // filter
+        m.put(key, super.buildReaderWithPartitionValues(sparkSession, dataSchemaWithoutMeta, StructType(Seq.empty), requiredWithoutMeta,
+          filters ++ requiredFilters, options, new Configuration(hadoopConf)))
       }
-    } else {
-      _: PartitionedFile => Iterator.empty
     }
 
-    (baseFileReader, preMergeBaseFileReader, skeletonReader, bootstrapBaseReader)
+    (baseFileReader, m)
+  }
+
+  protected def generateKey(dataSchema: StructType, requestedSchema: StructType): Long = {
+    AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, tableName).hashCode() + AvroConversionUtils.convertStructTypeToAvroSchema(requestedSchema, tableName).hashCode()
   }
 
   protected def getRecordKeyRelatedFilters(filters: Seq[Filter], recordKeyColumn: String): Seq[Filter] = {
