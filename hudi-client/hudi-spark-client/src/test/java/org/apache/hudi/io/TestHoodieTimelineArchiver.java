@@ -257,8 +257,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
   public void testArchiveEmptyTable() throws Exception {
     init();
     HoodieWriteConfig cfg =
-        HoodieWriteConfig.newBuilder().withPath(basePath)
-            .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
             .withParallelism(2, 2).forTable("test-trip-table").build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
