@@ -21,6 +21,7 @@ package org.apache.hudi.gcp.bigquery;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.sync.common.HoodieSyncTool;
 import org.apache.hudi.sync.common.util.ManifestFileWriter;
 
@@ -78,7 +79,7 @@ public class BigQuerySyncTool extends HoodieSyncTool {
     this.bqSchemaResolver = BigQuerySchemaResolver.getInstance();
   }
 
-  // allows us to pass in mocks for the writer and client
+  @VisibleForTesting // allows us to pass in mocks for the writer and client
   BigQuerySyncTool(Properties properties, ManifestFileWriter manifestFileWriter, HoodieBigQuerySyncClient bigQuerySyncClient, HoodieTableMetaClient metaClient,
                    BigQuerySchemaResolver bigQuerySchemaResolver) {
     super(properties);

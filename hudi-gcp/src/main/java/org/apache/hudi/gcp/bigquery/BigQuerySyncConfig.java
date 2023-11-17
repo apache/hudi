@@ -83,6 +83,7 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
       .key("hoodie.gcp.bigquery.sync.use_bq_manifest_file")
       .defaultValue(false)
       .markAdvanced()
+      .sinceVersion("0.14.0")
       .withDocumentation("If true, generate a manifest file with data file absolute paths and use BigQuery manifest file support to "
           + "directly create one external table over the Hudi table. If false (default), generate a manifest file with data file "
           + "names and create two external tables and one view in BigQuery. Query the view for the same results as querying the Hudi table");
@@ -124,11 +125,15 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
   public static final ConfigProperty<Boolean> BIGQUERY_SYNC_REQUIRE_PARTITION_FILTER = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.require_partition_filter")
       .defaultValue(false)
+      .sinceVersion("0.14.1")
+      .markAdvanced()
       .withDocumentation("If true, configure table to require a partition filter to be specified when querying the table");
 
   public static final ConfigProperty<String> BIGQUERY_SYNC_BIG_LAKE_CONNECTION_ID = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.big_lake_connection_id")
       .noDefaultValue()
+      .sinceVersion("0.14.1")
+      .markAdvanced()
       .withDocumentation("The Big Lake connection ID to use");
 
   public BigQuerySyncConfig(Properties props) {
