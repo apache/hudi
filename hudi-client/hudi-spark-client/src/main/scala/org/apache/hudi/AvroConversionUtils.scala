@@ -18,6 +18,7 @@
 
 package org.apache.hudi
 
+import org.apache.avro.Schema.Type
 import org.apache.avro.generic.GenericRecord
 import org.apache.avro.{JsonProperties, Schema}
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
@@ -241,5 +242,58 @@ object AvroConversionUtils {
     val qualifiedName = AvroSchemaUtils.getAvroRecordQualifiedName(tableName)
     val nameParts = qualifiedName.split('.')
     (nameParts.last, nameParts.init.mkString("."))
+  }
+
+  def areSchemasEquivalent(thisSchema: Schema, thatSchema: Schema): Boolean = {
+    if (thisSchema.getType != thatSchema.getType) {
+      return false
+    }
+    val thisSchemaResolved = handleUnion(thisSchema)
+    val thatSchemaResolved = handleUnion(thatSchema)
+    if (thisSchemaResolved.getType != thatSchemaResolved.getType) {
+      return false
+    }
+    if (thisSchemaResolved.getLogicalType != null) {
+      if (thatSchemaResolved.getLogicalType == null || thisSchemaResolved.getLogicalType.getName != thatSchemaResolved.getLogicalType.getName) {
+        return false
+      }
+    }
+    if (thisSchemaResolved.getType == Type.RECORD) {
+      if (thisSchemaResolved.getFields.length != thatSchemaResolved.getFields.length) {
+        return false
+      }
+      thisSchemaResolved.getFields.zip(thatSchemaResolved.getFields).forall { case (thisField, thatField) =>
+        getFieldsAreEquivalent(thisField, thatField)
+      }
+    } else {
+      true
+    }
+  }
+
+  private def getFieldsAreEquivalent(thisField: Schema.Field, thatField: Schema.Field): Boolean = {
+    val thisFieldSchema = handleUnion(thisField.schema)
+    val thatFieldSchema = handleUnion(thatField.schema)
+    if (thisFieldSchema.getType != thatFieldSchema.getType) {
+      return false
+    }
+    if (thisField.name != thatField.name) {
+      return false
+    }
+    if (thisFieldSchema.getType == Type.RECORD) {
+      return areSchemasEquivalent(thisField.schema, thatField.schema)
+    } else if (thisFieldSchema.getType == Type.ARRAY) {
+      return areSchemasEquivalent(thisFieldSchema.getElementType, thatFieldSchema.getElementType)
+    } else if (thisFieldSchema.getType == Type.MAP) {
+      return areSchemasEquivalent(thisFieldSchema.getValueType, thatFieldSchema.getValueType)
+    }
+    true
+  }
+
+  private def handleUnion(schema: Schema): Schema = {
+    if (schema.getType == Type.UNION) {
+      val index = if (schema.getTypes.get(0).getType == Schema.Type.NULL) 1 else 0
+      return schema.getTypes.get(index)
+    }
+    schema
   }
 }

@@ -474,8 +474,11 @@ public class FSUtils {
   }
 
   public static boolean isLogFile(String fileName) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(fileName);
-    return fileName.contains(".log") && matcher.find();
+    if (fileName.contains(".log")) {
+      Matcher matcher = LOG_FILE_PATTERN.matcher(fileName);
+      return matcher.find();
+    }
+    return false;
   }
 
   /**

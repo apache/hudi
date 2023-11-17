@@ -249,6 +249,11 @@ public class AvroSchemaUtils {
     }
 
     List<Schema> innerTypes = schema.getTypes();
+    if (innerTypes.size() == 2 && schema.isNullable()) {
+      // this is a basic nullable field so handle it more efficiently
+      return resolveNullableSchema(schema);
+    }
+
     Schema nonNullType =
         innerTypes.stream()
             .filter(it -> it.getType() != Schema.Type.NULL && Objects.equals(it.getFullName(), fieldSchemaFullName))
@@ -286,18 +291,19 @@ public class AvroSchemaUtils {
     }
 
     List<Schema> innerTypes = schema.getTypes();
-    Schema nonNullType =
-        innerTypes.stream()
-            .filter(it -> it.getType() != Schema.Type.NULL)
-            .findFirst()
-            .orElse(null);
 
-    if (innerTypes.size() != 2 || nonNullType == null) {
+    if (innerTypes.size() != 2) {
       throw new AvroRuntimeException(
           String.format("Unsupported Avro UNION type %s: Only UNION of a null type and a non-null type is supported", schema));
     }
-
-    return nonNullType;
+    Schema firstInnerType = innerTypes.get(0);
+    Schema secondInnerType = innerTypes.get(1);
+    if ((firstInnerType.getType() != Schema.Type.NULL && secondInnerType.getType() != Schema.Type.NULL)
+        || (firstInnerType.getType() == Schema.Type.NULL && secondInnerType.getType() == Schema.Type.NULL)) {
+      throw new AvroRuntimeException(
+          String.format("Unsupported Avro UNION type %s: Only UNION of a null type and a non-null type is supported", schema));
+    }
+    return firstInnerType.getType() == Schema.Type.NULL ? secondInnerType : firstInnerType;
   }
 
   /**
