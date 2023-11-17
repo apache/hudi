@@ -545,9 +545,11 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
           .checkpoint(1)
           .assertNextEvent()
           .checkpointComplete(1)
-          .checkWrittenData(EXPECTED3, 1);
+          .checkWrittenData(EXPECTED3, 1)
+          .end();
       // step to commit the 2nd txn
       validateConcurrentCommit(pipeline1);
+      pipeline1.end();
     }
   }
 
@@ -607,6 +609,8 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
       // should success for concurrent modification of same fileGroups if using non-blocking concurrency control
       // should throw exception otherwise
       validateConcurrentCommit(pipeline2);
+      pipeline1.end();
+      pipeline2.end();
     }
   }
 
@@ -619,11 +623,12 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     assertSame(viewStorageConfig.getStorageType(), FileSystemViewStorageType.REMOTE_FIRST);
 
     // get another write client
-    writeClient = FlinkWriteClients.createWriteClient(conf);
-    assertSame(writeClient.getConfig().getViewStorageConfig().getStorageType(), FileSystemViewStorageType.REMOTE_FIRST);
-    assertEquals(viewStorageConfig.getRemoteViewServerPort(), writeClient.getConfig().getViewStorageConfig().getRemoteViewServerPort());
+    HoodieFlinkWriteClient writeClient2 = FlinkWriteClients.createWriteClient(conf);
+    assertSame(writeClient2.getConfig().getViewStorageConfig().getStorageType(), FileSystemViewStorageType.REMOTE_FIRST);
+    assertEquals(viewStorageConfig.getRemoteViewServerPort(), writeClient2.getConfig().getViewStorageConfig().getRemoteViewServerPort());
     assertEquals(viewStorageConfig.getRemoteTimelineClientTimeoutSecs(), 500);
     writeClient.close();
+    writeClient2.close();
   }
 
   @Test
