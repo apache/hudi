@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -320,11 +321,8 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
           matchedPartitionPaths = tableMetadata.getPartitionPathWithPathPrefixes(relativePartitionPaths);
         }
       } else {
-        matchedPartitionPaths = Collections.singletonList("");
+        matchedPartitionPaths = Collections.singletonList(StringUtils.EMPTY_STRING);
       }
-
-
-      matchedPartitionPaths = tableMetadata.getPartitionPathWithPathPrefixes(relativePartitionPaths);
     } catch (IOException e) {
       throw new HoodieIOException("Error fetching partition paths", e);
     }
