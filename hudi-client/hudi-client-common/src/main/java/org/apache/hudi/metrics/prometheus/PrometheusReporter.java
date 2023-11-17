@@ -61,7 +61,7 @@ public class PrometheusReporter extends MetricsReporter {
     }
     List<String> labelNames = new ArrayList<>();
     List<String> labelValues = new ArrayList<>();
-    if (!StringUtils.isNullOrEmpty(config.getPushGatewayLabels())) {
+    if (StringUtils.nonEmpty(config.getPushGatewayLabels())) {
       LABEL_PATTERN.splitAsStream(config.getPushGatewayLabels().trim()).map(s -> s.split(":", 2))
           .forEach(parts -> {
             labelNames.add(parts[0]);
@@ -101,6 +101,7 @@ public class PrometheusReporter extends MetricsReporter {
   @Override
   public void stop() {
     collectorRegistry.unregister(metricExports);
+    PORT_TO_SERVER.values().forEach(httpServer -> httpServer.stop());
   }
 
   private static class LabeledSampleBuilder implements SampleBuilder {
