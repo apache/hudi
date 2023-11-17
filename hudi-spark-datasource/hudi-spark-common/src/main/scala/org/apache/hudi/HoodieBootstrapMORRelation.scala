@@ -69,9 +69,10 @@ case class HoodieBootstrapMORRelation(override val sqlContext: SQLContext,
 
   override def imbueConfigs(sqlContext: SQLContext): Unit = {
     super.imbueConfigs(sqlContext)
-    sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "true")
+    if (!sqlContext.sparkSession.sessionState.conf.contains("spark.sql.parquet.enableVectorizedReader")) {
+      sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "true")
+    }
   }
-
 
   protected override def getFileSlices(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSlice] = {
     if (globPaths.isEmpty) {
