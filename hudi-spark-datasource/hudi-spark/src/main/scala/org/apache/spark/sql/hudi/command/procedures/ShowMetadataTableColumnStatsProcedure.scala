@@ -78,9 +78,7 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
     stats_value match {
       case _: IntWrapper |
            _: BooleanWrapper |
-           _: BytesWrapper |
            _: DateWrapper |
-           _: DecimalWrapper |
            _: DoubleWrapper |
            _: FloatWrapper |
            _: LongWrapper |
@@ -88,6 +86,12 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
            _: TimeMicrosWrapper |
            _: TimestampMicrosWrapper =>
         String.valueOf(stats_value.asInstanceOf[IndexedRecord].get(0))
+      case _: BytesWrapper =>
+        var bytes_value = stats_value.asInstanceOf[BytesWrapper].getValue
+        util.Arrays.toString(bytes_value.array())
+      case _: DecimalWrapper =>
+        var decimal_value = stats_value.asInstanceOf[DecimalWrapper].getValue
+        util.Arrays.toString(decimal_value.array())
       case _ => throw new Exception("Unsupported type.")
     }
   }
