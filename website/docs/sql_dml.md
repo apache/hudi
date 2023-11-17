@@ -160,7 +160,7 @@ For a Hudi table with user configured primary keys, the join condition in `Merge
 For a Table where Hudi auto generates primary keys, the join condition in MIT can be on any arbitrary data columns.
 :::
 
-### Delete Data
+### Delete From
 
 You can remove data from a Hudi table using the `DELETE FROM` statement.
 
@@ -201,7 +201,7 @@ You can control the behavior of these operations using various configuration opt
 
 Flink SQL provides several Data Manipulation Language (DML) actions for interacting with Hudi tables. These operations allow you to insert, update and delete data from your Hudi tables. Let's explore them one by one.
 
-### Insert Data
+### Insert Into
 
 You can utilize the INSERT INTO statement to incorporate data into a Hudi table using Flink SQL. Here are a few illustrative examples:
 
@@ -219,7 +219,7 @@ INSERT INTO hudi_table SELECT 1, 'a1', 20;
 
 If the `write.operation` is 'upsert,' the INSERT INTO statement will not only insert new records but also update existing rows with the same record key.
 
-### Update Data
+### Update
 With Flink SQL, you can use update command to update the hudi table. Here are a few illustrative examples:
 
 ```sql
@@ -234,7 +234,7 @@ UPDATE hudi_table SET price = price * 2, ts = 1111 WHERE id = 1;
 Update query only work with batch excution mode.
 :::
 
-### Delete Data
+### Delete From
 With Flink SQL, you can use delete command to delete the rows from hudi table. Here are a few illustrative examples:
 
 ```sql

@@ -380,18 +380,34 @@ CREATE CATALOG hoodie_catalog
 
 ### Create Table
 
-The following is an example of creating a Flink table. Read the [Flink Quick Start](/docs/flink-quick-start-guide) guide for more examples.
+You can create tables using standard FLINK SQL CREATE TABLE syntax, which supports partitioning and passing Flink options using WITH.
 
-```sql 
+```sql
+CREATE TABLE [IF NOT EXISTS] [catalog_name.][db_name.]table_name
+  (
+    { <physical_column_definition> 
+    [ <table_constraint> ][ , ...n]
+  )
+  [COMMENT table_comment]
+  [PARTITIONED BY (partition_column_name1, partition_column_name2, ...)]
+  WITH (key1=val1, key2=val2, ...)
+```
+
+### Create non-partitioned table
+
+Creating a non-partitioned table is as simple as creating a regular table.
+
+```sql
+-- create a Hudi table
 CREATE TABLE hudi_table(
-  id int, 
-  name string, 
-  price double
+  id BIGINT,
+  name STRING,
+  price DOUBLE
 )
 WITH (
 'connector' = 'hudi',
 'path' = 'file:///tmp/hudi_table',
-'table.type' = 'MERGE_ON_READ' -- this creates a MERGE_ON_READ table, default is COPY_ON_WRITE
+'table.type' = 'MERGE_ON_READ'
 );
 ```
 
@@ -418,19 +434,19 @@ WITH (
 
 The following is an example of creating a Flink table with record key and ordering field similarly to spark.
 
-```sql 
+```sql
 CREATE TABLE hudi_table(
   id BIGINT PRIMARY KEY NOT ENFORCED,
   name STRING,
-  dt STRING,
-  hh STRING
+  price DOUBLE,
+  ts BIGINT
 )
 PARTITIONED BY (`dt`)
 WITH (
 'connector' = 'hudi',
 'path' = 'file:///tmp/hudi_table',
 'table.type' = 'MERGE_ON_READ',
-'precombine.field' = 'hh'
+'precombine.field' = 'ts'
 );
 ```
 

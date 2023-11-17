@@ -164,7 +164,7 @@ values={[
 
 <TabItem value="flinksql">
 
-Creates a Flink Hudi table first and insert data into the Hudi table using SQL `VALUES` as below.
+Insert data into the Hudi table using SQL `VALUES`.
 
 ```sql
 -- insert data using values
@@ -183,7 +183,7 @@ VALUES
 
 <TabItem value="dataStream">
 
-Creates a Flink Hudi table first and insert data into the Hudi table using DataStream API as below.
+Add some streaming source to flink and load the data in hudi table. Since, this is the first write, it will also auto-create the table.
 
 ```java
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -275,7 +275,7 @@ DataStream<RowData> rowDataDataStream = builder.source(env);
 rowDataDataStream.print();
 env.execute("Api_Source");
 ```
-Refer Full Quickstart Insert Example [here](https://github.com/ad1happy2go/hudi-examples/blob/main/flink/src/main/java/com/hudi/flink/quickstart/HudiDataStreamReader.java)
+Refer Full Streaming Reader Example [here](https://github.com/ad1happy2go/hudi-examples/blob/main/flink/src/main/java/com/hudi/flink/quickstart/HudiDataStreamReader.java)
 
 </TabItem>
 
@@ -299,7 +299,7 @@ values={[
 
 <TabItem value="flinksql">
 
-Creates a Flink Hudi table first and insert data into the Hudi table using SQL `VALUES` as below.
+Hudi tables can be updated by either inserting reocrds with same primary key or using a standard UPDATE statement shown as below.
 
 ```sql
 -- Update Queries only works with batch execution mode
@@ -310,21 +310,19 @@ UPDATE hudi_table SET fare = 25.0 WHERE uuid = '334e26e9-8355-45cc-97c6-c31daf0d
 
 <TabItem value="dataStream">
 
-Creates a Flink Hudi table first and insert data into the Hudi table using DataStream API as below.
+Add some streaming source to flink and load the data in hudi table using DataStream API as [above](#insert-data).
 When new rows with the same primary key arrive in stream, then it will be be updated.
 In the insert example incoming row with same record id will be updated.
 
-Refer Update Example [here](https://github.com/ad1happy2go/hudi-examples/blob/main/flink/src/main/java/com/hudi/flink/quickstart/HudiDataStreamReader.java)
+Refer Update Example [here](https://github.com/ad1happy2go/hudi-examples/blob/main/flink/src/main/java/com/hudi/flink/quickstart/HudiDataStreamWriter.java)
 
 </TabItem>
 
 </Tabs
 >
 
-Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
 [Querying](#query-data) the data again will now show updated records. Each write operation generates a new [commit](/docs/concepts) 
-denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `age` fields for the same `_hoodie_record_key`s in previous commit.
-
+denoted by the timestamp.
 :::note
 The `UPDATE` statement is supported since Flink 1.17, so only Hudi Flink bundle compiled with Flink 1.17+ supplies this functionality.
 Only **batch** queries on Hudi table with primary key work correctly. 
@@ -340,7 +338,9 @@ values={[
 >
 
 <TabItem value="flinksql">
+
 ### Row-level Delete
+
 When consuming data in streaming query, Hudi Flink source can also accept the change logs from the upstream data source if the `RowKind` is set up per-row,
 it can then apply the UPDATE and DELETE in row level. You can then sync a NEAR-REAL-TIME snapshot on Hudi for all kinds
 of RDBMS.
@@ -366,9 +366,10 @@ Only **batch** queries on Hudi table with primary key work correctly.
 Creates a Flink Hudi table first and insert data into the Hudi table using DataStream API as below.
 When new rows with the same primary key and Row Kind as Delete arrive in stream, then it will be be deleted.
 
-Refer Delete Example [here](https://github.com/ad1happy2go/hudi-examples/blob/main/flink/src/main/java/com/hudi/flink/quickstart/HudiDataStreamReader.java)
+Refer Delete Example [here](https://github.com/ad1happy2go/hudi-examples/blob/main/flink/src/main/java/com/hudi/flink/quickstart/HudiDataStreamWriter.java)
 
-</TabItem>
+</TabItem
+>
 
 </Tabs
 >
