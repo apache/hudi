@@ -99,7 +99,7 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     int attemptId = getRuntimeContext().getAttemptNumber();
     if (attemptId > 0) {
       // either a partial or global failover, reuses the current inflight instant
-      if (this.currentInstant != null) {
+      if (this.currentInstant != null && !metaClient.getActiveTimeline().filterCompletedInstants().containsInstant(currentInstant)) {
         LOG.info("Recover task[{}] for instant [{}] with attemptId [{}]", taskID, this.currentInstant, attemptId);
         this.currentInstant = null;
         return;
