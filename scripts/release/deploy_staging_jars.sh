@@ -66,9 +66,13 @@ declare -a ALL_VERSION_OPTS=(
 "-Dscala-2.12 -Dspark3.3 -pl hudi-spark-datasource/hudi-spark3.3.x,packaging/hudi-spark-bundle -am"
 # For Spark 3.4, Scala 2.12:
 # hudi-spark3.4.x_2.12
-# hudi-cli-bundle_2.12
 # hudi-spark3.4-bundle_2.12
-"-Dscala-2.12 -Dspark3.4 -pl hudi-spark-datasource/hudi-spark3.4.x,packaging/hudi-spark-bundle,packaging/hudi-cli-bundle -am"
+"-Dscala-2.12 -Dspark3.4 -pl hudi-spark-datasource/hudi-spark3.4.x,packaging/hudi-spark-bundle -am"
+# For Spark 3.5, Scala 2.12:
+# hudi-spark3.5.x_2.12
+# hudi-cli-bundle_2.12
+# hudi-spark3.5-bundle_2.12
+"-Dscala-2.12 -Dspark3.5 -pl hudi-spark-datasource/hudi-spark3.5.x,packaging/hudi-spark-bundle,packaging/hudi-cli-bundle -am"
 # For Spark 3.1, Scala 2.12:
 # All other modules and bundles using avro 1.8
 "-Dscala-2.12 -Dspark3.1"

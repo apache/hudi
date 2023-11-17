@@ -66,8 +66,8 @@ git clone https://github.com/apache/hudi.git && cd hudi
 mvn clean package -DskipTests
 
 # Start command
-spark-3.2.3-bin-hadoop3.2/bin/spark-shell \
-  --jars `ls packaging/hudi-spark-bundle/target/hudi-spark3.2-bundle_2.12-*.*.*-SNAPSHOT.jar` \
+spark-3.5.0-bin-hadoop3/bin/spark-shell \
+  --jars `ls packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-*.*.*-SNAPSHOT.jar` \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
   --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
   --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
@@ -85,7 +85,7 @@ mvn clean javadoc:aggregate -Pjavadocs
 ### Build with different Spark versions
 
 The default Spark 2.x version supported is 2.4.4. The default Spark 3.x version, corresponding to `spark3` profile is
-3.4.0. The default Scala version is 2.12. Refer to the table below for building with different Spark and Scala versions.
+3.5.0. The default Scala version is 2.12. Refer to the table below for building with different Spark and Scala versions.
 
 | Maven build options       | Expected Spark bundle jar name               | Notes                                            |
 |:--------------------------|:---------------------------------------------|:-------------------------------------------------|
@@ -96,9 +96,10 @@ The default Spark 2.x version supported is 2.4.4. The default Spark 3.x version,
 | `-Dspark3.2`              | hudi-spark3.2-bundle_2.12                    | For Spark 3.2.x and Scala 2.12 (same as default) |
 | `-Dspark3.3`              | hudi-spark3.3-bundle_2.12                    | For Spark 3.3.x and Scala 2.12                   |
 | `-Dspark3.4`              | hudi-spark3.4-bundle_2.12                    | For Spark 3.4.x and Scala 2.12                   |
+| `-Dspark3.5`              | hudi-spark3.5-bundle_2.12                    | For Spark 3.5.x and Scala 2.12                   |
 | `-Dspark2 -Dscala-2.11`   | hudi-spark-bundle_2.11 (legacy bundle name)  | For Spark 2.4.4 and Scala 2.11                   |
 | `-Dspark2 -Dscala-2.12`   | hudi-spark-bundle_2.12 (legacy bundle name)  | For Spark 2.4.4 and Scala 2.12                   |
-| `-Dspark3`                | hudi-spark3-bundle_2.12 (legacy bundle name) | For Spark 3.4.x and Scala 2.12                   |
+| `-Dspark3`                | hudi-spark3-bundle_2.12 (legacy bundle name) | For Spark 3.5.x and Scala 2.12                   |
 
 For example,
 ```
