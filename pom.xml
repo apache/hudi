@@ -2181,6 +2181,25 @@
         <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
         <skipITs>true</skipITs>
       </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <configuration>
+              <excludes>
+                <exclude>**/ParquetFileMetadataLoader.java</exclude>
+                <exclude>**/ParquetMetadataFileReader.java</exclude>
+                <exclude>**/RowGroup.java</exclude>
+                <exclude>**/HoodieParquetKeyedLookupReader.java</exclude>
+              </excludes>
+              <testExcludes>
+                <exclude>**/TestHoodieParquetKeyedLookupReader.java</exclude>
+                <exclude>**/TestParquetMetadataFileReader.java</exclude>
+              </testExcludes>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
       <activation>
         <property>
           <name>spark2</name>
@@ -2194,6 +2213,25 @@
         <module>hudi-spark-datasource/hudi-spark2</module>
         <module>hudi-spark-datasource/hudi-spark2-common</module>
       </modules>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <configuration>
+              <excludes>
+                <exclude>**/ParquetFileMetadataLoader.java</exclude>
+                <exclude>**/ParquetMetadataFileReader.java</exclude>
+                <exclude>**/RowGroup.java</exclude>
+                <exclude>**/HoodieParquetKeyedLookupReader.java</exclude>
+              </excludes>
+              <testExcludes>
+                <exclude>**/TestHoodieParquetKeyedLookupReader.java</exclude>
+                <exclude>**/TestParquetMetadataFileReader.java</exclude>
+              </testExcludes>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
       <properties>
         <spark.version>${spark2.version}</spark.version>
         <sparkbundle.version>2.4</sparkbundle.version>
@@ -2324,6 +2362,25 @@
         <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
         <skipITs>true</skipITs>
       </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <configuration>
+              <excludes>
+                <exclude>**/ParquetFileMetadataLoader.java</exclude>
+                <exclude>**/ParquetMetadataFileReader.java</exclude>
+                <exclude>**/RowGroup.java</exclude>
+                <exclude>**/HoodieParquetKeyedLookupReader.java</exclude>
+              </excludes>
+              <testExcludes>
+                <exclude>**/TestHoodieParquetKeyedLookupReader.java</exclude>
+                <exclude>**/TestParquetMetadataFileReader.java</exclude>
+              </testExcludes>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
       <modules>
         <module>hudi-spark-datasource/hudi-spark3.0.x</module>
         <module>hudi-spark-datasource/hudi-spark3-common</module>
@@ -2368,6 +2425,25 @@
         <module>hudi-spark-datasource/hudi-spark3.1.x</module>
         <module>hudi-spark-datasource/hudi-spark3-common</module>
       </modules>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <configuration>
+              <excludes>
+                <exclude>**/ParquetFileMetadataLoader.java</exclude>
+                <exclude>**/ParquetMetadataFileReader.java</exclude>
+                <exclude>**/RowGroup.java</exclude>
+                <exclude>**/HoodieParquetKeyedLookupReader.java</exclude>
+              </excludes>
+              <testExcludes>
+                <exclude>**/TestHoodieParquetKeyedLookupReader.java</exclude>
+                <exclude>**/TestParquetMetadataFileReader.java</exclude>
+              </testExcludes>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
       <activation>
         <property>
           <name>spark3.1</name>
@@ -2600,6 +2676,25 @@
         <flink.format.parquet.version>1.12.3</flink.format.parquet.version>
         <flink.connector.kafka.version>${flink1.17.version}</flink.connector.kafka.version>
       </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <configuration>
+              <excludes>
+                <exclude>**/ParquetFileMetadataLoader.java</exclude>
+                <exclude>**/ParquetMetadataFileReader.java</exclude>
+                <exclude>**/RowGroup.java</exclude>
+                <exclude>**/HoodieParquetKeyedLookupReader.java</exclude>
+              </excludes>
+              <testExcludes>
+                <exclude>**/TestHoodieParquetKeyedLookupReader.java</exclude>
+                <exclude>**/TestParquetMetadataFileReader.java</exclude>
+              </testExcludes>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
       <activation>
         <property>
           <name>flink1.17</name>
@@ -2617,6 +2712,25 @@
         <flink.format.parquet.version>1.12.2</flink.format.parquet.version>
         <flink.connector.kafka.version>${flink1.16.version}</flink.connector.kafka.version>
       </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <configuration>
+              <excludes>
+                <exclude>**/ParquetFileMetadataLoader.java</exclude>
+                <exclude>**/ParquetMetadataFileReader.java</exclude>
+                <exclude>**/RowGroup.java</exclude>
+                <exclude>**/HoodieParquetKeyedLookupReader.java</exclude>
+              </excludes>
+              <testExcludes>
+                <exclude>**/TestHoodieParquetKeyedLookupReader.java</exclude>
+                <exclude>**/TestParquetMetadataFileReader.java</exclude>
+              </testExcludes>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
       <activation>
         <property>
           <name>flink1.16</name>
@@ -2634,6 +2748,25 @@
         <flink.format.parquet.version>1.12.2</flink.format.parquet.version>
         <flink.connector.kafka.version>${flink1.15.version}</flink.connector.kafka.version>
       </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <configuration>
+              <excludes>
+                <exclude>**/ParquetFileMetadataLoader.java</exclude>
+                <exclude>**/ParquetMetadataFileReader.java</exclude>
+                <exclude>**/RowGroup.java</exclude>
+                <exclude>**/HoodieParquetKeyedLookupReader.java</exclude>
+              </excludes>
+              <testExcludes>
+                <exclude>**/TestHoodieParquetKeyedLookupReader.java</exclude>
+                <exclude>**/TestParquetMetadataFileReader.java</exclude>
+              </testExcludes>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
       <activation>
         <property>
           <name>flink1.15</name>
@@ -2660,6 +2793,25 @@
         <flink.format.parquet.version>1.11.1</flink.format.parquet.version>
         <flink.connector.kafka.version>${flink1.14.version}</flink.connector.kafka.version>
       </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <configuration>
+              <excludes>
+                <exclude>**/ParquetFileMetadataLoader.java</exclude>
+                <exclude>**/ParquetMetadataFileReader.java</exclude>
+                <exclude>**/RowGroup.java</exclude>
+                <exclude>**/HoodieParquetKeyedLookupReader.java</exclude>
+              </excludes>
+              <testExcludes>
+                <exclude>**/TestHoodieParquetKeyedLookupReader.java</exclude>
+                <exclude>**/TestParquetMetadataFileReader.java</exclude>
+              </testExcludes>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
       <activation>
         <property>
           <name>flink1.14</name>
@@ -2687,6 +2839,25 @@
         <flink.connector.kafka.version>${flink1.13.version}</flink.connector.kafka.version>
         <skipITs>true</skipITs>
       </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <configuration>
+              <excludes>
+                <exclude>**/ParquetFileMetadataLoader.java</exclude>
+                <exclude>**/ParquetMetadataFileReader.java</exclude>
+                <exclude>**/RowGroup.java</exclude>
+                <exclude>**/HoodieParquetKeyedLookupReader.java</exclude>
+              </excludes>
+              <testExcludes>
+                <exclude>**/TestHoodieParquetKeyedLookupReader.java</exclude>
+                <exclude>**/TestParquetMetadataFileReader.java</exclude>
+              </testExcludes>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
       <activation>
         <property>
           <name>flink1.13</name>

@@ -19,17 +19,22 @@
 package org.apache.hudi.common.util.io;
 
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Tests {@link ByteBufferBackedInputStream}.
  */
 public class TestByteBufferBackedInputStream {
+  private static final Logger LOG = LoggerFactory.getLogger(TestByteBufferBackedInputStream.class);
 
   @Test
   public void testConstructor() {
@@ -112,5 +117,52 @@ public class TestByteBufferBackedInputStream {
     // Continue reading the stream from where we left of (before copying)
     int secondByte = stream.read();
     assertEquals(secondByte, 0xE);
+  }
+
+  @Test
+  public void testGetPos() throws IOException {
+    byte[] sourceBytes = { 0xD, 0xE, 0xA, 0xD, 0xD, 0xA, 0xE, 0xD };
+
+    ByteBufferBackedInputStream stream = new ByteBufferBackedInputStream(sourceBytes);
+    int firstByte = stream.read();
+    assertEquals(firstByte, 0xD);
+    assertEquals(1L, stream.getPos());
+
+    stream.seek(7);
+    int lastByte = stream.read();
+    assertEquals(lastByte, 0xD);
+    assertEquals(8L, stream.getPos());
+
+    Exception e = assertThrows(IllegalArgumentException.class, stream::read);
+    String errorMessage = "Reading past backed buffer boundary";
+    assertEquals(errorMessage, e.getMessage());
+    assertEquals(8L, stream.getPos());
+  }
+
+  @Test
+  public void testSeekToNewSource() throws IOException {
+    byte[] sourceBytes = { 0xD, 0xE, 0xA, 0xD, 0xD, 0xA, 0xE, 0xD };
+
+    ByteBufferBackedInputStream stream = new ByteBufferBackedInputStream(sourceBytes);
+    assertFalse(stream.seekToNewSource(1L));
+  }
+
+  @Test
+  public void testCopyFromBasedRead() throws IOException {
+    byte[] sourceBytes = { 0xD, 0xE, 0xA, 0xD, 0xD, 0xA, 0xE, 0xD };
+    ByteBufferBackedInputStream stream = new ByteBufferBackedInputStream(sourceBytes);
+    assertEquals(0L, stream.getPos());
+
+    byte[] firstRead = new byte[2];
+    stream.read(0, firstRead, 0, 2);
+    assertEquals(0xD, firstRead[0]);
+    assertEquals(0xE, firstRead[1]);
+    assertEquals(0L, stream.getPos());
+
+    byte[] secondRead = new byte[2];
+    stream.readFully(5, secondRead);
+    assertEquals(0xA, secondRead[0]);
+    assertEquals(0xE, secondRead[1]);
+    assertEquals(0L, stream.getPos());
   }
 }
