@@ -246,7 +246,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
       boolean shouldIncludePendingCommits =
           HoodieHiveUtils.shouldIncludePendingCommits(job, tableMetaClient.getTableConfig().getTableName());
 
-      if (conf.getBoolean(ENABLE.key(), ENABLE.defaultValue()) && HoodieTableMetadataUtil.isFilesPartitionAvailable(tableMetaClient)) {
+      if (HoodieTableMetadataUtil.isFilesPartitionAvailable(tableMetaClient) || conf.getBoolean(ENABLE.key(), ENABLE.defaultValue())) {
         HiveHoodieTableFileIndex fileIndex =
             new HiveHoodieTableFileIndex(
                 engineContext,
@@ -269,6 +269,9 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
                 .collect(Collectors.toList())
         );
       } else {
+        // If hoodie.metadata.enabled is set to false and the table doesn't have the metadata,
+        // read the table using fs view cache instead of file index.
+        // This is because there's no file index in non-metadata table.
         String basePath = tableMetaClient.getBasePathV2().toString();
         Map<HoodieTableMetaClient, HoodieTableFileSystemView> fsViewCache = new HashMap<>();
         HoodieTimeline timeline = getActiveTimeline(tableMetaClient, shouldIncludePendingCommits);
