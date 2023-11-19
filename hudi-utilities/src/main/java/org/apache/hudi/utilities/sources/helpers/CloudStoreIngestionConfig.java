@@ -107,11 +107,4 @@ public class CloudStoreIngestionConfig {
    * A comma delimited list of path-based partition fields in the source file structure
    */
   public static final String PATH_BASED_PARTITION_FIELDS = "hoodie.deltastreamer.source.cloud.data.partition.fields.from.path";
-
-  /**
-   * boolean value for specifying path format in load args of spark.read.format("..").load("a.xml,b.xml,c.xml"),
-   * set true if path format needs to be comma separated string value, if false it's passed as array of strings like
-   * spark.read.format("..").load(new String[]{a.xml,b.xml,c.xml})
-   */
-  public static final String SPARK_DATASOURCE_READER_COMMA_SEPARATED_PATH_FORMAT = "hoodie.deltastreamer.source.cloud.data.reader.comma.separated.path.format";
 }
