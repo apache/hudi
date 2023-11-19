@@ -109,6 +109,9 @@ public class TestHoodieTableFactory {
     final MockContext sourceContext11 = MockContext.getInstance(this.conf, schema1, "f2");
     assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSource(sourceContext11));
     assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext11));
+    //miss the pre combine key will be ok
+    HoodieTableSink tableSink11 = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(sourceContext11);
+    assertThat(tableSink11.getConf().getString(FlinkOptions.PRECOMBINE_FIELD), is(FlinkOptions.NO_PRE_COMBINE));
     this.conf.set(FlinkOptions.OPERATION, FlinkOptions.OPERATION.defaultValue());
 
     // a non-exists precombine key will throw exception
@@ -139,6 +142,12 @@ public class TestHoodieTableFactory {
     // precombine field not specified, use the default payload clazz
     assertThat(tableSource.getConf().getString(FlinkOptions.PAYLOAD_CLASS_NAME), is(FlinkOptions.PAYLOAD_CLASS_NAME.defaultValue()));
     assertThat(tableSink.getConf().getString(FlinkOptions.PAYLOAD_CLASS_NAME), is(FlinkOptions.PAYLOAD_CLASS_NAME.defaultValue()));
+
+    // append mode given the pk but miss the pre combine key will be ok
+    this.conf.set(FlinkOptions.OPERATION, "insert");
+    HoodieTableSink tableSink3 = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(sourceContext3);
+    assertThat(tableSink3.getConf().getString(FlinkOptions.PRECOMBINE_FIELD), is(FlinkOptions.NO_PRE_COMBINE));
+    this.conf.set(FlinkOptions.OPERATION, FlinkOptions.OPERATION.defaultValue());
 
     this.conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, DefaultHoodieRecordPayload.class.getName());
     final MockContext sourceContext4 = MockContext.getInstance(this.conf, schema3, "f2");
