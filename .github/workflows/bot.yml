@@ -212,7 +212,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - flinkProfile: "flink1.13"
           - flinkProfile: "flink1.14"
           - flinkProfile: "flink1.15"
           - flinkProfile: "flink1.16"
@@ -304,13 +303,13 @@ jobs:
           - flinkProfile: 'flink1.14'
             sparkProfile: 'spark3.2'
             sparkRuntime: 'spark3.2.3'
-          - flinkProfile: 'flink1.13'
+          - flinkProfile: 'flink1.14'
             sparkProfile: 'spark3.1'
             sparkRuntime: 'spark3.1.3'
           - flinkProfile: 'flink1.14'
             sparkProfile: 'spark3.0'
             sparkRuntime: 'spark3.0.2'
-          - flinkProfile: 'flink1.13'
+          - flinkProfile: 'flink1.14'
             sparkProfile: 'spark2.4'
             sparkRuntime: 'spark2.4.8'
     steps:
@@ -378,13 +377,13 @@ jobs:
           - flinkProfile: 'flink1.14'
             sparkProfile: 'spark3.2'
             sparkRuntime: 'spark3.2.3'
-          - flinkProfile: 'flink1.13'
+          - flinkProfile: 'flink1.14'
             sparkProfile: 'spark3.1'
             sparkRuntime: 'spark3.1.3'
-          - flinkProfile: 'flink1.13'
+          - flinkProfile: 'flink1.14'
             sparkProfile: 'spark'
             sparkRuntime: 'spark2.4.8'
-          - flinkProfile: 'flink1.13'
+          - flinkProfile: 'flink1.14'
             sparkProfile: 'spark2.4'
             sparkRuntime: 'spark2.4.8'
     steps:
