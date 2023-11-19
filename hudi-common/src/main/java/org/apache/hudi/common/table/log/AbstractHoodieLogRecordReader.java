@@ -149,6 +149,8 @@ public abstract class AbstractHoodieLogRecordReader {
   // Use scanV2 method.
   private final boolean enableOptimizedLogBlocksScan;
 
+  private final LogIndex logIndex;
+
   protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
                                           Schema readerSchema, String latestInstantTime, boolean readBlocksLazily,
                                           boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
@@ -157,7 +159,8 @@ public abstract class AbstractHoodieLogRecordReader {
                                           InternalSchema internalSchema,
                                           Option<String> keyFieldOverride,
                                           boolean enableOptimizedLogBlocksScan,
-                                          HoodieRecordMerger recordMerger) {
+                                          HoodieRecordMerger recordMerger,
+                                          LogIndex logIndex) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
     this.hoodieTableMetaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build();
@@ -206,6 +209,7 @@ public abstract class AbstractHoodieLogRecordReader {
 
     this.partitionNameOverrideOpt = partitionNameOverride;
     this.recordType = recordMerger.getRecordType();
+    this.logIndex = logIndex;
   }
 
   /**
@@ -240,6 +244,7 @@ public abstract class AbstractHoodieLogRecordReader {
       logFormatReaderWrapper = new HoodieLogFormatReader(fs,
           logFilePaths.stream()
               .map(filePath -> new HoodieLogFile(new CachingPath(filePath)))
+              .map(logIndex::indexFile)
               .collect(Collectors.toList()),
           readerSchema, true, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
 
@@ -547,6 +552,7 @@ public abstract class AbstractHoodieLogRecordReader {
       logFormatReaderWrapper = new HoodieLogFormatReader(fs,
           logFilePaths.stream()
               .map(logFile -> new HoodieLogFile(new CachingPath(logFile)))
+              .map(logIndex::indexFile)
               .collect(Collectors.toList()),
           readerSchema, true, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
 

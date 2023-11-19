@@ -2055,6 +2055,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE);
   }
 
+  public boolean isLogIndexEnabled() {
+    return getBoolean(HoodieIndexConfig.LOG_INDEX_ENABLED);
+  }
+
   /**
    * storage properties.
    */

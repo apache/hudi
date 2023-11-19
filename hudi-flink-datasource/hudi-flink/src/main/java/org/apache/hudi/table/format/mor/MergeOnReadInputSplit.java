@@ -19,6 +19,7 @@
 package org.apache.hudi.table.format.mor;
 
 import org.apache.hudi.common.table.log.InstantRange;
+import org.apache.hudi.common.table.log.LogIndex;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.flink.core.io.InputSplit;
@@ -49,6 +50,31 @@ public class MergeOnReadInputSplit implements InputSplit {
   // which is the start of next round reading.
   private long consumed = NUM_NO_CONSUMPTION;
 
+  private final LogIndex logIndex;
+
+  public MergeOnReadInputSplit(
+      int splitNum,
+      @Nullable String basePath,
+      Option<List<String>> logPaths,
+      String latestCommit,
+      String tablePath,
+      long maxCompactionMemoryInBytes,
+      String mergeType,
+      @Nullable InstantRange instantRange,
+      String fileId,
+      LogIndex logIndex) {
+    this.splitNum = splitNum;
+    this.basePath = Option.ofNullable(basePath);
+    this.logPaths = logPaths;
+    this.latestCommit = latestCommit;
+    this.tablePath = tablePath;
+    this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
+    this.mergeType = mergeType;
+    this.instantRange = Option.ofNullable(instantRange);
+    this.fileId = fileId;
+    this.logIndex = logIndex;
+  }
+
   public MergeOnReadInputSplit(
       int splitNum,
       @Nullable String basePath,
@@ -59,15 +85,7 @@ public class MergeOnReadInputSplit implements InputSplit {
       String mergeType,
       @Nullable InstantRange instantRange,
       String fileId) {
-    this.splitNum = splitNum;
-    this.basePath = Option.ofNullable(basePath);
-    this.logPaths = logPaths;
-    this.latestCommit = latestCommit;
-    this.tablePath = tablePath;
-    this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
-    this.mergeType = mergeType;
-    this.instantRange = Option.ofNullable(instantRange);
-    this.fileId = fileId;
+    this(splitNum, basePath, logPaths, latestCommit, tablePath, maxCompactionMemoryInBytes, mergeType, instantRange, fileId, LogIndex.getEmptyIndex());
   }
 
   public String getFileId() {
@@ -123,6 +141,10 @@ public class MergeOnReadInputSplit implements InputSplit {
     return this.consumed != NUM_NO_CONSUMPTION;
   }
 
+  public LogIndex getLogIndex() {
+    return logIndex;
+  }
+
   @Override
   public String toString() {
     return "MergeOnReadInputSplit{"
@@ -134,6 +156,7 @@ public class MergeOnReadInputSplit implements InputSplit {
         + ", maxCompactionMemoryInBytes=" + maxCompactionMemoryInBytes
         + ", mergeType='" + mergeType + '\''
         + ", instantRange=" + instantRange
+        + ", logIndex=" + logIndex
         + '}';
   }
 }

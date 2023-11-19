@@ -414,6 +414,19 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       updateWriteStatus(stat, result);
     }
 
+    if (config.isLogIndexEnabled()) {
+      Map<String, Long> logIndex = stat.getLogIndex();
+      if (logIndex == null) {
+        stat.setLogIndex(new HashMap<>());
+      }
+      String fileName = result.logFile().getFileName();
+      long offset = result.offset();
+      stat.getLogIndex().merge(fileName, offset, (prevOffset, nextOffset) -> {
+        LOG.info(String.format("Merged log index for %s, prev offset %s, next offset %s", fileName, prevOffset, nextOffset));
+        return Math.min(prevOffset, nextOffset);
+      });
+    }
+
     if (config.isMetadataColumnStatsIndexEnabled()) {
       final List<Schema.Field> fieldsToIndex;
       // If column stats index is enabled but columns not configured then we assume that

@@ -100,9 +100,10 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
                                        Option<String> partitionName,
                                        InternalSchema internalSchema,
                                        Option<String> keyFieldOverride,
-                                       boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger) {
+                                       boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger,
+                                       LogIndex logIndex) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
-        instantRange, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger);
+        instantRange, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger, logIndex);
     try {
       this.maxMemorySizeInBytes = maxMemorySizeInBytes;
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
@@ -337,6 +338,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     private boolean enableOptimizedLogBlocksScan = false;
     private HoodieRecordMerger recordMerger = HoodiePreCombineAvroRecordMerger.INSTANCE;
 
+    private LogIndex logIndex = LogIndex.getEmptyIndex();
+
     @Override
     public Builder withFileSystem(FileSystem fs) {
       this.fs = fs;
@@ -452,6 +455,11 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       return this;
     }
 
+    public Builder withLogIndex(LogIndex logIndex) {
+      this.logIndex = logIndex;
+      return this;
+    }
+
     @Override
     public HoodieMergedLogRecordScanner build() {
       if (this.partitionName == null && CollectionUtils.nonEmpty(this.logFilePaths)) {
@@ -463,7 +471,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
           latestInstantTime, maxMemorySizeInBytes, readBlocksLazily, reverseReader,
           bufferSize, spillableMapBasePath, instantRange,
           diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, forceFullScan,
-          Option.ofNullable(partitionName), internalSchema, Option.ofNullable(keyFieldOverride), enableOptimizedLogBlocksScan, recordMerger);
+          Option.ofNullable(partitionName), internalSchema, Option.ofNullable(keyFieldOverride), enableOptimizedLogBlocksScan, recordMerger, logIndex);
     }
   }
 }

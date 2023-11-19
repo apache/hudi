@@ -23,6 +23,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.SchemeAwareFSDataInputStream;
 import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.fs.TimedFSDataInputStream;
+import org.apache.hudi.common.model.HoodieIndexedLogFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
@@ -126,6 +127,10 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
     if (this.reverseReader) {
       this.reverseLogFilePosition = this.lastReverseLogFilePosition = this.logFile.getFileSize();
+    } else if (logFile instanceof HoodieIndexedLogFile) {
+      long offset = ((HoodieIndexedLogFile) logFile).getStartOffset();
+      LOG.info("Log index hit. Reading " + this.logFile.getFileName() + " from offset " + offset);
+      this.inputStream.seek(offset);
     }
 
     addShutDownHook();
