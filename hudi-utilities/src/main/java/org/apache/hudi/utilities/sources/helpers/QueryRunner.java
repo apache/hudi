@@ -44,12 +44,14 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
  */
 public class QueryRunner {
   private final SparkSession sparkSession;
+  private final TypedProperties props;
   private final String sourcePath;
 
   private static final Logger LOG = LoggerFactory.getLogger(QueryRunner.class);
 
   public QueryRunner(SparkSession sparkSession, TypedProperties props) {
     this.sparkSession = sparkSession;
+    this.props = props;
     checkRequiredConfigProperties(props, Collections.singletonList(HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH));
     this.sourcePath = getStringWithAltKeys(props, HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH);
   }
@@ -85,7 +87,11 @@ public class QueryRunner {
     return sparkSession.read().format("org.apache.hudi")
         .option(DataSourceReadOptions.QUERY_TYPE().key(), queryInfo.getQueryType())
         .option(DataSourceReadOptions.BEGIN_INSTANTTIME().key(), queryInfo.getPreviousInstant())
-        .option(DataSourceReadOptions.END_INSTANTTIME().key(), queryInfo.getEndInstant()).load(sourcePath);
+        .option(DataSourceReadOptions.END_INSTANTTIME().key(), queryInfo.getEndInstant())
+        .option(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES().key(),
+            props.getString(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES().key(),
+                DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES().defaultValue()))
+        .load(sourcePath);
   }
 
   public Dataset<Row> runSnapshotQuery(QueryInfo queryInfo) {
