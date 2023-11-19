@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.adapter;
+package org.apache.hudi.utils;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;

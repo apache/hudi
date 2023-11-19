@@ -132,8 +132,6 @@ Refer to the table below for building with different Flink and Scala versions.
 | `-Dflink1.15`              | hudi-flink1.15-bundle          | For Flink 1.15                   |
 | `-Dflink1.14`              | hudi-flink1.14-bundle          | For Flink 1.14 and Scala 2.12    |
 | `-Dflink1.14 -Dscala-2.11` | hudi-flink1.14-bundle          | For Flink 1.14 and Scala 2.11    |
-| `-Dflink1.13`              | hudi-flink1.13-bundle          | For Flink 1.13 and Scala 2.12    |
-| `-Dflink1.13 -Dscala-2.11` | hudi-flink1.13-bundle          | For Flink 1.13 and Scala 2.11    |
 
 For example,
 ```
@@ -142,9 +140,6 @@ mvn clean package -DskipTests -Dflink1.15
 
 # Build against Flink 1.14.x and Scala 2.11
 mvn clean package -DskipTests -Dflink1.14 -Dscala-2.11
-
-# Build against Flink 1.13.x and Scala 2.12
-mvn clean package -DskipTests -Dflink1.13
 ```
 
 ## Running Tests
