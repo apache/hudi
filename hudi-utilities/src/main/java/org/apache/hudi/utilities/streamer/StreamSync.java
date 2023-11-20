@@ -1208,7 +1208,6 @@ public class StreamSync implements Serializable, Closeable {
    * Close all resources.
    */
   public void close() {
-    String basePath = writeClient.getConfig().getBasePath();
     if (writeClient != null) {
       writeClient.close();
       writeClient = null;
@@ -1220,7 +1219,7 @@ public class StreamSync implements Serializable, Closeable {
 
     LOG.info("Shutting down embedded timeline server");
     if (embeddedTimelineService.isPresent()) {
-      embeddedTimelineService.get().stopForBasePath(basePath);
+      embeddedTimelineService.get().stopForBasePath(cfg.targetBasePath);
     }
 
     if (metrics != null) {

@@ -531,7 +531,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     List<Row> counts = countsPerCommit(tableBasePath, sqlContext);
     assertEquals(1000, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
 
-
     //perform the upsert and now with the original config, the commit should go through
     HoodieDeltaStreamer.Config newCfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
     newCfg.sourceLimit = 2000;
