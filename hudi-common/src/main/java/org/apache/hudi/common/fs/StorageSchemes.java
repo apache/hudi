@@ -76,7 +76,9 @@ public enum StorageSchemes {
   // Volcengine Cloud HDFS
   CFS("cfs", true, null, null),
   // Aliyun Apsara File Storage for HDFS
-  DFS("dfs", true, false, true);
+  DFS("dfs", true, false, true),
+  // Hopsworks File System
+  HOPSFS("hopsfs", false, false, true);
 
   private String scheme;
   private boolean supportsAppend;

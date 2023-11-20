@@ -76,6 +76,7 @@ public class TestStorageSchemes {
     assertFalse(StorageSchemes.isAtomicCreationSupported("oci"));
     assertFalse(StorageSchemes.isAtomicCreationSupported("tos"));
     assertFalse(StorageSchemes.isAtomicCreationSupported("cfs"));
+    assertTrue(StorageSchemes.isAtomicCreationSupported("hopsfs"));
     assertThrows(IllegalArgumentException.class, () -> {
       StorageSchemes.isAppendSupported("s2");
     }, "Should throw exception for unsupported schemes");
