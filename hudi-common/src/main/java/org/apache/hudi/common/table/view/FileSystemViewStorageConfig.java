@@ -388,6 +388,11 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withRemoteFileSystemViewFirst(boolean enable) {
+      fileSystemViewStorageConfig.setValue(REMOTE_VIEW_FIRST, Boolean.toString(enable));
+      return this;
+    }
+
     public FileSystemViewStorageConfig build() {
       fileSystemViewStorageConfig.setDefaults(FileSystemViewStorageConfig.class.getName());
       // Validations
