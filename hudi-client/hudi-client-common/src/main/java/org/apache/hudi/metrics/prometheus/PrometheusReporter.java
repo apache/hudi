@@ -53,9 +53,10 @@ public class PrometheusReporter extends MetricsReporter {
 
   private final DropwizardExports metricExports;
   private final CollectorRegistry collectorRegistry;
+  private final int serverPort;
 
   public PrometheusReporter(HoodieWriteConfig config, MetricRegistry registry) {
-    int serverPort = config.getPrometheusPort();
+    this.serverPort = config.getPrometheusPort();
     if (!PORT_TO_SERVER.containsKey(serverPort) || !PORT_TO_COLLECTOR_REGISTRY.containsKey(serverPort)) {
       startHttpServer(serverPort);
     }
@@ -101,7 +102,10 @@ public class PrometheusReporter extends MetricsReporter {
   @Override
   public void stop() {
     collectorRegistry.unregister(metricExports);
-    PORT_TO_SERVER.values().forEach(httpServer -> httpServer.stop());
+    HTTPServer httpServer = PORT_TO_SERVER.remove(serverPort);
+    if (httpServer != null) {
+      httpServer.stop();
+    }
   }
 
   private static class LabeledSampleBuilder implements SampleBuilder {
