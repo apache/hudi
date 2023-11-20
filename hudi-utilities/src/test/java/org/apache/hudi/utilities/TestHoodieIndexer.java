@@ -40,6 +40,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -293,8 +294,8 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     // The catchup won't finish due to inflight delta commit, and this is expected
     Throwable cause = assertThrows(RuntimeException.class, () ->  indexer.start(0))
         .getCause();
-    assertTrue(cause instanceof HoodieException);
-    assertTrue(cause.getMessage().contains("Metadata table is not yet initialized"));
+    assertTrue(cause instanceof HoodieMetadataException);
+    assertTrue(cause.getMessage().contains("Failed to index partition"));
 
     // Now, make sure that the inflight delta commit happened before the async indexer
     // is intact
@@ -370,7 +371,10 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     config.propsFilePath = propsPath;
     // start the indexer and validate index building fails
     HoodieIndexer indexer = new HoodieIndexer(jsc(), config);
-    assertEquals(-1, indexer.start(0));
+    Throwable cause = assertThrows(RuntimeException.class, () ->  indexer.start(0))
+        .getCause();
+    assertTrue(cause instanceof HoodieException);
+    assertTrue(cause.getMessage().contains("Metadata table is not yet initialized"));
 
     // validate table config
     metaClient = reload(metaClient);
