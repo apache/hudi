@@ -13,11 +13,11 @@ See more informations about Chinese community sync call by changing the website 
 
 ## Monthly Community Call
 
-Participate in our community calls by joining us on LinkedIn Live every month on the **Fourth Wednesday**, at 09:00 AM Pacific Time (US and Canada)([translate to other time zones](https://www.worldtimebuddy.com/?qm=1&lid=5368361,2643743,1264527,1796236&h=2643743&date=2022-5-25&sln=17-18&hf=1)). To join, click on the image right below and join the community call on the events page:
+Participate in our community calls by joining us on LinkedIn Live every month on the **Fourth Wednesday**, at 09:00 AM Pacific Time (US and Canada)([translate to other time zones](https://www.worldtimebuddy.com/?qm=1&lid=5368361,1264527,1796236,2643743&h=5368361&date=2023-11-17&sln=9-10&hf=1)). You can click on the image right below and join the community call on the events page or you can click [here](https://www.linkedin.com/company/apache-hudi/events/?viewAsMember=true).
 
 [![Join us](/assets/images/community-sync-card.jpg)]( https://www.linkedin.com/company/apache-hudi/events/?viewAsMember=true "Watch Live")
 
-If you haven't already, please **like** and **follow the Apache Hudi [LinkedIn](https://www.linkedin.com/company/apache-hudi/) and [Twitter](https://twitter.com/apachehudi). 
+If you haven't already, please **like** and **follow** the Apache Hudi [LinkedIn](https://www.linkedin.com/company/apache-hudi/) and [Twitter](https://twitter.com/apachehudi). 
 
 ### Recordings of the community calls
 
