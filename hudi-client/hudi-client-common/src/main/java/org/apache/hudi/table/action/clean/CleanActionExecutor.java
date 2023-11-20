@@ -233,7 +233,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       throw new HoodieIOException("Failed to clean up after commit", e);
     } finally {
       if (!skipLocking) {
-        this.txnManager.endTransaction(Option.of(inflightInstant));
+        this.txnManager.endTransaction(Option.ofNullable(inflightInstant));
       }
     }
   }

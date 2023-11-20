@@ -259,6 +259,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     writeMetadata.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(clusteringPlan, writeMetadata));
     commitOnAutoCommit(writeMetadata);
     if (!writeMetadata.getCommitMetadata().isPresent()) {
+      LOG.info("Found empty commit metadata for clustering with instant time " + instantTime);
       HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(writeMetadata.getWriteStats().get(), writeMetadata.getPartitionToReplaceFileIds(),
           extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType());
       writeMetadata.setCommitMetadata(Option.of(commitMetadata));

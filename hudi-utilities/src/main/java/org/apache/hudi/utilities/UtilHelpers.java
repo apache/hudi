@@ -606,6 +606,7 @@ public class UtilHelpers {
       } while (ret != 0 && maxRetryCount-- > 0);
     } catch (Throwable t) {
       LOG.error(errorMessage, t);
+      throw new RuntimeException("Failed in retry", t);
     }
     return ret;
   }
