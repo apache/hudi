@@ -75,7 +75,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     /*
      * Now check if the incoming record is a delete record.
      */
-    return isDeleteRecord(incomingRecord, properties) ? Option.empty() : Option.of(incomingRecord);
+    return isDeleteRecord(incomingRecord, properties, schema) ? Option.empty() : Option.of(incomingRecord);
   }
 
   @Override
@@ -86,30 +86,38 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     GenericRecord incomingRecord = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
     eventTime = updateEventTime(incomingRecord, properties);
 
-    return isDeleteRecord(incomingRecord, properties) ? Option.empty() : Option.of(incomingRecord);
+    return isDeleteRecord(incomingRecord, properties, schema) ? Option.empty() : Option.of(incomingRecord);
   }
 
   /**
    * @param genericRecord instance of {@link GenericRecord} of interest.
    * @param properties payload related properties
+   * @param schema schema of interest.
    * @returns {@code true} if record represents a delete record. {@code false} otherwise.
    */
-  protected boolean isDeleteRecord(GenericRecord genericRecord, Properties properties) {
-    final String deleteKey = properties.getProperty(DELETE_KEY);
-    if (StringUtils.isNullOrEmpty(deleteKey)) {
-      return isDeleteRecord(genericRecord);
-    }
+  protected boolean isDeleteRecord(GenericRecord genericRecord, Properties properties, Schema schema) {
+    // call super.isDeleted to account of deletion based on _hoodie_is_deleted
+    boolean isDeletedBaseAvroPayload = super.isDeleted(schema, properties);
+    if (isDeletedBaseAvroPayload) {
+      return true;
+    } else {
+      // check for deletion based on custom delete marker.
+      final String deleteKey = properties.getProperty(DELETE_KEY);
+      if (StringUtils.isNullOrEmpty(deleteKey)) {
+        return isDeleteRecord(genericRecord);
+      }
 
-    ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(properties.getProperty(DELETE_MARKER)),
-        () -> DELETE_MARKER + " should be configured with " + DELETE_KEY);
-    // Modify to be compatible with new version Avro.
-    // The new version Avro throws for GenericRecord.get if the field name
-    // does not exist in the schema.
-    if (genericRecord.getSchema().getField(deleteKey) == null) {
-      return false;
+      ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(properties.getProperty(DELETE_MARKER)),
+          () -> DELETE_MARKER + " should be configured with " + DELETE_KEY);
+      // Modify to be compatible with new version Avro.
+      // The new version Avro throws for GenericRecord.get if the field name
+      // does not exist in the schema.
+      if (genericRecord.getSchema().getField(deleteKey) == null) {
+        return false;
+      }
+      Object deleteMarker = genericRecord.get(deleteKey);
+      return deleteMarker != null && properties.getProperty(DELETE_MARKER).equals(deleteMarker.toString());
     }
-    Object deleteMarker = genericRecord.get(deleteKey);
-    return deleteMarker != null && properties.getProperty(DELETE_MARKER).equals(deleteMarker.toString());
   }
 
   private static Option<Object> updateEventTime(GenericRecord record, Properties properties) {
