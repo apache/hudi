@@ -18,43 +18,29 @@
 package org.apache.hudi
 
 import org.apache.spark.sql._
-import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
-import org.apache.spark.util.{AccumulatorV2}
-import org.apache.spark.SparkContext
-
-import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
-import org.apache.hudi.DataSourceWriteOptions
+import org.apache.spark.util.AccumulatorV2
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
-
-
-import org.junit.jupiter.api.Assertions.{assertEquals}
-import org.junit.jupiter.api.{BeforeEach}
+import org.apache.hudi.testutils.HoodieSparkClientTestBase
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{EnumSource}
+import org.junit.jupiter.params.provider.EnumSource
+import org.apache.spark.sql.{DataFrame, SparkSession}
 
-class TestHoodieParquetBloomFilter {
+class TestHoodieParquetBloomFilter extends HoodieSparkClientTestBase {
 
   var spark: SparkSession = _
-  var sqlContext: SQLContext = _
-  var sc: SparkContext = _
-
-  def initSparkContext(): Unit = {
-    val sparkConf = getSparkConfForTest(getClass.getSimpleName)
-
-    spark = SparkSession.builder()
-      .withExtensions(new HoodieSparkSessionExtension)
-      .config(sparkConf)
-      .getOrCreate()
-
-    sc = spark.sparkContext
-    sc.setLogLevel("ERROR")
-    sqlContext = spark.sqlContext
+  /**
+   * Setup method running before each test.
+   */
+  @BeforeEach override def setUp(): Unit = {
+    initSparkContexts()
+    spark = sqlContext.sparkSession
   }
 
-  @BeforeEach
-  def setUp() {
-    initSparkContext()
+  @AfterEach override def tearDown(): Unit = {
+    cleanupSparkContexts()
   }
 
   @ParameterizedTest
