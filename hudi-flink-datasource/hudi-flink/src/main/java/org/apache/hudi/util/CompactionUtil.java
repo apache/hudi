@@ -113,7 +113,7 @@ public class CompactionUtil {
    * @param conf The configuration
    * @param metaClient The meta client
    */
-  public static void inferChangelogMode(Configuration conf, HoodieTableMetaClient metaClient) {
+  public static void inferChangelogMode(Configuration conf, HoodieTableMetaClient metaClient) throws Exception {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
     Schema tableAvroSchema = tableSchemaResolver.getTableAvroSchemaFromDataFile();
     if (tableAvroSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD) != null) {
