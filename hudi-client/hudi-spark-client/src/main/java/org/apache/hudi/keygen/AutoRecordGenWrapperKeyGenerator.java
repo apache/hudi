@@ -50,21 +50,21 @@ import java.util.List;
 public class AutoRecordGenWrapperKeyGenerator extends BuiltinKeyGenerator {
 
   private final BuiltinKeyGenerator builtinKeyGenerator;
-  private final int partitionId;
-  private final String instantTime;
+  private Integer partitionId;
+  private String instantTime;
   private int rowId;
 
   public AutoRecordGenWrapperKeyGenerator(TypedProperties config, BuiltinKeyGenerator builtinKeyGenerator) {
     super(config);
     this.builtinKeyGenerator = builtinKeyGenerator;
     this.rowId = 0;
-    this.partitionId = config.getInteger(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG);
-    this.instantTime = config.getString(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG);
+    partitionId = null;
+    instantTime = null;
   }
 
   @Override
   public String getRecordKey(GenericRecord record) {
-    return HoodieRecord.generateSequenceId(instantTime, partitionId, rowId++);
+    return generateSequenceId(rowId++);
   }
 
   @Override
@@ -74,12 +74,12 @@ public class AutoRecordGenWrapperKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getRecordKey(Row row) {
-    return HoodieRecord.generateSequenceId(instantTime, partitionId, rowId++);
+    return generateSequenceId(rowId++);
   }
 
   @Override
   public UTF8String getRecordKey(InternalRow internalRow, StructType schema) {
-    return UTF8String.fromString(HoodieRecord.generateSequenceId(instantTime, partitionId, rowId++));
+    return UTF8String.fromString(generateSequenceId(rowId++));
   }
 
   @Override
@@ -105,4 +105,13 @@ public class AutoRecordGenWrapperKeyGenerator extends BuiltinKeyGenerator {
     return builtinKeyGenerator.isConsistentLogicalTimestampEnabled();
   }
 
+  private String generateSequenceId(long recordIndex) {
+    if (partitionId == null) {
+      this.partitionId = config.getInteger(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG);
+    }
+    if (instantTime == null) {
+      this.instantTime = config.getString(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG);
+    }
+    return HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);
+  }
 }
