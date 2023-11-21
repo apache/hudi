@@ -36,7 +36,7 @@ See https://github.com/GoogleCloudPlatform/cloud-opensource-java/wiki/The-Google
       <dependency>
         <groupId>com.google.cloud</groupId>
         <artifactId>libraries-bom</artifactId>
-        <version>25.1.0</version>
+        <version>26.15.0</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
@@ -70,7 +70,6 @@ See https://github.com/GoogleCloudPlatform/cloud-opensource-java/wiki/The-Google
     <dependency>
       <groupId>com.google.cloud</groupId>
       <artifactId>google-cloud-pubsub</artifactId>
-      <version>${google.cloud.pubsub.version}</version>
     </dependency>
 
     <dependency>

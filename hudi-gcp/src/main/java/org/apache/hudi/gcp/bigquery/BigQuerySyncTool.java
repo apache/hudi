@@ -124,7 +124,7 @@ public class BigQuerySyncTool extends HoodieSyncTool {
   }
 
   private void syncTable(HoodieBigQuerySyncClient bqSyncClient) {
-    LOG.info("Sync hoodie table " + snapshotViewName + " at base path " + bqSyncClient.getBasePath());
+    LOG.info("Sync hoodie table {} at base path {}", snapshotViewName, bqSyncClient.getBasePath());
 
     if (!bqSyncClient.datasetExists()) {
       throw new HoodieBigQuerySyncException("Dataset not found: " + config.getString(BIGQUERY_SYNC_DATASET_NAME));
@@ -134,19 +134,21 @@ public class BigQuerySyncTool extends HoodieSyncTool {
     Schema latestSchema = bqSchemaResolver.getTableSchema(metaClient, partitionFields);
     if (config.getBoolean(BIGQUERY_SYNC_USE_BQ_MANIFEST_FILE)) {
       manifestFileWriter.writeManifestFile(true);
-      if (!tableExists(bqSyncClient, tableName)) {
-        bqSyncClient.createTableUsingBqManifestFile(
+      // if table does not exist, create it using the manifest file
+      // if table exists but is not yet using manifest file or needs to be recreated with the big-lake connection ID, update it to use manifest file
+      if (bqSyncClient.tableNotExistsOrDoesNotMatchSpecification(tableName)) {
+        bqSyncClient.createOrUpdateTableUsingBqManifestFile(
             tableName,
             manifestFileWriter.getManifestSourceUri(true),
             config.getString(BIGQUERY_SYNC_SOURCE_URI_PREFIX),
             latestSchema);
-        LOG.info("Completed table " + tableName + " creation using the manifest file");
+        LOG.info("Completed table {} creation using the manifest file", tableName);
       } else {
         bqSyncClient.updateTableSchema(tableName, latestSchema, partitionFields);
-        LOG.info("Synced schema for " + tableName);
+        LOG.info("Synced schema for {}", tableName);
       }
 
-      LOG.info("Sync table complete for " + tableName);
+      LOG.info("Sync table complete for {}", tableName);
       return;
     }
 
@@ -154,7 +156,7 @@ public class BigQuerySyncTool extends HoodieSyncTool {
 
     if (!tableExists(bqSyncClient, manifestTableName)) {
       bqSyncClient.createManifestTable(manifestTableName, manifestFileWriter.getManifestSourceUri(false));
-      LOG.info("Manifest table creation complete for " + manifestTableName);
+      LOG.info("Manifest table creation complete for {}", manifestTableName);
     }
 
     if (!tableExists(bqSyncClient, versionsTableName)) {
@@ -163,16 +165,15 @@ public class BigQuerySyncTool extends HoodieSyncTool {
           config.getString(BIGQUERY_SYNC_SOURCE_URI),
           config.getString(BIGQUERY_SYNC_SOURCE_URI_PREFIX),
           config.getSplitStrings(BIGQUERY_SYNC_PARTITION_FIELDS));
-      LOG.info("Versions table creation complete for " + versionsTableName);
+      LOG.info("Versions table creation complete for {}", versionsTableName);
     }
 
     if (!tableExists(bqSyncClient, snapshotViewName)) {
       bqSyncClient.createSnapshotView(snapshotViewName, versionsTableName, manifestTableName);
-      LOG.info("Snapshot view creation complete for " + snapshotViewName);
+      LOG.info("Snapshot view creation complete for {}", snapshotViewName);
     }
 
-    // TODO: Implement automatic schema evolution when you add a new column.
-    LOG.info("Sync table complete for " + snapshotViewName);
+    LOG.info("Sync table complete for {}", snapshotViewName);
   }
 
   @Override
