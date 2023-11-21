@@ -897,7 +897,7 @@ public class HoodieAvroUtils {
             String fieldNameFromOldSchema = renameCols.get(fieldFullName);
             // deal with rename
             Schema.Field oldFieldRenamed = fieldNameFromOldSchema == null ? null : oldSchema.getField(fieldNameFromOldSchema);
-            if (oldField == null && oldFieldRenamed != null) {
+            if (oldFieldRenamed != null) {
               // find rename
               newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldFieldRenamed.pos()), oldFieldRenamed.schema(), fields.get(i).schema(), renameCols, fieldNames, false));
             } else {
