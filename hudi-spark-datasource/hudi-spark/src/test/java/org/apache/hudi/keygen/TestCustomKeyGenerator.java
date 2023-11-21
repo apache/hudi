@@ -262,9 +262,9 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
       if (useKeyGeneratorClassName) {
         // "Property hoodie.datasource.write.recordkey.field not found" exception cause CustomKeyGenerator init fail
         Assertions.assertTrue(e.getMessage()
-            .contains("Property hoodie.datasource.write.recordkey.field not found"));
+            .contains("Unable to find field names for record key in cfg"));
       } else {
-        Assertions.assertTrue(stackTraceToString(e).contains("Property hoodie.datasource.write.recordkey.field not found"));
+        Assertions.assertTrue(stackTraceToString(e).contains("Unable to find field names for record key in cfg"));
       }
 
     }
@@ -280,9 +280,9 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
       if (useKeyGeneratorClassName) {
         // "Property hoodie.datasource.write.recordkey.field not found" exception cause CustomKeyGenerator init fail
         Assertions.assertTrue(e.getMessage()
-            .contains("Property hoodie.datasource.write.recordkey.field not found"));
+            .contains("All of the values for ([]) were either null or empty"));
       } else {
-        Assertions.assertTrue(stackTraceToString(e).contains("Property hoodie.datasource.write.recordkey.field not found"));
+        Assertions.assertTrue(stackTraceToString(e).contains("All of the values for ([]) were either null or empty"));
       }
     }
   }

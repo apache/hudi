@@ -58,7 +58,6 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 
-import java.lang.reflect.InvocationTargetException
 import java.sql.{Date, Timestamp}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.function.Consumer
@@ -1003,7 +1002,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       fail("should fail when invalid PartitionKeyType is provided!")
     } catch {
       case e: Exception =>
-        assertTrue(e.getCause.getCause.asInstanceOf[InvocationTargetException].getTargetException.getMessage.contains("No enum constant org.apache.hudi.keygen.CustomAvroKeyGenerator.PartitionKeyType.DUMMY"))
+        assertTrue(e.getCause.getMessage.contains("No enum constant org.apache.hudi.keygen.CustomAvroKeyGenerator.PartitionKeyType.DUMMY"))
     }
   }
 
