@@ -212,8 +212,8 @@ class IncrementalRelation(val sqlContext: SQLContext,
       //   1. the start commit is archived
       //   2. the end commit is archived
       //   3. there are files in metadata be deleted
-      val fallbackToFullTableScan = optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.key,
-        DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.defaultValue).toBoolean
+      val fallbackToFullTableScan = optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.key,
+        DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.defaultValue).toBoolean
 
       val sOpts = optParams.filter(p => !p._1.equalsIgnoreCase("path"))
 

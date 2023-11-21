@@ -2370,7 +2370,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     // Remove source.hoodieincr.num_instants config
     downstreamCfg.configs.remove(downstreamCfg.configs.size() - 1);
-    downstreamCfg.configs.add(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES().key() + "=true");
+    downstreamCfg.configs.add(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key() + "=true");
     //Adding this conf to make testing easier :)
     downstreamCfg.configs.add("hoodie.deltastreamer.source.hoodieincr.num_instants=10");
     downstreamCfg.operation = WriteOperationType.UPSERT;

@@ -209,7 +209,7 @@ object DataSourceReadOptions {
         " by carefully analyzing provided partition-column predicates and deducing corresponding partition-path prefix from " +
         " them (if possible).")
 
-  val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES: ConfigProperty[String] = ConfigProperty
+  val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.incr.fallback.fulltablescan.enable")
     .defaultValue("false")
     .markAdvanced()

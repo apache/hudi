@@ -41,7 +41,7 @@ import java.util.Collections;
 
 import static org.apache.hudi.DataSourceReadOptions.BEGIN_INSTANTTIME;
 import static org.apache.hudi.DataSourceReadOptions.END_INSTANTTIME;
-import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES;
+import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN;
 import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL;
@@ -184,9 +184,9 @@ public class HoodieIncrSource extends RowSource {
           .option(QUERY_TYPE().key(), QUERY_TYPE_INCREMENTAL_OPT_VAL())
           .option(BEGIN_INSTANTTIME().key(), queryInfo.getStartInstant())
           .option(END_INSTANTTIME().key(), queryInfo.getEndInstant())
-          .option(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES().key(),
-              props.getString(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES().key(),
-                  INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES().defaultValue()))
+          .option(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
+              props.getString(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
+                  INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().defaultValue()))
           .option(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT().key(), handlingMode.name())
           .load(srcPath);
     } else {
