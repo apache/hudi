@@ -130,12 +130,28 @@ class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
            |values (10, false, CAST('binary data' AS BINARY), CAST('2022-02-02' AS DATE), 20.5, 6.28, 3.14, 2000, 'another string', CAST('2022-02-02 00:00:00' AS TIMESTAMP))
            |""".stripMargin)
 
-      // collect column stats for table
+      // Only numerical and string types are compared for clarity on min/max values.
+      val expectedValues = Map(
+        1 -> ("1", "10"),
+        2 -> ("false", "true"),
+        6 -> ("3.14", "6.28"),
+        7 -> ("2.5", "3.14"),
+        8 -> ("1000", "2000"),
+        9 -> ("another string", "example string")
+      )
+
       for (i <- 1 to 10) {
         val columnName = s"c$i"
         val metadataStats = spark.sql(s"""call show_metadata_table_column_stats(table => '$tableName', targetColumns => '$columnName')""").collect()
-        assertResult(2) {
-          metadataStats.length
+        assertResult(1)(metadataStats.length)
+        val minVal: String = metadataStats(0).getAs[String]("min_value")
+        val maxVal: String = metadataStats(0).getAs[String]("max_value")
+
+        expectedValues.get(i) match {
+          case Some((expectedMin, expectedMax)) =>
+            assertResult(expectedMin)(minVal)
+            assertResult(expectedMax)(maxVal)
+          case None => // Do nothing if no expected values found
         }
       }
     }
