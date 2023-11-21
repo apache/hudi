@@ -106,6 +106,7 @@ public class PrometheusReporter extends MetricsReporter {
     if (httpServer != null) {
       httpServer.stop();
     }
+    PORT_TO_COLLECTOR_REGISTRY.remove(serverPort);
   }
 
   private static class LabeledSampleBuilder implements SampleBuilder {
