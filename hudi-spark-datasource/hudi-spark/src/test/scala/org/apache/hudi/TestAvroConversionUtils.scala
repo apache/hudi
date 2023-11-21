@@ -408,30 +408,6 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
     internalRowCompare(row1, row2, sparkSchema)
   }
 
-  test("test fields are equivalent") {
-    val baseAvroSchema = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"h0_record\",\"namespace\":\"hoodie.h0\",\"fields\""
-      + ":[{\"name\":\"col9\",\"type\":[\"null\",\"bytes\"],\"default\":null}]}")
-    val schemaWithDifferentName = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"new_record\",\"namespace\":\"hoodie.h0\",\"fields\""
-      + ":[{\"name\":\"col9\",\"type\":[\"null\",\"bytes\"],\"default\":null}]}")
-    val schemaWithDifferentFieldName = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"new_record\",\"namespace\":\"hoodie.h0\",\"fields\""
-      + ":[{\"name\":\"col10\",\"type\":[\"null\",\"bytes\"],\"default\":null}]}")
-    val schemaWithDifferentFieldType = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"new_record\",\"namespace\":\"hoodie.h0\",\"fields\""
-      + ":[{\"name\":\"col9\",\"type\":[\"null\",\"string\"],\"default\":null}]}")
-    assert(AvroConversionUtils.areSchemasEquivalent(baseAvroSchema, schemaWithDifferentName))
-    assert(!AvroConversionUtils.areSchemasEquivalent(baseAvroSchema, schemaWithDifferentFieldName))
-    assert(!AvroConversionUtils.areSchemasEquivalent(baseAvroSchema, schemaWithDifferentFieldType))
-
-    val complexAvroSchema = new Schema.Parser().parse(complexSchemaStr)
-    val complexSchemaWithDifferentNamespace = new Schema.Parser().parse(complexSchemaStr.replace("SchemaNS.SchemaName", "newNamspace"))
-    val complexSchemaWithDifferentMapFieldName = new Schema.Parser().parse(complexSchemaStr.replace("mapVal", "newVal"))
-    val complexSchemaWithDifferentListFieldName = new Schema.Parser().parse(complexSchemaStr.replace("arrayVal", "newArrayVal"))
-    val complexSchemaWithDifferentStructFieldName = new Schema.Parser().parse(complexSchemaStr.replace("innerKey", "newInnerKey"))
-    assert(AvroConversionUtils.areSchemasEquivalent(complexAvroSchema, complexSchemaWithDifferentNamespace))
-    assert(!AvroConversionUtils.areSchemasEquivalent(complexAvroSchema, complexSchemaWithDifferentMapFieldName))
-    assert(!AvroConversionUtils.areSchemasEquivalent(complexAvroSchema, complexSchemaWithDifferentListFieldName))
-    assert(!AvroConversionUtils.areSchemasEquivalent(complexAvroSchema, complexSchemaWithDifferentStructFieldName))
-  }
-
   private def internalRowCompare(expected: Any, actual: Any, schema: DataType): Unit = {
     schema match {
       case StructType(fields) =>

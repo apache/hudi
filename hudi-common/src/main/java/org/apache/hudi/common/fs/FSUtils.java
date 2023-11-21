@@ -87,6 +87,8 @@ public class FSUtils {
   private static final int MAX_ATTEMPTS_RECOVER_LEASE = 10;
   private static final String HOODIE_ENV_PROPS_PREFIX = "HOODIE_ENV_";
 
+  private static final String LOG_FILE_EXTENSION = ".log";
+
   private static final PathFilter ALLOW_ALL_FILTER = file -> true;
 
   public static Configuration prepareHadoopConf(Configuration conf) {
@@ -474,7 +476,7 @@ public class FSUtils {
   }
 
   public static boolean isLogFile(String fileName) {
-    if (fileName.contains(".log")) {
+    if (fileName.contains(LOG_FILE_EXTENSION)) {
       Matcher matcher = LOG_FILE_PATTERN.matcher(fileName);
       return matcher.find();
     }
