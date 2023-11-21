@@ -503,7 +503,7 @@ public class HoodieAvroUtils {
     } else if (field.defaultVal() instanceof JsonProperties.Null) {
       newRecord.put(field.pos(), null);
     } else {
-      if (!field.schema().isNullable() && field.defaultVal() == null) {
+      if (!isNullable(field.schema()) && field.defaultVal() == null) {
         throw new SchemaCompatibilityException("Field " + field.name() + " has no default value and is null in old record");
       }
       newRecord.put(field.pos(), field.defaultVal());

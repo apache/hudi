@@ -249,7 +249,7 @@ public class AvroSchemaUtils {
     }
 
     List<Schema> innerTypes = schema.getTypes();
-    if (innerTypes.size() == 2 && schema.isNullable()) {
+    if (innerTypes.size() == 2 && isNullable(schema)) {
       // this is a basic nullable field so handle it more efficiently
       return resolveNullableSchema(schema);
     }
