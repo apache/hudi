@@ -20,7 +20,13 @@
 package org.apache.spark.sql.hudi.command.index
 
 import org.apache.hudi.HoodieSparkUtils
+import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.util.Option
+import org.apache.hudi.hive.HiveSyncConfigHolder._
+import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor
+import org.apache.hudi.hive.testutils.HiveTestUtil
+import org.apache.hudi.sync.common.HoodieSyncConfig.{META_SYNC_BASE_PATH, META_SYNC_DATABASE_NAME, META_SYNC_PARTITION_EXTRACTOR_CLASS, META_SYNC_TABLE_NAME}
 import org.apache.spark.sql.catalyst.analysis.Analyzer
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.parser.ParserInterface
@@ -135,6 +141,68 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           val functionalIndexMetadata = metaClient.getFunctionalIndexMetadata.get()
           assertEquals(1, functionalIndexMetadata.getIndexDefinitions.size())
           assertEquals("func_index_idx_datestr", functionalIndexMetadata.getIndexDefinitions.get("func_index_idx_datestr").getIndexName)
+        }
+      }
+    }
+  }
+
+  test("Test Functional Index With Hive Sync Non Partitioned Table") {
+    if (HoodieSparkUtils.gteqSpark3_2) {
+      withTempDir { tmp =>
+        Seq("mor").foreach { tableType =>
+          val databaseName = "default"
+          val tableName = generateTableName
+          val basePath = s"${tmp.getCanonicalPath}/$tableName"
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | options (
+               |  primaryKey ='id',
+               |  type = '$tableType',
+               |  preCombineField = 'ts'
+               | )
+               | partitioned by(ts)
+               | location '$basePath'
+       """.stripMargin)
+          spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+          spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
+          spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
+
+          val createIndexSql = s"create index idx_datestr on $tableName using column_stats(ts) options(func='from_unixtime', format='yyyy-MM-dd')"
+          spark.sql(createIndexSql)
+          val metaClient = HoodieTableMetaClient.builder()
+            .setBasePath(basePath)
+            .setConf(spark.sessionState.newHadoopConf())
+            .build()
+          assertTrue(metaClient.getFunctionalIndexMetadata.isPresent)
+          val functionalIndexMetadata = metaClient.getFunctionalIndexMetadata.get()
+          assertEquals(1, functionalIndexMetadata.getIndexDefinitions.size())
+          assertEquals("func_index_idx_datestr", functionalIndexMetadata.getIndexDefinitions.get("func_index_idx_datestr").getIndexName)
+
+          // sync to hive without partition metadata
+          val hiveSyncProps = new TypedProperties()
+          hiveSyncProps.setProperty(HIVE_URL.key, "jdbc:hive2://localhost:10000")
+          hiveSyncProps.setProperty(HIVE_USER.key, "")
+          hiveSyncProps.setProperty(HIVE_PASS.key, "")
+          hiveSyncProps.setProperty(META_SYNC_DATABASE_NAME.key, databaseName)
+          hiveSyncProps.setProperty(META_SYNC_TABLE_NAME.key, tableName)
+          hiveSyncProps.setProperty(META_SYNC_BASE_PATH.key, basePath)
+          hiveSyncProps.setProperty(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key, "false")
+          // hiveSyncProps.setProperty(META_SYNC_PARTITION_FIELDS.key, "datestr")
+          hiveSyncProps.setProperty(META_SYNC_PARTITION_EXTRACTOR_CLASS.key, classOf[SlashEncodedDayPartitionValueExtractor].getName)
+          hiveSyncProps.setProperty(HIVE_BATCH_SYNC_PARTITION_NUM.key, "3")
+          HiveTestUtil.setUp(Option.of(hiveSyncProps))
+
+          // check query result
+          val queryResult = spark.sql(s"select * from $tableName where datestr='1970-01-02'")
+          assertResult(1)(queryResult.count())
+          HiveTestUtil.clear()
+          HiveTestUtil.shutdown()
         }
       }
     }

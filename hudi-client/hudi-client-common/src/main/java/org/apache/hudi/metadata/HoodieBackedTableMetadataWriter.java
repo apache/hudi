@@ -70,6 +70,7 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.hadoop.SerializablePath;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.avro.Schema;
@@ -733,15 +734,16 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    */
   private void initializeFileGroups(HoodieTableMetaClient dataMetaClient, MetadataPartitionType metadataPartition, String instantTime,
                                     int fileGroupCount) throws IOException {
+    String partitionName = HoodieIndexUtils.getPartitionNameFromPartitionType(metadataPartition, dataMetaClient, dataWriteConfig.getFunctionalIndexConfig().getIndexName());
     // Remove all existing file groups or leftover files in the partition
-    final Path partitionPath = new Path(metadataWriteConfig.getBasePath(), metadataPartition.getPartitionPath());
+    final Path partitionPath = new Path(metadataWriteConfig.getBasePath(), partitionName);
     FileSystem fs = metadataMetaClient.getFs();
     try {
       final FileStatus[] existingFiles = fs.listStatus(partitionPath);
       if (existingFiles.length > 0) {
-        LOG.warn("Deleting all existing files found in MDT partition " + metadataPartition.getPartitionPath());
+        LOG.warn("Deleting all existing files found in MDT partition " + partitionName);
         fs.delete(partitionPath, true);
-        ValidationUtils.checkState(!fs.exists(partitionPath), "Failed to delete MDT partition " + metadataPartition);
+        ValidationUtils.checkState(!fs.exists(partitionPath), "Failed to delete MDT partition " + partitionName);
       }
     } catch (FileNotFoundException ignored) {
       // If the partition did not exist yet, it will be created below
@@ -757,7 +759,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     // valid logFile). Since these log files being created have no content, it is safe to add them here before
     // the bulkInsert.
     final String msg = String.format("Creating %d file groups for partition %s with base fileId %s at instant time %s",
-        fileGroupCount, metadataPartition.getPartitionPath(), metadataPartition.getFileIdPrefix(), instantTime);
+        fileGroupCount, partitionName, metadataPartition.getFileIdPrefix(), instantTime);
     LOG.info(msg);
     final List<String> fileGroupFileIds = IntStream.range(0, fileGroupCount)
         .mapToObj(i -> HoodieTableMetadataUtil.getFileIDForFileGroup(metadataPartition, i))
@@ -771,7 +773,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         final HoodieDeleteBlock block = new HoodieDeleteBlock(Collections.emptyList(), false, blockHeader);
 
         HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
-            .onParentPath(FSUtils.getPartitionPath(metadataWriteConfig.getBasePath(), metadataPartition.getPartitionPath()))
+            .onParentPath(FSUtils.getPartitionPath(metadataWriteConfig.getBasePath(), partitionName))
             .withFileId(fileGroupFileId)
             .withDeltaCommit(instantTime)
             .withLogVersion(HoodieLogFile.LOGFILE_BASE_VERSION)
@@ -784,7 +786,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         writer.appendBlock(block);
         writer.close();
       } catch (InterruptedException e) {
-        throw new HoodieException("Failed to created fileGroup " + fileGroupFileId + " for partition " + metadataPartition.getPartitionPath(), e);
+        throw new HoodieException("Failed to created fileGroup " + fileGroupFileId + " for partition " + partitionName, e);
       }
     }, fileGroupFileIds.size());
   }
@@ -1253,7 +1255,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     HoodieTableFileSystemView fsView = HoodieTableMetadataUtil.getFileSystemView(metadataMetaClient);
     for (Map.Entry<MetadataPartitionType, HoodieData<HoodieRecord>> entry : partitionRecordsMap.entrySet()) {
-      final String partitionName = entry.getKey().getPartitionPath();
+      final String partitionName = HoodieIndexUtils.getPartitionNameFromPartitionType(entry.getKey(), dataMetaClient, dataWriteConfig.getFunctionalIndexConfig().getIndexName());
       HoodieData<HoodieRecord> records = entry.getValue();
 
       List<FileSlice> fileSlices =

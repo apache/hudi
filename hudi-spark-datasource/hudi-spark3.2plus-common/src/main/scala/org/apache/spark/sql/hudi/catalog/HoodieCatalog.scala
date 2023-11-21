@@ -19,6 +19,10 @@
 package org.apache.spark.sql.hudi.catalog
 
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.sql.InsertMode
@@ -34,6 +38,7 @@ import org.apache.spark.sql.connector.catalog._
 import org.apache.spark.sql.connector.expressions.{FieldReference, IdentityTransform, Transform}
 import org.apache.spark.sql.execution.datasources.DataSource
 import org.apache.spark.sql.hudi.analysis.HoodieSpark32PlusAnalysis.HoodieV1OrV2Table
+import org.apache.spark.sql.hudi.catalog.HoodieCatalog.buildPartitionTransforms
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.{HoodieSqlCommonUtils, ProvidesHoodieConfig}
 import org.apache.spark.sql.types.{StructField, StructType}
@@ -41,7 +46,7 @@ import org.apache.spark.sql.{Dataset, SaveMode, SparkSession, _}
 
 import java.net.URI
 import java.util
-import scala.collection.JavaConverters.{mapAsJavaMapConverter, mapAsScalaMapConverter}
+import scala.collection.JavaConverters._
 import scala.collection.mutable
 
 class HoodieCatalog extends DelegatingCatalogExtension
@@ -54,7 +59,8 @@ class HoodieCatalog extends DelegatingCatalogExtension
   override def stageCreate(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
     if (sparkAdapter.isHoodieTable(properties)) {
       val locUriAndTableType = deduceTableLocationURIAndTableType(ident, properties)
-      HoodieStagedTable(ident, locUriAndTableType, this, schema, partitions,
+      val partitionTransforms = if (partitions.isEmpty) buildPartitionTransforms(spark, locUriAndTableType._1.getPath) else partitions
+      HoodieStagedTable(ident, locUriAndTableType, this, schema, partitionTransforms,
         properties, TableCreationMode.STAGE_CREATE)
     } else {
       BasicStagedTable(
@@ -67,7 +73,8 @@ class HoodieCatalog extends DelegatingCatalogExtension
   override def stageReplace(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
     if (sparkAdapter.isHoodieTable(properties)) {
       val locUriAndTableType = deduceTableLocationURIAndTableType(ident, properties)
-      HoodieStagedTable(ident, locUriAndTableType, this, schema, partitions,
+      val partitionTransforms = if (partitions.isEmpty) buildPartitionTransforms(spark, locUriAndTableType._1.getPath) else partitions
+      HoodieStagedTable(ident, locUriAndTableType, this, schema, partitionTransforms,
         properties, TableCreationMode.STAGE_REPLACE)
     } else {
       super.dropTable(ident)
@@ -84,7 +91,8 @@ class HoodieCatalog extends DelegatingCatalogExtension
                                     properties: util.Map[String, String]): StagedTable = {
     if (sparkAdapter.isHoodieTable(properties)) {
       val locUriAndTableType = deduceTableLocationURIAndTableType(ident, properties)
-      HoodieStagedTable(ident, locUriAndTableType, this, schema, partitions,
+      val partitionTransforms = if (partitions.isEmpty) buildPartitionTransforms(spark, locUriAndTableType._1.getPath) else partitions
+      HoodieStagedTable(ident, locUriAndTableType, this, schema, partitionTransforms,
         properties, TableCreationMode.CREATE_OR_REPLACE)
     } else {
       try super.dropTable(ident) catch {
@@ -140,7 +148,8 @@ class HoodieCatalog extends DelegatingCatalogExtension
                            properties: util.Map[String, String]): Table = {
     if (sparkAdapter.isHoodieTable(properties)) {
       val locUriAndTableType = deduceTableLocationURIAndTableType(ident, properties)
-      createHoodieTable(ident, schema, locUriAndTableType, partitions, properties,
+      val partitionTransforms = if (partitions.isEmpty) buildPartitionTransforms(spark, locUriAndTableType._1.getPath) else partitions
+      createHoodieTable(ident, schema, locUriAndTableType, partitionTransforms, properties,
         Map.empty, Option.empty, TableCreationMode.CREATE)
     } else {
       super.createTable(ident, schema, partitions, properties)
@@ -368,5 +377,29 @@ object HoodieCatalog {
     }
 
     (identityCols, bucketSpec)
+  }
+
+  def buildPartitionTransforms(spark: SparkSession,
+                               basePath: String): Array[Transform] = {
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(spark.sessionState.newHadoopConf())
+      .setBasePath(basePath)
+      .build()
+    val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build()
+    val metadataFileSystemView = FileSystemViewManager.createInMemoryFileSystemView(
+      new HoodieSparkEngineContext(spark.sparkContext), metaClient, metadataConfig)
+    val partitions: List[Path] = metadataFileSystemView.getPartitionPaths.asScala.toList
+    val transforms = mutable.Set[Transform]()
+    partitions.foreach { path =>
+      path.toString.split("/").foreach { part =>
+        // TODO: make it work for non-hive style partitioning
+        part.split("=") match {
+          case Array(key, value) =>
+            transforms += new IdentityTransform(new FieldReference(Seq(key)))
+          case _ => // Not a partition path part
+        }
+      }
+    }
+    transforms.toArray
   }
 }
