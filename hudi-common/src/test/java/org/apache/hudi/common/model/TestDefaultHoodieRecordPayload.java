@@ -148,9 +148,12 @@ public class TestDefaultHoodieRecordPayload {
     DefaultHoodieRecordPayload defaultDeletePayload = new DefaultHoodieRecordPayload(defaultDeleteRecord, 2);
 
     assertFalse(payload.isDeleted(schema, props));
+    assertTrue(deletePayload.isDeleted(schema, props));
+    assertFalse(defaultDeletePayload.isDeleted(schema, props)); // if custom marker is present, should honor that irrespective of hoodie_is_deleted
+
     assertEquals(record, payload.getInsertValue(schema, props).get());
-    assertFalse(defaultDeletePayload.getInsertValue(schema, props).isPresent());
     assertFalse(deletePayload.getInsertValue(schema, props).isPresent());
+    assertTrue(defaultDeletePayload.getInsertValue(schema, props).isPresent()); // if custom marker is present, should honor that irrespective of hoodie_is_deleted
 
     assertEquals(delRecord, payload.combineAndGetUpdateValue(delRecord, schema, props).get());
     assertEquals(defaultDeleteRecord, payload.combineAndGetUpdateValue(defaultDeleteRecord, schema, props).get());
