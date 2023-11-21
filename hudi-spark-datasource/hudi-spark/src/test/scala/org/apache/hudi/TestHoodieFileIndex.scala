@@ -86,13 +86,9 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
   @BeforeEach
   override def setUp() {
     setTableName("hoodie_test")
+    super.setUp()
     initPath()
-    initSparkContexts()
     spark = sqlContext.sparkSession
-    initTestDataGenerator()
-    initFileSystem()
-    initMetaClient()
-
     queryOpts = queryOpts ++ Map("path" -> basePath)
   }
 
