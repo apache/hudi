@@ -844,6 +844,8 @@ public class HoodieStreamer implements Serializable {
         streamSync.syncOnce();
       } catch (IOException e) {
         throw new HoodieIngestionException(String.format("Ingestion via %s failed with exception.", this.getClass()), e);
+      } finally {
+        close();
       }
     }
 
