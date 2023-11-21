@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
@@ -37,6 +38,7 @@ import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
+import org.apache.hudi.sink.meta.CkpMetadataFactory;
 import org.apache.hudi.sink.utils.HiveSyncContext;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.util.ClientIds;
@@ -186,9 +188,9 @@ public class StreamWriteOperatorCoordinator
     this.gateways = new SubtaskGateway[this.parallelism];
     // init table, create if not exists.
     this.metaClient = initTableIfNotExists(this.conf);
-    this.ckpMetadata = initCkpMetadata(this.metaClient, this.conf);
     // the write client must create after the table creation
     this.writeClient = FlinkWriteClients.createWriteClient(conf);
+    this.ckpMetadata = initCkpMetadata(writeClient.getConfig(), this.conf);
     initMetadataTable(this.writeClient);
     this.tableState = TableState.create(conf);
     // start the executor
@@ -200,7 +202,7 @@ public class StreamWriteOperatorCoordinator
       initHiveSync();
     }
     // start client id heartbeats for optimistic concurrency control
-    if (OptionsResolver.isOptimisticConcurrencyControl(conf)) {
+    if (OptionsResolver.isMultiWriter(conf)) {
       initClientIds(conf);
     }
   }
@@ -349,8 +351,8 @@ public class StreamWriteOperatorCoordinator
     writeClient.initMetadataTable();
   }
 
-  private static CkpMetadata initCkpMetadata(HoodieTableMetaClient metaClient, Configuration conf) throws IOException {
-    CkpMetadata ckpMetadata = CkpMetadata.getInstance(metaClient, conf.getString(FlinkOptions.WRITE_CLIENT_ID));
+  private static CkpMetadata initCkpMetadata(HoodieWriteConfig writeConfig, Configuration conf) throws IOException {
+    CkpMetadata ckpMetadata = CkpMetadataFactory.getCkpMetadata(writeConfig, conf);
     ckpMetadata.bootstrap();
     return ckpMetadata;
   }
@@ -385,7 +387,7 @@ public class StreamWriteOperatorCoordinator
 
   private void startInstant() {
     // refresh the last txn metadata
-    this.writeClient.preTxn(this.metaClient);
+    this.writeClient.preTxn(tableState.operationType, this.metaClient);
     // put the assignment in front of metadata generation,
     // because the instant request from write task is asynchronous.
     this.instant = this.writeClient.startCommit(tableState.commitAction, this.metaClient);
@@ -407,23 +409,21 @@ public class StreamWriteOperatorCoordinator
    */
   private void initInstant(String instant) {
     HoodieTimeline completedTimeline = this.metaClient.getActiveTimeline().filterCompletedInstants();
-    executor.execute(() -> {
-      if (instant.equals(WriteMetadataEvent.BOOTSTRAP_INSTANT) || completedTimeline.containsInstant(instant)) {
-        // the last instant committed successfully
-        reset();
-      } else {
-        LOG.info("Recommit instant {}", instant);
-        // Recommit should start heartbeat for lazy failed writes clean policy to avoid aborting for heartbeat expired.
-        if (writeClient.getConfig().getFailedWritesCleanPolicy().isLazy()) {
-          writeClient.getHeartbeatClient().start(instant);
-        }
-        commitInstant(instant);
+    if (instant.equals(WriteMetadataEvent.BOOTSTRAP_INSTANT) || completedTimeline.containsInstant(instant)) {
+      // the last instant committed successfully
+      reset();
+    } else {
+      LOG.info("Recommit instant {}", instant);
+      // Recommit should start heartbeat for lazy failed writes clean policy to avoid aborting for heartbeat expired.
+      if (writeClient.getConfig().getFailedWritesCleanPolicy().isLazy()) {
+        writeClient.getHeartbeatClient().start(instant);
       }
-      // starts a new instant
-      startInstant();
-      // upgrade downgrade
-      this.writeClient.upgradeDowngrade(this.instant, this.metaClient);
-    }, "initialize instant %s", instant);
+      commitInstant(instant);
+    }
+    // starts a new instant
+    startInstant();
+    // upgrade downgrade
+    this.writeClient.upgradeDowngrade(this.instant, this.metaClient);
   }
 
   private void handleBootstrapEvent(WriteMetadataEvent event) {
@@ -458,7 +458,7 @@ public class StreamWriteOperatorCoordinator
   private void scheduleTableServices(Boolean committed) {
     // if compaction is on, schedule the compaction
     if (tableState.scheduleCompaction) {
-      CompactionUtil.scheduleCompaction(metaClient, writeClient, tableState.isDeltaTimeCompaction, committed);
+      CompactionUtil.scheduleCompaction(writeClient, tableState.isDeltaTimeCompaction, committed);
     }
     // if clustering is on, schedule the clustering
     if (tableState.scheduleClustering) {

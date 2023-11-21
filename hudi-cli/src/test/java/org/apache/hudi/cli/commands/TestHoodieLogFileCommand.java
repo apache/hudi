@@ -27,6 +27,8 @@ import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.HoodieMemoryConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -40,9 +42,8 @@ import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieCompactionConfig;
-import org.apache.hudi.config.HoodieMemoryConfig;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -112,7 +113,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
     try (HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
         .onParentPath(new Path(partitionPath))
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-        .withFileId("test-log-fileid1").overBaseCommit("100").withFs(fs)
+        .withFileId("test-log-fileid1").withDeltaCommit("100").withFs(fs)
         .withSizeThreshold(1).build()) {
 
       // write data to file
@@ -120,7 +121,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
       Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, INSTANT_TIME);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
-      dataBlock = new HoodieAvroDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+      dataBlock = new HoodieAvroDataBlock(records, false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
       writer.appendBlock(dataBlock);
 
       Map<HoodieLogBlock.HeaderMetadataType, String> rollbackHeader = new HashMap<>();
@@ -209,14 +210,14 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
       writer =
           HoodieLogFormat.newWriterBuilder().onParentPath(new Path(partitionPath))
               .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-              .withFileId("test-log-fileid1").overBaseCommit(INSTANT_TIME).withFs(fs).withSizeThreshold(500).build();
+              .withFileId("test-log-fileid1").withDeltaCommit(INSTANT_TIME).withFs(fs).withSizeThreshold(500).build();
 
       SchemaTestUtil testUtil = new SchemaTestUtil();
       List<HoodieRecord> records1 = testUtil.generateHoodieTestRecords(0, 100).stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
       Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, INSTANT_TIME);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-      HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records1, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+      HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records1, false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
       writer.appendBlock(dataBlock);
     } finally {
       if (writer != null) {
@@ -241,15 +242,15 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
             HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
         .withReadBlocksLazily(
             Boolean.parseBoolean(
-                HoodieCompactionConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE.defaultValue()))
+                HoodieReaderConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE.defaultValue()))
         .withReverseReader(
             Boolean.parseBoolean(
-                HoodieCompactionConfig.COMPACTION_REVERSE_LOG_READ_ENABLE.defaultValue()))
+                HoodieReaderConfig.COMPACTION_REVERSE_LOG_READ_ENABLE.defaultValue()))
         .withBufferSize(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.defaultValue())
-        .withSpillableMapBasePath(HoodieMemoryConfig.getDefaultSpillableMapBasePath())
+        .withSpillableMapBasePath(FileIOUtils.getDefaultSpillableMapBasePath())
         .withDiskMapType(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue())
         .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue())
-        .withOptimizedLogBlocksScan(Boolean.parseBoolean(HoodieCompactionConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue()))
+        .withOptimizedLogBlocksScan(Boolean.parseBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue()))
         .build();
 
     Iterator<HoodieRecord> records = scanner.iterator();

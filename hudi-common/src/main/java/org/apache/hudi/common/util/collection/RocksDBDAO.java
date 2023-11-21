@@ -103,11 +103,28 @@ public class RocksDBDAO {
       dbOptions.setLogger(new org.rocksdb.Logger(dbOptions) {
         @Override
         protected void log(InfoLogLevel infoLogLevel, String logMsg) {
-          LOG.info("From Rocks DB : " + logMsg);
+          switch (infoLogLevel) {
+            case DEBUG_LEVEL:
+              LOG.debug("From Rocks DB : {}", logMsg);
+              break;
+            case WARN_LEVEL:
+              LOG.warn("From Rocks DB : {}", logMsg);
+              break;
+            case ERROR_LEVEL:
+            case FATAL_LEVEL:
+              LOG.error("From Rocks DB : {}", logMsg);
+              break;
+            case HEADER_LEVEL:
+            case NUM_INFO_LOG_LEVELS:
+            case INFO_LEVEL:
+            default:
+              LOG.info("From Rocks DB : {}", logMsg);
+              break;
+          }
         }
       });
       final List<ColumnFamilyDescriptor> managedColumnFamilies = loadManagedColumnFamilies(dbOptions);
-      final List<ColumnFamilyHandle> managedHandles = new ArrayList<>();
+      final List<ColumnFamilyHandle> managedHandles = new ArrayList<>(managedColumnFamilies.size());
       FileIOUtils.mkdir(new File(rocksDBBasePath));
       rocksDB = RocksDB.open(dbOptions, rocksDBBasePath, managedColumnFamilies, managedHandles);
 

@@ -23,14 +23,16 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.SpillableMapTestUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SizeEstimator;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -47,6 +49,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -125,8 +128,9 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
       HoodieRecord<? extends HoodieRecordPayload> rec = itr.next();
       assert recordKeys.contains(rec.getRecordKey());
     }
+
     List<IndexedRecord> updatedRecords = SchemaTestUtil.updateHoodieTestRecords(recordKeys,
-        testUtil.generateHoodieTestRecords(0, 100), HoodieActiveTimeline.createNewInstantTime());
+        testUtil.generateHoodieTestRecords(0, 100), InProcessTimeGenerator.createNewInstantTime());
 
     // update records already inserted
     SpillableMapTestUtils.upsertRecords(updatedRecords, records);
@@ -251,7 +255,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     List<IndexedRecord> recordsToUpdate = new ArrayList<>();
     recordsToUpdate.add((IndexedRecord) record.getData().getInsertValue(schema).get());
 
-    String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    String newCommitTime = InProcessTimeGenerator.createNewInstantTime();
     List<String> keysToBeUpdated = new ArrayList<>();
     keysToBeUpdated.add(key);
     // Update the instantTime for this record
@@ -269,7 +273,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     recordsToUpdate = new ArrayList<>();
     recordsToUpdate.add((IndexedRecord) record.getData().getInsertValue(schema).get());
 
-    newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    newCommitTime = InProcessTimeGenerator.createNewInstantTime();
     keysToBeUpdated = new ArrayList<>();
     keysToBeUpdated.add(key);
     // Update the commitTime for this record
@@ -379,6 +383,53 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
       }, "ExternalSpillableMap put() should not throw exception!");
       recordKeys.add(hoodieRecord.getRecordKey());
     });
+  }
+
+  @ParameterizedTest
+  @MethodSource("testArguments")
+  public void testDataCorrectnessWithRecordExistsInDiskMapAndThenUpsertToMem(ExternalSpillableMap.DiskMapType diskMapType,
+                                                  boolean isCompressionEnabled) throws IOException, URISyntaxException {
+    Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
+
+    SizeEstimator keyEstimator = new DefaultSizeEstimator();
+    SizeEstimator valEstimator = new HoodieRecordSizeEstimator(schema);
+    SchemaTestUtil testUtil = new SchemaTestUtil();
+    List<IndexedRecord> iRecords = testUtil.generateHoodieTestRecords(0, 100);
+
+    // Get the first record
+    IndexedRecord firstRecord = iRecords.get(0);
+    String key = ((GenericRecord) firstRecord).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+    String partitionPath = ((GenericRecord) firstRecord).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+    HoodieRecord record =
+        new HoodieAvroRecord<>(new HoodieKey(key, partitionPath), new HoodieAvroPayload(Option.of((GenericRecord) firstRecord)));
+    record.setCurrentLocation(new HoodieRecordLocation(SpillableMapTestUtils.DUMMY_COMMIT_TIME, SpillableMapTestUtils.DUMMY_FILE_ID));
+    record.seal();
+
+    // Estimate the first record size and calculate the total memory size that the in-memory map can only contain 100 records.
+    long estimatedPayloadSize = keyEstimator.sizeEstimate(key) + valEstimator.sizeEstimate(record);
+    long totalEstimatedSizeWith100Records = (long) ((estimatedPayloadSize * 100) / 0.8);
+    ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
+        new ExternalSpillableMap<>(totalEstimatedSizeWith100Records, basePath, new DefaultSizeEstimator(),
+            new HoodieRecordSizeEstimator(schema), diskMapType, isCompressionEnabled);
+
+    // Insert 100 records and then in-memory map will contain 100 records.
+    SpillableMapTestUtils.upsertRecords(iRecords, records);
+
+    // Generate one record and it will be spilled to disk
+    List<IndexedRecord> singleRecord = testUtil.generateHoodieTestRecords(0, 1);
+    List<String> singleRecordKey = SpillableMapTestUtils.upsertRecords(singleRecord, records);
+
+    // Get the field we want to update
+    String fieldName = schema.getFields().stream().filter(field -> field.schema().getType() == Schema.Type.STRING).findAny()
+        .get().name();
+    HoodieRecord hoodieRecord = records.get(singleRecordKey.get(0));
+    // Use a new value to update this field, the estimate size of this record will be less than the first record.
+    String newValue = "";
+    HoodieRecord updatedRecord =
+        SchemaTestUtil.updateHoodieTestRecordsWithoutHoodieMetadata(Arrays.asList(hoodieRecord), schema, fieldName, newValue).get(0);
+    records.put(updatedRecord.getRecordKey(), updatedRecord);
+
+    assertEquals(records.size(), 101);
   }
 
   private static Stream<Arguments> testArguments() {

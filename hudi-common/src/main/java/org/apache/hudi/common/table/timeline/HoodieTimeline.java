@@ -250,12 +250,12 @@ public interface HoodieTimeline extends Serializable {
    * Create a new Timeline with instants after startTs and before or on endTs
    * by state transition timestamp of actions.
    */
-  HoodieTimeline findInstantsInRangeByStateTransitionTime(String startTs, String endTs);
+  HoodieTimeline findInstantsInRangeByCompletionTime(String startTs, String endTs);
 
   /**
    * Create new timeline with all instants that were modified after specified time.
    */
-  HoodieTimeline findInstantsModifiedAfterByStateTransitionTime(String instantTime);
+  HoodieTimeline findInstantsModifiedAfterByCompletionTime(String instantTime);
 
   /**
    * Create a new Timeline with all the instants after startTs.
@@ -379,7 +379,7 @@ public interface HoodieTimeline extends Serializable {
   /**
    * Get the stream of instants in order by state transition timestamp of actions.
    */
-  Stream<HoodieInstant> getInstantsOrderedByStateTransitionTime();
+  Stream<HoodieInstant> getInstantsOrderedByCompletionTime();
 
   /**
    * @return true if the passed in instant is before the first completed instant in the timeline
@@ -416,6 +416,20 @@ public interface HoodieTimeline extends Serializable {
   }
 
   /**
+   * Returns the smaller of the given two instants.
+   */
+  static String minInstant(String instant1, String instant2) {
+    return compareTimestamps(instant1, LESSER_THAN, instant2) ? instant1 : instant2;
+  }
+
+  /**
+   * Returns the greater of the given two instants.
+   */
+  static String maxInstant(String instant1, String instant2) {
+    return compareTimestamps(instant1, GREATER_THAN, instant2) ? instant1 : instant2;
+  }
+
+  /**
    * Return true if specified timestamp is in range (startTs, endTs].
    */
   static boolean isInRange(String timestamp, String startTs, String endTs) {
@@ -424,15 +438,19 @@ public interface HoodieTimeline extends Serializable {
   }
 
   /**
+   * Return true if specified timestamp is in range [startTs, endTs).
+   */
+  static boolean isInClosedOpenRange(String timestamp, String startTs, String endTs) {
+    return HoodieTimeline.compareTimestamps(timestamp, GREATER_THAN_OR_EQUALS, startTs)
+        && HoodieTimeline.compareTimestamps(timestamp, LESSER_THAN, endTs);
+  }
+
+  /**
    * Return true if specified timestamp is in range [startTs, endTs].
    */
   static boolean isInClosedRange(String timestamp, String startTs, String endTs) {
     return HoodieTimeline.compareTimestamps(timestamp, GREATER_THAN_OR_EQUALS, startTs)
         && HoodieTimeline.compareTimestamps(timestamp, LESSER_THAN_OR_EQUALS, endTs);
-  }
-
-  static HoodieInstant getCompletedInstant(final HoodieInstant instant) {
-    return new HoodieInstant(State.COMPLETED, instant.getAction(), instant.getTimestamp());
   }
 
   static HoodieInstant getRequestedInstant(final HoodieInstant instant) {

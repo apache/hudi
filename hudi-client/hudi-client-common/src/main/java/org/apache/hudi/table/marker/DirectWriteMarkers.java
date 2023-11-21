@@ -158,8 +158,8 @@ public class DirectWriteMarkers extends WriteMarkers {
   }
 
   @Override
-  protected Option<Path> create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists) {
-    return create(getMarkerPath(partitionPath, dataFileName, type), checkIfExists);
+  protected Option<Path> create(String partitionPath, String fileName, IOType type, boolean checkIfExists) {
+    return create(getMarkerPath(partitionPath, fileName, type), checkIfExists);
   }
 
   @Override

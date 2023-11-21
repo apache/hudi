@@ -19,7 +19,9 @@
 package org.apache.hudi.sink.append;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.bulk.BulkInsertWriterHelper;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
@@ -27,6 +29,7 @@ import org.apache.hudi.sink.event.WriteMetadataEvent;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
@@ -61,6 +64,11 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   private final RowType rowType;
 
   /**
+   * Metrics for flink stream write.
+   */
+  private FlinkStreamWriteMetrics writeMetrics;
+
+  /**
    * Constructs an AppendWriteFunction.
    *
    * @param config The config options
@@ -68,6 +76,11 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   public AppendWriteFunction(Configuration config, RowType rowType) {
     super(config);
     this.rowType = rowType;
+  }
+
+  @Override
+  public void open(Configuration parameters) throws Exception {
+    registerMetrics();
   }
 
   @Override
@@ -99,7 +112,7 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     int attemptId = getRuntimeContext().getAttemptNumber();
     if (attemptId > 0) {
       // either a partial or global failover, reuses the current inflight instant
-      if (this.currentInstant != null) {
+      if (this.currentInstant != null && !metaClient.getActiveTimeline().filterCompletedInstants().containsInstant(currentInstant)) {
         LOG.info("Recover task[{}] for instant [{}] with attemptId [{}]", taskID, this.currentInstant, attemptId);
         this.currentInstant = null;
         return;
@@ -129,10 +142,11 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     }
     this.writerHelper = new BulkInsertWriterHelper(this.config, this.writeClient.getHoodieTable(), this.writeClient.getConfig(),
         instant, this.taskID, getRuntimeContext().getNumberOfParallelSubtasks(), getRuntimeContext().getAttemptNumber(),
-        this.rowType);
+        this.rowType, false, Option.of(writeMetrics));
   }
 
   private void flushData(boolean endInput) {
+    writeMetrics.startDataFlush();
     final List<WriteStatus> writeStatus;
     if (this.writerHelper != null) {
       writeStatus = this.writerHelper.getWriteStatuses(this.taskID);
@@ -155,5 +169,13 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     this.writeStatuses.addAll(writeStatus);
     // blocks flushing until the coordinator starts a new instant
     this.confirming = true;
+    writeMetrics.endDataFlush();
+    writeMetrics.resetAfterCommit();
+  }
+
+  private void registerMetrics() {
+    MetricGroup metrics = getRuntimeContext().getMetricGroup();
+    writeMetrics = new FlinkStreamWriteMetrics(metrics);
+    writeMetrics.registerMetrics();
   }
 }

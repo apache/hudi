@@ -343,12 +343,20 @@ public class FlinkOptions extends HoodieConfig {
       .noDefaultValue()
       .withDescription("End commit instant for reading, the commit time format should be 'yyyyMMddHHmmss'");
 
+  public static final ConfigOption<Integer> READ_COMMITS_LIMIT = ConfigOptions
+      .key("read.commits.limit")
+      .intType()
+      .noDefaultValue()
+      .withDescription("The maximum number of commits allowed to read in each instant check, if it is streaming read, "
+          + "the avg read instants number per-second would be 'read.commits.limit'/'read.streaming.check-interval', by "
+          + "default no limit");
+
   @AdvancedConfig
   public static final ConfigOption<Boolean> READ_DATA_SKIPPING_ENABLED = ConfigOptions
       .key("read.data.skipping.enabled")
       .booleanType()
       .defaultValue(false)
-      .withDescription("Enables data-skipping allowing queries to leverage indexes to reduce the search space by"
+      .withDescription("Enables data-skipping allowing queries to leverage indexes to reduce the search space by "
           + "skipping over files");
 
   // ------------------------------------------------------------------------
@@ -665,7 +673,9 @@ public class FlinkOptions extends HoodieConfig {
       .key("compaction.trigger.strategy")
       .stringType()
       .defaultValue(NUM_COMMITS) // default true for MOR write
-      .withDescription("Strategy to trigger compaction, options are 'num_commits': trigger compaction when reach N delta commits;\n"
+      .withDescription("Strategy to trigger compaction, options are "
+          + "'num_commits': trigger compaction when there are at least N delta commits after last completed compaction;\n"
+          + "'num_commits_after_last_request': trigger compaction when there are at least N delta commits after last completed/requested compaction;\n"
           + "'time_elapsed': trigger compaction when time elapsed > N seconds since last compaction;\n"
           + "'num_and_time': trigger compaction when both NUM_COMMITS and TIME_ELAPSED are satisfied;\n"
           + "'num_or_time': trigger compaction when NUM_COMMITS or TIME_ELAPSED is satisfied.\n"

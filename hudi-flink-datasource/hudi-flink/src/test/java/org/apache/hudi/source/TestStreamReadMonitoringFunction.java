@@ -23,7 +23,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -219,7 +218,7 @@ public class TestStreamReadMonitoringFunction {
     // re-create the metadata file for c2 and c3 so that they have greater completion time than c4.
     // the completion time sequence become: c1, c4, c2, c3,
     // we will test with the same consumption sequence.
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tempFile.getAbsolutePath(), HadoopConfigurations.getHadoopConf(conf));
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
     List<HoodieInstant> oriInstants = metaClient.getCommitsTimeline().filterCompletedInstants().getInstants();
     assertThat(oriInstants.size(), is(4));
     List<HoodieCommitMetadata> metadataList = new ArrayList<>();
@@ -254,8 +253,8 @@ public class TestStreamReadMonitoringFunction {
           sourceContext.getPartitionPaths(), is("par1"));
       assertTrue(sourceContext.splits.stream().noneMatch(split -> split.getInstantRange().isPresent()),
           "No instants should have range limit");
-      assertTrue(sourceContext.splits.stream().allMatch(split -> split.getLatestCommit().equals(c4)),
-          "All the splits should be with specified instant time");
+      assertTrue(sourceContext.splits.stream().anyMatch(split -> split.getLatestCommit().equals(c4)),
+          "At least one input split's latest commit time should be equal to the specified instant time.");
 
       // reset the source context
       latch = new CountDownLatch(1);
@@ -271,8 +270,8 @@ public class TestStreamReadMonitoringFunction {
           "All instants should have range limit");
       assertTrue(sourceContext.splits.stream().allMatch(split -> isPointInstantRange(split.getInstantRange().get(), c2)),
           "All the splits should have point instant range");
-      assertTrue(sourceContext.splits.stream().allMatch(split -> split.getLatestCommit().equals(c2)),
-          "All the splits should be with specified instant time");
+      assertTrue(sourceContext.splits.stream().anyMatch(split -> split.getLatestCommit().equals(c2)),
+          "At least one input split's latest commit time should be equal to the specified instant time.");
 
       // reset the source context
       latch = new CountDownLatch(1);
@@ -288,8 +287,8 @@ public class TestStreamReadMonitoringFunction {
           "All instants should have range limit");
       assertTrue(sourceContext.splits.stream().allMatch(split -> isPointInstantRange(split.getInstantRange().get(), c3)),
           "All the splits should have point instant range");
-      assertTrue(sourceContext.splits.stream().allMatch(split -> split.getLatestCommit().equals(c3)),
-          "All the splits should be with specified instant time");
+      assertTrue(sourceContext.splits.stream().anyMatch(split -> split.getLatestCommit().equals(c3)),
+          "At least one input split's latest commit time should be equal to the specified instant time.");
 
       // Stop the stream task.
       function.close();

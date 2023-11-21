@@ -18,16 +18,19 @@
 
 package org.apache.hudi.source;
 
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
@@ -37,6 +40,7 @@ import org.apache.flink.core.fs.Path;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.ValueLiteralExpression;
+import org.apache.hadoop.fs.FileStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -49,12 +53,17 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test cases for {@link IncrementalInputSplits}.
@@ -82,9 +91,9 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     HoodieInstant commit1 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "1");
     HoodieInstant commit2 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "2");
     HoodieInstant commit3 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "3");
-    timeline.createNewInstant(commit1);
-    timeline.createNewInstant(commit2);
-    timeline.createNewInstant(commit3);
+    timeline.createCompleteInstant(commit1);
+    timeline.createCompleteInstant(commit2);
+    timeline.createCompleteInstant(commit3);
     timeline = timeline.reload();
 
     // previous read iteration read till instant time "1", next read iteration should return ["2", "3"]
@@ -126,8 +135,8 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     HoodieInstant commit1 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "1");
     HoodieInstant commit2 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "2");
     HoodieInstant commit3 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "3");
-    timeline.createNewInstant(commit1);
-    timeline.createNewInstant(commit2);
+    timeline.createCompleteInstant(commit1);
+    timeline.createCompleteInstant(commit2);
     timeline.createNewInstant(commit3);
     commit3 = timeline.transitionReplaceRequestedToInflight(commit3, Option.empty());
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(
@@ -137,7 +146,7 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
             WriteOperationType.CLUSTER,
             "",
             HoodieTimeline.REPLACE_COMMIT_ACTION);
-    timeline.transitionReplaceInflightToComplete(
+    timeline.transitionReplaceInflightToComplete(true,
         HoodieTimeline.getReplaceCommitInflightInstant(commit3.getTimestamp()),
         serializeCommitMetadata(commitMetadata));
     timeline = timeline.reload();
@@ -191,6 +200,82 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     assertEquals(expectedPartitions, partitions);
   }
 
+  @Test
+  void testInputSplitsWithSpeedLimit() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    conf.set(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING, true);
+    conf.set(FlinkOptions.READ_STREAMING_SKIP_COMPACT, true);
+    conf.set(FlinkOptions.READ_COMMITS_LIMIT, 1);
+    // insert data
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    HoodieTimeline commitsTimeline = metaClient.reloadActiveTimeline()
+            .filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.COMMIT_ACTION));
+    HoodieInstant firstInstant = commitsTimeline.firstInstant().get();
+    IncrementalInputSplits iis = IncrementalInputSplits.builder()
+            .conf(conf)
+            .path(new Path(basePath))
+            .rowType(TestConfigurations.ROW_TYPE)
+            .partitionPruner(null)
+            .build();
+    IncrementalInputSplits.Result result = iis.inputSplits(metaClient, firstInstant.getTimestamp(), firstInstant.getCompletionTime(), false);
+
+    String minStartCommit = result.getInputSplits().stream()
+            .map(split -> split.getInstantRange().get().getStartInstant())
+            .min((commit1,commit2) -> HoodieTimeline.compareTimestamps(commit1, LESSER_THAN, commit2) ? 1 : 0)
+            .orElse(null);
+    String maxEndCommit = result.getInputSplits().stream()
+            .map(split -> split.getInstantRange().get().getEndInstant())
+            .max((commit1,commit2) -> HoodieTimeline.compareTimestamps(commit1, GREATER_THAN, commit2) ? 1 : 0)
+            .orElse(null);
+    assertEquals(1, intervalBetween2Instants(commitsTimeline, minStartCommit, maxEndCommit));
+  }
+
+  @Test
+  void testInputSplitsForSplitLastCommit() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    conf.set(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
+    conf.set(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING, true);
+    conf.set(FlinkOptions.READ_STREAMING_SKIP_COMPACT, true);
+    conf.set(FlinkOptions.OPERATION, WriteOperationType.INSERT.value());
+
+    // insert data
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    HoodieTimeline commitsTimeline = metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    List<HoodieInstant> instants = commitsTimeline.getInstants();
+    String lastInstant  = commitsTimeline.lastInstant().map(HoodieInstant::getTimestamp).get();
+    List<HoodieCommitMetadata> metadataList = instants.stream()
+            .map(instant -> WriteProfiles.getCommitMetadata(tableName, new Path(basePath), instant, commitsTimeline)).collect(Collectors.toList());
+    FileStatus[] fileStatuses = WriteProfiles.getFilesFromMetadata(new Path(basePath), metaClient.getHadoopConf(), metadataList, metaClient.getTableType());
+    HoodieTableFileSystemView fileSystemView =
+            new HoodieTableFileSystemView(metaClient, commitsTimeline, fileStatuses);
+    Map<String, String> fileIdToBaseInstant = fileSystemView.getAllFileSlices("par1")
+            .collect(Collectors.toMap(FileSlice::getFileId, FileSlice::getBaseInstantTime));
+
+    IncrementalInputSplits iis = IncrementalInputSplits.builder()
+            .conf(conf)
+            .path(new Path(basePath))
+            .rowType(TestConfigurations.ROW_TYPE)
+            .partitionPruner(null)
+            .build();
+    IncrementalInputSplits.Result result = iis.inputSplits(metaClient, null, null, false);
+    result.getInputSplits().stream().filter(split -> fileIdToBaseInstant.containsKey(split.getFileId()))
+            .forEach(split -> assertEquals(fileIdToBaseInstant.get(split.getFileId()), split.getLatestCommit()));
+    assertTrue(result.getInputSplits().stream().anyMatch(split -> split.getLatestCommit().equals(lastInstant)),
+            "Some input splits' latest commit time should equal to the last instant");
+    assertTrue(result.getInputSplits().stream().anyMatch(split -> !split.getLatestCommit().equals(lastInstant)),
+            "The input split latest commit time does not always equal to last instant");
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
@@ -229,5 +314,19 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
       String[] pathParts = basePath.get().split("/");
       return pathParts[pathParts.length - 2];
     }).collect(Collectors.toList());
+  }
+
+  private Integer intervalBetween2Instants(HoodieTimeline timeline, String instant1, String instant2) {
+    Integer idxInstant1 = getInstantIdxInTimeline(timeline, instant1);
+    Integer idxInstant2 = getInstantIdxInTimeline(timeline, instant2);
+    return (idxInstant1 != -1 && idxInstant2 != -1) ? Math.abs(idxInstant1 - idxInstant2) : -1;
+  }
+
+  private Integer getInstantIdxInTimeline(HoodieTimeline timeline, String instant) {
+    List<HoodieInstant> instants = timeline.getInstants();
+    return IntStream.range(0, instants.size())
+            .filter(i -> instants.get(i).getTimestamp().equals(instant))
+            .findFirst()
+            .orElse(-1);
   }
 }

@@ -51,26 +51,28 @@ public class HoodieKeyLocationFetchHandle<T, I, K, O> extends HoodieReadHandle<T
     this.keyGeneratorOpt = keyGeneratorOpt;
   }
 
-  private List<HoodieKey> fetchHoodieKeys(HoodieBaseFile baseFile) {
+  private List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieBaseFile baseFile) {
     BaseFileUtils baseFileUtils = BaseFileUtils.getInstance(baseFile.getPath());
     if (keyGeneratorOpt.isPresent()) {
-      return baseFileUtils.fetchHoodieKeys(hoodieTable.getHadoopConf(), new Path(baseFile.getPath()), keyGeneratorOpt);
+      return baseFileUtils.fetchRecordKeysWithPositions(hoodieTable.getHadoopConf(), new Path(baseFile.getPath()), keyGeneratorOpt);
     } else {
-      return baseFileUtils.fetchHoodieKeys(hoodieTable.getHadoopConf(), new Path(baseFile.getPath()));
+      return baseFileUtils.fetchRecordKeysWithPositions(hoodieTable.getHadoopConf(), new Path(baseFile.getPath()));
     }
   }
 
   public Stream<Pair<HoodieKey, HoodieRecordLocation>> locations() {
     HoodieBaseFile baseFile = partitionPathBaseFilePair.getRight();
-    return fetchHoodieKeys(baseFile).stream()
-        .map(entry -> Pair.of(entry,
-            new HoodieRecordLocation(baseFile.getCommitTime(), baseFile.getFileId())));
+    return fetchRecordKeysWithPositions(baseFile).stream()
+        .map(entry -> Pair.of(entry.getLeft(),
+            new HoodieRecordLocation(baseFile.getCommitTime(), baseFile.getFileId(), entry.getRight())));
   }
 
   public Stream<Pair<String, HoodieRecordGlobalLocation>> globalLocations() {
     HoodieBaseFile baseFile = partitionPathBaseFilePair.getRight();
-    return fetchHoodieKeys(baseFile).stream()
-        .map(entry -> Pair.of(entry.getRecordKey(),
-            new HoodieRecordGlobalLocation(entry.getPartitionPath(), baseFile.getCommitTime(), baseFile.getFileId())));
+    return fetchRecordKeysWithPositions(baseFile).stream()
+        .map(entry -> Pair.of(entry.getLeft().getRecordKey(),
+            new HoodieRecordGlobalLocation(
+                entry.getLeft().getPartitionPath(), baseFile.getCommitTime(),
+                baseFile.getFileId(), entry.getRight())));
   }
 }

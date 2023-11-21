@@ -118,15 +118,11 @@ object CreateHoodieTableCommand {
     val properties = tableConfig.getProps.asScala.toMap
 
     val tableType = tableConfig.getTableType.name()
-    val inputFormat = tableType match {
-      case DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL =>
-        classOf[HoodieParquetInputFormat].getCanonicalName
-      case DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL =>
-        classOf[HoodieParquetRealtimeInputFormat].getCanonicalName
-      case _=> throw new IllegalArgumentException(s"UnKnow table type:$tableType")
-    }
-    val outputFormat = HoodieInputFormatUtils.getOutputFormatClassName(HoodieFileFormat.PARQUET)
-    val serdeFormat = HoodieInputFormatUtils.getSerDeClassName(HoodieFileFormat.PARQUET)
+
+    val fileFormat = tableConfig.getBaseFileFormat
+    val inputFormat = HoodieInputFormatUtils.getInputFormatClassName(fileFormat, tableType == DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+    val outputFormat = HoodieInputFormatUtils.getOutputFormatClassName(fileFormat)
+    val serdeFormat = HoodieInputFormatUtils.getSerDeClassName(fileFormat)
 
     // only parameters irrelevant to hudi can be set to storage.properties
     val storageProperties = HoodieOptionConfig.deleteHoodieOptions(properties)

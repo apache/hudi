@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -491,7 +492,8 @@ public class TestHoodieParquetInputFormat {
     List<HoodieWriteStat> writeStats = HoodieTestUtils.generateFakeHoodieWriteStat(1);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     writeStats.forEach(stat -> commitMetadata.addWriteStat(partitionPath, stat));
-    File file = basePath.resolve(".hoodie").resolve(commitNumber + ".commit").toFile();
+    File file = basePath.resolve(".hoodie")
+        .resolve(commitNumber + "_" + InProcessTimeGenerator.createNewInstantTime() + ".commit").toFile();
     file.createNewFile();
     FileOutputStream fileOutputStream = new FileOutputStream(file);
     fileOutputStream.write(serializeCommitMetadata(commitMetadata).get());
@@ -726,6 +728,23 @@ public class TestHoodieParquetInputFormat {
     assertEquals(5, files.length, "Snapshot read must return all files in partition");
     ensureFilesInCommit("Only completed commits files should be returned.",
         files, "200", 5);
+  }
+
+  @Test
+  public void testInputFormatLoadForEmptyPartitionedTable() throws IOException {
+    // initial commit
+    File partitionDir = InputFormatTestUtil.prepareTable(basePath, baseFileFormat, 10, "100");
+    InputFormatTestUtil.commit(basePath, "100");
+
+    // Add the empty paths
+    String emptyPath = ClassLoader.getSystemResource("emptyFile").getPath();
+    FileInputFormat.setInputPaths(jobConf, emptyPath);
+
+    InputSplit[] inputSplits = inputFormat.getSplits(jobConf, 10);
+    assertEquals(1, inputSplits.length);
+
+    FileStatus[] files = inputFormat.listStatus(jobConf);
+    assertEquals(1, files.length);
   }
 
   private void ensureRecordsInCommit(String msg, String commit, int expectedNumberOfRecordsInCommit,

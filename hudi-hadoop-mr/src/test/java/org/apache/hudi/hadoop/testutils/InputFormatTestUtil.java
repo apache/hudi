@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieHFileDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
@@ -148,12 +149,12 @@ public class InputFormatTestUtil {
 
   public static void commit(java.nio.file.Path basePath, String commitNumber) throws IOException {
     // create the commit
-    Files.createFile(basePath.resolve(Paths.get(".hoodie", commitNumber + ".commit")));
+    Files.createFile(basePath.resolve(Paths.get(".hoodie", commitNumber + "_" + InProcessTimeGenerator.createNewInstantTime() + ".commit")));
   }
 
   public static void deltaCommit(java.nio.file.Path basePath, String commitNumber) throws IOException {
     // create the commit
-    Files.createFile(basePath.resolve(Paths.get(".hoodie", commitNumber + ".deltacommit")));
+    Files.createFile(basePath.resolve(Paths.get(".hoodie", commitNumber + "_" + InProcessTimeGenerator.createNewInstantTime() + ".deltacommit")));
   }
 
   public static void setupIncremental(JobConf jobConf, String startCommit, int numberOfCommitsToPull) {
@@ -359,7 +360,7 @@ public class InputFormatTestUtil {
                                                      String newCommit, String rolledBackInstant, int logVersion)
       throws InterruptedException, IOException {
     HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(partitionDir.getPath())).withFileId(fileId)
-        .overBaseCommit(baseCommit).withFs(fs).withLogVersion(logVersion).withRolloverLogWriteToken("1-0-1")
+        .withDeltaCommit(baseCommit).withFs(fs).withLogVersion(logVersion).withRolloverLogWriteToken("1-0-1")
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
     // generate metadata
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
@@ -385,7 +386,7 @@ public class InputFormatTestUtil {
       throws InterruptedException, IOException {
     HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(partitionDir.getPath()))
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId).withLogVersion(logVersion)
-        .withRolloverLogWriteToken("1-0-1").overBaseCommit(baseCommit).withFs(fs).build();
+        .withRolloverLogWriteToken("1-0-1").withDeltaCommit(newCommit).withFs(fs).build();
     List<IndexedRecord> records = new ArrayList<>();
     for (int i = offset; i < offset + numberOfRecords; i++) {
       records.add(SchemaTestUtil.generateAvroRecordFromJson(schema, i, newCommit, "fileid0"));
@@ -400,9 +401,9 @@ public class InputFormatTestUtil {
       dataBlock = new HoodieHFileDataBlock(
           hoodieRecords, header, Compression.Algorithm.GZ, writer.getLogFile().getPath());
     } else if (logBlockType == HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK) {
-      dataBlock = new HoodieParquetDataBlock(hoodieRecords, header, HoodieRecord.RECORD_KEY_METADATA_FIELD, CompressionCodecName.GZIP, 0.1, true);
+      dataBlock = new HoodieParquetDataBlock(hoodieRecords, false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD, CompressionCodecName.GZIP, 0.1, true);
     } else {
-      dataBlock = new HoodieAvroDataBlock(hoodieRecords, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+      dataBlock = new HoodieAvroDataBlock(hoodieRecords, false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
     }
     writer.appendBlock(dataBlock);
     return writer;
@@ -412,7 +413,7 @@ public class InputFormatTestUtil {
                                                                    String fileId, String baseCommit, String newCommit, String oldCommit, int logVersion)
       throws InterruptedException, IOException {
     HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(partitionDir.getPath()))
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId).overBaseCommit(baseCommit)
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId).withDeltaCommit(baseCommit)
         .withLogVersion(logVersion).withFs(fs).build();
 
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();

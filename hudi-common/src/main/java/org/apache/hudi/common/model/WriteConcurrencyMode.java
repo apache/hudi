@@ -21,6 +21,8 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
 
+import java.util.Locale;
+
 /**
  * Different concurrency modes for write operations.
  */
@@ -35,9 +37,31 @@ public enum WriteConcurrencyMode {
   @EnumFieldDescription("Multiple writers can operate on the table with lazy conflict resolution "
       + "using locks. This means that only one writer succeeds if multiple writers write to the "
       + "same file group.")
-  OPTIMISTIC_CONCURRENCY_CONTROL;
+  OPTIMISTIC_CONCURRENCY_CONTROL,
 
-  public boolean supportsOptimisticConcurrencyControl() {
+  // Multiple writer can perform write ops on a MOR table with non-blocking conflict resolution
+  @EnumFieldDescription("Multiple writers can operate on the table with non-blocking conflict resolution. "
+      + "The writers can write into the same file group with the conflicts resolved automatically "
+      + "by the query reader and the compactor.")
+  NON_BLOCKING_CONCURRENCY_CONTROL;
+
+  public boolean supportsMultiWriter() {
+    return this == OPTIMISTIC_CONCURRENCY_CONTROL || this == NON_BLOCKING_CONCURRENCY_CONTROL;
+  }
+
+  public static boolean supportsMultiWriter(String name) {
+    return WriteConcurrencyMode.valueOf(name.toUpperCase(Locale.ROOT)).supportsMultiWriter();
+  }
+
+  public boolean isOptimisticConcurrencyControl() {
     return this == OPTIMISTIC_CONCURRENCY_CONTROL;
+  }
+
+  public boolean isNonBlockingConcurrencyControl() {
+    return this == NON_BLOCKING_CONCURRENCY_CONTROL;
+  }
+
+  public static boolean isNonBlockingConcurrencyControl(String name) {
+    return WriteConcurrencyMode.valueOf(name.toUpperCase()).isNonBlockingConcurrencyControl();
   }
 }

@@ -23,7 +23,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -32,6 +31,7 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.LogFileCreationCallback;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -39,6 +39,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.avro.Schema;
@@ -121,8 +122,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
       throw new HoodieIOException("Failed to make dir " + path, e);
     }
 
-    return new Path(path.toString(), FSUtils.makeBaseFileName(instantTime, writeToken, fileId,
-        hoodieTable.getMetaClient().getTableConfig().getBaseFileFormat().getFileExtension()));
+    return new Path(path.toString(), FSUtils.makeBaseFileName(instantTime, writeToken, fileId, hoodieTable.getBaseFileExtension()));
   }
 
   /**
@@ -233,39 +233,43 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     return new Schema.Parser().parse(config.getWriteSchema());
   }
 
-  protected HoodieLogFormat.Writer createLogWriter(
-      Option<FileSlice> fileSlice, String baseCommitTime) throws IOException {
-    return createLogWriter(fileSlice, baseCommitTime, null);
+  protected HoodieLogFormat.Writer createLogWriter(String deltaCommitTime) {
+    return createLogWriter(deltaCommitTime, null);
   }
 
-  protected HoodieLogFormat.Writer createLogWriter(
-      Option<FileSlice> fileSlice, String baseCommitTime, String suffix) throws IOException {
-    Option<HoodieLogFile> latestLogFile = fileSlice.isPresent()
-        ? fileSlice.get().getLatestLogFile()
-        : Option.empty();
-
-    return HoodieLogFormat.newWriterBuilder()
-        .onParentPath(FSUtils.getPartitionPath(hoodieTable.getMetaClient().getBasePath(), partitionPath))
-        .withFileId(fileId)
-        .overBaseCommit(baseCommitTime)
-        .withLogVersion(latestLogFile.map(HoodieLogFile::getLogVersion).orElse(HoodieLogFile.LOGFILE_BASE_VERSION))
-        .withFileSize(latestLogFile.map(HoodieLogFile::getFileSize).orElse(0L))
-        .withSizeThreshold(config.getLogFileMaxSize())
-        .withFs(fs)
-        .withRolloverLogWriteToken(writeToken)
-        .withLogWriteToken(latestLogFile.map(HoodieLogFile::getLogWriteToken).orElse(writeToken))
-        .withSuffix(suffix)
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
-  }
-
-  protected HoodieLogFormat.Writer createLogWriter(String baseCommitTime, String fileSuffix) {
+  protected HoodieLogFormat.Writer createLogWriter(String deltaCommitTime, String fileSuffix) {
     try {
-      return createLogWriter(Option.empty(),baseCommitTime, fileSuffix);
+      return HoodieLogFormat.newWriterBuilder()
+          .onParentPath(FSUtils.getPartitionPath(hoodieTable.getMetaClient().getBasePath(), partitionPath))
+          .withFileId(fileId)
+          .withDeltaCommit(deltaCommitTime)
+          .withFileSize(0L)
+          .withSizeThreshold(config.getLogFileMaxSize())
+          .withFs(fs)
+          .withRolloverLogWriteToken(writeToken)
+          .withLogWriteToken(writeToken)
+          .withFileCreationCallback(getLogCreationCallback())
+          .withSuffix(fileSuffix)
+          .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
     } catch (IOException e) {
       throw new HoodieException("Creating logger writer with fileId: " + fileId + ", "
-          + "base commit time: " + baseCommitTime + ", "
+          + "delta commit time: " + deltaCommitTime + ", "
           + "file suffix: " + fileSuffix + " error");
     }
+  }
+
+  /**
+   * Returns a log creation hook impl.
+   */
+  protected LogFileCreationCallback getLogCreationCallback() {
+    return new LogFileCreationCallback() {
+      @Override
+      public boolean preFileCreation(HoodieLogFile logFile) {
+        WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
+        return writeMarkers.createIfNotExists(partitionPath, logFile.getFileName(), IOType.CREATE,
+            config, fileId, hoodieTable.getMetaClient().getActiveTimeline()).isPresent();
+      }
+    };
   }
 
   protected static Option<IndexedRecord> toAvroRecord(HoodieRecord record, Schema writerSchema, TypedProperties props) {

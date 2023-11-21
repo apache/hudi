@@ -173,10 +173,12 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
     }
 
     return HoodieJavaPairRDD.of(keyLookupResultRDD.flatMap(List::iterator)
-        .filter(lr -> lr.getMatchingRecordKeys().size() > 0)
-        .flatMapToPair(lookupResult -> lookupResult.getMatchingRecordKeys().stream()
-            .map(recordKey -> new Tuple2<>(new HoodieKey(recordKey, lookupResult.getPartitionPath()),
-                new HoodieRecordLocation(lookupResult.getBaseInstantTime(), lookupResult.getFileId())))
+        .filter(lr -> lr.getMatchingRecordKeysAndPositions().size() > 0)
+        .flatMapToPair(lookupResult -> lookupResult.getMatchingRecordKeysAndPositions().stream()
+            .map(recordKeyAndPosition -> new Tuple2<>(
+                new HoodieKey(recordKeyAndPosition.getLeft(), lookupResult.getPartitionPath()),
+                new HoodieRecordLocation(lookupResult.getBaseInstantTime(), lookupResult.getFileId(),
+                    recordKeyAndPosition.getRight())))
             .collect(Collectors.toList()).iterator()));
   }
 

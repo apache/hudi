@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import javax.annotation.concurrent.Immutable;
+
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -91,7 +92,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".log.compaction.enable")
       .defaultValue("false")
       .markAdvanced()
-      .sinceVersion("0.14")
+      .sinceVersion("0.14.0")
       .withDocumentation("This configs enables logcompaction for the metadata table.");
 
   // Log blocks threshold, after a file slice crosses this threshold log compact operation is scheduled.
@@ -99,6 +100,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".log.compaction.blocks.threshold")
       .defaultValue(5)
       .markAdvanced()
+      .sinceVersion("0.14.0")
       .withDocumentation("Controls the criteria to log compacted files groups in metadata table.");
 
   // Regex to filter out matching directories during bootstrap
@@ -108,14 +110,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.7.0")
       .withDocumentation("Directories matching this regex, will be filtered out when initializing metadata table from lake storage for the first time.");
-
-  public static final ConfigProperty<String> ASSUME_DATE_PARTITIONING = ConfigProperty
-      .key("hoodie.assume.date.partitioning")
-      .defaultValue("false")
-      .markAdvanced()
-      .sinceVersion("0.3.0")
-      .withDocumentation("Should HoodieWriteClient assume the data is partitioned by dates, i.e three levels from base path. "
-          + "This is a stop-gap to support tables created by versions < 0.3.1. Will be removed eventually");
 
   public static final ConfigProperty<Integer> FILE_LISTING_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.file.listing.parallelism")
@@ -280,6 +274,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> RECORD_INDEX_MAX_PARALLELISM = ConfigProperty
       .key(METADATA_PREFIX + ".max.init.parallelism")
       .defaultValue(100000)
+      .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Maximum parallelism to use when initializing Record Index.");
 
@@ -308,6 +303,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   public static final ConfigProperty<Long> MAX_LOG_FILE_SIZE_BYTES_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".max.logfile.size")
       .defaultValue(2 * 1024 * 1024 * 1024L)  // 2GB
+      .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Maximum size in bytes of a single log file. Larger log files can contain larger log blocks "
           + "thereby reducing the number of blocks to search for keys");
@@ -319,6 +315,20 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Initializes the metadata table by reading from the file system when the table is first created. Enabled by default. "
           + "Warning: This should only be disabled when manually constructing the metadata table outside of typical Hudi writer flows.");
+
+  public static final ConfigProperty<Integer> FUNCTIONAL_INDEX_FILE_GROUP_COUNT = ConfigProperty
+      .key(METADATA_PREFIX + ".index.functional.file.group.count")
+      .defaultValue(2)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Metadata functional index partition file group count.");
+
+  public static final ConfigProperty<Integer> FUNCTIONAL_INDEX_PARALLELISM = ConfigProperty
+      .key(METADATA_PREFIX + ".index.functional.parallelism")
+      .defaultValue(200)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Parallelism to use, when generating functional index.");
 
   public long getMaxLogFileSize() {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
@@ -334,10 +344,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public int getFileListingParallelism() {
     return Math.max(getInt(HoodieMetadataConfig.FILE_LISTING_PARALLELISM_VALUE), 1);
-  }
-
-  public Boolean shouldAssumeDatePartitioning() {
-    return getBoolean(HoodieMetadataConfig.ASSUME_DATE_PARTITIONING);
   }
 
   public boolean enabled() {
@@ -452,6 +458,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBoolean(AUTO_INITIALIZE);
   }
 
+  public int getFunctionalIndexFileGroupCount() {
+    return getInt(FUNCTIONAL_INDEX_FILE_GROUP_COUNT);
+  }
+
+  public int getFunctionalIndexParallelism() {
+    return getInt(FUNCTIONAL_INDEX_PARALLELISM);
+  }
+
   public static class Builder {
 
     private EngineType engineType = EngineType.SPARK;
@@ -554,11 +568,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withAssumeDatePartitioning(boolean assumeDatePartitioning) {
-      metadataConfig.setValue(ASSUME_DATE_PARTITIONING, String.valueOf(assumeDatePartitioning));
-      return this;
-    }
-
     public Builder withDirectoryFilterRegex(String regex) {
       metadataConfig.setValue(DIR_FILTER_REGEX, regex);
       return this;
@@ -627,6 +636,16 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withMaxLogFileSizeBytes(long sizeInBytes) {
       metadataConfig.setValue(MAX_LOG_FILE_SIZE_BYTES_PROP, String.valueOf(sizeInBytes));
+      return this;
+    }
+
+    public Builder withFunctionalIndexFileGroupCount(int fileGroupCount) {
+      metadataConfig.setValue(FUNCTIONAL_INDEX_FILE_GROUP_COUNT, String.valueOf(fileGroupCount));
+      return this;
+    }
+
+    public Builder withFunctionalIndexParallelism(int parallelism) {
+      metadataConfig.setValue(FUNCTIONAL_INDEX_PARALLELISM, String.valueOf(parallelism));
       return this;
     }
 
@@ -702,16 +721,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
    */
   @Deprecated
   public static final String DEFAULT_DIRECTORY_FILTER_REGEX = DIR_FILTER_REGEX.defaultValue();
-  /**
-   * @deprecated Use {@link #ASSUME_DATE_PARTITIONING} and its methods.
-   */
-  @Deprecated
-  public static final String HOODIE_ASSUME_DATE_PARTITIONING_PROP = ASSUME_DATE_PARTITIONING.key();
-  /**
-   * @deprecated Use {@link #ASSUME_DATE_PARTITIONING} and its methods.
-   */
-  @Deprecated
-  public static final String DEFAULT_ASSUME_DATE_PARTITIONING = ASSUME_DATE_PARTITIONING.defaultValue();
   /**
    * @deprecated Use {@link #FILE_LISTING_PARALLELISM_VALUE} and its methods.
    */

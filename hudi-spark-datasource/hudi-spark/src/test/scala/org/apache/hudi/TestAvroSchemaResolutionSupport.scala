@@ -18,7 +18,7 @@
  */
 package org.apache.hudi
 
-import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.SchemaCompatibilityException
@@ -145,7 +145,12 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
           upsertData(upsertDf, tempRecordPath, isCow)
 
           // read out the table
-          val readDf = spark.read.format("hudi").load(tempRecordPath)
+          val readDf = spark.read.format("hudi")
+            // NOTE: type promotion is not supported for the custom file format and the filegroup reader
+            //       HUDI-7045 and PR#10007 in progress to fix the issue
+            .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
+            .option(DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT.key(), "false")
+            .load(tempRecordPath)
           readDf.printSchema()
           readDf.show(false)
           readDf.foreach(_ => {})
@@ -383,7 +388,12 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     upsertData(df2, tempRecordPath, isCow)
 
     // read out the table
-    val readDf = spark.read.format("hudi").load(tempRecordPath)
+    val readDf = spark.read.format("hudi")
+      // NOTE: long to int type change is not supported for the custom file format and the filegroup reader
+      //       HUDI-7045 and PR#10007 in progress to fix the issue
+      .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
+      .option(DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT.key(), "false")
+      .load(tempRecordPath)
     readDf.printSchema()
     readDf.show(false)
     readDf.foreach(_ => {})
@@ -475,7 +485,12 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     upsertData(df2, tempRecordPath, isCow)
 
     // read out the table
-    val readDf = spark.read.format("hudi").load(tempRecordPath)
+    val readDf = spark.read.format("hudi")
+      // NOTE: type promotion is not supported for the custom file format and the filegroup reader
+      //       HUDI-7045 and PR#10007 in progress to fix the issue
+      .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
+      .option(DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT.key(), "false")
+      .load(tempRecordPath)
     readDf.printSchema()
     readDf.show(false)
     readDf.foreach(_ => {})
@@ -537,7 +552,12 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     upsertData(df2, tempRecordPath, isCow)
 
     // read out the table
-    val readDf = spark.read.format("hudi").load(tempRecordPath)
+    val readDf = spark.read.format("hudi")
+      // NOTE: type promotion is not supported for the custom file format and the filegroup reader
+      //       HUDI-7045 and PR#10007 in progress to fix the issue
+      .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
+      .option(DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT.key(), "false")
+      .load(tempRecordPath)
     readDf.printSchema()
     readDf.show(false)
     readDf.foreach(_ => {})
@@ -727,7 +747,7 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     df2.printSchema()
     df2.show(false)
     // upsert
-    upsertData(df2, tempRecordPath, isCow)
+    upsertData(df2, tempRecordPath, isCow, true)
 
     // read out the table
     val readDf = spark.read.format("hudi").load(tempRecordPath)
@@ -803,7 +823,12 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     upsertData(df7, tempRecordPath)
 
     // read out the table
-    val readDf = spark.read.format("hudi").load(tempRecordPath)
+    val readDf = spark.read.format("hudi")
+      // NOTE: type promotion is not supported for the custom file format and the filegroup reader
+      //       HUDI-7045 and PR#10007 in progress to fix the issue
+      .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
+      .option(DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT.key(), "false")
+      .load(tempRecordPath)
     readDf.printSchema()
     readDf.show(false)
     readDf.foreach(_ => {})

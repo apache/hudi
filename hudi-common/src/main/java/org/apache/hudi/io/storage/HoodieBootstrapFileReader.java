@@ -23,6 +23,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
 
@@ -55,7 +56,7 @@ public abstract class HoodieBootstrapFileReader<T> implements HoodieFileReader<T
   }
 
   @Override
-  public Set<String> filterRowKeys(Set<String> candidateRowKeys) {
+  public Set<Pair<String, Long>> filterRowKeys(Set<String> candidateRowKeys) {
     return skeletonFileReader.filterRowKeys(candidateRowKeys);
   }
 

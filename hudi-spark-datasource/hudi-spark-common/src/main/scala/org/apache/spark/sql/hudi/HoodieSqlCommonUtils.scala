@@ -326,15 +326,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
   def getPartitionPathToDrop(
                               hoodieCatalogTable: HoodieCatalogTable,
                               normalizedSpecs: Seq[Map[String, String]]): String = {
-    val table = hoodieCatalogTable.table
-    val allPartitionPaths = hoodieCatalogTable.getPartitionPaths
-    val enableHiveStylePartitioning = isHiveStyledPartitioning(allPartitionPaths, table)
-    val enableEncodeUrl = isUrlEncodeEnabled(allPartitionPaths, table)
-    val partitionFields = hoodieCatalogTable.partitionFields
-    val partitionsToDrop = normalizedSpecs.map(
-      makePartitionPath(partitionFields, _, enableEncodeUrl, enableHiveStylePartitioning)
-    ).mkString(",")
-    partitionsToDrop
+    normalizedSpecs.map(makePartitionPath(hoodieCatalogTable, _)).mkString(",")
   }
 
   private def makePartitionPath(partitionFields: Seq[String],

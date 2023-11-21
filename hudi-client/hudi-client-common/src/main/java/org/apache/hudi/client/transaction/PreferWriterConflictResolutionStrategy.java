@@ -73,8 +73,8 @@ public class PreferWriterConflictResolutionStrategy
     List<HoodieInstant> completedCommitsInstants = activeTimeline
         .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, REPLACE_COMMIT_ACTION, COMPACTION_ACTION, DELTA_COMMIT_ACTION))
         .filterCompletedInstants()
-        .findInstantsModifiedAfterByStateTransitionTime(currentInstant.getTimestamp())
-        .getInstantsOrderedByStateTransitionTime()
+        .findInstantsModifiedAfterByCompletionTime(currentInstant.getTimestamp())
+        .getInstantsOrderedByCompletionTime()
         .collect(Collectors.toList());
     LOG.info(String.format("Instants that may have conflict with %s are %s", currentInstant, completedCommitsInstants));
     return completedCommitsInstants.stream();
@@ -92,7 +92,7 @@ public class PreferWriterConflictResolutionStrategy
         activeTimeline
             .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, REPLACE_COMMIT_ACTION, COMPACTION_ACTION, DELTA_COMMIT_ACTION))
             .filterCompletedInstants()
-            .findInstantsModifiedAfterByStateTransitionTime(currentInstant.getTimestamp())
+            .findInstantsModifiedAfterByCompletionTime(currentInstant.getTimestamp())
             .getInstantsAsStream();
 
     // Fetch list of ingestion inflight commits.
@@ -104,7 +104,7 @@ public class PreferWriterConflictResolutionStrategy
 
     // Merge and sort the instants and return.
     List<HoodieInstant> instantsToConsider = Stream.concat(completedCommitsStream, inflightIngestionCommitsStream)
-        .sorted(Comparator.comparing(o -> o.getStateTransitionTime()))
+        .sorted(Comparator.comparing(o -> o.getCompletionTime()))
         .collect(Collectors.toList());
     LOG.info(String.format("Instants that may have conflict with %s are %s", currentInstant, instantsToConsider));
     return instantsToConsider.stream();

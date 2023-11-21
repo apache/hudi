@@ -38,12 +38,12 @@ if [[ ${SPARK_RUNTIME} == 'spark2.4.8' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=2.3.9
   DERBY_VERSION=10.10.2.0
-  FLINK_VERSION=1.13.6
+  FLINK_VERSION=1.14.6
   SPARK_VERSION=2.4.8
   SPARK_HADOOP_VERSION=2.7
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  IMAGE_TAG=flink1136hive239spark248
+  IMAGE_TAG=flink1146hive239spark248
 elif [[ ${SPARK_RUNTIME} == 'spark3.0.2' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=3.1.3
@@ -58,12 +58,12 @@ elif [[ ${SPARK_RUNTIME} == 'spark3.1.3' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=3.1.3
   DERBY_VERSION=10.14.1.0
-  FLINK_VERSION=1.13.6
+  FLINK_VERSION=1.14.6
   SPARK_VERSION=3.1.3
   SPARK_HADOOP_VERSION=2.7
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  IMAGE_TAG=flink1136hive313spark313
+  IMAGE_TAG=flink1146hive313spark313
 elif [[ ${SPARK_RUNTIME} == 'spark3.2.3' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=3.1.3
@@ -104,6 +104,16 @@ elif [[ ${SPARK_RUNTIME} == 'spark3.4.0' ]]; then
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
   IMAGE_TAG=flink1170hive313spark340
+elif [[ ${SPARK_RUNTIME} == 'spark3.5.0' ]]; then
+  HADOOP_VERSION=3.3.5
+  HIVE_VERSION=3.1.3
+  DERBY_VERSION=10.14.1.0
+  FLINK_VERSION=1.18.0
+  SPARK_VERSION=3.5.0
+  SPARK_HADOOP_VERSION=3
+  CONFLUENT_VERSION=5.5.12
+  KAFKA_CONNECT_HDFS_VERSION=10.1.13
+  IMAGE_TAG=flink1180hive313spark350
 fi
 
 # Copy bundle jars to temp dir for mounting
@@ -152,9 +162,7 @@ else
     HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
   fi
 
-  if [[ ${FLINK_PROFILE} == 'flink1.13' ]]; then
-    HUDI_FLINK_BUNDLE_NAME=hudi-flink1.13-bundle
-  elif [[ ${FLINK_PROFILE} == 'flink1.14' ]]; then
+  if [[ ${FLINK_PROFILE} == 'flink1.14' ]]; then
     HUDI_FLINK_BUNDLE_NAME=hudi-flink1.14-bundle
   elif [[ ${FLINK_PROFILE} == 'flink1.15' ]]; then
     HUDI_FLINK_BUNDLE_NAME=hudi-flink1.15-bundle
@@ -162,6 +170,8 @@ else
     HUDI_FLINK_BUNDLE_NAME=hudi-flink1.16-bundle
   elif [[ ${FLINK_PROFILE} == 'flink1.17' ]]; then
     HUDI_FLINK_BUNDLE_NAME=hudi-flink1.17-bundle
+  elif [[ ${FLINK_PROFILE} == 'flink1.18' ]]; then
+    HUDI_FLINK_BUNDLE_NAME=hudi-flink1.18-bundle
   fi
 
   echo "Downloading bundle jars from staging repo orgapachehudi-$STAGING_REPO_NUM ..."

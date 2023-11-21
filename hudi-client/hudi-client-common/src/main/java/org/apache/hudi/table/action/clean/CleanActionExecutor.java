@@ -225,8 +225,8 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
         this.txnManager.beginTransaction(Option.of(inflightInstant), Option.empty());
       }
       writeTableMetadata(metadata, inflightInstant.getTimestamp());
-      table.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant,
-          TimelineMetadataUtils.serializeCleanMetadata(metadata));
+      table.getActiveTimeline().transitionCleanInflightToComplete(false,
+          inflightInstant, TimelineMetadataUtils.serializeCleanMetadata(metadata));
       LOG.info("Marked clean started on " + inflightInstant.getTimestamp() + " as complete");
       return metadata;
     } catch (IOException e) {

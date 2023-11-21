@@ -64,4 +64,13 @@ public enum HoodieFileFormat {
   public String getFileExtension() {
     return extension;
   }
+
+  public static HoodieFileFormat fromFileExtension(String extension) {
+    for (HoodieFileFormat format : HoodieFileFormat.values()) {
+      if (format.getFileExtension().equals(extension)) {
+        return format;
+      }
+    }
+    throw new IllegalArgumentException("Unknown file extension :" + extension);
+  }
 }

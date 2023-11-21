@@ -28,45 +28,34 @@ VERSION=$2
 
 STAGING_REPO="https://repository.apache.org/content/repositories/${REPO}/org/apache/hudi"
 
-declare -a BUNDLE_URLS=(
-"${STAGING_REPO}/hudi-aws-bundle/${VERSION}/hudi-aws-bundle-${VERSION}.jar"
-"${STAGING_REPO}/hudi-cli-bundle_2.11/${VERSION}/hudi-cli-bundle_2.11-${VERSION}.jar"
-"${STAGING_REPO}/hudi-cli-bundle_2.12/${VERSION}/hudi-cli-bundle_2.12-${VERSION}.jar"
-"${STAGING_REPO}/hudi-datahub-sync-bundle/${VERSION}/hudi-datahub-sync-bundle-${VERSION}.jar"
-"${STAGING_REPO}/hudi-flink1.13-bundle/${VERSION}/hudi-flink1.13-bundle-${VERSION}.jar"
-"${STAGING_REPO}/hudi-flink1.14-bundle/${VERSION}/hudi-flink1.14-bundle-${VERSION}.jar"
-"${STAGING_REPO}/hudi-flink1.15-bundle/${VERSION}/hudi-flink1.15-bundle-${VERSION}.jar"
-"${STAGING_REPO}/hudi-flink1.16-bundle/${VERSION}/hudi-flink1.16-bundle-${VERSION}.jar"
-"${STAGING_REPO}/hudi-flink1.17-bundle/${VERSION}/hudi-flink1.17-bundle-${VERSION}.jar"
-"${STAGING_REPO}/hudi-gcp-bundle/${VERSION}/hudi-gcp-bundle-${VERSION}.jar"
-"${STAGING_REPO}/hudi-hadoop-mr-bundle/${VERSION}/hudi-hadoop-mr-bundle-${VERSION}.jar"
-"${STAGING_REPO}/hudi-hive-sync-bundle/${VERSION}/hudi-hive-sync-bundle-${VERSION}.jar"
-"${STAGING_REPO}/hudi-integ-test-bundle/${VERSION}/hudi-integ-test-bundle-${VERSION}.jar"
-"${STAGING_REPO}/hudi-kafka-connect-bundle/${VERSION}/hudi-kafka-connect-bundle-${VERSION}.jar"
-"${STAGING_REPO}/hudi-metaserver-server-bundle/${VERSION}/hudi-metaserver-server-bundle-${VERSION}.jar"
-"${STAGING_REPO}/hudi-presto-bundle/${VERSION}/hudi-presto-bundle-${VERSION}.jar"
-"${STAGING_REPO}/hudi-spark-bundle_2.11/${VERSION}/hudi-spark-bundle_2.11-${VERSION}.jar"
-"${STAGING_REPO}/hudi-spark-bundle_2.12/${VERSION}/hudi-spark-bundle_2.12-${VERSION}.jar"
-"${STAGING_REPO}/hudi-spark2.4-bundle_2.11/${VERSION}/hudi-spark2.4-bundle_2.11-${VERSION}.jar"
-"${STAGING_REPO}/hudi-spark2.4-bundle_2.12/${VERSION}/hudi-spark2.4-bundle_2.12-${VERSION}.jar"
-"${STAGING_REPO}/hudi-spark3-bundle_2.12/${VERSION}/hudi-spark3-bundle_2.12-${VERSION}.jar"
-"${STAGING_REPO}/hudi-spark3.1-bundle_2.12/${VERSION}/hudi-spark3.1-bundle_2.12-${VERSION}.jar"
-"${STAGING_REPO}/hudi-spark3.2-bundle_2.12/${VERSION}/hudi-spark3.2-bundle_2.12-${VERSION}.jar"
-"${STAGING_REPO}/hudi-spark3.3-bundle_2.12/${VERSION}/hudi-spark3.3-bundle_2.12-${VERSION}.jar"
-"${STAGING_REPO}/hudi-timeline-server-bundle/${VERSION}/hudi-timeline-server-bundle-${VERSION}.jar"
-"${STAGING_REPO}/hudi-trino-bundle/${VERSION}/hudi-trino-bundle-${VERSION}.jar"
-"${STAGING_REPO}/hudi-utilities-bundle_2.11/${VERSION}/hudi-utilities-bundle_2.11-${VERSION}.jar"
-"${STAGING_REPO}/hudi-utilities-bundle_2.12/${VERSION}/hudi-utilities-bundle_2.12-${VERSION}.jar"
-"${STAGING_REPO}/hudi-utilities-slim-bundle_2.11/${VERSION}/hudi-utilities-slim-bundle_2.11-${VERSION}.jar"
-"${STAGING_REPO}/hudi-utilities-slim-bundle_2.12/${VERSION}/hudi-utilities-slim-bundle_2.12-${VERSION}.jar"
-)
+declare -a extensions=("-javadoc.jar" "-javadoc.jar.asc" "-javadoc.jar.md5" "-javadoc.jar.sha1" "-sources.jar"
+"-sources.jar.asc" "-sources.jar.md5" "-sources.jar.sha1" ".jar" ".jar.asc" ".jar.md5" ".jar.sha1" ".pom" ".pom.asc"
+".pom.md5" ".pom.sha1")
+
+declare -a bundles=("hudi-aws-bundle" "hudi-cli-bundle_2.11" "hudi-cli-bundle_2.12" "hudi-datahub-sync-bundle" "hudi-flink1.14-bundle"
+"hudi-flink1.15-bundle" "hudi-flink1.16-bundle" "hudi-flink1.17-bundle" "hudi-flink1.18-bundle" "hudi-gcp-bundle" "hudi-hadoop-mr-bundle" "hudi-hive-sync-bundle" "hudi-integ-test-bundle"
+"hudi-kafka-connect-bundle" "hudi-metaserver-server-bundle" "hudi-presto-bundle" "hudi-spark-bundle_2.11" "hudi-spark-bundle_2.12"
+"hudi-spark2.4-bundle_2.11" "hudi-spark2.4-bundle_2.12" "hudi-spark3-bundle_2.12" "hudi-spark3.0-bundle_2.12" "hudi-spark3.1-bundle_2.12"
+"hudi-spark3.2-bundle_2.12" "hudi-spark3.3-bundle_2.12" "hudi-spark3.4-bundle_2.12" "hudi-spark3.5-bundle_2.12" "hudi-timeline-server-bundle"
+"hudi-trino-bundle" "hudi-utilities-bundle_2.11" "hudi-utilities-bundle_2.12" "hudi-utilities-slim-bundle_2.11"
+"hudi-utilities-slim-bundle_2.12")
 
 NOW=$(date +%s)
 TMP_DIR_FOR_BUNDLES=/tmp/${NOW}
 mkdir "$TMP_DIR_FOR_BUNDLES"
-for url in "${BUNDLE_URLS[@]}"; do
-   echo "downloading $url"
-   wget "$url" -P "$TMP_DIR_FOR_BUNDLES"
+
+for bundle in "${bundles[@]}"
+do
+   for extension in "${extensions[@]}"
+   do
+       url=${STAGING_REPO}/$bundle/${VERSION}/$bundle-${VERSION}$extension
+       if curl --output "$TMP_DIR_FOR_BUNDLES/$bundle-${VERSION}$extension" --head --fail "$url"; then
+         echo "Artifact exists: $url"
+       else
+         echo "Artifact missing: $url"
+         exit 1
+       fi
+   done
 done
 
-ls -l "$TMP_DIR_FOR_BUNDLES"
+echo "All artifacts exist. Validation succeeds."

@@ -22,7 +22,7 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
@@ -33,6 +33,8 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
+
+import static org.apache.hudi.common.config.HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN;
 
 /**
  * Compaction related config.
@@ -65,7 +67,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .key("hoodie.log.compaction.enable")
       .defaultValue("false")
       .markAdvanced()
-      .sinceVersion("0.14")
+      .sinceVersion("0.14.0")
       .withDocumentation("By enabling log compaction through this config, log compaction will also get enabled for the metadata table.");
 
   public static final ConfigProperty<String> INLINE_LOG_COMPACT = ConfigProperty
@@ -146,21 +148,6 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + "compaction during each compaction run. By default. Hudi picks the log file "
           + "with most accumulated unmerged data");
 
-  public static final ConfigProperty<String> COMPACTION_LAZY_BLOCK_READ_ENABLE = ConfigProperty
-      .key("hoodie.compaction.lazy.block.read")
-      .defaultValue("true")
-      .markAdvanced()
-      .withDocumentation("When merging the delta log files, this config helps to choose whether the log blocks "
-          + "should be read lazily or not. Choose true to use lazy block reading (low memory usage, but incurs seeks to each block"
-          + " header) or false for immediate block read (higher memory usage)");
-
-  public static final ConfigProperty<String> COMPACTION_REVERSE_LOG_READ_ENABLE = ConfigProperty
-      .key("hoodie.compaction.reverse.log.read")
-      .defaultValue("false")
-      .markAdvanced()
-      .withDocumentation("HoodieLogFormatReader reads a logfile in the forward direction starting from pos=0 to pos=file_length. "
-          + "If this config is set to true, the reader reads the logfile in reverse direction, from pos=file_length to pos=0");
-
   public static final ConfigProperty<String> TARGET_PARTITIONS_PER_DAYBASED_COMPACTION = ConfigProperty
       .key("hoodie.compaction.daybased.target.partitions")
       .defaultValue("10")
@@ -204,24 +191,24 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("Log compaction can be scheduled if the no. of log blocks crosses this threshold value. "
           + "This is effective only when log compaction is enabled via " + INLINE_LOG_COMPACT.key());
 
-  public static final ConfigProperty<String> ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN = ConfigProperty
-      .key("hoodie" + HoodieMetadataConfig.OPTIMIZED_LOG_BLOCKS_SCAN)
-      .defaultValue("false")
-      .markAdvanced()
-      .sinceVersion("0.13.0")
-      .withDocumentation("New optimized scan for log blocks that handles all multi-writer use-cases while appending to log files. "
-          + "It also differentiates original blocks written by ingestion writers and compacted blocks written log compaction.");
-
-  /** @deprecated Use {@link #INLINE_COMPACT} and its methods instead */
+  /**
+   * @deprecated Use {@link #INLINE_COMPACT} and its methods instead
+   */
   @Deprecated
   public static final String INLINE_COMPACT_PROP = INLINE_COMPACT.key();
-  /** @deprecated Use {@link #INLINE_COMPACT_NUM_DELTA_COMMITS} and its methods instead */
+  /**
+   * @deprecated Use {@link #INLINE_COMPACT_NUM_DELTA_COMMITS} and its methods instead
+   */
   @Deprecated
   public static final String INLINE_COMPACT_NUM_DELTA_COMMITS_PROP = INLINE_COMPACT_NUM_DELTA_COMMITS.key();
-  /** @deprecated Use {@link #INLINE_COMPACT_TIME_DELTA_SECONDS} and its methods instead */
+  /**
+   * @deprecated Use {@link #INLINE_COMPACT_TIME_DELTA_SECONDS} and its methods instead
+   */
   @Deprecated
   public static final String INLINE_COMPACT_TIME_DELTA_SECONDS_PROP = INLINE_COMPACT_TIME_DELTA_SECONDS.key();
-  /** @deprecated Use {@link #INLINE_COMPACT_TRIGGER_STRATEGY} and its methods instead */
+  /**
+   * @deprecated Use {@link #INLINE_COMPACT_TRIGGER_STRATEGY} and its methods instead
+   */
   @Deprecated
   public static final String INLINE_COMPACT_TRIGGER_STRATEGY_PROP = INLINE_COMPACT_TRIGGER_STRATEGY.key();
   /**
@@ -289,39 +276,59 @@ public class HoodieCompactionConfig extends HoodieConfig {
    */
   @Deprecated
   public static final String COMPACTION_STRATEGY_PROP = COMPACTION_STRATEGY.key();
-  /** @deprecated Use {@link #COMPACTION_STRATEGY} and its methods instead */
+  /**
+   * @deprecated Use {@link #COMPACTION_STRATEGY} and its methods instead
+   */
   @Deprecated
   public static final String DEFAULT_COMPACTION_STRATEGY = COMPACTION_STRATEGY.defaultValue();
-  /** @deprecated Use {@link #COMPACTION_LAZY_BLOCK_READ_ENABLE} and its methods instead */
+  /**
+   * @deprecated Use {@link HoodieReaderConfig#COMPACTION_LAZY_BLOCK_READ_ENABLE} and its methods instead
+   */
   @Deprecated
-  public static final String COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP = COMPACTION_LAZY_BLOCK_READ_ENABLE.key();
-  /** @deprecated Use {@link #COMPACTION_LAZY_BLOCK_READ_ENABLE} and its methods instead */
+  public static final String COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP = HoodieReaderConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE.key();
+  /**
+   * @deprecated Use {@link HoodieReaderConfig#COMPACTION_LAZY_BLOCK_READ_ENABLE} and its methods instead
+   */
   @Deprecated
-  public static final String DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED = COMPACTION_REVERSE_LOG_READ_ENABLE.defaultValue();
-  /** @deprecated Use {@link #COMPACTION_REVERSE_LOG_READ_ENABLE} and its methods instead */
+  public static final String DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED = HoodieReaderConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE.defaultValue();
+  /**
+   * @deprecated Use {@link HoodieReaderConfig#COMPACTION_REVERSE_LOG_READ_ENABLE} and its methods instead
+   */
   @Deprecated
-  public static final String COMPACTION_REVERSE_LOG_READ_ENABLED_PROP = COMPACTION_REVERSE_LOG_READ_ENABLE.key();
-  /** @deprecated Use {@link #COMPACTION_REVERSE_LOG_READ_ENABLE} and its methods instead */
+  public static final String COMPACTION_REVERSE_LOG_READ_ENABLED_PROP = HoodieReaderConfig.COMPACTION_REVERSE_LOG_READ_ENABLE.key();
+  /**
+   * @deprecated Use {@link HoodieReaderConfig#COMPACTION_REVERSE_LOG_READ_ENABLE} and its methods instead
+   */
   @Deprecated
-  public static final String DEFAULT_COMPACTION_REVERSE_LOG_READ_ENABLED = COMPACTION_REVERSE_LOG_READ_ENABLE.defaultValue();
+  public static final String DEFAULT_COMPACTION_REVERSE_LOG_READ_ENABLED = HoodieReaderConfig.COMPACTION_REVERSE_LOG_READ_ENABLE.defaultValue();
   /**
    * @deprecated Use {@link #INLINE_COMPACT} and its methods instead
    */
   @Deprecated
   private static final String DEFAULT_INLINE_COMPACT = INLINE_COMPACT.defaultValue();
-  /** @deprecated Use {@link #INLINE_COMPACT_NUM_DELTA_COMMITS} and its methods instead */
+  /**
+   * @deprecated Use {@link #INLINE_COMPACT_NUM_DELTA_COMMITS} and its methods instead
+   */
   @Deprecated
   private static final String DEFAULT_INLINE_COMPACT_NUM_DELTA_COMMITS = INLINE_COMPACT_NUM_DELTA_COMMITS.defaultValue();
-  /** @deprecated Use {@link #INLINE_COMPACT_TIME_DELTA_SECONDS} and its methods instead */
+  /**
+   * @deprecated Use {@link #INLINE_COMPACT_TIME_DELTA_SECONDS} and its methods instead
+   */
   @Deprecated
   private static final String DEFAULT_INLINE_COMPACT_TIME_DELTA_SECONDS = INLINE_COMPACT_TIME_DELTA_SECONDS.defaultValue();
-  /** @deprecated Use {@link #INLINE_COMPACT_TRIGGER_STRATEGY} and its methods instead */
+  /**
+   * @deprecated Use {@link #INLINE_COMPACT_TRIGGER_STRATEGY} and its methods instead
+   */
   @Deprecated
   private static final String DEFAULT_INLINE_COMPACT_TRIGGER_STRATEGY = INLINE_COMPACT_TRIGGER_STRATEGY.defaultValue();
-  /** @deprecated Use {@link #TARGET_PARTITIONS_PER_DAYBASED_COMPACTION} and its methods instead */
+  /**
+   * @deprecated Use {@link #TARGET_PARTITIONS_PER_DAYBASED_COMPACTION} and its methods instead
+   */
   @Deprecated
   public static final String TARGET_PARTITIONS_PER_DAYBASED_COMPACTION_PROP = TARGET_PARTITIONS_PER_DAYBASED_COMPACTION.key();
-  /** @deprecated Use {@link #TARGET_PARTITIONS_PER_DAYBASED_COMPACTION} and its methods instead */
+  /**
+   * @deprecated Use {@link #TARGET_PARTITIONS_PER_DAYBASED_COMPACTION} and its methods instead
+   */
   @Deprecated
   public static final String DEFAULT_TARGET_PARTITIONS_PER_DAYBASED_COMPACTION = TARGET_PARTITIONS_PER_DAYBASED_COMPACTION.defaultValue();
 
@@ -415,12 +422,12 @@ public class HoodieCompactionConfig extends HoodieConfig {
     }
 
     public Builder withCompactionLazyBlockReadEnabled(Boolean compactionLazyBlockReadEnabled) {
-      compactionConfig.setValue(COMPACTION_LAZY_BLOCK_READ_ENABLE, String.valueOf(compactionLazyBlockReadEnabled));
+      compactionConfig.setValue(HoodieReaderConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE, String.valueOf(compactionLazyBlockReadEnabled));
       return this;
     }
 
     public Builder withCompactionReverseLogReadEnabled(Boolean compactionReverseLogReadEnabled) {
-      compactionConfig.setValue(COMPACTION_REVERSE_LOG_READ_ENABLE, String.valueOf(compactionReverseLogReadEnabled));
+      compactionConfig.setValue(HoodieReaderConfig.COMPACTION_REVERSE_LOG_READ_ENABLE, String.valueOf(compactionReverseLogReadEnabled));
       return this;
     }
 
@@ -456,6 +463,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public HoodieCompactionConfig build() {
       compactionConfig.setDefaults(HoodieCompactionConfig.class.getName());
+      compactionConfig.setDefaults(HoodieReaderConfig.class.getName());
       return compactionConfig;
     }
   }

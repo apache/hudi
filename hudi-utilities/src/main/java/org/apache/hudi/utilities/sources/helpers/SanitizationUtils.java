@@ -65,7 +65,7 @@ public class SanitizationUtils {
 
   private static final String AVRO_FIELD_NAME_KEY = "name";
 
-  public static boolean getShouldSanitize(TypedProperties props) {
+  public static boolean shouldSanitize(TypedProperties props) {
     return getBooleanWithAltKeys(props, HoodieStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES);
   }
 
@@ -118,6 +118,11 @@ public class SanitizationUtils {
       }
     }
     return targetDataset;
+  }
+
+  public static Dataset<Row> sanitizeColumnNamesForAvro(Dataset<Row> inputDataset, TypedProperties props) {
+    return shouldSanitize(props) ? sanitizeColumnNamesForAvro(inputDataset, getInvalidCharMask(props))
+        : inputDataset;
   }
 
   /*

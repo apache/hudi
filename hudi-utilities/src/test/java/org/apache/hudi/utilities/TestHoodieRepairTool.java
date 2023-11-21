@@ -342,7 +342,6 @@ public class TestHoodieRepairTool extends HoodieCommonTestHarness implements Spa
     HoodieRepairTool.Config config = new HoodieRepairTool.Config();
     config.backupPath = backupPath;
     config.basePath = basePath;
-    config.assumeDatePartitioning = true;
     if (startingInstantOption.isPresent()) {
       config.startingInstantTime = startingInstantOption.get();
     }

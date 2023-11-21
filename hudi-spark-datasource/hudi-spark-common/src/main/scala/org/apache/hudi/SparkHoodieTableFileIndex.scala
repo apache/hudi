@@ -31,7 +31,7 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.internal.schema.Types.RecordType
 import org.apache.hudi.internal.schema.utils.Conversions
-import org.apache.hudi.keygen.{CustomAvroKeyGenerator, CustomKeyGenerator, StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
+import org.apache.hudi.keygen.{StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.util.JFunction
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
@@ -112,9 +112,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       // Note that key generator class name could be null
       val keyGeneratorClassName = tableConfig.getKeyGeneratorClassName
       if (classOf[TimestampBasedKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)
-        || classOf[TimestampBasedAvroKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)
-        || classOf[CustomKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)
-        || classOf[CustomAvroKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)) {
+        || classOf[TimestampBasedAvroKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)) {
         val partitionFields = partitionColumns.get().map(column => StructField(column, StringType))
         StructType(partitionFields)
       } else {
@@ -203,7 +201,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    * @param predicates The filter condition.
    * @return The pruned partition paths.
    */
-  protected def listMatchingPartitionPaths(predicates: Seq[Expression]): Seq[PartitionPath] = {
+  def listMatchingPartitionPaths(predicates: Seq[Expression]): Seq[PartitionPath] = {
     val resolve = spark.sessionState.analyzer.resolver
     val partitionColumnNames = getPartitionColumns
     val partitionPruningPredicates = predicates.filter {

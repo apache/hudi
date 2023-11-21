@@ -34,7 +34,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieHFileUtils;
-import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -106,8 +105,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
       FileSystem fs = metaClient.getFs();
       // The metadata table is never bootstrapped, so the bootstrap index is always absent
       // for the metadata table.  The fs.exists calls are avoided for metadata table.
-      isPresent = !HoodieTableMetadata.isMetadataTable(metaClient.getBasePathV2().toString())
-          && fs.exists(indexByPartitionPath) && fs.exists(indexByFilePath);
+      isPresent = !metaClient.isMetadataTable() && fs.exists(indexByPartitionPath) && fs.exists(indexByFilePath);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
@@ -322,8 +320,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
 
     @Override
     public List<BootstrapFileMapping> getSourceFileMappingForPartition(String partition) {
-      try {
-        HFileScanner scanner = partitionIndexReader().getScanner(true, false);
+      try (HFileScanner scanner = partitionIndexReader().getScanner(true, false)) {
         KeyValue keyValue = new KeyValue(Bytes.toBytes(getPartitionKey(partition)), new byte[0], new byte[0],
             HConstants.LATEST_TIMESTAMP, KeyValue.Type.Put, new byte[0]);
         if (scanner.seekTo(keyValue) == 0) {
@@ -355,8 +352,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
       // Arrange input Keys in sorted order for 1 pass scan
       List<HoodieFileGroupId> fileGroupIds = new ArrayList<>(ids);
       Collections.sort(fileGroupIds);
-      try {
-        HFileScanner scanner = fileIdIndexReader().getScanner(true, false);
+      try (HFileScanner scanner = fileIdIndexReader().getScanner(true, false)) {
         for (HoodieFileGroupId fileGroupId : fileGroupIds) {
           KeyValue keyValue = new KeyValue(Bytes.toBytes(getFileGroupKey(fileGroupId)), new byte[0], new byte[0],
               HConstants.LATEST_TIMESTAMP, KeyValue.Type.Put, new byte[0]);

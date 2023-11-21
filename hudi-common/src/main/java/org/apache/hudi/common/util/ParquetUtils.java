@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -74,15 +75,15 @@ public class ParquetUtils extends BaseFileUtils {
 
   /**
    * Read the rowKey list matching the given filter, from the given parquet file. If the filter is empty, then this will
-   * return all the rowkeys.
+   * return all the rowkeys and corresponding positions.
    *
    * @param filePath      The parquet file path.
    * @param configuration configuration to build fs object
    * @param filter        record keys filter
-   * @return Set Set of row keys matching candidateRecordKeys
+   * @return Set Set of pairs of row key and position matching candidateRecordKeys
    */
   @Override
-  public Set<String> filterRowKeys(Configuration configuration, Path filePath, Set<String> filter) {
+  public Set<Pair<String, Long>> filterRowKeys(Configuration configuration, Path filePath, Set<String> filter) {
     return filterParquetRowKeys(configuration, filePath, filter, HoodieAvroUtils.getRecordKeySchema());
   }
 
@@ -105,10 +106,10 @@ public class ParquetUtils extends BaseFileUtils {
    * @param configuration configuration to build fs object
    * @param filter        record keys filter
    * @param readSchema    schema of columns to be read
-   * @return Set Set of row keys matching candidateRecordKeys
+   * @return Set Set of pairs of row key and position matching candidateRecordKeys
    */
-  private static Set<String> filterParquetRowKeys(Configuration configuration, Path filePath, Set<String> filter,
-                                                  Schema readSchema) {
+  private static Set<Pair<String, Long>> filterParquetRowKeys(Configuration configuration, Path filePath, Set<String> filter,
+                                                              Schema readSchema) {
     Option<RecordKeysFilterFunction> filterFunction = Option.empty();
     if (filter != null && !filter.isEmpty()) {
       filterFunction = Option.of(new RecordKeysFilterFunction(filter));
@@ -117,17 +118,19 @@ public class ParquetUtils extends BaseFileUtils {
     conf.addResource(FSUtils.getFs(filePath.toString(), conf).getConf());
     AvroReadSupport.setAvroReadSchema(conf, readSchema);
     AvroReadSupport.setRequestedProjection(conf, readSchema);
-    Set<String> rowKeys = new HashSet<>();
+    Set<Pair<String, Long>> rowKeys = new HashSet<>();
+    long rowPosition = 0;
     try (ParquetReader reader = AvroParquetReader.builder(filePath).withConf(conf).build()) {
       Object obj = reader.read();
       while (obj != null) {
         if (obj instanceof GenericRecord) {
           String recordKey = ((GenericRecord) obj).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
           if (!filterFunction.isPresent() || filterFunction.get().apply(recordKey)) {
-            rowKeys.add(recordKey);
+            rowKeys.add(Pair.of(recordKey, rowPosition));
           }
+          obj = reader.read();
+          rowPosition++;
         }
-        obj = reader.read();
       }
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read row keys from Parquet " + filePath, e);
@@ -138,15 +141,15 @@ public class ParquetUtils extends BaseFileUtils {
   }
 
   /**
-   * Fetch {@link HoodieKey}s from the given parquet file.
+   * Fetch {@link HoodieKey}s with row positions from the given parquet file.
    *
    * @param filePath      The parquet file path.
    * @param configuration configuration to build fs object
-   * @return {@link List} of {@link HoodieKey}s fetched from the parquet file
+   * @return {@link List} of pairs of {@link HoodieKey} and row position fetched from the parquet file
    */
   @Override
-  public List<HoodieKey> fetchHoodieKeys(Configuration configuration, Path filePath) {
-    return fetchHoodieKeys(configuration, filePath, Option.empty());
+  public List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(Configuration configuration, Path filePath) {
+    return fetchRecordKeysWithPositions(configuration, filePath, Option.empty());
   }
 
   @Override
@@ -185,19 +188,23 @@ public class ParquetUtils extends BaseFileUtils {
   }
 
   /**
-   * Fetch {@link HoodieKey}s from the given parquet file.
+   * Fetch {@link HoodieKey}s with row positions from the given parquet file.
    *
    * @param configuration   configuration to build fs object
    * @param filePath        The parquet file path.
    * @param keyGeneratorOpt instance of KeyGenerator.
-   * @return {@link List} of {@link HoodieKey}s fetched from the parquet file
+   * @return {@link List} of pairs of {@link HoodieKey} and row position fetched from the parquet file
    */
   @Override
-  public List<HoodieKey> fetchHoodieKeys(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    List<HoodieKey> hoodieKeys = new ArrayList<>();
+  public List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    List<Pair<HoodieKey, Long>> hoodieKeysAndPositions = new ArrayList<>();
+    long position = 0;
     try (ClosableIterator<HoodieKey> iterator = getHoodieKeyIterator(configuration, filePath, keyGeneratorOpt)) {
-      iterator.forEachRemaining(hoodieKeys::add);
-      return hoodieKeys;
+      while (iterator.hasNext()) {
+        hoodieKeysAndPositions.add(Pair.of(iterator.next(), position));
+        position++;
+      }
+      return hoodieKeysAndPositions;
     }
   }
 

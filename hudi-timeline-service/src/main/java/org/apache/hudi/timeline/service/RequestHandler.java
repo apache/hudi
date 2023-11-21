@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.marker.MarkerOperation;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.dto.BaseFileDTO;
+import org.apache.hudi.common.table.timeline.dto.InstantStateDTO;
 import org.apache.hudi.common.table.timeline.dto.ClusteringOpDTO;
 import org.apache.hudi.common.table.timeline.dto.CompactionOpDTO;
 import org.apache.hudi.common.table.timeline.dto.FileGroupDTO;
@@ -38,6 +39,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.timeline.service.handlers.BaseFileHandler;
 import org.apache.hudi.timeline.service.handlers.FileSliceHandler;
+import org.apache.hudi.timeline.service.handlers.InstantStateHandler;
 import org.apache.hudi.timeline.service.handlers.MarkerHandler;
 import org.apache.hudi.timeline.service.handlers.TimelineHandler;
 
@@ -77,6 +79,7 @@ public class RequestHandler {
   private final FileSliceHandler sliceHandler;
   private final BaseFileHandler dataFileHandler;
   private final MarkerHandler markerHandler;
+  private final InstantStateHandler instantStateHandler;
   private final Registry metricsRegistry = Registry.getRegistry("TimelineService");
   private ScheduledExecutorService asyncResultService = Executors.newSingleThreadScheduledExecutor();
 
@@ -94,6 +97,11 @@ public class RequestHandler {
           conf, timelineServiceConfig, hoodieEngineContext, fileSystem, viewManager, metricsRegistry);
     } else {
       this.markerHandler = null;
+    }
+    if (timelineServiceConfig.enableInstantStateRequests) {
+      this.instantStateHandler = new InstantStateHandler(conf, timelineServiceConfig, fileSystem, viewManager);
+    } else {
+      this.instantStateHandler = null;
     }
     if (timelineServiceConfig.async) {
       asyncResultService = Executors.newSingleThreadScheduledExecutor();
@@ -139,6 +147,9 @@ public class RequestHandler {
     if (markerHandler != null) {
       registerMarkerAPI();
     }
+    if (instantStateHandler != null) {
+      registerInstantStateAPI();
+    }
   }
 
   public void stop() {
@@ -160,7 +171,7 @@ public class RequestHandler {
     if (LOG.isDebugEnabled()) {
       LOG.debug("Client [ LastTs=" + lastKnownInstantFromClient + ", TimelineHash=" + timelineHashFromClient
           + "], localTimeline=" + localTimeline.getInstants());
-    } 
+    }
 
     if ((!localTimeline.getInstantsAsStream().findAny().isPresent())
         && HoodieTimeline.INVALID_INSTANT_TS.equals(lastKnownInstantFromClient)) {
@@ -501,6 +512,24 @@ public class RequestHandler {
       metricsRegistry.add("DELETE_MARKER_DIR", 1);
       boolean success = markerHandler.deleteMarkers(
           ctx.queryParamAsClass(MarkerOperation.MARKER_DIR_PATH_PARAM, String.class).getOrDefault(""));
+      writeValueAsString(ctx, success);
+    }, false));
+  }
+
+  private void registerInstantStateAPI() {
+    app.get(InstantStateHandler.ALL_INSTANT_STATE_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("ALL_INSTANT_STATE", 1);
+      List<InstantStateDTO> instantStates = instantStateHandler.getAllInstantStates(
+          ctx.queryParam(InstantStateHandler.INSTANT_STATE_DIR_PATH_PARAM)
+      );
+      writeValueAsString(ctx, instantStates);
+    }, false));
+
+    app.post(InstantStateHandler.REFRESH_INSTANT_STATE, new ViewHandler(ctx -> {
+      metricsRegistry.add("REFRESH_INSTANT_STATE", 1);
+      boolean success = instantStateHandler.refresh(
+          ctx.queryParam(InstantStateHandler.INSTANT_STATE_DIR_PATH_PARAM)
+      );
       writeValueAsString(ctx, success);
     }, false));
   }

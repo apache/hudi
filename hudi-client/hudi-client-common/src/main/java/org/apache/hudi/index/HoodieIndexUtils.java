@@ -61,7 +61,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.table.action.commit.HoodieDeleteHelper.createDeleteRecord;
@@ -173,18 +173,18 @@ public class HoodieIndexUtils {
    *
    * @param filePath            - File to filter keys from
    * @param candidateRecordKeys - Candidate keys to filter
-   * @return List of candidate keys that are available in the file
+   * @return List of pairs of candidate keys and positions that are available in the file
    */
-  public static List<String> filterKeysFromFile(Path filePath, List<String> candidateRecordKeys,
-                                                Configuration configuration) throws HoodieIndexException {
+  public static List<Pair<String, Long>> filterKeysFromFile(Path filePath, List<String> candidateRecordKeys,
+                                                            Configuration configuration) throws HoodieIndexException {
     ValidationUtils.checkArgument(FSUtils.isBaseFile(filePath));
-    List<String> foundRecordKeys = new ArrayList<>();
+    List<Pair<String, Long>> foundRecordKeys = new ArrayList<>();
     try (HoodieFileReader fileReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
         .getFileReader(configuration, filePath)) {
       // Load all rowKeys from the file, to double-confirm
       if (!candidateRecordKeys.isEmpty()) {
         HoodieTimer timer = HoodieTimer.start();
-        Set<String> fileRowKeys = fileReader.filterRowKeys(new TreeSet<>(candidateRecordKeys));
+        Set<Pair<String, Long>> fileRowKeys = fileReader.filterRowKeys(candidateRecordKeys.stream().collect(Collectors.toSet()));
         foundRecordKeys.addAll(fileRowKeys);
         LOG.info(String.format("Checked keys against file %s, in %d ms. #candidates (%d) #found (%d)", filePath,
             timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size()));
@@ -282,9 +282,14 @@ public class HoodieIndexUtils {
     HoodieData<HoodieRecord<R>> untaggedUpdatingRecords = incomingRecordsAndLocations.filter(p -> p.getRight().isPresent()).map(Pair::getLeft)
         .distinctWithKey(HoodieRecord::getRecordKey, config.getGlobalIndexReconcileParallelism());
     // the tagging partitions and locations
+    // NOTE: The incoming records may only differ in record position, however, for the purpose of
+    //       merging in case of partition updates, it is safe to ignore the record positions.
     HoodieData<HoodieRecordGlobalLocation> globalLocations = incomingRecordsAndLocations
         .filter(p -> p.getRight().isPresent())
-        .map(p -> p.getRight().get())
+        .map(p -> new HoodieRecordGlobalLocation(
+            p.getRight().get().getPartitionPath(),
+            p.getRight().get().getInstantTime(),
+            p.getRight().get().getFileId()))
         .distinct(config.getGlobalIndexReconcileParallelism());
     // merged existing records with current locations being set
     HoodieData<HoodieRecord<R>> existingRecords = getExistingRecords(globalLocations, config, hoodieTable);

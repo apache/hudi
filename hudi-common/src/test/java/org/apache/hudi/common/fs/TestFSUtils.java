@@ -20,6 +20,7 @@ package org.apache.hudi.common.fs;
 
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -228,7 +229,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     Path rlPath = new Path(new Path(partitionPath), oldLogFile);
     assertTrue(FSUtils.isLogFile(rlPath));
     assertEquals(fileName, FSUtils.getFileIdFromLogPath(rlPath));
-    assertEquals("100", FSUtils.getBaseCommitTimeFromLogPath(rlPath));
+    assertEquals("100", FSUtils.getDeltaCommitTimeFromLogPath(rlPath));
     assertEquals(1, FSUtils.getFileVersionFromLog(rlPath));
     assertNull(FSUtils.getTaskPartitionIdFromLogPath(rlPath));
     assertNull(FSUtils.getStageIdFromLogPath(rlPath));
@@ -244,9 +245,11 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String logFile = FSUtils.makeLogFileName(fileName, ".log", "100", 2, "1-0-1");
     System.out.println("Log File =" + logFile);
     Path rlPath = new Path(new Path(partitionPath), logFile);
+    Path inlineFsPath = InLineFSUtils.getInlineFilePath(rlPath, "file", 0, 100);
     assertTrue(FSUtils.isLogFile(rlPath));
+    assertTrue(FSUtils.isLogFile(inlineFsPath));
     assertEquals(fileName, FSUtils.getFileIdFromLogPath(rlPath));
-    assertEquals("100", FSUtils.getBaseCommitTimeFromLogPath(rlPath));
+    assertEquals("100", FSUtils.getDeltaCommitTimeFromLogPath(rlPath));
     assertEquals(2, FSUtils.getFileVersionFromLog(rlPath));
     assertEquals(1, FSUtils.getTaskPartitionIdFromLogPath(rlPath));
     assertEquals(0, FSUtils.getStageIdFromLogPath(rlPath));
@@ -263,7 +266,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertTrue(FSUtils.isLogFile(path));
     assertEquals("log", FSUtils.getFileExtensionFromLog(path));
     assertEquals(fileName, FSUtils.getFileIdFromLogPath(path));
-    assertEquals("100", FSUtils.getBaseCommitTimeFromLogPath(path));
+    assertEquals("100", FSUtils.getDeltaCommitTimeFromLogPath(path));
     assertEquals(1, FSUtils.getTaskPartitionIdFromLogPath(path));
     assertEquals("1-0-1", FSUtils.getWriteTokenFromLogPath(path));
     assertEquals(0, FSUtils.getStageIdFromLogPath(path));
@@ -281,7 +284,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertFalse(FSUtils.isLogFile(path));
     assertEquals("archive", FSUtils.getFileExtensionFromLog(path));
     assertEquals(fileName, FSUtils.getFileIdFromLogPath(path));
-    assertEquals("", FSUtils.getBaseCommitTimeFromLogPath(path));
+    assertEquals("", FSUtils.getDeltaCommitTimeFromLogPath(path));
     assertEquals(1, FSUtils.getTaskPartitionIdFromLogPath(path));
     assertEquals("1-0-1", FSUtils.getWriteTokenFromLogPath(path));
     assertEquals(0, FSUtils.getStageIdFromLogPath(path));
@@ -350,8 +353,8 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertEquals(log5, logFilesList.get(4));
   }
 
-  public static String makeOldLogFileName(String fileId, String logFileExtension, String baseCommitTime, int version) {
-    return "." + String.format("%s_%s%s.%d", fileId, baseCommitTime, logFileExtension, version);
+  public static String makeOldLogFileName(String fileId, String logFileExtension, String deltaCommitTime, int version) {
+    return "." + String.format("%s_%s%s.%d", fileId, deltaCommitTime, logFileExtension, version);
   }
 
   @Test
@@ -372,7 +375,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
     String logFileName = FSUtils.makeLogFileName(fileId, LOG_EXTENSION, instantTime, version, writeToken);
     assertTrue(FSUtils.isLogFile(new Path(logFileName)));
-    assertEquals(instantTime, FSUtils.getBaseCommitTimeFromLogPath(new Path(logFileName)));
+    assertEquals(instantTime, FSUtils.getDeltaCommitTimeFromLogPath(new Path(logFileName)));
     assertEquals(fileId, FSUtils.getFileIdFromLogPath(new Path(logFileName)));
     assertEquals(version, FSUtils.getFileVersionFromLog(new Path(logFileName)));
     assertEquals(LOG_STR, FSUtils.getFileExtensionFromLog(new Path(logFileName)));
@@ -389,8 +392,6 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
     assertEquals(3, (int) FSUtils.getLatestLogVersion(FSUtils.getFs(basePath, new Configuration()),
         new Path(partitionPath.toString()), fileId, LOG_EXTENSION, instantTime).get().getLeft());
-    assertEquals(4, FSUtils.computeNextLogVersion(FSUtils.getFs(basePath, new Configuration()),
-        new Path(partitionPath.toString()), fileId, LOG_EXTENSION, instantTime));
   }
 
   @Test
@@ -545,6 +546,33 @@ public class TestFSUtils extends HoodieCommonTestHarness {
             .map(FileStatus::getPath)
             .filter(filePath -> filePath.getName().endsWith(".txt"))
             .collect(Collectors.toSet()));
+  }
+
+  @Test
+  public void testGetFileExtension() {
+    String pathWithExtension = "/path/to/some/file/sample.parquet";
+    String pathWithoutExtension = "/path/to/some/file/sample";
+    String justFileNameWithExtension = "sample.orc";
+    String justFileNameWithoutExtension = "sample";
+
+    // file with extension
+    String result1 = FSUtils.getFileExtension(pathWithExtension);
+    assertEquals(".parquet", result1);
+
+    // file without extension
+    String result2 = FSUtils.getFileExtension(pathWithoutExtension);
+    assertEquals("", result2);
+
+    // just a file name with extension
+    String result3 = FSUtils.getFileExtension(justFileNameWithExtension);
+    assertEquals(".orc", result3);
+
+    // just a file name without extension
+    String result4 = FSUtils.getFileExtension(justFileNameWithoutExtension);
+    assertEquals("", result4);
+
+    // null input
+    assertThrows(NullPointerException.class, () -> FSUtils.getFileExtension(null));
   }
 
   private Path getHoodieTempDir() {

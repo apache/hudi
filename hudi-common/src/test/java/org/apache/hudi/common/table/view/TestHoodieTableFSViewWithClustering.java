@@ -180,9 +180,9 @@ public class TestHoodieTableFSViewWithClustering extends HoodieCommonTestHarness
     assertEquals(actualReplacedFileIds, allReplacedFileIds);
   }
 
-  private static void saveAsComplete(HoodieActiveTimeline timeline, HoodieInstant inflight, Option<byte[]> data) {
+  private void saveAsComplete(HoodieActiveTimeline timeline, HoodieInstant inflight, Option<byte[]> data) {
     if (inflight.getAction().equals(HoodieTimeline.COMPACTION_ACTION)) {
-      timeline.transitionCompactionInflightToComplete(inflight, data);
+      timeline.transitionCompactionInflightToComplete(true, inflight, data);
     } else {
       HoodieInstant requested = new HoodieInstant(HoodieInstant.State.REQUESTED, inflight.getAction(), inflight.getTimestamp());
       timeline.createNewInstant(requested);

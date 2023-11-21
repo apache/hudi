@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -49,7 +50,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -64,7 +64,7 @@ public abstract class AbstractRealtimeRecordReader {
   protected final RealtimeSplit split;
   protected final JobConf jobConf;
   protected final boolean usesCustomPayload;
-  protected Properties payloadProps = new Properties();
+  protected TypedProperties payloadProps = new TypedProperties();
   // Schema handles
   private Schema readerSchema;
   private Schema writerSchema;

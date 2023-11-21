@@ -22,14 +22,11 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
@@ -64,8 +61,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 
 public abstract class BaseJavaCommitActionExecutor<T> extends
     BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, HoodieWriteMetadata> {
@@ -192,37 +187,14 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
   }
 
   @Override
-  protected void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<List<WriteStatus>> result) {
-    commit(extraMetadata, result, result.getWriteStatuses().stream().map(WriteStatus::getStat).collect(Collectors.toList()));
+  protected void commit(HoodieWriteMetadata<List<WriteStatus>> result) {
+    commit(HoodieListData.eager(result.getWriteStatuses()), result,
+        result.getWriteStatuses().stream().map(WriteStatus::getStat).collect(Collectors.toList()));
   }
 
   protected void setCommitMetadata(HoodieWriteMetadata<List<WriteStatus>> result) {
     result.setCommitMetadata(Option.of(CommitUtils.buildMetadata(result.getWriteStatuses().stream().map(WriteStatus::getStat).collect(Collectors.toList()),
         result.getPartitionToReplaceFileIds(), extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType())));
-  }
-
-  protected void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<List<WriteStatus>> result, List<HoodieWriteStat> writeStats) {
-    String actionType = getCommitActionType();
-    LOG.info("Committing " + instantTime + ", action Type " + actionType);
-    result.setCommitted(true);
-    result.setWriteStats(writeStats);
-    // Finalize write
-    finalizeWrite(instantTime, writeStats, result);
-    try {
-      LOG.info("Committing " + instantTime + ", action Type " + getCommitActionType());
-      HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-      HoodieCommitMetadata metadata = result.getCommitMetadata().get();
-      writeTableMetadata(metadata, HoodieListData.eager(result.getWriteStatuses()), actionType);
-      // cannot serialize maps with null values
-      metadata.getExtraMetadata().entrySet().removeIf(entry -> entry.getValue() == null);
-      activeTimeline.saveAsComplete(
-          new HoodieInstant(true, getCommitActionType(), instantTime),
-          serializeCommitMetadata(metadata));
-      LOG.info("Committed " + instantTime);
-      result.setCommitMetadata(Option.of(metadata));
-    } catch (IOException e) {
-      throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime, e);
-    }
   }
 
   protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {

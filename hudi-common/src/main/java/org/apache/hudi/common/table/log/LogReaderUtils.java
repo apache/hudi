@@ -42,6 +42,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -102,7 +103,7 @@ public class LogReaderUtils {
    * generated from serializing {@link Roaring64NavigableMap} bitmap using the portable format.
    * @throws IOException upon I/O error.
    */
-  public static String encodePositions(List<Long> positions) throws IOException {
+  public static String encodePositions(Set<Long> positions) throws IOException {
     Roaring64NavigableMap positionBitmap = new Roaring64NavigableMap();
     positions.forEach(positionBitmap::add);
     return encodePositions(positionBitmap);

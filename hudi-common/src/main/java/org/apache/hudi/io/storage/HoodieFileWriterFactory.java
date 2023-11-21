@@ -121,7 +121,7 @@ public class HoodieFileWriterFactory {
     throw new UnsupportedOperationException();
   }
 
-  protected BloomFilter createBloomFilter(HoodieConfig config) {
+  public static BloomFilter createBloomFilter(HoodieConfig config) {
     return BloomFilterFactory.createBloomFilter(
         config.getIntOrDefault(HoodieStorageConfig.BLOOM_FILTER_NUM_ENTRIES_VALUE),
         config.getDoubleOrDefault(HoodieStorageConfig.BLOOM_FILTER_FPP_VALUE),

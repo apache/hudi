@@ -164,7 +164,8 @@ trait ProvidesHoodieConfig extends Logging {
                               isOverwritePartition: Boolean,
                               isOverwriteTable: Boolean,
                               insertPartitions: Map[String, Option[String]] = Map.empty,
-                              extraOptions: Map[String, String]): Map[String, String] = {
+                              extraOptions: Map[String, String],
+                              staticOverwritePartitionPathOpt: Option[String] = Option.empty): Map[String, String] = {
 
     if (insertPartitions.nonEmpty &&
       (insertPartitions.keys.toSet != hoodieCatalogTable.partitionFields.toSet)) {
@@ -256,6 +257,13 @@ trait ProvidesHoodieConfig extends Logging {
       Map()
     }
 
+    val staticOverwritePartitionPathOptions = staticOverwritePartitionPathOpt match {
+      case Some(staticOverwritePartitionPath) =>
+        Map(HoodieInternalConfig.STATIC_OVERWRITE_PARTITION_PATHS.key() -> staticOverwritePartitionPath)
+      case _ =>
+        Map()
+    }
+
     // try to use new insert dup policy instead of legacy insert mode to deduce payload class. If only insert mode is explicitly specified,
     // w/o specifying any value for insert dup policy, legacy configs will be honored. But on all other cases (i.e when neither of the configs is set,
     // or when both configs are set, or when only insert dup policy is set), we honor insert dup policy and ignore the insert mode.
@@ -304,7 +312,7 @@ trait ProvidesHoodieConfig extends Logging {
       RECORDKEY_FIELD.key -> recordKeyConfigValue,
       PRECOMBINE_FIELD.key -> preCombineField,
       PARTITIONPATH_FIELD.key -> partitionFieldsStr
-    ) ++ overwriteTableOpts ++ getDropDupsConfig(useLegacyInsertModeFlow, combinedOpts)
+    ) ++ overwriteTableOpts ++ getDropDupsConfig(useLegacyInsertModeFlow, combinedOpts) ++ staticOverwritePartitionPathOptions
 
     combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
       defaultOpts = defaultOpts, overridingOpts = overridingOpts)
@@ -448,7 +456,7 @@ trait ProvidesHoodieConfig extends Logging {
     hiveSyncConfig.setValue(HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key, enableHive.toString)
     hiveSyncConfig.setValue(HiveSyncConfigHolder.HIVE_SYNC_MODE.key, props.getString(HiveSyncConfigHolder.HIVE_SYNC_MODE.key, HiveSyncMode.HMS.name()))
     hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_BASE_PATH, hoodieCatalogTable.tableLocation)
-    hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT, hoodieCatalogTable.baseFileFormat)
+    hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT, props.getString(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT.key, HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT.defaultValue))
     hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_DATABASE_NAME, hoodieCatalogTable.table.identifier.database.getOrElse("default"))
     hiveSyncConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_TABLE_NAME, hoodieCatalogTable.table.identifier.table)
     if (props.get(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key) != null) {

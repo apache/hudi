@@ -61,7 +61,7 @@ class RepairMigratePartitionMetaProcedure extends BaseProcedure with ProcedureBu
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(tablePath).build
 
     val engineContext: HoodieLocalEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf)
-    val partitionPaths: util.List[String] = FSUtils.getAllPartitionPaths(engineContext, tablePath, false, false)
+    val partitionPaths: util.List[String] = FSUtils.getAllPartitionPaths(engineContext, tablePath, false)
     val basePath: Path = new Path(tablePath)
 
     val rows = new util.ArrayList[Row](partitionPaths.size)
@@ -74,7 +74,7 @@ class RepairMigratePartitionMetaProcedure extends BaseProcedure with ProcedureBu
       if (!dryRun) {
         if (!baseFormatFile.isPresent) {
           val partitionMetadata: HoodiePartitionMetadata = new HoodiePartitionMetadata(metaClient.getFs, latestCommit,
-            basePath, partition, Option.of(metaClient.getTableConfig.getBaseFileFormat))
+            basePath, partition, Option.of(getWriteConfig(basePath.toString).getBaseFileFormat))
           partitionMetadata.trySave(0)
         }
         // delete it, in case we failed midway last time.

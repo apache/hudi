@@ -64,7 +64,7 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
     Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(instantTime);
     if (metadataWriterOpt.isPresent()) {
       try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
-        metadataWriter.update(metadata, writeStatus, instantTime);
+        metadataWriter.updateFromWriteStatuses(metadata, writeStatus, instantTime);
       } catch (Exception e) {
         if (e instanceof HoodieException) {
           throw (HoodieException) e;

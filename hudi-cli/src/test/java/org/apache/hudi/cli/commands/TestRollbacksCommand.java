@@ -40,6 +40,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -101,21 +102,23 @@ public class TestRollbacksCommand extends CLIFunctionalTestHarness {
         )
         .withRollbackUsingMarkers(false)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
-    HoodieMetadataTestTable.of(metaClient, SparkHoodieBackedTableMetadataWriter.create(
-            metaClient.getHadoopConf(), config, context), Option.of(context))
-        .withPartitionMetaFiles(DEFAULT_PARTITION_PATHS)
-        .addCommit("100")
-        .withBaseFilesInPartitions(partitionAndFileId).getLeft()
-        .addCommit("101")
-        .withBaseFilesInPartitions(partitionAndFileId).getLeft()
-        .addInflightCommit("102")
-        .withBaseFilesInPartitions(partitionAndFileId);
+    try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
+        metaClient.getHadoopConf(), config, context)) {
+      HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context))
+          .withPartitionMetaFiles(DEFAULT_PARTITION_PATHS)
+          .addCommit("100")
+          .withBaseFilesInPartitions(partitionAndFileId).getLeft()
+          .addCommit("101")
+          .withBaseFilesInPartitions(partitionAndFileId).getLeft()
+          .addInflightCommit("102")
+          .withBaseFilesInPartitions(partitionAndFileId);
 
-    // generate two rollback
-    try (BaseHoodieWriteClient client = new SparkRDDWriteClient(context(), config)) {
-      // Rollback inflight commit3 and commit2
-      client.rollback("102");
-      client.rollback("101");
+      // generate two rollback
+      try (BaseHoodieWriteClient client = new SparkRDDWriteClient(context(), config)) {
+        // Rollback inflight commit3 and commit2
+        client.rollback("102");
+        client.rollback("101");
+      }
     }
   }
 

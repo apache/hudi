@@ -77,6 +77,10 @@ public class TestCreateKeyGeneratorByTypeWithFactory {
     props.put(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), keyGenType);
     KeyGeneratorType keyType = KeyGeneratorType.valueOf(keyGenType);
 
+    if (keyType == KeyGeneratorType.CUSTOM) {
+      // input needs to be properly formatted
+      props.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "timestamp:timestamp");
+    }
     KeyGenerator keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
     switch (keyType) {
       case SIMPLE:

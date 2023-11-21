@@ -158,12 +158,12 @@ public class InternalSchema implements Serializable {
   }
 
   /**
-   * Returns the {@link Type} of a sub-field identified by the field name.
+   * Returns the fully qualified name of the field corresponding to the given id.
    *
    * @param id a field id
-   * @return fullName of field of
+   * @return full name of field corresponding to id
    */
-  public String findfullName(int id) {
+  public String findFullName(int id) {
     if (idToName == null) {
       buildIdToName();
     }
@@ -272,8 +272,7 @@ public class InternalSchema implements Serializable {
   public String toString() {
     return String.format("table {\n%s\n}",
         StringUtils.join(record.fields().stream()
-            .map(f -> " " + f)
-            .collect(Collectors.toList()).toArray(new String[0]), "\n"));
+            .map(f -> " " + f).toArray(String[]::new), "\n"));
   }
 
   @Override

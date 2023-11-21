@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -156,7 +155,7 @@ public final class SchemaTestUtil {
 
   public List<IndexedRecord> generateHoodieTestRecords(int from, int limit)
       throws IOException, URISyntaxException {
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    String instantTime = InProcessTimeGenerator.createNewInstantTime();
     List<String> recorKeyList = genRandomUUID(limit, Collections.emptyList());
     return generateHoodieTestRecords(from, recorKeyList, "0000/00/00", instantTime);
   }

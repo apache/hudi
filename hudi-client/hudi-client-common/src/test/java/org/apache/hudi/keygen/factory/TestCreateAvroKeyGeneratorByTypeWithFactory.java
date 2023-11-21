@@ -75,7 +75,10 @@ public class TestCreateAvroKeyGeneratorByTypeWithFactory {
   public void testKeyGeneratorTypes(String keyGenType) throws IOException {
     props.put(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), keyGenType);
     KeyGeneratorType keyType = KeyGeneratorType.valueOf(keyGenType);
-
+    if (keyType == KeyGeneratorType.CUSTOM) {
+      // input needs to be properly formatted
+      props.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "timestamp:timestamp");
+    }
     KeyGenerator keyGenerator = HoodieAvroKeyGeneratorFactory.createKeyGenerator(props);
     switch (keyType) {
       case SIMPLE:

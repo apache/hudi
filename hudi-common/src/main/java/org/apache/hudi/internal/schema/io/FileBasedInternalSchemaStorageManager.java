@@ -22,6 +22,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
@@ -42,6 +43,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
@@ -75,7 +77,11 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
   // make metaClient build lazy
   private HoodieTableMetaClient getMetaClient() {
     if (metaClient == null) {
-      metaClient = HoodieTableMetaClient.builder().setBasePath(baseSchemaPath.getParent().getParent().toString()).setConf(conf).build();
+      metaClient = HoodieTableMetaClient.builder()
+          .setBasePath(baseSchemaPath.getParent().getParent().toString())
+          .setConf(conf)
+          .setTimeGeneratorConfig(HoodieTimeGeneratorConfig.defaultConfig(baseSchemaPath.getParent().getParent().toString()))
+          .build();
     }
     return metaClient;
   }
@@ -88,7 +94,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
     timeline.createNewInstant(hoodieInstant);
     byte[] writeContent = getUTF8Bytes(historySchemaStr);
     timeline.transitionRequestedToInflight(hoodieInstant, Option.empty());
-    timeline.saveAsComplete(new HoodieInstant(HoodieInstant.State.INFLIGHT, hoodieInstant.getAction(), hoodieInstant.getTimestamp()), Option.of(writeContent));
+    timeline.saveAsComplete(false, new HoodieInstant(HoodieInstant.State.INFLIGHT, hoodieInstant.getAction(), hoodieInstant.getTimestamp()), Option.of(writeContent));
     LOG.info(String.format("persist history schema success on commit time: %s", instantTime));
   }
 
@@ -148,7 +154,9 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
       if (fs.exists(baseSchemaPath)) {
         List<String> validaSchemaFiles = Arrays.stream(fs.listStatus(baseSchemaPath))
             .filter(f -> f.isFile() && f.getPath().getName().endsWith(SCHEMA_COMMIT_ACTION))
-            .map(file -> file.getPath().getName()).filter(f -> commitList.contains(f.split("\\.")[0])).sorted().collect(Collectors.toList());
+            .map(file -> file.getPath().getName())
+            .filter(Objects::nonNull)
+            .filter(f -> commitList.contains(HoodieInstant.extractTimestamp(f))).sorted().collect(Collectors.toList());
         if (!validaSchemaFiles.isEmpty()) {
           Path latestFilePath = new Path(baseSchemaPath, validaSchemaFiles.get(validaSchemaFiles.size() - 1));
           byte[] content;

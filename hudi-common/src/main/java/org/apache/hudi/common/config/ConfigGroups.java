@@ -34,12 +34,14 @@ public class ConfigGroups {
     SPARK_DATASOURCE("Spark Datasource Configs"),
     FLINK_SQL("Flink Sql Configs"),
     WRITE_CLIENT("Write Client Configs"),
+    READER("Reader Configs"),
     META_SYNC("Metastore and Catalog Sync Configs"),
     METRICS("Metrics Configs"),
     RECORD_PAYLOAD("Record Payload Config"),
     KAFKA_CONNECT("Kafka Connect Configs"),
     AWS("Amazon Web Services Configs"),
-    HUDI_STREAMER("Hudi Streamer Configs");
+    HUDI_STREAMER("Hudi Streamer Configs"),
+    INDEXING("Indexing Configs");
 
     public final String name;
 
@@ -75,7 +77,10 @@ public class ConfigGroups {
         "Configurations controlling the behavior of reading source data."),
     NONE(
         "None",
-        "No subgroup. This description should be hidden.");
+        "No subgroup. This description should be hidden."),
+    FUNCTIONAL_INDEX(
+        "Functional Index Configs",
+        "Configurations controlling the behavior of functional index.");
 
     public final String name;
     private final String description;

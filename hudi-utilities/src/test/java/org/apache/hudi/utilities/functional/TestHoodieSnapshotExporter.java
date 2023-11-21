@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex.IndexType;
@@ -141,8 +142,10 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     public void testExportAsHudi() throws IOException {
       new HoodieSnapshotExporter().export(jsc(), cfg);
 
+      Path completeInstantPath = HoodieTestUtils
+          .getCompleteInstantPath(lfs, new Path(targetPath, ".hoodie"), COMMIT_TIME, "commit");
       // Check results
-      assertTrue(lfs.exists(new Path(targetPath + "/.hoodie/" + COMMIT_TIME + ".commit")));
+      assertTrue(lfs.exists(completeInstantPath));
       assertTrue(lfs.exists(new Path(targetPath + "/.hoodie/" + COMMIT_TIME + ".commit.requested")));
       assertTrue(lfs.exists(new Path(targetPath + "/.hoodie/" + COMMIT_TIME + ".inflight")));
       assertTrue(lfs.exists(new Path(targetPath + "/.hoodie/hoodie.properties")));

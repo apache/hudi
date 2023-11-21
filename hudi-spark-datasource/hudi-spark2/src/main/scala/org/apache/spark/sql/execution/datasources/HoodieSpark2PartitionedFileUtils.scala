@@ -19,11 +19,11 @@
 
 package org.apache.spark.sql.execution.datasources
 
-import org.apache.hadoop.fs.Path
+import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.sql.catalyst.InternalRow
 
 /**
- * Utils on Spark [[PartitionedFile]] for Spark 2.4.
+ * Utils on Spark [[PartitionedFile]] and [[PartitionDirectory]] for Spark 2.4.
  */
 object HoodieSpark2PartitionedFileUtils extends HoodieSparkPartitionedFileUtils {
   override def getPathFromPartitionedFile(partitionedFile: PartitionedFile): Path = {
@@ -39,5 +39,13 @@ object HoodieSpark2PartitionedFileUtils extends HoodieSparkPartitionedFileUtils 
                                      start: Long,
                                      length: Long): PartitionedFile = {
     PartitionedFile(partitionValues, filePath.toUri.toString, start, length)
+  }
+
+  override def toFileStatuses(partitionDirs: Seq[PartitionDirectory]): Seq[FileStatus] = {
+    partitionDirs.flatMap(_.files)
+  }
+
+  override def newPartitionDirectory(internalRow: InternalRow, statuses: Seq[FileStatus]): PartitionDirectory = {
+    PartitionDirectory(internalRow, statuses)
   }
 }

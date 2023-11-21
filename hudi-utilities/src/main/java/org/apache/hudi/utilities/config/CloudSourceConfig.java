@@ -121,4 +121,20 @@ public class CloudSourceConfig extends HoodieConfig {
       .sinceVersion("0.14.0")
       .withDocumentation("A comma delimited list of path-based partition fields in the source file structure.");
 
+  public static final ConfigProperty<Boolean> SPARK_DATASOURCE_READER_COMMA_SEPARATED_PATH_FORMAT = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.reader.comma.separated.path.format")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("0.14.1")
+      .withDocumentation("Boolean value for specifying path format in load args of spark.read.format(\"..\").load(\"a.xml,b.xml,c.xml\"),\n"
+          + "   * set true if path format needs to be comma separated string value, if false it's passed as array of strings like\n"
+          + "   * spark.read.format(\"..\").load(new String[]{a.xml,b.xml,c.xml})");
+
+  public static final ConfigProperty<String> SOURCE_MAX_BYTES_PER_PARTITION = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.partition.max.size")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("0.14.1")
+      .withDocumentation("specify this value in bytes, to coalesce partitions of source dataset not greater than specified limit");
+
 }

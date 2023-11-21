@@ -100,8 +100,8 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
         isOverWritePartition = true
       }
     }
-
-    val config = buildHoodieInsertConfig(catalogTable, sparkSession, isOverWritePartition, isOverWriteTable, partitionSpec, extraOptions)
+    val staticOverwritePartitionPathOpt = getStaticOverwritePartitionPath(catalogTable, partitionSpec, isOverWritePartition)
+    val config = buildHoodieInsertConfig(catalogTable, sparkSession, isOverWritePartition, isOverWriteTable, partitionSpec, extraOptions, staticOverwritePartitionPathOpt)
 
     val alignedQuery = alignQueryOutput(query, catalogTable, partitionSpec, sparkSession.sessionState.conf)
 
@@ -116,6 +116,22 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     }
 
     success
+  }
+
+  private def getStaticOverwritePartitionPath(hoodieCatalogTable: HoodieCatalogTable,
+                                              partitionsSpec: Map[String, Option[String]],
+                                              isOverWritePartition: Boolean): Option[String] = {
+    if (isOverWritePartition) {
+      val staticPartitionValues = filterStaticPartitionValues(partitionsSpec)
+      val isStaticOverwritePartition = staticPartitionValues.keys.size == hoodieCatalogTable.partitionFields.length
+      if (isStaticOverwritePartition) {
+        Option.apply(makePartitionPath(hoodieCatalogTable, staticPartitionValues))
+      } else {
+        Option.empty
+      }
+    } else {
+      Option.empty
+    }
   }
 
   /**
@@ -164,11 +180,15 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
                                        conf: SQLConf): LogicalPlan = {
     val planUtils = sparkAdapter.getCatalystPlanUtils
     try {
-      planUtils.resolveOutputColumns(catalogTable.catalogTableName, expectedSchema.toAttributes, query, byName = true, conf)
+      planUtils.resolveOutputColumns(
+        catalogTable.catalogTableName, sparkAdapter.getSchemaUtils.toAttributes(expectedSchema), query, byName = true, conf)
     } catch {
       // NOTE: In case matching by name didn't match the query output, we will attempt positional matching
-      case ae: AnalysisException if ae.getMessage().startsWith("Cannot write incompatible data to table") =>
-        planUtils.resolveOutputColumns(catalogTable.catalogTableName, expectedSchema.toAttributes, query, byName = false, conf)
+      // SPARK-42309 Error message changed in Spark 3.5.0 so we need to match two strings here
+      case ae: AnalysisException if (ae.getMessage().startsWith("[INCOMPATIBLE_DATA_FOR_TABLE.CANNOT_FIND_DATA] Cannot write incompatible data for the table")
+        || ae.getMessage().startsWith("Cannot write incompatible data to table")) =>
+        planUtils.resolveOutputColumns(
+          catalogTable.catalogTableName, sparkAdapter.getSchemaUtils.toAttributes(expectedSchema), query, byName = false, conf)
     }
   }
 

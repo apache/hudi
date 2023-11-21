@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -32,9 +33,11 @@ import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -116,7 +119,11 @@ public class TestHoodieDeleteBlock {
   }
 
   public void testDeleteBlockWithValidation(DeleteRecord[] deleteRecords) throws IOException {
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecords, new HashMap<>());
+    List<Pair<DeleteRecord, Long>> deleteRecordList = new ArrayList<>();
+    for (DeleteRecord dr : deleteRecords) {
+      deleteRecordList.add(Pair.of(dr, -1L));
+    }
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, false, new HashMap<>());
     byte[] contentBytes = deleteBlock.getContentBytes();
     HoodieDeleteBlock deserializeDeleteBlock = new HoodieDeleteBlock(
         Option.of(contentBytes), null, true, Option.empty(), new HashMap<>(), new HashMap<>());

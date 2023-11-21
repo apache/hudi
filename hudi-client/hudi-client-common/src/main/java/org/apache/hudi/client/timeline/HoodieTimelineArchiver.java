@@ -37,6 +37,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.marker.WriteMarkers;
@@ -56,7 +57,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.client.utils.ArchivalUtils.getMinAndMaxInstantsToKeep;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.compareTimestamps;
 
@@ -75,6 +75,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   private final TransactionManager txnManager;
 
   private final LSMTimelineWriter timelineWriter;
+  private final HoodieMetrics metrics;
 
   public HoodieTimelineArchiver(HoodieWriteConfig config, HoodieTable<T, I, K, O> table) {
     this.config = config;
@@ -85,16 +86,17 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     Pair<Integer, Integer> minAndMaxInstants = getMinAndMaxInstantsToKeep(table, metaClient);
     this.minInstantsToKeep = minAndMaxInstants.getLeft();
     this.maxInstantsToKeep = minAndMaxInstants.getRight();
+    this.metrics = new HoodieMetrics(config);
   }
 
-  public boolean archiveIfRequired(HoodieEngineContext context) throws IOException {
+  public int archiveIfRequired(HoodieEngineContext context) throws IOException {
     return archiveIfRequired(context, false);
   }
 
   /**
    * Check if commits need to be archived. If yes, archive commits.
    */
-  public boolean archiveIfRequired(HoodieEngineContext context, boolean acquireLock) throws IOException {
+  public int archiveIfRequired(HoodieEngineContext context, boolean acquireLock) throws IOException {
     try {
       if (acquireLock) {
         // there is no owner or instant time per se for archival.
@@ -102,7 +104,6 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       }
       // Sort again because the cleaning and rollback instants could break the sequence.
       List<ActiveAction> instantsToArchive = getInstantsToArchive().sorted().collect(Collectors.toList());
-      boolean success = true;
       if (!instantsToArchive.isEmpty()) {
         LOG.info("Archiving instants " + instantsToArchive);
         Consumer<Exception> exceptionHandler = e -> {
@@ -112,13 +113,13 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         };
         this.timelineWriter.write(instantsToArchive, Option.of(action -> deleteAnyLeftOverMarkers(context, action)), Option.of(exceptionHandler));
         LOG.info("Deleting archived instants " + instantsToArchive);
-        success = deleteArchivedInstants(instantsToArchive, context);
+        deleteArchivedInstants(instantsToArchive, context);
         // triggers compaction and cleaning only after archiving action
         this.timelineWriter.compactAndClean(context);
       } else {
         LOG.info("No Instants to archive");
       }
-      return success;
+      return instantsToArchive.size();
     } finally {
       if (acquireLock) {
         txnManager.endTransaction(Option.empty());
@@ -213,8 +214,8 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
           return Collections.emptyList();
         } else {
           LOG.info("Limiting archiving of instants to latest compaction on metadata table at " + latestCompactionTime.get());
-          earliestInstantToRetainCandidates.add(Option.of(new HoodieInstant(
-              HoodieInstant.State.COMPLETED, COMPACTION_ACTION, latestCompactionTime.get())));
+          earliestInstantToRetainCandidates.add(
+              completedCommitsTimeline.findInstantsModifiedAfterByCompletionTime(latestCompactionTime.get()).firstInstant());
         }
       } catch (Exception e) {
         throw new HoodieException("Error limiting instant archival based on metadata table", e);

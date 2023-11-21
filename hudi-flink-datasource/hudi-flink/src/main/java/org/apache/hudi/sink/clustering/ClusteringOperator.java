@@ -282,7 +282,8 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
             .build();
 
         HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
-        HoodieFileSliceReader<? extends IndexedRecord> hoodieFileSliceReader = HoodieFileSliceReader.getFileSliceReader(baseFileReader, scanner, readerSchema,
+        HoodieFileSliceReader<? extends IndexedRecord> hoodieFileSliceReader = new HoodieFileSliceReader(baseFileReader, scanner, readerSchema,
+            tableConfig.getPreCombineField(),writeConfig.getRecordMerger(),
             tableConfig.getProps(),
             tableConfig.populateMetaFields() ? Option.empty() : Option.of(Pair.of(tableConfig.getRecordKeyFieldProp(),
                 tableConfig.getPartitionFieldProp())));

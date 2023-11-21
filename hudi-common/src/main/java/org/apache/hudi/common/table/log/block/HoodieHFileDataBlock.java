@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -92,7 +93,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
                               Map<HeaderMetadataType, String> header,
                               Compression.Algorithm compressionAlgorithm,
                               Path pathForReader) {
-    super(records, header, new HashMap<>(), HoodieAvroHFileReader.KEY_FIELD_NAME);
+    super(records, false, header, new HashMap<>(), HoodieAvroHFileReader.KEY_FIELD_NAME);
     this.compressionAlgorithm = Option.of(compressionAlgorithm);
     this.pathForReader = pathForReader;
   }
@@ -177,8 +178,21 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     FileSystem fs = FSUtils.getFs(pathForReader.toString(), hadoopConf);
     // Read the content
     try (HoodieAvroHFileReader reader = new HoodieAvroHFileReader(hadoopConf, pathForReader, new CacheConfig(hadoopConf),
-                                                             fs, content, Option.of(getSchemaFromHeader()))) {
+        fs, content, Option.of(getSchemaFromHeader()))) {
       return unsafeCast(reader.getRecordIterator(readerSchema));
+    }
+  }
+
+  @Override
+  protected <T> ClosableIterator<T> deserializeRecords(HoodieReaderContext<T> readerContext, byte[] content) throws IOException {
+    checkState(readerSchema != null, "Reader's schema has to be non-null");
+
+    Configuration hadoopConf = FSUtils.buildInlineConf(getBlockContentLocation().get().getHadoopConf());
+    FileSystem fs = FSUtils.getFs(pathForReader.toString(), hadoopConf);
+    // Read the content
+    try (HoodieAvroHFileReader reader = new HoodieAvroHFileReader(hadoopConf, pathForReader, new CacheConfig(hadoopConf),
+        fs, content, Option.of(getSchemaFromHeader()))) {
+      return unsafeCast(reader.getIndexedRecordIterator(readerSchema, readerSchema));
     }
   }
 

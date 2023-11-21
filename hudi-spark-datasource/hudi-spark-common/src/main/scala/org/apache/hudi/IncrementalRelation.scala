@@ -94,9 +94,9 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
   private val commitsTimelineToReturn = {
     if (hollowCommitHandling == USE_TRANSITION_TIME) {
-      commitTimeline.findInstantsInRangeByStateTransitionTime(
+      commitTimeline.findInstantsInRangeByCompletionTime(
         optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key),
-        optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getStateTransitionTime))
+        optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getCompletionTime))
     } else {
       commitTimeline.findInstantsInRange(
         optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key),

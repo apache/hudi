@@ -38,6 +38,14 @@ import static org.apache.hudi.common.util.ConfigUtils.enumNames;
     description = "The following set of configurations are common across Hudi.")
 public class HoodieCommonConfig extends HoodieConfig {
 
+  public static final ConfigProperty<String> BASE_PATH = ConfigProperty
+      .key("hoodie.base.path")
+      .noDefaultValue()
+      .withDocumentation("Base path on lake storage, under which all the table data is stored. "
+          + "Always prefix it explicitly with the storage scheme (e.g hdfs://, s3:// etc). "
+          + "Hudi stores all the main meta-data about commits, savepoints, cleaning audit logs "
+          + "etc in .hoodie directory under this base path directory.");
+
   public static final ConfigProperty<Boolean> SCHEMA_EVOLUTION_ENABLE = ConfigProperty
       .key("hoodie.schema.on.read.enable")
       .defaultValue(false)
@@ -50,10 +58,12 @@ public class HoodieCommonConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("The query instant for time travel. Without specified this option, we query the latest snapshot.");
 
+  @Deprecated
   public static final ConfigProperty<Boolean> RECONCILE_SCHEMA = ConfigProperty
       .key("hoodie.datasource.write.reconcile.schema")
       .defaultValue(false)
       .markAdvanced()
+      .deprecatedAfter("0.14.1")
       .withDocumentation("This config controls how writer's schema will be selected based on the incoming batch's "
           + "schema as well as existing table's one. When schema reconciliation is DISABLED, incoming batch's "
           + "schema will be picked as a writer-schema (therefore updating table's schema). When schema reconciliation "
@@ -66,9 +76,21 @@ public class HoodieCommonConfig extends HoodieConfig {
       .key("hoodie.datasource.write.new.columns.nullable")
       .defaultValue(false)
       .markAdvanced()
+      .sinceVersion("0.14.0")
       .withDocumentation("When a non-nullable column is added to datasource during a write operation, the write "
           + " operation will fail schema compatibility check. Set this option to true will make the newly added "
           + " column nullable to successfully complete the write operation.");
+
+  public static final ConfigProperty<String> HANDLE_MISSING_COLUMNS_WITH_LOSSLESS_TYPE_PROMOTIONS = ConfigProperty
+      .key("hoodie.write.handle.missing.cols.with.lossless.type.promotion")
+      .defaultValue("false")
+      .markAdvanced()
+      .withDocumentation("When a nullable column is missing from incoming batch during a write operation, the write "
+          + " operation will fail schema compatibility check. Set this option to true will make the missing "
+          + " column be filled with null values to successfully complete the write operation. Similarly lossless promotion"
+          + " are type promotions that are not back compatible like long to int, double to float etc can be handled "
+          + " by setting this config to true, in which case incoming data will be promoted to the table schema type"
+          + " and written to the table.");
 
   public static final ConfigProperty<ExternalSpillableMap.DiskMapType> SPILLABLE_DISK_MAP_TYPE = ConfigProperty
       .key("hoodie.common.spillable.diskmap.type")
@@ -106,11 +128,26 @@ public class HoodieCommonConfig extends HoodieConfig {
       .key("hoodie.fs.atomic_creation.support")
       .defaultValue("")
       .markAdvanced()
+      .sinceVersion("0.14.0")
       .withDocumentation("This config is used to specify the file system which supports atomic file creation . "
           + "atomic means that an operation either succeeds and has an effect or has fails and has no effect;"
           + " now this feature is used by FileSystemLockProvider to guaranteeing that only one writer can create the lock file at a time."
           + " since some FS does not support atomic file creation (eg: S3), we decide the FileSystemLockProvider only support HDFS,local FS"
           + " and View FS as default. if you want to use FileSystemLockProvider with other FS, you can set this config with the FS scheme, eg: fs1,fs2");
+
+  public static final ConfigProperty<String> MAX_MEMORY_FOR_COMPACTION = ConfigProperty
+      .key("hoodie.memory.compaction.max.size")
+      .noDefaultValue()
+      .markAdvanced()
+      .withDocumentation("Maximum amount of memory used  in bytes for compaction operations in bytes , before spilling to local storage.");
+
+  public static final ConfigProperty<Integer> MAX_DFS_STREAM_BUFFER_SIZE = ConfigProperty
+      .key("hoodie.memory.dfs.buffer.max.size")
+      .defaultValue(16 * 1024 * 1024)
+      .markAdvanced()
+      .withDocumentation("Property to control the max memory in bytes for dfs input stream buffer size");
+
+  public static final long DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES = 1024 * 1024 * 1024L;
 
   public ExternalSpillableMap.DiskMapType getSpillableDiskMapType() {
     return ExternalSpillableMap.DiskMapType.valueOf(getString(SPILLABLE_DISK_MAP_TYPE).toUpperCase(Locale.ROOT));

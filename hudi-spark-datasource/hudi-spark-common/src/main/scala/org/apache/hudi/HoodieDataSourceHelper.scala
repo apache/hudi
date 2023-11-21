@@ -29,7 +29,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.PredicateHelper
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
-import org.apache.spark.sql.sources.Filter
+import org.apache.spark.sql.sources.{And, Filter, Or}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
@@ -58,7 +58,7 @@ object HoodieDataSourceHelper extends PredicateHelper with SparkAdapterSupport {
       dataSchema = dataSchema,
       partitionSchema = partitionSchema,
       requiredSchema = requiredSchema,
-      filters = filters,
+      filters = if (appendPartitionValues) getNonPartitionFilters(filters, dataSchema, partitionSchema) else filters,
       options = options,
       hadoopConf = hadoopConf
     )
@@ -97,5 +97,62 @@ object HoodieDataSourceHelper extends PredicateHelper with SparkAdapterSupport {
       checkState(avroRecord.getSchema.getFields.size() == structTypeSchema.fields.length)
       deserializer.deserialize(avroRecord).get.asInstanceOf[InternalRow]
     }
+  }
+
+  def getNonPartitionFilters(filters: Seq[Filter], dataSchema: StructType, partitionSchema: StructType): Seq[Filter] = {
+    filters.flatMap(f => {
+      if (f.references.intersect(partitionSchema.fields.map(_.name)).nonEmpty) {
+        extractPredicatesWithinOutputSet(f, dataSchema.fieldNames.toSet)
+      } else {
+        Some(f)
+      }
+    })
+  }
+
+  /**
+   * Heavily adapted from {@see org.apache.spark.sql.catalyst.expressions.PredicateHelper#extractPredicatesWithinOutputSet}
+   * Method is adapted to work with Filters instead of Expressions
+   *
+   * @return
+   */
+  def extractPredicatesWithinOutputSet(condition: Filter,
+                                       outputSet: Set[String]): Option[Filter] = condition match {
+    case And(left, right) =>
+      val leftResultOptional = extractPredicatesWithinOutputSet(left, outputSet)
+      val rightResultOptional = extractPredicatesWithinOutputSet(right, outputSet)
+      (leftResultOptional, rightResultOptional) match {
+        case (Some(leftResult), Some(rightResult)) => Some(And(leftResult, rightResult))
+        case (Some(leftResult), None) => Some(leftResult)
+        case (None, Some(rightResult)) => Some(rightResult)
+        case _ => None
+      }
+
+    // The Or predicate is convertible when both of its children can be pushed down.
+    // That is to say, if one/both of the children can be partially pushed down, the Or
+    // predicate can be partially pushed down as well.
+    //
+    // Here is an example used to explain the reason.
+    // Let's say we have
+    // condition: (a1 AND a2) OR (b1 AND b2),
+    // outputSet: AttributeSet(a1, b1)
+    // a1 and b1 is convertible, while a2 and b2 is not.
+    // The predicate can be converted as
+    // (a1 OR b1) AND (a1 OR b2) AND (a2 OR b1) AND (a2 OR b2)
+    // As per the logical in And predicate, we can push down (a1 OR b1).
+    case Or(left, right) =>
+      for {
+        lhs <- extractPredicatesWithinOutputSet(left, outputSet)
+        rhs <- extractPredicatesWithinOutputSet(right, outputSet)
+      } yield Or(lhs, rhs)
+
+    // Here we assume all the `Not` operators is already below all the `And` and `Or` operators
+    // after the optimization rule `BooleanSimplification`, so that we don't need to handle the
+    // `Not` operators here.
+    case other =>
+      if (other.references.toSet.subsetOf(outputSet)) {
+        Some(other)
+      } else {
+        None
+      }
   }
 }

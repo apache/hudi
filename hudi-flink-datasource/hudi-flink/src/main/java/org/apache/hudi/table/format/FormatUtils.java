@@ -18,7 +18,9 @@
 
 package org.apache.hudi.table.format;
 
-import java.util.stream.Collectors;
+import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.HoodieMemoryConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieOperation;
@@ -32,12 +34,11 @@ import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
-import org.apache.hudi.common.util.queue.HoodieProducer;
 import org.apache.hudi.common.util.queue.FunctionBasedQueueProducer;
+import org.apache.hudi.common.util.queue.HoodieProducer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.FlinkWriteClients;
@@ -59,6 +60,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Utilities for format.
@@ -202,13 +204,12 @@ public class FormatUtils {
           .withInternalSchema(internalSchema)
           .withLatestInstantTime(split.getLatestCommit())
           .withReadBlocksLazily(
-              string2Boolean(
-                  flinkConf.getString(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP,
-                      HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)))
+              getBooleanWithAltKeys(flinkConf,
+                  HoodieReaderConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE))
           .withReverseReader(false)
           .withBufferSize(
-              flinkConf.getInteger(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP,
-                  HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE))
+              flinkConf.getInteger(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.key(),
+                  HoodieMemoryConfig.DEFAULT_MR_MAX_DFS_STREAM_BUFFER_SIZE))
           .withInstantRange(split.getInstantRange())
           .withRecordMerger(merger);
 
@@ -274,6 +275,45 @@ public class FormatUtils {
         .withBitCaskDiskMapCompressionEnabled(writeConfig.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
         .withRecordMerger(writeConfig.getRecordMerger())
         .build();
+  }
+
+  /**
+   * Gets the raw value for a {@link ConfigProperty} config from Flink configuration. The key and
+   * alternative keys are used to fetch the config.
+   *
+   * @param flinkConf      Configs in Flink {@link org.apache.flink.configuration.Configuration}.
+   * @param configProperty {@link ConfigProperty} config to fetch.
+   * @return {@link Option} of value if the config exists; empty {@link Option} otherwise.
+   */
+  public static Option<String> getRawValueWithAltKeys(org.apache.flink.configuration.Configuration flinkConf,
+                                                      ConfigProperty<?> configProperty) {
+    if (flinkConf.containsKey(configProperty.key())) {
+      return Option.ofNullable(flinkConf.getString(configProperty.key(), ""));
+    }
+    for (String alternative : configProperty.getAlternatives()) {
+      if (flinkConf.containsKey(alternative)) {
+        return Option.ofNullable(flinkConf.getString(alternative, ""));
+      }
+    }
+    return Option.empty();
+  }
+
+  /**
+   * Gets the boolean value for a {@link ConfigProperty} config from Flink configuration. The key and
+   * alternative keys are used to fetch the config. The default value of {@link ConfigProperty}
+   * config, if exists, is returned if the config is not found in the configuration.
+   *
+   * @param conf           Configs in Flink {@link Configuration}.
+   * @param configProperty {@link ConfigProperty} config to fetch.
+   * @return boolean value if the config exists; default boolean value if the config does not exist
+   * and there is default value defined in the {@link ConfigProperty} config; {@code false} otherwise.
+   */
+  public static boolean getBooleanWithAltKeys(org.apache.flink.configuration.Configuration conf,
+                                              ConfigProperty<?> configProperty) {
+    Option<String> rawValue = getRawValueWithAltKeys(conf, configProperty);
+    boolean defaultValue = configProperty.hasDefaultValue()
+        ? Boolean.parseBoolean(configProperty.defaultValue().toString()) : false;
+    return rawValue.map(Boolean::parseBoolean).orElse(defaultValue);
   }
 
   private static Boolean string2Boolean(String s) {

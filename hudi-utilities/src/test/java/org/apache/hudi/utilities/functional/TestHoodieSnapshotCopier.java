@@ -70,7 +70,7 @@ public class TestHoodieSnapshotCopier extends FunctionalTestHarness {
 
     // Do the snapshot
     HoodieSnapshotCopier copier = new HoodieSnapshotCopier();
-    copier.snapshot(jsc(), basePath, outputPath, true,
+    copier.snapshot(jsc(), basePath, outputPath,
         HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS);
 
     // Nothing changed; we just bail out
@@ -124,7 +124,7 @@ public class TestHoodieSnapshotCopier extends FunctionalTestHarness {
 
     // Do a snapshot copy
     HoodieSnapshotCopier copier = new HoodieSnapshotCopier();
-    copier.snapshot(jsc(), basePath, outputPath, false, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS);
+    copier.snapshot(jsc(), basePath, outputPath, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS);
 
     // Check results
     assertTrue(fs.exists(new Path(outputPath + "/2016/05/01/" + file11.getName())));

@@ -70,12 +70,12 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
         val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
         // Generate the first clustering plan
-        val firstScheduleInstant = HoodieActiveTimeline.createNewInstantTime
+        val firstScheduleInstant = client.createNewInstantTime()
         client.scheduleClusteringAtInstant(firstScheduleInstant, HOption.empty())
 
         // Generate the second clustering plan
         spark.sql(s"insert into $tableName values(4, 'a4', 10, 1003)")
-        val secondScheduleInstant = HoodieActiveTimeline.createNewInstantTime
+        val secondScheduleInstant = client.createNewInstantTime()
         client.scheduleClusteringAtInstant(secondScheduleInstant, HOption.empty())
         checkAnswer(s"call show_clustering('$tableName')")(
           Seq(secondScheduleInstant, 1, HoodieInstant.State.REQUESTED.name(), "*"),
@@ -171,7 +171,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
         val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
         // Generate the first clustering plan
-        val firstScheduleInstant = HoodieActiveTimeline.createNewInstantTime
+        val firstScheduleInstant = client.createNewInstantTime()
         client.scheduleClusteringAtInstant(firstScheduleInstant, HOption.empty())
         checkAnswer(s"call show_clustering(path => '$basePath', show_involved_partition => true)")(
           Seq(firstScheduleInstant, 3, HoodieInstant.State.REQUESTED.name(), "ts=1000,ts=1001,ts=1002")
@@ -711,6 +711,61 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
 
       checkExceptionContain(s"call run_clustering(table => '$tableName')")(
         "Executor SparkExecuteClusteringCommitActionExecutor is not compatible with table layout HoodieSimpleBucketLayout")
+    }
+  }
+
+  test("Test Call run_clustering with limit parameter") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  c1 int,
+           |  c2 string,
+           |  c3 double
+           |) using hudi
+           | options (
+           |  primaryKey = 'c1',
+           |  type = 'cow',
+           |  hoodie.metadata.enable = 'true',
+           |  hoodie.metadata.index.column.stats.enable = 'true',
+           |  hoodie.enable.data.skipping = 'true',
+           |  hoodie.datasource.write.operation = 'insert'
+           | )
+           | location '$basePath'
+     """.stripMargin)
+
+      val conf = new Configuration
+      val metaClient = HoodieTableMetaClient.builder.setConf(conf).setBasePath(basePath).build
+      assert(0 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
+      assert(metaClient.getActiveTimeline.filterPendingReplaceTimeline().empty())
+
+      writeRecords(2, 4, 0, basePath, Map("hoodie.avro.schema.validate" -> "false"))
+      spark.sql(s"call run_clustering(table => '$tableName', op => 'schedule')")
+
+      writeRecords(2, 4, 0, basePath, Map("hoodie.avro.schema.validate" -> "false"))
+      spark.sql(s"call run_clustering(table => '$tableName', op => 'schedule')")
+
+      metaClient.reloadActiveTimeline()
+      assert(0 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
+      assert(2 == metaClient.getActiveTimeline.filterPendingReplaceTimeline().getInstants.size())
+
+      spark.sql(s"call run_clustering(table => '$tableName', op => 'execute')")
+      metaClient.reloadActiveTimeline()
+      assert(2 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
+      assert(0 == metaClient.getActiveTimeline.filterPendingReplaceTimeline().getInstants.size())
+
+      writeRecords(2, 4, 0, basePath, Map("hoodie.avro.schema.validate" -> "false"))
+      spark.sql(s"call run_clustering(table => '$tableName', op => 'schedule')")
+
+      writeRecords(2, 4, 0, basePath, Map("hoodie.avro.schema.validate" -> "false"))
+      spark.sql(s"call run_clustering(table => '$tableName', op => 'schedule')")
+
+      spark.sql(s"call run_clustering(table => '$tableName', op => 'execute', limit => 1)")
+      metaClient.reloadActiveTimeline()
+      assert(3 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
+      assert(1 == metaClient.getActiveTimeline.filterPendingReplaceTimeline().getInstants.size())
     }
   }
 

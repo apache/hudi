@@ -18,10 +18,11 @@
 
 package org.apache.hudi.hadoop.utils;
 
+import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 
@@ -74,8 +75,10 @@ public class HoodieRealtimeRecordReaderUtils {
   public static long getMaxCompactionMemoryInBytes(JobConf jobConf) {
     // jobConf.getMemoryForMapTask() returns in MB
     return (long) Math
-        .ceil(Double.parseDouble(jobConf.get(HoodieRealtimeConfig.COMPACTION_MEMORY_FRACTION_PROP,
-            HoodieRealtimeConfig.DEFAULT_COMPACTION_MEMORY_FRACTION))
+        .ceil(Double.parseDouble(
+            ConfigUtils.getRawValueWithAltKeys(
+                    jobConf, HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION)
+                .orElse(HoodieMemoryConfig.DEFAULT_MR_COMPACTION_MEMORY_FRACTION))
             * jobConf.getMemoryForMapTask() * 1024 * 1024L);
   }
 

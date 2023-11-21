@@ -34,27 +34,24 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BootstrapFileMapping;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
-import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.keygen.KeyGeneratorInterface;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
-import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.BaseCommitActionExecutor;
@@ -78,7 +75,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.client.bootstrap.BootstrapMode.FULL_RECORD;
 import static org.apache.hudi.client.bootstrap.BootstrapMode.METADATA_ONLY;
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE;
 import static org.apache.hudi.table.action.bootstrap.MetadataBootstrapHandlerFactory.getMetadataHandler;
@@ -192,11 +188,13 @@ public class SparkBootstrapCommitActionExecutor<T>
 
   @Override
   protected void setCommitMetadata(HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
-    result.setCommitMetadata(Option.of(new HoodieCommitMetadata()));
+    result.setCommitMetadata(Option.of(CommitUtils.buildMetadata(result.getWriteStatuses().map(WriteStatus::getStat).collectAsList(),
+        result.getPartitionToReplaceFileIds(),
+        extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType())));
   }
 
   @Override
-  protected void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
+  protected void commit(HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
     // Perform bootstrap index write and then commit. Make sure both record-key and bootstrap-index
     // is all done in a single job DAG.
     Map<String, List<Pair<BootstrapFileMapping, HoodieWriteStat>>> bootstrapSourceAndStats =
@@ -217,45 +215,9 @@ public class SparkBootstrapCommitActionExecutor<T>
       LOG.info("Finished writing bootstrap index for source " + config.getBootstrapSourceBasePath() + " in table "
           + config.getBasePath());
     }
-
-    commit(extraMetadata, result, bootstrapSourceAndStats.values().stream()
+    commit(result.getWriteStatuses(), result, bootstrapSourceAndStats.values().stream()
         .flatMap(f -> f.stream().map(Pair::getValue)).collect(Collectors.toList()));
     LOG.info("Committing metadata bootstrap !!");
-  }
-
-  protected void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<HoodieData<WriteStatus>> result, List<HoodieWriteStat> stats) {
-    String actionType = table.getMetaClient().getCommitActionType();
-    LOG.info("Committing " + instantTime + ", action Type " + actionType);
-    // Create a Hoodie table which encapsulated the commits and files visible
-    HoodieSparkTable table = HoodieSparkTable.create(config, context);
-
-    HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-    HoodieCommitMetadata metadata = new HoodieCommitMetadata();
-
-    result.setCommitted(true);
-    stats.forEach(stat -> metadata.addWriteStat(stat.getPartitionPath(), stat));
-    result.setWriteStats(stats);
-
-    // Finalize write
-    finalizeWrite(instantTime, stats, result);
-    // add in extra metadata
-    if (extraMetadata.isPresent()) {
-      extraMetadata.get().forEach(metadata::addMetadata);
-    }
-    metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, getSchemaToStoreInCommit());
-    metadata.setOperationType(operationType);
-    writeTableMetadata(metadata, result.getWriteStatuses(), actionType);
-    // cannot serialize maps with null values
-    metadata.getExtraMetadata().entrySet().removeIf(entry -> entry.getValue() == null);
-    try {
-      activeTimeline.saveAsComplete(
-          new HoodieInstant(true, actionType, instantTime),
-          serializeCommitMetadata(metadata));
-      LOG.info("Committed " + instantTime);
-    } catch (IOException e) {
-      throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime, e);
-    }
-    result.setCommitMetadata(Option.of(metadata));
   }
 
   /**
@@ -304,7 +266,7 @@ public class SparkBootstrapCommitActionExecutor<T>
    */
   private Map<BootstrapMode, List<Pair<String, List<HoodieFileStatus>>>> listAndProcessSourcePartitions() throws IOException {
     List<Pair<String, List<HoodieFileStatus>>> folders = BootstrapUtils.getAllLeafFoldersWithFiles(
-        table.getMetaClient(), bootstrapSourceFileSystem, config.getBootstrapSourceBasePath(), context);
+        table.getBaseFileFormat(), bootstrapSourceFileSystem, config.getBootstrapSourceBasePath(), context);
 
     LOG.info("Fetching Bootstrap Schema !!");
     HoodieBootstrapSchemaProvider sourceSchemaProvider = new HoodieSparkBootstrapSchemaProvider(config);

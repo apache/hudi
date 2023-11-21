@@ -94,7 +94,7 @@ public class TestHoodieBigQuerySyncClient {
 
     QueryJobConfiguration configuration = jobInfoCaptor.getValue().getConfiguration();
     assertEquals(configuration.getQuery(),
-        String.format("CREATE EXTERNAL TABLE `%s.%s.%s` ( field STRING ) WITH PARTITION COLUMNS OPTIONS (enable_list_inference=true, "
+        String.format("CREATE EXTERNAL TABLE `%s.%s.%s` ( `field` STRING ) WITH PARTITION COLUMNS OPTIONS (enable_list_inference=true, "
             + "hive_partition_uri_prefix=\"%s\", uris=[\"%s\"], format=\"PARQUET\", "
             + "file_set_spec_type=\"NEW_LINE_DELIMITED_MANIFEST\")", PROJECT_ID, TEST_DATASET, TEST_TABLE, SOURCE_PREFIX, MANIFEST_FILE_URI));
   }
@@ -114,7 +114,7 @@ public class TestHoodieBigQuerySyncClient {
 
     QueryJobConfiguration configuration = jobInfoCaptor.getValue().getConfiguration();
     assertEquals(configuration.getQuery(),
-        String.format("CREATE EXTERNAL TABLE `%s.%s.%s` ( field STRING ) OPTIONS (enable_list_inference=true, uris=[\"%s\"], format=\"PARQUET\", "
+        String.format("CREATE EXTERNAL TABLE `%s.%s.%s` ( `field` STRING ) OPTIONS (enable_list_inference=true, uris=[\"%s\"], format=\"PARQUET\", "
             + "file_set_spec_type=\"NEW_LINE_DELIMITED_MANIFEST\")", PROJECT_ID, TEST_DATASET, TEST_TABLE, MANIFEST_FILE_URI));
   }
 }

@@ -50,4 +50,44 @@ class TestGetPartitionValuesFromPath extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test get partition values from path when upsert and bulk_insert MOR table") {
+    withTable(generateTableName) { tableName =>
+      spark.sql(
+        s"""
+           |create table $tableName (
+           | id int,
+           | name string,
+           | ts bigint,
+           | region string,
+           | dt date
+           |) using hudi
+           |tblproperties (
+           | primaryKey = 'id',
+           | type = 'mor',
+           | preCombineField = 'ts',
+           | hoodie.datasource.write.drop.partition.columns = 'true'
+           |)
+           |partitioned by (region, dt)""".stripMargin)
+
+      spark.sql(s"insert into $tableName partition (region='reg1', dt='2023-10-01') select 1, 'name1', 1000")
+      checkAnswer(s"select id, name, ts, region, cast(dt as string) from $tableName")(
+        Seq(1, "name1", 1000, "reg1", "2023-10-01")
+      )
+
+      withSQLConf("hoodie.datasource.write.operation" -> "upsert") {
+        spark.sql(s"insert into $tableName partition (region='reg1', dt='2023-10-01') select 1, 'name11', 1000")
+        checkAnswer(s"select id, name, ts, region, cast(dt as string) from $tableName")(
+          Seq(1, "name11", 1000, "reg1", "2023-10-01")
+        )
+      }
+
+      withSQLConf("hoodie.datasource.write.operation" -> "bulk_insert") {
+        spark.sql(s"insert into $tableName partition (region='reg1', dt='2023-10-01') select 1, 'name111', 1000")
+        checkAnswer(s"select id, name, ts, region, cast(dt as string) from $tableName")(
+          Seq(1, "name11", 1000, "reg1", "2023-10-01"), Seq(1, "name111", 1000, "reg1", "2023-10-01")
+        )
+      }
+    }
+  }
 }

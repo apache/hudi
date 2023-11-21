@@ -26,7 +26,7 @@ import org.apache.hudi.MergeOnReadSnapshotRelation.createPartitionedFile
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{BaseFile, FileSlice, HoodieLogFile, HoodieRecord}
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.{HoodieBaseRelation, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, LogFileIterator, MergeOnReadSnapshotRelation, PartitionFileSliceMapping, RecordMergingFileIterator, SkipMergeIterator, SparkAdapterSupport}
+import org.apache.hudi.{HoodieBaseRelation, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, LogFileIterator, MergeOnReadSnapshotRelation, HoodiePartitionFileSliceMapping, RecordMergingFileIterator, SkipMergeIterator, SparkAdapterSupport}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
@@ -51,7 +51,10 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
                                  mergeType: String,
                                  mandatoryFields: Seq[String],
                                  isMOR: Boolean,
-                                 isBootstrap: Boolean) extends ParquetFileFormat with SparkAdapterSupport {
+                                 isBootstrap: Boolean,
+                                 isIncremental: Boolean,
+                                 requiredFilters: Seq[Filter]
+                                ) extends ParquetFileFormat with SparkAdapterSupport {
 
   override def isSplitable(sparkSession: SparkSession,
                            options: Map[String, String],
@@ -69,9 +72,9 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
   private var supportBatchCalled = false
   private var supportBatchResult = false
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
-    if (!supportBatchCalled) {
+    if (!supportBatchCalled || supportBatchResult) {
       supportBatchCalled = true
-      supportBatchResult = !isMOR && super.supportBatch(sparkSession, schema)
+      supportBatchResult = !isIncremental && !isMOR && super.supportBatch(sparkSession, schema)
     }
     supportBatchResult
   }
@@ -114,13 +117,14 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
     val bootstrapBaseAppend = needDataCols && isBootstrap && !isMOR && partitionSchema.nonEmpty
 
     val (baseFileReader, preMergeBaseFileReader, skeletonReader, bootstrapBaseReader) = buildFileReaders(sparkSession,
-      dataSchema, partitionSchema, requiredSchema, filters, options, hadoopConf, requiredSchemaWithMandatory,
+      dataSchema, partitionSchema, if (isIncremental) requiredSchemaWithMandatory else requiredSchema,
+      filters, options, hadoopConf, requiredSchemaWithMandatory,
       requiredWithoutMeta, requiredMeta)
 
     val broadcastedHadoopConf = sparkSession.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
     (file: PartitionedFile) => {
       file.partitionValues match {
-        case fileSliceMapping: PartitionFileSliceMapping =>
+        case fileSliceMapping: HoodiePartitionFileSliceMapping =>
           val filePath = sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(file)
           if (FSUtils.isLogFile(filePath)) {
             //no base file
@@ -135,8 +139,8 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
               case Some(fileSlice) =>
                 val hoodieBaseFile = fileSlice.getBaseFile.get()
                 val bootstrapFileOpt = hoodieBaseFile.getBootstrapBaseFile
-                val partitionValues = fileSliceMapping.getInternalRow
-                val logFiles = getLogFilesFromSlice(fileSlice)
+                val partitionValues = fileSliceMapping.getPartitionValues
+                val logFiles = if (isMOR) getLogFilesFromSlice(fileSlice) else List.empty
                 if (requiredSchemaWithMandatory.isEmpty) {
                   val baseFile = createPartitionedFile(partitionValues, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen)
                   baseFileReader(baseFile)
@@ -163,9 +167,13 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
                     //baseFileReader(baseFile)
                   }
                 }
+              case _ if isIncremental =>
+                projectSchema(baseFileReader(file), StructType(requiredSchemaWithMandatory.fields ++ partitionSchema.fields), outputSchema)
               case _ => baseFileReader(file)
             }
           }
+        case _ if isIncremental =>
+          projectSchema(baseFileReader(file), StructType(requiredSchemaWithMandatory.fields ++ partitionSchema.fields), outputSchema)
         case _ => baseFileReader(file)
       }
     }
@@ -184,14 +192,19 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
     PartitionedFile => Iterator[InternalRow]) = {
 
     //file reader when you just read a hudi parquet file and don't do any merging
-
-    val baseFileReader = super.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema,
-      filters, options, new Configuration(hadoopConf))
+    val baseFileReader = if (isIncremental) {
+      super.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchemaWithMandatory,
+        filters ++ requiredFilters, options, new Configuration(hadoopConf))
+    } else {
+      super.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema,
+        filters ++ requiredFilters, options, new Configuration(hadoopConf))
+    }
 
     //file reader for reading a hudi base file that needs to be merged with log files
+   val recordKeyRelatedFilters = getRecordKeyRelatedFilters(filters, tableState.value.recordKeyField)
     val preMergeBaseFileReader = if (isMOR) {
       super.buildReaderWithPartitionValues(sparkSession, dataSchema, StructType(Seq.empty),
-        requiredSchemaWithMandatory, Seq.empty, options, new Configuration(hadoopConf))
+        requiredSchemaWithMandatory, requiredFilters ++ recordKeyRelatedFilters, options, new Configuration(hadoopConf))
     } else {
       _: PartitionedFile => Iterator.empty
     }
@@ -234,7 +247,7 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
       } else {
         // filter and append
         super.buildReaderWithPartitionValues(sparkSession, dataSchemaWithoutMeta, partitionSchema, requiredWithoutMeta,
-          filters, options, new Configuration(hadoopConf))
+          filters ++ requiredFilters, options, new Configuration(hadoopConf))
       }
     } else {
       _: PartitionedFile => Iterator.empty
@@ -358,5 +371,9 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
 
   protected def getLogFilesFromSlice(fileSlice: FileSlice): List[HoodieLogFile] = {
     fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList
+  }
+
+  protected def getRecordKeyRelatedFilters(filters: Seq[Filter], recordKeyColumn: String): Seq[Filter] = {
+    filters.filter(f => f.references.exists(c => c.equalsIgnoreCase(recordKeyColumn)))
   }
 }

@@ -100,6 +100,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -120,7 +121,7 @@ public class HoodieTableSource implements
     SupportsFilterPushDown {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieTableSource.class);
 
-  private static final int NO_LIMIT_CONSTANT = -1;
+  private static final long NO_LIMIT_CONSTANT = -1;
 
   private final transient org.apache.hadoop.conf.Configuration hadoopConf;
   private final transient HoodieTableMetaClient metaClient;
@@ -171,20 +172,16 @@ public class HoodieTableSource implements
     this.partitionKeys = partitionKeys;
     this.defaultPartName = defaultPartName;
     this.conf = conf;
-    this.predicates = predicates == null ? Collections.emptyList() : predicates;
+    this.predicates = Optional.ofNullable(predicates).orElse(Collections.emptyList());
     this.dataPruner = dataPruner;
     this.partitionPruner = partitionPruner;
     this.dataBucket = dataBucket;
-    this.requiredPos = requiredPos == null
-        ? IntStream.range(0, this.tableRowType.getFieldCount()).toArray()
-        : requiredPos;
-    this.limit = limit == null ? NO_LIMIT_CONSTANT : limit;
+    this.requiredPos = Optional.ofNullable(requiredPos).orElse(IntStream.range(0, this.tableRowType.getFieldCount()).toArray());
+    this.limit = Optional.ofNullable(limit).orElse(NO_LIMIT_CONSTANT);
     this.hadoopConf = HadoopConfigurations.getHadoopConf(conf);
-    this.metaClient = metaClient == null ? StreamerUtil.metaClientForReader(conf, hadoopConf) : metaClient;
+    this.metaClient = Optional.ofNullable(metaClient).orElse(StreamerUtil.metaClientForReader(conf, hadoopConf));
     this.maxCompactionMemoryInBytes = StreamerUtil.getMaxCompactionMemoryInBytes(conf);
-    this.internalSchemaManager = internalSchemaManager == null
-        ? InternalSchemaManager.get(this.conf, this.metaClient)
-        : internalSchemaManager;
+    this.internalSchemaManager = Optional.ofNullable(internalSchemaManager).orElse(InternalSchemaManager.get(this.conf, this.metaClient));
   }
 
   @Override
@@ -210,6 +207,7 @@ public class HoodieTableSource implements
           SingleOutputStreamOperator<RowData> source = execEnv.addSource(monitoringFunction, getSourceOperatorName("split_monitor"))
               .uid(Pipelines.opUID("split_monitor", conf))
               .setParallelism(1)
+              .setMaxParallelism(1)
               .keyBy(MergeOnReadInputSplit::getFileId)
               .transform("split_reader", typeInfo, factory)
               .uid(Pipelines.opUID("split_reader", conf))

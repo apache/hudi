@@ -18,16 +18,12 @@
 
 package org.apache.hudi.sink.meta;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
-import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
@@ -41,6 +37,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * The checkpoint metadata for bookkeeping the checkpoint messages.
@@ -76,12 +73,7 @@ public class CkpMetadata implements Serializable, AutoCloseable {
   private List<CkpMessage> messages;
   private List<String> instantCache;
 
-  private CkpMetadata(Configuration config) {
-    this(FSUtils.getFs(config.getString(FlinkOptions.PATH), HadoopConfigurations.getHadoopConf(config)),
-        config.getString(FlinkOptions.PATH), config.getString(FlinkOptions.WRITE_CLIENT_ID));
-  }
-
-  private CkpMetadata(FileSystem fs, String basePath, String uniqueId) {
+  CkpMetadata(FileSystem fs, String basePath, String uniqueId) {
     this.fs = fs;
     this.path = new Path(ckpMetaPath(basePath, uniqueId));
   }
@@ -208,20 +200,22 @@ public class CkpMetadata implements Serializable, AutoCloseable {
     return this.instantCache;
   }
 
+  @Nullable
+  @VisibleForTesting
+  public String lastCompleteInstant() {
+    load();
+    for (int i = this.messages.size() - 1; i >= 0; i--) {
+      CkpMessage ckpMsg = this.messages.get(i);
+      if (ckpMsg.isComplete()) {
+        return ckpMsg.getInstant();
+      }
+    }
+    return null;
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
-  public static CkpMetadata getInstance(Configuration config) {
-    return new CkpMetadata(config);
-  }
-
-  public static CkpMetadata getInstance(HoodieTableMetaClient metaClient, String uniqueId) {
-    return new CkpMetadata(metaClient.getFs(), metaClient.getBasePath(), uniqueId);
-  }
-
-  public static CkpMetadata getInstance(FileSystem fs, String basePath, String uniqueId) {
-    return new CkpMetadata(fs, basePath, uniqueId);
-  }
 
   protected static String ckpMetaPath(String basePath, String uniqueId) {
     // .hoodie/.aux/ckp_meta
@@ -233,12 +227,16 @@ public class CkpMetadata implements Serializable, AutoCloseable {
     return new Path(path, fileName);
   }
 
-  private List<CkpMessage> scanCkpMetadata(Path ckpMetaPath) throws IOException {
+  protected Stream<CkpMessage> fetchCkpMessages(Path ckpMetaPath) throws IOException {
     // This is required when the storage is minio
     if (!this.fs.exists(ckpMetaPath)) {
-      return new ArrayList<>();
+      return Stream.empty();
     }
-    return Arrays.stream(this.fs.listStatus(ckpMetaPath)).map(CkpMessage::new)
+    return Arrays.stream(this.fs.listStatus(ckpMetaPath)).map(CkpMessage::new);
+  }
+
+  protected List<CkpMessage> scanCkpMetadata(Path ckpMetaPath) throws IOException {
+    return fetchCkpMessages(ckpMetaPath)
         .collect(Collectors.groupingBy(CkpMessage::getInstant)).values().stream()
         .map(messages -> messages.stream().reduce((x, y) -> {
           // Pick the one with the highest state

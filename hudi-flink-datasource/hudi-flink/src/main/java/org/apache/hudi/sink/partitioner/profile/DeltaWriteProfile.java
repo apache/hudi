@@ -50,7 +50,7 @@ public class DeltaWriteProfile extends WriteProfile {
     List<SmallFile> smallFileLocations = new ArrayList<>();
 
     // Init here since this class (and member variables) might not have been initialized
-    HoodieTimeline commitTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
+    HoodieTimeline commitTimeline = metaClient.getCommitsTimeline().filterCompletedAndCompactionInstants();
 
     // Find out all eligible small file slices
     if (!commitTimeline.empty()) {
@@ -77,7 +77,7 @@ public class DeltaWriteProfile extends WriteProfile {
         } else {
           smallFileSlice.getLogFiles().findFirst().ifPresent(logFile -> {
             // in case there is something error, and the file slice has no log file
-            sf.location = new HoodieRecordLocation(logFile.getBaseCommitTime(), logFile.getFileId());
+            sf.location = new HoodieRecordLocation(logFile.getDeltaCommitTime(), logFile.getFileId());
             sf.sizeBytes = getTotalFileSize(smallFileSlice);
             smallFileLocations.add(sf);
           });

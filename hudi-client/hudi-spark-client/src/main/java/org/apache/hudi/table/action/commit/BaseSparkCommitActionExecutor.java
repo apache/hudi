@@ -25,14 +25,12 @@ import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
@@ -41,7 +39,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
-import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
@@ -79,7 +76,6 @@ import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.util.ClusteringUtils.getAllFileGroupsInPendingClusteringPlans;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE;
 
@@ -146,7 +142,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
           .map(Map.Entry::getValue)
           .collect(Collectors.toSet());
       pendingClusteringInstantsToRollback.forEach(instant -> {
-        String commitTime = HoodieActiveTimeline.createNewInstantTime();
+        String commitTime = table.getMetaClient().createNewInstantTime();
         table.scheduleRollback(context, commitTime, instant, false, config.shouldRollbackUsingMarkers(), false);
         table.rollback(context, commitTime, instant, true, true);
       });
@@ -294,31 +290,10 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   }
 
   @Override
-  protected void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
+  protected void commit(HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
     context.setJobStatus(this.getClass().getSimpleName(), "Commit write status collect: " + config.getTableName());
-    String actionType = getCommitActionType();
-    LOG.info("Committing " + instantTime + ", action Type " + actionType + ", operation Type " + operationType);
-    result.setCommitted(true);
-    if (!result.getWriteStats().isPresent()) {
-      result.setWriteStats(result.getWriteStatuses().map(WriteStatus::getStat).collectAsList());
-    }
-    // Finalize write
-    finalizeWrite(instantTime, result.getWriteStats().get(), result);
-    try {
-      HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-      HoodieCommitMetadata metadata = result.getCommitMetadata().get();
-      writeTableMetadata(metadata, result.getWriteStatuses(), actionType);
-      // cannot serialize maps with null values
-      metadata.getExtraMetadata().entrySet().removeIf(entry -> entry.getValue() == null);
-      activeTimeline.saveAsComplete(
-          new HoodieInstant(true, getCommitActionType(), instantTime),
-          serializeCommitMetadata(metadata));
-      LOG.info("Committed " + instantTime);
-      result.setCommitMetadata(Option.of(metadata));
-    } catch (IOException e) {
-      throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
-          e);
-    }
+    commit(result.getWriteStatuses(), result, result.getWriteStats().isPresent()
+        ? result.getWriteStats().get() : result.getWriteStatuses().map(WriteStatus::getStat).collectAsList());
   }
 
   protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<HoodieData<WriteStatus>> writeStatuses) {

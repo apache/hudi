@@ -62,7 +62,6 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
-import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.MarkerUtils;
@@ -548,8 +547,9 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     Path baseFilePath = new Path(basePathStr, filePath);
     HoodieBaseFile baseFile = new HoodieBaseFile(baseFilePath.toString());
 
+    HoodieMergeHandle handle = null;
     try {
-      HoodieMergeHandle handle = new HoodieMergeHandle(cfg, instantTime, table, new HashMap<>(),
+      handle = new HoodieMergeHandle(cfg, instantTime, table, new HashMap<>(),
           partitionPath, FSUtils.getFileId(baseFilePath.getName()), baseFile, new JavaTaskContextSupplier(),
           config.populateMetaFields() ? Option.empty() :
               Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps()))));
@@ -559,13 +559,19 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
       handle.performMergeDataValidationCheck(writeStatus);
     } catch (HoodieCorruptedDataException e1) {
       fail("Exception not expected because merge validation check is disabled");
+    } finally {
+      if (handle != null) {
+        handle.close();
+      }
     }
 
+    handle = null;
     try {
       final String newInstantTime = "006";
       cfg.getProps().setProperty("hoodie.merge.data.validation.enabled", "true");
       HoodieWriteConfig cfg2 = HoodieWriteConfig.newBuilder().withProps(cfg.getProps()).build();
-      HoodieMergeHandle handle = new HoodieMergeHandle(cfg2, newInstantTime, table, new HashMap<>(),
+      // does the handle need to be closed to clean up the writer it contains?
+      handle = new HoodieMergeHandle(cfg2, newInstantTime, table, new HashMap<>(),
           partitionPath, FSUtils.getFileId(baseFilePath.getName()), baseFile, new JavaTaskContextSupplier(),
           config.populateMetaFields() ? Option.empty() :
               Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps()))));
@@ -576,6 +582,10 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
       fail("The above line should have thrown an exception");
     } catch (HoodieUpsertException e2) {
       // expected
+    } finally {
+      if (handle != null) {
+        handle.close();
+      }
     }
   }
 
@@ -777,7 +787,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
             .withInlineClustering(true).withInlineClusteringNumCommits(2).build());
     try (HoodieJavaWriteClient client = getHoodieWriteClient(cfgBuilder.build())) {
       int numRecords = 200;
-      String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      String newCommitTime = client.createNewInstantTime();
       List<HoodieRecord> records1 = dataGen.generateInserts(newCommitTime, numRecords);
       client.startCommitWithTime(newCommitTime);
       List<WriteStatus> statuses = client.insert(records1, newCommitTime);
@@ -808,7 +818,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
 
     // setup clustering config.
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
-        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).withInlineClustering(false).withScheduleInlineClustering(scheduleInlineClustering)
+        .withClusteringTargetPartitions(0).withAsyncClusteringMaxCommits(1).withInlineClustering(false).withScheduleInlineClustering(scheduleInlineClustering)
         .withClusteringExecutionStrategyClass(JavaSortAndSizeExecutionStrategy.class.getName())
         .withClusteringPlanStrategyClass(JavaSizeBasedClusteringPlanStrategy.class.getName())
         .build();
@@ -818,10 +828,10 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
         .withProps(getPropertiesForKeyGen()).build();
     HoodieJavaWriteClient client = getHoodieWriteClient(config);
     dataGen = new HoodieTestDataGenerator(new String[] {"2015/03/16"});
-    String commitTime1 = HoodieActiveTimeline.createNewInstantTime();
+    String commitTime1 = client.createNewInstantTime();
     List<HoodieRecord> records1 = dataGen.generateInserts(commitTime1, 200);
     client.startCommitWithTime(commitTime1);
-    List<WriteStatus> statuses = client.upsert(records1, commitTime1);
+    List<WriteStatus> statuses = client.insert(records1, commitTime1);
     assertNoWriteErrors(statuses);
     client.commit(commitTime1, statuses);
 
@@ -891,14 +901,15 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     }
 
     dataGen = new HoodieTestDataGenerator(new String[] {partitionPath});
-    String commitTime1 = HoodieActiveTimeline.createNewInstantTime();
+    String commitTime1 = client.createNewInstantTime();
     List<HoodieRecord> records1 = dataGen.generateInserts(commitTime1, 200);
     List<WriteStatus> statuses1 = writeAndVerifyBatch(client, records1, commitTime1, populateMetaFields, failInlineClustering);
     Set<HoodieFileGroupId> fileIds1 = getFileGroupIdsFromWriteStatus(statuses1);
 
-    String commitTime2 = HoodieActiveTimeline.createNewInstantTime();
+    String commitTime2 = client.createNewInstantTime();
     List<HoodieRecord> records2 = dataGen.generateInserts(commitTime2, 200);
     List<WriteStatus> statuses2 = writeAndVerifyBatch(client, records2, commitTime2, populateMetaFields, failInlineClustering);
+    client.close();
     Set<HoodieFileGroupId> fileIds2 = getFileGroupIdsFromWriteStatus(statuses2);
     Set<HoodieFileGroupId> fileIdsUnion = new HashSet<>(fileIds1);
     fileIdsUnion.addAll(fileIds2);
@@ -1009,7 +1020,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
   private Set<String> verifyRecordKeys(List<HoodieRecord> expectedRecords, List<WriteStatus> allStatus, List<GenericRecord> records) {
     for (WriteStatus status : allStatus) {
       Path filePath = new Path(basePath, status.getStat().getPath());
-      records.addAll(BaseFileUtils.getInstance(metaClient).readAvroRecords(hadoopConf, filePath));
+      records.addAll(getFileUtilsInstance(metaClient).readAvroRecords(hadoopConf, filePath));
     }
     Set<String> expectedKeys = recordsToRecordKeySet(expectedRecords);
     assertEquals(records.size(), expectedKeys.size());
@@ -1322,6 +1333,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
       conditionMet = client.getHeartbeatClient().isHeartbeatExpired("300");
       Thread.sleep(2000);
     }
+    client.close();
     client = new HoodieJavaWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
     // Perform 1 successful write
     writeBatch(client, "500", "400", Option.of(Arrays.asList("500")), "500",
@@ -1476,6 +1488,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     assertTrue(timeline.getTimelineOfActions(
         CollectionUtils.createSet(CLEAN_ACTION)).countInstants() == 0);
     assertTrue(timeline.getCommitsTimeline().filterCompletedInstants().countInstants() == 3);
+    service.shutdown();
   }
 
   private Pair<Path, List<WriteStatus>> testConsistencyCheck(HoodieTableMetaClient metaClient, String instantTime, boolean enableOptimisticConsistencyGuard)

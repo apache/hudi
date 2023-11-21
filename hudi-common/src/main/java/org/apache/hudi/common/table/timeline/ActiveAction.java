@@ -95,7 +95,7 @@ public class ActiveAction implements Serializable, Comparable<ActiveAction> {
   }
 
   public String getCompletionTime() {
-    return this.completed.getStateTransitionTime();
+    return this.completed.getCompletionTime();
   }
 
   public Option<byte[]> getCommitMetadata(HoodieTableMetaClient metaClient) {

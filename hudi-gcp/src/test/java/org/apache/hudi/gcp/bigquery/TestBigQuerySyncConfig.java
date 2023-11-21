@@ -29,7 +29,6 @@ import java.util.Arrays;
 import java.util.Properties;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
-import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_LOCATION;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_NAME;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_PARTITION_FIELDS;
@@ -58,7 +57,6 @@ public class TestBigQuerySyncConfig {
     props.setProperty(BIGQUERY_SYNC_SYNC_BASE_PATH.key(), "gs://test-bucket/dwh/table_name");
     props.setProperty(BIGQUERY_SYNC_PARTITION_FIELDS.key(), "a,b");
     props.setProperty(BIGQUERY_SYNC_USE_FILE_LISTING_FROM_METADATA.key(), "true");
-    props.setProperty(BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING.key(), "true");
     BigQuerySyncConfig syncConfig = new BigQuerySyncConfig(props);
     assertEquals("fooproject", syncConfig.getString(BIGQUERY_SYNC_PROJECT_ID));
     assertEquals("foodataset", syncConfig.getString(BIGQUERY_SYNC_DATASET_NAME));
@@ -70,7 +68,6 @@ public class TestBigQuerySyncConfig {
     assertEquals("gs://test-bucket/dwh/table_name", syncConfig.getString(BIGQUERY_SYNC_SYNC_BASE_PATH));
     assertEquals(Arrays.asList("a", "b"), syncConfig.getSplitStrings(BIGQUERY_SYNC_PARTITION_FIELDS));
     assertEquals(true, syncConfig.getBoolean(BIGQUERY_SYNC_USE_FILE_LISTING_FROM_METADATA));
-    assertEquals(true, syncConfig.getBoolean(BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING));
   }
 
   @Test
@@ -128,16 +125,5 @@ public class TestBigQuerySyncConfig {
     props2.setProperty(HoodieMetadataConfig.ENABLE.key(), "true");
     BigQuerySyncConfig config2 = new BigQuerySyncConfig(props2);
     assertEquals(true, config2.getBoolean(BIGQUERY_SYNC_USE_FILE_LISTING_FROM_METADATA));
-  }
-
-  @Test
-  void testInferAssumeDatePartition() {
-    BigQuerySyncConfig config1 = new BigQuerySyncConfig(new Properties());
-    assertEquals(false, config1.getBoolean(BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING));
-
-    Properties props2 = new Properties();
-    props2.setProperty(HoodieMetadataConfig.ASSUME_DATE_PARTITIONING.key(), "true");
-    BigQuerySyncConfig config2 = new BigQuerySyncConfig(props2);
-    assertEquals(true, config2.getBoolean(BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING));
   }
 }

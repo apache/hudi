@@ -19,13 +19,14 @@
 package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
-import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
@@ -77,13 +78,14 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
   }
 
   public HoodieParquetDataBlock(List<HoodieRecord> records,
+                                boolean shouldWriteRecordPositions,
                                 Map<HeaderMetadataType, String> header,
                                 String keyField,
                                 CompressionCodecName compressionCodecName,
                                 double expectedCompressionRatio,
                                 boolean useDictionaryEncoding
   ) {
-    super(records, header, new HashMap<>(), keyField);
+    super(records, shouldWriteRecordPositions, header, new HashMap<>(), keyField);
 
     this.compressionCodecName = Option.of(compressionCodecName);
     this.expectedCompressionRatio = Option.of(expectedCompressionRatio);
@@ -163,7 +165,32 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
   }
 
   @Override
+  protected <T> ClosableIterator<T> readRecordsFromBlockPayload(HoodieReaderContext<T> readerContext) throws IOException {
+    HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
+
+    // NOTE: It's important to extend Hadoop configuration here to make sure configuration
+    //       is appropriately carried over
+    Configuration inlineConf = FSUtils.buildInlineConf(blockContentLoc.getHadoopConf());
+
+    Path inlineLogFilePath = InLineFSUtils.getInlineFilePath(
+        blockContentLoc.getLogFile().getPath(),
+        blockContentLoc.getLogFile().getPath().toUri().getScheme(),
+        blockContentLoc.getContentPositionInLogFile(),
+        blockContentLoc.getBlockSize());
+
+    Schema writerSchema = new Schema.Parser().parse(this.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
+
+    return readerContext.getFileRecordIterator(
+        inlineLogFilePath, 0, blockContentLoc.getBlockSize(), writerSchema, readerSchema, inlineConf);
+  }
+
+  @Override
   protected <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(byte[] content, HoodieRecordType type) throws IOException {
+    throw new UnsupportedOperationException("Should not be invoked");
+  }
+
+  @Override
+  protected <T> ClosableIterator<T> deserializeRecords(HoodieReaderContext<T> readerContext, byte[] content) throws IOException {
     throw new UnsupportedOperationException("Should not be invoked");
   }
 }

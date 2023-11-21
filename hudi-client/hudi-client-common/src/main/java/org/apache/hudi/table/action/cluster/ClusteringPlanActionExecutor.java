@@ -57,8 +57,7 @@ public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseActionExecutor
 
   protected Option<HoodieClusteringPlan> createClusteringPlan() {
     LOG.info("Checking if clustering needs to be run on " + config.getBasePath());
-    Option<HoodieInstant> lastClusteringInstant = table.getActiveTimeline()
-        .filter(s -> s.getAction().equalsIgnoreCase(HoodieTimeline.REPLACE_COMMIT_ACTION)).lastInstant();
+    Option<HoodieInstant> lastClusteringInstant = table.getActiveTimeline().getLastClusterCommit();
 
     int commitsSinceLastClustering = table.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()
         .findInstantsAfter(lastClusteringInstant.map(HoodieInstant::getTimestamp).orElse("0"), Integer.MAX_VALUE)
@@ -71,7 +70,7 @@ public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseActionExecutor
       return Option.empty();
     }
 
-    if (config.isAsyncClusteringEnabled() && config.getAsyncClusterMaxCommits() > commitsSinceLastClustering) {
+    if ((config.isAsyncClusteringEnabled() || config.scheduleInlineClustering()) && config.getAsyncClusterMaxCommits() > commitsSinceLastClustering) {
       LOG.warn("Not scheduling async clustering as only " + commitsSinceLastClustering
           + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
           + config.getAsyncClusterMaxCommits());

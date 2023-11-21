@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -225,7 +224,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    */
   public static Long getNextCommitTime(long curCommitTime) {
     if ((curCommitTime + 1) % 1000000000000L >= 60) { // max seconds is 60 and hence
-      return Long.parseLong(HoodieActiveTimeline.createNewInstantTime());
+      return Long.parseLong(InProcessTimeGenerator.createNewInstantTime());
     } else {
       return curCommitTime + 1;
     }
@@ -519,8 +518,20 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   private static void createCommitFile(String basePath, String instantTime, Configuration configuration, HoodieCommitMetadata commitMetadata) {
-    Arrays.asList(HoodieTimeline.makeCommitFileName(instantTime), HoodieTimeline.makeInflightCommitFileName(instantTime),
-        HoodieTimeline.makeRequestedCommitFileName(instantTime))
+    Arrays.asList(HoodieTimeline.makeCommitFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()), HoodieTimeline.makeInflightCommitFileName(instantTime),
+            HoodieTimeline.makeRequestedCommitFileName(instantTime))
+        .forEach(f -> createMetadataFile(f, basePath, configuration, commitMetadata));
+  }
+
+  public static void createDeltaCommitFile(String basePath, String instantTime, Configuration configuration) {
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    createDeltaCommitFile(basePath, instantTime, configuration, commitMetadata);
+  }
+
+  private static void createDeltaCommitFile(String basePath, String instantTime, Configuration configuration, HoodieCommitMetadata commitMetadata) {
+    Arrays.asList(HoodieTimeline.makeDeltaFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
+            HoodieTimeline.makeInflightDeltaFileName(instantTime),
+            HoodieTimeline.makeRequestedDeltaFileName(instantTime))
         .forEach(f -> createMetadataFile(f, basePath, configuration, commitMetadata));
   }
 
@@ -614,7 +625,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public static void createSavepointFile(String basePath, String instantTime, Configuration configuration)
       throws IOException {
     Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-        + HoodieTimeline.makeSavePointFileName(instantTime));
+        + HoodieTimeline.makeSavePointFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()));
     FileSystem fs = FSUtils.getFs(basePath, configuration);
     try (FSDataOutputStream os = fs.create(commitFile, true)) {
       HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();

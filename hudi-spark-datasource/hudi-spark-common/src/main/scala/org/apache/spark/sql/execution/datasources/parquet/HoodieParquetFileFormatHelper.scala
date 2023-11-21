@@ -30,11 +30,13 @@ object HoodieParquetFileFormatHelper {
     val convert = new ParquetToSparkSchemaConverter(hadoopConf)
     val fileStruct = convert.convert(parquetFileMetaData.getSchema)
     val fileStructMap = fileStruct.fields.map(f => (f.name, f.dataType)).toMap
+    // if there are missing fields or if field's data type needs to be changed while reading, we handle it here.
     val sparkRequestStructFields = requiredSchema.map(f => {
       val requiredType = f.dataType
       if (fileStructMap.contains(f.name) && !isDataTypeEqual(requiredType, fileStructMap(f.name))) {
-        implicitTypeChangeInfo.put(new Integer(requiredSchema.fieldIndex(f.name)), org.apache.hudi.common.util.collection.Pair.of(requiredType, fileStructMap(f.name)))
-        StructField(f.name, fileStructMap(f.name), f.nullable)
+        val readerType = addMissingFields(requiredType, fileStructMap(f.name))
+        implicitTypeChangeInfo.put(new Integer(requiredSchema.fieldIndex(f.name)), org.apache.hudi.common.util.collection.Pair.of(requiredType, readerType))
+        StructField(f.name, readerType, f.nullable)
       } else {
         f
       }
@@ -68,5 +70,20 @@ object HoodieParquetFileFormatHelper {
       }
 
     case _ => false
+  }
+
+  def addMissingFields(requiredType: DataType, fileType: DataType): DataType = (requiredType, fileType) match {
+    case (requiredType, fileType) if requiredType == fileType => fileType
+    case (ArrayType(rt, _), ArrayType(ft, _)) => ArrayType(addMissingFields(rt, ft))
+    case (MapType(requiredKey, requiredValue, _), MapType(fileKey, fileValue, _)) => MapType(addMissingFields(requiredKey, fileKey), addMissingFields(requiredValue, fileValue))
+    case (StructType(requiredFields), StructType(fileFields)) =>
+      val fileFieldMap = fileFields.map(f => f.name -> f).toMap
+      StructType(requiredFields.map(f => {
+        fileFieldMap.get(f.name) match {
+          case Some(ff) => StructField(ff.name, addMissingFields(f.dataType, ff.dataType), ff.nullable, ff.metadata)
+          case None => f
+        }
+      }))
+    case _ => fileType
   }
 }

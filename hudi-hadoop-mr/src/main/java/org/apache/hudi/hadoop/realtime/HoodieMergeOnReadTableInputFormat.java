@@ -110,6 +110,24 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
     }
   }
 
+  /**
+   * return non hoodie paths
+   * @param job
+   * @return
+   * @throws IOException
+   */
+  @Override
+  public FileStatus[] listStatusForNonHoodiePaths(JobConf job) throws IOException {
+    FileStatus[] fileStatuses = doListStatus(job);
+    List<FileStatus> result = new ArrayList<>();
+    for (FileStatus fileStatus : fileStatuses) {
+      String baseFilePath = fileStatus.getPath().toUri().toString();
+      RealtimeFileStatus realtimeFileStatus = new RealtimeFileStatus(fileStatus, baseFilePath, new ArrayList<>(), false, Option.empty());
+      result.add(realtimeFileStatus);
+    }
+    return result.toArray(new FileStatus[0]);
+  }
+
   @Override
   protected boolean checkIfValidFileSlice(FileSlice fileSlice) {
     Option<HoodieBaseFile> baseFileOpt = fileSlice.getBaseFile();

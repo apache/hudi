@@ -22,7 +22,6 @@ import org.apache.hudi.async.HoodieAsyncTableService;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
@@ -248,7 +247,7 @@ public class HoodieFlinkClusteringJob {
         ClusteringUtil.validateClusteringScheduling(conf);
 
         String clusteringInstantTime = cfg.clusteringInstantTime != null ? cfg.clusteringInstantTime
-            : HoodieActiveTimeline.createNewInstantTime();
+            : writeClient.createNewInstantTime();
 
         LOG.info("Creating a clustering plan for instant [" + clusteringInstantTime + "]");
         boolean scheduled = writeClient.scheduleClusteringAtInstant(clusteringInstantTime, Option.empty());
@@ -349,7 +348,9 @@ public class HoodieFlinkClusteringJob {
           .addSink(new ClusteringCommitSink(conf))
           .name("clustering_commit")
           .uid("uid_clustering_commit")
-          .setParallelism(1);
+          .setParallelism(1)
+          .getTransformation()
+          .setMaxParallelism(1);
 
       env.execute("flink_hudi_clustering_" + clusteringInstant.getTimestamp());
     }

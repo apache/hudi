@@ -26,6 +26,7 @@ import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.ConcatenatingIterator;
+import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -34,6 +35,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.log.HoodieFileSliceReader;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
@@ -90,7 +92,6 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.client.utils.SparkPartitionUtils.getPartitionFieldVals;
 import static org.apache.hudi.common.config.HoodieCommonConfig.TIMESTAMP_AS_OF;
-import static org.apache.hudi.common.table.log.HoodieFileSliceReader.getFileSliceReader;
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
 
 /**
@@ -107,7 +108,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> performClustering(final HoodieClusteringPlan clusteringPlan, final Schema schema, final String instantTime) {
     JavaSparkContext engineContext = HoodieSparkEngineContext.getSparkContext(getEngineContext());
-    boolean shouldPreserveMetadata = Option.ofNullable(clusteringPlan.getPreserveHoodieMetadata()).orElse(false);
+    boolean shouldPreserveMetadata = Option.ofNullable(clusteringPlan.getPreserveHoodieMetadata()).orElse(true);
     ExecutorService clusteringExecutorService = Executors.newFixedThreadPool(
         Math.min(clusteringPlan.getInputGroups().size(), writeConfig.getClusteringMaxParallelism()),
         new CustomizedThreadFactory("clustering-job-group", true));
@@ -116,7 +117,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
       Stream<HoodieData<WriteStatus>> writeStatusesStream = FutureUtils.allOf(
               clusteringPlan.getInputGroups().stream()
                   .map(inputGroup -> {
-                    if (getWriteConfig().getBooleanOrDefault("hoodie.datasource.write.row.writer.enable", false)) {
+                    if (getWriteConfig().getBooleanOrDefault("hoodie.datasource.write.row.writer.enable", true)) {
                       return runClusteringForGroupAsyncAsRow(inputGroup,
                           clusteringPlan.getStrategy().getStrategyParams(),
                           shouldPreserveMetadata,
@@ -295,7 +296,9 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     String bootstrapBasePath = tableConfig.getBootstrapBasePath().orElse(null);
     Option<String[]> partitionFields = tableConfig.getPartitionFields();
 
-    return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, clusteringOps.size()).mapPartitions(clusteringOpsPartition -> {
+    int readParallelism = Math.min(writeConfig.getClusteringGroupReadParallelism(), clusteringOps.size());
+
+    return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, readParallelism).mapPartitions(clusteringOpsPartition -> {
       List<Iterator<HoodieRecord<T>>> recordIterators = new ArrayList<>();
       clusteringOpsPartition.forEachRemaining(clusteringOp -> {
         long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), config);
@@ -323,7 +326,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
           Option<HoodieFileReader> baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
               ? Option.empty()
               : Option.of(getBaseOrBootstrapFileReader(hadoopConf, bootstrapBasePath, partitionFields, clusteringOp));
-          recordIterators.add(getFileSliceReader(baseFileReader, scanner, readerSchema,
+          recordIterators.add(new HoodieFileSliceReader(baseFileReader, scanner, readerSchema, tableConfig.getPreCombineField(), config.getRecordMerger(),
               tableConfig.getProps(),
               tableConfig.populateMetaFields() ? Option.empty() : Option.of(Pair.of(tableConfig.getRecordKeyFieldProp(),
                   tableConfig.getPartitionFieldProp()))));
@@ -351,7 +354,9 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     String bootstrapBasePath = tableConfig.getBootstrapBasePath().orElse(null);
     Option<String[]> partitionFields = tableConfig.getPartitionFields();
 
-    return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, clusteringOps.size())
+    int readParallelism = Math.min(writeConfig.getClusteringGroupReadParallelism(), clusteringOps.size());
+
+    return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, readParallelism)
         .mapPartitions(clusteringOpsPartition -> {
           List<Iterator<HoodieRecord<T>>> iteratorsForPartition = new ArrayList<>();
           clusteringOpsPartition.forEachRemaining(clusteringOp -> {
@@ -431,9 +436,10 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
 
     Path[] paths;
     if (hasLogFiles) {
-      String compactionFractor = Option.ofNullable(getWriteConfig().getString("compaction.memory.fraction"))
-          .orElse("0.75");
-      params.put("compaction.memory.fraction", compactionFractor);
+      String rawFractionConfig = getWriteConfig().getString(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION);
+      String compactionFractor = rawFractionConfig != null
+          ? rawFractionConfig : HoodieMemoryConfig.DEFAULT_MR_COMPACTION_MEMORY_FRACTION;
+      params.put(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION.key(), compactionFractor);
 
       Path[] deltaPaths = clusteringOps
           .stream()
