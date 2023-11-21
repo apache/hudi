@@ -23,10 +23,12 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Properties;
 
+import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_BIG_LAKE_CONNECTION_ID;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_LOCATION;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_NAME;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_PROJECT_ID;
+import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_REQUIRE_PARTITION_FILTER;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_USE_BQ_MANIFEST_FILE;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_SOURCE_URI;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_SOURCE_URI_PREFIX;
@@ -50,8 +52,10 @@ public class TestBigQuerySyncToolArgs {
         "--source-uri-prefix", "gs://foobartable/",
         "--base-path", "gs://foobartable",
         "--partitioned-by", "year,month,day",
+        "--big-lake-connection-id", "connection-id",
         "--use-bq-manifest-file",
-        "--use-file-listing-from-metadata"
+        "--use-file-listing-from-metadata",
+        "--require-partition-filter"
     };
     cmd.parse(args);
 
@@ -66,5 +70,7 @@ public class TestBigQuerySyncToolArgs {
     assertEquals("year,month,day", props.getProperty(BIGQUERY_SYNC_PARTITION_FIELDS.key()));
     assertEquals("true", props.getProperty(BIGQUERY_SYNC_USE_BQ_MANIFEST_FILE.key()));
     assertEquals("true", props.getProperty(BIGQUERY_SYNC_USE_FILE_LISTING_FROM_METADATA.key()));
+    assertEquals("true", props.getProperty(BIGQUERY_SYNC_REQUIRE_PARTITION_FILTER.key()));
+    assertEquals("connection-id", props.getProperty(BIGQUERY_SYNC_BIG_LAKE_CONNECTION_ID.key()));
   }
 }
