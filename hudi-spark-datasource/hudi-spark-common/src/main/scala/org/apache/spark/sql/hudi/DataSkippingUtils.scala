@@ -106,14 +106,14 @@ object DataSkippingUtils extends Logging {
             //       [[AttributeReference]] referring to the Data Table, and swap it w/ expression referring to
             //       corresponding column in the Column Stats Index
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            genColumnValuesEqualToExpression(colName, valueExpr, targetExprBuilder)
+            genColumnValuesEqualToExpressionSafe(colName, valueExpr, targetExprBuilder)
           }
 
       case EqualTo(valueExpr: Expression, sourceExpr @ AllowedTransformationExpression(attrRef)) if isValueExpression(valueExpr) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            genColumnValuesEqualToExpression(colName, valueExpr, targetExprBuilder)
+            genColumnValuesEqualToExpressionSafe(colName, valueExpr, targetExprBuilder)
           }
 
       // Filter "expr(colA) != B" and "B != expr(colA)"
@@ -124,14 +124,14 @@ object DataSkippingUtils extends Logging {
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            Not(genColumnOnlyValuesEqualToExpression(colName, value, targetExprBuilder))
+            Not(genColumnOnlyValuesEqualToExpressionSafe(colName, value, targetExprBuilder))
           }
 
       case Not(EqualTo(value: Expression, sourceExpr @ AllowedTransformationExpression(attrRef))) if isValueExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            Not(genColumnOnlyValuesEqualToExpression(colName, value, targetExprBuilder))
+            Not(genColumnOnlyValuesEqualToExpressionSafe(colName, value, targetExprBuilder))
           }
 
       // Filter "colA = null"
@@ -146,14 +146,16 @@ object DataSkippingUtils extends Logging {
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            LessThan(targetExprBuilder.apply(genColMinValueExpr(colName)), value)
+            val minValueExpr = genColMinValueExpr(colName)
+            Or(IsNull(minValueExpr), LessThan(targetExprBuilder.apply(minValueExpr), value))
           }
 
       case GreaterThan(value: Expression, sourceExpr @ AllowedTransformationExpression(attrRef)) if isValueExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            LessThan(targetExprBuilder.apply(genColMinValueExpr(colName)), value)
+            val minValueExpr = genColMinValueExpr(colName)
+            Or(IsNull(minValueExpr), LessThan(targetExprBuilder.apply(minValueExpr), value))
           }
 
       // Filter "B < expr(colA)" and "expr(colA) > B"
@@ -162,14 +164,16 @@ object DataSkippingUtils extends Logging {
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            GreaterThan(targetExprBuilder.apply(genColMaxValueExpr(colName)), value)
+            val maxValueExpr = genColMaxValueExpr(colName)
+            Or(IsNull(maxValueExpr), GreaterThan(targetExprBuilder.apply(maxValueExpr), value))
           }
 
       case GreaterThan(sourceExpr @ AllowedTransformationExpression(attrRef), value: Expression) if isValueExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            GreaterThan(targetExprBuilder.apply(genColMaxValueExpr(colName)), value)
+            val maxValueExpr = genColMaxValueExpr(colName)
+            Or(IsNull(maxValueExpr), GreaterThan(targetExprBuilder.apply(maxValueExpr), value))
           }
 
       // Filter "expr(colA) <= B" and "B >= expr(colA)"
@@ -178,14 +182,16 @@ object DataSkippingUtils extends Logging {
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            LessThanOrEqual(targetExprBuilder.apply(genColMinValueExpr(colName)), value)
+            val minValueExpr = genColMinValueExpr(colName)
+            Or(IsNull(minValueExpr), LessThanOrEqual(targetExprBuilder.apply(minValueExpr), value))
           }
 
       case GreaterThanOrEqual(value: Expression, sourceExpr @ AllowedTransformationExpression(attrRef)) if isValueExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            LessThanOrEqual(targetExprBuilder.apply(genColMinValueExpr(colName)), value)
+            val minValueExpr = genColMinValueExpr(colName)
+            Or(IsNull(minValueExpr), LessThanOrEqual(targetExprBuilder.apply(minValueExpr), value))
           }
 
       // Filter "B <= expr(colA)" and "expr(colA) >= B"
@@ -194,27 +200,36 @@ object DataSkippingUtils extends Logging {
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            GreaterThanOrEqual(targetExprBuilder.apply(genColMaxValueExpr(colName)), value)
+            val maxValueExpr = genColMaxValueExpr(colName)
+            Or(IsNull(maxValueExpr), GreaterThanOrEqual(targetExprBuilder.apply(maxValueExpr), value))
           }
 
       case GreaterThanOrEqual(sourceExpr @ AllowedTransformationExpression(attrRef), value: Expression) if isValueExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            GreaterThanOrEqual(targetExprBuilder.apply(genColMaxValueExpr(colName)), value)
+            val maxValueExpr = genColMaxValueExpr(colName)
+            Or(IsNull(maxValueExpr), GreaterThanOrEqual(targetExprBuilder.apply(maxValueExpr), value))
           }
 
       // Filter "colA is null"
       // Translates to "colA_nullCount > 0" for index lookup
       case IsNull(attribute: AttributeReference) =>
         getTargetIndexedColumnName(attribute, indexSchema)
-          .map(colName => GreaterThan(genColNumNullsExpr(colName), Literal(0)))
+          .map {colName =>
+            val numNullExpr = genColNumNullsExpr(colName)
+            Or(IsNull(numNullExpr), GreaterThan(numNullExpr, Literal(0)))
+          }
 
       // Filter "colA is not null"
       // Translates to "colA_nullCount < colA_valueCount" for index lookup
       case IsNotNull(attribute: AttributeReference) =>
         getTargetIndexedColumnName(attribute, indexSchema)
-          .map(colName => LessThan(genColNumNullsExpr(colName), genColValueCountExpr))
+          .map {colName =>
+            val numNullExpr = genColNumNullsExpr(colName)
+            val valueCountExpr = genColValueCountExpr
+            Or(Or(IsNull(numNullExpr), IsNull(valueCountExpr)), LessThan(numNullExpr, valueCountExpr))
+          }
 
       // Filter "expr(colA) in (B1, B2, ...)"
       // Translates to "(colA_minValue <= B1 AND colA_maxValue >= B1) OR (colA_minValue <= B2 AND colA_maxValue >= B2) ... "
@@ -224,7 +239,8 @@ object DataSkippingUtils extends Logging {
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            list.map(lit => genColumnValuesEqualToExpression(colName, lit, targetExprBuilder)).reduce(Or)
+            val exprOrList = list.map(lit => genColumnValuesEqualToExpression(colName, lit, targetExprBuilder)).reduce(Or)
+            Or(Or(IsNull(genColMinValueExpr(colName)), IsNull(genColMaxValueExpr(colName))), exprOrList)
           }
 
       // Filter "expr(colA) in (B1, B2, ...)"
@@ -234,7 +250,7 @@ object DataSkippingUtils extends Logging {
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            hset.map { value =>
+            val exprOrList = hset.map { value =>
               // NOTE: [[Literal]] has a gap where it could hold [[UTF8String]], but [[Literal#apply]] doesn't
               //       accept [[UTF8String]]. As such we have to handle it separately
               val lit = value match {
@@ -243,6 +259,7 @@ object DataSkippingUtils extends Logging {
               }
               genColumnValuesEqualToExpression(colName, lit, targetExprBuilder)
             }.reduce(Or)
+            Or(Or(IsNull(genColMinValueExpr(colName)), IsNull(genColMaxValueExpr(colName))), exprOrList)
           }
 
       // Filter "expr(colA) not in (B1, B2, ...)"
@@ -252,7 +269,8 @@ object DataSkippingUtils extends Logging {
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            Not(list.map(lit => genColumnOnlyValuesEqualToExpression(colName, lit, targetExprBuilder)).reduce(Or))
+            val notExpr = Not(list.map(lit => genColumnOnlyValuesEqualToExpression(colName, lit, targetExprBuilder)).reduce(Or))
+            Or(Or(IsNull(genColMinValueExpr(colName)), IsNull(genColMaxValueExpr(colName))), notExpr)
           }
 
       // Filter "colA like 'xxx%'"
@@ -265,7 +283,7 @@ object DataSkippingUtils extends Logging {
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            genColumnValuesEqualToExpression(colName, v, targetExprBuilder)
+            genColumnValuesEqualToExpressionSafe(colName, v, targetExprBuilder)
           }
 
       // Filter "expr(colA) not like 'xxx%'"
@@ -275,9 +293,12 @@ object DataSkippingUtils extends Logging {
         getTargetIndexedColumnName(attrRef, indexSchema)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            val minValueExpr = targetExprBuilder.apply(genColMinValueExpr(colName))
-            val maxValueExpr = targetExprBuilder.apply(genColMaxValueExpr(colName))
-            Not(And(StartsWith(minValueExpr, value), StartsWith(maxValueExpr, value)))
+            val minValueOriginExpr = genColMinValueExpr(colName)
+            val maxValueOriginExpr = genColMaxValueExpr(colName)
+            val minValueExpr = targetExprBuilder.apply(minValueOriginExpr)
+            val maxValueExpr = targetExprBuilder.apply(maxValueOriginExpr)
+            Or(Or(IsNull(minValueOriginExpr), IsNull(maxValueOriginExpr)),
+              Not(And(StartsWith(minValueExpr, value), StartsWith(maxValueExpr, value))))
           }
 
       case or: Or =>
@@ -357,6 +378,18 @@ object ColumnStatsExpressionUtils {
     And(LessThanOrEqual(minValueExpr, value), GreaterThanOrEqual(maxValueExpr, value))
   }
 
+  @inline def genColumnValuesEqualToExpressionSafe(colName: String,
+                                               value: Expression,
+                                               targetExprBuilder: Function[Expression, Expression] = Predef.identity): Expression = {
+    val minValueOriginExpr = genColMinValueExpr(colName)
+    val maxValueOriginExpr = genColMaxValueExpr(colName)
+    val minValueExpr = targetExprBuilder.apply(minValueOriginExpr)
+    val maxValueExpr = targetExprBuilder.apply(maxValueOriginExpr)
+    // Only case when column C contains value V is when min(C) <= V <= max(c)
+    Or(Or(IsNull(minValueOriginExpr), IsNull(maxValueOriginExpr)),
+      And(LessThanOrEqual(minValueExpr, value), GreaterThanOrEqual(maxValueExpr, value)))
+  }
+
   def genColumnOnlyValuesEqualToExpression(colName: String,
                                            value: Expression,
                                            targetExprBuilder: Function[Expression, Expression] = Predef.identity): Expression = {
@@ -364,6 +397,18 @@ object ColumnStatsExpressionUtils {
     val maxValueExpr = targetExprBuilder.apply(genColMaxValueExpr(colName))
     // Only case when column C contains _only_ value V is when min(C) = V AND max(c) = V
     And(EqualTo(minValueExpr, value), EqualTo(maxValueExpr, value))
+  }
+
+  def genColumnOnlyValuesEqualToExpressionSafe(colName: String,
+                                           value: Expression,
+                                           targetExprBuilder: Function[Expression, Expression] = Predef.identity): Expression = {
+    val minValueOriginExpr = genColMinValueExpr(colName)
+    val maxValueOriginExpr = genColMaxValueExpr(colName)
+    val minValueExpr = targetExprBuilder.apply(minValueOriginExpr)
+    val maxValueExpr = targetExprBuilder.apply(maxValueOriginExpr)
+    // Only case when column C contains _only_ value V is when min(C) = V AND max(c) = V
+    Or(Or(IsNull(minValueOriginExpr), IsNull(maxValueOriginExpr)),
+      And(EqualTo(minValueExpr, value), EqualTo(maxValueExpr, value)))
   }
 
   def swapAttributeRefInExpr(sourceExpr: Expression, from: AttributeReference, to: Expression): Expression = {

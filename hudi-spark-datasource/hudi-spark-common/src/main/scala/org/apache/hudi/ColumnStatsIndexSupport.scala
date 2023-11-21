@@ -276,7 +276,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
                   //       behavior is consistent with reading non-existent columns from Parquet)
                   //
                   // This is a way to determine current column's index without explicit iteration (we're adding 3 stats / column)
-                  acc ++= Seq(null, null, valueCount)
+                  acc ++= Seq(null, null, null)
               }
           }
 

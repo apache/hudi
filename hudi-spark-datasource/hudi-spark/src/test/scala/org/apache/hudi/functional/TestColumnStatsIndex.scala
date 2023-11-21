@@ -32,7 +32,7 @@ import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, GreaterThan, Literal, Or}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, GreaterThan, IsNull, Literal, Or}
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
@@ -348,7 +348,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       )
 
       val expectedAndConditionIndexedFilter = And(
-        GreaterThan(UnresolvedAttribute("c1_maxValue"), Literal(1)),
+        Or(IsNull(UnresolvedAttribute("c1_maxValue")),GreaterThan(UnresolvedAttribute("c1_maxValue"), Literal(1))),
         Literal(true)
       )
 
@@ -370,7 +370,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       )
 
       val expectedOrConditionIndexedFilter = Or(
-        GreaterThan(UnresolvedAttribute("c1_maxValue"), Literal(1)),
+        Or(IsNull(UnresolvedAttribute("c1_maxValue")), GreaterThan(UnresolvedAttribute("c1_maxValue"), Literal(1))),
         Literal(true)
       )
 
