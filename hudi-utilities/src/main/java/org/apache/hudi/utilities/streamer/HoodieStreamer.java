@@ -751,6 +751,8 @@ public class HoodieStreamer implements Serializable {
           while (!isShutdownRequested()) {
             try {
               long start = System.currentTimeMillis();
+              // Send a heartbeat metrics event to track the active ingestion job for this table.
+              streamSync.getMetrics().updateStreamerHeartbeatTimestamp(start);
               // check if deltastreamer need to update the configuration before the sync
               if (configurationHotUpdateStrategyOpt.isPresent()) {
                 Option<TypedProperties> newProps = configurationHotUpdateStrategyOpt.get().updateProperties(props);

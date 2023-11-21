@@ -160,6 +160,7 @@ public class StreamSync implements Serializable, Closeable {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(StreamSync.class);
+  private static final String NULL_PLACEHOLDER = "[null]";
 
   /**
    * Delta Sync Config.
@@ -419,14 +420,19 @@ public class StreamSync implements Serializable, Closeable {
       } else {
         Schema newSourceSchema = inputBatchIsEmptyPair.getKey().getSchemaProvider().getSourceSchema();
         Schema newTargetSchema = inputBatchIsEmptyPair.getKey().getSchemaProvider().getTargetSchema();
-        if (!(processedSchema.isSchemaPresent(newSourceSchema))
-            || !(processedSchema.isSchemaPresent(newTargetSchema))) {
-          LOG.info("Seeing new schema. Source :" + newSourceSchema.toString(true)
-              + ", Target :" + newTargetSchema.toString(true));
+        if ((newSourceSchema != null && !processedSchema.isSchemaPresent(newSourceSchema))
+            || (newTargetSchema != null && !processedSchema.isSchemaPresent(newTargetSchema))) {
+          String sourceStr = newSourceSchema == null ? NULL_PLACEHOLDER : newSourceSchema.toString(true);
+          String targetStr = newTargetSchema == null ? NULL_PLACEHOLDER : newTargetSchema.toString(true);
+          LOG.info("Seeing new schema. Source: {0}, Target: {1}", sourceStr, targetStr);
           // We need to recreate write client with new schema and register them.
           reInitWriteClient(newSourceSchema, newTargetSchema, recordsFromSource);
-          processedSchema.addSchema(newSourceSchema);
-          processedSchema.addSchema(newTargetSchema);
+          if (newSourceSchema != null) {
+            processedSchema.addSchema(newSourceSchema);
+          }
+          if (newTargetSchema != null) {
+            processedSchema.addSchema(newTargetSchema);
+          }
         }
       }
 
@@ -575,7 +581,8 @@ public class StreamSync implements Serializable, Closeable {
           ErrorEvent.ErrorReason.CUSTOM_TRANSFORMER_FAILURE);
 
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
-      if (this.userProvidedSchemaProvider != null && this.userProvidedSchemaProvider.getTargetSchema() != null) {
+      if (this.userProvidedSchemaProvider != null && this.userProvidedSchemaProvider.getTargetSchema() != null
+          && this.userProvidedSchemaProvider.getTargetSchema() != InputBatch.NULL_SCHEMA) {
         if (useRowWriter) {
           inputBatchForWriter = new InputBatch(transformed, checkpointStr, this.userProvidedSchemaProvider);
         } else {
@@ -982,6 +989,7 @@ public class StreamSync implements Serializable, Closeable {
       LOG.info("When set --enable-hive-sync will use HiveSyncTool for backward compatibility");
     }
     if (cfg.enableMetaSync) {
+      LOG.debug("[MetaSync] Starting sync");
       FileSystem fs = FSUtils.getFs(cfg.targetBasePath, hoodieSparkContext.hadoopConfiguration());
 
       TypedProperties metaProps = new TypedProperties();
@@ -995,14 +1003,19 @@ public class StreamSync implements Serializable, Closeable {
       Map<String, HoodieException> failedMetaSyncs = new HashMap<>();
       for (String impl : syncClientToolClasses) {
         Timer.Context syncContext = metrics.getMetaSyncTimerContext();
+        boolean success = false;
         try {
           SyncUtilHelpers.runHoodieMetaSync(impl.trim(), metaProps, conf, fs, cfg.targetBasePath, cfg.baseFileFormat);
+          success = true;
         } catch (HoodieMetaSyncException e) {
-          LOG.warn("SyncTool class " + impl.trim() + " failed with exception", e);
+          LOG.error("SyncTool class {0} failed with exception {1}",  impl.trim(), e);
           failedMetaSyncs.put(impl, e);
         }
         long metaSyncTimeMs = syncContext != null ? syncContext.stop() : 0;
         metrics.updateStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeMs);
+        if (success) {
+          LOG.info("[MetaSync] SyncTool class {0} completed successfully and took {1} ", impl.trim(), metaSyncTimeMs);
+        }
       }
       if (!failedMetaSyncs.isEmpty()) {
         throw getHoodieMetaSyncException(failedMetaSyncs);
@@ -1174,13 +1187,14 @@ public class StreamSync implements Serializable, Closeable {
    */
   private void registerAvroSchemas(Schema sourceSchema, Schema targetSchema) {
     // register the schemas, so that shuffle does not serialize the full schemas
-    if (null != sourceSchema) {
-      List<Schema> schemas = new ArrayList<>();
+    List<Schema> schemas = new ArrayList<>();
+    if (sourceSchema != null) {
       schemas.add(sourceSchema);
-      if (targetSchema != null) {
-        schemas.add(targetSchema);
-      }
-
+    }
+    if (targetSchema != null) {
+      schemas.add(targetSchema);
+    }
+    if (!schemas.isEmpty()) {
       if (LOG.isDebugEnabled()) {
         LOG.debug("Registering Schema: " + schemas);
       }
