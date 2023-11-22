@@ -146,6 +146,10 @@ There are 3 use cases for incremental query:
    the interval is a closed one: both start commit and end commit are inclusive;
 3. Time Travel: consume as batch for an instant time, specify the `read.end-commit` is enough because the start commit is latest by default.
 
+```sql
+select * from hudi_table/*+ OPTIONS('read.start-commit'='earliest', 'read.end-commit'='20231122155636355')*/;
+```
+
 #### Options
 |  Option Name  | Required | Default | Remarks |
 |  -----------  | -------  | ------- | ------- |

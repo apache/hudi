@@ -597,6 +597,45 @@ WITH (
 ALTER TABLE tableA RENAME TO tableB;
 ```
 
+### Setting Hudi configs
+
+#### Using table options
+You can configure hoodie configs in table options when creating a table. You can refer Flink specific hoodie configs [here](/docs/next/configurations#FLINK_SQL)
+These configs will be applied to all the operations on that table.
+
+```sql
+CREATE TABLE IF NOT EXISTS tableName (
+  colName1 colType1 PRIMARY KEY NOT ENFORCED,
+  colName2 colType2,
+  ...
+)
+WITH (
+  'connector' = 'hudi',
+  'path' = '${path}',
+  ${hoodie.config.key1} = '${hoodie.config.value1}',
+  ${hoodie.config.key2} = '${hoodie.config.value2}',
+  ....
+);
+
+e.g.
+CREATE TABLE hudi_table(
+  id BIGINT PRIMARY KEY NOT ENFORCED,
+  name STRING,
+  price DOUBLE,
+  ts BIGINT
+)
+PARTITIONED BY (`dt`)
+WITH (
+'connector' = 'hudi',
+'path' = 'file:///tmp/hudi_table',
+'table.type' = 'MERGE_ON_READ',
+'precombine.field' = 'ts',
+'hoodie.cleaner.fileversions.retained' = '20',
+'hoodie.keep.max.commits' = '20',
+'hoodie.datasource.write.hive_style_partitioning' = 'true'
+);
+```
+
 ## Supported Types
 
 | Spark         |     Hudi     |     Notes     |

@@ -219,6 +219,11 @@ INSERT INTO hudi_table SELECT 1, 'a1', 20;
 
 If the `write.operation` is 'upsert,' the INSERT INTO statement will not only insert new records but also update existing rows with the same record key.
 
+```sql
+-- Insert into a Hudi table in upsert mode
+INSERT INTO hudi_table/*+ OPTIONS('write.operation'='upsert')*/ SELECT 1, 'a1', 20;
+```
+
 ### Update
 With Flink SQL, you can use update command to update the hudi table. Here are a few illustrative examples:
 
@@ -245,6 +250,22 @@ DELETE FROM tableIdentifier [ WHERE boolExpression ]
 DELETE FROM hudi_table WHERE price < 100;
 ```
 
+
+```sql
+DELETE FROM hudi_table WHERE price < 100;
+```
+
 :::note Key requirements
 Delete query only work with batch excution mode.
 :::
+
+### Setting Writer/Reader Configs
+With Flink SQL, you can additionally set the writer/reader writer configs along with the query.
+
+```sql
+INSERT INTO hudi_table/*+ OPTIONS('${hoodie.config.key1}'='${hoodie.config.value1}')*/
+```
+
+```sql
+INSERT INTO hudi_table/*+ OPTIONS('hoodie.keep.max.commits'='true')*/
+```
