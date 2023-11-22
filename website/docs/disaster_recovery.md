@@ -3,7 +3,7 @@ title: Disaster Recovery
 toc: true
 ---
 
-Disaster Recovery is very much mission critical for any software. Especially when it comes to data systems, the impact could be very serious
+Disaster Recovery is very much mission-critical for any software. Especially when it comes to data systems, the impact could be very serious
 leading to delay in business decisions or even wrong business decisions at times. Apache Hudi has two operations to assist you in recovering
 data from a previous state: "savepoint" and "restore".
 
@@ -25,10 +25,10 @@ will be hitting latest files which has high possibility of getting deleted with 
 
 ## Runbook
 
-Savepoint and restore can only be triggered from hudi-cli. Lets walk through an example of how one can take savepoint 
+Savepoint and restore can only be triggered from hudi-cli. Let's walk through an example of how one can take savepoint 
 and later restore the state of the table. 
 
-Lets create a hudi table via spark-shell. I am going to trigger few batches of inserts. 
+Let's create a hudi table via spark-shell. I am going to trigger few batches of inserts. 
 
 ```scala
 import org.apache.hudi.QuickstartUtils._
@@ -55,19 +55,20 @@ df.write.format("hudi").
   save(basePath)
 ```
 
-Each batch inserst 10 records. Repeating for 4 more batches. 
+Let's add four more batches of inserts. 
 ```scala
-
-val inserts = convertToStringList(dataGen.generateInserts(10))
-val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
-df.write.format("hudi").
-  options(getQuickstartWriteConfigs).
-  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(TABLE_NAME, tableName).
-  mode(Append).
-  save(basePath)
+for (_ <- 1 to 4) {
+  val inserts = convertToStringList(dataGen.generateInserts(10))
+  val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
+  df.write.format("hudi").
+    options(getQuickstartWriteConfigs).
+    option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+    option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+    option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+    option(TABLE_NAME, tableName).
+    mode(Append).
+    save(basePath)
+}
 ```
 
 Total record count should be 50. 
@@ -82,11 +83,11 @@ spark.sql("select count(partitionpath, uuid) from  hudi_trips_snapshot ").show()
 
 +--------------------------+
 |count(partitionpath, uuid)|
-  +--------------------------+
++--------------------------+
 |                        50|
-  +--------------------------+
++--------------------------+
 ```
-Let's take a look at the timeline after 5 batch of inserts. 
+Let's take a look at the timeline after 5 batches of inserts. 
 ```shell
 ls -ltr /tmp/hudi_trips_cow/.hoodie 
 total 128
@@ -120,6 +121,10 @@ set --conf SPARK_HOME=<SPARK_HOME>
 savepoint create --commit 20220128160245447 --sparkMaster local[2]
 ```
 
+:::note NOTE:
+Make sure you replace 20220128160245447 with the latest commit in your table.
+:::
+
 Let's check the timeline after savepoint. 
 ```shell
 ls -ltr /tmp/hudi_trips_cow/.hoodie
@@ -147,19 +152,21 @@ drwxr-xr-x  2 nsb  wheel    64 Jan 28 16:00 archived
 
 You could notice that savepoint meta files are added which keeps track of the files that are part of the latest table snapshot. 
 
-Now, lets continue adding few more batches of inserts. 
-Repeat below commands for 3 times.
+Now, lets continue adding three more batches of inserts. 
+
 ```scala
-val inserts = convertToStringList(dataGen.generateInserts(10))
-val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
-df.write.format("hudi").
-  options(getQuickstartWriteConfigs).
-  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(TABLE_NAME, tableName).
-  mode(Append).
-  save(basePath)
+for (_ <- 1 to 3) {
+  val inserts = convertToStringList(dataGen.generateInserts(10))
+  val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
+  df.write.format("hudi").
+    options(getQuickstartWriteConfigs).
+    option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+    option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+    option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+    option(TABLE_NAME, tableName).
+    mode(Append).
+    save(basePath)
+}
 ```
 
 Total record count will be 80 since we have done 8 batches in total. (5 until savepoint and 3 after savepoint)
@@ -173,12 +180,12 @@ tripsSnapshotDF.createOrReplaceTempView("hudi_trips_snapshot")
 spark.sql("select count(partitionpath, uuid) from  hudi_trips_snapshot ").show()
 +--------------------------+
 |count(partitionpath, uuid)|
-  +--------------------------+
++--------------------------+
 |                        80|
-  +--------------------------+
++--------------------------+
 ```
 
-Let's say something bad happened and you want to restore your table to a older snapshot. As we called out earlier, we can
+Let's say something bad happened, and you want to restore your table to an older snapshot. As we called out earlier, we can
 trigger restore only from hudi-cli. And do remember to bring down all of your writer processes while doing a restore. 
 
 Lets checkout timeline once, before we trigger the restore.
@@ -233,6 +240,10 @@ savepoints show
 savepoint rollback --savepoint 20220128160245447 --sparkMaster local[2]
 ```
 
+:::note NOTE:
+Make sure you replace 20220128160245447 with the latest savepoint in your table.
+:::
+
 Hudi table should have been restored to the savepointed commit 20220128160245447. Both data files and timeline files should have 
 been deleted. 
 ```shell
@@ -261,7 +272,7 @@ drwxr-xr-x  2 nsb  wheel    64 Jan 28 16:00 archived
 -rw-r--r--  1 nsb  wheel  4152 Jan 28 16:07 20220128160732437.restore
 ```
 
-Lets check the total record count in the table. Should match the records we had, just before we triggered the savepoint. 
+Let's check the total record count in the table. Should match the records we had, just before we triggered the savepoint. 
 ```scala
 val tripsSnapshotDF = spark.
   read.
@@ -272,9 +283,9 @@ tripsSnapshotDF.createOrReplaceTempView("hudi_trips_snapshot")
 spark.sql("select count(partitionpath, uuid) from  hudi_trips_snapshot ").show()
 +--------------------------+
 |count(partitionpath, uuid)|
-  +--------------------------+
++--------------------------+
 |                        50|
-  +--------------------------+
++--------------------------+
 ```
 
 As you could see, entire table state is restored back to the commit which was savepointed. Users can choose to trigger savepoint 
