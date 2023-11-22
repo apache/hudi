@@ -180,6 +180,7 @@ public class TestDefaultHoodieRecordPayload {
     }
 
     try {
+      payload = new DefaultHoodieRecordPayload(record, 1);
       payload.combineAndGetUpdateValue(record, schema, props).get();
       fail("Should fail");
     } catch (IllegalArgumentException e) {
