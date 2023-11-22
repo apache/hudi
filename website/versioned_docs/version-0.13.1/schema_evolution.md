@@ -6,9 +6,6 @@ toc: true
 last_modified_at: 2022-04-27T15:59:57-04:00
 ---
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
-
 Schema evolution allows users to easily change the current schema of a Hudi table to adapt to the data that is changing over time.
 As of 0.11.0 release, Spark SQL (Spark 3.1.x, 3.2.1 and above) DDL support for Schema evolution has been added and is experimental.
 
@@ -211,36 +208,17 @@ The following table presents a summary of the types of schema changes compatible
 Let us walk through an example to demonstrate the schema evolution support in Hudi.
 In the below example, we are going to add a new string field and change the datatype of a field from int to long.
 
-<Tabs
-groupId="programming-language"
-defaultValue="scala"
-values={[
-{ label: 'Scala', value: 'scala', },
-{ label: 'Python', value: 'python', },
-]}
->
-<TabItem value="scala">
-
-```shell
-# Spark 3.3
-spark-shell \
-  --packages org.apache.hudi:hudi-spark3.3-bundle_2.12:0.13.1 \
-  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
-  --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
-  --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
-  --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
-```
-```scala
+```java
 Welcome to
-        ____              __
-        / __/__  ___ _____/ /__
-        _\ \/ _ \/ _ `/ __/  '_/
-        /___/ .__/\_,_/_/ /_/\_\   version 3.3.3
-        /_/
+    ____              __
+    / __/__  ___ _____/ /__
+    _\ \/ _ \/ _ `/ __/  '_/
+    /___/ .__/\_,_/_/ /_/\_\   version 3.1.2
+    /_/
 
-        Using Scala version 2.12.15 (OpenJDK 64-Bit Server VM, Java 11.0.20.1)
-        Type in expressions to have them evaluated.
-        Type :help for more information.
+    Using Scala version 2.12.10 (OpenJDK 64-Bit Server VM, Java 1.8.0_292)
+    Type in expressions to have them evaluated.
+    Type :help for more information.
 
 scala> import org.apache.hudi.QuickstartUtils._
 import org.apache.hudi.QuickstartUtils._
@@ -288,11 +266,11 @@ scala> val data1 = Seq(Row("row_1", "part_0", 0L, "bob", "v_0", 0),
 scala> var dfFromData1 = spark.createDataFrame(data1, schema)
 scala> dfFromData1.write.format("hudi").
     |   options(getQuickstartWriteConfigs).
-    |   option(PRECOMBINE_FIELD_OPT_KEY, "preComb").
-    |   option(RECORDKEY_FIELD_OPT_KEY, "rowId").
-    |   option(PARTITIONPATH_FIELD_OPT_KEY, "partitionId").
+    |   option(PRECOMBINE_FIELD_OPT_KEY.key, "preComb").
+    |   option(RECORDKEY_FIELD_OPT_KEY.key, "rowId").
+    |   option(PARTITIONPATH_FIELD_OPT_KEY.key, "partitionId").
     |   option("hoodie.index.type","SIMPLE").
-    |   option(TABLE_NAME, tableName).
+    |   option(TABLE_NAME.key, tableName).
     |   mode(Overwrite).
     |   save(basePath)
 
@@ -348,11 +326,11 @@ scala> val data2 = Seq(Row("row_2", "part_0", 5L, "john", "v_3", 3L, "newField_1
 scala> var dfFromData2 = spark.createDataFrame(data2, newSchema)
 scala> dfFromData2.write.format("hudi").
     |   options(getQuickstartWriteConfigs).
-    |   option(PRECOMBINE_FIELD_OPT_KEY, "preComb").
-    |   option(RECORDKEY_FIELD_OPT_KEY, "rowId").
-    |   option(PARTITIONPATH_FIELD_OPT_KEY, "partitionId").
+    |   option(PRECOMBINE_FIELD_OPT_KEY.key, "preComb").
+    |   option(RECORDKEY_FIELD_OPT_KEY.key, "rowId").
+    |   option(PARTITIONPATH_FIELD_OPT_KEY.key, "partitionId").
     |   option("hoodie.index.type","SIMPLE").
-    |   option(TABLE_NAME, tableName).
+    |   option(TABLE_NAME.key, tableName).
     |   mode(Append).
     |   save(basePath)
 
@@ -392,156 +370,3 @@ scala> spark.sql("select rowId, partitionId, preComb, name, versionId, intToLong
     +-----+-----------+-------+-------+---------+---------+----------+
 
 ```
-</TabItem>
-
-<TabItem value="python">
-
-```shell
-# Spark 3.3
-pyspark \
-  --packages org.apache.hudi:hudi-spark3.3-bundle_2.12:0.13.1 \
-  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
-  --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
-  --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
-  --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
-```
-```python
-Welcome to
-      ____              __
-     / __/__  ___ _____/ /__
-    _\ \/ _ \/ _ `/ __/  '_/
-   /__ / .__/\_,_/_/ /_/\_\   version 3.3.3
-      /_/
-
-Using Python version 3.9.18 (main, Aug 24 2023 21:19:58)
-Spark context Web UI available at http://10.0.0.199:4041
-Spark context available as 'sc' (master = local[*], app id = local-1695360528431).
-SparkSession available as 'spark'.
->>>
->>> from pyspark.sql.types import *
->>>
->>> tableName = "hudi_trips_cow"
->>> basePath = "file:///tmp/hudi_trips_cow"
->>> schema = StructType([
-...     StructField("rowId", StringType(), nullable=True),
-...     StructField("partitionId", StringType(), nullable=True),
-...     StructField("preComb", LongType(), nullable=True),
-...     StructField("name", StringType(), nullable=True),
-...     StructField("versionId", StringType(), nullable=True),
-...     StructField("intToLong", IntegerType(), nullable=True)
-... ])
->>>
->>> data1 = [("row_1", "part_0", 0, "bob", "v_0", 0),
-...          ("row_2", "part_0", 0, "john", "v_0", 0),
-...          ("row_3", "part_0", 0, "tom", "v_0", 0)]
->>>
->>> dfFromData1 = spark.createDataFrame(data1, schema)
->>>
->>> hudiOptions = {
-...     "hoodie.table.name": tableName,
-...     "hoodie.datasource.write.recordkey.field": "rowId",
-...     "hoodie.datasource.write.partitionpath.field": "partitionId",
-...     "hoodie.datasource.write.precombine.field": "preComb",
-...     "hoodie.index.type": "SIMPLE",
-...     "hoodie.upsert.shuffle.parallelism": 2,
-...     "hoodie.insert.shuffle.parallelism": 2
-... }
->>>
->>> dfFromData1.write.format("hudi") \
-...     .options(**hudiOptions) \
-...     .mode("overwrite") \
-...     .save(basePath)
->>>
->>> tripsSnapshotDF1 = spark.read \
-...     .format("hudi") \
-...     .load(basePath)
->>>
->>> tripsSnapshotDF1.createOrReplaceTempView("hudi_trips_snapshot")
->>>
->>> spark.sql("select rowId, partitionId, preComb, name, versionId, intToLong from hudi_trips_snapshot").show()
-+-----+-----------+-------+----+---------+---------+
-|rowId|partitionId|preComb|name|versionId|intToLong|
-+-----+-----------+-------+----+---------+---------+
-|row_2|     part_0|      0|john|      v_0|        0|
-|row_1|     part_0|      0| bob|      v_0|        0|
-|row_3|     part_0|      0| tom|      v_0|        0|
-+-----+-----------+-------+----+---------+---------+
-
->>>
->>> spark.sql("desc hudi_trips_snapshot").show()
-+--------------------+---------+-------+
-|            col_name|data_type|comment|
-+--------------------+---------+-------+
-| _hoodie_commit_time|   string|   null|
-|_hoodie_commit_seqno|   string|   null|
-|  _hoodie_record_key|   string|   null|
-|_hoodie_partition...|   string|   null|
-|   _hoodie_file_name|   string|   null|
-|               rowId|   string|   null|
-|             preComb|   bigint|   null|
-|                name|   string|   null|
-|           versionId|   string|   null|
-|           intToLong|      int|   null|
-|         partitionId|   string|   null|
-+--------------------+---------+-------+
-
->>>
->>> # In the new schema, we are going to add a String field and
->>> # change the datatype `intToLong` field from  int to long.
->>> newSchema = StructType([
-...     StructField("rowId", StringType(), nullable=True),
-...     StructField("partitionId", StringType(), nullable=True),
-...     StructField("preComb", LongType(), nullable=True),
-...     StructField("name", StringType(), nullable=True),
-...     StructField("versionId", StringType(), nullable=True),
-...     StructField("intToLong", LongType(), nullable=True),
-...     StructField("newField", StringType(), nullable=True)
-... ])
->>>
->>> data2 = [("row_2", "part_0", 5, "john", "v_3", 3, "newField_1"),
-...          ("row_5", "part_0", 5, "maroon", "v_2", 2, "newField_1"),
-...          ("row_9", "part_0", 5, "michael", "v_2", 2, "newField_1")]
->>>
->>> dfFromData2 = spark.createDataFrame(data2, newSchema)
->>>
->>> dfFromData2.write.format("hudi") \
-...     .options(**hudiOptions) \
-...     .mode("append") \
-...     .save(basePath)
->>>
->>> tripsSnapshotDF2 = spark.read.format("hudi").load(basePath)
->>>
->>> tripsSnapshotDF2.createOrReplaceTempView("hudi_trips_snapshot")
->>>
->>> spark.sql("desc hudi_trips_snapshot").show()
-+--------------------+---------+-------+
-|            col_name|data_type|comment|
-+--------------------+---------+-------+
-| _hoodie_commit_time|   string|   null|
-|_hoodie_commit_seqno|   string|   null|
-|  _hoodie_record_key|   string|   null|
-|_hoodie_partition...|   string|   null|
-|   _hoodie_file_name|   string|   null|
-|               rowId|   string|   null|
-|             preComb|   bigint|   null|
-|                name|   string|   null|
-|           versionId|   string|   null|
-|           intToLong|   bigint|   null|
-|            newField|   string|   null|
-|         partitionId|   string|   null|
-+--------------------+---------+-------+
-
->>>
->>> spark.sql("select rowId, partitionId, preComb, name, versionId, intToLong, newField from hudi_trips_snapshot").show()
-+-----+-----------+-------+-------+---------+---------+----------+
-|rowId|partitionId|preComb|   name|versionId|intToLong|  newField|
-+-----+-----------+-------+-------+---------+---------+----------+
-|row_2|     part_0|      5|   john|      v_3|        3|newField_1|
-|row_1|     part_0|      0|    bob|      v_0|        0|      null|
-|row_3|     part_0|      0|    tom|      v_0|        0|      null|
-|row_5|     part_0|      5| maroon|      v_2|        2|newField_1|
-|row_9|     part_0|      5|michael|      v_2|        2|newField_1|
-+-----+-----------+-------+-------+---------+---------+----------+
-```
-</TabItem>
-</Tabs>
