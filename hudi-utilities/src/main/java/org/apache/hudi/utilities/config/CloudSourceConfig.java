@@ -23,7 +23,6 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.util.Option;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -109,14 +108,7 @@ public class CloudSourceConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> DATAFILE_FORMAT = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.datafile.format")
-      .defaultValue("parquet")
-      .withInferFunction(hoodieConfig -> {
-        if (hoodieConfig.contains(HoodieIncrSourceConfig.SOURCE_FILE_FORMAT)) {
-          return Option.of(hoodieConfig.getString(HoodieIncrSourceConfig.SOURCE_FILE_FORMAT));
-        } else {
-          return Option.empty();
-        }
-      })
+      .defaultValue(HoodieIncrSourceConfig.SOURCE_FILE_FORMAT.defaultValue())
       .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.cloud.data.datafile.format")
       .markAdvanced()
       .withDocumentation("Format of the data file. By default, this will be the same as hoodie.streamer.source.hoodieincr.file.format");
