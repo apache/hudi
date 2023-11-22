@@ -59,8 +59,9 @@ public class PubsubMessagesFetcher {
 
   private static final int DEFAULT_BATCH_SIZE_ACK_API = 10;
   private static final long MAX_WAIT_TIME_TO_ACK_MESSAGES = TimeUnit.MINUTES.toMillis(1);
+  private static final int ACK_PRODUCER_THREAD_POOL_SIZE = 3;
 
-  private final ExecutorService threadPool = Executors.newFixedThreadPool(3);
+  private final ExecutorService threadPool = Executors.newFixedThreadPool(ACK_PRODUCER_THREAD_POOL_SIZE);
   private final String googleProjectId;
   private final String pubsubSubscriptionId;
 
