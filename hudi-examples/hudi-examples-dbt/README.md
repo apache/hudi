@@ -18,45 +18,113 @@
 
 This dbt project transforms demonstrates hudi integration with dbt, it has a few models to demonstrate the different ways in which you can create hudi datasets using dbt.
 
-### What is this repo?
-What this repo _is_:
-- A self-contained playground dbt project, useful for testing out scripts, and communicating some of the core dbt concepts.
+This directory serves as a self-contained playground dbt project, useful for testing out scripts, and communicating some of the core dbt concepts.
 
-### Running this project
-To get up and running with this project:
-1. Install dbt using [these instructions](https://docs.getdbt.com/docs/installation).
+### Setup
 
-2. Install [dbt-spark](https://github.com/dbt-labs/dbt-spark) package:
-```bash
-pip install dbt-spark
-```
+Switch working directory and have `python3` installed.
 
-3. Clone this repo and change into the `hudi-examples-dbt` directory from the command line:
-```bash
+```shell
 cd hudi-examples/hudi-examples-dbt
 ```
 
-4. Set up a profile called `spark` to connect to a spark cluster by following [these instructions](https://docs.getdbt.com/reference/warehouse-profiles/spark-profile). If you have access to a data warehouse, you can use those credentials – we recommend setting your [target schema](https://docs.getdbt.com/docs/configure-your-profile#section-populating-your-profile) to be a new schema (dbt will create the schema for you, as long as you have the right privileges). If you don't have access to an existing data warehouse, you can also setup a local postgres database and connect to it in your profile.
+### Install dbt
 
-> **NOTE:** You need to include the hudi spark bundle to the spark cluster, the latest supported version is 0.10.1.
+Create python virtual environment ([Reference](https://docs.getdbt.com/docs/installation)).
 
-5. Ensure your profile is setup correctly from the command line:
-```bash
+```shell
+python3 -m venv dbt-env
+source dbt-env/bin/activate
+```
+
+We are using `thrift` as the connection method ([Reference](https://docs.getdbt.com/docs/core/connect-data-platform/spark-setup)).
+
+```shell
+python3 -m pip install "dbt-spark[PyHive]"
+```
+
+### Configure dbt for Spark
+
+Set up a profile called `spark` to connect to a spark cluster via thrift server ([Reference](https://docs.getdbt.com/docs/core/connect-data-platform/spark-setup#thrift)).
+
+```yaml
+spark:
+  target: dev
+  outputs:
+    dev:
+      type: spark
+      method: thrift
+      schema: my_schema
+      host: localhost
+      port: 10000
+      server_side_parameters:
+        "spark.driver.memory": "3g"
+```
+
+_If you have access to a data warehouse, you can use those credentials – we recommend setting your [target schema](https://docs.getdbt.com/docs/configure-your-profile#section-populating-your-profile) to be a new schema (dbt will create the schema for you, as long as you have the right privileges). If you don't have access to an existing data warehouse, you can also setup a local postgres database and connect to it in your profile._
+
+### Start Spark Thrift server
+
+> **NOTE** Using these versions
+> - Spark 3.2.3 (with Derby 10.14.2.0)
+> - Hudi 0.14.0
+
+Start a local Derby server
+
+```shell
+export DERBY_VERSION=10.14.2.0
+wget https://archive.apache.org/dist/db/derby/db-derby-$DERBY_VERSION/db-derby-$DERBY_VERSION-bin.tar.gz -P /opt/
+tar -xf /opt/db-derby-$DERBY_VERSION-bin.tar.gz -C /opt/
+export DERBY_HOME=/opt/db-derby-$DERBY_VERSION-bin
+$DERBY_HOME/bin/startNetworkServer -h 0.0.0.0
+```
+
+Start a local Thrift server for Spark
+
+```shell
+export SPARK_VERSION=3.2.3
+wget https://archive.apache.org/dist/spark/spark-$SPARK_VERSION/spark-$SPARK_VERSION-bin-hadoop2.7.tgz -P /opt/
+tar -xf /opt/spark-$SPARK_VERSION-bin-hadoop2.7.tgz -C /opt/
+export SPARK_HOME=/opt/spark-$SPARK_VERSION-bin-hadoop2.7
+
+# install dependencies
+cp $DERBY_HOME/lib/{derby,derbyclient}.jar $SPARK_HOME/jars/
+wget https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-spark3.2-bundle_2.12/0.14.0/hudi-spark3.2-bundle_2.12-0.14.0.jar -P $SPARK_HOME/jars/
+
+# start Thrift server connecting to Derby as HMS backend
+$SPARK_HOME/sbin/start-thriftserver.sh \
+--conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+--conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension \
+--conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog \
+--conf spark.sql.warehouse.dir=/tmp/hudi/hive/warehouse \
+--hiveconf hive.metastore.warehouse.dir=/tmp/hudi/hive/warehouse \
+--hiveconf hive.metastore.schema.verification=false \
+--hiveconf datanucleus.schema.autoCreateAll=true \
+--hiveconf javax.jdo.option.ConnectionDriverName=org.apache.derby.jdbc.ClientDriver \
+--hiveconf 'javax.jdo.option.ConnectionURL=jdbc:derby://localhost:1527/default;create=true'
+```
+
+### Verify dbt setup
+
+```shell
 dbt debug
 ```
 
 Output of the above command should show this text at the end of the output:
-```bash
+
+```
 All checks passed!
 ```
 
-6. Run the models:
-```bash
+### Run the models
+
+```shell
 dbt run
 ```
 
-Output should look like this:
-```bash
+Output should look like this
+
+```
 05:47:28  Running with dbt=1.0.0
 05:47:28  Found 5 models, 10 tests, 0 snapshots, 0 analyses, 0 macros, 0 operations, 0 seed files, 0 sources, 0 exposures, 0 metrics
 05:47:28
@@ -77,12 +145,16 @@ Output should look like this:
 05:47:42
 05:47:42  Completed successfully
 ```
-7. Test the output of the models:
-```bash
+
+### Test the output of the models
+
+```shell
 dbt test
 ```
-Output should look like this:
-```bash
+
+Output should look like this
+
+```
 05:48:17  Running with dbt=1.0.0
 05:48:17  Found 5 models, 10 tests, 0 snapshots, 0 analyses, 0 macros, 0 operations, 0 seed files, 0 sources, 0 exposures, 0 metrics
 05:48:17
@@ -116,14 +188,12 @@ Output should look like this:
 05:48:26  Done. PASS=10 WARN=0 ERROR=0 SKIP=0 TOTAL=10
 ```
 
-8. Generate documentation for the project:
-```bash
-dbt docs generate
-```
+### Generate documentation
 
-9. View the [documentation](http://127.0.0.1:8080/#!/overview) for the project after running the following command:
-```bash
+```shell
+dbt docs generate
 dbt docs serve
+# then visit http://127.0.0.1:8080/#!/overview
 ```
 
 ---
