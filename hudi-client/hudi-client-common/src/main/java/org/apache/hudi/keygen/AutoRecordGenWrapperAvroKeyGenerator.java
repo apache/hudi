@@ -43,7 +43,7 @@ import java.util.List;
  * PartitionId refers to spark's partition Id.
  * RowId refers to the row index within the spark partition.
  */
-public class AutoRecordGenWrapperAvroKeyGenerator extends BaseKeyGenerator {
+public class AutoRecordGenWrapperAvroKeyGenerator extends BaseKeyGenerator implements AutoRecordKeyGeneratorWrapper {
 
   private final BaseKeyGenerator keyGenerator;
   private Integer partitionId;
@@ -79,6 +79,11 @@ public class AutoRecordGenWrapperAvroKeyGenerator extends BaseKeyGenerator {
 
   public boolean isConsistentLogicalTimestampEnabled() {
     return keyGenerator.isConsistentLogicalTimestampEnabled();
+  }
+
+  @Override
+  public BaseKeyGenerator getPartitionKeyGenerator() {
+    return keyGenerator;
   }
 
   private String generateSequenceId(long recordIndex) {

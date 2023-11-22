@@ -47,16 +47,16 @@ import java.util.List;
  * PartitionId refers to spark's partition Id.
  * RowId refers to the row index within the spark partition.
  */
-public class AutoRecordGenWrapperKeyGenerator extends BuiltinKeyGenerator {
+public class AutoRecordGenWrapperKeyGenerator extends BuiltinKeyGenerator implements AutoRecordKeyGeneratorWrapper {
 
-  private final BuiltinKeyGenerator builtinKeyGenerator;
+  private final BuiltinKeyGenerator keyGenerator;
   private Integer partitionId;
   private String instantTime;
   private int rowId;
 
-  public AutoRecordGenWrapperKeyGenerator(TypedProperties config, BuiltinKeyGenerator builtinKeyGenerator) {
+  public AutoRecordGenWrapperKeyGenerator(TypedProperties config, BuiltinKeyGenerator keyGenerator) {
     super(config);
-    this.builtinKeyGenerator = builtinKeyGenerator;
+    this.keyGenerator = keyGenerator;
     this.rowId = 0;
     partitionId = null;
     instantTime = null;
@@ -69,7 +69,7 @@ public class AutoRecordGenWrapperKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getPartitionPath(GenericRecord record) {
-    return builtinKeyGenerator.getPartitionPath(record);
+    return keyGenerator.getPartitionPath(record);
   }
 
   @Override
@@ -84,25 +84,30 @@ public class AutoRecordGenWrapperKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getPartitionPath(Row row) {
-    return builtinKeyGenerator.getPartitionPath(row);
+    return keyGenerator.getPartitionPath(row);
   }
 
   @Override
   public UTF8String getPartitionPath(InternalRow internalRow, StructType schema) {
-    return builtinKeyGenerator.getPartitionPath(internalRow, schema);
+    return keyGenerator.getPartitionPath(internalRow, schema);
   }
 
   @Override
   public List<String> getRecordKeyFieldNames() {
-    return builtinKeyGenerator.getRecordKeyFieldNames();
+    return keyGenerator.getRecordKeyFieldNames();
   }
 
   public List<String> getPartitionPathFields() {
-    return builtinKeyGenerator.getPartitionPathFields();
+    return keyGenerator.getPartitionPathFields();
   }
 
   public boolean isConsistentLogicalTimestampEnabled() {
-    return builtinKeyGenerator.isConsistentLogicalTimestampEnabled();
+    return keyGenerator.isConsistentLogicalTimestampEnabled();
+  }
+
+  @Override
+  public BuiltinKeyGenerator getPartitionKeyGenerator() {
+    return keyGenerator;
   }
 
   private String generateSequenceId(long recordIndex) {
