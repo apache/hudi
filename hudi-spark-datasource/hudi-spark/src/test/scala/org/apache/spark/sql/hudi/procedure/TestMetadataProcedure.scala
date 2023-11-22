@@ -102,7 +102,7 @@ class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
            |  c2 boolean,
            |  c3 binary,
            |  c4 date,
-           |  c5 decimal,
+           |  c5 decimal(10,1),
            |  c6 double,
            |  c7 float,
            |  c8 long,
@@ -122,12 +122,12 @@ class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(
         s"""
            |insert into table $tableName
-           |values (1, true, CAST('binary data' AS BINARY), CAST('2021-01-01' AS DATE), 10.5, 3.14, 2.5, 1000, 'example string', CAST('2021-01-01 00:00:00' AS TIMESTAMP))
+           |values (1, true, CAST('binary data' AS BINARY), CAST('2021-01-01' AS DATE), CAST(10.5 AS DECIMAL(10,1)), CAST(3.14 AS DOUBLE), CAST(2.5 AS FLOAT), 1000, 'example string', CAST('2021-01-01 00:00:00' AS TIMESTAMP))
            |""".stripMargin)
       spark.sql(
         s"""
            |insert into table $tableName
-           |values (10, false, CAST('binary data' AS BINARY), CAST('2022-02-02' AS DATE), 20.5, 6.28, 3.14, 2000, 'another string', CAST('2022-02-02 00:00:00' AS TIMESTAMP))
+           |values (10, false, CAST('binary data' AS BINARY), CAST('2022-02-02' AS DATE),  CAST(20.5 AS DECIMAL(10,1)), CAST(6.28 AS DOUBLE), CAST(3.14 AS FLOAT), 2000, 'another string', CAST('2022-02-02 00:00:00' AS TIMESTAMP))
            |""".stripMargin)
 
       // Only numerical and string types are compared for clarity on min/max values.
