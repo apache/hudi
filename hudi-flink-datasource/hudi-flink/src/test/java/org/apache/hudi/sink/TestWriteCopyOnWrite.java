@@ -19,6 +19,7 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -73,6 +74,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @AfterEach
   public void after() {
     conf = null;
+    EmbeddedTimelineService.shutdownAllTimelineServers();
   }
 
   /**
@@ -617,6 +619,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testReuseEmbeddedServer() throws IOException {
     conf.setInteger("hoodie.filesystem.view.remote.timeout.secs", 500);
+    conf.setString("hoodie.metadata.enable","true");
     HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf);
     FileSystemViewStorageConfig viewStorageConfig = writeClient.getConfig().getViewStorageConfig();
 

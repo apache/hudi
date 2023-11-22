@@ -33,6 +33,7 @@ import org.apache.hudi.avro.AvroSchemaUtils.{isCompatibleProjectionOf, isSchemaC
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.removeMetadataFields
 import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.client.embedded.EmbeddedTimelineService
 import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
 import org.apache.hudi.commit.{DatasetBulkInsertCommitActionExecutor, DatasetBulkInsertOverwriteCommitActionExecutor, DatasetBulkInsertOverwriteTableCommitActionExecutor}
 import org.apache.hudi.common.config._
@@ -821,6 +822,7 @@ class HoodieSparkSqlWriterInternal {
         log.info("Closing write client")
         writeClient.close()
       }
+      EmbeddedTimelineService.shutdownAllTimelineServers()
     }
   }
 

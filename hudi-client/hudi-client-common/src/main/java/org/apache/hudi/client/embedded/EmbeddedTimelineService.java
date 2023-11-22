@@ -123,6 +123,16 @@ public class EmbeddedTimelineService {
     return service;
   }
 
+  public static void shutdownAllTimelineServers() {
+    RUNNING_SERVICES.entrySet().forEach(entry -> {
+      LOG.info("Closing Timeline server");
+      entry.getValue().server.close();
+      METRICS_REGISTRY.set(NUM_EMBEDDED_TIMELINE_SERVERS, NUM_SERVERS_RUNNING.decrementAndGet());
+      LOG.info("Closed Timeline server");
+    });
+    RUNNING_SERVICES.clear();
+  }
+
   private FileSystemViewManager createViewManager() {
     // Using passed-in configs to build view storage configs
     FileSystemViewStorageConfig.Builder builder =
