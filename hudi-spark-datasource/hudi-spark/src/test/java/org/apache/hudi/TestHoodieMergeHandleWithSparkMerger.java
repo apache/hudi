@@ -40,6 +40,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
@@ -88,6 +89,8 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
     properties.setProperty(
         PAYLOAD_ORDERING_FIELD_PROP_KEY,
         HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName());
+    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(),"partition_path");
+    properties.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(),"partition_path");
     metaClient = getHoodieMetaClient(hadoopConf(), basePath(), HoodieTableType.MERGE_ON_READ, properties);
   }
 
@@ -173,6 +176,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
     extraProperties.setProperty(
         WRITE_RECORD_POSITIONS.key(),
         "true");
+    extraProperties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(),"partition_path");
 
     return getConfigBuilder(true)
         .withPath(basePath())
@@ -249,7 +253,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
         .read()
         .options(properties)
         .format("org.apache.hudi")
-        .load(basePath() + "/" + getPartitionPath());
+        .load(basePath());
     List<Row> result = rows.collectAsList();
     assertEquals(numRecords, result.size());
   }
