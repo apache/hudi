@@ -76,9 +76,9 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
       .build
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
     val schemaUtil = new TableSchemaResolver(metaClient)
-    var schema = AvroConversionUtils.convertAvroSchemaToStructType(schemaUtil.getTableAvroSchema)
+    val schema = AvroConversionUtils.convertAvroSchemaToStructType(schemaUtil.getTableAvroSchema)
     val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
-    val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = columnStatsIndex.loadColumnStatsIndexRecords(targetColumnsSeq, false)
+    val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = columnStatsIndex.loadColumnStatsIndexRecords(targetColumnsSeq, shouldReadInMemory = false)
     val fsView = buildFileSystemView(table)
     val allFileSlices: Set[FileSlice] = {
       if (partitionsSeq.isEmpty) {
@@ -108,7 +108,7 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
     rows.toList
   }
 
-  def getColumnStatsValue(stats_value: Any): String = {
+  private def getColumnStatsValue(stats_value: Any): String = {
     stats_value match {
       case _: IntWrapper |
            _: BooleanWrapper |
