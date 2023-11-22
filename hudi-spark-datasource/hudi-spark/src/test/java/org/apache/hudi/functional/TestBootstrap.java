@@ -92,6 +92,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -201,9 +202,9 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
     String keyGeneratorClass = partitioned ? SimpleKeyGenerator.class.getCanonicalName()
         : NonpartitionedKeyGenerator.class.getCanonicalName();
     if (deltaCommit) {
-      metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ, bootstrapBasePath, true, keyGeneratorClass);
+      metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ, bootstrapBasePath, true, keyGeneratorClass, "partition_path");
     } else {
-      metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE, bootstrapBasePath, true, keyGeneratorClass);
+      metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE, bootstrapBasePath, true, keyGeneratorClass, "partition_path");
     }
 
     int totalRecords = 100;
@@ -240,7 +241,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
             HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS);
         break;
     }
-    List<String> partitions = Arrays.asList("2020/04/01", "2020/04/02", "2020/04/03");
+    List<String> partitions = partitioned ? Arrays.asList("2020/04/01", "2020/04/02", "2020/04/03") : Collections.EMPTY_LIST;
     long timestamp = Instant.now().toEpochMilli();
     Schema schema = generateNewDataSetAndReturnSchema(timestamp, totalRecords, partitions, bootstrapBasePath);
     HoodieWriteConfig config = getConfigBuilder(schema.toString())

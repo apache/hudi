@@ -74,12 +74,20 @@ public class HoodieTestUtils {
   }
 
   public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, boolean bootstrapIndexEnable, String keyGenerator) throws IOException {
+    return init(basePath, tableType, bootstrapBasePath, bootstrapIndexEnable, keyGenerator, "datestr");
+  }
+
+  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, boolean bootstrapIndexEnable, String keyGenerator,
+                                             String partitionFieldConfigValue) throws IOException {
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.BOOTSTRAP_BASE_PATH.key(), bootstrapBasePath);
     props.put(HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE.key(), bootstrapIndexEnable);
     if (keyGenerator != null) {
       props.put("hoodie.datasource.write.keygenerator.class", keyGenerator);
-      props.put("hoodie.datasource.write.partitionpath.field", "datestr");
+    }
+    if (keyGenerator != null && !keyGenerator.equals("org.apache.hudi.keygen.NonpartitionedKeyGenerator")) {
+      props.put("hoodie.datasource.write.partitionpath.field", partitionFieldConfigValue);
+      props.put(HoodieTableConfig.PARTITION_FIELDS.key(), partitionFieldConfigValue);
     }
     return init(getDefaultHadoopConf(), basePath, tableType, props);
   }
