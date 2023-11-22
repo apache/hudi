@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.catalog;
 
+import org.apache.flink.table.catalog.ResolvedCatalogTable;
 import org.apache.hudi.adapter.HiveCatalogConstants.AlterHiveDatabaseOp;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
@@ -510,6 +511,9 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     }
 
     flinkConf.setString(FlinkOptions.TABLE_NAME, tablePath.getObjectName());
+
+    StreamerUtil.checkPreCombineKey(flinkConf, ((ResolvedCatalogTable) catalogTable).getResolvedSchema());
+
     try {
       StreamerUtil.initTableIfNotExists(flinkConf, hiveConf);
     } catch (IOException e) {
