@@ -80,6 +80,8 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
 
   private final Option<SchemaProvider> schemaProvider;
 
+  private final Option<SnapshotLoadQuerySplitter> snapshotLoadQuerySplitter;
+
   public static class Config {
     // control whether we do existence check for files before consuming them
     @Deprecated
@@ -138,6 +140,7 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     this.queryRunner = queryRunner;
     this.cloudDataFetcher = cloudDataFetcher;
     this.schemaProvider = Option.ofNullable(schemaProvider);
+    this.snapshotLoadQuerySplitter = SnapshotLoadQuerySplitter.getInstance(props);
   }
 
   @Override
@@ -158,9 +161,9 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
       LOG.warn("Already caught up. No new data to process");
       return Pair.of(Option.empty(), queryInfo.getEndInstant());
     }
-
-    Dataset<Row> source = queryRunner.run(queryInfo);
-    Dataset<Row> filteredSourceData = applyFilter(source, fileFormat);
+    Pair<QueryInfo, Dataset<Row>> queryInfoDatasetPair = queryRunner.run(queryInfo, snapshotLoadQuerySplitter);
+    queryInfo = queryInfoDatasetPair.getLeft();
+    Dataset<Row> filteredSourceData = applyFilter(queryInfoDatasetPair.getRight(), fileFormat);
 
     LOG.info("Adjusting end checkpoint:" + queryInfo.getEndInstant() + " based on sourceLimit :" + sourceLimit);
     Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> checkPointAndDataset =
