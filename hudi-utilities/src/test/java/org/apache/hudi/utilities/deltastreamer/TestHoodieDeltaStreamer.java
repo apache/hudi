@@ -379,7 +379,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @Test
   public void testPropsWithInvalidKeyGenerator() {
-    Exception e = assertThrows(IllegalArgumentException.class, () -> {
+    Exception e = assertThrows(IOException.class, () -> {
       String tableBasePath = basePath + "/test_table_invalid_key_gen";
       HoodieDeltaStreamer deltaStreamer =
           new HoodieDeltaStreamer(TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT,
@@ -387,8 +387,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       deltaStreamer.sync();
     }, "Should error out when setting the key generator class property to an invalid value");
     // expected
-    LOG.debug("Expected error during getting the key generator", e);
-    assertTrue(e.getMessage().contains("No KeyGeneratorType found for class name"));
+    LOG.warn("Expected error during getting the key generator", e);
+    assertTrue(e.getMessage().contains("Could not load key generator class invalid"));
   }
 
   private static Stream<Arguments> provideInferKeyGenArgs() {
