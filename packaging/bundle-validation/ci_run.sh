@@ -68,22 +68,22 @@ elif [[ ${SPARK_RUNTIME} == 'spark3.2.3' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=3.1.3
   DERBY_VERSION=10.14.1.0
-  FLINK_VERSION=1.14.6
+  FLINK_VERSION=1.15.3
   SPARK_VERSION=3.2.3
   SPARK_HADOOP_VERSION=2.7
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  IMAGE_TAG=flink1146hive313spark323
+  IMAGE_TAG=flink1153hive313spark323
 elif [[ ${SPARK_RUNTIME} == 'spark3.3.1' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=3.1.3
   DERBY_VERSION=10.14.1.0
-  FLINK_VERSION=1.15.3
+  FLINK_VERSION=1.16.2
   SPARK_VERSION=3.3.1
   SPARK_HADOOP_VERSION=2
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  IMAGE_TAG=flink1153hive313spark331
+  IMAGE_TAG=flink1162hive313spark331
 elif [[ ${SPARK_RUNTIME} == 'spark3.3.2' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=3.1.3
@@ -98,12 +98,12 @@ elif [[ ${SPARK_RUNTIME} == 'spark3.4.0' ]]; then
   HADOOP_VERSION=3.3.5
   HIVE_VERSION=3.1.3
   DERBY_VERSION=10.14.1.0
-  FLINK_VERSION=1.17.0
+  FLINK_VERSION=1.18.0
   SPARK_VERSION=3.4.0
   SPARK_HADOOP_VERSION=3
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  IMAGE_TAG=flink1170hive313spark340
+  IMAGE_TAG=flink1180hive313spark340
 elif [[ ${SPARK_RUNTIME} == 'spark3.5.0' ]]; then
   HADOOP_VERSION=3.3.5
   HIVE_VERSION=3.1.3
@@ -154,6 +154,14 @@ else
     HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
   elif [[ ${SPARK_PROFILE} == 'spark3.3' ]]; then
     HUDI_SPARK_BUNDLE_NAME=hudi-spark3.3-bundle_2.12
+    HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.12
+    HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
+  elif [[ ${SPARK_PROFILE} == 'spark3.4' ]]; then
+    HUDI_SPARK_BUNDLE_NAME=hudi-spark3.4-bundle_2.12
+    HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.12
+    HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
+  elif [[ ${SPARK_PROFILE} == 'spark3.5' ]]; then
+    HUDI_SPARK_BUNDLE_NAME=hudi-spark3.5-bundle_2.12
     HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.12
     HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
   elif [[ ${SPARK_PROFILE} == 'spark3' ]]; then
