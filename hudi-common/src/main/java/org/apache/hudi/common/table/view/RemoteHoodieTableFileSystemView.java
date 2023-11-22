@@ -101,6 +101,9 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String ALL_FILEGROUPS_FOR_PARTITION_URL =
       String.format("%s/%s", BASE_URL, "filegroups/all/partition/");
 
+  public static final String ALL_FILEGROUPS_FOR_PARTITION_STATELESS_URL =
+      String.format("%s/%s", BASE_URL, "filegroups/all/partition/stateless");
+
   public static final String ALL_REPLACED_FILEGROUPS_BEFORE_OR_ON =
       String.format("%s/%s", BASE_URL, "filegroups/replaced/beforeoron/");
 
@@ -125,6 +128,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String LOAD_ALL_PARTITIONS_URL = String.format("%s/%s", BASE_URL, "loadallpartitions/");
 
   public static final String PARTITION_PARAM = "partition";
+  public static final String PARTITIONS_PARAM = "partitions";
   public static final String BASEPATH_PARAM = "basepath";
   public static final String INSTANT_PARAM = "instant";
   public static final String MAX_INSTANT_PARAM = "maxinstant";
@@ -209,6 +213,13 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     Map<String, String> paramsMap = new HashMap<>();
     paramsMap.put(BASEPATH_PARAM, basePath);
     paramsMap.put(PARTITION_PARAM, partitionPath);
+    return paramsMap;
+  }
+
+  private Map<String, String> getParamsWithPartitionPaths(List<String> partitionPaths) {
+    Map<String, String> paramsMap = new HashMap<>();
+    paramsMap.put(BASEPATH_PARAM, basePath);
+    paramsMap.put(PARTITIONS_PARAM, StringUtils.join(partitionPaths.toArray(new String[0]), ","));
     return paramsMap;
   }
 
@@ -436,6 +447,23 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }
+  }
+
+  @Override
+  public Stream<HoodieFileGroup> getAllFileGroupsStateless(String partitionPath) {
+    Map<String, String> paramsMap = getParamsWithPartitionPath(partitionPath);
+    try {
+      List<FileGroupDTO> fileGroups = executeRequest(ALL_FILEGROUPS_FOR_PARTITION_STATELESS_URL, paramsMap,
+              new TypeReference<List<FileGroupDTO>>() {}, RequestMethod.GET);
+      return DTOUtils.fileGroupDTOsToFileGroups(fileGroups, metaClient);
+    } catch (IOException e) {
+      throw new HoodieRemoteException(e);
+    }
+  }
+
+  @Override
+  public boolean isPartitionAvailableInStoreForTest(String partitionStr) {
+    throw new UnsupportedOperationException("isPartitionAvailableInStoreForTest() is not supported for RemoteHoodieTableFileSystemView!");
   }
 
   @Override

@@ -18,9 +18,6 @@
 
 package org.apache.hudi.timeline.service.handlers;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.table.timeline.dto.ClusteringOpDTO;
 import org.apache.hudi.common.table.timeline.dto.CompactionOpDTO;
@@ -29,6 +26,9 @@ import org.apache.hudi.common.table.timeline.dto.FileGroupDTO;
 import org.apache.hudi.common.table.timeline.dto.FileSliceDTO;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.timeline.service.TimelineService;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -109,6 +109,12 @@ public class FileSliceHandler extends Handler {
 
   public List<FileGroupDTO> getAllFileGroups(String basePath, String partitionPath) {
     List<HoodieFileGroup> fileGroups =  viewManager.getFileSystemView(basePath).getAllFileGroups(partitionPath)
+        .collect(Collectors.toList());
+    return DTOUtils.fileGroupDTOsfromFileGroups(fileGroups);
+  }
+
+  public List<FileGroupDTO> getAllFileGroupsStateless(String basePath, String partitionPath) {
+    List<HoodieFileGroup> fileGroups =  viewManager.getFileSystemView(basePath).getAllFileGroupsStateless(partitionPath)
         .collect(Collectors.toList());
     return DTOUtils.fileGroupDTOsfromFileGroups(fileGroups);
   }

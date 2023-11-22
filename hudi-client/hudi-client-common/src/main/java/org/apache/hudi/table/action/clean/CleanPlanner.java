@@ -254,7 +254,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     // In other words, the file versions only apply to the active file groups.
     deletePaths.addAll(getReplacedFilesEligibleToClean(savepointedFiles, partitionPath, Option.empty()));
     boolean toDeletePartition = false;
-    List<HoodieFileGroup> fileGroups = fileSystemView.getAllFileGroups(partitionPath).collect(Collectors.toList());
+    List<HoodieFileGroup> fileGroups = fileSystemView.getAllFileGroupsStateless(partitionPath).collect(Collectors.toList());
     for (HoodieFileGroup fileGroup : fileGroups) {
       int keepVersions = config.getCleanerFileVersionsRetained();
       // do not cleanup slice required for pending compaction
@@ -329,7 +329,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       // all replaced file groups before earliestCommitToRetain are eligible to clean
       deletePaths.addAll(getReplacedFilesEligibleToClean(savepointedFiles, partitionPath, earliestCommitToRetain));
       // add active files
-      List<HoodieFileGroup> fileGroups = fileSystemView.getAllFileGroups(partitionPath).collect(Collectors.toList());
+      List<HoodieFileGroup> fileGroups = fileSystemView.getAllFileGroupsStateless(partitionPath).collect(Collectors.toList());
       for (HoodieFileGroup fileGroup : fileGroups) {
         List<FileSlice> fileSliceList = fileGroup.getAllFileSlices().collect(Collectors.toList());
 

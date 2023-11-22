@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 
 import java.util.List;
@@ -167,6 +168,19 @@ public interface TableFileSystemView {
    * Stream all the file groups for a given partition.
    */
   Stream<HoodieFileGroup> getAllFileGroups(String partitionPath);
+
+  /**
+   * Stream all the file groups for a given partition.
+   */
+  Stream<HoodieFileGroup> getAllFileGroupsStateless(String partitionPath);
+
+  /**
+   * Checks if partition is pre-loaded and available in store.
+   *
+   * NOTE: This method could only be used in tests
+   */
+  @VisibleForTesting
+  boolean isPartitionAvailableInStoreForTest(String partitionPath);
 
   /**
    * Return Pending Compaction Operations.

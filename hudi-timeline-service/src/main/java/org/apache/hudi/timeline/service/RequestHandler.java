@@ -421,6 +421,14 @@ public class RequestHandler {
       writeValueAsString(ctx, dtos);
     }, true));
 
+    app.get(RemoteHoodieTableFileSystemView.ALL_FILEGROUPS_FOR_PARTITION_STATELESS_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("ALL_FILEGROUPS_FOR_PARTITION_STATELESS", 1);
+      List<FileGroupDTO> dtos = sliceHandler.getAllFileGroupsStateless(
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""));
+      writeValueAsString(ctx, dtos);
+    }, true));
+
     app.post(RemoteHoodieTableFileSystemView.REFRESH_TABLE, new ViewHandler(ctx -> {
       metricsRegistry.add("REFRESH_TABLE", 1);
       boolean success = sliceHandler

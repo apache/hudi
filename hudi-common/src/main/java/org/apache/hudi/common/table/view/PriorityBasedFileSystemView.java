@@ -223,6 +223,16 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   }
 
   @Override
+  public Stream<HoodieFileGroup> getAllFileGroupsStateless(String partitionPath) {
+    return execute(partitionPath, preferredView::getAllFileGroupsStateless, secondaryView::getAllFileGroupsStateless);
+  }
+
+  @Override
+  public boolean isPartitionAvailableInStoreForTest(String partitionStr) {
+    throw new UnsupportedOperationException("isPartitionAvailableInStoreForTest() is not supported for PriorityBasedFileSystemView!");
+  }
+
+  @Override
   public Stream<HoodieFileGroup> getReplacedFileGroupsBeforeOrOn(String maxCommitTime, String partitionPath) {
     return execute(maxCommitTime, partitionPath, preferredView::getReplacedFileGroupsBeforeOrOn, secondaryView::getReplacedFileGroupsBeforeOrOn);
   }

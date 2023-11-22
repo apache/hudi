@@ -553,6 +553,10 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
     );
   }
 
+  protected boolean isReplacedFileExistWithinSpecifiedPartition(String partitionPath) {
+    throw new UnsupportedOperationException("isReplacedFileExistWithinSpecifiedPartition() is not supported for RocksDbBasedFileSystemView!");
+  }
+
   @Override
   protected Option<HoodieInstant> getReplaceInstant(final HoodieFileGroupId fileGroupId) {
     String lookupKey = schemaHelper.getKeyForReplacedFileGroup(fileGroupId);
