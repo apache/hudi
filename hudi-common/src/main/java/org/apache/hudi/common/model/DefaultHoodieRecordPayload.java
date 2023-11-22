@@ -76,7 +76,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     /*
      * Now check if the incoming record is a delete record.
      */
-    return isDeleteRecord(incomingRecord, properties, schema) ? Option.empty() : Option.of(incomingRecord);
+    return isDeleteRecord(incomingRecord, properties) ? Option.empty() : Option.of(incomingRecord);
   }
 
   @Override
@@ -87,7 +87,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     GenericRecord incomingRecord = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
     eventTime = updateEventTime(incomingRecord, properties);
 
-    return isDeleteRecord(incomingRecord, properties, schema) ? Option.empty() : Option.of(incomingRecord);
+    return isDeleteRecord(incomingRecord, properties) ? Option.empty() : Option.of(incomingRecord);
   }
 
   public boolean isDeleted(Schema schema, Properties props) {
@@ -96,7 +96,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     }
     try {
       GenericRecord incomingRecord = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
-      return isDeleteRecord(incomingRecord, props, schema);
+      return isDeleteRecord(incomingRecord, props);
     } catch (IOException e) {
       throw new HoodieIOException("Deserializing bytes to avro failed ", e);
     }
@@ -105,11 +105,9 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
   /**
    * @param genericRecord instance of {@link GenericRecord} of interest.
    * @param properties payload related properties
-   * @param schema schema of interest.
    * @returns {@code true} if record represents a delete record. {@code false} otherwise.
    */
-  protected boolean isDeleteRecord(GenericRecord genericRecord, Properties properties, Schema schema) {
-    // check for deletion based on custom delete marker.
+  protected boolean isDeleteRecord(GenericRecord genericRecord, Properties properties) {
     final String deleteKey = properties.getProperty(DELETE_KEY);
     if (StringUtils.isNullOrEmpty(deleteKey)) {
       return isDeleteRecord(genericRecord);
