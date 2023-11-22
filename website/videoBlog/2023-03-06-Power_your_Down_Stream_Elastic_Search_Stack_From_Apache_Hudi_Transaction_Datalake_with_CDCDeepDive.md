@@ -4,9 +4,13 @@ last_modified_at: 2023-10-13T16:54:38.964863-07:00
 authors:
 - name: Soumil Shah
 category: blog
-image: /assets/images/hudi-video-page-default.png
+image: /assets/images/video_blogs/2023-03-06-Power_your_Down_Stream_ElasticSearch_Stack_From_Apache_Hudi_Transaction_Datalake_with_CDCDemo_Video.png
 navigate: "https://www.youtube.com/watch?v=rr2V5xhgPeM"
 tags:
-- guide
+- deep dive
+- elastic search
+- cdc
+- incremental-query
+- incremental-etl
 - apache hudi
 ---

@@ -711,6 +711,8 @@ copy table to a new table.
 | end_instance_time                                                 | String | N        | ""            | End instance time                                                                                                                                                                                                                           |
 | as_of_instant                                                     | String | N        | ""            | As of instant time                                                                                                                                                                                                                          |
 | save_mode                                                         | String | N        | "overwrite"   | Save mode                                                                                                                                                                                                                                   |
+| columns                                                           | String | N        | ""            | Columns of source table which should copy to new table                                                                                                                                                                                      |
+
 
 **Output**
 
@@ -847,6 +849,7 @@ Show files of a hudi table.
 |----------------|--------|----------|---------------|-----------------|
 | table          | String | Y        | None          | Hudi table name |
 | partition      | String | N        | ""            | Partition name  |
+| limit          | Int    | N        | 100           | Limit number    |
 
 **Output**
 
@@ -969,6 +972,7 @@ Show detail of a path.
 | path           | String  | Y        | None          | Hudi table name        |
 | is_sub         | Boolean | N        | false         | Whether to list files  |
 | sort           | Boolean | N        | true          | Sorted by storage_size |
+| limit          | Int     | N        | 100           | Limit number           |
 
 **Output**
 
@@ -1130,6 +1134,7 @@ Show invalid parquet files of a table.
 | Parameter Name | Type    | Required | Default Value | Description                          |
 |----------------|---------|----------|---------------|--------------------------------------|
 | Path           | String  | Y        | None          | Hudi table name                      |
+| limit          | Int     | N        | 100           | Limit number                         |
 
 **Output**
 
@@ -1238,8 +1243,8 @@ Trigger clustering on a hoodie table. By using partition predicates, clustering 
 with specified partitions, and you can also specify the order columns to sort data.
 
 :::note
-Newly clustering instant will be generated every call, and all pending clustering instants are executed.
-When calling this procedure, one of parameters ``table`` and ``path`` must be specified at least. If both 
+Newly clustering instant will be generated every call, or some pending clustering instants are executed.
+When calling this procedure, one of parameters ``table`` and ``path`` must be specified at least. If both
 parameters are given, ``table`` will take effect.
 
 :::
@@ -1247,16 +1252,30 @@ parameters are given, ``table`` will take effect.
 
 **Input**
 
-| Parameter Name | Type   | Required | Default Value | Description                   |
-|----------------|--------|----------|---------------|-------------------------------|
-| table          | String | N        | None          | Name of table to be clustered |
-| path           | String | N        | None          | Path of table to be clustered |
-| predicate      | String | N        | None          | Predicate to filter partition |
-| order          | String | N        | None          | Order column split by `,`     |
+| Parameter Name          | Type    | Required | Default Value | Description                                                    |
+|-------------------------|---------|----------|---------------|----------------------------------------------------------------|
+| table                   | String  | N        | None          | Name of table to be clustered                                  |
+| path                    | String  | N        | None          | Path of table to be clustered                                  |
+| predicate               | String  | N        | None          | Predicate to filter partition                                  |
+| order                   | String  | N        | None          | Order column split by `,`                                      |
+| show_involved_partition | Boolean | N        | false         | Show involved partition in the output                          |
+| op                      | String  | N        | None          | Operation type, `EXECUTE` or `SCHEDULE`                        |
+| order_strategy          | String  | N        | None          | Records layout optimization, `linear/z-order/hilbert`          |
+| options                 | String  | N        | None          | Customize hudi configs in the format "key1=value1,key2=value2` |
+| instants                | String  | N        | None          | Specified instants by `,`                                      |
+| selected_partitions     | String  | N        | None          | Partitions to run clustering by `,`                            |
+| limit                   | Int     | N        | None          | Max number of plans to be executed                             |
 
 **Output**
 
-Empty
+The output as follows:
+
+| Parameter Name      | Type   | Required | Default Value | Description                              |
+|---------------------|--------|----------|---------------|------------------------------------------|
+| timestamp           | String | N        | None          | Instant name                             |
+| input_group_size    | Int    | N        | None          | The input group sizes for each plan      |
+| state               | String | N        | None          | The instant final state                  |
+| involved_partitions | String | N        | *             | Show involved partitions, default is `*` |
 
 **Example**
 
@@ -1274,6 +1293,47 @@ Clustering test_hudi_table with table name, predicate and order column
 ```
 call run_clustering(table => 'test_hudi_table', predicate => 'ts <= 20220408L', order => 'ts');
 ```
+
+Clustering test_hudi_table with table name, show_involved_partition
+```
+call run_clustering(table => 'test_hudi_table', show_involved_partition => true);
+```
+
+Clustering test_hudi_table with table name, op
+```
+call run_clustering(table => 'test_hudi_table', op => 'schedule');
+```
+
+Clustering test_hudi_table with table name, order_strategy
+```
+call run_clustering(table => 'test_hudi_table', order_strategy => 'z-order');
+```
+
+Clustering test_hudi_table with table name, op, options
+```
+call run_clustering(table => 'test_hudi_table', op => 'schedule', options => '
+hoodie.clustering.plan.strategy.target.file.max.bytes=1024*1024*1024,
+hoodie.clustering.plan.strategy.max.bytes.per.group=2*1024*1024*1024');
+```
+
+Clustering test_hudi_table with table name, op, instants
+```
+call run_clustering(table => 'test_hudi_table', op => 'execute', instants => 'ts1,ts2');
+```
+
+Clustering test_hudi_table with table name, op, selected_partitions
+```
+call run_clustering(table => 'test_hudi_table', op => 'execute', selected_partitions => 'par1,par2');
+```
+
+Clustering test_hudi_table with table name, op, limit
+```
+call run_clustering(table => 'test_hudi_table', op => 'execute', limit => 10);
+```
+:::note
+Limit parameter is valid only when op is execute.
+
+:::
 
 ### show_clustering
 

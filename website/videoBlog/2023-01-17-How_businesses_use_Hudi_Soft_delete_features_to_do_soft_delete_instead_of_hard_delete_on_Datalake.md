@@ -8,5 +8,7 @@ image: /assets/images/hudi-video-page-default.png
 navigate: "https://youtu.be/E7HlgPHxTtI"
 tags:
 - guide
+- delete
+- soft delete
 - apache hudi
 ---

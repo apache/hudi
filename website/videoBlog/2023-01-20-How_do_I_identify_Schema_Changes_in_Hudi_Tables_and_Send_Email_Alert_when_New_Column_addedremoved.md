@@ -8,5 +8,11 @@ image: /assets/images/hudi-video-page-default.png
 navigate: "https://www.youtube.com/watch?v=_i5G4ojpwlk"
 tags:
 - guide
+- schema changes
+- schema evolution
+- alerting
+- amazon s3
+- aws glue
 - apache hudi
+- amazon athena
 ---

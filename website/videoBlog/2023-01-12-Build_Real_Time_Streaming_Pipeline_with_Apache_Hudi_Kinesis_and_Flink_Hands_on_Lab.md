@@ -8,5 +8,11 @@ image: /assets/images/hudi-video-page-default.png
 navigate: "https://youtu.be/8XS8egfrS_o"
 tags:
 - guide
+- streaming ingestion
+- real-time-datalake
+- merge on read
+- MOR
+- amazon kinesis
+- apache flink
 - apache hudi
 ---

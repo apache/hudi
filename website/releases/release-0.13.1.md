@@ -1,6 +1,6 @@
 ---
 title: "Release 0.13.1"
-sidebar_position: 2
+sidebar_position: 3
 layout: releases
 toc: true
 last_modified_at: 2023-05-25T13:00:00-08:00

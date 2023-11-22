@@ -8,5 +8,10 @@ image: /assets/images/hudi-video-page-default.png
 navigate: "https://www.youtube.com/watch?v=BvoLVeidd-0"
 tags:
 - guide
+- small files
+- incremental-processing
+- pyspark
+- aws glue
+- amazon s3
 - apache hudi
 ---

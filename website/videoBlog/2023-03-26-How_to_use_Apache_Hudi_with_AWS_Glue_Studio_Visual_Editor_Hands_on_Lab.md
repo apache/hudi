@@ -8,5 +8,6 @@ image: /assets/images/hudi-video-page-default.png
 navigate: "https://www.youtube.com/watch?v=q73uNI35Nos"
 tags:
 - guide
+- aws glue
 - apache hudi
 ---

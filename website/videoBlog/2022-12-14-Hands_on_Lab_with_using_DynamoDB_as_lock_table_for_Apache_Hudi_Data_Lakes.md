@@ -8,5 +8,10 @@ image: /assets/images/hudi-video-page-default.png
 navigate: "https://youtu.be/JP0orl9_0yQ"
 tags:
 - guide
+- concurrency control
+- multi-writer
+- amazon dynamodb
+- lock providers
+- external locking
 - apache hudi
 ---

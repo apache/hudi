@@ -667,3 +667,90 @@ corresponding to the library release version is used:
 ```shell
 upgrade table
 ```
+
+### Change Hudi Table Type
+There are cases we want to change the hudi table type. For example, change COW table to MOR for more efficient and 
+lower latency ingestion; change MOR to COW for better read performance and compatibility with downstream engines.
+So we offer the table command to perform this modification conveniently. 
+
+Changing **COW to MOR**, we can simply modify the `hoodie.table.type` in `hoodie.properties` to MERGE_ON_READ.
+
+While changing **MOR to COW**, we must make sure all the log files are compacted before modifying the table type, 
+or it will cause data loss.
+
+```shell
+connect --path <table_path>
+table change-table-type <target_table_type>
+```
+
+The parameter `target_table_type` candidates are below:
+
+| target table type | comment                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+|:------------------|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| MOR               | Change COW table to MERGE_ON_READ.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| COW               | Change MOR table to COPY_ON_WRITE. <br/>By default, changing to COW will **execute all pending compactions** and **perform a full compaction** if any log file left. Set `--enable-compaction=false` will disable the default compaction. <br/>There are params can be set for the compaction operation:<br/>`--parallelism`: Default `3`. Parallelism for hoodie compaction<br/>`--sparkMaster`: Default `local`. Spark Master<br/>`--sparkMemory`: Default `4G`. Spark executor memory<br/>`--retry`: Default `1`. Number of retries<br/>`--propsFilePath`: Default ` `. path to properties file on localfs or dfs with configurations for hoodie client for compacting<br/>`--hoodieConfigs`: Default ` `. Any configuration that can be set in the properties file can be passed here in the form of an array |
+
+
+Example below is changing MOR table to COW:
+```shell
+connect --path /var/dataset/test_table_mor2cow
+desc
+╔════════════════════════════════════════════════╤═════════════════════════════════════════╗
+║ Property                                       │ Value                                   ║
+╠════════════════════════════════════════════════╪═════════════════════════════════════════╣
+║ basePath                                       │ /var/dataset/test_table_mor2cow         ║
+╟────────────────────────────────────────────────┼─────────────────────────────────────────╢
+║ metaPath                                       │ /var/dataset/test_table_mor2cow/.hoodie ║
+╟────────────────────────────────────────────────┼─────────────────────────────────────────╢
+║ fileSystem                                     │ file                                    ║
+╟────────────────────────────────────────────────┼─────────────────────────────────────────╢
+║ hoodie.table.name                              │ test_table                              ║
+╟────────────────────────────────────────────────┼─────────────────────────────────────────╢
+║ hoodie.compaction.record.merger.strategy       │ eeb8d96f-b1e4-49fd-bbf8-28ac514178e5    ║
+╟────────────────────────────────────────────────┼─────────────────────────────────────────╢
+║ hoodie.table.metadata.partitions               │ files                                   ║
+╟────────────────────────────────────────────────┼─────────────────────────────────────────╢
+║ hoodie.table.type                              │ MERGE_ON_READ                           ║
+╟────────────────────────────────────────────────┼─────────────────────────────────────────╢
+║ hoodie.table.metadata.partitions.inflight      │                                         ║
+╟────────────────────────────────────────────────┼─────────────────────────────────────────╢
+║ hoodie.archivelog.folder                       │ archived                                ║
+╟────────────────────────────────────────────────┼─────────────────────────────────────────╢
+║ hoodie.timeline.layout.version                 │ 1                                       ║
+╟────────────────────────────────────────────────┼─────────────────────────────────────────╢
+║ hoodie.table.checksum                          │ 2702201862                              ║
+╟────────────────────────────────────────────────┼─────────────────────────────────────────╢
+║ hoodie.compaction.payload.type                 │ HOODIE_AVRO                             ║
+╟────────────────────────────────────────────────┼─────────────────────────────────────────╢
+║ hoodie.table.version                           │ 6                                       ║
+╟────────────────────────────────────────────────┼─────────────────────────────────────────╢
+║ hoodie.datasource.write.drop.partition.columns │ false                                   ║
+╚════════════════════════════════════════════════╧═════════════════════════════════════════╝
+
+table change-table-type COW
+╔════════════════════════════════════════════════╤══════════════════════════════════════╤══════════════════════════════════════╗
+║ Property                                       │ Old Value                            │ New Value                            ║
+╠════════════════════════════════════════════════╪══════════════════════════════════════╪══════════════════════════════════════╣
+║ hoodie.archivelog.folder                       │ archived                             │ archived                             ║
+╟────────────────────────────────────────────────┼──────────────────────────────────────┼──────────────────────────────────────╢
+║ hoodie.compaction.payload.type                 │ HOODIE_AVRO                          │ HOODIE_AVRO                          ║
+╟────────────────────────────────────────────────┼──────────────────────────────────────┼──────────────────────────────────────╢
+║ hoodie.compaction.record.merger.strategy       │ eeb8d96f-b1e4-49fd-bbf8-28ac514178e5 │ eeb8d96f-b1e4-49fd-bbf8-28ac514178e5 ║
+╟────────────────────────────────────────────────┼──────────────────────────────────────┼──────────────────────────────────────╢
+║ hoodie.datasource.write.drop.partition.columns │ false                                │ false                                ║
+╟────────────────────────────────────────────────┼──────────────────────────────────────┼──────────────────────────────────────╢
+║ hoodie.table.checksum                          │ 2702201862                           │ 2702201862                           ║
+╟────────────────────────────────────────────────┼──────────────────────────────────────┼──────────────────────────────────────╢
+║ hoodie.table.metadata.partitions               │ files                                │ files                                ║
+╟────────────────────────────────────────────────┼──────────────────────────────────────┼──────────────────────────────────────╢
+║ hoodie.table.metadata.partitions.inflight      │                                      │                                      ║
+╟────────────────────────────────────────────────┼──────────────────────────────────────┼──────────────────────────────────────╢
+║ hoodie.table.name                              │ test_table                           │ test_table                           ║
+╟────────────────────────────────────────────────┼──────────────────────────────────────┼──────────────────────────────────────╢
+║ hoodie.table.type                              │ MERGE_ON_READ                        │ COPY_ON_WRITE                        ║
+╟────────────────────────────────────────────────┼──────────────────────────────────────┼──────────────────────────────────────╢
+║ hoodie.table.version                           │ 6                                    │ 6                                    ║
+╟────────────────────────────────────────────────┼──────────────────────────────────────┼──────────────────────────────────────╢
+║ hoodie.timeline.layout.version                 │ 1                                    │ 1                                    ║
+╚════════════════════════════════════════════════╧══════════════════════════════════════╧══════════════════════════════════════╝
+```

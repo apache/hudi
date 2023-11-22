@@ -8,5 +8,12 @@ image: /assets/images/hudi-video-page-default.png
 navigate: "https://www.youtube.com/watch?v=yfZx1P9ovxA"
 tags:
 - guide
+- streaming ingestion
+- near real-time analytics
+- mongodb atlas
+- merge on read
+- MOR
+- amazon kinesis
+- event bus
 - apache hudi
 ---

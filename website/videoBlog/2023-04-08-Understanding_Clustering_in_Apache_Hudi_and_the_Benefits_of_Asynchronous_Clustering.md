@@ -8,5 +8,9 @@ image: /assets/images/hudi-video-page-default.png
 navigate: "https://www.youtube.com/watch?v=R_sm4wlGXuE"
 tags:
 - guide
+- clustering
+- asynchronous clustering
+- file sizing
+- sorting
 - apache hudi
 ---

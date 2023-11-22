@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[61045],{15211:s=>{s.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/dyanmodb","name":"dyanmodb","count":1,"permalink":"/cn/videos/tags/dyanmodb"}')}}]);

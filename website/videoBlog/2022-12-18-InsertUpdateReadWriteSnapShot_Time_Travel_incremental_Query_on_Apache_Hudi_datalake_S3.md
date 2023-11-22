@@ -8,5 +8,14 @@ image: /assets/images/hudi-video-page-default.png
 navigate: "https://youtu.be/hK1G7CPBL2M"
 tags:
 - guide
+- write operations
+- insert
+- update
+- delete
+- snapshot-query
+- time-travel
+- incremental-query
+- clustering
+- compaction
 - apache hudi
 ---

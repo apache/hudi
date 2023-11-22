@@ -2,11 +2,116 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/videos</id>
     <title>Apache Hudi Blog</title>
-    <updated>2023-08-09T00:00:00.000Z</updated>
+    <updated>2023-11-08T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/videos"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[A Glide, Skip or a Jump: Efficiently Stream Data into Your Medallion Architecture with Apache Hudi]]></title>
+        <id>/2023/11/08/A-Glide-Skip-or-a-Jump-Efficiently-Stream-Data-into-Your-Medallion-Architecture-with-Apache-Hudi</id>
+        <link href="https://hudi.apache.org/videos/2023/11/08/A-Glide-Skip-or-a-Jump-Efficiently-Stream-Data-into-Your-Medallion-Architecture-with-Apache-Hudi"/>
+        <updated>2023-11-08T00:00:00.000Z</updated>
+        <author>
+            <name>nadine farah</name>
+        </author>
+        <author>
+            <name>ethan guo</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[How to Unlock Data Insights from Hudi Metrics for Your Data Lake using Elastic Search and Kibana]]></title>
+        <id>/2023/10/28/How-to-Unlock-Data-Insights-from-Hudi-Metrics-for-Your-Data-Lake-using-Elastic-Search-and-Kibana</id>
+        <link href="https://hudi.apache.org/videos/2023/10/28/How-to-Unlock-Data-Insights-from-Hudi-Metrics-for-Your-Data-Lake-using-Elastic-Search-and-Kibana"/>
+        <updated>2023-10-28T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Full Apache Hudi Course for beginners | Operations Type | Part 5]]></title>
+        <id>/2023/10/21/Full-Apache-Hudi-Course-for-beginner-Operations-Type-Part-5</id>
+        <link href="https://hudi.apache.org/videos/2023/10/21/Full-Apache-Hudi-Course-for-beginner-Operations-Type-Part-5"/>
+        <updated>2023-10-21T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[[LIVE] Hudi 0.14.0 Deep Dive: Record Level Index]]></title>
+        <id>/2023/10/16/Hudi-0-14-0-Deep-Dive-Record-Level-Index</id>
+        <link href="https://hudi.apache.org/videos/2023/10/16/Hudi-0-14-0-Deep-Dive-Record-Level-Index"/>
+        <updated>2023-10-16T00:00:00.000Z</updated>
+        <author>
+            <name>prashant wason</name>
+        </author>
+        <author>
+            <name>nadine farah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Accelerating Data Processing: Leveraging Apache Hudi with DynamoDB for Faster Commit Time Retrieval]]></title>
+        <id>/2023/10/14/Accelerating-Data-Processing-Leveraging-Apache-Hudi-with-DynamoDB-for-Faster-Commit-Time-Retrieval</id>
+        <link href="https://hudi.apache.org/videos/2023/10/14/Accelerating-Data-Processing-Leveraging-Apache-Hudi-with-DynamoDB-for-Faster-Commit-Time-Retrieval"/>
+        <updated>2023-10-14T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Hudi's Latest Feature: Auto-Generating Primary Keys for Modern Data Lakes]]></title>
+        <id>/2023/10/07/Hudi-Latest-Feature-Auto-Generating-Primary-Keys-for-Modern-Data-Lakes</id>
+        <link href="https://hudi.apache.org/videos/2023/10/07/Hudi-Latest-Feature-Auto-Generating-Primary-Keys-for-Modern-Data-Lakes"/>
+        <updated>2023-10-07T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Learn How to Use Apache Flink with Kafka & Build Transactional Datalakes on S3 using PyFLink Locally]]></title>
+        <id>/2023/09/27/Learn-How-to-Use-Apache-Flink-with-Kafka-Build-Transactional-Datalakes-on-S3-using-PyFLink-Locally</id>
+        <link href="https://hudi.apache.org/videos/2023/09/27/Learn-How-to-Use-Apache-Flink-with-Kafka-Build-Transactional-Datalakes-on-S3-using-PyFLink-Locally"/>
+        <updated>2023-09-27T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[How to Ingest Data from PostgreSQL into Hudi Tables on S3 with Apache Flink CDC Connector & Python]]></title>
+        <id>/2023/09/26/How-to-Ingest-Data-from-PostgreSQL-into-Hudi-Tables-on-S3-with-Apache-Flink-CDC-Connector-Python</id>
+        <link href="https://hudi.apache.org/videos/2023/09/26/How-to-Ingest-Data-from-PostgreSQL-into-Hudi-Tables-on-S3-with-Apache-Flink-CDC-Connector-Python"/>
+        <updated>2023-09-26T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[How to Use Apache Hudi with Flink 1.15 on AWS Managed Apache Flink | Hands on Guide for Beginners]]></title>
+        <id>/2023/09/25/How-to-Use-Apache-Hudi-with-Flink-1-15-on-AWS-Managed-Apache-Flink-Hands-on-Guide-for-Beginners</id>
+        <link href="https://hudi.apache.org/videos/2023/09/25/How-to-Use-Apache-Hudi-with-Flink-1-15-on-AWS-Managed-Apache-Flink-Hands-on-Guide-for-Beginners"/>
+        <updated>2023-09-25T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Flink (CDC) with POSTGRES RealTime Stream Data Processing with Python Hands on Labs]]></title>
+        <id>/2023/09/23/Flink-with-POSTGRES-RealTime-Stream-Data-Processing-with-Python-Hands-on-Labs</id>
+        <link href="https://hudi.apache.org/videos/2023/09/23/Flink-with-POSTGRES-RealTime-Stream-Data-Processing-with-Python-Hands-on-Labs"/>
+        <updated>2023-09-23T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[From Zero to Data Hero: Building Dynamic Data Platforms Like a Pro 🚀📊 Final Part Demo]]></title>
+        <id>/2023/08/29/From-Zero-to-Data-Hero-Building-Dynamic-Data-Platforms-Like-a-Pro-Final-Part-Demo</id>
+        <link href="https://hudi.apache.org/videos/2023/08/29/From-Zero-to-Data-Hero-Building-Dynamic-Data-Platforms-Like-a-Pro-Final-Part-Demo"/>
+        <updated>2023-08-29T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Easy Step by Step Guide for Beginner Ingest CSV Files into Hudi with AWS GLue | Hands on Labs]]></title>
         <id>/2023/08/09/Easy_Step_by_Step_Guide_for_Beginner_Ingest_CSV_Files_into_Hudi_with_AWS_GLue_Hands_on_Labs</id>
@@ -350,15 +455,6 @@
         </author>
     </entry>
     <entry>
-        <title type="html"><![CDATA[Podcast: Unleashing the Power of Data: The Epic Story Behind Apache Hudi's Creation by Uber]]></title>
-        <id>/2023/04/11/Podcast_Unleashing_the_Power_of_Data_The_Epic_Story_Behind_Apache_Hudi_s_Creation_by_Uber</id>
-        <link href="https://hudi.apache.org/videos/2023/04/11/Podcast_Unleashing_the_Power_of_Data_The_Epic_Story_Behind_Apache_Hudi_s_Creation_by_Uber"/>
-        <updated>2023-04-11T00:00:00.000Z</updated>
-        <author>
-            <name>Soumil Shah</name>
-        </author>
-    </entry>
-    <entry>
         <title type="html"><![CDATA[Bootstrapping in Apache Hudi on EMR Serverless with Lab]]></title>
         <id>/2023/04/09/Bootstrapping_in_Apache_Hudi_on_EMR_Serverless_with_Lab</id>
         <link href="https://hudi.apache.org/videos/2023/04/09/Bootstrapping_in_Apache_Hudi_on_EMR_Serverless_with_Lab"/>
@@ -435,15 +531,6 @@
         <id>/2023/03/31/Project_Using_Apache_Hudi_Deltastreamer_and_AWS_DMS_Hands_on_Lab_Part_5</id>
         <link href="https://hudi.apache.org/videos/2023/03/31/Project_Using_Apache_Hudi_Deltastreamer_and_AWS_DMS_Hands_on_Lab_Part_5"/>
         <updated>2023-03-31T00:00:00.000Z</updated>
-        <author>
-            <name>Soumil Shah</name>
-        </author>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Podcast Uber's Game-Changing Data Management with Apache Hudi Delta Streamer]]></title>
-        <id>/2023/03/30/Podcast_Uber_s_GameChanging_Data_Management_with_Apache_Hudi_Delta_Streamer</id>
-        <link href="https://hudi.apache.org/videos/2023/03/30/Podcast_Uber_s_GameChanging_Data_Management_with_Apache_Hudi_Delta_Streamer"/>
-        <updated>2023-03-30T00:00:00.000Z</updated>
         <author>
             <name>Soumil Shah</name>
         </author>
@@ -533,78 +620,6 @@
         <title type="html"><![CDATA[Build CDC Pipeline from Microsoft SQL Server into Apache Hudi with AWS DMS | PART 5]]></title>
         <id>/2023/03/25/Build_CDC_Pipeline_from_Microsoft_SQL_Server_into_Apache_Hudi_with_AWS_DMS_PART_5</id>
         <link href="https://hudi.apache.org/videos/2023/03/25/Build_CDC_Pipeline_from_Microsoft_SQL_Server_into_Apache_Hudi_with_AWS_DMS_PART_5"/>
-        <updated>2023-03-25T00:00:00.000Z</updated>
-        <author>
-            <name>Soumil Shah</name>
-        </author>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Podcast 1: What is Apache Hudi]]></title>
-        <id>/2023/03/25/Podcast_1_What_is_Apache_Hudi</id>
-        <link href="https://hudi.apache.org/videos/2023/03/25/Podcast_1_What_is_Apache_Hudi"/>
-        <updated>2023-03-25T00:00:00.000Z</updated>
-        <author>
-            <name>Soumil Shah</name>
-        </author>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Podcast 2: Why Lake house architecture is being adopted by businesses, and how hudi can assist you]]></title>
-        <id>/2023/03/25/Podcast_2_Why_Lake_house_architecture_is_being_adopted_by_businesses_and_how_hudi_can_assist_you</id>
-        <link href="https://hudi.apache.org/videos/2023/03/25/Podcast_2_Why_Lake_house_architecture_is_being_adopted_by_businesses_and_how_hudi_can_assist_you"/>
-        <updated>2023-03-25T00:00:00.000Z</updated>
-        <author>
-            <name>Soumil Shah</name>
-        </author>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Podcast 3 : Benefits of Using a Transactional Data Lake and How Apache Hudi Can Help]]></title>
-        <id>/2023/03/25/Podcast_3_Benefits_of_Using_a_Transactional_Data_Lake_and_How_Apache_Hudi_Can_Help</id>
-        <link href="https://hudi.apache.org/videos/2023/03/25/Podcast_3_Benefits_of_Using_a_Transactional_Data_Lake_and_How_Apache_Hudi_Can_Help"/>
-        <updated>2023-03-25T00:00:00.000Z</updated>
-        <author>
-            <name>Soumil Shah</name>
-        </author>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Podcast: Exploring Copy on Write Table Type in Apache Hudi: Benefits and Use Cases]]></title>
-        <id>/2023/03/25/Podcast_Exploring_Copy_on_Write_Table_Type_in_Apache_Hudi_Benefits_and_Use_Cases</id>
-        <link href="https://hudi.apache.org/videos/2023/03/25/Podcast_Exploring_Copy_on_Write_Table_Type_in_Apache_Hudi_Benefits_and_Use_Cases"/>
-        <updated>2023-03-25T00:00:00.000Z</updated>
-        <author>
-            <name>Soumil Shah</name>
-        </author>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Podcast: Importance of Data Governance and Apache Hudi in Managing a Data Lake: The Case of Grofers]]></title>
-        <id>/2023/03/25/Podcast_Importance_of_Data_Governance_and_Apache_Hudi_in_Managing_a_Data_Lake_The_Case_of_Grofers</id>
-        <link href="https://hudi.apache.org/videos/2023/03/25/Podcast_Importance_of_Data_Governance_and_Apache_Hudi_in_Managing_a_Data_Lake_The_Case_of_Grofers"/>
-        <updated>2023-03-25T00:00:00.000Z</updated>
-        <author>
-            <name>Soumil Shah</name>
-        </author>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Podcast: Maximizing Data Management Efficiency with Apache Hudi's Clustering Feature]]></title>
-        <id>/2023/03/25/Podcast_Maximizing_Data_Management_Efficiency_with_Apache_Hudi_s_Clustering_Feature</id>
-        <link href="https://hudi.apache.org/videos/2023/03/25/Podcast_Maximizing_Data_Management_Efficiency_with_Apache_Hudi_s_Clustering_Feature"/>
-        <updated>2023-03-25T00:00:00.000Z</updated>
-        <author>
-            <name>Soumil Shah</name>
-        </author>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Podcast: Maximizing Efficiency with Merge on Read Table Type in Apache Hudi: Benefits and Use Cases]]></title>
-        <id>/2023/03/25/Podcast_Maximizing_Efficiency_with_Merge_on_Read_Table_Type_in_Apache_Hudi_Benefits_and_Use_Cases</id>
-        <link href="https://hudi.apache.org/videos/2023/03/25/Podcast_Maximizing_Efficiency_with_Merge_on_Read_Table_Type_in_Apache_Hudi_Benefits_and_Use_Cases"/>
-        <updated>2023-03-25T00:00:00.000Z</updated>
-        <author>
-            <name>Soumil Shah</name>
-        </author>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[Podcast: Optimizing Data Lake Performance with Apache Hudi Compaction: Strategies and Benefits]]></title>
-        <id>/2023/03/25/Podcast_Optimizing_Data_Lake_Performance_with_Apache_Hudi_Compaction_Strategies_and_Benefits</id>
-        <link href="https://hudi.apache.org/videos/2023/03/25/Podcast_Optimizing_Data_Lake_Performance_with_Apache_Hudi_Compaction_Strategies_and_Benefits"/>
         <updated>2023-03-25T00:00:00.000Z</updated>
         <author>
             <name>Soumil Shah</name>

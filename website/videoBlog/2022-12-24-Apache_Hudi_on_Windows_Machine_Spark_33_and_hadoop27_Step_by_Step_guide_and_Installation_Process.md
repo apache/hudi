@@ -8,5 +8,9 @@ image: /assets/images/hudi-video-page-default.png
 navigate: "https://youtu.be/0Quqj3DLC2w"
 tags:
 - guide
+- pyspark
+- windows 10
+- apache spark
 - apache hudi
+- beginner
 ---

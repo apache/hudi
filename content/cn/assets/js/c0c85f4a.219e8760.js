@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[67599],{6503:a=>{a.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/acid-guarantees","name":"ACID guarantees","count":1,"permalink":"/cn/blog/tags/acid-guarantees"}')}}]);

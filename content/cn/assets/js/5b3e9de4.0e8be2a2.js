@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[38809],{62272:s=>{s.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/pyflink","name":"pyflink","count":1,"permalink":"/cn/videos/tags/pyflink"}')}}]);

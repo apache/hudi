@@ -8,5 +8,10 @@ image: /assets/images/hudi-video-page-default.png
 navigate: "https://www.youtube.com/watch?v=1us5YD2lDZw"
 tags:
 - guide
+- data quality
+- validation
+- pydeequ
+- python
+- aws glue
 - apache hudi
 ---

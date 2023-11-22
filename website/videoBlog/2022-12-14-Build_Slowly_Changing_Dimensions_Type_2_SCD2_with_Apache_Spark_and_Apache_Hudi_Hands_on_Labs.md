@@ -8,5 +8,8 @@ image: /assets/images/hudi-video-page-default.png
 navigate: "https://youtu.be/V2LqEvEeU_8"
 tags:
 - guide
+- scd2
+- Slowly Changing Dimensions Type 2
+- apache spark
 - apache hudi
 ---
