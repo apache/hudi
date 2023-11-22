@@ -267,7 +267,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
 
     val readOpts = queryOpts ++ Map(
       HoodieMetadataConfig.ENABLE.key -> useMetadataTable.toString,
-      DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key -> listingModeOverride,
+      DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key -> listingModeOverride
     )
 
     metaClient = HoodieTableMetaClient.reload(metaClient)
