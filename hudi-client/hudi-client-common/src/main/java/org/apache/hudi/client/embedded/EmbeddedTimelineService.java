@@ -98,12 +98,10 @@ public class EmbeddedTimelineService {
     // if reuse is enabled, check if any existing instances are compatible
     if (writeConfig.isEmbeddedTimelineServerReuseEnabled()) {
       synchronized (SERVICE_LOCK) {
-        for (Map.Entry<TimelineServiceIdentifier, EmbeddedTimelineService> entry: RUNNING_SERVICES.entrySet()) {
-          if (entry.getKey().equals(timelineServiceIdentifier)) {
-            entry.getValue().addBasePath(writeConfig.getBasePath());
-            LOG.info("Reusing existing embedded timeline server with configuration: " + entry.getValue().serviceConfig);
-            return entry.getValue();
-          }
+        if (RUNNING_SERVICES.containsKey(timelineServiceIdentifier)) {
+          RUNNING_SERVICES.get(timelineServiceIdentifier).addBasePath(writeConfig.getBasePath());
+          LOG.info("Reusing existing embedded timeline server with configuration: " + RUNNING_SERVICES.get(timelineServiceIdentifier).serviceConfig);
+          return RUNNING_SERVICES.get(timelineServiceIdentifier);
         }
         // if no compatible instance is found, create a new one
         EmbeddedTimelineService service = createAndStartService(context, embeddedTimelineServiceHostAddr, writeConfig,
@@ -282,8 +280,12 @@ public class EmbeddedTimelineService {
         return false;
       }
       TimelineServiceIdentifier that = (TimelineServiceIdentifier) o;
-      return isMetadataEnabled == that.isMetadataEnabled && isEarlyConflictDetectionEnable == that.isEarlyConflictDetectionEnable
-          && isTimelineServerBasedInstantStateEnabled == that.isTimelineServerBasedInstantStateEnabled && hostAddr.equals(that.hostAddr) && markerType == that.markerType;
+      if (this.hostAddr != null && that.hostAddr != null) {
+        return isMetadataEnabled == that.isMetadataEnabled && isEarlyConflictDetectionEnable == that.isEarlyConflictDetectionEnable
+            && isTimelineServerBasedInstantStateEnabled == that.isTimelineServerBasedInstantStateEnabled && hostAddr.equals(that.hostAddr) && markerType == that.markerType;
+      } else {
+        return (hostAddr == null && that.hostAddr == null);
+      }
     }
 
     @Override
