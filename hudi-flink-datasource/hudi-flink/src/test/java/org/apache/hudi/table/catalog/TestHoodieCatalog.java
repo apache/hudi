@@ -251,6 +251,25 @@ public class TestHoodieCatalog {
   }
 
   @Test
+  public void testCreateTableSpecifyRecordKeyField() {
+    String catalogStr = "CREATE CATALOG hudi_catalog WITH(\n" +
+            "    'type' = 'hudi',\n" +
+            "    'catalog.path' = '" + catalogPathStr + "',\n" +
+            "    'mode' = 'dfs'\n" +
+            ")";
+    String ddlStr = "CREATE TABLE IF NOT EXISTS hudi_catalog." + DEFAULT_DATABASE + ".ct1\n" +
+            "(\n" +
+            "    f1 string,\n" +
+            "    dt string\n" +
+            ") WITH (\n" +
+            "    'connector' = 'hudi',\n" +
+            "    'hoodie.datasource.write.recordkey.field' = 'dt'\n" +
+            ")";
+    streamTableEnv.executeSql(catalogStr);
+    streamTableEnv.executeSql(ddlStr);
+  }
+
+  @Test
   void testCreateTableWithoutPreCombineKey() {
     Map<String, String> options = getDefaultCatalogOption();
     options.put(FlinkOptions.PAYLOAD_CLASS_NAME.key(), DefaultHoodieRecordPayload.class.getName());

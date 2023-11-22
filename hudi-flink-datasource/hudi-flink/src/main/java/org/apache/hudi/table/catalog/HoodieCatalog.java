@@ -88,6 +88,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.util.Preconditions.checkArgument;
+import static org.apache.hudi.configuration.FlinkOptions.RECORD_KEY_FIELD;
 import static org.apache.hudi.table.catalog.CatalogOptions.CATALOG_PATH;
 import static org.apache.hudi.table.catalog.CatalogOptions.DEFAULT_DATABASE;
 
@@ -311,7 +312,7 @@ public class HoodieCatalog extends AbstractCatalog {
     Configuration conf = Configuration.fromMap(options);
     conf.setString(FlinkOptions.PATH, tablePathStr);
     ResolvedSchema resolvedSchema = resolvedTable.getResolvedSchema();
-    if (!resolvedSchema.getPrimaryKey().isPresent()) {
+    if (!resolvedSchema.getPrimaryKey().isPresent() && !conf.contains(RECORD_KEY_FIELD)) {
       throw new CatalogException("Primary key definition is missing");
     }
     final String avroSchema = AvroSchemaConverter.convertToSchema(
@@ -326,7 +327,7 @@ public class HoodieCatalog extends AbstractCatalog {
     // when calling #getTable.
 
     final String pkColumns = String.join(",", resolvedSchema.getPrimaryKey().get().getColumns());
-    conf.setString(FlinkOptions.RECORD_KEY_FIELD, pkColumns);
+    conf.setString(RECORD_KEY_FIELD, pkColumns);
     options.put(TableOptionProperties.PK_CONSTRAINT_NAME, resolvedSchema.getPrimaryKey().get().getName());
     options.put(TableOptionProperties.PK_COLUMNS, pkColumns);
 
