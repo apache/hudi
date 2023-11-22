@@ -214,6 +214,77 @@ class TestSavepointsProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
+  test("Test Call delete_savepoint Procedure with batch mode") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath + "/" + tableName
+      // create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      // insert data to table
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
+      spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
+      spark.sql(s"insert into $tableName select 4, 'a4', 40, 2500")
+
+      val commits = spark.sql(s"""call show_commits(table => '$tableName')""").collect()
+      assertResult(4) {
+        commits.length
+      }
+
+      // create 4 savepoints
+      commits.foreach(r => {
+        checkAnswer(s"""call create_savepoint('$tableName', '${r.getString(0)}')""")(Seq(true))
+      })
+
+      // Delete 2 savepoint with table name and instant time
+      val toDeleteInstant = s"${commits.apply(1).getString(0)},${commits.apply(0).getString(0)}"
+      checkAnswer(s"""call delete_savepoint('$tableName', '${toDeleteInstant}')""")(Seq(true))
+
+      // show_savepoints should return two savepoint
+      var savepoints = spark.sql(s"""call show_savepoints(table => '$tableName')""").collect()
+      assertResult(2) {
+        savepoints.length
+      }
+
+      assertResult(commits(2).getString(0))(savepoints(0).getString(0))
+      assertResult(commits(3).getString(0))(savepoints(1).getString(0))
+
+      // Delete a savepoint with table name and latest savepoint time
+      checkAnswer(s"""call delete_savepoint('$tableName', '')""")(Seq(true))
+
+      // show_savepoints should return one savepoint
+      savepoints = spark.sql(s"""call show_savepoints(table => '$tableName')""").collect()
+      assertResult(1) {
+        savepoints.length
+      }
+
+      assertResult(commits(3).getString(0))(savepoints(0).getString(0))
+
+      // Delete a savepoint with table base path and latest savepoint time
+      checkAnswer(s"""call delete_savepoint(path => '$tablePath')""".stripMargin)(Seq(true))
+
+      // show_savepoints should return zero savepoint
+      savepoints = spark.sql(s"""call show_savepoints(table => '$tableName')""").collect()
+      assertResult(0) {
+        savepoints.length
+      }
+    }
+  }
+
   test("Test Call rollback_to_savepoint Procedure") {
     withTempDir { tmp =>
       val tableName = generateTableName
