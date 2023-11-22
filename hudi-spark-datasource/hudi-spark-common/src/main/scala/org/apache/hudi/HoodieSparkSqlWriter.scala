@@ -822,7 +822,6 @@ class HoodieSparkSqlWriterInternal {
         log.info("Closing write client")
         writeClient.close()
       }
-      EmbeddedTimelineService.shutdownAllTimelineServers()
     }
   }
 

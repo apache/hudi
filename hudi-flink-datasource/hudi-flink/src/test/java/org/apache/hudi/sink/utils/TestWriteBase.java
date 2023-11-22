@@ -522,6 +522,7 @@ public class TestWriteBase {
 
     public void end() throws Exception {
       this.pipeline.close();
+      this.pipeline = null;
     }
 
     private String lastPendingInstant() {
