@@ -7,6 +7,11 @@
 
 .blogPostTitle {
   font-size: 1rem;
+  color: #0db1f9;
+}
+
+.blogPostTitle:hover, .videoImage {
+  cursor: pointer;
 }
 
 .blogPostPageTitle {

@@ -235,7 +235,7 @@ Spark SQL needs an explicit create table command.
   considered a managed table. You can read more about external vs managed
   tables [here](https://sparkbyexamples.com/apache-hive/difference-between-hive-internal-tables-and-external-tables/).
 
-*Read more in the [table management](/docs/table_management) guide.*
+*Read more in the [table management](/docs/0.11.0/table_management) guide.*
 
 :::note
 1. Since Hudi 0.10.0, `primaryKey` is required. It aligns with Hudi DataSource writer’s and resolves behavioural

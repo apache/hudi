@@ -47,6 +47,12 @@ module.exports = {
     },
   },
   plugins: [
+    ['@docusaurus/plugin-content-blog', {
+      id: 'video-blog',
+      path: 'videoBlog',
+      routeBasePath: 'videos',
+      blogSidebarCount: 0,
+    }],
     [
       '@docusaurus/plugin-content-docs',
       {
@@ -112,11 +118,11 @@ module.exports = {
           },
           {
             from: ['/docs/releases', '/docs/next/releases'],
-            to: '/releases/release-0.13.1',
+            to: '/releases/release-0.14.0',
           },
           {
             from: ['/releases'],
-            to: '/releases/release-0.13.1',
+            to: '/releases/release-0.14.0',
           },
         ],
       },
@@ -158,6 +164,10 @@ module.exports = {
             {
               label: 'Tech Specs',
               href: '/tech-specs',
+            },
+            {
+              label: 'Tech Specs 1.0',
+              href: '/tech-specs-1point0',
             },
             {
               label: 'Technical Wiki',
@@ -259,6 +269,12 @@ module.exports = {
           className: 'header-youtube-link',
           'aria-label': 'Hudi YouTube Channel',
         },
+        {
+          href: 'https://www.linkedin.com/company/apache-hudi/?viewAsMember=true',
+          position: 'right',
+          className: 'header-linkedin-link',
+          'aria-label': 'Hudi Linkedin Page',
+        },
       ],
     },
     footer: {
@@ -281,7 +297,7 @@ module.exports = {
             },
             {
               label: 'Releases',
-              to: '/releases/release-0.13.1',
+              to: '/releases/release-0.14.0',
             },
             {
               label: 'Download',
@@ -379,6 +395,10 @@ module.exports = {
               href:  'https://www.youtube.com/channel/UCs7AhE0BWaEPZSChrBR-Muw',
             },
             {
+              label: 'Linkedin',
+              href: 'https://www.linkedin.com/company/apache-hudi/?viewAsMember=true',
+            },
+            {
               label: 'Mailing List',
               to: 'mailto:dev-subscribe@hudi.apache.org?Subject=SubscribeToHudi',
             },
@@ -436,6 +456,20 @@ module.exports = {
       defaultMode: 'light',
       disableSwitch: true,
     },
+    blog: {
+      path: 'blog', // Path to the existing blog folder
+      routeBasePath: 'blog', // Route for the existing blog
+      include: ['*.md', '*.mdx'], // File types to include for the existing blog
+
+      // Add the new blog for videos
+      videoBlog: {
+        path: 'video-blog', // Path to the video blog folder
+        routeBasePath: 'videos', // Route for the video blog
+        include: ['*.md', '*.mdx'], // File types to include for the video blog
+        videoBlogRoute: '/videos'
+        // Add any other specific settings for the video blog
+      },
+    },
   },
   presets: [
     [
@@ -458,8 +492,8 @@ module.exports = {
               path: 'next',
               banner: 'unreleased',
             },
-            '0.13.1': {
-              label: '0.13.1',
+            '0.14.0': {
+              label: '0.14.0',
               path: '',
             }
           },

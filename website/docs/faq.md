@@ -120,13 +120,37 @@ Hudi provides snapshot isolation between all three types of processes - writers,
 
 ### Hudi’s commits are based on transaction start time instead of completed time. Does this cause data loss or inconsistency in case of incremental and time travel queries?
 
-Let’s take a closer look at the scenario here: two commits C1 and C2 (with C2 starting later than C1) start with a later commit (C2)  finishing first leaving the inflight transaction of the earlier commit (C1) before the completed write of the later transaction (C2) in Hudi’s timeline. This is not an uncommon scenario, especially with various ingestions needs such as backfilling, deleting, bootstrapping, etc alongside regular writes. When/Whether the first job would commit will depend on factors such as conflicts between concurrent commits, inflight compactions, other actions on the table’s timeline etc. If the first job fails for some reason, Hudi will abort the earlier commit inflight (c1) and the writer has to retry next time with a new instant time > c2 much similar to other OCC implementations. Firstly, for snapshot queries the order of commits should not matter at all, since any incomplete writes on the active timeline is ignored by queries and cause no side-effects.
+Let’s take a closer look at the scenario here: two commits C1 and C2 (with C2 starting later than C1) start with a later commit (C2) finishing first leaving the inflight transaction of the earlier commit (C1) 
+before the completed write of the later transaction (C2) in Hudi’s timeline. This is not an uncommon scenario, especially with various ingestions needs such as backfilling, deleting, bootstrapping, etc 
+alongside regular writes. When/Whether the first job would commit will depend on factors such as conflicts between concurrent commits, inflight compactions, other actions on the table’s timeline etc. 
+If the first job fails for some reason, Hudi will abort the earlier commit inflight (c1) and the writer has to retry next time with a new instant time > c2 much similar to other OCC implementations. 
+Firstly, for snapshot queries the order of commits should not matter at all, since any incomplete writes on the active timeline is ignored by queries and cause no side-effects.
 
-In these scenarios, it might be tempting to think of data inconsistencies/data loss when using Hudi’s incremental queries. However, Hudi takes special handling in incremental queries to ensure that no data is served beyond the point Hudi sees an inflight instant in its timeline, so no data loss or drop happens. In this case, on seeing C1’s inflight commit (publish to timeline is atomic), C2 data (which is > C1 in the timeline) is not served until C1 inflight transitions to a terminal state such as completed or marked as failed. This [test](https://github.com/apache/hudi/blob/master/hudi-utilities/src/test/java/org/apache/hudi/utilities/sources/TestHoodieIncrSource.java#L137) demonstrates how Hudi incremental source stops proceeding until C1 completes. Hudi favors [safety and sacrifices liveness](https://en.wikipedia.org/wiki/Safety_and_liveness_properties), in such a case. For a single writer, the start times of the transactions are the same as the order of completion of transactions, and both incremental and time-travel queries work as expected. In the case of multi-writer, incremental queries still work as expected but time travel queries don't. Since most time travel queries are on historical snapshots with a stable continuous timeline, this has not been implemented upto Hudi 0.13. However, a similar approach like above can be easily applied to failing time travel queries as well in this window.
+In these scenarios, it might be tempting to think of data inconsistencies/data loss when using Hudi’s incremental queries. However, Hudi takes special handling 
+(examples [1](https://github.com/apache/hudi/blob/aea5bb6f0ab824247f5e3498762ad94f643a2cb6/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/helpers/IncrSourceHelper.java#L76), 
+[2](https://github.com/apache/hudi/blame/7a6543958368540d221ddc18e0c12b8d526b6859/hudi-hadoop-mr/src/main/java/org/apache/hudi/hadoop/utils/HoodieInputFormatUtils.java#L173)) in incremental queries to ensure that no data 
+is served beyond the point there is an inflight instant in its timeline, so no data loss or drop happens. This detection is made possible because Hudi writes first request a transaction on the timeline, before planning/executing
+the write, as explained in the [timeline](https://hudi.apache.org/docs/timeline#states) section.
+
+In this case, on seeing C1’s inflight commit (publish to timeline is atomic), C2 data (which is > C1 in the timeline) is not served until C1 inflight transitions to a terminal state such as completed or marked as failed. 
+This [test](https://github.com/apache/hudi/blob/master/hudi-utilities/src/test/java/org/apache/hudi/utilities/sources/TestHoodieIncrSource.java#L137) demonstrates how Hudi incremental source stops proceeding until C1 completes. 
+Hudi favors [safety and sacrifices liveness](https://en.wikipedia.org/wiki/Safety_and_liveness_properties), in such a case. For a single writer, the start times of the transactions are the same as the order of completion of transactions, and both incremental and time-travel queries work as expected. 
+In the case of multi-writer, incremental queries still work as expected but time travel queries don't. Since most time travel queries are on historical snapshots with a stable continuous timeline, this has not been implemented upto Hudi 0.13. 
+However, a similar approach like above can be easily applied to failing time travel queries as well in this window.
 
 ### How does Hudi plan to address the liveness issue above for incremental queries?
 
-Hudi has had a proposal to streamline/improve this experience by adding a transition-time to our timeline, which will remove the [liveness sacrifice](https://en.wikipedia.org/wiki/Safety_and_liveness_properties) currently being made and makes it easier to understand. This has been delayed for a few reasons (a) Large hosted query engines and users not upgrading fast enough. (b) the issues brought up - \[[1](https://hudi.apache.org/docs/next/faq#does-hudis-use-of-wall-clock-timestamp-for-instants-pose-any-clock-skew-issues),[2](https://hudi.apache.org/docs/next/faq#hudis-commits-are-based-on-transaction-start-time-instead-of-completed-time-does-this-cause-data-loss-or-inconsistency-in-case-of-incremental-and-time-travel-queries)\], relevant to this are not practically very important to users beyond good pedantic discussions, (c) wanting to align with our future concurrency control schemes. This is scheduled to be addressed in a less than ideal way in 0.14 and in a more generalized manner with [non-blocking concurrency control](https://issues.apache.org/jira/browse/HUDI-3187) in Hudi version 1.x.
+Hudi 0.14 improves the liveness aspects by enabling change streams, incremental query and time-travel based on the file/object's timestamp (similar to [Delta Lake](https://docs.delta.io/latest/delta-batch.html#query-an-older-snapshot-of-a-table-time-travel)).
+
+To expand more on the long term approach, Hudi has had a proposal to streamline/improve this experience by adding a transition-time to our timeline, which will remove the [liveness sacrifice](https://en.wikipedia.org/wiki/Safety_and_liveness_properties) and makes it easier to understand. 
+This has been delayed for a few reasons 
+
+- Large hosted query engines and users not upgrading fast enough. 
+- The issues brought up - \[[1](https://hudi.apache.org/docs/next/faq#does-hudis-use-of-wall-clock-timestamp-for-instants-pose-any-clock-skew-issues),[2](https://hudi.apache.org/docs/next/faq#hudis-commits-are-based-on-transaction-start-time-instead-of-completed-time-does-this-cause-data-loss-or-inconsistency-in-case-of-incremental-and-time-travel-queries)\], 
+relevant to this are not practically very important to users beyond good pedantic discussions, 
+- Wanting to do it alongside [non-blocking concurrency control](https://github.com/apache/hudi/pull/7907) in Hudi version 1.x.
+
+It's planned to be addressed in the first 1.x release.
 
 ### Does Hudi’s use of wall clock timestamp for instants pose any clock skew issues?
 
@@ -138,7 +162,7 @@ Further - Hudi’s commit time can be a logical time and need not strictly be a 
 
 ### What are some ways to write a Hudi table?
 
-Typically, you obtain a set of partial updates/inserts from your source and issue [write operations](https://hudi.apache.org/docs/write_operations/) against a Hudi table. If you ingesting data from any of the standard sources like Kafka, or tailing DFS, the [delta streamer](https://hudi.apache.org/docs/hoodie_deltastreamer#deltastreamer) tool is invaluable and provides an easy, self-managed solution to getting data written into Hudi. You can also write your own code to capture data from a custom source using the Spark datasource API and use a [Hudi datasource](https://hudi.apache.org/docs/writing_data/#spark-datasource-writer) to write into Hudi.
+Typically, you obtain a set of partial updates/inserts from your source and issue [write operations](https://hudi.apache.org/docs/write_operations/) against a Hudi table. If you ingesting data from any of the standard sources like Kafka, or tailing DFS, the [delta streamer](https://hudi.apache.org/docs/hoodie_streaming_ingestion#deltastreamer) tool is invaluable and provides an easy, self-managed solution to getting data written into Hudi. You can also write your own code to capture data from a custom source using the Spark datasource API and use a [Hudi datasource](https://hudi.apache.org/docs/writing_data/#spark-datasource-writer) to write into Hudi.
 
 ### How is a Hudi writer job deployed?
 

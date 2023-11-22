@@ -19,7 +19,6 @@
 
 package org.apache.hudi.utils;
 
-import com.sun.tools.doclets.internal.toolkit.NestedClassWriter;
 import org.apache.hudi.common.config.*;
 import org.apache.hudi.common.config.ConfigGroups.Names;
 import org.apache.hudi.common.config.ConfigGroups.SubGroupNames;
@@ -63,6 +62,7 @@ public class HoodieConfigDocGenerator {
   private static final String NEWLINE = "\n";
   private static final String LINE_BREAK = "<br></br>\n";
   private static final String DOUBLE_NEWLINE = "\n\n";
+  private static final String NOTE_ON_NA = new StringBuilder().append(":::note \n").append("In the tables below **(N/A)** means there is no default value set\n").append(":::\n").toString();
   private static final String ALL_CONFIGS_PAGE_SUMMARY = "This page covers the different ways of configuring " +
           "your job to write/read Hudi tables. " +
           "At a high level, you can control behaviour at few levels.";
@@ -188,15 +188,15 @@ public class HoodieConfigDocGenerator {
       // Default value
       Object defaultValue = cfgProperty.hasDefaultValue() ? cfgProperty.defaultValue() : (cfgProperty.hasInferFunction() ? "" : null);
       if (defaultValue != null) {
-        columns.add(defaultValue + " (Optional)");
+        columns.add(defaultValue + " ");
       } else {
-        columns.add("N/A " + new BoldText("(Required)"));
+        columns.add("(N/A)");
       }
       boolean isConfigRequired = (defaultValue == null);
 
       // Description
       String configParam = "`Config Param: " + field.getName() + "`";
-      String description = StringUtils.isNullOrEmpty(cfgProperty.doc()) ? "" : cfgProperty.doc().replaceAll("[\\t\\n\\r]+", " ").replaceAll("&", "&amp;").replaceAll("\\|", " &#124; ").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+      String description = StringUtils.isNullOrEmpty(cfgProperty.doc()) ? "" : cfgProperty.doc().replaceAll("[\\t\\n\\r]+", " ").replaceAll("&", "&amp;").replaceAll("\\|", " &#124; ").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll("&lt;ul&gt;", "<ul>").replaceAll("&lt;/ul&gt;", "</ul>").replaceAll("&lt;li&gt;", "<li>").replaceAll("&lt;/li&gt;", "</li>");
 
       // First version
       String versionInfo = "";
@@ -208,7 +208,7 @@ public class HoodieConfigDocGenerator {
         }
         versionInfo = sinceVersion + deprecatedVersion;
       }
-      columns.add(description + "<br /><br />" + configParam + versionInfo);
+      columns.add(description + "<br />" + configParam + versionInfo);
 
       return new ConfigTableRow(cfgProperty.key(), new TableRow<>(columns), isConfigRequired, cfgProperty.isAdvanced());
     } catch (IllegalAccessException e) {
@@ -439,16 +439,16 @@ public class HoodieConfigDocGenerator {
         // Default value
         Object defaultValue = cfgProperty.hasDefaultValue() ? cfgProperty.defaultValue() : null;
         if (defaultValue != null) {
-          columns.add(defaultValue + " (Optional)");
+          columns.add(defaultValue + " ");
         } else {
-          columns.add("N/A " + new BoldText("(Required)"));
+          columns.add("(N/A)");
         }
         boolean isConfigRequired = (defaultValue == null);
 
         // Description
         String configParam = " `Config Param: " + field.getName() + "`";
         String desc = StringUtils.isNullOrEmpty(description) ? "" : description.replaceAll("[\\t\\n\\r]+", " ");
-        columns.add(desc + "<br /><br />" + configParam);
+        columns.add(desc + "<br />" + configParam);
 
         ConfigTableRow configRow = new ConfigTableRow(cfgProperty.key(), new TableRow<>(columns), isConfigRequired);
 
@@ -513,6 +513,7 @@ public class HoodieConfigDocGenerator {
     ListBuilder contentTableBuilder = new ListBuilder();
     generateMainHeadings(contentTableBuilder, EnumSet.noneOf(Names.class));
     mainDocBuilder.append(contentTableBuilder.build()).append(DOUBLE_NEWLINE);
+    mainDocBuilder.append(NOTE_ON_NA).append(NEWLINE);
     mainDocBuilder.append(generateExternalizedConfigs());
     Set<ConfigClassMeta> keySet = configClassTreeMap.keySet();
 
@@ -584,6 +585,7 @@ public class HoodieConfigDocGenerator {
     }
     generateMainHeadings(contentTableBuilder, EnumSet.complementOf(inclusionList));
     mainDocBuilder.append(contentTableBuilder.build()).append(DOUBLE_NEWLINE);
+    mainDocBuilder.append(NOTE_ON_NA).append(NEWLINE);
     mainDocBuilder.append(stringBuilder);
     try {
       Files.write(Paths.get(BASIC_CONFIGS_PATH), mainDocBuilder.toString().getBytes(StandardCharsets.UTF_8));

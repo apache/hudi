@@ -25,7 +25,7 @@ feature, please check out [this blog](https://www.onehouse.ai/blog/asynchronous-
 
 ## Setup Async Indexing
 
-First, we will generate a continuous workload. In the below example, we are going to start a [deltastreamer](/docs/hoodie_deltastreamer#deltastreamer) which will continuously write data
+First, we will generate a continuous workload. In the below example, we are going to start a [deltastreamer](/docs/0.13.1/hoodie_deltastreamer#deltastreamer) which will continuously write data
 from raw parquet to Hudi table. We used the widely available [NY Taxi dataset](https://registry.opendata.aws/nyc-tlc-trip-records-pds/), whose setup details are as below:
 <details>
   <summary>Ingestion write config</summary>

@@ -195,7 +195,56 @@ Take a look at this blog for reference - (Apache Hudi vs Delta Lake vs Apache Ic
        For example if the article is https://www.uber.com/blog/cost-efficiency-big-data/ we would use `uber` as the tag here. 
        Another example - for https://robinhood.engineering/author-balaji-varadarajan-e3f496815ebf  we would use 
        `robinhood` as the tag. For blogs directly contributed to hudi repo, we can use `apache hudi` as the tag.
-      
+
+## Video Guides
+
+When adding a new video guide, please follow these guidelines.
+
+1. Every video guide should have the `title`, `last_modified_at`, `authors`, `image`, `navigate`, `tags` in the metadata
+   of the video guide. For example the front matter for a video guide should look like below.
+```
+---
+title: "Video guide title"
+last_modified_at: <Time in this format - 2023-10-13T16:54:38.964863-07:00>
+authors:
+- name: FirstName LastName
+- name: FirstName LastName
+category: blog
+image: /assets/images/video_blogs/<image_file>
+navigate: "<youtube/any other video link>"
+tags:
+- guide
+- hands-on
+- csv
+- aws glue
+- apache hudi
+---
+```
+2. The video guide should be named as a `<yyyy-mm-dd>-<Video Guide Title>.md` file where date part of the file name 
+   represents date published.
+3. The image must be uploaded in the path /assets/images/video_blogs/<image_file-name> and should be of standard size 
+   1200 * 600. Its easy to use the same name as the video guide for the image as well - `<yyyy-mm-dd>-<Video Guide Title>.png`
+   If there is no thumbnail or cover image stick to the default image - `/assets/images/hudi-video-page-default.png`
+4. The navigate field represents the actual link to video.
+5. The tags should be representative of Hudi component/feature focussed in the guide. The tags can refer to services or 
+   techniques used in the guide. Stick to 5 - 7 tags at the max.
+    1. tag 1
+        - code-walkthrough 
+        - guide (represents hands-on labs, labs)
+    2. tag 2
+       Can be the use case or functionality achieved. Example - de-duplication. This can be skipped if the guide is in 
+       general talking about ingestion using different sources and sinks.
+    3. tag 3
+        - Represent individual Hudi features/components - clustering, compaction, ingestion, meta-sync etc.
+    4. tag 4
+        - List of technologies used in the guide. This should be an inclusive list. Qualify names fully here. For example 
+          prefer to "amazon athena" instead of "athena". This helps in discoverability of the guides.
+    5. tag N
+        - [beginner, intermediate, advanced]. Use this tag if its clear on what level this guide targets. Else feel 
+          free to skip this tag.
+6. Ensure that tags are consistent. When adding new tags refer [Blog Tags](https://hudi.apache.org/blog/tags) and 
+   [Video Guide Tags](https://hudi.apache.org/videos/tags) to check if there is a tag already and prefer to use that. 
+
 ## Maintainer
 
 Apache Hudi Community

@@ -25,7 +25,7 @@ With Merge_On_Read Table, Hudi ingestion needs to also take care of compacting d
 
 ### DeltaStreamer
 
-[DeltaStreamer](/docs/hoodie_deltastreamer#deltastreamer) is the standalone utility to incrementally pull upstream changes 
+[DeltaStreamer](/docs/0.12.1/hoodie_deltastreamer#deltastreamer) is the standalone utility to incrementally pull upstream changes 
 from varied sources such as DFS, Kafka and DB Changelogs and ingest them to hudi tables.  It runs as a spark application in two modes.
 
 To use DeltaStreamer in Spark, the `hudi-utilities-bundle` is required, by adding
@@ -36,7 +36,7 @@ corresponding to the Spark version used, e.g.,
 `--packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:0.12.1,org.apache.hudi:hudi-spark3.1-bundle_2.12:0.12.1`,
 if using `hudi-utilities-bundle` solely in Spark encounters compatibility issues.
 
- - **Run Once Mode** : In this mode, Deltastreamer performs one ingestion round which includes incrementally pulling events from upstream sources and ingesting them to hudi table. Background operations like cleaning old file versions and archiving hoodie timeline are automatically executed as part of the run. For Merge-On-Read tables, Compaction is also run inline as part of ingestion unless disabled by passing the flag "--disable-compaction". By default, Compaction is run inline for every ingestion run and this can be changed by setting the property "hoodie.compact.inline.max.delta.commits". You can either manually run this spark application or use any cron trigger or workflow orchestrator (most common deployment strategy) such as Apache Airflow to spawn this application. See command line options in [this section](/docs/hoodie_deltastreamer#deltastreamer) for running the spark application.
+ - **Run Once Mode** : In this mode, Deltastreamer performs one ingestion round which includes incrementally pulling events from upstream sources and ingesting them to hudi table. Background operations like cleaning old file versions and archiving hoodie timeline are automatically executed as part of the run. For Merge-On-Read tables, Compaction is also run inline as part of ingestion unless disabled by passing the flag "--disable-compaction". By default, Compaction is run inline for every ingestion run and this can be changed by setting the property "hoodie.compact.inline.max.delta.commits". You can either manually run this spark application or use any cron trigger or workflow orchestrator (most common deployment strategy) such as Apache Airflow to spawn this application. See command line options in [this section](/docs/0.12.1/hoodie_deltastreamer#deltastreamer) for running the spark application.
 
 Here is an example invocation for reading from kafka topic in a single-run mode and writing to Merge On Read table type in a yarn cluster.
 

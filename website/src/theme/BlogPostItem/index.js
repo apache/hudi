@@ -16,6 +16,8 @@ import EditThisPage from '@theme/EditThisPage';
 import styles from './styles.module.css';
 import Tag from '@theme/Tag';
 import AuthorName from "@site/src/components/AuthorName";
+import { useLocation } from 'react-router-dom';
+import classNames from "classnames";
 
 function useReadingTimePlural() {
     const {selectMessage} = usePluralForm();
@@ -40,6 +42,7 @@ function useReadingTimePlural() {
 
 function BlogPostItem(props) {
     const readingTimePlural = useReadingTimePlural();
+    const location = useLocation();
     const { withBaseUrl } = useBaseUrlUtils();
 
     const {
@@ -63,6 +66,12 @@ function BlogPostItem(props) {
     } = metadata;
     const image = assets.image ?? frontMatter.image ?? '/assets/images/hudi-logo-medium.png';
     const tagsExists = tags.length > 0;
+
+    const manageVideoOpen = (videoLink) => {
+        if(videoLink) {
+            window.open(videoLink, '_blank', 'noopener noreferrer');
+        }
+    }
 
     const tagsList = () => {
         return (
@@ -119,28 +128,42 @@ function BlogPostItem(props) {
                 <div>
                     {!isBlogPostPage && image && (
                         <div className="col blogThumbnail" itemProp="blogThumbnail">
-                            <Link itemProp="url" to={permalink}>
+                            {
+                            location.pathname.startsWith('/blog') ? <Link itemProp="url" to={permalink}>
                                 <img
                                     src={withBaseUrl(image, {
                                         absolute: true,
                                     })}
                                     className="blog-image"
                                 />
-                            </Link>
+                                </Link> :
+                                <img onClick={() => manageVideoOpen(frontMatter?.navigate)}
+                                    src={withBaseUrl(image, {
+                                        absolute: true,
+                                        })}
+                                    className={classNames(styles.videoImage, 'blog-image')}
+                                    />
+                                }
+
                         </div>
                     )}
                     <TitleHeading className={styles.blogPostTitle} itemProp="headline">
                         {isBlogPostPage ? (
-                            <TitleHeading className={styles.blogPostPageTitle} itemProp="headline">
+                             <TitleHeading className={styles.blogPostPageTitle} itemProp="headline">
                                 {title}
                             </TitleHeading>
                         ) : (
+                        location.pathname.startsWith('/blog') ?
                             <Link itemProp="url" to={permalink}>
                                 <TitleHeading className={styles.blogPostTitle} itemProp="headline">
                                     {title}
                                 </TitleHeading>
                             </Link>
-
+                            :
+                            <TitleHeading onClick={() => manageVideoOpen(frontMatter?.navigate)}
+                                className={styles.blogPostTitle} itemProp="headline">
+                                    {title}
+                            </TitleHeading>
                         )}
                     </TitleHeading>
                     <div className={clsx(styles.blogInfo, "margin-top--sm margin-bottom--sm")}>
@@ -179,14 +202,14 @@ function BlogPostItem(props) {
             )}
 
             {(tagsExists || truncated) && isBlogPostPage && editUrl && (
-                <footer
+                <footer0
                     className={clsx('row docusaurus-mt-lg', {
                         [styles.blogPostDetailsFull]: isBlogPostPage,
                     })}>
                     <div className="col margin-top--sm">
                         <EditThisPage editUrl={editUrl}/>
                     </div>
-                </footer>
+                </footer0>
             )}
         </article>
     );

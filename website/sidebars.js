@@ -42,14 +42,14 @@ module.exports = {
                     type: 'category',
                     label: 'SQL',
                     items: [
-                        'table_management',
+                        'sql_ddl',
+                        'sql_dml',
+                        'sql_queries',
                         'procedures'
                     ],
                 },
                 'writing_data',
                 'hoodie_streaming_ingestion',
-                'querying_data',
-                'flink_configuration',
                 {
                     type: 'category',
                     label: 'Syncing to Catalogs',
@@ -99,6 +99,7 @@ module.exports = {
                 'encryption',
                 'troubleshooting',
                 'tuning-guide',
+                'flink_tuning',
                 {
                     type: 'category',
                     label: 'Storage Configurations',

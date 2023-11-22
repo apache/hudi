@@ -3,6 +3,7 @@ import styles from "@site/src/components/JoinCommunity/styles.module.css";
 import CommunityCard from "@site/src/components/JoinCommunity/CommunityCard";
 import GitHubIcon from "@site/src/components/JoinCommunity/Icons/github.svg";
 import SlackIcon from "@site/src/components/JoinCommunity/Icons/slack.svg";
+import LinkedinIcon from "@site/src/components/JoinCommunity/Icons/linkedin.svg";
 import TwitterIcon from "@site/src/components/JoinCommunity/Icons/twitter.svg";
 import MailIcon from "@site/src/components/JoinCommunity/Icons/mail.svg";
 import YoutubeIcon from "@site/src/components/JoinCommunity/Icons/youtube.svg";
@@ -21,6 +22,12 @@ const JoinCommunity = () => {
       title: "Slack",
       linkText: "Join community",
       url: "https://join.slack.com/t/apache-hudi/shared_invite/zt-20r833rxh-627NWYDUyR8jRtMa2mZ~gg",
+    },
+    {
+      icon: LinkedinIcon,
+      title: "Linkedin",
+      linkText: "Join community",
+      url: "https://www.linkedin.com/company/apache-hudi/?viewAsMember=true",
     },
     {
       icon: TwitterIcon,
@@ -42,8 +49,8 @@ const JoinCommunity = () => {
     },
   ];
 
-  const firstRow = communityData.slice(0,2);
-  const secondRow = communityData.slice(2,5);
+  const firstRow = communityData.slice(0,3);
+  const secondRow = communityData.slice(3,6);
 
   return (
     <div className={styles.joinCommunityWrapper}>

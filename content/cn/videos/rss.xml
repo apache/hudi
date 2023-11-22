@@ -1,0 +1,779 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0">
+    <channel>
+        <title>Apache Hudi Blog</title>
+        <link>https://hudi.apache.org/cn/videos</link>
+        <description>Apache Hudi Blog</description>
+        <lastBuildDate>Wed, 08 Nov 2023 00:00:00 GMT</lastBuildDate>
+        <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
+        <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[A Glide, Skip or a Jump: Efficiently Stream Data into Your Medallion Architecture with Apache Hudi]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/11/08/A-Glide-Skip-or-a-Jump-Efficiently-Stream-Data-into-Your-Medallion-Architecture-with-Apache-Hudi</link>
+            <guid>/2023/11/08/A-Glide-Skip-or-a-Jump-Efficiently-Stream-Data-into-Your-Medallion-Architecture-with-Apache-Hudi</guid>
+            <pubDate>Wed, 08 Nov 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[How to Unlock Data Insights from Hudi Metrics for Your Data Lake using Elastic Search and Kibana]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/10/28/How-to-Unlock-Data-Insights-from-Hudi-Metrics-for-Your-Data-Lake-using-Elastic-Search-and-Kibana</link>
+            <guid>/2023/10/28/How-to-Unlock-Data-Insights-from-Hudi-Metrics-for-Your-Data-Lake-using-Elastic-Search-and-Kibana</guid>
+            <pubDate>Sat, 28 Oct 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Full Apache Hudi Course for beginners | Operations Type | Part 5]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/10/21/Full-Apache-Hudi-Course-for-beginner-Operations-Type-Part-5</link>
+            <guid>/2023/10/21/Full-Apache-Hudi-Course-for-beginner-Operations-Type-Part-5</guid>
+            <pubDate>Sat, 21 Oct 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[[LIVE] Hudi 0.14.0 Deep Dive: Record Level Index]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/10/16/Hudi-0-14-0-Deep-Dive-Record-Level-Index</link>
+            <guid>/2023/10/16/Hudi-0-14-0-Deep-Dive-Record-Level-Index</guid>
+            <pubDate>Mon, 16 Oct 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Accelerating Data Processing: Leveraging Apache Hudi with DynamoDB for Faster Commit Time Retrieval]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/10/14/Accelerating-Data-Processing-Leveraging-Apache-Hudi-with-DynamoDB-for-Faster-Commit-Time-Retrieval</link>
+            <guid>/2023/10/14/Accelerating-Data-Processing-Leveraging-Apache-Hudi-with-DynamoDB-for-Faster-Commit-Time-Retrieval</guid>
+            <pubDate>Sat, 14 Oct 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Hudi's Latest Feature: Auto-Generating Primary Keys for Modern Data Lakes]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/10/07/Hudi-Latest-Feature-Auto-Generating-Primary-Keys-for-Modern-Data-Lakes</link>
+            <guid>/2023/10/07/Hudi-Latest-Feature-Auto-Generating-Primary-Keys-for-Modern-Data-Lakes</guid>
+            <pubDate>Sat, 07 Oct 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Learn How to Use Apache Flink with Kafka & Build Transactional Datalakes on S3 using PyFLink Locally]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/09/27/Learn-How-to-Use-Apache-Flink-with-Kafka-Build-Transactional-Datalakes-on-S3-using-PyFLink-Locally</link>
+            <guid>/2023/09/27/Learn-How-to-Use-Apache-Flink-with-Kafka-Build-Transactional-Datalakes-on-S3-using-PyFLink-Locally</guid>
+            <pubDate>Wed, 27 Sep 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[How to Ingest Data from PostgreSQL into Hudi Tables on S3 with Apache Flink CDC Connector & Python]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/09/26/How-to-Ingest-Data-from-PostgreSQL-into-Hudi-Tables-on-S3-with-Apache-Flink-CDC-Connector-Python</link>
+            <guid>/2023/09/26/How-to-Ingest-Data-from-PostgreSQL-into-Hudi-Tables-on-S3-with-Apache-Flink-CDC-Connector-Python</guid>
+            <pubDate>Tue, 26 Sep 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[How to Use Apache Hudi with Flink 1.15 on AWS Managed Apache Flink | Hands on Guide for Beginners]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/09/25/How-to-Use-Apache-Hudi-with-Flink-1-15-on-AWS-Managed-Apache-Flink-Hands-on-Guide-for-Beginners</link>
+            <guid>/2023/09/25/How-to-Use-Apache-Hudi-with-Flink-1-15-on-AWS-Managed-Apache-Flink-Hands-on-Guide-for-Beginners</guid>
+            <pubDate>Mon, 25 Sep 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Flink (CDC) with POSTGRES RealTime Stream Data Processing with Python Hands on Labs]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/09/23/Flink-with-POSTGRES-RealTime-Stream-Data-Processing-with-Python-Hands-on-Labs</link>
+            <guid>/2023/09/23/Flink-with-POSTGRES-RealTime-Stream-Data-Processing-with-Python-Hands-on-Labs</guid>
+            <pubDate>Sat, 23 Sep 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[From Zero to Data Hero: Building Dynamic Data Platforms Like a Pro 🚀📊 Final Part Demo]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/08/29/From-Zero-to-Data-Hero-Building-Dynamic-Data-Platforms-Like-a-Pro-Final-Part-Demo</link>
+            <guid>/2023/08/29/From-Zero-to-Data-Hero-Building-Dynamic-Data-Platforms-Like-a-Pro-Final-Part-Demo</guid>
+            <pubDate>Tue, 29 Aug 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Easy Step by Step Guide for Beginner Ingest CSV Files into Hudi with AWS GLue | Hands on Labs]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/08/09/Easy_Step_by_Step_Guide_for_Beginner_Ingest_CSV_Files_into_Hudi_with_AWS_GLue_Hands_on_Labs</link>
+            <guid>/2023/08/09/Easy_Step_by_Step_Guide_for_Beginner_Ingest_CSV_Files_into_Hudi_with_AWS_GLue_Hands_on_Labs</guid>
+            <pubDate>Wed, 09 Aug 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Easy Step by Step Guide for Beginner Setup AWS Transfer Family - SFTP with S3]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/08/06/Easy_Step_by_Step_Guide_for_Beginner_Setup_AWS_Transfer_Family_SFTP_with_S3</link>
+            <guid>/2023/08/06/Easy_Step_by_Step_Guide_for_Beginner_Setup_AWS_Transfer_Family_SFTP_with_S3</guid>
+            <pubDate>Sun, 06 Aug 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Powering Event-Driven Workloads with Hudi Read Stream & AWS Glue Streaming JOBS!]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/08/03/Powering_EventDriven_Workloads_with_Hudi_Read_Stream_AWS_Glue_Streaming_JOBS</link>
+            <guid>/2023/08/03/Powering_EventDriven_Workloads_with_Hudi_Read_Stream_AWS_Glue_Streaming_JOBS</guid>
+            <pubDate>Thu, 03 Aug 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Building and Automating Hudi Medallion Architecture with AWS Glue Workflow Hands on Labs StepbyStep]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/08/01/Building_and_Automating_Hudi_Medallion_Architecture_with_AWS_Glue_Workflow_Hands_on_Labs_StepbyStep</link>
+            <guid>/2023/08/01/Building_and_Automating_Hudi_Medallion_Architecture_with_AWS_Glue_Workflow_Hands_on_Labs_StepbyStep</guid>
+            <pubDate>Tue, 01 Aug 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Removing Duplicates in Hudi Partitions with Insert_Overwrite API and Spark SQL]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/07/28/Removing_Duplicates_in_Hudi_Partitions_with_InsertOverwrite_API_and_Spark_SQL</link>
+            <guid>/2023/07/28/Removing_Duplicates_in_Hudi_Partitions_with_InsertOverwrite_API_and_Spark_SQL</guid>
+            <pubDate>Fri, 28 Jul 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[learn How to use AWS Glue Crawler with Hudi Tables to Catlog the Data]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/07/22/learn_How_to_use_AWS_Glue_Crawler_with_Hudi_Tables_to_Catlog_the_Data</link>
+            <guid>/2023/07/22/learn_How_to_use_AWS_Glue_Crawler_with_Hudi_Tables_to_Catlog_the_Data</guid>
+            <pubDate>Sat, 22 Jul 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Develop Incremental ETL Pipeline From Hudi Tables to Redshift Using AWS Glue and Spark]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/07/09/Develop_Incremental_ETL_Pipeline_From_Hudi_Tables_to_Redshift_Using_AWS_Glue_and_Spark</link>
+            <guid>/2023/07/09/Develop_Incremental_ETL_Pipeline_From_Hudi_Tables_to_Redshift_Using_AWS_Glue_and_Spark</guid>
+            <pubDate>Sun, 09 Jul 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Incremental Data Extraction from Postgres using Triggers and PySpark]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/07/09/Incremental_Data_Extraction_from_Postgres_using_Triggers_and_PySpark</link>
+            <guid>/2023/07/09/Incremental_Data_Extraction_from_Postgres_using_Triggers_and_PySpark</guid>
+            <pubDate>Sun, 09 Jul 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Hudi Best Practices: Handling Failed Inserts/Upserts with Error Tables]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/07/02/Hudi_Best_Practices_Handling_Failed_InsertsUpserts_with_Error_Tables</link>
+            <guid>/2023/07/02/Hudi_Best_Practices_Handling_Failed_InsertsUpserts_with_Error_Tables</guid>
+            <pubDate>Sun, 02 Jul 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Building Lakehouse using Hudi | Apache Hudi | Data Lakehouse | Hudi | Apache]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/07/01/Building_Lakehouse_using_Hudi_Apache_Hudi_Data_Lakehouse_Hudi_Apache</link>
+            <guid>/2023/07/01/Building_Lakehouse_using_Hudi_Apache_Hudi_Data_Lakehouse_Hudi_Apache</guid>
+            <pubDate>Sat, 01 Jul 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Learn About Apache Hudi Pre Commit Validator with Hands on Lab]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/06/23/Learn_About_Apache_Hudi_Pre_Commit_Validator_with_Hands_on_Lab</link>
+            <guid>/2023/06/23/Learn_About_Apache_Hudi_Pre_Commit_Validator_with_Hands_on_Lab</guid>
+            <pubDate>Fri, 23 Jun 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Full Workshop Recap: Build a ride-share lakehouse platform]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/06/22/Full_Workshop_Recap_Build_a_rideshare_lakehouse_platform</link>
+            <guid>/2023/06/22/Full_Workshop_Recap_Build_a_rideshare_lakehouse_platform</guid>
+            <pubDate>Thu, 22 Jun 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[SNS + Lambda: How to Trigger Lambda Functions from SNS using Message Filtering]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/06/16/SNS_Lambda_How_to_Trigger_Lambda_Functions_from_SNS_using_Message_Filtering</link>
+            <guid>/2023/06/16/SNS_Lambda_How_to_Trigger_Lambda_Functions_from_SNS_using_Message_Filtering</guid>
+            <pubDate>Fri, 16 Jun 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[How to read data from Multiple Hudi Tables Join them and insert into DynamoDB with AWS Glue]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/06/10/How_to_read_data_from_Multiple_Hudi_Tables_Join_them_and_insert_into_DynamoDB_with_AWS_Glue</link>
+            <guid>/2023/06/10/How_to_read_data_from_Multiple_Hudi_Tables_Join_them_and_insert_into_DynamoDB_with_AWS_Glue</guid>
+            <pubDate>Sat, 10 Jun 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[How Data Scientist &Data Engineer Can Query Hudi Tables with Athena Spark Notebook for AdhocAnalysis]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/06/07/How_Data_Scientist_Data_Engineer_Can_Query_Hudi_Tables_with_Athena_Spark_Notebook_for_AdhocAnalysis</link>
+            <guid>/2023/06/07/How_Data_Scientist_Data_Engineer_Can_Query_Hudi_Tables_with_Athena_Spark_Notebook_for_AdhocAnalysis</guid>
+            <pubDate>Wed, 07 Jun 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Learn | How to delete Partition in Apache Hudi on AWS Glue | Hands on]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/06/07/Learn_How_to_delete_Partition_in_Apache_Hudi_on_AWS_Glue_Hands_on</link>
+            <guid>/2023/06/07/Learn_How_to_delete_Partition_in_Apache_Hudi_on_AWS_Glue_Hands_on</guid>
+            <pubDate>Wed, 07 Jun 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[How to JOIN Hudi Tables in Incremental fashion with DynamoDB in AWS GLue | Hands on Lab for Begineer]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/06/05/How_to_JOIN_Hudi_Tables_in_Incremental_fashion_with_DynamoDB_in_AWS_GLue_Hands_on_Lab_for_Begineer</link>
+            <guid>/2023/06/05/How_to_JOIN_Hudi_Tables_in_Incremental_fashion_with_DynamoDB_in_AWS_GLue_Hands_on_Lab_for_Begineer</guid>
+            <pubDate>Mon, 05 Jun 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[How to Query Hudi Tables in Incremental Fashion and Get only New data on AWS Glue | Hands on Lab]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/06/02/How_to_Query_Hudi_Tables_in_Incremental_Fashion_and_Get_only_New_data_on_AWS_Glue_Hands_on_Lab</link>
+            <guid>/2023/06/02/How_to_Query_Hudi_Tables_in_Incremental_Fashion_and_Get_only_New_data_on_AWS_Glue_Hands_on_Lab</guid>
+            <pubDate>Fri, 02 Jun 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[AWS and Apache Hudi Workshop Overview: Build a ride share lakehouse platform]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/05/31/AWS_and_Apache_Hudi_Workshop_Overview_Build_a_ride_share_lakehouse_platform</link>
+            <guid>/2023/05/31/AWS_and_Apache_Hudi_Workshop_Overview_Build_a_ride_share_lakehouse_platform</guid>
+            <pubDate>Wed, 31 May 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Automate alerting and reporting for AWS Glue job resource usage]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/05/27/Automate_alerting_and_reporting_for_AWS_Glue_job_resource_usage</link>
+            <guid>/2023/05/27/Automate_alerting_and_reporting_for_AWS_Glue_job_resource_usage</guid>
+            <pubDate>Sat, 27 May 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[How to Set Up AWS Glue Locally with Docker: Accessing Glue Database & Table in Your LocalEnvironment]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/05/21/How_to_Set_Up_AWS_Glue_Locally_with_Docker_Accessing_Glue_Database_Table_in_Your_LocalEnvironment</link>
+            <guid>/2023/05/21/How_to_Set_Up_AWS_Glue_Locally_with_Docker_Accessing_Glue_Database_Table_in_Your_LocalEnvironment</guid>
+            <pubDate>Sun, 21 May 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Mastering File Sizing in Hudi: Boosting Performance and Efficiency]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/05/20/Mastering_File_Sizing_in_Hudi_Boosting_Performance_and_Efficiency</link>
+            <guid>/2023/05/20/Mastering_File_Sizing_in_Hudi_Boosting_Performance_and_Efficiency</guid>
+            <pubDate>Sat, 20 May 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Hands-On Lab: Unleashing Efficiency and Flexibility with Partial Updates in Apache Hudi]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/05/19/HandsOn_Lab_Unleashing_Efficiency_and_Flexibility_with_Partial_Updates_in_Apache_Hudi</link>
+            <guid>/2023/05/19/HandsOn_Lab_Unleashing_Efficiency_and_Flexibility_with_Partial_Updates_in_Apache_Hudi</guid>
+            <pubDate>Fri, 19 May 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Unify Your Event Data:Guide to Mapping Events to Standardized Format with Incremental ETL using Hudi]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/05/16/Unify_Your_Event_Data_Guide_to_Mapping_Events_to_Standardized_Format_with_Incremental_ETL_using_Hudi</link>
+            <guid>/2023/05/16/Unify_Your_Event_Data_Guide_to_Mapping_Events_to_Standardized_Format_with_Incremental_ETL_using_Hudi</guid>
+            <pubDate>Tue, 16 May 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[EMR Serverless Made Easy: Submitting Hive SQL Queries for Beginners with NYC Taxi Dataset]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/05/13/EMR_Serverless_Made_Easy_Submitting_Hive_SQL_Queries_for_Beginners_with_NYC_Taxi_Dataset</link>
+            <guid>/2023/05/13/EMR_Serverless_Made_Easy_Submitting_Hive_SQL_Queries_for_Beginners_with_NYC_Taxi_Dataset</guid>
+            <pubDate>Sat, 13 May 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[EMR Serverless for Beginners: | Ingest Data incrementally | Submit Spark Job with EMR-CLI |Data lake]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/05/11/EMR_Serverless_for_Beginners_Ingest_Data_incrementally_Submit_Spark_Job_with_EMRCLI_Data_lake</link>
+            <guid>/2023/05/11/EMR_Serverless_for_Beginners_Ingest_Data_incrementally_Submit_Spark_Job_with_EMRCLI_Data_lake</guid>
+            <pubDate>Thu, 11 May 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Maximizing Efficiency DataLake(Hudi) Glue ETL Jobs with Templated Approach &Serverless Architecture]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/05/07/Maximizing_Efficiency_DataLake_Hudi_Glue_ETL_Jobs_with_Templated_Approach_Serverless_Architecture</link>
+            <guid>/2023/05/07/Maximizing_Efficiency_DataLake_Hudi_Glue_ETL_Jobs_with_Templated_Approach_Serverless_Architecture</guid>
+            <pubDate>Sun, 07 May 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[How to Build Your Own Version of AWS Glue Bookmark to get Only New Incremental Files]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/05/06/How_to_Build_Your_Own_Version_of_AWS_Glue_Bookmark_to_get_Only_New_Incremental_Files</link>
+            <guid>/2023/05/06/How_to_Build_Your_Own_Version_of_AWS_Glue_Bookmark_to_get_Only_New_Incremental_Files</guid>
+            <pubDate>Sat, 06 May 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Build, deploy, and run Spark jobs on Amazon EMR with the open-source EMR CLI tool]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/05/03/Build_deploy_and_run_Spark_jobs_on_Amazon_EMR_with_the_opensource_EMR_CLI_tool</link>
+            <guid>/2023/05/03/Build_deploy_and_run_Spark_jobs_on_Amazon_EMR_with_the_opensource_EMR_CLI_tool</guid>
+            <pubDate>Wed, 03 May 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Mastering Slowly Changing Dimension with Hudi: A Step-by-Step Guide to Efficient Data Management|]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/05/03/Mastering_Slowly_Changing_Dimension_with_Hudi_A_StepbyStep_Guide_to_Efficient_Data_Management</link>
+            <guid>/2023/05/03/Mastering_Slowly_Changing_Dimension_with_Hudi_A_StepbyStep_Guide_to_Efficient_Data_Management</guid>
+            <pubDate>Wed, 03 May 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Building a Scalable and Resilient Streaming ETL Pipeline with Hudi's Incremental Processing #1]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/05/01/Building_a_Scalable_and_Resilient_Streaming_ETL_Pipeline_with_Hudi_s_Incremental_Processing_1</link>
+            <guid>/2023/05/01/Building_a_Scalable_and_Resilient_Streaming_ETL_Pipeline_with_Hudi_s_Incremental_Processing_1</guid>
+            <pubDate>Mon, 01 May 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Efficiently Managing Ride & Late Arriving Tips Data with Incremental ETL using Apache Hudi :Hands On]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/04/29/Efficiently_Managing_Ride_Late_Arriving_Tips_Data_with_Incremental_ETL_using_Apache_Hudi_Hands_On</link>
+            <guid>/2023/04/29/Efficiently_Managing_Ride_Late_Arriving_Tips_Data_with_Incremental_ETL_using_Apache_Hudi_Hands_On</guid>
+            <pubDate>Sat, 29 Apr 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[From Raw Data to Insights: Building a Lake House with Hudi and Star Schema | Step by Step Guide]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/04/26/From_Raw_Data_to_Insights_Building_a_Lake_House_with_Hudi_and_Star_Schema_Step_by_Step_Guide</link>
+            <guid>/2023/04/26/From_Raw_Data_to_Insights_Building_a_Lake_House_with_Hudi_and_Star_Schema_Step_by_Step_Guide</guid>
+            <pubDate>Wed, 26 Apr 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Joining Hudi Raw Tables for Powerful Data Analysis with Spark SQL]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/04/25/Joining_Hudi_Raw_Tables_for_Powerful_Data_Analysis_with_Spark_SQL</link>
+            <guid>/2023/04/25/Joining_Hudi_Raw_Tables_for_Powerful_Data_Analysis_with_Spark_SQL</guid>
+            <pubDate>Tue, 25 Apr 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Effortlessly Sync Your JDBC Source to Hudi Transactional Datalake: No DMS or Debezium Required!]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/04/20/Effortlessly_Sync_Your_JDBC_Source_to_Hudi_Transactional_Datalake_No_DMS_or_Debezium_Required</link>
+            <guid>/2023/04/20/Effortlessly_Sync_Your_JDBC_Source_to_Hudi_Transactional_Datalake_No_DMS_or_Debezium_Required</guid>
+            <pubDate>Thu, 20 Apr 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Efficient Data Ingestion with Glue Concurrency and Hudi Data Lake]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/04/12/Efficient_Data_Ingestion_with_Glue_Concurrency_and_Hudi_Data_Lake</link>
+            <guid>/2023/04/12/Efficient_Data_Ingestion_with_Glue_Concurrency_and_Hudi_Data_Lake</guid>
+            <pubDate>Wed, 12 Apr 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Journey to Hudi Transactional Data Lake Mastery: How I Learned and Succeeded]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/04/11/Journey_to_Hudi_Transactional_Data_Lake_Mastery_How_I_Learned_and_Succeeded</link>
+            <guid>/2023/04/11/Journey_to_Hudi_Transactional_Data_Lake_Mastery_How_I_Learned_and_Succeeded</guid>
+            <pubDate>Tue, 11 Apr 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Learn about Apache Hudi Transformers with Hands on Lab]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/04/11/Learn_about_Apache_Hudi_Transformers_with_Hands_on_Lab</link>
+            <guid>/2023/04/11/Learn_about_Apache_Hudi_Transformers_with_Hands_on_Lab</guid>
+            <pubDate>Tue, 11 Apr 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Bootstrapping in Apache Hudi on EMR Serverless with Lab]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/04/09/Bootstrapping_in_Apache_Hudi_on_EMR_Serverless_with_Lab</link>
+            <guid>/2023/04/09/Bootstrapping_in_Apache_Hudi_on_EMR_Serverless_with_Lab</guid>
+            <pubDate>Sun, 09 Apr 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Understanding Clustering in Apache Hudi and the Benefits of Asynchronous Clustering]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/04/08/Understanding_Clustering_in_Apache_Hudi_and_the_Benefits_of_Asynchronous_Clustering</link>
+            <guid>/2023/04/08/Understanding_Clustering_in_Apache_Hudi_and_the_Benefits_of_Asynchronous_Clustering</guid>
+            <pubDate>Sat, 08 Apr 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Advantages of Metadata Indexing and Asynchronous Indexing in Hudi Hands on Lab]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/04/07/Advantages_of_Metadata_Indexing_and_Asynchronous_Indexing_in_Hudi_Hands_on_Lab</link>
+            <guid>/2023/04/07/Advantages_of_Metadata_Indexing_and_Asynchronous_Indexing_in_Hudi_Hands_on_Lab</guid>
+            <pubDate>Fri, 07 Apr 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Efficient Data Lake Management with Apache Hudi Cleaner: Benefits of Scheduling Data Cleaning #1]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/04/06/Efficient_Data_Lake_Management_with_Apache_Hudi_Cleaner_Benefits_of_Scheduling_Data_Cleaning_1</link>
+            <guid>/2023/04/06/Efficient_Data_Lake_Management_with_Apache_Hudi_Cleaner_Benefits_of_Scheduling_Data_Cleaning_1</guid>
+            <pubDate>Thu, 06 Apr 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Efficient Data Lake Management with Apache Hudi Cleaner: Benefits of Scheduling Data Cleaning #2]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/04/06/Efficient_Data_Lake_Management_with_Apache_Hudi_Cleaner_Benefits_of_Scheduling_Data_Cleaning_2</link>
+            <guid>/2023/04/06/Efficient_Data_Lake_Management_with_Apache_Hudi_Cleaner_Benefits_of_Scheduling_Data_Cleaning_2</guid>
+            <pubDate>Thu, 06 Apr 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Getting Alerts when hudi Delta Streamer Fails with Event Driven Approach using Lambdas &Event Bridge]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/04/05/Getting_Alerts_when_hudi_Delta_Streamer_Fails_with_Event_Driven_Approach_using_Lambdas_Event_Bridge</link>
+            <guid>/2023/04/05/Getting_Alerts_when_hudi_Delta_Streamer_Fails_with_Event_Driven_Approach_using_Lambdas_Event_Bridge</guid>
+            <pubDate>Wed, 05 Apr 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Running Apache Hudi Delta Streamer On EMR Serverless Hands on Lab step by step guide]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/04/04/Running_Apache_Hudi_Delta_Streamer_On_EMR_Serverless_Hands_on_Lab_step_by_step_guide</link>
+            <guid>/2023/04/04/Running_Apache_Hudi_Delta_Streamer_On_EMR_Serverless_Hands_on_Lab_step_by_step_guide</guid>
+            <pubDate>Tue, 04 Apr 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Learn How to Integrate Apache Hudi with Redshift Spectrum Hands on Labs with Code]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/04/02/Learn_How_to_Integrate_Apache_Hudi_with_Redshift_Spectrum_Hands_on_Labs_with_Code</link>
+            <guid>/2023/04/02/Learn_How_to_Integrate_Apache_Hudi_with_Redshift_Spectrum_Hands_on_Labs_with_Code</guid>
+            <pubDate>Sun, 02 Apr 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Project : Using Apache Hudi Deltastreamer and AWS DMS Hands on Lab# Part 5]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/03/31/Project_Using_Apache_Hudi_Deltastreamer_and_AWS_DMS_Hands_on_Lab_Part_5</link>
+            <guid>/2023/03/31/Project_Using_Apache_Hudi_Deltastreamer_and_AWS_DMS_Hands_on_Lab_Part_5</guid>
+            <pubDate>Fri, 31 Mar 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Project: Using Apache Hudi Deltastreamer and AWS DMS Hands on Lab# Part 1]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/03/30/Project_Using_Apache_Hudi_Deltastreamer_and_AWS_DMS_Hands_on_Lab_Part_1</link>
+            <guid>/2023/03/30/Project_Using_Apache_Hudi_Deltastreamer_and_AWS_DMS_Hands_on_Lab_Part_1</guid>
+            <pubDate>Thu, 30 Mar 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Project : Using Apache Hudi Deltastreamer and AWS DMS Hands on Lab# Part 2]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/03/30/Project_Using_Apache_Hudi_Deltastreamer_and_AWS_DMS_Hands_on_Lab_Part_2</link>
+            <guid>/2023/03/30/Project_Using_Apache_Hudi_Deltastreamer_and_AWS_DMS_Hands_on_Lab_Part_2</guid>
+            <pubDate>Thu, 30 Mar 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Project : Using Apache Hudi Deltastreamer and AWS DMS Hands on Lab# Part 3]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/03/30/Project_Using_Apache_Hudi_Deltastreamer_and_AWS_DMS_Hands_on_Lab_Part_3</link>
+            <guid>/2023/03/30/Project_Using_Apache_Hudi_Deltastreamer_and_AWS_DMS_Hands_on_Lab_Part_3</guid>
+            <pubDate>Thu, 30 Mar 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Project : Using Apache Hudi Deltastreamer and AWS DMS Hands on Lab# Part 4]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/03/30/Project_Using_Apache_Hudi_Deltastreamer_and_AWS_DMS_Hands_on_Lab_Part_4</link>
+            <guid>/2023/03/30/Project_Using_Apache_Hudi_Deltastreamer_and_AWS_DMS_Hands_on_Lab_Part_4</guid>
+            <pubDate>Thu, 30 Mar 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[How to use Apache Hudi with AWS Glue Studio Visual Editor | Hands on Lab]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/03/26/How_to_use_Apache_Hudi_with_AWS_Glue_Studio_Visual_Editor_Hands_on_Lab</link>
+            <guid>/2023/03/26/How_to_use_Apache_Hudi_with_AWS_Glue_Studio_Visual_Editor_Hands_on_Lab</guid>
+            <pubDate>Sun, 26 Mar 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Build CDC Pipeline from Microsoft SQL Server into Apache Hudi with AWS DMS | PART 1]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/03/25/Build_CDC_Pipeline_from_Microsoft_SQL_Server_into_Apache_Hudi_with_AWS_DMS_PART_1</link>
+            <guid>/2023/03/25/Build_CDC_Pipeline_from_Microsoft_SQL_Server_into_Apache_Hudi_with_AWS_DMS_PART_1</guid>
+            <pubDate>Sat, 25 Mar 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Build CDC Pipeline from Microsoft SQL Server into Apache Hudi with AWS DMS | PART 2]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/03/25/Build_CDC_Pipeline_from_Microsoft_SQL_Server_into_Apache_Hudi_with_AWS_DMS_PART_2</link>
+            <guid>/2023/03/25/Build_CDC_Pipeline_from_Microsoft_SQL_Server_into_Apache_Hudi_with_AWS_DMS_PART_2</guid>
+            <pubDate>Sat, 25 Mar 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Build CDC Pipeline from Microsoft SQL Server into Apache Hudi with AWS DMS | PART 3]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/03/25/Build_CDC_Pipeline_from_Microsoft_SQL_Server_into_Apache_Hudi_with_AWS_DMS_PART_3</link>
+            <guid>/2023/03/25/Build_CDC_Pipeline_from_Microsoft_SQL_Server_into_Apache_Hudi_with_AWS_DMS_PART_3</guid>
+            <pubDate>Sat, 25 Mar 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Build CDC Pipeline from Microsoft SQL Server into Apache Hudi with AWS DMS | PART 4]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/03/25/Build_CDC_Pipeline_from_Microsoft_SQL_Server_into_Apache_Hudi_with_AWS_DMS_PART_4</link>
+            <guid>/2023/03/25/Build_CDC_Pipeline_from_Microsoft_SQL_Server_into_Apache_Hudi_with_AWS_DMS_PART_4</guid>
+            <pubDate>Sat, 25 Mar 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Build CDC Pipeline from Microsoft SQL Server into Apache Hudi with AWS DMS | PART 5]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/03/25/Build_CDC_Pipeline_from_Microsoft_SQL_Server_into_Apache_Hudi_with_AWS_DMS_PART_5</link>
+            <guid>/2023/03/25/Build_CDC_Pipeline_from_Microsoft_SQL_Server_into_Apache_Hudi_with_AWS_DMS_PART_5</guid>
+            <pubDate>Sat, 25 Mar 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Weekend Project |Build CDC Pipeline from Microsoft SQL Server into Apache Hudi #1]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/03/25/Weekend_Project_Build_CDC_Pipeline_from_Microsoft_SQL_Server_into_Apache_Hudi_1</link>
+            <guid>/2023/03/25/Weekend_Project_Build_CDC_Pipeline_from_Microsoft_SQL_Server_into_Apache_Hudi_1</guid>
+            <pubDate>Sat, 25 Mar 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Data Analysis for Apache Hudi Blogs on Medium with Pandas]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/03/24/Data_Analysis_for_Apache_Hudi_Blogs_on_Medium_with_Pandas</link>
+            <guid>/2023/03/24/Data_Analysis_for_Apache_Hudi_Blogs_on_Medium_with_Pandas</guid>
+            <pubDate>Fri, 24 Mar 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[RFC 42: Consistent Hashing in Apache Hudi MOR Tables]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/03/21/RFC_42_Consistent_Hashing_in_Apache_Hudi_MOR_Tables</link>
+            <guid>/2023/03/21/RFC_42_Consistent_Hashing_in_Apache_Hudi_MOR_Tables</guid>
+            <pubDate>Tue, 21 Mar 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[RFC - 18: Insert Overwrite in Apache Hudi with Example]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/03/19/RFC_18_Insert_Overwrite_in_Apache_Hudi_with_Example</link>
+            <guid>/2023/03/19/RFC_18_Insert_Overwrite_in_Apache_Hudi_with_Example</guid>
+            <pubDate>Sun, 19 Mar 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Push Hudi Commit Notification TO HTTP URI with Callback]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/03/18/Push_Hudi_Commit_Notification_TO_HTTP_URI_with_Callback</link>
+            <guid>/2023/03/18/Push_Hudi_Commit_Notification_TO_HTTP_URI_with_Callback</guid>
+            <pubDate>Sat, 18 Mar 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Setting Uber’s Transactional Data Lake in Motion with Incremental ETL Using Apache Hudi]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/03/17/Setting_Uber_s_Transactional_Data_Lake_in_Motion_with_Incremental_ETL_Using_Apache_Hudi</link>
+            <guid>/2023/03/17/Setting_Uber_s_Transactional_Data_Lake_in_Motion_with_Incremental_ETL_Using_Apache_Hudi</guid>
+            <pubDate>Fri, 17 Mar 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Learn About Bucket Index (SIMPLE) In Apache Hudi with lab]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/03/15/Learn_About_Bucket_Index_SIMPLE_In_Apache_Hudi_with_lab</link>
+            <guid>/2023/03/15/Learn_About_Bucket_Index_SIMPLE_In_Apache_Hudi_with_lab</guid>
+            <pubDate>Wed, 15 Mar 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[How do I read data from Cross Account S3 Buckets and Build Hudi Datalake in Datateam Account]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/03/11/How_do_I_read_data_from_Cross_Account_S3_Buckets_and_Build_Hudi_Datalake_in_Datateam_Account</link>
+            <guid>/2023/03/11/How_do_I_read_data_from_Cross_Account_S3_Buckets_and_Build_Hudi_Datalake_in_Datateam_Account</guid>
+            <pubDate>Sat, 11 Mar 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Query cross-account Hudi Glue Data Catalogs using Amazon Athena]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/03/11/Query_crossaccount_Hudi_Glue_Data_Catalogs_using_Amazon_Athena</link>
+            <guid>/2023/03/11/Query_crossaccount_Hudi_Glue_Data_Catalogs_using_Amazon_Athena</guid>
+            <pubDate>Sat, 11 Mar 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[How to Rollback to Previous Checkpoint during Disaster in Apache Hudi using Glue 4.0 Demo]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/03/07/How_to_Rollback_to_Previous_Checkpoint_during_Disaster_in_Apache_Hudi_using_Glue_40_Demo</link>
+            <guid>/2023/03/07/How_to_Rollback_to_Previous_Checkpoint_during_Disaster_in_Apache_Hudi_using_Glue_40_Demo</guid>
+            <pubDate>Tue, 07 Mar 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Power your Down Stream ElasticSearch Stack From Apache Hudi Transaction Datalake with CDC|Demo Video]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/03/06/Power_your_Down_Stream_ElasticSearch_Stack_From_Apache_Hudi_Transaction_Datalake_with_CDCDemo_Video</link>
+            <guid>/2023/03/06/Power_your_Down_Stream_ElasticSearch_Stack_From_Apache_Hudi_Transaction_Datalake_with_CDCDemo_Video</guid>
+            <pubDate>Mon, 06 Mar 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Power your Down Stream Elastic Search Stack From Apache Hudi Transaction Datalake with CDC|DeepDive]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/03/06/Power_your_Down_Stream_Elastic_Search_Stack_From_Apache_Hudi_Transaction_Datalake_with_CDCDeepDive</link>
+            <guid>/2023/03/06/Power_your_Down_Stream_Elastic_Search_Stack_From_Apache_Hudi_Transaction_Datalake_with_CDCDeepDive</guid>
+            <pubDate>Mon, 06 Mar 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Develop Incremental Pipeline with CDC from Hudi to Aurora Postgres | Demo Video]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/03/04/Develop_Incremental_Pipeline_with_CDC_from_Hudi_to_Aurora_Postgres_Demo_Video</link>
+            <guid>/2023/03/04/Develop_Incremental_Pipeline_with_CDC_from_Hudi_to_Aurora_Postgres_Demo_Video</guid>
+            <pubDate>Sat, 04 Mar 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Python helper class which makes querying incremental data from Hudi Data lakes easy]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/02/26/Python_helper_class_which_makes_querying_incremental_data_from_Hudi_Data_lakes_easy</link>
+            <guid>/2023/02/26/Python_helper_class_which_makes_querying_incremental_data_from_Hudi_Data_lakes_easy</guid>
+            <pubDate>Sun, 26 Feb 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[RFC-51 Change Data Capture in Apache Hudi like Debezium and AWS DMS Hands on Labs]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/02/25/RFC51_Change_Data_Capture_in_Apache_Hudi_like_Debezium_and_AWS_DMS_Hands_on_Labs</link>
+            <guid>/2023/02/25/RFC51_Change_Data_Capture_in_Apache_Hudi_like_Debezium_and_AWS_DMS_Hands_on_Labs</guid>
+            <pubDate>Sat, 25 Feb 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Use Glue 4.0 to take regular save points for your Hudi tables for backup or disaster Recovery]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/02/22/Use_Glue_40_to_take_regular_save_points_for_your_Hudi_tables_for_backup_or_disaster_Recovery</link>
+            <guid>/2023/02/22/Use_Glue_40_to_take_regular_save_points_for_your_Hudi_tables_for_backup_or_disaster_Recovery</guid>
+            <pubDate>Wed, 22 Feb 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Apache Hudi Bulk Insert Sort Modes a summary of two incredible blogs]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/02/21/Apache_Hudi_Bulk_Insert_Sort_Modes_a_summary_of_two_incredible_blogs</link>
+            <guid>/2023/02/21/Apache_Hudi_Bulk_Insert_Sort_Modes_a_summary_of_two_incredible_blogs</guid>
+            <pubDate>Tue, 21 Feb 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Streaming Ingestion from MongoDB into Hudi with Glue, kinesis&Event bridge&MongoStream Hands on labs]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/02/18/Streaming_Ingestion_from_MongoDB_into_Hudi_with_Glue_kinesis_Event_bridge_MongoStream_Hands_on_labs</link>
+            <guid>/2023/02/18/Streaming_Ingestion_from_MongoDB_into_Hudi_with_Glue_kinesis_Event_bridge_MongoStream_Hands_on_labs</guid>
+            <pubDate>Sat, 18 Feb 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Create Your Hudi Transaction Datalake on S3 with EMR Serverless for Beginners in fun and easy way]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/02/11/Create_Your_Hudi_Transaction_Datalake_on_S3_with_EMR_Serverless_for_Beginners_in_fun_and_easy_way</link>
+            <guid>/2023/02/11/Create_Your_Hudi_Transaction_Datalake_on_S3_with_EMR_Serverless_for_Beginners_in_fun_and_easy_way</guid>
+            <pubDate>Sat, 11 Feb 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[How do I Ingest Extremely Small Files into Hudi Data lake with Glue Incremental data processing]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/02/07/How_do_I_Ingest_Extremely_Small_Files_into_Hudi_Data_lake_with_Glue_Incremental_data_processing</link>
+            <guid>/2023/02/07/How_do_I_Ingest_Extremely_Small_Files_into_Hudi_Data_lake_with_Glue_Incremental_data_processing</guid>
+            <pubDate>Tue, 07 Feb 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Learn How to restrict Intern from accessing Certain Column in Hudi Datalake with lake Formation]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/01/28/Learn_How_to_restrict_Intern_from_accessing_Certain_Column_in_Hudi_Datalake_with_lake_Formation</link>
+            <guid>/2023/01/28/Learn_How_to_restrict_Intern_from_accessing_Certain_Column_in_Hudi_Datalake_with_lake_Formation</guid>
+            <pubDate>Sat, 28 Jan 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Writing data quality and validation scripts for a Hudi data lake with AWS Glue and pydeequ| Hands on Lab]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/01/23/Writing_data_quality_and_validation_scripts_for_a_Hudi_data_lake_with_AWS_Glue_and_pydeequ_Hands_on_Lab</link>
+            <guid>/2023/01/23/Writing_data_quality_and_validation_scripts_for_a_Hudi_data_lake_with_AWS_Glue_and_pydeequ_Hands_on_Lab</guid>
+            <pubDate>Mon, 23 Jan 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[How to detect and Mask PII data in Apache Hudi Data Lake | Hands on Lab]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/01/21/How_to_detect_and_Mask_PII_data_in_Apache_Hudi_Data_Lake_Hands_on_Lab</link>
+            <guid>/2023/01/21/How_to_detect_and_Mask_PII_data_in_Apache_Hudi_Data_Lake_Hands_on_Lab</guid>
+            <pubDate>Sat, 21 Jan 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[How do I identify Schema Changes in Hudi Tables and Send Email Alert when New Column added/removed]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/01/20/How_do_I_identify_Schema_Changes_in_Hudi_Tables_and_Send_Email_Alert_when_New_Column_addedremoved</link>
+            <guid>/2023/01/20/How_do_I_identify_Schema_Changes_in_Hudi_Tables_and_Send_Email_Alert_when_New_Column_addedremoved</guid>
+            <pubDate>Fri, 20 Jan 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Cleaner Service: Save up to 40% on data lake storage costs | Hudi Labs]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/01/17/Cleaner_Service_Save_up_to_40_on_data_lake_storage_costs_Hudi_Labs</link>
+            <guid>/2023/01/17/Cleaner_Service_Save_up_to_40_on_data_lake_storage_costs_Hudi_Labs</guid>
+            <pubDate>Tue, 17 Jan 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Global Bloom Index: Remove duplicates & guarantee uniquness | Hudi Labs]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/01/17/Global_Bloom_Index_Remove_duplicates_guarantee_uniquness_Hudi_Labs</link>
+            <guid>/2023/01/17/Global_Bloom_Index_Remove_duplicates_guarantee_uniquness_Hudi_Labs</guid>
+            <pubDate>Tue, 17 Jan 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[How businesses use Hudi Soft delete features to do soft delete instead of hard delete on Datalake]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/01/17/How_businesses_use_Hudi_Soft_delete_features_to_do_soft_delete_instead_of_hard_delete_on_Datalake</link>
+            <guid>/2023/01/17/How_businesses_use_Hudi_Soft_delete_features_to_do_soft_delete_instead_of_hard_delete_on_Datalake</guid>
+            <pubDate>Tue, 17 Jan 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Leverage Apache Hudi incremental query to process new & updated data | Hudi Labs]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/01/17/Leverage_Apache_Hudi_incremental_query_to_process_new_updated_data_Hudi_Labs</link>
+            <guid>/2023/01/17/Leverage_Apache_Hudi_incremental_query_to_process_new_updated_data_Hudi_Labs</guid>
+            <pubDate>Tue, 17 Jan 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Leverage Apache Hudi upsert to remove duplicates on a data lake | Hudi Labs]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/01/17/Leverage_Apache_Hudi_upsert_to_remove_duplicates_on_a_data_lake_Hudi_Labs</link>
+            <guid>/2023/01/17/Leverage_Apache_Hudi_upsert_to_remove_duplicates_on_a_data_lake_Hudi_Labs</guid>
+            <pubDate>Tue, 17 Jan 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Precomb Key Overview: Avoid dedupes | Hudi Labs]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/01/17/Precomb_Key_Overview_Avoid_dedupes_Hudi_Labs</link>
+            <guid>/2023/01/17/Precomb_Key_Overview_Avoid_dedupes_Hudi_Labs</guid>
+            <pubDate>Tue, 17 Jan 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Use Apache Hudi for hard deletes on your data lake for data governance | Hudi Labs]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/01/17/Use_Apache_Hudi_for_hard_deletes_on_your_data_lake_for_data_governance_Hudi_Labs</link>
+            <guid>/2023/01/17/Use_Apache_Hudi_for_hard_deletes_on_your_data_lake_for_data_governance_Hudi_Labs</guid>
+            <pubDate>Tue, 17 Jan 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Real Time Streaming Pipeline From Aurora Postgres to Hudi with DMS , Kinesis and Flink |Hands on Lab]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/01/16/Real_Time_Streaming_Pipeline_From_Aurora_Postgres_to_Hudi_with_DMS_Kinesis_and_Flink_Hands_on_Lab</link>
+            <guid>/2023/01/16/Real_Time_Streaming_Pipeline_From_Aurora_Postgres_to_Hudi_with_DMS_Kinesis_and_Flink_Hands_on_Lab</guid>
+            <pubDate>Mon, 16 Jan 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Real Time Streaming Data Pipeline From Aurora Postgres to Hudi with DMS , Kinesis and Flink |DEMO]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/01/15/Real_Time_Streaming_Data_Pipeline_From_Aurora_Postgres_to_Hudi_with_DMS_Kinesis_and_Flink_DEMO</link>
+            <guid>/2023/01/15/Real_Time_Streaming_Data_Pipeline_From_Aurora_Postgres_to_Hudi_with_DMS_Kinesis_and_Flink_DEMO</guid>
+            <pubDate>Sun, 15 Jan 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Build Real Time Low Latency Streaming pipeline from DynamoDB to Apache Hudi using Kinesis,Flink|Lab]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/01/13/Build_Real_Time_Low_Latency_Streaming_pipeline_from_DynamoDB_to_Apache_Hudi_using_Kinesis_FlinkLab</link>
+            <guid>/2023/01/13/Build_Real_Time_Low_Latency_Streaming_pipeline_from_DynamoDB_to_Apache_Hudi_using_Kinesis_FlinkLab</guid>
+            <pubDate>Fri, 13 Jan 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Build Real Time Streaming Pipeline with Apache Hudi Kinesis and Flink | Hands on Lab]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/01/12/Build_Real_Time_Streaming_Pipeline_with_Apache_Hudi_Kinesis_and_Flink_Hands_on_Lab</link>
+            <guid>/2023/01/12/Build_Real_Time_Streaming_Pipeline_with_Apache_Hudi_Kinesis_and_Flink_Hands_on_Lab</guid>
+            <pubDate>Thu, 12 Jan 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Great Article|Apache Hudi vs Delta Lake vs Apache Iceberg - Lakehouse Feature Comparison by OneHouse]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/01/11/Great_ArticleApache_Hudi_vs_Delta_Lake_vs_Apache_Iceberg_Lakehouse_Feature_Comparison_by_OneHouse</link>
+            <guid>/2023/01/11/Great_ArticleApache_Hudi_vs_Delta_Lake_vs_Apache_Iceberg_Lakehouse_Feature_Comparison_by_OneHouse</guid>
+            <pubDate>Wed, 11 Jan 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Streaming ETL using Apache Flink joining multiple Kinesis streams | Demo]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/01/01/Streaming_ETL_using_Apache_Flink_joining_multiple_Kinesis_streams_Demo</link>
+            <guid>/2023/01/01/Streaming_ETL_using_Apache_Flink_joining_multiple_Kinesis_streams_Demo</guid>
+            <pubDate>Sun, 01 Jan 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Transaction Hudi Data Lake with Streaming ETL from Multiple Kinesis Streams & Joining using Flink]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/01/01/Transaction_Hudi_Data_Lake_with_Streaming_ETL_from_Multiple_Kinesis_Streams_Joining_using_Flink</link>
+            <guid>/2023/01/01/Transaction_Hudi_Data_Lake_with_Streaming_ETL_from_Multiple_Kinesis_Streams_Joining_using_Flink</guid>
+            <pubDate>Sun, 01 Jan 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Step by Step guide how to setup VPC & Subnet & Get Started with HUDI on EMR | Installation Guide |]]></title>
+            <link>https://hudi.apache.org/cn/videos/2022/12/30/Step_by_Step_guide_how_to_setup_VPC_Subnet_Get_Started_with_HUDI_on_EMR_Installation_Guide</link>
+            <guid>/2022/12/30/Step_by_Step_guide_how_to_setup_VPC_Subnet_Get_Started_with_HUDI_on_EMR_Installation_Guide</guid>
+            <pubDate>Fri, 30 Dec 2022 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Comparing Apache Hudi's MOR and COW Tables: Use Cases from Uber]]></title>
+            <link>https://hudi.apache.org/cn/videos/2022/12/28/Comparing_Apache_Hudi_s_MOR_and_COW_Tables_Use_Cases_from_Uber</link>
+            <guid>/2022/12/28/Comparing_Apache_Hudi_s_MOR_and_COW_Tables_Use_Cases_from_Uber</guid>
+            <pubDate>Wed, 28 Dec 2022 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Bring Data from Source using Debezium with CDC into Kafka&S3Sink &Build Hudi Datalake | Hands on lab]]></title>
+            <link>https://hudi.apache.org/cn/videos/2022/12/27/Bring_Data_from_Source_using_Debezium_with_CDC_into_Kafka_S3Sink_Build_Hudi_Datalake_Hands_on_lab</link>
+            <guid>/2022/12/27/Bring_Data_from_Source_using_Debezium_with_CDC_into_Kafka_S3Sink_Build_Hudi_Datalake_Hands_on_lab</guid>
+            <pubDate>Tue, 27 Dec 2022 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Apache Hudi on Windows Machine Spark 3.3 and hadoop2.7 Step by Step guide and Installation Process]]></title>
+            <link>https://hudi.apache.org/cn/videos/2022/12/24/Apache_Hudi_on_Windows_Machine_Spark_33_and_hadoop27_Step_by_Step_guide_and_Installation_Process</link>
+            <guid>/2022/12/24/Apache_Hudi_on_Windows_Machine_Spark_33_and_hadoop27_Step_by_Step_guide_and_Installation_Process</guid>
+            <pubDate>Sat, 24 Dec 2022 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Lets Build Streaming Solution using Kafka + PySpark and Apache HUDI Hands on Lab with code]]></title>
+            <link>https://hudi.apache.org/cn/videos/2022/12/24/Lets_Build_Streaming_Solution_using_Kafka_PySpark_and_Apache_HUDI_Hands_on_Lab_with_code</link>
+            <guid>/2022/12/24/Lets_Build_Streaming_Solution_using_Kafka_PySpark_and_Apache_HUDI_Hands_on_Lab_with_code</guid>
+            <pubDate>Sat, 24 Dec 2022 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Apache Hudi with DBT Hands on Lab.Transform Raw Hudi tables with DBT and Glue Interactive Session]]></title>
+            <link>https://hudi.apache.org/cn/videos/2022/12/23/Apache_Hudi_with_DBT_Hands_on_LabTransform_Raw_Hudi_tables_with_DBT_and_Glue_Interactive_Session</link>
+            <guid>/2022/12/23/Apache_Hudi_with_DBT_Hands_on_LabTransform_Raw_Hudi_tables_with_DBT_and_Glue_Interactive_Session</guid>
+            <pubDate>Fri, 23 Dec 2022 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Learn Schema Evolution in Apache Hudi Transaction Datalake with hands on labs]]></title>
+            <link>https://hudi.apache.org/cn/videos/2022/12/21/Learn_Schema_Evolution_in_Apache_Hudi_Transaction_Datalake_with_hands_on_labs</link>
+            <guid>/2022/12/21/Learn_Schema_Evolution_in_Apache_Hudi_Transaction_Datalake_with_hands_on_labs</guid>
+            <pubDate>Wed, 21 Dec 2022 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Getting started with Kafka and Glue to Build Real Time Apache Hudi Transaction Datalake]]></title>
+            <link>https://hudi.apache.org/cn/videos/2022/12/20/Getting_started_with_Kafka_and_Glue_to_Build_Real_Time_Apache_Hudi_Transaction_Datalake</link>
+            <guid>/2022/12/20/Getting_started_with_Kafka_and_Glue_to_Build_Real_Time_Apache_Hudi_Transaction_Datalake</guid>
+            <pubDate>Tue, 20 Dec 2022 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Build Production Ready Alternative Data Pipeline from DynamoDB to Apache Hudi | PROJECT DEMO]]></title>
+            <link>https://hudi.apache.org/cn/videos/2022/12/19/Build_Production_Ready_Alternative_Data_Pipeline_from_DynamoDB_to_Apache_Hudi_PROJECT_DEMO</link>
+            <guid>/2022/12/19/Build_Production_Ready_Alternative_Data_Pipeline_from_DynamoDB_to_Apache_Hudi_PROJECT_DEMO</guid>
+            <pubDate>Mon, 19 Dec 2022 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Build Production Ready Alternative Data Pipeline from DynamoDB to Apache Hudi | Step by Step Guide]]></title>
+            <link>https://hudi.apache.org/cn/videos/2022/12/19/Build_Production_Ready_Alternative_Data_Pipeline_from_DynamoDB_to_Apache_Hudi_Step_by_Step_Guide</link>
+            <guid>/2022/12/19/Build_Production_Ready_Alternative_Data_Pipeline_from_DynamoDB_to_Apache_Hudi_Step_by_Step_Guide</guid>
+            <pubDate>Mon, 19 Dec 2022 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Insert|Update|Read|Write|SnapShot| Time Travel |incremental Query on Apache Hudi datalake (S3)]]></title>
+            <link>https://hudi.apache.org/cn/videos/2022/12/18/InsertUpdateReadWriteSnapShot_Time_Travel_incremental_Query_on_Apache_Hudi_datalake_S3</link>
+            <guid>/2022/12/18/InsertUpdateReadWriteSnapShot_Time_Travel_incremental_Query_on_Apache_Hudi_datalake_S3</guid>
+            <pubDate>Sun, 18 Dec 2022 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Migrate Certain Tables from ONPREM DB using DMS into Apache Hudi Transaction Datalake with Glue|Demo]]></title>
+            <link>https://hudi.apache.org/cn/videos/2022/12/17/Migrate_Certain_Tables_from_ONPREM_DB_using_DMS_into_Apache_Hudi_Transaction_Datalake_with_GlueDemo</link>
+            <guid>/2022/12/17/Migrate_Certain_Tables_from_ONPREM_DB_using_DMS_into_Apache_Hudi_Transaction_Datalake_with_GlueDemo</guid>
+            <pubDate>Sat, 17 Dec 2022 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Step by Step Guide on Migrate Certain Tables from DB using DMS into Apache Hudi Transaction Datalake]]></title>
+            <link>https://hudi.apache.org/cn/videos/2022/12/17/Step_by_Step_Guide_on_Migrate_Certain_Tables_from_DB_using_DMS_into_Apache_Hudi_Transaction_Datalake</link>
+            <guid>/2022/12/17/Step_by_Step_Guide_on_Migrate_Certain_Tables_from_DB_using_DMS_into_Apache_Hudi_Transaction_Datalake</guid>
+            <pubDate>Sat, 17 Dec 2022 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Build production Ready Real Time Transaction Hudi Datalake from DynamoDB Streams using Glue &kinesis]]></title>
+            <link>https://hudi.apache.org/cn/videos/2022/12/15/Build_production_Ready_Real_Time_Transaction_Hudi_Datalake_from_DynamoDB_Streams_using_Glue_kinesis</link>
+            <guid>/2022/12/15/Build_production_Ready_Real_Time_Transaction_Hudi_Datalake_from_DynamoDB_Streams_using_Glue_kinesis</guid>
+            <pubDate>Thu, 15 Dec 2022 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Build Slowly Changing Dimensions Type 2 (SCD2) with Apache Spark and Apache Hudi | Hands on Labs]]></title>
+            <link>https://hudi.apache.org/cn/videos/2022/12/14/Build_Slowly_Changing_Dimensions_Type_2_SCD2_with_Apache_Spark_and_Apache_Hudi_Hands_on_Labs</link>
+            <guid>/2022/12/14/Build_Slowly_Changing_Dimensions_Type_2_SCD2_with_Apache_Spark_and_Apache_Hudi_Hands_on_Labs</guid>
+            <pubDate>Wed, 14 Dec 2022 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Hands on Lab with using DynamoDB as lock table for Apache Hudi Data Lakes]]></title>
+            <link>https://hudi.apache.org/cn/videos/2022/12/14/Hands_on_Lab_with_using_DynamoDB_as_lock_table_for_Apache_Hudi_Data_Lakes</link>
+            <guid>/2022/12/14/Hands_on_Lab_with_using_DynamoDB_as_lock_table_for_Apache_Hudi_Data_Lakes</guid>
+            <pubDate>Wed, 14 Dec 2022 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[How to convert Existing data in S3 into Apache Hudi Transaction Datalake with Glue | Hands on Lab]]></title>
+            <link>https://hudi.apache.org/cn/videos/2022/12/14/How_to_convert_Existing_data_in_S3_into_Apache_Hudi_Transaction_Datalake_with_Glue_Hands_on_Lab</link>
+            <guid>/2022/12/14/How_to_convert_Existing_data_in_S3_into_Apache_Hudi_Transaction_Datalake_with_Glue_Hands_on_Lab</guid>
+            <pubDate>Wed, 14 Dec 2022 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Build Datalakes on S3 with Apache HUDI in a easy way for Beginners with hands on labs | Glue]]></title>
+            <link>https://hudi.apache.org/cn/videos/2022/12/11/Build_Datalakes_on_S3_with_Apache_HUDI_in_a_easy_way_for_Beginners_with_hands_on_labs_Glue</link>
+            <guid>/2022/12/11/Build_Datalakes_on_S3_with_Apache_HUDI_in_a_easy_way_for_Beginners_with_hands_on_labs_Glue</guid>
+            <pubDate>Sun, 11 Dec 2022 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Simple 5 Steps Guide to get started with Apache Hudi and Glue 4.0 and query the data using Athena]]></title>
+            <link>https://hudi.apache.org/cn/videos/2022/12/08/Simple_5_Steps_Guide_to_get_started_with_Apache_Hudi_and_Glue_40_and_query_the_data_using_Athena</link>
+            <guid>/2022/12/08/Simple_5_Steps_Guide_to_get_started_with_Apache_Hudi_and_Glue_40_and_query_the_data_using_Athena</guid>
+            <pubDate>Thu, 08 Dec 2022 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Different table types in Apache Hudi | MOR and COW | Deep Dive | By Sivabalan Narayanan]]></title>
+            <link>https://hudi.apache.org/cn/videos/2022/11/20/Different_table_types_in_Apache_Hudi_MOR_and_COW_Deep_Dive_By_Sivabalan_Narayanan</link>
+            <guid>/2022/11/20/Different_table_types_in_Apache_Hudi_MOR_and_COW_Deep_Dive_By_Sivabalan_Narayanan</guid>
+            <pubDate>Sun, 20 Nov 2022 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Build a Spark pipeline to analyze streaming data using AWS Glue, Apache Hudi, S3 and Athena]]></title>
+            <link>https://hudi.apache.org/cn/videos/2022/11/19/Build_a_Spark_pipeline_to_analyze_streaming_data_using_AWS_Glue_Apache_Hudi_S3_and_Athena</link>
+            <guid>/2022/11/19/Build_a_Spark_pipeline_to_analyze_streaming_data_using_AWS_Glue_Apache_Hudi_S3_and_Athena</guid>
+            <pubDate>Sat, 19 Nov 2022 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Insert | Update | Delete On Datalake (S3) with Apache Hudi and glue Pyspark]]></title>
+            <link>https://hudi.apache.org/cn/videos/2022/11/17/Insert_Update_Delete_On_Datalake_S3_with_Apache_Hudi_and_glue_Pyspark</link>
+            <guid>/2022/11/17/Insert_Update_Delete_On_Datalake_S3_with_Apache_Hudi_and_glue_Pyspark</guid>
+            <pubDate>Thu, 17 Nov 2022 00:00:00 GMT</pubDate>
+        </item>
+    </channel>
+</rss>

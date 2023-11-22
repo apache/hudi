@@ -10,10 +10,10 @@ This page introduces Flink-Hudi integration. We can feel the unique charm of how
 This guide helps you quickly start using Flink on Hudi, and learn different modes for reading/writing Hudi by Flink:
 
 - **Quick Start** : Read [Quick Start](#quick-start) to get started quickly Flink sql client to write to(read from) Hudi.
-- **Configuration** : For [Global Configuration](/docs/flink_configuration#global-configurations), sets up through `$FLINK_HOME/conf/flink-conf.yaml`. For per job configuration, sets up through [Table Option](/docs/flink_configuration#table-options).
-- **Writing Data** : Flink supports different modes for writing, such as [CDC Ingestion](/docs/hoodie_deltastreamer#cdc-ingestion), [Bulk Insert](/docs/hoodie_deltastreamer#bulk-insert), [Index Bootstrap](/docs/hoodie_deltastreamer#index-bootstrap), [Changelog Mode](/docs/hoodie_deltastreamer#changelog-mode) and [Append Mode](/docs/hoodie_deltastreamer#append-mode).
+- **Configuration** : For [Global Configuration](/docs/0.13.0/flink_configuration#global-configurations), sets up through `$FLINK_HOME/conf/flink-conf.yaml`. For per job configuration, sets up through [Table Option](/docs/0.13.0/flink_configuration#table-options).
+- **Writing Data** : Flink supports different modes for writing, such as [CDC Ingestion](/docs/0.13.0/hoodie_deltastreamer#cdc-ingestion), [Bulk Insert](/docs/0.13.0/hoodie_deltastreamer#bulk-insert), [Index Bootstrap](/docs/0.13.0/hoodie_deltastreamer#index-bootstrap), [Changelog Mode](/docs/0.13.0/hoodie_deltastreamer#changelog-mode) and [Append Mode](/docs/0.13.0/hoodie_deltastreamer#append-mode).
 - **Querying Data** : Flink supports different modes for reading, such as [Streaming Query](/docs/querying_data#streaming-query) and [Incremental Query](/docs/querying_data#incremental-query).
-- **Tuning** : For write/read tasks, this guide gives some tuning suggestions, such as [Memory Optimization](/docs/flink_configuration#memory-optimization) and [Write Rate Limit](/docs/flink_configuration#write-rate-limit).
+- **Tuning** : For write/read tasks, this guide gives some tuning suggestions, such as [Memory Optimization](/docs/0.13.0/flink_configuration#memory-optimization) and [Write Rate Limit](/docs/0.13.0/flink_configuration#write-rate-limit).
 - **Optimization**: Offline compaction is supported [Offline Compaction](/docs/compaction#flink-offline-compaction).
 - **Query Engines**: Besides Flink, many other engines are integrated: [Hive Query](/docs/syncing_metastore#flink-setup), [Presto Query](/docs/0.13.0/query_engine_setup#prestodb).
 
@@ -49,7 +49,7 @@ Start a standalone Flink cluster within hadoop environment.
 Before you start up the cluster, we suggest to config the cluster as follows:
 
 - in `$FLINK_HOME/conf/flink-conf.yaml`, add config option `taskmanager.numberOfTaskSlots: 4`
-- in `$FLINK_HOME/conf/flink-conf.yaml`, [add other global configurations according to the characteristics of your task](/docs/flink_configuration#global-configurations)
+- in `$FLINK_HOME/conf/flink-conf.yaml`, [add other global configurations according to the characteristics of your task](/docs/0.13.0/flink_configuration#global-configurations)
 - in `$FLINK_HOME/conf/workers`, add item `localhost` as 4 lines so that there are 4 workers on the local cluster
 
 Now starts the cluster:
@@ -335,13 +335,13 @@ it can then applies the UPDATE and DELETE by per-row level. You can then sync a 
 of RDBMS.
 
 ## Where To Go From Here?
-Check out the [Flink Setup](/docs/next/flink_configuration) how-to page for deeper dive into configuration settings. 
+Check out the [Flink Setup](/docs/0.13.0/flink_configuration) how-to page for deeper dive into configuration settings. 
 
 If you are relatively new to Apache Hudi, it is important to be familiar with a few core concepts:
-  - [Hudi Timeline](/docs/next/timeline) – How Hudi manages transactions and other table services
-  - [Hudi File Layout](/docs/next/file_layouts) - How the files are laid out on storage
-  - [Hudi Table Types](/docs/next/table_types) – `COPY_ON_WRITE` and `MERGE_ON_READ`
-  - [Hudi Query Types](/docs/next/table_types#query-types) – Snapshot Queries, Incremental Queries, Read-Optimized Queries
+  - [Hudi Timeline](/docs/timeline) – How Hudi manages transactions and other table services
+  - [Hudi File Layout](/docs/file_layouts) - How the files are laid out on storage
+  - [Hudi Table Types](/docs/table_types) – `COPY_ON_WRITE` and `MERGE_ON_READ`
+  - [Hudi Query Types](/docs/table_types#query-types) – Snapshot Queries, Incremental Queries, Read-Optimized Queries
 
 See more in the "Concepts" section of the docs.
 

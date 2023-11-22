@@ -269,7 +269,7 @@ Spark SQL needs an explicit create table command.
   considered a managed table. You can read more about external vs managed
   tables [here](https://sparkbyexamples.com/apache-hive/difference-between-hive-internal-tables-and-external-tables/).
 
-*Read more in the [table management](/docs/table_management) guide.*
+*Read more in the [table management](/docs/0.13.0/table_management) guide.*
 
 :::note
 1. Since Hudi 0.10.0, `primaryKey` is required. It aligns with Hudi DataSource writer’s and resolves behavioural
@@ -530,7 +530,7 @@ complex, custom, NonPartitioned Key gen, etc.
 
 
 :::tip
-With [externalized config file](/docs/next/configurations#externalized-config-file),
+With [externalized config file](/docs/configurations#externalized-config-file),
 instead of directly passing configuration settings to every Hudi job, 
 you can also centrally set them in a configuration file `hudi-default.conf`.
 :::
@@ -1096,7 +1096,7 @@ For CoW tables, table services work in inline mode by default.
 For MoR tables, some async services are enabled by default.
 
 :::note
-Since Hudi 0.11 Metadata Table is enabled by default. When using async table services with Metadata Table enabled you must use Optimistic Concurrency Control to avoid the risk of data loss (even in single writer scenario). See [Metadata Table deployment considerations](/docs/next/metadata#deployment-considerations) for detailed instructions.
+Since Hudi 0.11 Metadata Table is enabled by default. When using async table services with Metadata Table enabled you must use Optimistic Concurrency Control to avoid the risk of data loss (even in single writer scenario). See [Metadata Table deployment considerations](/docs/metadata#deployment-considerations) for detailed instructions.
 
 If you're using Foreach or ForeachBatch streaming sink you must use inline table services, async table services are not supported.
 :::

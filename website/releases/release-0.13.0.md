@@ -1,6 +1,6 @@
 ---
 title: "Release 0.13.0"
-sidebar_position: 3
+sidebar_position: 5
 layout: releases
 toc: true
 ---
@@ -351,7 +351,7 @@ implementation, unfortunately, you'd need to wait until it is replaced by the co
 
 ### New Source Support in Deltastreamer
 
-[Deltastreamer](/docs/hoodie_deltastreamer) is a fully-managed incremental ETL utility that supports a wide variety of
+[Deltastreamer](/docs/0.13.0/hoodie_deltastreamer) is a fully-managed incremental ETL utility that supports a wide variety of
 sources. In this release, we have added three new sources to its repertoire.
 
 #### Proto Kafka Source
@@ -359,7 +359,7 @@ sources. In this release, we have added three new sources to its repertoire.
 Deltastreamer already supports exactly-once ingestion of new events from Kafka using JSON and Avro formats.
 [`ProtoKafkaSource`](https://github.com/apache/hudi/blob/release-0.13.0/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/ProtoKafkaSource.java)
 extends this support to Protobuf class-based schemas as well. With just one additional config, one
-can easily set up this source. Check out the [docs](/docs/hoodie_deltastreamer) for more details.
+can easily set up this source. Check out the [docs](/docs/0.13.0/hoodie_deltastreamer) for more details.
 
 #### GCS Incremental Source
 
@@ -371,7 +371,7 @@ Check out the docs on how to set up this source.
 #### Pulsar Source
 [Apache Pulsar](https://pulsar.apache.org/) is an open-source, distributed messaging and streaming platform built for
 the cloud. [`PulsarSource`](https://github.com/apache/hudi/blob/release-0.13.0/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/PulsarSource.java)
-supports ingesting from Apache Pulsar through the Deltastreamer. Check out the [docs](/docs/hoodie_deltastreamer) on how
+supports ingesting from Apache Pulsar through the Deltastreamer. Check out the [docs](/docs/0.13.0/hoodie_deltastreamer) on how
 to set up this source.
 
 ### Support for Partial Payload Update

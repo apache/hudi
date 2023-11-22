@@ -111,7 +111,7 @@ for even more flexibility and get away from Hive-style partition evol route.
 
 ### What are some ways to write a Hudi dataset?
 
-Typically, you obtain a set of partial updates/inserts from your source and issue [write operations](https://hudi.apache.org/docs/write_operations/) against a Hudi dataset.  If you ingesting data from any of the standard sources like Kafka, or tailing DFS, the [delta streamer](https://hudi.apache.org/docs/hoodie_deltastreamer#deltastreamer) tool is invaluable and provides an easy, self-managed solution to getting data written into Hudi. You can also write your own code to capture data from a custom source using the Spark datasource API and use a [Hudi datasource](https://hudi.apache.org/docs/writing_data/#spark-datasource-writer) to write into Hudi. 
+Typically, you obtain a set of partial updates/inserts from your source and issue [write operations](https://hudi.apache.org/docs/write_operations/) against a Hudi dataset.  If you ingesting data from any of the standard sources like Kafka, or tailing DFS, the [delta streamer](https://hudi.apache.org/docs/0.13.1/hoodie_deltastreamer#deltastreamer) tool is invaluable and provides an easy, self-managed solution to getting data written into Hudi. You can also write your own code to capture data from a custom source using the Spark datasource API and use a [Hudi datasource](https://hudi.apache.org/docs/writing_data/#spark-datasource-writer) to write into Hudi. 
 
 ### How is a Hudi job deployed?
 
@@ -304,8 +304,8 @@ Depending on how you write to Hudi these are the possible options currently.
    - Please note it is not possible to disable async compaction for MOR dataset with spark structured streaming. 
 - Flink:
    - Async compaction is enabled by default for Merge-On-Read table.
-   - Offline compaction can be achieved by setting ```compaction.async.enabled``` to ```false``` and periodically running [Flink offline Compactor](https://hudi.apache.org/docs/next/compaction/#flink-offline-compaction). When running the offline compactor, one needs to ensure there are no active writes to the table.
-   - Third option (highly recommended over the second one) is to schedule the compactions from the regular ingestion job and executing the compaction plans from an offline job. To achieve this set ```compaction.async.enabled``` to ```false```, ```compaction.schedule.enabled``` to ```true``` and then run the [Flink offline Compactor](https://hudi.apache.org/docs/next/compaction/#flink-offline-compaction) periodically to execute the plans.
+   - Offline compaction can be achieved by setting ```compaction.async.enabled``` to ```false``` and periodically running [Flink offline Compactor](https://hudi.apache.org/docs/compaction/#flink-offline-compaction). When running the offline compactor, one needs to ensure there are no active writes to the table.
+   - Third option (highly recommended over the second one) is to schedule the compactions from the regular ingestion job and executing the compaction plans from an offline job. To achieve this set ```compaction.async.enabled``` to ```false```, ```compaction.schedule.enabled``` to ```true``` and then run the [Flink offline Compactor](https://hudi.apache.org/docs/compaction/#flink-offline-compaction) periodically to execute the plans.
 
 ### How to disable all table services in case of multiple writers?
 
@@ -552,7 +552,7 @@ But manually changing it will result in checksum errors. So, we have to go via h
 ### Can I get notified when new commits happen in my Hudi table?
 
 Yes. Hudi provides the ability to post a callback notification about a write commit. You can use a http hook or choose to 
-be notified via a Kafka/pulsar topic or plug in your own implementation to get notified. Please refer [here](https://hudi.apache.org/docs/next/writing_data/#commit-notifications)
+be notified via a Kafka/pulsar topic or plug in your own implementation to get notified. Please refer [here](https://hudi.apache.org/docs/writing_data/#commit-notifications)
 for details
 
 ### How do I verify datasource schema reconciliation in Hudi?
