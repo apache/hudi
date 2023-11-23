@@ -210,4 +210,13 @@ public abstract class HoodieReaderContext<T> {
    * @return a function that takes in a record and returns the record with reordered columns
    */
   public abstract UnaryOperator<T> projectRecord(Schema from, Schema to);
+
+  /**
+   * Extracts the record position value from the record itself.
+   *
+   * @return the record position in the base file.
+   */
+  public long extractRecordPosition(T record, Schema schema, String fieldName, long providedPositionIfNeeded) {
+    return providedPositionIfNeeded;
+  }
 }
