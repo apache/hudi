@@ -49,7 +49,7 @@ public class TestPubsubMessagesFetcher {
   private static final long MAX_WAIT_TIME_IN_REQUEST = TimeUnit.SECONDS.toMillis(1);
 
   private final SubscriberStub mockSubscriber = Mockito.mock(SubscriberStub.class);
-  private final PubsubMessagesFetcher.PubsubQueueClient mockPubsubQueueClient = Mockito.mock(PubsubMessagesFetcher.PubsubQueueClient.class);
+  private final PubsubQueueClient mockPubsubQueueClient = Mockito.mock(PubsubQueueClient.class);
 
   @Test
   public void testFetchMessages() throws IOException {
