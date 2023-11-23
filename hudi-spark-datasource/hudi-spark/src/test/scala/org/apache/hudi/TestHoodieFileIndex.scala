@@ -246,7 +246,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
   def testIndexRefreshesFileSlices(listingModeOverride: String,
                                    useMetadataTable: Boolean): Unit = {
     def getDistinctCommitTimeFromAllFilesInIndex(files: Seq[PartitionDirectory]): Seq[String] = {
-      files.flatMap(_.files).map(new HoodieBaseFile(_)).map(_.getCommitTime).distinct
+      files.flatMap(_.files).map(fileStatus => new HoodieBaseFile(fileStatus.getPath.toString)).map(_.getCommitTime).distinct
     }
 
     val r = new Random(0xDEED)
