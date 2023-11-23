@@ -116,9 +116,7 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
 
     HoodieJavaWriteClient writeClient;
     if (passInTimelineServer) {
-      EmbeddedTimelineService timelineService =
-          new EmbeddedTimelineService(context, null, writeConfig);
-      timelineService.startServer();
+      EmbeddedTimelineService timelineService = EmbeddedTimelineService.getOrStartEmbeddedTimelineService(context, null, writeConfig);
       writeConfig.setViewStorageConfig(timelineService.getRemoteFileSystemViewConfig());
       writeClient = new HoodieJavaWriteClient(context, writeConfig, true, Option.of(timelineService));
       // Both the write client and the table service client should use the same passed-in
@@ -127,7 +125,7 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
       assertEquals(timelineService, writeClient.getTableServiceClient().getTimelineServer().get());
       // Write config should not be changed
       assertEquals(writeConfig, writeClient.getConfig());
-      timelineService.stop();
+      timelineService.stopForBasePath(writeConfig.getBasePath());
     } else {
       writeClient = new HoodieJavaWriteClient(context, writeConfig);
       // Only one timeline server should be instantiated, and the same timeline server

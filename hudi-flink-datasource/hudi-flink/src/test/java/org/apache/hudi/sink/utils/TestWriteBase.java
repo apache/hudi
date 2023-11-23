@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
@@ -484,6 +485,7 @@ public class TestWriteBase {
 
     public void end() throws Exception {
       this.pipeline.close();
+      this.pipeline = null;
     }
 
     private String lastPendingInstant() {

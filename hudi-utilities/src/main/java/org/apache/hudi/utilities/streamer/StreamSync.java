@@ -1218,7 +1218,7 @@ public class StreamSync implements Serializable, Closeable {
 
     LOG.info("Shutting down embedded timeline server");
     if (embeddedTimelineService.isPresent()) {
-      embeddedTimelineService.get().stop();
+      embeddedTimelineService.get().stopForBasePath(cfg.targetBasePath);
     }
 
     if (metrics != null) {

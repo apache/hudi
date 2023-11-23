@@ -537,12 +537,14 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .checkpoint(1)
         .assertNextEvent()
         .checkpointComplete(1)
-        .checkWrittenData(EXPECTED3, 1);
+        .checkWrittenData(EXPECTED3, 1)
+            .end();
     // step to commit the 2nd txn, should throw exception
     // for concurrent modification of same fileGroups
     pipeline1.checkpoint(1)
         .assertNextEvent()
         .checkpointCompleteThrows(1, HoodieWriteConflictException.class, "Cannot resolve conflicts");
+    pipeline1.end();
   }
 
   // case2: txn2's time range has partial overlap with txn1
@@ -553,46 +555,69 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
     conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
     conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
+    TestHarness pipeline1 = null;
+    TestHarness pipeline2 = null;
 
-    TestHarness pipeline1 = preparePipeline(conf)
-        .consume(TestData.DATA_SET_INSERT_DUPLICATES)
-        .assertEmptyDataFiles();
-    // now start pipeline2 and suspend the txn commit
-    Configuration conf2 = conf.clone();
-    conf2.setString(FlinkOptions.WRITE_CLIENT_ID, "2");
-    TestHarness pipeline2 = preparePipeline(conf2)
-        .consume(TestData.DATA_SET_INSERT_DUPLICATES)
-        .assertEmptyDataFiles();
+    try {
+       pipeline1 = preparePipeline(conf)
+          .consume(TestData.DATA_SET_INSERT_DUPLICATES)
+          .assertEmptyDataFiles();
+      // now start pipeline2 and suspend the txn commit
+      Configuration conf2 = conf.clone();
+      conf2.setString(FlinkOptions.WRITE_CLIENT_ID, "2");
+       pipeline2 = preparePipeline(conf2)
+          .consume(TestData.DATA_SET_INSERT_DUPLICATES)
+          .assertEmptyDataFiles();
 
-    // step to commit the 1st txn, should succeed
-    pipeline1.checkpoint(1)
-        .assertNextEvent()
-        .checkpoint(1)
-        .assertNextEvent()
-        .checkpointComplete(1)
-        .checkWrittenData(EXPECTED3, 1);
+      // step to commit the 1st txn, should succeed
+      pipeline1.checkpoint(1)
+          .assertNextEvent()
+          .checkpoint(1)
+          .assertNextEvent()
+          .checkpointComplete(1)
+          .checkWrittenData(EXPECTED3, 1);
 
-    // step to commit the 2nd txn, should throw exception
-    // for concurrent modification of same fileGroups
-    pipeline2.checkpoint(1)
-        .assertNextEvent()
-        .checkpointCompleteThrows(1, HoodieWriteConflictException.class, "Cannot resolve conflicts");
+      // step to commit the 2nd txn, should throw exception
+      // for concurrent modification of same fileGroups
+      pipeline2.checkpoint(1)
+          .assertNextEvent()
+          .checkpointCompleteThrows(1, HoodieWriteConflictException.class, "Cannot resolve conflicts");
+    } finally {
+      if (pipeline1 != null) {
+        pipeline1.end();
+      }
+      if (pipeline2 != null) {
+        pipeline2.end();
+      }
+    }
   }
 
   @Test
   public void testReuseEmbeddedServer() throws IOException {
     conf.setInteger("hoodie.filesystem.view.remote.timeout.secs", 500);
-    HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf);
-    FileSystemViewStorageConfig viewStorageConfig = writeClient.getConfig().getViewStorageConfig();
+    conf.setString("hoodie.metadata.enable","true");
+    HoodieFlinkWriteClient writeClient = null;
+    HoodieFlinkWriteClient writeClient2 = null;
 
-    assertSame(viewStorageConfig.getStorageType(), FileSystemViewStorageType.REMOTE_FIRST);
+    try {
+      writeClient = FlinkWriteClients.createWriteClient(conf);
+      FileSystemViewStorageConfig viewStorageConfig = writeClient.getConfig().getViewStorageConfig();
 
-    // get another write client
-    writeClient = FlinkWriteClients.createWriteClient(conf);
-    assertSame(writeClient.getConfig().getViewStorageConfig().getStorageType(), FileSystemViewStorageType.REMOTE_FIRST);
-    assertEquals(viewStorageConfig.getRemoteViewServerPort(), writeClient.getConfig().getViewStorageConfig().getRemoteViewServerPort());
-    assertEquals(viewStorageConfig.getRemoteTimelineClientTimeoutSecs(), 500);
-    writeClient.close();
+      assertSame(viewStorageConfig.getStorageType(), FileSystemViewStorageType.REMOTE_FIRST);
+
+      // get another write client
+      writeClient2 = FlinkWriteClients.createWriteClient(conf);
+      assertSame(writeClient2.getConfig().getViewStorageConfig().getStorageType(), FileSystemViewStorageType.REMOTE_FIRST);
+      assertEquals(viewStorageConfig.getRemoteViewServerPort(), writeClient2.getConfig().getViewStorageConfig().getRemoteViewServerPort());
+      assertEquals(viewStorageConfig.getRemoteTimelineClientTimeoutSecs(), 500);
+    } finally {
+      if (writeClient != null) {
+        writeClient.close();
+      }
+      if (writeClient2 != null) {
+        writeClient2.close();
+      }
+    }
   }
 
   @Test

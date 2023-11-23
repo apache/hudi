@@ -165,6 +165,18 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     return opts;
   }
 
+  @ParameterizedTest
+  @MethodSource("configParamsDirectBased")
+  public void testHoodieClientBasicMultiWriterWithEarlyConflictDetectionDirect(String tableType, String earlyConflictDetectionStrategy) throws Exception {
+    testHoodieClientBasicMultiWriterWithEarlyConflictDetection(tableType, MarkerType.DIRECT.name(), earlyConflictDetectionStrategy);
+  }
+
+  @ParameterizedTest
+  @MethodSource("configParamsTimelineServerBased")
+  public void testHoodieClientBasicMultiWriterWithEarlyConflictDetectionTimelineServerBased(String tableType, String earlyConflictDetectionStrategy) throws Exception {
+    testHoodieClientBasicMultiWriterWithEarlyConflictDetection(tableType, MarkerType.TIMELINE_SERVER_BASED.name(), earlyConflictDetectionStrategy);
+  }
+
   /**
    * Test multi-writers with early conflict detect enable, including
    * 1. MOR + Direct marker
@@ -185,9 +197,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
    * @param markerType
    * @throws Exception
    */
-  @ParameterizedTest
-  @MethodSource("configParams")
-  public void testHoodieClientBasicMultiWriterWithEarlyConflictDetection(String tableType, String markerType, String earlyConflictDetectionStrategy) throws Exception {
+  private void testHoodieClientBasicMultiWriterWithEarlyConflictDetection(String tableType, String markerType, String earlyConflictDetectionStrategy) throws Exception {
     if (tableType.equalsIgnoreCase(HoodieTableType.MERGE_ON_READ.name())) {
       setUpMORTestTable();
     }
@@ -953,14 +963,21 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     return result;
   }
 
-  public static Stream<Arguments> configParams() {
+  public static Stream<Arguments> configParamsTimelineServerBased() {
     Object[][] data =
         new Object[][] {
-            {"COPY_ON_WRITE", MarkerType.TIMELINE_SERVER_BASED.name(), AsyncTimelineServerBasedDetectionStrategy.class.getName()},
-            {"MERGE_ON_READ", MarkerType.TIMELINE_SERVER_BASED.name(), AsyncTimelineServerBasedDetectionStrategy.class.getName()},
-            {"MERGE_ON_READ", MarkerType.DIRECT.name(), SimpleDirectMarkerBasedDetectionStrategy.class.getName()},
-            {"COPY_ON_WRITE", MarkerType.DIRECT.name(), SimpleDirectMarkerBasedDetectionStrategy.class.getName()},
-            {"COPY_ON_WRITE", MarkerType.DIRECT.name(), SimpleTransactionDirectMarkerBasedDetectionStrategy.class.getName()}
+            {"COPY_ON_WRITE", AsyncTimelineServerBasedDetectionStrategy.class.getName()},
+            {"MERGE_ON_READ", AsyncTimelineServerBasedDetectionStrategy.class.getName()}
+        };
+    return Stream.of(data).map(Arguments::of);
+  }
+
+  public static Stream<Arguments> configParamsDirectBased() {
+    Object[][] data =
+        new Object[][] {
+            {"MERGE_ON_READ", SimpleDirectMarkerBasedDetectionStrategy.class.getName()},
+            {"COPY_ON_WRITE", SimpleDirectMarkerBasedDetectionStrategy.class.getName()},
+            {"COPY_ON_WRITE", SimpleTransactionDirectMarkerBasedDetectionStrategy.class.getName()}
         };
     return Stream.of(data).map(Arguments::of);
   }

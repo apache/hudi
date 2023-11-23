@@ -68,6 +68,8 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
   private final String timelineServerHost;
   private final int timelineServerPort;
   private final int timeoutSecs;
+  private static final TypeReference<Boolean> BOOLEAN_TYPE_REFERENCE = new TypeReference<Boolean>() {};
+  private static final TypeReference<Set<String>> STRING_TYPE_REFERENCE = new TypeReference<Set<String>>() {};
 
   public TimelineServerBasedWriteMarkers(HoodieTable table, String instantTime) {
     this(table.getMetaClient().getBasePath(),
@@ -91,7 +93,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
     Map<String, String> paramsMap = Collections.singletonMap(MARKER_DIR_PATH_PARAM, markerDirPath.toString());
     try {
       return executeRequestToTimelineServer(
-          DELETE_MARKER_DIR_URL, paramsMap, new TypeReference<Boolean>() {}, RequestMethod.POST);
+          DELETE_MARKER_DIR_URL, paramsMap, BOOLEAN_TYPE_REFERENCE, RequestMethod.POST);
     } catch (IOException e) {
       throw new HoodieRemoteException("Failed to delete marker directory " + markerDirPath.toString(), e);
     }
@@ -102,7 +104,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
     Map<String, String> paramsMap = Collections.singletonMap(MARKER_DIR_PATH_PARAM, markerDirPath.toString());
     try {
       return executeRequestToTimelineServer(
-          MARKERS_DIR_EXISTS_URL, paramsMap, new TypeReference<Boolean>() {}, RequestMethod.GET);
+          MARKERS_DIR_EXISTS_URL, paramsMap, BOOLEAN_TYPE_REFERENCE, RequestMethod.GET);
     } catch (IOException e) {
       throw new HoodieRemoteException("Failed to check marker directory " + markerDirPath.toString(), e);
     }
@@ -113,7 +115,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
     Map<String, String> paramsMap = Collections.singletonMap(MARKER_DIR_PATH_PARAM, markerDirPath.toString());
     try {
       Set<String> markerPaths = executeRequestToTimelineServer(
-          CREATE_AND_MERGE_MARKERS_URL, paramsMap, new TypeReference<Set<String>>() {}, RequestMethod.GET);
+          CREATE_AND_MERGE_MARKERS_URL, paramsMap, STRING_TYPE_REFERENCE, RequestMethod.GET);
       return markerPaths.stream().map(WriteMarkers::stripMarkerSuffix).collect(Collectors.toSet());
     } catch (IOException e) {
       throw new HoodieRemoteException("Failed to get CREATE and MERGE data file paths in "
@@ -126,7 +128,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
     Map<String, String> paramsMap = Collections.singletonMap(MARKER_DIR_PATH_PARAM, markerDirPath.toString());
     try {
       return executeRequestToTimelineServer(
-          ALL_MARKERS_URL, paramsMap, new TypeReference<Set<String>>() {}, RequestMethod.GET);
+          ALL_MARKERS_URL, paramsMap, STRING_TYPE_REFERENCE, RequestMethod.GET);
     } catch (IOException e) {
       throw new HoodieRemoteException("Failed to get all markers in " + markerDirPath.toString(), e);
     }
@@ -180,8 +182,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
     boolean success;
     try {
       success = executeRequestToTimelineServer(
-          CREATE_MARKER_URL, paramsMap, new TypeReference<Boolean>() {
-          }, RequestMethod.POST);
+          CREATE_MARKER_URL, paramsMap, BOOLEAN_TYPE_REFERENCE, RequestMethod.POST);
     } catch (IOException e) {
       throw new HoodieRemoteException("Failed to create marker file " + partitionPath + "/" + markerFileName, e);
     }
