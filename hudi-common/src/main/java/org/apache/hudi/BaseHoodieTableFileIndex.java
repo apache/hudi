@@ -428,6 +428,8 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
     // Reset it to null to trigger re-loading of all partition path
     this.cachedAllPartitionPaths = null;
+    // Reset to force reload file slices inside partitions
+    this.cachedAllInputFileSlices = new HashMap<>();
     if (!shouldListLazily) {
       ensurePreloadedPartitions(getAllQueryPartitionPaths());
     }
