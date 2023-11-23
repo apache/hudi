@@ -41,7 +41,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.zookeeper.Op;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -51,6 +50,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGER_STRATEGY;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
@@ -126,7 +126,9 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.readerState.baseFileAvroSchema = requiredSchema;
     this.readerState.logRecordAvroSchema = requiredSchema;
     this.readerState.mergeProps.putAll(props);
-    this.recordBuffer = shouldUseRecordPosition
+    this.recordBuffer = this.logFiles.isEmpty()
+        ? new HoodieSimpleFileGroupRecordBuffer<>(readerContext, requiredSchema, requiredSchema, Option.empty(), Option.empty(), recordMerger, props)
+        : shouldUseRecordPosition
         ? new HoodiePositionBasedFileGroupRecordBuffer<>(
         readerContext, requiredSchema, requiredSchema, Option.empty(), Option.empty(),
         recordMerger, props)
@@ -157,10 +159,11 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
 
     return readerContext.getFileRecordIterator(baseFile.getHadoopPath(), start, length,
-         dataSchema, generateRequiredSchema(), hadoopConf);
+         dataSchema, requiredSchema, hadoopConf);
   }
 
   private Schema generateRequiredSchema() {
+    //might need to change this if other queries than mor have mandatory fields
     if (logFiles.isEmpty()) {
       return requestedSchema;
     }
@@ -172,14 +175,26 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         if (foundField == null) {
           throw new IllegalArgumentException("Filed: " + field + " does not exist in the table schema");
         }
-        addedFields.add(foundField);
+        addedFields.add(new Schema.Field(foundField.name(), foundField.schema(), foundField.doc(), foundField.defaultVal()));
       }
     }
+
     if (addedFields.isEmpty()) {
-      return requestedSchema;
+      return maybeReorderForBootstrap(requestedSchema);
     }
 
-    return AvroSchemaUtils.appendFieldsToSchema(requestedSchema, addedFields);
+    return maybeReorderForBootstrap(AvroSchemaUtils.appendFieldsToSchema(requestedSchema, addedFields));
+  }
+
+  private Schema maybeReorderForBootstrap(Schema input) {
+    if (this.hoodieBaseFileOption.isPresent() && this.hoodieBaseFileOption.get().getBootstrapBaseFile().isPresent()) {
+      Pair<List<Schema.Field>,List<Schema.Field>> requiredFields = getDataAndMetaCols(input);
+      if (!(requiredFields.getLeft().isEmpty() || requiredFields.getRight().isEmpty())) {
+        return createSchemaFromFields(Stream.concat(requiredFields.getLeft().stream(), requiredFields.getRight().stream())
+            .collect(Collectors.toList()));
+      }
+    }
+    return input;
   }
 
   private static Pair<List<Schema.Field>,List<Schema.Field>> getDataAndMetaCols(Schema schema) {
@@ -190,6 +205,11 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   }
 
   private Schema createSchemaFromFields(List<Schema.Field> fields) {
+    //fields have positions set, so we need to remove them due to avro setFields implementation
+    for (int i = 0; i < fields.size(); i++) {
+      Schema.Field curr = fields.get(i);
+      fields.set(i, new Schema.Field(curr.name(), curr.schema(), curr.doc(), curr.defaultVal()));
+    }
     Schema newSchema = Schema.createRecord(dataSchema.getName(), dataSchema.getDoc(), dataSchema.getNamespace(), dataSchema.isError());
     newSchema.setFields(fields);
     return newSchema;
@@ -197,7 +217,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
   private ClosableIterator<T> makeBootstrapBaseFileIterator(HoodieBaseFile baseFile) {
     BaseFile dataFile = baseFile.getBootstrapBaseFile().get();
-    Schema requiredSchema = generateRequiredSchema();
     Pair<List<Schema.Field>,List<Schema.Field>> requiredFields = getDataAndMetaCols(requiredSchema);
     Pair<List<Schema.Field>,List<Schema.Field>> allFields = getDataAndMetaCols(dataSchema);
 
@@ -233,7 +252,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   public T next() {
     T nextVal = recordBuffer.next();
     if (outputConverter.isPresent()) {
-     return outputConverter.get().apply(nextVal);
+      return outputConverter.get().apply(nextVal);
     }
     return nextVal;
   }

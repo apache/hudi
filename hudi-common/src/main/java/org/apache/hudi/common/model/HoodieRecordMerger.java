@@ -31,7 +31,6 @@ import org.apache.avro.Schema;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.List;
 
 /**
  * HoodieMerge defines how to merge two records. It is a stateless component.
@@ -133,7 +132,7 @@ public interface HoodieRecordMerger extends Serializable {
       cfg.getRecordKeyFieldStream().forEach(requiredFields::add);
     }
     requiredFields.add(cfg.getPreCombineField());
-    return (String[]) requiredFields.toArray();
+    return requiredFields.toArray(new String[0]);
   }
 
   /**

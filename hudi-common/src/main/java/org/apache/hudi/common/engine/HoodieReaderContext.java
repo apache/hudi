@@ -192,6 +192,5 @@ public abstract class HoodieReaderContext<T> {
 
   public abstract ClosableIterator<T> mergeBootstrapReaders(ClosableIterator<T> skeletonFileIterator, ClosableIterator<T> dataFileIterator);
 
-
   public abstract UnaryOperator<T> projectRecord(Schema from, Schema to);
 }

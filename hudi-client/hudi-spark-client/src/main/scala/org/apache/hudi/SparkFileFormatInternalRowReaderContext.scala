@@ -53,8 +53,7 @@ import scala.collection.mutable
  *                        not required for reading a file group with only log files.
  * @param partitionValues The values for a partition in which the file group lives.
  */
-class SparkFileFormatInternalRowReaderContext(readerMaps: mutable.Map[Long, PartitionedFile => Iterator[InternalRow]],
-                                              partitionValues: InternalRow) extends BaseSparkInternalRowReaderContext {
+class SparkFileFormatInternalRowReaderContext(readerMaps: mutable.Map[Long, PartitionedFile => Iterator[InternalRow]]) extends BaseSparkInternalRowReaderContext {
   lazy val sparkAdapter = SparkAdapterSupport.sparkAdapter
   lazy val sparkFileReaderFactory = new HoodieSparkFileReaderFactory
   val deserializerMap: mutable.Map[Schema, HoodieAvroDeserializer] = mutable.Map()
@@ -66,7 +65,7 @@ class SparkFileFormatInternalRowReaderContext(readerMaps: mutable.Map[Long, Part
                                      requiredSchema: Schema,
                                      conf: Configuration): ClosableIterator[InternalRow] = {
     val fileInfo = sparkAdapter.getSparkPartitionedFileUtils
-      .createPartitionedFile(partitionValues, filePath, start, length)
+      .createPartitionedFile(InternalRow.empty, filePath, start, length)
     if (FSUtils.isLogFile(filePath)) {
       val structType: StructType = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
       val projection: UnsafeProjection = HoodieInternalRowUtils.getCachedUnsafeProjection(structType, structType)

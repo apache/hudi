@@ -17,15 +17,17 @@
 
 package org.apache.spark.sql
 
-import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.{SparkAdapterSupport, SparkHoodieTableFileIndex}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.TableOutputResolver
 import org.apache.spark.sql.catalyst.catalog.CatalogStorageFormat
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression, ProjectionOverSchema}
 import org.apache.spark.sql.catalyst.plans.JoinType
-import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, Join, JoinHint, LeafNode, LogicalPlan}
+import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, Join, JoinHint, LeafNode, LogicalPlan, Project}
 import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
 import org.apache.spark.sql.execution.command.{CreateTableLikeCommand, ExplainCommand}
+import org.apache.spark.sql.execution.datasources.HadoopFsRelation
+import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, ParquetFileFormat}
 import org.apache.spark.sql.execution.{ExtendedMode, SimpleMode}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
@@ -83,6 +85,13 @@ trait HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
 }
 
 object HoodieSpark3CatalystPlanUtils extends SparkAdapterSupport {
+
+  def applyNewFileFormatChanges(scanOperation: LogicalPlan, logicalRelation: LogicalPlan, fs: HadoopFsRelation): LogicalPlan = {
+    val ff = fs.fileFormat.asInstanceOf[ParquetFileFormat with HoodieFormatTrait]
+    ff.isProjected = true
+    Project(logicalRelation.resolve(fs.location.asInstanceOf[SparkHoodieTableFileIndex].schema, fs.sparkSession.sessionState.analyzer.resolver), scanOperation)
+  }
+
 
   /**
    * This is an extractor to accommodate for [[ResolvedTable]] signature change in Spark 3.2
