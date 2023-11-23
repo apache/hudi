@@ -553,7 +553,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
     );
   }
 
-  protected boolean isReplacedFileExistWithinSpecifiedPartition(String partitionPath) {
+  protected boolean hasReplacedFilesInPartition(String partitionPath) {
     throw new UnsupportedOperationException("isReplacedFileExistWithinSpecifiedPartition() is not supported for RocksDbBasedFileSystemView!");
   }
 

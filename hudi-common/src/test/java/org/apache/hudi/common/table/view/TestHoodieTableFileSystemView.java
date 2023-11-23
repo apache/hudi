@@ -363,9 +363,9 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     saveAsComplete(commitTimeline, instant2, Option.empty());
 
     fsView.getAllFileGroups(partitionPath1);
-    assertTrue(fsView.isPartitionAvailableInStoreForTest(partitionPath1));
+    assertTrue(((AbstractTableFileSystemView) fsView).isPartitionAvailableInStore(partitionPath1));
     fsView.getAllFileGroupsStateless(partitionPath2);
-    assertFalse(fsView.isPartitionAvailableInStoreForTest(partitionPath2));
+    assertFalse(((AbstractTableFileSystemView) fsView).isPartitionAvailableInStore(partitionPath2));
   }
 
   @Test

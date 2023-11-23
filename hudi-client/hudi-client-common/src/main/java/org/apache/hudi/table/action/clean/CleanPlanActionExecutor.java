@@ -123,21 +123,19 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       Map<String, List<HoodieCleanFileInfo>> cleanOps = new HashMap<>();
       List<String> partitionsToDelete = new ArrayList<>();
       for (int i = 0; i < partitionsToClean.size(); i += cleanerParallelism) {
+        // Handles at most 'cleanerParallelism' number of partitions once at a time to avoid overlarge memory pressure to the timeline server
+        // (remote or local embedded), thus to reduce the risk of an OOM exception.
         List<String> subPartitionsToClean = partitionsToClean.subList(i, Math.min(i + cleanerParallelism, partitionsToClean.size()));
         Map<String, Pair<Boolean, List<CleanFileInfo>>> cleanOpsWithPartitionMeta = context
             .map(subPartitionsToClean, partitionPathToClean -> Pair.of(partitionPathToClean, planner.getDeletePaths(partitionPathToClean, earliestInstant)), cleanerParallelism)
             .stream()
             .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
-        Map<String, List<HoodieCleanFileInfo>> subCleanOps = cleanOpsWithPartitionMeta.entrySet().stream()
-            .collect(Collectors.toMap(Map.Entry::getKey,
-                e -> CleanerUtils.convertToHoodieCleanFileInfoList(e.getValue().getValue())));
+        cleanOps.putAll(cleanOpsWithPartitionMeta.entrySet().stream()
+            .collect(Collectors.toMap(Map.Entry::getKey, e -> CleanerUtils.convertToHoodieCleanFileInfoList(e.getValue().getValue()))));
 
-        List<String> subPartitionsToDelete = cleanOpsWithPartitionMeta.entrySet().stream().filter(entry -> entry.getValue().getKey()).map(Map.Entry::getKey)
-            .collect(Collectors.toList());
-
-        cleanOps.putAll(subCleanOps);
-        partitionsToDelete.addAll(subPartitionsToDelete);
+        partitionsToDelete.addAll(cleanOpsWithPartitionMeta.entrySet().stream().filter(entry -> entry.getValue().getKey()).map(Map.Entry::getKey)
+            .collect(Collectors.toList()));
       }
 
       return new HoodieCleanerPlan(earliestInstant

@@ -377,7 +377,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   }
 
   @Override
-  protected boolean isPartitionAvailableInStore(String partitionPath) {
+  public boolean isPartitionAvailableInStore(String partitionPath) {
     return partitionToFileGroupsMap.containsKey(partitionPath);
   }
 
@@ -409,7 +409,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   }
 
   @Override
-  protected boolean isReplacedFileExistWithinSpecifiedPartition(String partitionPath) {
+  protected boolean hasReplacedFilesInPartition(String partitionPath) {
     return fgIdToReplaceInstants.keySet().stream().anyMatch(fg -> fg.getPartitionPath().equals(partitionPath));
   }
 
