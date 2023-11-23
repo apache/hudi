@@ -23,6 +23,7 @@ import org.apache.hudi.exception.HoodieException;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
 import org.apache.http.client.fluent.Request;
 import org.apache.http.client.fluent.Response;
 import org.apache.http.client.utils.URIBuilder;
@@ -37,7 +38,7 @@ import java.util.Map;
  */
 public class HttpRequestClient {
   private static final Logger LOG = LoggerFactory.getLogger(HttpRequestClient.class);
-  private final ObjectMapper mapper;
+  private static final ObjectMapper MAPPER = new ObjectMapper().registerModule(new AfterburnerModule());
   private final String serverHost;
   private final int serverPort;
   private final int timeoutSecs;
@@ -51,7 +52,6 @@ public class HttpRequestClient {
   }
 
   public HttpRequestClient(String serverHost, int serverPort, int timeoutSecs, int maxRetry) {
-    this.mapper = new ObjectMapper();
     this.serverHost = serverHost;
     this.serverPort = serverPort;
     this.timeoutSecs = timeoutSecs;
@@ -59,7 +59,7 @@ public class HttpRequestClient {
   }
 
   public <T> T executeRequestWithRetry(String requestPath, Map<String, String> queryParameters,
-                                       TypeReference reference, RequestMethod method) {
+                                       TypeReference<T> reference, RequestMethod method) {
     int retry = maxRetry;
     while (--retry >= 0) {
       try {
@@ -72,14 +72,14 @@ public class HttpRequestClient {
   }
 
   public <T> T executeRequest(String requestPath, Map<String, String> queryParameters,
-                              TypeReference reference, RequestMethod method) throws IOException {
+                              TypeReference<T> reference, RequestMethod method) throws IOException {
     URIBuilder builder =
         new URIBuilder().setHost(serverHost).setPort(serverPort).setPath(requestPath).setScheme("http");
 
     queryParameters.forEach(builder::addParameter);
 
     String url = builder.toString();
-    LOG.debug("Sending request : (" + url + ")");
+    LOG.debug("Sending request : ( {} )", url);
     Response response;
     int timeout = this.timeoutSecs * 1000; // msec
     switch (method) {
@@ -92,7 +92,7 @@ public class HttpRequestClient {
         break;
     }
     String content = response.returnContent().asString();
-    return (T) mapper.readValue(content, reference);
+    return MAPPER.readValue(content, reference);
   }
 
   public enum RequestMethod {

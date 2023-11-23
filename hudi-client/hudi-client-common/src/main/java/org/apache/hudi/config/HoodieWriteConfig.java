@@ -476,8 +476,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.embed.timeline.server.reuse.enabled")
       .defaultValue(false)
       .markAdvanced()
-      .withDocumentation("Controls whether the timeline server instance should be cached and reused across the JVM (across task lifecycles)"
-          + "to avoid startup costs. This should rarely be changed.");
+      .withDocumentation("Controls whether the timeline server instance should be cached and reused across the tables"
+          + "to avoid startup costs and server overhead. This should only be used if you are running multiple writers in the same JVM.");
 
   public static final ConfigProperty<String> EMBEDDED_TIMELINE_SERVER_PORT_NUM = ConfigProperty
       .key("hoodie.embed.timeline.server.port")

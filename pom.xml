@@ -471,6 +471,8 @@
               <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
               <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
               <include>org.apache.htrace:htrace-core4</include>
+              <!-- afterburner module for jackson performance -->
+              <include>com.fasterxml.jackson.module:jackson-module-afterburner</include>
             </includes>
           </artifactSet>
           <relocations>
@@ -871,6 +873,12 @@
         <groupId>com.fasterxml.jackson.module</groupId>
         <artifactId>jackson-module-scala_${scala.binary.version}</artifactId>
         <version>${fasterxml.jackson.module.scala.version}</version>
+      </dependency>
+      <!-- Provides performance improvements with json serialization/deserialization -->
+      <dependency>
+        <groupId>com.fasterxml.jackson.module</groupId>
+        <artifactId>jackson-module-afterburner</artifactId>
+        <version>${fasterxml.version}</version>
       </dependency>
 
       <!-- Glassfish -->

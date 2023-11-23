@@ -120,7 +120,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     if (timelineServer.isPresent() && shouldStopTimelineServer) {
       // Stop only if owner
       LOG.info("Stopping Timeline service !!");
-      timelineServer.get().stop();
+      timelineServer.get().stopForBasePath(basePath);
     }
 
     timelineServer = Option.empty();
