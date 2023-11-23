@@ -543,9 +543,9 @@ public class StreamSync implements Serializable, Closeable {
     if (useRowWriter) { // no additional processing required for row writer.
       return inputBatch;
     } else {
-      JavaRDD<HoodieRecord> records = HoodieStreamerUtils.createHoodieRecords(cfg, props, inputBatch.getBatch(), schemaProvider,
+      Option<JavaRDD<HoodieRecord>> recordsOpt = HoodieStreamerUtils.createHoodieRecords(cfg, props, inputBatch.getBatch(), schemaProvider,
           recordType, autoGenerateRecordKeys, instantTime);
-      return new InputBatch(Option.of(records), checkpointStr, schemaProvider);
+      return new InputBatch(recordsOpt, checkpointStr, schemaProvider);
     }
   }
 
