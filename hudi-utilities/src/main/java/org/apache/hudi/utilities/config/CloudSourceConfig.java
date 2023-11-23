@@ -108,7 +108,7 @@ public class CloudSourceConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> DATAFILE_FORMAT = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.datafile.format")
-      .defaultValue("parquet")
+      .defaultValue(HoodieIncrSourceConfig.SOURCE_FILE_FORMAT.defaultValue())
       .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.cloud.data.datafile.format")
       .markAdvanced()
       .withDocumentation("Format of the data file. By default, this will be the same as hoodie.streamer.source.hoodieincr.file.format");
