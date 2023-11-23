@@ -62,9 +62,11 @@ public class HoodieKeyLocationFetchHandle<T, I, K, O> extends HoodieReadHandle<T
 
   public Stream<Pair<HoodieKey, HoodieRecordLocation>> locations() {
     HoodieBaseFile baseFile = partitionPathBaseFilePair.getRight();
+    String commitTime = baseFile.getCommitTime();
+    String fileId = baseFile.getFileId();
     return fetchHoodieKeys(baseFile).stream()
         .map(entry -> Pair.of(entry,
-            new HoodieRecordLocation(baseFile.getCommitTime(), baseFile.getFileId())));
+            new HoodieRecordLocation(commitTime, fileId)));
   }
 
   public Stream<Pair<String, HoodieRecordGlobalLocation>> globalLocations() {
