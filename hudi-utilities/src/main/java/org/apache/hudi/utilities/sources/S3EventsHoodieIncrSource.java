@@ -35,6 +35,7 @@ import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.QueryInfo;
 import org.apache.hudi.utilities.sources.helpers.QueryRunner;
 
+import org.apache.parquet.Strings;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
@@ -51,6 +52,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.DATAFILE_FORMAT;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.ENABLE_EXISTS_CHECK;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH;
@@ -70,6 +72,7 @@ import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getMiss
 public class S3EventsHoodieIncrSource extends HoodieIncrSource {
 
   private static final Logger LOG = LoggerFactory.getLogger(S3EventsHoodieIncrSource.class);
+  private static final String EMPTY_STRING = "";
   private final String srcPath;
   private final int numInstantsPerFetch;
   private final boolean checkIfFileExists;
@@ -135,7 +138,13 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     this.srcPath = getStringWithAltKeys(props, HOODIE_SRC_BASE_PATH);
     this.numInstantsPerFetch = getIntWithAltKeys(props, NUM_INSTANTS_PER_FETCH);
     this.checkIfFileExists = getBooleanWithAltKeys(props, ENABLE_EXISTS_CHECK);
-    this.fileFormat = getStringWithAltKeys(props, SOURCE_FILE_FORMAT, true);
+
+    // This is to ensure backward compatibility where we were using the
+    // config SOURCE_FILE_FORMAT for file format in previous versions.
+    this.fileFormat = Strings.isNullOrEmpty(getStringWithAltKeys(props, DATAFILE_FORMAT, EMPTY_STRING))
+        ? getStringWithAltKeys(props, SOURCE_FILE_FORMAT, true)
+        : getStringWithAltKeys(props, DATAFILE_FORMAT, EMPTY_STRING);
+
     this.missingCheckpointStrategy = getMissingCheckpointStrategy(props);
     this.queryRunner = queryRunner;
     this.cloudDataFetcher = cloudDataFetcher;

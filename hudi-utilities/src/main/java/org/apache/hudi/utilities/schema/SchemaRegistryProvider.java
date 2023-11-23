@@ -195,7 +195,10 @@ public class SchemaRegistryProvider extends SchemaProvider {
     try {
       return parseSchemaFromRegistry(registryUrl);
     } catch (Exception e) {
-      throw new HoodieSchemaFetchException("Error reading source schema from registry :" + registryUrl, e);
+      throw new HoodieSchemaFetchException(String.format(
+          "Error reading source schema from registry. Please check %s is configured correctly. Truncated URL: %s",
+          Config.SRC_SCHEMA_REGISTRY_URL_PROP,
+          StringUtils.truncate(registryUrl, 10, 10)), e);
     }
   }
 
@@ -207,7 +210,11 @@ public class SchemaRegistryProvider extends SchemaProvider {
     try {
       return parseSchemaFromRegistry(targetRegistryUrl);
     } catch (Exception e) {
-      throw new HoodieSchemaFetchException("Error reading target schema from registry :" + targetRegistryUrl, e);
+      throw new HoodieSchemaFetchException(String.format(
+          "Error reading target schema from registry. Please check %s is configured correctly. If that is not configured then check %s. Truncated URL: %s",
+          Config.SRC_SCHEMA_REGISTRY_URL_PROP,
+          Config.TARGET_SCHEMA_REGISTRY_URL_PROP,
+          StringUtils.truncate(targetRegistryUrl, 10, 10)), e);
     }
   }
 }
