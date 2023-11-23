@@ -34,6 +34,15 @@ import java.util.Random;
  * 期望每一个数据partition下对应10个task写数据(控制文件数)
  * 则 1,2,3,4,..,100 ==> group1-[1,2,3,..,10], group2-[11,12,13,...,20],...,group10-[91,92,..,100]
  * partition1 使用 group1
+ *
+ * groupLength must be lower than numPartitions ==> groupLength < numPartitions
+ * groupNumber = [0,]
+ * groupIndex = [0, groupNumber-1]
+ * index = [0, groupLength -1]
+ *
+ * Be careful :
+ * If numPartitions is not divisible by groupLength, then the partition corresponding to the remainder will be wasted.
+ *
  */
 public class DefaultInsertPartitioner<T extends HoodieKey> implements Partitioner<T> {
 
