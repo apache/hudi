@@ -147,12 +147,12 @@ public class CloudSourceConfig extends HoodieConfig {
       .sinceVersion("0.14.1")
       .withDocumentation("specify this value in bytes, to coalesce partitions of source dataset not greater than specified limit");
 
-  public static final ConfigProperty<Integer> MAX_FETCH_TIME_PER_SYNC_MS = ConfigProperty
-      .key(STREAMER_CONFIG_PREFIX + "source.cloud.meta.max.fetch.time.per.sync.ms")
-      .defaultValue(1)
+  public static final ConfigProperty<Integer> MAX_FETCH_TIME_PER_SYNC_SECS = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.cloud.meta.max.fetch.time.per.sync.secs")
+      .defaultValue(60)
       .markAdvanced()
       .sinceVersion("0.14.1")
-      .withDocumentation("Max time in millis to consume " + MAX_NUM_MESSAGES_PER_SYNC.key() + " messages from cloud queue. Cloud event queues like SQS, "
+      .withDocumentation("Max time in secs to consume " + MAX_NUM_MESSAGES_PER_SYNC.key() + " messages from cloud queue. Cloud event queues like SQS, "
           + "PubSub can return empty responses even when messages are available the queue, this config ensures we don't wait forever "
           + "to consume MAX_MESSAGES_CONF messages, but time out and move on further.");
 }
