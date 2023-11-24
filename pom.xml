@@ -568,6 +568,11 @@
               <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.util.MetricSampleQuantiles
               </shadedPattern>
             </relocation>
+            <relocation>
+              <pattern>com.fasterxml.jackson.module</pattern>
+              <shadedPattern>org.apache.hudi.com.fasterxml.jackson.module
+              </shadedPattern>
+            </relocation>
           </relocations>
         </configuration>
       </plugin>
