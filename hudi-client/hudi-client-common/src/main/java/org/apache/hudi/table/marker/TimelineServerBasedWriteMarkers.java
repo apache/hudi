@@ -63,7 +63,7 @@ import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_NAME_PA
 public class TimelineServerBasedWriteMarkers extends WriteMarkers {
   private static final Logger LOG = LoggerFactory.getLogger(TimelineServerBasedWriteMarkers.class);
   private static final TypeReference<Boolean> BOOLEAN_TYPE_REFERENCE = new TypeReference<Boolean>() {};
-  private static final TypeReference<Set<String>> STRING_TYPE_REFERENCE = new TypeReference<Set<String>>() {};
+  private static final TypeReference<Set<String>> SET_TYPE_REFERENCE = new TypeReference<Set<String>>() {};
 
   private final HttpRequestClient httpRequestClient;
 
@@ -108,7 +108,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
     Map<String, String> paramsMap = Collections.singletonMap(MARKER_DIR_PATH_PARAM, markerDirPath.toString());
     try {
       Set<String> markerPaths = httpRequestClient.executeRequest(
-          CREATE_AND_MERGE_MARKERS_URL, paramsMap, STRING_TYPE_REFERENCE, RequestMethod.GET);
+          CREATE_AND_MERGE_MARKERS_URL, paramsMap, SET_TYPE_REFERENCE, RequestMethod.GET);
       return markerPaths.stream().map(WriteMarkers::stripMarkerSuffix).collect(Collectors.toSet());
     } catch (IOException e) {
       throw new HoodieRemoteException("Failed to get CREATE and MERGE data file paths in "
@@ -121,7 +121,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
     Map<String, String> paramsMap = Collections.singletonMap(MARKER_DIR_PATH_PARAM, markerDirPath.toString());
     try {
       return httpRequestClient.executeRequest(
-          ALL_MARKERS_URL, paramsMap, STRING_TYPE_REFERENCE, RequestMethod.GET);
+          ALL_MARKERS_URL, paramsMap, SET_TYPE_REFERENCE, RequestMethod.GET);
     } catch (IOException e) {
       throw new HoodieRemoteException("Failed to get all markers in " + markerDirPath.toString(), e);
     }
