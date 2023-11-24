@@ -1736,6 +1736,20 @@
       </dependency>
     </dependencies>
   </dependencyManagement>
+
+  <distributionManagement>
+    <repository>
+      <id>codeartifact</id>
+      <name>codeartifact</name>
+      <url>https://onehouse-194159489498.d.codeartifact.us-west-2.amazonaws.com/maven/onehouse-internal/</url>
+    </repository>
+    <snapshotRepository>
+      <id>codeartifact</id>
+      <name>codeartifact</name>
+      <url>https://onehouse-194159489498.d.codeartifact.us-west-2.amazonaws.com/maven/onehouse-internal/</url>
+    </snapshotRepository>
+  </distributionManagement>
+
   <repositories>
     <repository>
       <id>Maven Central</id>
