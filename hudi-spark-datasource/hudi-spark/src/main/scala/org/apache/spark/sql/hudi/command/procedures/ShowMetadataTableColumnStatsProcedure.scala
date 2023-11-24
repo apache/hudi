@@ -103,7 +103,7 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
           getColumnStatsValue(c.getMaxValue), c.getNullCount.longValue())
       }
 
-    rows.toList
+    rows.toList.sortBy(r => r.getString(1))
   }
 
   private def getColumnStatsValue(stats_value: Any): String = {
