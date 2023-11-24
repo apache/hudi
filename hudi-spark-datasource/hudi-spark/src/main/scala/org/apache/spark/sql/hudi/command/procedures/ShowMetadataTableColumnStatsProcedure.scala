@@ -48,11 +48,11 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
-    StructField("File Name", DataTypes.StringType, nullable = true, Metadata.empty),
-    StructField("Column Name", DataTypes.StringType, nullable = true, Metadata.empty),
-    StructField("Min Value", DataTypes.StringType, nullable = true, Metadata.empty),
-    StructField("Max Value", DataTypes.StringType, nullable = true, Metadata.empty),
-    StructField("Null Number", DataTypes.LongType, nullable = true, Metadata.empty)
+    StructField("file_name", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("column_name", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("min_value", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("max_value", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("null_number", DataTypes.LongType, nullable = true, Metadata.empty)
   ))
 
   def parameters: Array[ProcedureParameter] = PARAMETERS
