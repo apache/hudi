@@ -844,10 +844,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   @Override
   public final Stream<FileSlice> getLatestFileSlicesStateless(String partitionStr) {
-    if (isPartitionAvailableInStore(partitionStr)) {
-      return getLatestFileSlices(partitionStr);
+    String partition = formatPartitionKey(partitionStr);
+    if (isPartitionAvailableInStore(partition)) {
+      return getLatestFileSlices(partition);
     } else {
-      String partition = formatPartitionKey(partitionStr);
       try {
         Stream<FileSlice> fileSliceStream = buildFileGroups(getAllFilesInPartition(partition), visibleCommitsAndCompactionTimeline, true).stream()
             .filter(fg -> !isFileGroupReplaced(fg))
@@ -862,7 +862,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         }
         return fileSliceStream;
       } catch (IOException e) {
-        throw new HoodieIOException("Failed to fetch all files in partition " + partitionStr, e);
+        throw new HoodieIOException("Failed to fetch all files in partition " + partition, e);
       }
     }
   }
@@ -1059,10 +1059,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   @Override
   public final Stream<HoodieFileGroup> getAllFileGroupsStateless(String partitionStr) {
-    if (isPartitionAvailableInStore(partitionStr)) {
-      return getAllFileGroups(partitionStr);
+    String partition = formatPartitionKey(partitionStr);
+    if (isPartitionAvailableInStore(partition)) {
+      return getAllFileGroups(partition);
     } else {
-      String partition = formatPartitionKey(partitionStr);
       try {
         Stream<HoodieFileGroup> fileGroupStream = buildFileGroups(getAllFilesInPartition(partition), visibleCommitsAndCompactionTimeline, true).stream()
             .filter(fg -> !isFileGroupReplaced(fg));
@@ -1074,7 +1074,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         }
         return fileGroupStream;
       } catch (IOException e) {
-        throw new HoodieIOException("Failed to fetch all files in partition " + partitionStr, e);
+        throw new HoodieIOException("Failed to fetch all files in partition " + partition, e);
       }
     }
   }
@@ -1105,26 +1105,36 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   @Override
   public Stream<HoodieFileGroup> getReplacedFileGroupsBeforeOrOn(String maxCommitTime, String partitionPath) {
-    return getAllFileGroupsIncludingReplaced(partitionPath).filter(fg -> isFileGroupReplacedBeforeOrOn(fg.getFileGroupId(), maxCommitTime));
+    String partition = formatPartitionKey(partitionPath);
+    if (hasReplacedFilesInPartition(partition)) {
+      return getAllFileGroupsIncludingReplaced(partition).filter(fg -> isFileGroupReplacedBeforeOrOn(fg.getFileGroupId(), maxCommitTime));
+    }
+    return Stream.empty();
   }
 
   @Override
   public Stream<HoodieFileGroup> getReplacedFileGroupsBefore(String maxCommitTime, String partitionPath) {
-    if (hasReplacedFilesInPartition(partitionPath)) {
-      return getAllFileGroupsIncludingReplaced(partitionPath).filter(fg -> isFileGroupReplacedBefore(fg.getFileGroupId(), maxCommitTime));
+    String partition = formatPartitionKey(partitionPath);
+    if (hasReplacedFilesInPartition(partition)) {
+      return getAllFileGroupsIncludingReplaced(partition).filter(fg -> isFileGroupReplacedBefore(fg.getFileGroupId(), maxCommitTime));
     }
     return Stream.empty();
   }
 
   @Override
   public Stream<HoodieFileGroup> getReplacedFileGroupsAfterOrOn(String minCommitTime, String partitionPath) {
-    return getAllFileGroupsIncludingReplaced(partitionPath).filter(fg -> isFileGroupReplacedAfterOrOn(fg.getFileGroupId(), minCommitTime));
+    String partition = formatPartitionKey(partitionPath);
+    if (hasReplacedFilesInPartition(partition)) {
+      return getAllFileGroupsIncludingReplaced(partition).filter(fg -> isFileGroupReplacedAfterOrOn(fg.getFileGroupId(), minCommitTime));
+    }
+    return Stream.empty();
   }
 
   @Override
   public Stream<HoodieFileGroup> getAllReplacedFileGroups(String partitionPath) {
-    if (hasReplacedFilesInPartition(partitionPath)) {
-      return getAllFileGroupsIncludingReplaced(partitionPath).filter(fg -> isFileGroupReplaced(fg.getFileGroupId()));
+    String partition = formatPartitionKey(partitionPath);
+    if (hasReplacedFilesInPartition(partition)) {
+      return getAllFileGroupsIncludingReplaced(partition).filter(fg -> isFileGroupReplaced(fg.getFileGroupId()));
     }
     return Stream.empty();
   }

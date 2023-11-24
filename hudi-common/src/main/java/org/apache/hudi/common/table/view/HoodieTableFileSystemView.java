@@ -377,7 +377,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   }
 
   @Override
-  public boolean isPartitionAvailableInStore(String partitionPath) {
+  protected boolean isPartitionAvailableInStore(String partitionPath) {
     return partitionToFileGroupsMap.containsKey(partitionPath);
   }
 

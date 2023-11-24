@@ -129,7 +129,6 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String LOAD_ALL_PARTITIONS_URL = String.format("%s/%s", BASE_URL, "loadallpartitions/");
 
   public static final String PARTITION_PARAM = "partition";
-  public static final String PARTITIONS_PARAM = "partitions";
   public static final String BASEPATH_PARAM = "basepath";
   public static final String INSTANT_PARAM = "instant";
   public static final String MAX_INSTANT_PARAM = "maxinstant";
@@ -214,13 +213,6 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     Map<String, String> paramsMap = new HashMap<>();
     paramsMap.put(BASEPATH_PARAM, basePath);
     paramsMap.put(PARTITION_PARAM, partitionPath);
-    return paramsMap;
-  }
-
-  private Map<String, String> getParamsWithPartitionPaths(List<String> partitionPaths) {
-    Map<String, String> paramsMap = new HashMap<>();
-    paramsMap.put(BASEPATH_PARAM, basePath);
-    paramsMap.put(PARTITIONS_PARAM, StringUtils.join(partitionPaths.toArray(new String[0]), ","));
     return paramsMap;
   }
 
