@@ -49,6 +49,8 @@ import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.ACK_MESSAGES;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.BATCH_SIZE_CONF;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.MAX_FETCH_TIME_PER_SYNC_MS;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.MAX_NUM_MESSAGES_PER_SYNC;
 import static org.apache.hudi.utilities.config.GCSEventsSourceConfig.GOOGLE_PROJECT_ID;
 import static org.apache.hudi.utilities.config.GCSEventsSourceConfig.PUBSUB_SUBSCRIPTION_ID;
 import static org.apache.hudi.utilities.sources.helpers.gcs.MessageValidity.ProcessingDecision.DO_SKIP;
@@ -117,8 +119,9 @@ public class GcsEventsSource extends RowSource {
             new PubsubMessagesFetcher(
                 getStringWithAltKeys(props, GOOGLE_PROJECT_ID),
                 getStringWithAltKeys(props, PUBSUB_SUBSCRIPTION_ID),
-                getIntWithAltKeys(props, BATCH_SIZE_CONF)
-            )
+                getIntWithAltKeys(props, BATCH_SIZE_CONF),
+                getIntWithAltKeys(props, MAX_NUM_MESSAGES_PER_SYNC),
+                getIntWithAltKeys(props, MAX_FETCH_TIME_PER_SYNC_MS))
     );
   }
 
