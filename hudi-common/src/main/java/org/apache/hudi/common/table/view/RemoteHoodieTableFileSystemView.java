@@ -64,6 +64,8 @@ import java.util.stream.Stream;
  */
 public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, Serializable {
 
+  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().registerModule(new AfterburnerModule());
+
   private static final String BASE_URL = "/v1/hoodie/view";
   public static final String LATEST_PARTITION_SLICES_URL = String.format("%s/%s", BASE_URL, "slices/partition/latest/");
   public static final String LATEST_PARTITION_SLICE_URL = String.format("%s/%s", BASE_URL, "slices/file/latest/");
@@ -113,7 +115,6 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   
   public static final String PENDING_CLUSTERING_FILEGROUPS = String.format("%s/%s", BASE_URL, "clustering/pending/");
 
-
   public static final String LAST_INSTANT = String.format("%s/%s", BASE_URL, "timeline/instant/last");
   public static final String LAST_INSTANTS = String.format("%s/%s", BASE_URL, "timeline/instants/last");
 
@@ -147,7 +148,6 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   private static final TypeReference<List<BaseFileDTO>> BASE_FILE_DTOS_REFERENCE = new TypeReference<List<BaseFileDTO>>() {};
   private static final TypeReference<Map<String, List<BaseFileDTO>>> BASE_FILE_MAP_REFERENCE = new TypeReference<Map<String, List<BaseFileDTO>>>() {};
   private static final TypeReference<Map<String, List<FileSliceDTO>>> FILE_SLICE_MAP_REFERENCE = new TypeReference<Map<String, List<FileSliceDTO>>>() {};
-  private static final ObjectMapper MAPPER = new ObjectMapper().registerModule(new AfterburnerModule());
 
   private final String serverHost;
   private final int serverPort;
@@ -202,7 +202,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     LOG.info("Sending request : (" + url + ")");
     Response response = retryHelper != null ? retryHelper.start(() -> get(timeoutMs, url, method)) : get(timeoutMs, url, method);
     String content = response.returnContent().asString(Consts.UTF_8);
-    return MAPPER.readValue(content, reference);
+    return (T) OBJECT_MAPPER.readValue(content, reference);
   }
 
   private Map<String, String> getParamsWithPartitionPath(String partitionPath) {
@@ -363,7 +363,8 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
         new String[] {MAX_INSTANT_PARAM, INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM},
         new String[] {maxCommitTime, String.valueOf(includeFileSlicesInPendingCompaction)});
     try {
-      List<FileSliceDTO> dataFiles = executeRequest(LATEST_SLICES_BEFORE_ON_INSTANT_URL, paramsMap, FILE_SLICE_DTOS_REFERENCE, RequestMethod.GET);
+      List<FileSliceDTO> dataFiles = executeRequest(LATEST_SLICES_BEFORE_ON_INSTANT_URL, paramsMap,
+          FILE_SLICE_DTOS_REFERENCE, RequestMethod.GET);
       return dataFiles.stream().map(FileSliceDTO::toFileSlice);
     } catch (IOException e) {
       throw new HoodieRemoteException(e);

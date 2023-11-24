@@ -132,6 +132,12 @@
       <artifactId>jackson-module-afterburner</artifactId>
     </dependency>
 
+
+    <dependency>
+      <groupId>com.fasterxml.jackson.module</groupId>
+      <artifactId>jackson-module-afterburner</artifactId>
+    </dependency>
+
     <!-- Avro -->
     <dependency>
       <groupId>org.apache.avro</groupId>
