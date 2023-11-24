@@ -22,13 +22,15 @@ import org.apache.hadoop.fs.FileStatus
 import org.apache.hudi.avro.model._
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.data.HoodieData
+import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.timeline.{HoodieDefaultTimeline, HoodieInstant}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
-import org.apache.hudi.common.util.collection.{Pair => HPair}
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.metadata.HoodieTableMetadata
+import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -36,7 +38,7 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 import java.util
 import java.util.function.{Function, Supplier}
 import scala.collection.{JavaConversions, mutable}
-import scala.jdk.CollectionConverters.{asScalaBufferConverter, asScalaIteratorConverter, collectionAsScalaIterableConverter}
+import scala.jdk.CollectionConverters.{asScalaBufferConverter, asScalaIteratorConverter}
 
 class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
@@ -70,31 +72,36 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
     val metadataConfig = HoodieMetadataConfig.newBuilder
       .enable(true)
       .build
-    val engineCtx = new HoodieSparkEngineContext(jsc)
-    val metaTable = HoodieTableMetadata.create(engineCtx, metadataConfig, basePath)
+    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val schemaUtil = new TableSchemaResolver(metaClient)
+    val schema = AvroConversionUtils.convertAvroSchemaToStructType(schemaUtil.getTableAvroSchema)
+    val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
+    val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = columnStatsIndex.loadColumnStatsIndexRecords(targetColumnsSeq, shouldReadInMemory = false)
     val fsView = buildFileSystemView(table)
-    val partitionFileNameList: util.List[HPair[String, String]] = new util.ArrayList[HPair[String, String]]()
+    val allFileSlices: Set[FileSlice] = {
+      if (partitionsSeq.isEmpty) {
+        val engineCtx = new HoodieSparkEngineContext(jsc)
+        val metaTable = HoodieTableMetadata.create(engineCtx, metadataConfig, basePath)
+        metaTable.getAllPartitionPaths
+          .asScala
+          .flatMap(path => fsView.getLatestFileSlices(path).iterator().asScala)
+          .toSet
+      } else {
+        partitionsSeq
+          .flatMap(partition => fsView.getLatestFileSlices(partition).iterator().asScala)
+          .toSet
+      }
+    }
 
-    metaTable.getAllPartitionPaths
-      .asScala
-      .filter(path => partitionsSeq.isEmpty || partitionsSeq.exists(prefix => path.startsWith(prefix)))
-      .foreach(path => {
-        val fsViews = fsView.getLatestFileSlices(path).iterator().asScala
-        fsViews.toStream.foreach(fs => {
-          partitionFileNameList.add(HPair.of(path, fs.getBaseFile.get().getFileName))
-        })
-      })
+    val allFileNames: Set[String] = allFileSlices.map(_.getBaseFile.get().getFileName)
 
     val rows = mutable.ListBuffer[Row]()
-    targetColumnsSeq.toStream.foreach(targetColumn => {
-      val colStatsRecords: util.Collection[HoodieMetadataColumnStats] = metaTable.getColumnStats(partitionFileNameList, targetColumn).values()
-
-      colStatsRecords.asScala
-        .foreach { c =>
-          rows += Row(c.getFileName, c.getColumnName, getColumnStatsValue(c.getMinValue),
-            getColumnStatsValue(c.getMaxValue), c.getNullCount.longValue())
-        }
-    })
+    colStatsRecords.collectAsList().asScala
+      .filter(c => allFileNames.contains(c.getFileName))
+      .foreach { c =>
+        rows += Row(c.getFileName, c.getColumnName, getColumnStatsValue(c.getMinValue),
+          getColumnStatsValue(c.getMaxValue), c.getNullCount.longValue())
+      }
 
     rows.toList
   }
