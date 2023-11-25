@@ -1377,7 +1377,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         if (i == 2 || i == 4) { // this validation reloads the timeline. So, we are validating only for first and last batch.
           // validate commit metadata for all completed commits to have valid schema in extra metadata.
           HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(jsc.hadoopConfiguration()).build();
-          metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants().forEach(entry -> assertValidSchemaInCommitMetadata(entry, metaClient));
+          metaClient.reloadActiveTimeline().getCommitsTimeline()
+              .filterCompletedInstants().getInstants()
+              .forEach(entry -> assertValidSchemaAndOperationTypeInCommitMetadata(
+                  entry, metaClient, WriteOperationType.BULK_INSERT));
         }
       }
     } finally {
@@ -1743,15 +1746,21 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertRecordCount(parquetRecordsCount + 100, tableBasePath, sqlContext);
     // validate commit metadata for all completed commits to have valid schema in extra metadata.
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(jsc.hadoopConfiguration()).build();
-    metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants().forEach(entry -> assertValidSchemaInCommitMetadata(entry, metaClient));
+    metaClient.reloadActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants().getInstants()
+        .forEach(entry -> assertValidSchemaAndOperationTypeInCommitMetadata(
+            entry, metaClient, WriteOperationType.INSERT));
     testNum++;
   }
 
-  private void assertValidSchemaInCommitMetadata(HoodieInstant instant, HoodieTableMetaClient metaClient) {
+  private void assertValidSchemaAndOperationTypeInCommitMetadata(HoodieInstant instant,
+                                                                 HoodieTableMetaClient metaClient,
+                                                                 WriteOperationType operationType) {
     try {
       HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
           .fromBytes(metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
       assertFalse(StringUtils.isNullOrEmpty(commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY)));
+      assertEquals(operationType, commitMetadata.getOperationType());
     } catch (IOException ioException) {
       throw new HoodieException("Failed to parse commit metadata for " + instant.toString());
     }
