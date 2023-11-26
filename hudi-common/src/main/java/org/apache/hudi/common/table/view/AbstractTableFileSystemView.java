@@ -816,7 +816,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
             .filter(fg -> !isFileGroupReplaced(fg))
             .map(HoodieFileGroup::getLatestFileSlice)
             .filter(Option::isPresent).map(Option::get)
-            .flatMap(slice -> this.filterUncommittedFiles(slice, true));
+            .flatMap(slice -> this.filterBaseFileAfterPendingCompaction(slice, true));
         if (bootstrapIndex.useIndex()) {
           final Map<HoodieFileGroupId, BootstrapBaseFileMapping> bootstrapBaseFileMappings = getBootstrapBaseFileMappings(partition);
           if (!bootstrapBaseFileMappings.isEmpty()) {
