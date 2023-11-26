@@ -90,11 +90,12 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -326,6 +327,109 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     FileSlice fileSlice = fileSlices.get(0);
     assertEquals(commitTime1, fileSlice.getBaseInstantTime());
     assertEquals(2, fsView.getAllFileGroups(partitionPath).count());
+  }
+
+  @Test
+  public void testViewForGetAllFileGroupsStateless() throws Exception {
+    String partitionPath1 = "2023/11/22";
+    new File(basePath + "/" + partitionPath1).mkdirs();
+    new File(basePath + "/" + partitionPath1 + "/" + HOODIE_PARTITION_METAFILE_PREFIX + ".parquet").mkdirs();
+    String partitionPath2 = "2023/11/23";
+    new File(basePath + "/" + partitionPath2).mkdirs();
+    new File(basePath + "/" + partitionPath2 + "/" + HOODIE_PARTITION_METAFILE_PREFIX + ".parquet").mkdirs();
+
+    // create 2 fileId in partition1
+    String fileId1 = UUID.randomUUID().toString();
+    String fileId2 = UUID.randomUUID().toString();
+    String commitTime1 = "1";
+    String fileName1 = FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId1);
+    String fileName2 = FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId2);
+    new File(basePath + "/" + partitionPath1 + "/" + fileName1).createNewFile();
+    new File(basePath + "/" + partitionPath1 + "/" + fileName2).createNewFile();
+
+    HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
+    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, commitTime1);
+    saveAsComplete(commitTimeline, instant1, Option.empty());
+
+    // create 2 fileId in partition2
+    String fileId3 = UUID.randomUUID().toString();
+    String fileId4 = UUID.randomUUID().toString();
+    String commitTime2 = "2";
+    String fileName3 = FSUtils.makeBaseFileName(commitTime2, TEST_WRITE_TOKEN, fileId3);
+    String fileName4 = FSUtils.makeBaseFileName(commitTime2, TEST_WRITE_TOKEN, fileId4);
+    new File(basePath + "/" + partitionPath2 + "/" + fileName3).createNewFile();
+    new File(basePath + "/" + partitionPath2 + "/" + fileName4).createNewFile();
+
+    HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, commitTime2);
+    saveAsComplete(commitTimeline, instant2, Option.empty());
+
+    fsView.sync();
+    // invokes the stateless API first then the normal API, assert the result equality with different file group objects
+    List<HoodieFileGroup> actual1 = fsView.getAllFileGroupsStateless(partitionPath1).collect(Collectors.toList());
+    List<HoodieFileGroup> expected1 = fsView.getAllFileGroups(partitionPath1).collect(Collectors.toList());
+    for (int i = 0; i < expected1.size(); i++) {
+      assertThat("The stateless API should return the same result", actual1.get(i).toString(), is(expected1.get(i).toString()));
+      assertNotSame(actual1.get(i), expected1.get(i), "The stateless API does not cache");
+    }
+
+    List<HoodieFileGroup> expected2 = fsView.getAllFileGroupsStateless(partitionPath2).collect(Collectors.toList());
+    List<HoodieFileGroup> actual2 = fsView.getAllFileGroups(partitionPath2).collect(Collectors.toList());
+    for (int i = 0; i < expected2.size(); i++) {
+      assertThat("The stateless API should return the same result", actual2.get(i).toString(), is(expected2.get(i).toString()));
+      assertNotSame(actual2.get(i), expected2.get(i), "The stateless API does not cache");
+    }
+  }
+
+  @Test
+  public void testViewForGetLatestFileSlicesStateless() throws Exception {
+    String partitionPath1 = "2023/11/22";
+    new File(basePath + "/" + partitionPath1).mkdirs();
+    new File(basePath + "/" + partitionPath1 + "/" + HOODIE_PARTITION_METAFILE_PREFIX + ".parquet").mkdirs();
+    String partitionPath2 = "2023/11/23";
+    new File(basePath + "/" + partitionPath2).mkdirs();
+    new File(basePath + "/" + partitionPath2 + "/" + HOODIE_PARTITION_METAFILE_PREFIX + ".parquet").mkdirs();
+
+    // create 2 fileId in partition1
+    String fileId1 = UUID.randomUUID().toString();
+    String fileId2 = UUID.randomUUID().toString();
+    String commitTime1 = "1";
+    String fileName1 = FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId1);
+    String fileName2 = FSUtils.makeBaseFileName(commitTime1, TEST_WRITE_TOKEN, fileId2);
+    new File(basePath + "/" + partitionPath1 + "/" + fileName1).createNewFile();
+    new File(basePath + "/" + partitionPath1 + "/" + fileName2).createNewFile();
+
+    HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
+    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, commitTime1);
+    saveAsComplete(commitTimeline, instant1, Option.empty());
+
+    // create 2 fileId in partition2
+    String fileId3 = UUID.randomUUID().toString();
+    String fileId4 = UUID.randomUUID().toString();
+    String commitTime2 = "2";
+    String fileName3 = FSUtils.makeBaseFileName(commitTime2, TEST_WRITE_TOKEN, fileId3);
+    String fileName4 = FSUtils.makeBaseFileName(commitTime2, TEST_WRITE_TOKEN, fileId4);
+    new File(basePath + "/" + partitionPath2 + "/" + fileName3).createNewFile();
+    new File(basePath + "/" + partitionPath2 + "/" + fileName4).createNewFile();
+
+    HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, commitTime2);
+    saveAsComplete(commitTimeline, instant2, Option.empty());
+
+    fsView.sync();
+
+    // invokes the stateless API first then the normal API, assert the result equality with different file slice objects
+    List<FileSlice> actual1 = fsView.getLatestFileSlicesStateless(partitionPath1).collect(Collectors.toList());
+    List<FileSlice> expected1 = fsView.getLatestFileSlices(partitionPath1).collect(Collectors.toList());
+    for (int i = 0; i < expected1.size(); i++) {
+      assertThat("The stateless API should return the same result", actual1.get(i), is(expected1.get(i)));
+      assertNotSame(actual1.get(i), expected1.get(i), "The stateless API does not cache");
+    }
+
+    List<FileSlice> expected2 = fsView.getLatestFileSlicesStateless(partitionPath2).collect(Collectors.toList());
+    List<FileSlice> actual2 = fsView.getLatestFileSlices(partitionPath2).collect(Collectors.toList());
+    for (int i = 0; i < expected2.size(); i++) {
+      assertThat("The stateless API should return the same result", actual2.get(i), is(expected2.get(i)));
+      assertNotSame(actual2.get(i), expected2.get(i), "The stateless API does not cache");
+    }
   }
 
   @Test

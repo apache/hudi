@@ -434,6 +434,19 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   /**
+   * Returns all files situated at the given partition.
+   */
+  private FileStatus[] getAllFilesInPartition(String relativePartitionPath) throws IOException {
+    Path partitionPath = FSUtils.getPartitionPath(metaClient.getBasePathV2(), relativePartitionPath);
+    long beginLsTs = System.currentTimeMillis();
+    FileStatus[] statuses = listPartition(partitionPath);
+    long endLsTs = System.currentTimeMillis();
+    LOG.debug("#files found in partition (" + relativePartitionPath + ") =" + statuses.length + ", Time taken ="
+            + (endLsTs - beginLsTs));
+    return statuses;
+  }
+
+  /**
    * Allows lazily loading the partitions if needed.
    *
    * @param partition partition to be loaded if not present
@@ -449,15 +462,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         // Not loaded yet
         try {
           LOG.info("Building file system view for partition (" + partitionPathStr + ")");
-
-          Path partitionPath = FSUtils.getPartitionPath(metaClient.getBasePathV2(), partitionPathStr);
-          long beginLsTs = System.currentTimeMillis();
-          FileStatus[] statuses = listPartition(partitionPath);
-          long endLsTs = System.currentTimeMillis();
-          LOG.debug("#files found in partition (" + partitionPathStr + ") =" + statuses.length + ", Time taken ="
-              + (endLsTs - beginLsTs));
-          List<HoodieFileGroup> groups = addFilesToView(statuses);
-
+          List<HoodieFileGroup> groups = addFilesToView(getAllFilesInPartition(partitionPathStr));
           if (groups.isEmpty()) {
             storePartitionView(partitionPathStr, new ArrayList<>());
           }
@@ -598,24 +603,32 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   protected HoodieFileGroup addBootstrapBaseFileIfPresent(HoodieFileGroup fileGroup) {
+    return addBootstrapBaseFileIfPresent(fileGroup, this::getBootstrapBaseFile);
+  }
+
+  protected HoodieFileGroup addBootstrapBaseFileIfPresent(HoodieFileGroup fileGroup, Function<HoodieFileGroupId, Option<BootstrapBaseFileMapping>> bootstrapBaseFileMappingFunc) {
     boolean hasBootstrapBaseFile = fileGroup.getAllFileSlices()
         .anyMatch(fs -> fs.getBaseInstantTime().equals(METADATA_BOOTSTRAP_INSTANT_TS));
     if (hasBootstrapBaseFile) {
       HoodieFileGroup newFileGroup = new HoodieFileGroup(fileGroup);
       newFileGroup.getAllFileSlices().filter(fs -> fs.getBaseInstantTime().equals(METADATA_BOOTSTRAP_INSTANT_TS))
           .forEach(fs -> fs.setBaseFile(
-              addBootstrapBaseFileIfPresent(fs.getFileGroupId(), fs.getBaseFile().get())));
+              addBootstrapBaseFileIfPresent(fs.getFileGroupId(), fs.getBaseFile().get(), bootstrapBaseFileMappingFunc)));
       return newFileGroup;
     }
     return fileGroup;
   }
 
   protected FileSlice addBootstrapBaseFileIfPresent(FileSlice fileSlice) {
+    return addBootstrapBaseFileIfPresent(fileSlice, this::getBootstrapBaseFile);
+  }
+
+  protected FileSlice addBootstrapBaseFileIfPresent(FileSlice fileSlice, Function<HoodieFileGroupId, Option<BootstrapBaseFileMapping>> bootstrapBaseFileMappingFunc) {
     if (fileSlice.getBaseInstantTime().equals(METADATA_BOOTSTRAP_INSTANT_TS)) {
       FileSlice copy = new FileSlice(fileSlice);
       copy.getBaseFile().ifPresent(dataFile -> {
         Option<BootstrapBaseFileMapping> edf = getBootstrapBaseFile(copy.getFileGroupId());
-        edf.ifPresent(e -> dataFile.setBootstrapBaseFile(e.getBootstrapBaseFile()));
+        bootstrapBaseFileMappingFunc.apply(copy.getFileGroupId()).ifPresent(e -> dataFile.setBootstrapBaseFile(e.getBootstrapBaseFile()));
       });
       return copy;
     }
@@ -623,10 +636,16 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   protected HoodieBaseFile addBootstrapBaseFileIfPresent(HoodieFileGroupId fileGroupId, HoodieBaseFile baseFile) {
+    return addBootstrapBaseFileIfPresent(fileGroupId, baseFile, this::getBootstrapBaseFile);
+  }
+
+  protected HoodieBaseFile addBootstrapBaseFileIfPresent(
+      HoodieFileGroupId fileGroupId,
+      HoodieBaseFile baseFile,
+      Function<HoodieFileGroupId, Option<BootstrapBaseFileMapping>> bootstrapBaseFileMappingFunc) {
     if (baseFile.getCommitTime().equals(METADATA_BOOTSTRAP_INSTANT_TS)) {
       HoodieBaseFile copy = new HoodieBaseFile(baseFile);
-      Option<BootstrapBaseFileMapping> edf = getBootstrapBaseFile(fileGroupId);
-      edf.ifPresent(e -> copy.setBootstrapBaseFile(e.getBootstrapBaseFile()));
+      bootstrapBaseFileMappingFunc.apply(fileGroupId).ifPresent(e -> copy.setBootstrapBaseFile(e.getBootstrapBaseFile()));
       return copy;
     }
     return baseFile;
@@ -706,7 +725,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   public final Map<String, Stream<HoodieBaseFile>> getAllLatestBaseFilesBeforeOrOn(String maxCommitTime) {
     try {
       readLock.lock();
-
       List<String> formattedPartitionList = ensureAllPartitionsLoadedCorrectly();
       return formattedPartitionList.stream().collect(Collectors.toMap(
           Function.identity(),
@@ -821,6 +839,31 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
           .map(this::addBootstrapBaseFileIfPresent);
     } finally {
       readLock.unlock();
+    }
+  }
+
+  @Override
+  public final Stream<FileSlice> getLatestFileSlicesStateless(String partitionStr) {
+    String partition = formatPartitionKey(partitionStr);
+    if (isPartitionAvailableInStore(partition)) {
+      return getLatestFileSlices(partition);
+    } else {
+      try {
+        Stream<FileSlice> fileSliceStream = buildFileGroups(getAllFilesInPartition(partition), visibleCommitsAndCompactionTimeline, true).stream()
+            .filter(fg -> !isFileGroupReplaced(fg))
+            .map(HoodieFileGroup::getLatestFileSlice)
+            .filter(Option::isPresent).map(Option::get)
+            .flatMap(slice -> this.filterUncommittedFiles(slice, true));
+        if (bootstrapIndex.useIndex()) {
+          final Map<HoodieFileGroupId, BootstrapBaseFileMapping> bootstrapBaseFileMappings = getBootstrapBaseFileMappings(partition);
+          if (!bootstrapBaseFileMappings.isEmpty()) {
+            return fileSliceStream.map(fileSlice -> addBootstrapBaseFileIfPresent(fileSlice, fileGroupId -> Option.ofNullable(bootstrapBaseFileMappings.get(fileGroupId))));
+          }
+        }
+        return fileSliceStream;
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to fetch all files in partition " + partition, e);
+      }
     }
   }
 
@@ -1014,6 +1057,39 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     return getAllFileGroupsIncludingReplaced(partitionStr).filter(fg -> !isFileGroupReplaced(fg));
   }
 
+  @Override
+  public final Stream<HoodieFileGroup> getAllFileGroupsStateless(String partitionStr) {
+    String partition = formatPartitionKey(partitionStr);
+    if (isPartitionAvailableInStore(partition)) {
+      return getAllFileGroups(partition);
+    } else {
+      try {
+        Stream<HoodieFileGroup> fileGroupStream = buildFileGroups(getAllFilesInPartition(partition), visibleCommitsAndCompactionTimeline, true).stream()
+            .filter(fg -> !isFileGroupReplaced(fg));
+        if (bootstrapIndex.useIndex()) {
+          final Map<HoodieFileGroupId, BootstrapBaseFileMapping> bootstrapBaseFileMappings = getBootstrapBaseFileMappings(partition);
+          if (!bootstrapBaseFileMappings.isEmpty()) {
+            return fileGroupStream.map(fileGroup -> addBootstrapBaseFileIfPresent(fileGroup, fileGroupId -> Option.ofNullable(bootstrapBaseFileMappings.get(fileGroupId))));
+          }
+        }
+        return fileGroupStream;
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to fetch all files in partition " + partition, e);
+      }
+    }
+  }
+
+  private Map<HoodieFileGroupId, BootstrapBaseFileMapping> getBootstrapBaseFileMappings(String partition) {
+    try (BootstrapIndex.IndexReader reader = bootstrapIndex.createReader()) {
+      LOG.info("Bootstrap Index available for partition " + partition);
+      List<BootstrapFileMapping> sourceFileMappings =
+          reader.getSourceFileMappingForPartition(partition);
+      return sourceFileMappings.stream()
+          .map(s -> new BootstrapBaseFileMapping(new HoodieFileGroupId(s.getPartitionPath(),
+              s.getFileId()), s.getBootstrapFileStatus())).collect(Collectors.toMap(BootstrapBaseFileMapping::getFileGroupId, s -> s));
+    }
+  }
+
   private Stream<HoodieFileGroup> getAllFileGroupsIncludingReplaced(final String partitionStr) {
     try {
       readLock.lock();
@@ -1029,22 +1105,38 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   @Override
   public Stream<HoodieFileGroup> getReplacedFileGroupsBeforeOrOn(String maxCommitTime, String partitionPath) {
-    return getAllFileGroupsIncludingReplaced(partitionPath).filter(fg -> isFileGroupReplacedBeforeOrOn(fg.getFileGroupId(), maxCommitTime));
+    String partition = formatPartitionKey(partitionPath);
+    if (hasReplacedFilesInPartition(partition)) {
+      return getAllFileGroupsIncludingReplaced(partition).filter(fg -> isFileGroupReplacedBeforeOrOn(fg.getFileGroupId(), maxCommitTime));
+    }
+    return Stream.empty();
   }
 
   @Override
   public Stream<HoodieFileGroup> getReplacedFileGroupsBefore(String maxCommitTime, String partitionPath) {
-    return getAllFileGroupsIncludingReplaced(partitionPath).filter(fg -> isFileGroupReplacedBefore(fg.getFileGroupId(), maxCommitTime));
+    String partition = formatPartitionKey(partitionPath);
+    if (hasReplacedFilesInPartition(partition)) {
+      return getAllFileGroupsIncludingReplaced(partition).filter(fg -> isFileGroupReplacedBefore(fg.getFileGroupId(), maxCommitTime));
+    }
+    return Stream.empty();
   }
 
   @Override
   public Stream<HoodieFileGroup> getReplacedFileGroupsAfterOrOn(String minCommitTime, String partitionPath) {
-    return getAllFileGroupsIncludingReplaced(partitionPath).filter(fg -> isFileGroupReplacedAfterOrOn(fg.getFileGroupId(), minCommitTime));
+    String partition = formatPartitionKey(partitionPath);
+    if (hasReplacedFilesInPartition(partition)) {
+      return getAllFileGroupsIncludingReplaced(partition).filter(fg -> isFileGroupReplacedAfterOrOn(fg.getFileGroupId(), minCommitTime));
+    }
+    return Stream.empty();
   }
 
   @Override
   public Stream<HoodieFileGroup> getAllReplacedFileGroups(String partitionPath) {
-    return getAllFileGroupsIncludingReplaced(partitionPath).filter(fg -> isFileGroupReplaced(fg.getFileGroupId()));
+    String partition = formatPartitionKey(partitionPath);
+    if (hasReplacedFilesInPartition(partition)) {
+      return getAllFileGroupsIncludingReplaced(partition).filter(fg -> isFileGroupReplaced(fg.getFileGroupId()));
+    }
+    return Stream.empty();
   }
 
   @Override
@@ -1262,6 +1354,11 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * Remove file groups that are replaced in any of the specified instants.
    */
   protected abstract void removeReplacedFileIdsAtInstants(Set<String> instants);
+
+  /**
+   * Returns whether there are replaced files within the given partition.
+   */
+  protected abstract boolean hasReplacedFilesInPartition(String partitionPath);
 
   /**
    * Track instant time for file groups replaced.

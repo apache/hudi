@@ -68,6 +68,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
   private static final String BASE_URL = "/v1/hoodie/view";
   public static final String LATEST_PARTITION_SLICES_URL = String.format("%s/%s", BASE_URL, "slices/partition/latest/");
+  public static final String LATEST_PARTITION_SLICES_STATELESS_URL = String.format("%s/%s", BASE_URL, "slices/partition/latest/stateless/");
   public static final String LATEST_PARTITION_SLICE_URL = String.format("%s/%s", BASE_URL, "slices/file/latest/");
   public static final String LATEST_PARTITION_UNCOMPACTED_SLICES_URL =
       String.format("%s/%s", BASE_URL, "slices/uncompacted/partition/latest/");
@@ -100,6 +101,9 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
   public static final String ALL_FILEGROUPS_FOR_PARTITION_URL =
       String.format("%s/%s", BASE_URL, "filegroups/all/partition/");
+
+  public static final String ALL_FILEGROUPS_FOR_PARTITION_STATELESS_URL =
+      String.format("%s/%s", BASE_URL, "filegroups/all/partition/stateless/");
 
   public static final String ALL_REPLACED_FILEGROUPS_BEFORE_OR_ON =
       String.format("%s/%s", BASE_URL, "filegroups/replaced/beforeoron/");
@@ -333,6 +337,18 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   }
 
   @Override
+  public Stream<FileSlice> getLatestFileSlicesStateless(String partitionPath) {
+    Map<String, String> paramsMap = getParamsWithPartitionPath(partitionPath);
+    try {
+      List<FileSliceDTO> dataFiles = executeRequest(LATEST_PARTITION_SLICES_STATELESS_URL, paramsMap,
+          new TypeReference<List<FileSliceDTO>>() {}, RequestMethod.GET);
+      return dataFiles.stream().map(FileSliceDTO::toFileSlice);
+    } catch (IOException e) {
+      throw new HoodieRemoteException(e);
+    }
+  }
+
+  @Override
   public Option<FileSlice> getLatestFileSlice(String partitionPath, String fileId) {
     Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, FILEID_PARAM, fileId);
     try {
@@ -432,6 +448,18 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     try {
       List<FileGroupDTO> fileGroups = executeRequest(ALL_FILEGROUPS_FOR_PARTITION_URL, paramsMap,
           FILE_GROUP_DTOS_REFERENCE, RequestMethod.GET);
+      return DTOUtils.fileGroupDTOsToFileGroups(fileGroups, metaClient);
+    } catch (IOException e) {
+      throw new HoodieRemoteException(e);
+    }
+  }
+
+  @Override
+  public Stream<HoodieFileGroup> getAllFileGroupsStateless(String partitionPath) {
+    Map<String, String> paramsMap = getParamsWithPartitionPath(partitionPath);
+    try {
+      List<FileGroupDTO> fileGroups = executeRequest(ALL_FILEGROUPS_FOR_PARTITION_STATELESS_URL, paramsMap,
+              new TypeReference<List<FileGroupDTO>>() {}, RequestMethod.GET);
       return DTOUtils.fileGroupDTOsToFileGroups(fileGroups, metaClient);
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
