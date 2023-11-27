@@ -23,14 +23,12 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.IndexedRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection.{ClosableIterator, CloseableMappingIterator}
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
 import org.apache.hudi.util.CloseableInternalRowIterator
-import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieInternalRowUtils}
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{JoinedRow, UnsafeProjection, UnsafeRow}
@@ -38,6 +36,7 @@ import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
+import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieInternalRowUtils}
 
 import java.util.function.UnaryOperator
 import scala.collection.mutable
@@ -152,9 +151,7 @@ class SparkFileFormatInternalRowReaderContext(readerMaps: mutable.Map[Long, Part
   }
 
   override def projectRecord(from: Schema, to: Schema): UnaryOperator[InternalRow] = {
-    val projection = HoodieCatalystExpressionUtils.generateUnsafeProjection(AvroConversionUtils.convertAvroSchemaToStructType(from),
-      AvroConversionUtils.convertAvroSchemaToStructType(to))
-    //needed for spark2.4
-    u: InternalRow => projection(u).asInstanceOf[InternalRow]
+    HoodieCatalystExpressionUtils.generateUnsafeProjection(AvroConversionUtils.convertAvroSchemaToStructType(from),
+      AvroConversionUtils.convertAvroSchemaToStructType(to)).asInstanceOf[UnaryOperator[InternalRow]]
   }
 }
