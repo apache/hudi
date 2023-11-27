@@ -144,8 +144,8 @@ class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
         val columnName = s"c$i"
         val metadataStats = spark.sql(s"""call show_metadata_table_column_stats(table => '$tableName', targetColumns => '$columnName')""").collect()
         assertResult(1)(metadataStats.length)
-        val minVal: String = metadataStats(0).getAs[String]("Min Value")
-        val maxVal: String = metadataStats(0).getAs[String]("Max Value")
+        val minVal: String = metadataStats(0).getAs[String]("min_value")
+        val maxVal: String = metadataStats(0).getAs[String]("max_value")
 
         expectedValues.get(i) match {
           case Some((expectedMin, expectedMax)) =>
