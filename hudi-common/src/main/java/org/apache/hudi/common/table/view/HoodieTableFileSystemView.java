@@ -409,6 +409,11 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   }
 
   @Override
+  protected boolean hasReplacedFilesInPartition(String partitionPath) {
+    return fgIdToReplaceInstants.keySet().stream().anyMatch(fg -> fg.getPartitionPath().equals(partitionPath));
+  }
+
+  @Override
   protected Option<HoodieInstant> getReplaceInstant(final HoodieFileGroupId fileGroupId) {
     return Option.ofNullable(fgIdToReplaceInstants.get(fileGroupId));
   }

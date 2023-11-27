@@ -20,6 +20,7 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
+import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.timeline.LSMTimelineWriter;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
@@ -56,10 +57,12 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
@@ -109,6 +112,9 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.createCompactionC
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.config.HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
+import static org.apache.hudi.metrics.HoodieMetrics.ARCHIVE_ACTION;
+import static org.apache.hudi.metrics.HoodieMetrics.DELETE_INSTANTS_NUM_STR;
+import static org.apache.hudi.metrics.HoodieMetrics.DURATION_STR;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -256,8 +262,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(cfg, table);
-    boolean result = archiver.archiveIfRequired(context);
-    assertTrue(result);
+    int result = archiver.archiveIfRequired(context);
+    assertEquals(0, result);
   }
 
   @ParameterizedTest
@@ -767,7 +773,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
 
     HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     assertEquals(6, timeline.countInstants(), "Loaded 6 commits and the count should match");
-    assertTrue(archiver.archiveIfRequired(context));
+    archiver.archiveIfRequired(context);
     timeline = metaClient.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
     if (archiveBeyondSavepoint) {
       // commits in active timeline = 101 and 105.
@@ -953,13 +959,31 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
 
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(cfg, table);
-    boolean result = archiver.archiveIfRequired(context);
-    assertTrue(result);
+    archiver.archiveIfRequired(context);
     HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
     List<HoodieInstant> archivedInstants = Arrays.asList(instant1, instant2, instant3);
     assertEquals(new HashSet<>(archivedInstants),
         archivedTimeline.filterCompletedInstants().getInstantsAsStream().collect(Collectors.toSet()));
     assertFalse(wrapperFs.exists(markerPath));
+  }
+
+  @Test
+  public void testArchiveMetrics() throws Exception {
+    init();
+    HoodieWriteConfig cfg =
+        HoodieWriteConfig.newBuilder().withPath(basePath)
+            .withMetricsConfig(HoodieMetricsConfig
+                .newBuilder()
+                .on(true)
+                .withReporterType("INMEMORY")
+                .build())
+            .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+            .withParallelism(2, 2).forTable("test-trip-table").build();
+    HoodieMetrics metrics = new HoodieMetrics(cfg);
+    BaseHoodieWriteClient client = getHoodieWriteClient(cfg);
+    client.archive();
+    assertTrue(metrics.getMetrics().getRegistry().getNames().contains(metrics.getMetricsName(ARCHIVE_ACTION, DURATION_STR)));
+    assertTrue(metrics.getMetrics().getRegistry().getNames().contains(metrics.getMetricsName(ARCHIVE_ACTION, DELETE_INSTANTS_NUM_STR)));
   }
 
   private void verifyInflightInstants(HoodieTableMetaClient metaClient, int expectedTotalInstants) {
@@ -1360,10 +1384,9 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     // Run archival
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(cfg, table);
-    boolean result = archiver.archiveIfRequired(context);
+    archiver.archiveIfRequired(context);
     expectedInstants.remove("1000");
     expectedInstants.remove("1001");
-    assertTrue(result);
     timeline = metaClient.reloadActiveTimeline().getWriteTimeline();
 
     // Check the count of instants after archive it should have 2 less instants
@@ -1383,7 +1406,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     metaClient.reloadActiveTimeline();
 
     // Run archival
-    assertTrue(archiver.archiveIfRequired(context));
+    archiver.archiveIfRequired(context);
     timeline = metaClient.reloadActiveTimeline().getWriteTimeline();
     expectedInstants.removeAll(Arrays.asList("1002", "1003", "1004", "1005"));
 
@@ -1417,8 +1440,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
 
     HoodieTimeline timeline = metaClient.reloadActiveTimeline();
     assertEquals(9, timeline.countInstants(), "Loaded 9 commits and the count should match");
-    boolean result = archiver.archiveIfRequired(context);
-    assertTrue(result);
+    archiver.archiveIfRequired(context);
     timeline = metaClient.reloadActiveTimeline();
     assertEquals(9, timeline.countInstants(),
         "Since we have a pending replacecommit at 1001, we should never archive any commit after 1001");

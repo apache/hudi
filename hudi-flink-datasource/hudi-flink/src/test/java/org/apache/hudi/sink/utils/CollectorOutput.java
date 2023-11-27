@@ -18,12 +18,11 @@
 
 package org.apache.hudi.sink.utils;
 
-import org.apache.hudi.adapter.OutputAdapter;
-
 import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.runtime.streamrecord.LatencyMarker;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.apache.flink.streaming.runtime.watermarkstatus.WatermarkStatus;
 import org.apache.flink.util.OutputTag;
 
 import java.util.ArrayList;
@@ -32,7 +31,7 @@ import java.util.List;
 /**
  * Collecting {@link Output} for {@link StreamRecord}.
  */
-public class CollectorOutput<T> implements OutputAdapter<StreamRecord<T>> {
+public class CollectorOutput<T> implements Output<StreamRecord<T>> {
 
   private final List<T> records;
 
@@ -67,5 +66,10 @@ public class CollectorOutput<T> implements OutputAdapter<StreamRecord<T>> {
   @Override
   public void close() {
     this.records.clear();
+  }
+
+  @Override
+  public void emitWatermarkStatus(WatermarkStatus watermarkStatus) {
+    // no operation
   }
 }

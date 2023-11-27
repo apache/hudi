@@ -117,7 +117,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
 
     List<HoodieCompactionOperation> operations = engineContext.flatMap(partitionPaths, partitionPath -> fileSystemView
-        .getLatestFileSlices(partitionPath)
+        .getLatestFileSlicesStateless(partitionPath)
         .filter(slice -> filterFileSlice(slice, lastCompletedInstantTime, fgIdsInPendingCompactionAndClustering, instantRange))
         .map(s -> {
           List<HoodieLogFile> logFiles = s.getLogFiles()

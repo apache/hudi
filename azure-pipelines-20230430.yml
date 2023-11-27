@@ -32,7 +32,6 @@ parameters:
       - 'hudi-common'
       - 'hudi-flink-datasource'
       - 'hudi-flink-datasource/hudi-flink'
-      - 'hudi-flink-datasource/hudi-flink1.13.x'
       - 'hudi-flink-datasource/hudi-flink1.14.x'
       - 'hudi-flink-datasource/hudi-flink1.15.x'
       - 'hudi-flink-datasource/hudi-flink1.16.x'
@@ -42,6 +41,7 @@ parameters:
     type: object
     default:
       - 'hudi-client/hudi-spark-client'
+      - 'hudi-spark-datasource/hudi-spark'
   - name: job3UTModules
     type: object
     default:
@@ -65,7 +65,6 @@ parameters:
       - '!hudi-examples/hudi-examples-spark'
       - '!hudi-flink-datasource'
       - '!hudi-flink-datasource/hudi-flink'
-      - '!hudi-flink-datasource/hudi-flink1.13.x'
       - '!hudi-flink-datasource/hudi-flink1.14.x'
       - '!hudi-flink-datasource/hudi-flink1.15.x'
       - '!hudi-flink-datasource/hudi-flink1.16.x'
@@ -89,12 +88,12 @@ parameters:
       - '!hudi-examples/hudi-examples-spark'
       - '!hudi-flink-datasource'
       - '!hudi-flink-datasource/hudi-flink'
-      - '!hudi-flink-datasource/hudi-flink1.13.x'
       - '!hudi-flink-datasource/hudi-flink1.14.x'
       - '!hudi-flink-datasource/hudi-flink1.15.x'
       - '!hudi-flink-datasource/hudi-flink1.16.x'
       - '!hudi-flink-datasource/hudi-flink1.17.x'
       - '!hudi-flink-datasource/hudi-flink1.18.x'
+      - '!hudi-spark-datasource/hudi-spark'
 
 variables:
   BUILD_PROFILES: '-Dscala-2.12 -Dspark3.2 -Dflink1.18'
@@ -144,7 +143,7 @@ stages:
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
       - job: UT_FT_2
-        displayName: FT client/spark-client
+        displayName: FT client/spark-client & hudi-spark-datasource/hudi-spark
         timeoutInMinutes: '150'
         steps:
           - task: Maven@4
@@ -156,7 +155,7 @@ stages:
               publishJUnitResults: false
               jdkVersionOption: '1.8'
           - task: Maven@4
-            displayName: FT client/spark-client
+            displayName: FT client/spark-client & hudi-spark-datasource/hudi-spark
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'

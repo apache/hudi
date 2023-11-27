@@ -159,6 +159,8 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
     // because the data files belongs 3rd commit is not included in the last compaction.
     Map<String, String> readOptimizedResult = Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,2,par1]");
     TestData.checkWrittenData(tempFile, readOptimizedResult, 1);
+    pipeline1.end();
+    pipeline2.end();
   }
 
   @Test
@@ -227,6 +229,8 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
     // the data files belongs 3rd commit is not included in the last compaction.
     Map<String, String> readOptimizedResult = Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,1,par1]");
     TestData.checkWrittenData(tempFile, readOptimizedResult, 1);
+    pipeline1.end();
+    pipeline2.end();
   }
 
   // case1: txn1 is upsert writer, txn2 is bulk_insert writer.
@@ -269,6 +273,8 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
 
     // step to commit the 2nd txn, should throw exception
     pipeline2.endInputThrows(HoodieWriteConflictException.class, "Cannot resolve conflicts");
+    pipeline1.end();
+    pipeline2.end();
   }
 
   // case1: txn1 is upsert writer, txn2 is bulk_insert writer.
@@ -342,6 +348,8 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
     // because the data files belongs 3rd commit is not included in the last compaction.
     Map<String, String> readOptimizedResult = Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,2,par1]");
     TestData.checkWrittenData(tempFile, readOptimizedResult, 1);
+    pipeline1.end();
+    pipeline2.end();
   }
 
   @Override

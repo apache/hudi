@@ -58,25 +58,28 @@ class DeleteSavepointProcedure extends BaseProcedure with ProcedureBuilder with 
     if (StringUtils.isNullOrEmpty(instantTime)) {
       instantTime = completedInstants.lastInstant.get.getTimestamp
     }
-    val savePoint = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, instantTime)
-
-    if (!completedInstants.containsInstant(savePoint)) {
-      throw new HoodieException("Commit " + instantTime + " not found in Commits " + completedInstants)
-    }
-
+    val instantTimes = instantTime.split(",")
     val client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, Map.empty,
       tableName.asInstanceOf[Option[String]])
-    var result = false
+    var result = true
+    var currentInstant = ""
+    for (it <- instantTimes) {
+      val savePoint = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, it)
+      currentInstant = it
+      if (!completedInstants.containsInstant(savePoint)) {
+        throw new HoodieException("Commit " + it + " not found in Commits " + completedInstants)
+      }
 
-    try {
-      client.deleteSavepoint(instantTime)
-      logInfo(s"The commit $instantTime has been deleted savepoint.")
-      result = true
-    } catch {
-      case _: HoodieSavepointException =>
-        logWarning(s"Failed: Could not delete savepoint $instantTime.")
-    } finally {
-      client.close()
+      try {
+        client.deleteSavepoint(it)
+        logInfo(s"The commit $instantTime has been deleted savepoint.")
+      } catch {
+        case _: HoodieSavepointException =>
+          logWarning(s"Failed: Could not delete savepoint $currentInstant.")
+          result = false
+      } finally {
+        client.close()
+      }
     }
 
     Seq(Row(result))

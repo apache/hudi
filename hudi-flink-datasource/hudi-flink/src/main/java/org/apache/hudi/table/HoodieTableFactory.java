@@ -171,8 +171,8 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
 
     if (!OptionsResolver.isAppendMode(conf)) {
       checkRecordKey(conf, schema);
-      checkPreCombineKey(conf, schema);
     }
+    checkPreCombineKey(conf, schema);
   }
 
   /**

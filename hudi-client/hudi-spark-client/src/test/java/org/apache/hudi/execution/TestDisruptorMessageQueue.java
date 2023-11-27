@@ -92,7 +92,7 @@ public class TestDisruptorMessageQueue extends HoodieSparkClientTestHarness {
   @SuppressWarnings("unchecked")
   @Test
   @Timeout(value = 60)
-  public void testRecordReading() throws Exception {
+  public void testRecordReading() {
 
     final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, 100);
     ArrayList<HoodieRecord> beforeRecord = new ArrayList<>();

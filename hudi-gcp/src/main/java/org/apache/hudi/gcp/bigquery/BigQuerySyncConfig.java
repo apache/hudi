@@ -122,6 +122,20 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
       .markAdvanced()
       .withDocumentation("Fetch file listing from Hudi's metadata");
 
+  public static final ConfigProperty<Boolean> BIGQUERY_SYNC_REQUIRE_PARTITION_FILTER = ConfigProperty
+      .key("hoodie.gcp.bigquery.sync.require_partition_filter")
+      .defaultValue(false)
+      .sinceVersion("0.14.1")
+      .markAdvanced()
+      .withDocumentation("If true, configure table to require a partition filter to be specified when querying the table");
+
+  public static final ConfigProperty<String> BIGQUERY_SYNC_BIG_LAKE_CONNECTION_ID = ConfigProperty
+      .key("hoodie.gcp.bigquery.sync.big_lake_connection_id")
+      .noDefaultValue()
+      .sinceVersion("0.14.1")
+      .markAdvanced()
+      .withDocumentation("The Big Lake connection ID to use");
+
   public BigQuerySyncConfig(Properties props) {
     super(props);
     setDefaults(BigQuerySyncConfig.class.getName());
@@ -147,6 +161,10 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
     public String sourceUri;
     @Parameter(names = {"--source-uri-prefix"}, description = "Name of the source uri gcs path prefix of the table", required = false)
     public String sourceUriPrefix;
+    @Parameter(names = {"--big-lake-connection-id"}, description = "The Big Lake connection ID to use when creating the table if using the manifest file approach.")
+    public String bigLakeConnectionId;
+    @Parameter(names = {"--require-partition-filter"}, description = "If true, configure table to require a partition filter to be specified when querying the table")
+    public Boolean requirePartitionFilter;
 
     public boolean isHelp() {
       return hoodieSyncConfigParams.isHelp();
@@ -164,6 +182,8 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
       props.setPropertyIfNonNull(BIGQUERY_SYNC_SYNC_BASE_PATH.key(), hoodieSyncConfigParams.basePath);
       props.setPropertyIfNonNull(BIGQUERY_SYNC_PARTITION_FIELDS.key(), StringUtils.join(",", hoodieSyncConfigParams.partitionFields));
       props.setPropertyIfNonNull(BIGQUERY_SYNC_USE_FILE_LISTING_FROM_METADATA.key(), hoodieSyncConfigParams.useFileListingFromMetadata);
+      props.setPropertyIfNonNull(BIGQUERY_SYNC_BIG_LAKE_CONNECTION_ID.key(), bigLakeConnectionId);
+      props.setPropertyIfNonNull(BIGQUERY_SYNC_REQUIRE_PARTITION_FILTER.key(), requirePartitionFilter);
       return props;
     }
   }

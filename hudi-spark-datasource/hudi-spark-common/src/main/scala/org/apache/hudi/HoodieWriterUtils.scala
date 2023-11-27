@@ -203,10 +203,11 @@ object HoodieWriterUtils {
         }
 
         val datasourcePartitionFields = params.getOrElse(PARTITIONPATH_FIELD.key(), null)
+        val currentPartitionFields = if (datasourcePartitionFields == null) null else SparkKeyGenUtils.getPartitionColumns(TypedProperties.fromMap(params))
         val tableConfigPartitionFields = tableConfig.getString(HoodieTableConfig.PARTITION_FIELDS)
         if (null != datasourcePartitionFields && null != tableConfigPartitionFields
-          && datasourcePartitionFields != tableConfigPartitionFields) {
-          diffConfigs.append(s"PartitionPath:\t$datasourcePartitionFields\t$tableConfigPartitionFields\n")
+          && currentPartitionFields != tableConfigPartitionFields) {
+          diffConfigs.append(s"PartitionPath:\t$currentPartitionFields\t$tableConfigPartitionFields\n")
         }
       }
 

@@ -229,8 +229,11 @@ public final class SourceFormatAdapter implements Closeable {
           // configured via this option. The column is then used to trigger error events.
           StructType dataType = AvroConversionUtils.convertAvroSchemaToStructType(sourceSchema)
               .add(new StructField(ERROR_TABLE_CURRUPT_RECORD_COL_NAME, DataTypes.StringType, true, Metadata.empty()));
+          StructType nullableStruct = dataType.asNullable();
           Option<Dataset<Row>> dataset = r.getBatch().map(rdd -> source.getSparkSession().read()
-              .option("columnNameOfCorruptRecord", ERROR_TABLE_CURRUPT_RECORD_COL_NAME).schema(dataType.asNullable())
+              .option("columnNameOfCorruptRecord", ERROR_TABLE_CURRUPT_RECORD_COL_NAME)
+              .schema(nullableStruct)
+              .option("mode", "PERMISSIVE")
               .json(rdd));
           Option<Dataset<Row>> eventsDataset = processErrorEvents(dataset,
               ErrorEvent.ErrorReason.JSON_ROW_DESERIALIZATION_FAILURE);
