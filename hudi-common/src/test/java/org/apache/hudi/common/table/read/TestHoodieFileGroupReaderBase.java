@@ -44,7 +44,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -157,7 +156,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     SyncableFileSystemView fsView = viewManager.getFileSystemView(metaClient);
     FileSlice fileSlice = fsView.getAllFileSlices(partitionPaths[0]).findFirst().get();
     List<String> logFilePathList = getLogFileListFromFileSlice(fileSlice);
-    Collections.sort(logFilePathList);
+    //Collections.sort(logFilePathList);
     assertEquals(expectedLogFileNum, logFilePathList.size());
 
     List<T> actualRecordList = new ArrayList<>();

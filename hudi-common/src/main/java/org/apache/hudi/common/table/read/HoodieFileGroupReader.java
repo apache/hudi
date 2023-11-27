@@ -41,6 +41,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -52,6 +53,7 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGER_STRATEGY;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
@@ -106,7 +108,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.readerContext = readerContext;
     this.hadoopConf = hadoopConf;
     this.hoodieBaseFileOption = fileSlice.getBaseFile();
-    this.logFiles = fileSlice.getLogFiles().collect(Collectors.toList());
+    this.logFiles = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
     this.props = props;
     this.start = start;
     this.length = length;
@@ -272,7 +274,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
           .withReadBlocksLazily(getBooleanWithAltKeys(props, HoodieReaderConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE))
           .withReverseReader(false)
           .withBufferSize(getIntWithAltKeys(props, HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE))
-          .withPartition("needtofix")
+          .withPartition(getRelativePartitionPath(
+              new Path(readerState.tablePath), logFiles.get(0).getPath().getParent()))
           .withRecordMerger(recordMerger)
           .withRecordBuffer(recordBuffer)
           .build();

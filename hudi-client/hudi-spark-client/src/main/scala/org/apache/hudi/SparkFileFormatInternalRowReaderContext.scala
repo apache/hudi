@@ -152,8 +152,9 @@ class SparkFileFormatInternalRowReaderContext(readerMaps: mutable.Map[Long, Part
   }
 
   override def projectRecord(from: Schema, to: Schema): UnaryOperator[InternalRow] = {
-        val projection = HoodieCatalystExpressionUtils.generateUnsafeProjection(AvroConversionUtils.convertAvroSchemaToStructType(from),
-          AvroConversionUtils.convertAvroSchemaToStructType(to))
-    u: InternalRow => projection(u)
+    val projection = HoodieCatalystExpressionUtils.generateUnsafeProjection(AvroConversionUtils.convertAvroSchemaToStructType(from),
+      AvroConversionUtils.convertAvroSchemaToStructType(to))
+    //needed for spark2.4
+    u: InternalRow => projection(u).asInstanceOf[InternalRow]
   }
 }
