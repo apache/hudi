@@ -34,12 +34,15 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.spark.sql.HoodieCatalystExpressionUtils;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
 import org.apache.spark.sql.types.StructType;
 
 import java.util.Map;
+import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
@@ -122,5 +125,12 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
     } else {
       return null;
     }
+  }
+
+  @Override
+  public UnaryOperator<InternalRow> projectRecord(Schema from, Schema to) {
+    UnsafeProjection projection = HoodieCatalystExpressionUtils.generateUnsafeProjection(AvroConversionUtils.convertAvroSchemaToStructType(from),
+        AvroConversionUtils.convertAvroSchemaToStructType(to));
+    return projection::apply;
   }
 }

@@ -36,9 +36,8 @@ import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
-import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieInternalRowUtils}
+import org.apache.spark.sql.HoodieInternalRowUtils
 
-import java.util.function.UnaryOperator
 import scala.collection.mutable
 
 /**
@@ -148,10 +147,5 @@ class SparkFileFormatInternalRowReaderContext(readerMaps: mutable.Map[Long, Part
         dataFileIterator.close()
       }
     }.asInstanceOf[ClosableIterator[InternalRow]]
-  }
-
-  override def projectRecord(from: Schema, to: Schema): UnaryOperator[InternalRow] = {
-    HoodieCatalystExpressionUtils.generateUnsafeProjection(AvroConversionUtils.convertAvroSchemaToStructType(from),
-      AvroConversionUtils.convertAvroSchemaToStructType(to)).asInstanceOf[UnaryOperator[InternalRow]]
   }
 }
