@@ -29,20 +29,12 @@ import java.util.Random;
 
 /**
  * Insert input partitioner.
- * 假设：
- * Flink并行度为 100
- * 期望每一个数据partition下对应10个task写数据(控制文件数)
- * 则 1,2,3,4,..,100 ==> group1-[1,2,3,..,10], group2-[11,12,13,...,20],...,group10-[91,92,..,100]
- * partition1 使用 group1
  *
- * groupLength must be lower than numPartitions ==> groupLength < numPartitions
- * groupNumber = [0,]
- * groupIndex = [0, groupNumber-1]
- * index = [0, groupLength -1]
+ * 1. Split numPartitions into multi bucket based on numPartitions / groupLength
+ * 2. Route each record into related Bucket based on (partitionPath.hashCode() & Integer.MAX_VALUE) % groupNumber
+ * 3. Using random to get specific index number.
  *
- * Be careful :
- * If numPartitions is not divisible by groupLength, then the partition corresponding to the remainder will be wasted.
- *
+ * Need to take care of the last bucket to avoid resource wast.
  */
 public class DefaultInsertPartitioner<T extends HoodieKey> implements Partitioner<T> {
 
@@ -54,15 +46,29 @@ public class DefaultInsertPartitioner<T extends HoodieKey> implements Partitione
     this.random = new Random();
   }
 
+  /**
+   * Make sure that data with the same partition will only be routed to the same flink task group(groupIndex).
+   * @param hoodieKey
+   * @param numPartitions
+   * @return
+   */
   @Override
   public int partition(HoodieKey hoodieKey, int numPartitions) {
     String partitionPath = hoodieKey.getPartitionPath();
     int groupNumber = numPartitions / groupLength;
+    int remaining = numPartitions - groupNumber * groupLength;
     ValidationUtils.checkArgument(groupNumber != 0,
-        String.format("write.insert.partitioner.default_parallelism_per_partition are greater than numPartitions %d.", numPartitions));
+        String.format("write.insert.partitioner.parallelism.per.partition are greater than numPartitions %d.", numPartitions));
 
     int groupIndex = (partitionPath.hashCode() & Integer.MAX_VALUE) % groupNumber;
-    int index = random.nextInt(groupLength);
-    return groupIndex * groupLength + index;
+    int step;
+
+    if (remaining > 0 && groupIndex == groupNumber - 1) {
+      // the last group contains remaining partitions.
+      step = random.nextInt(groupLength + remaining);
+    } else {
+      step = random.nextInt(groupLength);
+    }
+    return groupIndex * groupLength + step;
   }
 }
