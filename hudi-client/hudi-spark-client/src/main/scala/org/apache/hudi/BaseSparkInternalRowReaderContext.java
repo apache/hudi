@@ -34,7 +34,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.spark.sql.HoodieCatalystExpressionUtils;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -129,7 +128,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
 
   @Override
   public UnaryOperator<InternalRow> projectRecord(Schema from, Schema to) {
-    UnsafeProjection projection = HoodieCatalystExpressionUtils.generateUnsafeProjection(AvroConversionUtils.convertAvroSchemaToStructType(from),
+    UnsafeProjection projection = HoodieInternalRowUtils.getCachedUnsafeProjection(AvroConversionUtils.convertAvroSchemaToStructType(from),
         AvroConversionUtils.convertAvroSchemaToStructType(to));
     return projection::apply;
   }
