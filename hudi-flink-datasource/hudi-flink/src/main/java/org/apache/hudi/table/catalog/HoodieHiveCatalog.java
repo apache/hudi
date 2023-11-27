@@ -97,6 +97,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -512,7 +513,9 @@ public class HoodieHiveCatalog extends AbstractCatalog {
 
     flinkConf.setString(FlinkOptions.TABLE_NAME, tablePath.getObjectName());
 
-    StreamerUtil.checkPreCombineKey(flinkConf, ((ResolvedCatalogTable) catalogTable).getResolvedSchema());
+    List<String> fields = new ArrayList<>();
+    catalogTable.getUnresolvedSchema().getColumns().forEach(column -> {fields.add(column.getName());});
+    StreamerUtil.checkPreCombineKey(flinkConf, fields);
 
     try {
       StreamerUtil.initTableIfNotExists(flinkConf, hiveConf);

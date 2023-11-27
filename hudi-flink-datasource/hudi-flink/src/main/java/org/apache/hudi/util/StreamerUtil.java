@@ -523,8 +523,7 @@ public class StreamerUtil {
   /**
    * Validate pre_combine key.
    */
-  public static void checkPreCombineKey(Configuration conf, ResolvedSchema schema) {
-    List<String> fields = schema.getColumnNames();
+  public static void checkPreCombineKey(Configuration conf, List<String> fields) {
     String preCombineField = conf.get(FlinkOptions.PRECOMBINE_FIELD);
     if (!fields.contains(preCombineField)) {
       if (OptionsResolver.isDefaultHoodieRecordPayloadClazz(conf)) {
