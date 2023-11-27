@@ -78,6 +78,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -365,15 +366,15 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     fsView.sync();
     // invokes the stateless API first then the normal API, assert the result equality with different file group objects
-    List<HoodieFileGroup> actual1 = fsView.getAllFileGroupsStateless(partitionPath1).collect(Collectors.toList());
-    List<HoodieFileGroup> expected1 = fsView.getAllFileGroups(partitionPath1).collect(Collectors.toList());
+    List<HoodieFileGroup> actual1 = fsView.getAllFileGroupsStateless(partitionPath1).sorted(Comparator.comparing(HoodieFileGroup::getFileGroupId)).collect(Collectors.toList());
+    List<HoodieFileGroup> expected1 = fsView.getAllFileGroups(partitionPath1).sorted(Comparator.comparing(HoodieFileGroup::getFileGroupId)).collect(Collectors.toList());
     for (int i = 0; i < expected1.size(); i++) {
       assertThat("The stateless API should return the same result", actual1.get(i).toString(), is(expected1.get(i).toString()));
       assertNotSame(actual1.get(i), expected1.get(i), "The stateless API does not cache");
     }
 
-    List<HoodieFileGroup> expected2 = fsView.getAllFileGroupsStateless(partitionPath2).collect(Collectors.toList());
-    List<HoodieFileGroup> actual2 = fsView.getAllFileGroups(partitionPath2).collect(Collectors.toList());
+    List<HoodieFileGroup> expected2 = fsView.getAllFileGroupsStateless(partitionPath2).sorted(Comparator.comparing(HoodieFileGroup::getFileGroupId)).collect(Collectors.toList());
+    List<HoodieFileGroup> actual2 = fsView.getAllFileGroups(partitionPath2).sorted(Comparator.comparing(HoodieFileGroup::getFileGroupId)).collect(Collectors.toList());
     for (int i = 0; i < expected2.size(); i++) {
       assertThat("The stateless API should return the same result", actual2.get(i).toString(), is(expected2.get(i).toString()));
       assertNotSame(actual2.get(i), expected2.get(i), "The stateless API does not cache");
@@ -417,15 +418,15 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     fsView.sync();
 
     // invokes the stateless API first then the normal API, assert the result equality with different file slice objects
-    List<FileSlice> actual1 = fsView.getLatestFileSlicesStateless(partitionPath1).collect(Collectors.toList());
-    List<FileSlice> expected1 = fsView.getLatestFileSlices(partitionPath1).collect(Collectors.toList());
+    List<FileSlice> actual1 = fsView.getLatestFileSlicesStateless(partitionPath1).sorted(Comparator.comparing(FileSlice::getFileId)).collect(Collectors.toList());
+    List<FileSlice> expected1 = fsView.getLatestFileSlices(partitionPath1).sorted(Comparator.comparing(FileSlice::getFileId)).collect(Collectors.toList());
     for (int i = 0; i < expected1.size(); i++) {
       assertThat("The stateless API should return the same result", actual1.get(i), is(expected1.get(i)));
       assertNotSame(actual1.get(i), expected1.get(i), "The stateless API does not cache");
     }
 
-    List<FileSlice> expected2 = fsView.getLatestFileSlicesStateless(partitionPath2).collect(Collectors.toList());
-    List<FileSlice> actual2 = fsView.getLatestFileSlices(partitionPath2).collect(Collectors.toList());
+    List<FileSlice> expected2 = fsView.getLatestFileSlicesStateless(partitionPath2).sorted(Comparator.comparing(FileSlice::getFileId)).collect(Collectors.toList());
+    List<FileSlice> actual2 = fsView.getLatestFileSlices(partitionPath2).sorted(Comparator.comparing(FileSlice::getFileId)).collect(Collectors.toList());
     for (int i = 0; i < expected2.size(); i++) {
       assertThat("The stateless API should return the same result", actual2.get(i), is(expected2.get(i)));
       assertNotSame(actual2.get(i), expected2.get(i), "The stateless API does not cache");
