@@ -139,6 +139,7 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(30)
       .withDescription("The parallelism to use in each partition when using DefaultInsertPartitioner.");
 
+  @AdvancedConfig
   public static final ConfigOption<String> RECORD_MERGER_IMPLS = ConfigOptions
       .key("record.merger.impls")
       .stringType()
