@@ -21,7 +21,6 @@ package org.apache.hudi.aws;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.config.HoodieAWSConfig;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
 
@@ -41,11 +40,11 @@ public class TestHoodieAWSCredentialsProviderFactory {
     assertEquals("random-session-token", credentials.sessionToken());
   }
 
-  @Disabled("HUDI-7114")
   @Test
   public void testGetAWSCredentialsWithInvalidAssumeRole() {
     // This test is to ensure that the AWS credentials provider factory fallbacks to default credentials
     // when the assume role ARN is invalid.
+    System.setProperty("aws.region", "eu-west-1");
     HoodieConfig cfg = new HoodieConfig();
     cfg.setValue(HoodieAWSConfig.AWS_ACCESS_KEY, "random-access-key");
     cfg.setValue(HoodieAWSConfig.AWS_SECRET_KEY, "random-secret-key");
