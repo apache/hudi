@@ -38,8 +38,8 @@ public class TestDefaultInsertPartitioner {
     int recordsPerPartition = 20;
     HashMap<Integer, Integer> res = new HashMap<>();
     String partitionPath = "dt=2023-11-27/hour=01/index=";
-    for(int partitionIndex = 0 ; partitionIndex < numberDataPartition; partitionIndex ++) {
-      for(int recordIndex = 0 ; recordIndex < recordsPerPartition; recordIndex ++) {
+    for (int partitionIndex = 0; partitionIndex < numberDataPartition; partitionIndex++) {
+      for (int recordIndex = 0; recordIndex < recordsPerPartition; recordIndex++) {
         int id = partitioner.partition(new HoodieKey("id" + recordIndex, partitionPath + partitionIndex), numberFlinkPartitions);
         if (res.containsKey(id)) {
           Integer value = res.get(id);
