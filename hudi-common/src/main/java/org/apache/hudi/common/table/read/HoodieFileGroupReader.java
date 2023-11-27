@@ -175,7 +175,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       if (requestedSchema.getField(field) == null) {
         Schema.Field foundField  = dataSchema.getField(field);
         if (foundField == null) {
-          throw new IllegalArgumentException("Filed: " + field + " does not exist in the table schema");
+          throw new IllegalArgumentException("Field: " + field + " does not exist in the table schema");
         }
         addedFields.add(new Schema.Field(foundField.name(), foundField.schema(), foundField.doc(), foundField.defaultVal()));
       }
