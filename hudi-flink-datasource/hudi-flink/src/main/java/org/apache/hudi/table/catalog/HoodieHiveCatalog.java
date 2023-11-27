@@ -57,7 +57,6 @@ import org.apache.flink.table.catalog.CatalogPropertiesUtil;
 import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.catalog.CatalogView;
 import org.apache.flink.table.catalog.ObjectPath;
-import org.apache.flink.table.catalog.ResolvedCatalogTable;
 import org.apache.flink.table.catalog.exceptions.CatalogException;
 import org.apache.flink.table.catalog.exceptions.DatabaseAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.DatabaseNotEmptyException;
@@ -514,7 +513,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     flinkConf.setString(FlinkOptions.TABLE_NAME, tablePath.getObjectName());
 
     List<String> fields = new ArrayList<>();
-    catalogTable.getUnresolvedSchema().getColumns().forEach(column -> {fields.add(column.getName());});
+    catalogTable.getUnresolvedSchema().getColumns().forEach(column -> fields.add(column.getName()));
     StreamerUtil.checkPreCombineKey(flinkConf, fields);
 
     try {
