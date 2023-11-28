@@ -40,6 +40,8 @@ public class DefaultInsertPartitioner<T extends HoodieKey> implements Partitione
 
   private final int groupLength;
   private final Random random;
+  private int groupNumber = -1;
+  private int remaining = -1;
 
   public DefaultInsertPartitioner(Configuration conf) {
     this.groupLength = conf.get(FlinkOptions.DEFAULT_PARALLELISM_PER_PARTITION); // default 30 ==> parallelism per partition
@@ -54,12 +56,8 @@ public class DefaultInsertPartitioner<T extends HoodieKey> implements Partitione
    */
   @Override
   public int partition(HoodieKey hoodieKey, int numPartitions) {
+    setupIfNecessary(numPartitions);
     String partitionPath = hoodieKey.getPartitionPath();
-    int groupNumber = numPartitions / groupLength;
-    int remaining = numPartitions - groupNumber * groupLength;
-    ValidationUtils.checkArgument(groupNumber != 0,
-        String.format("write.insert.partitioner.parallelism.per.partition are greater than numPartitions %d.", numPartitions));
-
     int groupIndex = (partitionPath.hashCode() & Integer.MAX_VALUE) % groupNumber;
     int step;
 
@@ -70,5 +68,18 @@ public class DefaultInsertPartitioner<T extends HoodieKey> implements Partitione
       step = random.nextInt(groupLength);
     }
     return groupIndex * groupLength + step;
+  }
+
+  /**
+   * set up groupNumber and remaining for the first time, avoid unnecessary calculation.
+   * @param numPartitions
+   */
+  private void setupIfNecessary(int numPartitions) {
+    if (groupNumber == -1 || remaining == -1) {
+      groupNumber = numPartitions / groupLength;
+      remaining = numPartitions - groupNumber * groupLength;
+      ValidationUtils.checkArgument(groupNumber != 0,
+          String.format("write.insert.partitioner.parallelism.per.partition are greater than numPartitions %d.", numPartitions));
+    }
   }
 }

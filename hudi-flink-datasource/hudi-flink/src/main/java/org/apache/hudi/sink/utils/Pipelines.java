@@ -228,7 +228,9 @@ public class Pipelines {
     WriteOperatorFactory<RowData> operatorFactory = AppendWriteOperator.getFactory(conf, rowType);
 
     return finalDataStream
-        .transform(opName("hoodie_append_write", conf), TypeInformation.of(Object.class), operatorFactory);
+        .transform(opName("hoodie_append_write", conf), TypeInformation.of(Object.class), operatorFactory)
+        .uid(opUID("hoodie_stream_write", conf))
+        .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
   }
 
   public static Option<Partitioner> getInsertPartitioner(Configuration conf) {
