@@ -45,7 +45,7 @@ import scala.jdk.CollectionConverters.asScalaIteratorConverter
 
 trait HoodieFormatTrait {
 
-  //Used so that the planner only projects once and does not stack overflow
+  // Used so that the planner only projects once and does not stack overflow
   var isProjected: Boolean = false
 }
 
