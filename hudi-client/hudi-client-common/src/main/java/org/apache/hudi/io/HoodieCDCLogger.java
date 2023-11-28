@@ -53,6 +53,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -84,7 +85,7 @@ public class HoodieCDCLogger implements Closeable {
   private final Schema cdcSchema;
 
   // the cdc data
-  private final Map<String, HoodieAvroPayload> cdcData;
+  private final ExternalSpillableMap<String, HoodieAvroPayload> cdcData;
 
   private final Map<HoodieLogBlock.HeaderMetadataType, String> cdcDataBlockHeader;
 
@@ -183,15 +184,16 @@ public class HoodieCDCLogger implements Closeable {
   private void flushIfNeeded(Boolean force) {
     if (force || numOfCDCRecordsInMemory.get() * averageCDCRecordSize >= maxBlockSize) {
       try {
-        List<HoodieRecord> records = cdcData.values().stream()
-            .map(record -> {
-              try {
-                return new HoodieAvroIndexedRecord(record.getInsertValue(cdcSchema).get());
-              } catch (IOException e) {
-                throw new HoodieIOException("Failed to get cdc record", e);
-              }
-            }).collect(Collectors.toList());
-
+        ArrayList<HoodieRecord> records = new ArrayList<>();
+        Iterator<HoodieAvroPayload> recordIter = cdcData.iterator();
+        while (recordIter.hasNext()) {
+          HoodieAvroPayload record = recordIter.next();
+          try {
+            records.add(new HoodieAvroIndexedRecord(record.getInsertValue(cdcSchema).get()));
+          } catch (IOException e) {
+            throw new HoodieIOException("Failed to get cdc record", e);
+          }
+        }
         HoodieLogBlock block = new HoodieCDCDataBlock(records, cdcDataBlockHeader, keyField);
         AppendResult result = cdcWriter.appendBlocks(Collections.singletonList(block));
 
