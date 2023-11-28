@@ -32,7 +32,7 @@ import org.apache.spark.sql.SparkSession;
 /**
  * DFS Source that reads parquet data.
  */
-πpublic class ParquetDFSSource extends RowSource {
+public class ParquetDFSSource extends RowSource {
 
   private final DFSPathSelector pathSelector;
 
