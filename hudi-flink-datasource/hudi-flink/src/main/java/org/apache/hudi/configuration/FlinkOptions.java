@@ -128,7 +128,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> INSERT_PARTITIONER_CLASS_NAME = ConfigOptions
       .key("write.insert.partitioner.class.name")
       .stringType()
-      .defaultValue("")
+      .noDefaultValue()
       .withDescription("Insert partitioner to use aiming to re-balance records and reducing small file number "
           + "in the scenario of multi-level partitioning. For example dt/hour/eventID"
           + "Currently support org.apache.hudi.sink.partitioner.DefaultInsertPartitioner");
@@ -136,7 +136,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Integer> DEFAULT_PARALLELISM_PER_PARTITION = ConfigOptions
       .key("write.insert.partitioner.parallelism.per.partition")
       .intType()
-      .defaultValue(30)
+      .noDefaultValue()
       .withDescription("The parallelism to use in each partition when using DefaultInsertPartitioner.");
 
   @AdvancedConfig

@@ -38,13 +38,13 @@ import java.util.Random;
  */
 public class DefaultInsertPartitioner<T extends HoodieKey> implements Partitioner<T> {
 
-  private final int groupLength;
+  private Integer groupLength;
   private final Random random;
-  private int groupNumber = -1;
-  private int remaining = -1;
+  private Integer groupNumber = null;
+  private Integer remaining = null;
 
   public DefaultInsertPartitioner(Configuration conf) {
-    this.groupLength = conf.get(FlinkOptions.DEFAULT_PARALLELISM_PER_PARTITION); // default 30 ==> parallelism per partition
+    this.groupLength = conf.get(FlinkOptions.DEFAULT_PARALLELISM_PER_PARTITION);
     this.random = new Random();
   }
 
@@ -75,7 +75,11 @@ public class DefaultInsertPartitioner<T extends HoodieKey> implements Partitione
    * @param numPartitions
    */
   private void setupIfNecessary(int numPartitions) {
-    if (groupNumber == -1 || remaining == -1) {
+    if (groupLength == null) {
+      groupLength = numPartitions; // use numPartitions as default groupLength
+    }
+
+    if (groupNumber == null || remaining == null) {
       groupNumber = numPartitions / groupLength;
       remaining = numPartitions - groupNumber * groupLength;
       ValidationUtils.checkArgument(groupNumber != 0,
