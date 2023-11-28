@@ -33,6 +33,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.exception.InvalidHoodieFileNameException;
 import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
@@ -298,6 +299,17 @@ public class FSUtils {
       throw new InvalidHoodiePathException(logPath.toString(), "LogFile");
     }
     return matcher.group(3);
+  }
+
+  public static String getFileIdFromFileName(String fileName) {
+    if (FSUtils.isLogFile(fileName)) {
+      Matcher matcher = LOG_FILE_PATTERN.matcher(fileName);
+      if (!matcher.find()) {
+        throw new InvalidHoodieFileNameException(fileName, "LogFile");
+      }
+      return matcher.group(1);
+    }
+    return FSUtils.getFileId(fileName);
   }
 
   public static String getFileIdFromLogPath(StoragePath path) {
