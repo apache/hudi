@@ -32,7 +32,7 @@ import org.apache.spark.sql.SparkSession;
 /**
  * DFS Source that reads parquet data.
  */
-public class ParquetDFSSource extends RowSource {
+πpublic class ParquetDFSSource extends RowSource {
 
   private final DFSPathSelector pathSelector;
 
@@ -52,6 +52,6 @@ public class ParquetDFSSource extends RowSource {
   }
 
   private Dataset<Row> fromFiles(String pathStr) {
-    return sparkSession.read().parquet(pathStr.split(","));
+    return sparkSession.read().option("mergeSchema", "true").parquet(pathStr.split(","));
   }
 }
