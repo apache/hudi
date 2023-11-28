@@ -40,6 +40,13 @@ CREATE TABLE IF NOT EXISTS hudi_table (
 ) USING hudi;
 ```
 
+:::note NOTE:
+If you're running this tutorial locally and if you are facing `java.io.IOException: Mkdirs failed to create file:/user/hive/warehouse/hudi_table/.hoodie` issue,
+it's likely because of the spark-hive integration. To get around this, you can follow either of the two options mentioned below:
+1. Create a database i.e. `CREATE DATABASE hudidb;` and use it i.e. `USE hudidb;` before running the DDL statement.
+2. Or provide a path using `LOCATION` keyword to persist the data with the DDL statement.
+:::
+
 ### Create partitioned table
 A partitioned table can be created by adding a `partitioned by` clause. Partitioning helps to organize the data into multiple folders 
 based on the partition columns. It can also help speed up queries and index lookups by limiting the amount of metadata, index and data scanned.
