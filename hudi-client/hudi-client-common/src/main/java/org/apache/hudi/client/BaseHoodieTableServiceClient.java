@@ -115,6 +115,9 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   protected transient AsyncArchiveService asyncArchiveService;
 
   @Setter(AccessLevel.PROTECTED)
+  protected Option<Pair<HoodieInstant, Map<String, String>>> lastCompletedTxnAndMetadata = Option.empty();
+
+  @Setter(AccessLevel.PROTECTED)
   protected Set<String> pendingInflightAndRequestedInstants;
 
   protected BaseHoodieTableServiceClient(HoodieEngineContext context,
@@ -559,7 +562,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     final HoodieInstant clusteringInstant = ClusteringUtils.getInflightClusteringInstant(clusteringCommitTime,
         table.getActiveTimeline(), table.getMetaClient().getInstantGenerator()).get();
     try {
-      this.txnManager.beginStateChange(Option.of(clusteringInstant), Option.empty());
+      this.txnManager.beginStateChange(Option.of(clusteringInstant),
+          lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
 
       finalizeWrite(table, clusteringCommitTime, writeStats);
       // Only in some cases conflict resolution needs to be performed.
