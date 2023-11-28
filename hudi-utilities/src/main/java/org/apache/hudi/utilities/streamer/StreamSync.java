@@ -899,7 +899,7 @@ public class StreamSync implements Serializable, Closeable {
     instantTime = startCommit(instantTime, !autoGenerateRecordKeys);
 
     if (useRowWriter) {
-      Dataset<Row> df = (Dataset<Row>) inputBatch.getBatch().orElse(hoodieSparkContext.emptyRDD());
+      Dataset<Row> df = (Dataset<Row>) inputBatch.getBatch().orElse(hoodieSparkContext.getSqlContext().emptyDataFrame());
       HoodieWriteConfig hoodieWriteConfig = prepareHoodieConfigForRowWriter(inputBatch.getSchemaProvider().getTargetSchema());
       BaseDatasetBulkInsertCommitActionExecutor executor = new HoodieStreamerDatasetBulkInsertCommitActionExecutor(hoodieWriteConfig, writeClient, instantTime);
       writeClientWriteResult = new WriteClientWriteResult(executor.execute(df, !HoodieStreamerUtils.getPartitionColumns(props).isEmpty()).getWriteStatuses());

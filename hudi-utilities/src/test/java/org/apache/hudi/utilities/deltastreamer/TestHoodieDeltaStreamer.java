@@ -1355,10 +1355,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     try {
       if (testEmptyBatch) {
         prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, "2.parquet", false, null, null);
-        deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
         deltaStreamer.sync();
         // since we mimic'ed empty batch, total records should be same as first sync().
-        assertRecordCount(200, tableBasePath, sqlContext);
+        assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
         HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(jsc.hadoopConfiguration()).build();
 
         // validate table schema fetches valid schema from last but one commit.
@@ -1371,7 +1370,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       // add 3 more batches and ensure all commits succeed.
       for (int i = 2; i < 5; i++) {
         prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, Integer.toString(i) + ".parquet", false, null, null);
-        deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
         deltaStreamer.sync();
         assertRecordCount(recordsSoFar + (i - 1) * 100, tableBasePath, sqlContext);
         if (i == 2 || i == 4) { // this validation reloads the timeline. So, we are validating only for first and last batch.
