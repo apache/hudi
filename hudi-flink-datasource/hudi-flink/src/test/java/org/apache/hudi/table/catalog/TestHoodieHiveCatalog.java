@@ -45,6 +45,7 @@ import org.apache.flink.table.catalog.exceptions.TableAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
 import org.apache.flink.table.factories.FactoryUtil;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
 import org.apache.hadoop.hive.metastore.api.Partition;
@@ -58,18 +59,23 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.flink.configuration.Configuration.fromMap;
 import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
+import static org.apache.hudi.configuration.FlinkOptions.PRECOMBINE_FIELD;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -165,7 +171,7 @@ public class TestHoodieHiveCatalog {
     assertEquals("hudi", table1.getOptions().get(CONNECTOR.key()));
     assertEquals(tableType.toString(), table1.getOptions().get(FlinkOptions.TABLE_TYPE.key()));
     assertEquals("uuid", table1.getOptions().get(FlinkOptions.RECORD_KEY_FIELD.key()));
-    assertNull(table1.getOptions().get(FlinkOptions.PRECOMBINE_FIELD.key()), "preCombine key is not declared");
+    assertNull(table1.getOptions().get(PRECOMBINE_FIELD.key()), "preCombine key is not declared");
     String tableSchema = table1.getUnresolvedSchema().getColumns().stream()
         .map(Schema.UnresolvedColumn::toString)
         .collect(Collectors.joining(","));
@@ -187,6 +193,53 @@ public class TestHoodieHiveCatalog {
 
     CatalogBaseTable table2 = hoodieCatalog.getTable(tablePath);
     assertEquals("id", table2.getOptions().get(FlinkOptions.RECORD_KEY_FIELD.key()));
+  }
+
+  @Test
+  void testCreateTableWithoutPreCombineKey() throws TableAlreadyExistException, DatabaseNotExistException, IOException, TableNotExistException {
+    String db = "default";
+    Map<String, String> options = new HashMap<>();
+    options.put(FactoryUtil.CONNECTOR.key(), "hudi");
+
+    hoodieCatalog = new HoodieHiveCatalog("test_catalog", fromMap(options));
+    hoodieCatalog.open();
+
+    Map<String, String> propMap = createTableAndReturnTableProperties(options, new ObjectPath(db, "table1"));
+    assertFalse(propMap.containsKey("hoodie.table.precombine.field"));
+
+    options.put(PRECOMBINE_FIELD.key(), "ts_3");
+    propMap = createTableAndReturnTableProperties(options, new ObjectPath(db, "table21"));
+    assertTrue(propMap.containsKey("hoodie.table.precombine.field"));
+    assertEquals("ts_3", propMap.get("hoodie.table.precombine.field"));
+  }
+
+  private Map<String, String> createTableAndReturnTableProperties(Map<String, String> options, ObjectPath tablePath)
+      throws IOException, TableAlreadyExistException, DatabaseNotExistException, TableNotExistException {
+    CatalogTable table =
+        new CatalogTableImpl(schema, partitions, options, "hudi table");
+
+    hoodieCatalog.createTable(tablePath, table, true);
+
+    CatalogBaseTable table1 = hoodieCatalog.getTable(tablePath);
+
+    String path = table1.getOptions().get("path");
+    FileSystem fs = FSUtils.getFs(path, new Configuration());
+
+    BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(new Path(path + "/.hoodie/hoodie.properties"))));
+
+    Map<String, String> propMap = new HashMap<>();
+    String line;
+    while ((line = reader.readLine()) != null) {
+      if (!line.contains("=")) {
+        continue;
+      }
+      String[] prop = line.split("=");
+      propMap.put(prop[0], prop[1]);
+    }
+
+    reader.close();
+    fs.close();
+    return propMap;
   }
 
   @Test
