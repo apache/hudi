@@ -96,7 +96,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
   public Schema parseSchemaFromRegistry(String registryUrl) {
     String schema = fetchSchemaFromRegistry(registryUrl);
     try {
-      String schemaConverter = getStringWithAltKeys(config, HoodieSchemaProviderConfig.SCHEMA_CONVERTER);
+      String schemaConverter = getStringWithAltKeys(config, HoodieSchemaProviderConfig.SCHEMA_CONVERTER, true);
       SchemaConverter converter = !StringUtils.isNullOrEmpty(schemaConverter)
           ? ReflectionUtils.loadClass(schemaConverter)
           : s -> s;
