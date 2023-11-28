@@ -149,7 +149,7 @@ public class HoodieLogFile implements Serializable {
   }
 
   public boolean isCDC() {
-    return getFileExtension().equals(HoodieCDCUtils.CDC_LOGFILE_SUFFIX);
+    return getSuffix().equals(HoodieCDCUtils.CDC_LOGFILE_SUFFIX);
   }
 
   public String getSuffix() {

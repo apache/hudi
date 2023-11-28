@@ -20,6 +20,7 @@ package org.apache.spark.sql.execution.datasources.parquet
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.MergeOnReadSnapshotRelation.createPartitionedFile
+import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.cdc.{CDCFileGroupIterator, CDCRelation, HoodieCDCFileGroupSplit}
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.engine.HoodieReaderContext
@@ -71,6 +72,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
   private var supportBatchCalled = false
   private var supportBatchResult = false
 
+  private val sanitizedTableName = AvroSchemaUtils.getAvroRecordQualifiedName(tableName)
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
     if (!supportBatchCalled) {
       supportBatchCalled = true
@@ -102,8 +104,8 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
       spark, dataSchema, partitionSchema, if (isIncremental) requiredSchemaWithMandatory else requiredSchema,
       filters, options, augmentedHadoopConf, requiredSchemaWithMandatory, requiredWithoutMeta, requiredMeta)
 
-    val requestedAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(requiredSchema, tableName)
-    val dataAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, tableName)
+    val requestedAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(requiredSchema, sanitizedTableName)
+    val dataAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName)
 
     val broadcastedHadoopConf = spark.sparkContext.broadcast(new SerializableConfiguration(augmentedHadoopConf))
     val broadcastedDataSchema =  spark.sparkContext.broadcast(dataAvroSchema)
@@ -327,7 +329,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
   }
 
   protected def generateKey(dataSchema: StructType, requestedSchema: StructType): Long = {
-    AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, tableName).hashCode() + AvroConversionUtils.convertStructTypeToAvroSchema(requestedSchema, tableName).hashCode()
+    AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName).hashCode() + AvroConversionUtils.convertStructTypeToAvroSchema(requestedSchema, sanitizedTableName).hashCode()
   }
 
   protected def getRecordKeyRelatedFilters(filters: Seq[Filter], recordKeyColumn: String): Seq[Filter] = {

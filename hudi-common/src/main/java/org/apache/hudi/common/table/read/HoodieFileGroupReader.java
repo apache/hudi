@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.util.Option;
@@ -168,6 +169,11 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     //might need to change this if other queries than mor have mandatory fields
     if (logFiles.isEmpty()) {
       return requestedSchema;
+    }
+
+    //MergeOnReadSnapshotRelation.isProjectionCompatible. Should centralize the logic
+    if (!hoodieTableConfig.getPayloadClass().equals(OverwriteWithLatestAvroPayload.class.getName())) {
+      return dataSchema;
     }
 
     List<Schema.Field> addedFields = new ArrayList<>();
