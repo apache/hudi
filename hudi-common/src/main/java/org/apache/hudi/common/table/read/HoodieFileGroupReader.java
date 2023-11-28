@@ -28,9 +28,9 @@ import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.util.Option;
@@ -171,8 +171,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return requestedSchema;
     }
 
-    //MergeOnReadSnapshotRelation.isProjectionCompatible. Should centralize the logic
-    if (!hoodieTableConfig.getPayloadClass().equals(OverwriteWithLatestAvroPayload.class.getName())) {
+    if (!HoodiePayloadProps.isProjectionCompatible(hoodieTableConfig.getPayloadClass())) {
       return dataSchema;
     }
 

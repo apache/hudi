@@ -301,7 +301,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
       val requestedMeta = StructType(requiredSchema.fields.filter(sf => isMetaField(sf.name)))
       m.put(generateKey(HoodieSparkUtils.getMetaSchema, requestedMeta),
         super.buildReaderWithPartitionValues(sparkSession, HoodieSparkUtils.getMetaSchema, StructType(Seq.empty), requestedMeta,
-          filters ++ requiredFilters, options, new Configuration(hadoopConf)))
+          Seq.empty, options, new Configuration(hadoopConf)))
     }
 
     //file reader for bootstrap base files
@@ -322,7 +322,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
       val requestedWithoutMeta = StructType(requiredSchema.fields.filterNot(sf => isMetaField(sf.name)))
       m.put(generateKey(dataSchemaWithoutMeta, requestedWithoutMeta),
         super.buildReaderWithPartitionValues(sparkSession, dataSchemaWithoutMeta, StructType(Seq.empty), requestedWithoutMeta,
-        filters ++ requiredFilters, options, new Configuration(hadoopConf)))
+          Seq.empty, options, new Configuration(hadoopConf)))
     }
 
     (baseFileReader, preMergeBaseFileReader, m)

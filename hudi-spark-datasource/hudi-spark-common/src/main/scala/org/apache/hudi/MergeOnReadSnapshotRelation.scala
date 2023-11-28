@@ -21,7 +21,7 @@ package org.apache.hudi
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.MergeOnReadSnapshotRelation.{createPartitionedFile, isProjectionCompatible}
-import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, OverwriteWithLatestAvroPayload}
+import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, HoodiePayloadProps}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
@@ -152,20 +152,8 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
 
 object MergeOnReadSnapshotRelation extends SparkAdapterSupport {
 
-  /**
-   * List of [[HoodieRecordPayload]] classes capable of merging projected records:
-   * in some cases, when for example, user is only interested in a handful of columns rather
-   * than the full row we will be able to optimize data throughput by only fetching the required
-   * columns. However, to properly fulfil MOR semantic particular [[HoodieRecordPayload]] in
-   * question should be able to merge records based on just such projected representation (including
-   * columns required for merging, such as primary-key, pre-combine key, etc)
-   */
-  private val projectionCompatiblePayloadClasses: Set[String] = Seq(
-    classOf[OverwriteWithLatestAvroPayload]
-  ).map(_.getName).toSet
-
   def isProjectionCompatible(tableState: HoodieTableState): Boolean =
-    projectionCompatiblePayloadClasses.contains(tableState.recordPayloadClassName)
+    HoodiePayloadProps.isProjectionCompatible(tableState.recordPayloadClassName)
 
   def createPartitionedFile(partitionValues: InternalRow,
                             filePath: Path,

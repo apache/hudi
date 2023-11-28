@@ -33,6 +33,9 @@ import org.apache.avro.Schema;
 import java.io.IOException;
 import java.util.Map;
 
+/**
+ * Used when the filegroup doesn't have any log files
+ */
 public class HoodieSimpleFileGroupRecordBuffer<T> extends HoodieBaseFileGroupRecordBuffer<T> {
   public HoodieSimpleFileGroupRecordBuffer(HoodieReaderContext<T> readerContext, Schema readerSchema, Schema baseFileSchema,
                                            Option<String> partitionNameOverrideOpt, Option<String[]> partitionPathFieldOpt, HoodieRecordMerger recordMerger,

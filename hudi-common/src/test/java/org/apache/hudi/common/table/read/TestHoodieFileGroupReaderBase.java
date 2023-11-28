@@ -156,7 +156,6 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     SyncableFileSystemView fsView = viewManager.getFileSystemView(metaClient);
     FileSlice fileSlice = fsView.getAllFileSlices(partitionPaths[0]).findFirst().get();
     List<String> logFilePathList = getLogFileListFromFileSlice(fileSlice);
-    //Collections.sort(logFilePathList);
     assertEquals(expectedLogFileNum, logFilePathList.size());
 
     List<T> actualRecordList = new ArrayList<>();

@@ -117,6 +117,7 @@ class SparkFileFormatInternalRowReaderContext(readerMaps: mutable.Map[Long, Part
       val combinedRow = new JoinedRow()
 
       override def hasNext: Boolean = {
+        //If the iterators are out of sync it is probably due to filter pushdown
         checkState(dataFileIterator.hasNext == skeletonFileIterator.hasNext,
           "Bootstrap data-file iterator and skeleton-file iterator have to be in-sync!")
         dataFileIterator.hasNext && skeletonFileIterator.hasNext
