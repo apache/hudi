@@ -538,7 +538,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .assertNextEvent()
         .checkpointComplete(1)
         .checkWrittenData(EXPECTED3, 1)
-            .end();
+        .end();
     // step to commit the 2nd txn, should throw exception
     // for concurrent modification of same fileGroups
     pipeline1.checkpoint(1)
@@ -559,13 +559,13 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     TestHarness pipeline2 = null;
 
     try {
-       pipeline1 = preparePipeline(conf)
+      pipeline1 = preparePipeline(conf)
           .consume(TestData.DATA_SET_INSERT_DUPLICATES)
           .assertEmptyDataFiles();
       // now start pipeline2 and suspend the txn commit
       Configuration conf2 = conf.clone();
       conf2.setString(FlinkOptions.WRITE_CLIENT_ID, "2");
-       pipeline2 = preparePipeline(conf2)
+      pipeline2 = preparePipeline(conf2)
           .consume(TestData.DATA_SET_INSERT_DUPLICATES)
           .assertEmptyDataFiles();
 
