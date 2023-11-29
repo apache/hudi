@@ -55,6 +55,64 @@ class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
+  test("Test Call create_metadata_table then create_metadata_table with mutiltables") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+      // insert data to table
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
+
+      val tableName_1 = generateTableName
+      // create table
+      spark.sql(
+        s"""
+           |create table $tableName_1 (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName_1'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+      // insert data to table
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
+
+      val tables = s"$tableName,$tableName_1"
+
+      // The first step is delete the metadata
+      val ret = spark.sql(s"""call delete_metadata_table(table => '$tables')""").collect()
+      assertResult(1) {
+        ret.length
+      }
+
+      // The second step is create the metadata
+      val createResult = spark.sql(s"""call create_metadata_table(table => '$tableName')""").collect()
+      assertResult(1) {
+        createResult.length
+      }
+    }
+  }
+
   test("Test Call init_metadata_table Procedure") {
     withTempDir { tmp =>
       val tableName = generateTableName
