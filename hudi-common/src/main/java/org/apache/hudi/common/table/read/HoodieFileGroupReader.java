@@ -180,7 +180,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     for (String field : recordMerger.getMandatoryFieldsForMerging(hoodieTableConfig)) {
       //need to match HoodieFileGroupReaderBasedParquetFileFormat for now
       //if (!findNestedField(requestedSchema, field).isPresent()) {
-      if (!findNestedField(requestedSchema, field).isPresent()) {
+      if (requestedSchema.getField(field) == null) {
         Option<Schema.Field> foundFieldOpt  = findNestedField(dataSchema, field);
         if (!foundFieldOpt.isPresent()) {
           throw new IllegalArgumentException("Field: " + field + " does not exist in the table schema");
