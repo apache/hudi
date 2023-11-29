@@ -100,4 +100,12 @@ public class HoodieWriteCommitCallbackMessage implements Serializable {
   public List<HoodieWriteStat> getHoodieWriteStat() {
     return hoodieWriteStat;
   }
+
+  public Option<String> getCommitActionType() {
+    return commitActionType;
+  }
+
+  public Option<Map<String, String>> getExtraMetadata() {
+    return extraMetadata;
+  }
 }
