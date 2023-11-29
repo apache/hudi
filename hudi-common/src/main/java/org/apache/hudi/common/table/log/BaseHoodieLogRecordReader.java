@@ -260,7 +260,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
             && !HoodieTimeline.compareTimestamps(logBlock.getLogBlockHeader().get(INSTANT_TIME), HoodieTimeline.LESSER_THAN_OR_EQUALS, this.latestInstantTime
         )) {
           // hit a block with instant time greater than should be processed, stop processing further
-          break;
+          continue;
         }
         if (logBlock.getBlockType() != CORRUPT_BLOCK && logBlock.getBlockType() != COMMAND_BLOCK) {
           if (!completedInstantsTimeline.containsOrBeforeTimelineStarts(instantTime)

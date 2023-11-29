@@ -14,13 +14,13 @@
   See the License for the specific language governing permissions and
   limitations under the License.
 -->
-## Testing dbt project: `hudi_examples_dbt`
+# Testing dbt project: `hudi_examples_dbt`
 
 This dbt project transforms demonstrates hudi integration with dbt, it has a few models to demonstrate the different ways in which you can create hudi datasets using dbt.
 
 This directory serves as a self-contained playground dbt project, useful for testing out scripts, and communicating some of the core dbt concepts.
 
-### Setup
+## Setup
 
 Switch working directory and have `python3` installed.
 
@@ -28,7 +28,7 @@ Switch working directory and have `python3` installed.
 cd hudi-examples/hudi-examples-dbt
 ```
 
-### Install dbt
+## Install dbt
 
 Create python virtual environment ([Reference](https://docs.getdbt.com/docs/installation)).
 
@@ -54,7 +54,7 @@ spark:
     dev:
       type: spark
       method: thrift
-      schema: my_schema
+      schema: hudi_examples_dbt
       host: localhost
       port: 10000
       server_side_parameters:
@@ -63,7 +63,7 @@ spark:
 
 _If you have access to a data warehouse, you can use those credentials – we recommend setting your [target schema](https://docs.getdbt.com/docs/configure-your-profile#section-populating-your-profile) to be a new schema (dbt will create the schema for you, as long as you have the right privileges). If you don't have access to an existing data warehouse, you can also setup a local postgres database and connect to it in your profile._
 
-### Start Spark Thrift server
+## Start Spark Thrift server
 
 > **NOTE** Using these versions
 > - Spark 3.2.3 (with Derby 10.14.2.0)
@@ -104,7 +104,7 @@ $SPARK_HOME/sbin/start-thriftserver.sh \
 --hiveconf 'javax.jdo.option.ConnectionURL=jdbc:derby://localhost:1527/default;create=true'
 ```
 
-### Verify dbt setup
+## Verify dbt setup
 
 ```shell
 dbt debug
@@ -116,13 +116,16 @@ Output of the above command should show this text at the end of the output:
 All checks passed!
 ```
 
-### Run the models
+## Run the models
+
+### Run `example`
 
 ```shell
-dbt run
+dbt run -m example
 ```
 
-Output should look like this
+<details>
+<summary>Output should look like this</summary>
 
 ```
 05:47:28  Running with dbt=1.0.0
@@ -145,14 +148,16 @@ Output should look like this
 05:47:42
 05:47:42  Completed successfully
 ```
+</details>
 
-### Test the output of the models
+### Test `example`
 
 ```shell
-dbt test
+dbt test -m example
 ```
 
-Output should look like this
+<details>
+<summary>Output should look like this</summary>
 
 ```
 05:48:17  Running with dbt=1.0.0
@@ -187,6 +192,84 @@ Output should look like this
 05:48:26
 05:48:26  Done. PASS=10 WARN=0 ERROR=0 SKIP=0 TOTAL=10
 ```
+</details>
+
+### Run `example_cdc`
+
+Bootstrap the raw table `raw_updates` and `profiles`.
+
+```shell
+dbt run -m example_cdc.raw_updates -m example_cdc.profiles
+```
+
+Launch a `spark-sql` shell to interact with the tables created by `example_cdc`.
+
+```shell
+spark-sql \
+--packages org.apache.hudi:hudi-spark3.2-bundle_2.12:0.14.0 \
+--conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+--conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog \
+--conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension \
+--conf spark.sql.warehouse.dir=/tmp/hudi/hive/warehouse \
+--conf spark.hadoop.hive.metastore.warehouse.dir=/tmp/hudi/hive/warehouse \
+--conf spark.hadoop.hive.metastore.schema.verification=false \
+--conf spark.hadoop.datanucleus.schema.autoCreateAll=true \
+--conf spark.hadoop.javax.jdo.option.ConnectionDriverName=org.apache.derby.jdbc.ClientDriver \
+--conf 'spark.hadoop.javax.jdo.option.ConnectionURL=jdbc:derby://localhost:1527/default;create=true' \
+--conf 'spark.hadoop.hive.cli.print.header=true'
+```
+
+Insert sample records.
+
+```sql
+use hudi_examples_dbt;
+insert into raw_updates values ('101', 'D', UNIX_TIMESTAMP());
+insert into raw_updates values ('102', 'E', UNIX_TIMESTAMP());
+insert into raw_updates values ('103', 'F', UNIX_TIMESTAMP());
+```
+
+Process the updates and write new date to `profiles`.
+
+```shell
+dbt run -m example_cdc.profiles
+```
+
+<details>
+<summary>Check `profiles` records.</summary>
+
+```shell
+spark-sql> refresh table profiles;
+spark-sql> select _hoodie_commit_time, user_id, city, updated_at from profiles order by updated_at;
+_hoodie_commit_time	user_id	city	updated_at
+20231128013722030	101	D	1701157027
+20231128013722030	102	E	1701157031
+20231128013722030	103	F	1701157035
+Time taken: 0.219 seconds, Fetched 3 row(s)
+```
+</details>
+
+Extract changed data from `profiles` to `profile_changes`.
+
+```shell
+dbt run -m example_cdc.profile_changes
+```
+
+<details>
+<summary>Check `profile_changes` records.</summary>
+
+```shell
+spark-sql> refresh table profile_changes;
+spark-sql> select user_id, old_city, new_city from profile_changes order by process_ts;
+user_id	old_city	new_city
+101	Nil	A
+102	Nil	B
+103	Nil	C
+101	A	D
+102	B	E
+103	C	F
+Time taken: 0.129 seconds, Fetched 6 row(s)
+```
+</details>
 
 ### Generate documentation
 

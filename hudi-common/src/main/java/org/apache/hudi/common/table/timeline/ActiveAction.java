@@ -48,7 +48,8 @@ public class ActiveAction implements Serializable, Comparable<ActiveAction> {
   }
 
   public static ActiveAction fromInstants(List<HoodieInstant> instants) {
-    ValidationUtils.checkArgument(instants.size() <= 3);
+    ValidationUtils.checkArgument(instants.size() <= 3,
+        "Number of instant metadata files should be <= 3: " + instants);
     HoodieInstant requested = null;
     HoodieInstant inflight = null;
     HoodieInstant completed = null;

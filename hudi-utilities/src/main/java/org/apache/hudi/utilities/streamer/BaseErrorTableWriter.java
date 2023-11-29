@@ -29,6 +29,8 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.SparkSession;
 
+import java.io.Serializable;
+
 /**
  * The class which handles error events while processing write records. All the
  * records which have a processing/write failure are triggered as error events to
@@ -38,7 +40,7 @@ import org.apache.spark.sql.SparkSession;
  *
  * The writer can use the configs defined in HoodieErrorTableConfig to manage the error table.
  */
-public abstract class BaseErrorTableWriter<T extends ErrorEvent> {
+public abstract class BaseErrorTableWriter<T extends ErrorEvent> implements Serializable {
 
   // The column name passed to Spark for option `columnNameOfCorruptRecord`. The record
   // is set to this column in case of an error

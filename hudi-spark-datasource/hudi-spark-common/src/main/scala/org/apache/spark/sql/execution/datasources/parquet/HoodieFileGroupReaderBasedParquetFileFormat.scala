@@ -74,7 +74,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
 
   private val sanitizedTableName = AvroSchemaUtils.getAvroRecordQualifiedName(tableName)
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
-    if (!supportBatchCalled) {
+    if (!supportBatchCalled || supportBatchResult) {
       supportBatchCalled = true
       supportBatchResult = !isMOR && !isIncremental && !isBootstrap && super.supportBatch(sparkSession, schema)
     }
