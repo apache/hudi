@@ -472,7 +472,7 @@ public abstract class TestHoodieHFileReaderWriterBase extends TestHoodieReaderWr
         content, hfilePrefix, false, HFileBootstrapIndex.HoodieKVComparator.class, 4);
   }
 
-  private Set<String> getRandomKeys(int count, List<String> keys) {
+  Set<String> getRandomKeys(int count, List<String> keys) {
     Set<String> rowKeys = new HashSet<>();
     int totalKeys = keys.size();
     while (rowKeys.size() < count) {
