@@ -137,7 +137,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   /**
    * If set, not update index after written.
    */
-  protected boolean ignored;
+  protected boolean ignoreIndexUpdate;
 
   /**
    * Indicates whether the object is sealed.
@@ -164,7 +164,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     this.currentLocation = null;
     this.newLocation = null;
     this.sealed = false;
-    this.ignored = false;
+    this.ignoreIndexUpdate = false;
     this.operation = operation;
     this.metaData = metaData;
   }
@@ -187,7 +187,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     this.currentLocation = record.currentLocation;
     this.newLocation = record.newLocation;
     this.sealed = record.sealed;
-    this.ignored = record.ignored;
+    this.ignoreIndexUpdate = record.ignoreIndexUpdate;
   }
 
   public HoodieRecord() {}
@@ -266,12 +266,12 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   /**
    * Sets the ignore flag.
    */
-  public void setIgnoreFlag(boolean ignoreFlag) {
-    this.ignored = ignoreFlag;
+  public void setIgnoreIndexUpdate(boolean ignoreFlag) {
+    this.ignoreIndexUpdate = ignoreFlag;
   }
 
-  public boolean getIgnoreFlag() {
-    return this.ignored;
+  public boolean getIgnoreIndexUpdate() {
+    return this.ignoreIndexUpdate;
   }
 
   @Override
@@ -285,7 +285,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     HoodieRecord that = (HoodieRecord) o;
     return Objects.equals(key, that.key) && Objects.equals(data, that.data)
         && Objects.equals(currentLocation, that.currentLocation) && Objects.equals(newLocation, that.newLocation)
-        && Objects.equals(ignored, that.ignored);
+        && Objects.equals(ignoreIndexUpdate, that.ignoreIndexUpdate);
   }
 
   @Override
@@ -362,7 +362,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     // NOTE: Writing out actual record payload is relegated to the actual
     //       implementation
     writeRecordPayload(data, kryo, output);
-    kryo.writeObjectOrNull(output, ignored, Boolean.class);
+    kryo.writeObjectOrNull(output, ignoreIndexUpdate, Boolean.class);
   }
 
   /**
@@ -378,7 +378,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     // NOTE: Reading out actual record payload is relegated to the actual
     //       implementation
     this.data = readRecordPayload(kryo, input);
-    this.ignored = kryo.readObjectOrNull(input, Boolean.class);
+    this.ignoreIndexUpdate = kryo.readObjectOrNull(input, Boolean.class);
 
     // NOTE: We're always seal object after deserialization
     this.sealed = true;

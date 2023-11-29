@@ -1487,7 +1487,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       List<HoodieRecord> recordList = new LinkedList<>();
       for (HoodieRecordDelegate recordDelegate : writeStatus.getWrittenRecordDelegates()) {
         if (!writeStatus.isErrored(recordDelegate.getHoodieKey())) {
-          if (recordDelegate.getIgnoreFlag()) {
+          if (recordDelegate.getIgnoreIndexUpdate()) {
             continue;
           }
           HoodieRecord hoodieRecord;

@@ -105,9 +105,9 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
     val key = new HoodieKey("rec-key", "part-path")
 
     val legacyRecord = toLegacyAvroRecord(avroRecord, key)
-    legacyRecord.setIgnoreFlag(true)
+    legacyRecord.setIgnoreIndexUpdate(true)
     val avroIndexedRecord = new HoodieAvroIndexedRecord(key, avroRecord)
-    avroIndexedRecord.setIgnoreFlag(true)
+    avroIndexedRecord.setIgnoreIndexUpdate(true)
 
     val expectedLagacyRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 536 else 530
 

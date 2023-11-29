@@ -55,16 +55,16 @@ public class HoodieRecordDelegate implements Serializable, KryoSerializable {
   /**
    * If set, not update index after written.
    */
-  private boolean ignored;
+  private boolean ignoreIndexUpdate;
 
   private HoodieRecordDelegate(HoodieKey hoodieKey,
                                @Nullable HoodieRecordLocation currentLocation,
                                @Nullable HoodieRecordLocation newLocation,
-                               boolean ignored) {
+                               boolean ignoreIndexUpdate) {
     this.hoodieKey = hoodieKey;
     this.currentLocation = Option.ofNullable(currentLocation);
     this.newLocation = Option.ofNullable(newLocation);
-    this.ignored = ignored;
+    this.ignoreIndexUpdate = ignoreIndexUpdate;
   }
 
   public static HoodieRecordDelegate create(String recordKey, String partitionPath) {
@@ -99,12 +99,12 @@ public class HoodieRecordDelegate implements Serializable, KryoSerializable {
   }
 
   public static HoodieRecordDelegate fromHoodieRecord(HoodieRecord record) {
-    return new HoodieRecordDelegate(record.getKey(), record.getCurrentLocation(), record.getNewLocation(), record.getIgnoreFlag());
+    return new HoodieRecordDelegate(record.getKey(), record.getCurrentLocation(), record.getNewLocation(), record.getIgnoreIndexUpdate());
   }
 
   public static HoodieRecordDelegate fromHoodieRecord(HoodieRecord record,
                                                       @Nullable HoodieRecordLocation newLocationOverride) {
-    return new HoodieRecordDelegate(record.getKey(), record.getCurrentLocation(), newLocationOverride, record.getIgnoreFlag());
+    return new HoodieRecordDelegate(record.getKey(), record.getCurrentLocation(), newLocationOverride, record.getIgnoreIndexUpdate());
   }
 
   public String getRecordKey() {
@@ -127,8 +127,8 @@ public class HoodieRecordDelegate implements Serializable, KryoSerializable {
     return newLocation;
   }
 
-  public boolean getIgnoreFlag() {
-    return ignored;
+  public boolean getIgnoreIndexUpdate() {
+    return ignoreIndexUpdate;
   }
 
   @Override
@@ -137,7 +137,7 @@ public class HoodieRecordDelegate implements Serializable, KryoSerializable {
         + "hoodieKey=" + hoodieKey
         + ", currentLocation=" + currentLocation
         + ", newLocation=" + newLocation
-        + ", ignored=" + ignored
+        + ", ignoreIndexUpdate=" + ignoreIndexUpdate
         + '}';
   }
 
@@ -147,7 +147,7 @@ public class HoodieRecordDelegate implements Serializable, KryoSerializable {
     kryo.writeObjectOrNull(output, hoodieKey, HoodieKey.class);
     kryo.writeClassAndObject(output, currentLocation.isPresent() ? currentLocation.get() : null);
     kryo.writeClassAndObject(output, newLocation.isPresent() ? newLocation.get() : null);
-    kryo.writeObjectOrNull(output, ignored, Boolean.class);
+    kryo.writeObjectOrNull(output, ignoreIndexUpdate, Boolean.class);
   }
 
   @VisibleForTesting
@@ -156,6 +156,6 @@ public class HoodieRecordDelegate implements Serializable, KryoSerializable {
     this.hoodieKey = kryo.readObjectOrNull(input, HoodieKey.class);
     this.currentLocation = Option.ofNullable((HoodieRecordLocation) kryo.readClassAndObject(input));
     this.newLocation = Option.ofNullable((HoodieRecordLocation) kryo.readClassAndObject(input));
-    this.ignored = kryo.readObjectOrNull(input, Boolean.class);
+    this.ignoreIndexUpdate = kryo.readObjectOrNull(input, Boolean.class);
   }
 }
