@@ -613,7 +613,7 @@ public class TestHoodieAvroUtils {
 
   @Test
   public void testAddMetadataFields() {
-    Schema baseSchema = new Schema.Parser().parse(EXAMPLE_SCHEMA);
+    Schema baseSchema = new Schema.Parser().parse(EXAMPLE_SCHEMA_WITH_PROPS);
     Schema schemaWithMetadata = HoodieAvroUtils.addMetadataFields(baseSchema);
     List<Schema.Field> updatedFields = schemaWithMetadata.getFields();
     // assert fields added in expected order
