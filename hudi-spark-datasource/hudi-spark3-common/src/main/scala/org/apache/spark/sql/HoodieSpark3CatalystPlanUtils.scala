@@ -23,7 +23,7 @@ import org.apache.spark.sql.catalyst.analysis.TableOutputResolver
 import org.apache.spark.sql.catalyst.catalog.CatalogStorageFormat
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression, ProjectionOverSchema}
 import org.apache.spark.sql.catalyst.plans.JoinType
-import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, Join, JoinHint, LeafNode, LogicalPlan, Project}
+import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
 import org.apache.spark.sql.execution.command.{CreateTableLikeCommand, ExplainCommand}
 import org.apache.spark.sql.execution.datasources.HadoopFsRelation
@@ -89,7 +89,13 @@ object HoodieSpark3CatalystPlanUtils extends SparkAdapterSupport {
   def applyNewFileFormatChanges(scanOperation: LogicalPlan, logicalRelation: LogicalPlan, fs: HadoopFsRelation): LogicalPlan = {
     val ff = fs.fileFormat.asInstanceOf[ParquetFileFormat with HoodieFormatTrait]
     ff.isProjected = true
-    Project(logicalRelation.resolve(fs.location.asInstanceOf[SparkHoodieTableFileIndex].schema, fs.sparkSession.sessionState.analyzer.resolver), scanOperation)
+    val tableSchema = fs.location.asInstanceOf[SparkHoodieTableFileIndex].schema
+    val resolvedSchema = logicalRelation.resolve(tableSchema, fs.sparkSession.sessionState.analyzer.resolver)
+    if (scanOperation.sameOutput(logicalRelation)) {
+      Project(resolvedSchema, scanOperation)
+    } else {
+      scanOperation
+    }
   }
 
 
