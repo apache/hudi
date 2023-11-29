@@ -145,11 +145,15 @@ public class StreamerUtil {
    * Returns the payload config with given configuration.
    */
   public static HoodiePayloadConfig getPayloadConfig(Configuration conf) {
-    return HoodiePayloadConfig.newBuilder()
+    HoodiePayloadConfig.Builder builder = HoodiePayloadConfig.newBuilder()
         .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
-        .withPayloadOrderingField(conf.getString(FlinkOptions.PRECOMBINE_FIELD))
-        .withPayloadEventTimeField(conf.getString(FlinkOptions.PRECOMBINE_FIELD))
-        .build();
+        .withPayloadOrderingField(conf.getString(FlinkOptions.PRECOMBINE_FIELD));
+
+    if (StringUtils.isNullOrEmpty(conf.getString(FlinkOptions.EVENT_TIME_FIELD))) {
+      return builder.withPayloadEventTimeField(conf.getString(FlinkOptions.PRECOMBINE_FIELD)).build();
+    } else {
+      return builder.withPayloadEventTimeField(conf.getString(FlinkOptions.EVENT_TIME_FIELD)).build();
+    }
   }
 
   /**

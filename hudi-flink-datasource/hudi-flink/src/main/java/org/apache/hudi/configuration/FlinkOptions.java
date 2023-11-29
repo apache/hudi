@@ -116,6 +116,13 @@ public class FlinkOptions extends HoodieConfig {
           + "key value, we will pick the one with the largest value for the precombine field,\n"
           + "determined by Object.compareTo(..)");
 
+  public static final ConfigOption<String> EVENT_TIME_FIELD = ConfigOptions
+      .key("eventtime.field")
+      .stringType()
+      .defaultValue("ts")
+      .withDescription("Table column/field name to derive timestamp associated with the records. This can"
+          + "be useful for e.g, determining the freshness of the table.");
+
   @AdvancedConfig
   public static final ConfigOption<String> PAYLOAD_CLASS_NAME = ConfigOptions
       .key("payload.class")
