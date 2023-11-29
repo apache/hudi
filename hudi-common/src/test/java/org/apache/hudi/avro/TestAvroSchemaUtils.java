@@ -24,6 +24,7 @@ import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -229,4 +230,75 @@ public class TestAvroSchemaUtils {
   public void testIsCompatiblePartitionDropCols(boolean shouldValidate) {
     AvroSchemaUtils.checkSchemaCompatible(FULL_SCHEMA, SHORT_SCHEMA, shouldValidate, false, Collections.singleton("c"));
   }
+
+  /* behavior is slightly modified currently
+  @Test
+  public void testAppendFieldsToSchemaDedupNested() {
+    Schema full_schema = new Schema.Parser().parse("{\n"
+        + "  \"type\": \"record\",\n"
+        + "  \"namespace\": \"example.schema\",\n"
+        + "  \"name\": \"source\",\n"
+        + "  \"fields\": [\n"
+        + "    {\n"
+        + "      \"name\": \"number\",\n"
+        + "      \"type\": [\"null\", \"int\"]\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"nested_record\",\n"
+        + "      \"type\": {\n"
+        + "        \"name\": \"nested\",\n"
+        + "        \"type\": \"record\",\n"
+        + "        \"fields\": [\n"
+        + "          {\n"
+        + "            \"name\": \"string\",\n"
+        + "            \"type\": [\"null\", \"string\"]\n"
+        + "          },\n"
+        + "          {\n"
+        + "            \"name\": \"long\",\n"
+        + "            \"type\": [\"null\", \"long\"]\n"
+        + "          }\n"
+        + "        ]\n"
+        + "      }\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"other\",\n"
+        + "      \"type\": [\"null\", \"int\"]\n"
+        + "    }\n"
+        + "  ]\n"
+        + "}\n");
+
+    Schema missing_field_schema = new Schema.Parser().parse("{\n"
+        + "  \"type\": \"record\",\n"
+        + "  \"namespace\": \"example.schema\",\n"
+        + "  \"name\": \"source\",\n"
+        + "  \"fields\": [\n"
+        + "    {\n"
+        + "      \"name\": \"number\",\n"
+        + "      \"type\": [\"null\", \"int\"]\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"nested_record\",\n"
+        + "      \"type\": {\n"
+        + "        \"name\": \"nested\",\n"
+        + "        \"type\": \"record\",\n"
+        + "        \"fields\": [\n"
+        + "          {\n"
+        + "            \"name\": \"string\",\n"
+        + "            \"type\": [\"null\", \"string\"]\n"
+        + "          }\n"
+        + "        ]\n"
+        + "      }\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"other\",\n"
+        + "      \"type\": [\"null\", \"int\"]\n"
+        + "    }\n"
+        + "  ]\n"
+        + "}\n");
+
+      Option<Schema.Field> missingField = AvroSchemaUtils.findNestedField(full_schema, "nested_record.long");
+      assertTrue(missingField.isPresent());
+      assertEquals(full_schema, AvroSchemaUtils.appendFieldsToSchemaDedupNested(missing_field_schema, Collections.singletonList(missingField.get())));
+  }
+  */
 }

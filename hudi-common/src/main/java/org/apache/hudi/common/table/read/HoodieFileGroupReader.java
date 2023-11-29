@@ -19,7 +19,6 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
@@ -54,6 +53,8 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchema;
+import static org.apache.hudi.avro.AvroSchemaUtils.findNestedField;
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGER_STRATEGY;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
@@ -177,12 +178,15 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
     List<Schema.Field> addedFields = new ArrayList<>();
     for (String field : recordMerger.getMandatoryFieldsForMerging(hoodieTableConfig)) {
-      if (requestedSchema.getField(field) == null) {
-        Schema.Field foundField  = dataSchema.getField(field);
-        if (foundField == null) {
+      //need to match HoodieFileGroupReaderBasedParquetFileFormat for now
+      //if (!findNestedField(requestedSchema, field).isPresent()) {
+      if (!findNestedField(requestedSchema, field).isPresent()) {
+        Option<Schema.Field> foundFieldOpt  = findNestedField(dataSchema, field);
+        if (!foundFieldOpt.isPresent()) {
           throw new IllegalArgumentException("Field: " + field + " does not exist in the table schema");
         }
-        addedFields.add(new Schema.Field(foundField.name(), foundField.schema(), foundField.doc(), foundField.defaultVal()));
+        Schema.Field foundField = foundFieldOpt.get();
+        addedFields.add(foundField);
       }
     }
 
@@ -190,7 +194,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return maybeReorderForBootstrap(requestedSchema);
     }
 
-    return maybeReorderForBootstrap(AvroSchemaUtils.appendFieldsToSchema(requestedSchema, addedFields));
+    //return maybeReorderForBootstrap(appendFieldsToSchemaDedupNested(requestedSchema, addedFields));
+    return maybeReorderForBootstrap(appendFieldsToSchema(requestedSchema, addedFields));
   }
 
   private Schema maybeReorderForBootstrap(Schema input) {
