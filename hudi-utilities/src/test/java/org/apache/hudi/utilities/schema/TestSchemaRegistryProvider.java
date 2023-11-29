@@ -46,11 +46,18 @@ class TestSchemaRegistryProvider {
   private static final String REGISTRY_RESPONSE = "{\"schema\":\"{\\\"type\\\": \\\"record\\\", \\\"namespace\\\": \\\"example\\\", "
       + "\\\"name\\\": \\\"FullName\\\",\\\"fields\\\": [{ \\\"name\\\": \\\"first\\\", \\\"type\\\": "
       + "\\\"string\\\" }]}\"}";
+  private static final String RAW_SCHEMA = "{\"type\": \"record\", \"namespace\": \"example\", "
+      + "\"name\": \"FullName\",\"fields\": [{ \"name\": \"first\", \"type\": "
+      + "\"string\" }]}";
   private static final String CONVERTED_SCHEMA = "{\"type\": \"record\", \"namespace\": \"com.example.hoodie\", "
       + "\"name\": \"FullName\",\"fields\": [{ \"name\": \"first\", \"type\": "
       + "\"string\" }]}";
 
   private static Schema getExpectedSchema() {
+    return new Schema.Parser().parse(RAW_SCHEMA);
+  }
+
+  private static Schema getExpectedConvertedSchema() {
     return new Schema.Parser().parse(CONVERTED_SCHEMA);
   }
 
@@ -60,7 +67,6 @@ class TestSchemaRegistryProvider {
         put("hoodie.deltastreamer.schemaprovider.registry.baseUrl", "http://" + BASIC_AUTH + "@localhost");
         put("hoodie.deltastreamer.schemaprovider.registry.urlSuffix", "-value");
         put("hoodie.deltastreamer.schemaprovider.registry.url", "http://foo:bar@localhost");
-        put("hoodie.deltastreamer.schemaprovider.registry.schemaconverter", DummySchemaConverter.class.getName());
         put("hoodie.deltastreamer.source.kafka.topic", "foo");
       }
     };
@@ -97,10 +103,11 @@ class TestSchemaRegistryProvider {
   public void testGetSourceSchemaShouldRequestSchemaWithoutCreds() throws IOException {
     TypedProperties props = getProps();
     props.put("hoodie.deltastreamer.schemaprovider.registry.url", "http://localhost");
+    props.put("hoodie.deltastreamer.schemaprovider.registry.schemaconverter", DummySchemaConverter.class.getName());
     SchemaRegistryProvider spyUnderTest = getUnderTest(props);
     Schema actual = spyUnderTest.getSourceSchema();
     assertNotNull(actual);
-    assertEquals(getExpectedSchema(), actual);
+    assertEquals(getExpectedConvertedSchema(), actual);
     verify(spyUnderTest, times(0)).setAuthorizationHeader(Mockito.any(), Mockito.any());
   }
 
@@ -108,10 +115,11 @@ class TestSchemaRegistryProvider {
   public void testGetTargetSchemaShouldRequestSchemaWithoutCreds() throws IOException {
     TypedProperties props = getProps();
     props.put("hoodie.deltastreamer.schemaprovider.registry.url", "http://localhost");
+    props.put("hoodie.deltastreamer.schemaprovider.registry.schemaconverter", DummySchemaConverter.class.getName());
     SchemaRegistryProvider spyUnderTest = getUnderTest(props);
     Schema actual = spyUnderTest.getTargetSchema();
     assertNotNull(actual);
-    assertEquals(getExpectedSchema(), actual);
+    assertEquals(getExpectedConvertedSchema(), actual);
     verify(spyUnderTest, times(0)).setAuthorizationHeader(Mockito.any(), Mockito.any());
   }
 
