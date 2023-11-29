@@ -757,7 +757,8 @@ public class StreamSync implements Serializable, Closeable {
     hoodieConfig.setValue(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key(), cfg.payloadClassName);
     hoodieConfig.setValue(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName(props));
     hoodieConfig.setValue("path", cfg.targetBasePath);
-    return HoodieSparkSqlWriter.getBulkInsertRowConfig(writerSchema, hoodieConfig, cfg.targetBasePath, cfg.targetTableName);
+    return HoodieSparkSqlWriter.getBulkInsertRowConfig(writerSchema != InputBatch.NULL_SCHEMA ? Option.of(writerSchema) : Option.empty(),
+        hoodieConfig, cfg.targetBasePath, cfg.targetTableName);
   }
 
   /**
