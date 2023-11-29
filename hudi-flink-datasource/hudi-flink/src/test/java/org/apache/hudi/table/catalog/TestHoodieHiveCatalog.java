@@ -68,7 +68,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.flink.configuration.Configuration.fromMap;
 import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
 import static org.apache.hudi.configuration.FlinkOptions.PRECOMBINE_FIELD;
 import static org.hamcrest.CoreMatchers.instanceOf;
@@ -198,17 +197,17 @@ public class TestHoodieHiveCatalog {
   @Test
   void testCreateTableWithoutPreCombineKey() throws TableAlreadyExistException, DatabaseNotExistException, IOException, TableNotExistException {
     String db = "default";
+    hoodieCatalog = HoodieCatalogTestUtils.createHiveCatalog();
+    hoodieCatalog.open();
+
     Map<String, String> options = new HashMap<>();
     options.put(FactoryUtil.CONNECTOR.key(), "hudi");
 
-    hoodieCatalog = new HoodieHiveCatalog("test_catalog", fromMap(options));
-    hoodieCatalog.open();
-
-    Map<String, String> propMap = createTableAndReturnTableProperties(options, new ObjectPath(db, "table1"));
+    Map<String, String> propMap = createTableAndReturnTableProperties(options, new ObjectPath(db, "tablenew1"));
     assertFalse(propMap.containsKey("hoodie.table.precombine.field"));
 
     options.put(PRECOMBINE_FIELD.key(), "ts_3");
-    propMap = createTableAndReturnTableProperties(options, new ObjectPath(db, "table21"));
+    propMap = createTableAndReturnTableProperties(options, new ObjectPath(db, "tablenew2"));
     assertTrue(propMap.containsKey("hoodie.table.precombine.field"));
     assertEquals("ts_3", propMap.get("hoodie.table.precombine.field"));
   }
