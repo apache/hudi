@@ -35,7 +35,6 @@ import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.QueryInfo;
 import org.apache.hudi.utilities.sources.helpers.QueryRunner;
 
-import org.apache.parquet.Strings;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
@@ -141,7 +140,7 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
 
     // This is to ensure backward compatibility where we were using the
     // config SOURCE_FILE_FORMAT for file format in previous versions.
-    this.fileFormat = Strings.isNullOrEmpty(getStringWithAltKeys(props, DATAFILE_FORMAT, EMPTY_STRING))
+    this.fileFormat = StringUtils.isNullOrEmpty(getStringWithAltKeys(props, DATAFILE_FORMAT, EMPTY_STRING))
         ? getStringWithAltKeys(props, SOURCE_FILE_FORMAT, true)
         : getStringWithAltKeys(props, DATAFILE_FORMAT, EMPTY_STRING);
 
