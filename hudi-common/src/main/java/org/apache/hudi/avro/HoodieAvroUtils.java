@@ -294,14 +294,13 @@ public class HoodieAvroUtils {
     for (Schema.Field field : schema.getFields()) {
       if (!isMetadataField(field.name())) {
         Schema.Field newField = new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal());
-        for (Map.Entry<String, Object> prop : field.getObjectProps().entrySet()) {
-          newField.addProp(prop.getKey(), prop.getValue());
-        }
+        newField.putAll(field);
         parentFields.add(newField);
       }
     }
 
     Schema mergedSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), false);
+    mergedSchema.putAll(schema);
     mergedSchema.setFields(parentFields);
     return mergedSchema;
   }
