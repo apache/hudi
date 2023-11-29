@@ -56,7 +56,7 @@ public class PubsubMessagesFetcher {
 
   private final int batchSize;
   private final int maxMessagesPerSync;
-  private final long maxFetchTimePerSync;
+  private final long maxFetchTimePerSyncSecs;
   private final SubscriberStubSettings subscriberStubSettings;
   private final PubsubQueueClient pubsubQueueClient;
 
@@ -64,13 +64,13 @@ public class PubsubMessagesFetcher {
 
   public PubsubMessagesFetcher(String googleProjectId, String pubsubSubscriptionId, int batchSize,
                                int maxMessagesPerSync,
-                               long maxFetchTimePerSync,
+                               long maxFetchTimePerSyncSecs,
                                PubsubQueueClient pubsubQueueClient) {
     this.googleProjectId = googleProjectId;
     this.pubsubSubscriptionId = pubsubSubscriptionId;
     this.batchSize = batchSize;
     this.maxMessagesPerSync = maxMessagesPerSync;
-    this.maxFetchTimePerSync = maxFetchTimePerSync;
+    this.maxFetchTimePerSyncSecs = maxFetchTimePerSyncSecs;
 
     try {
       /** For details of timeout and retry configs,
@@ -94,13 +94,13 @@ public class PubsubMessagesFetcher {
       String pubsubSubscriptionId,
       int batchSize,
       int maxMessagesPerSync,
-      long maxFetchTimePerSync) {
+      long maxFetchTimePerSyncSecs) {
     this(
         googleProjectId,
         pubsubSubscriptionId,
         batchSize,
         maxMessagesPerSync,
-        maxFetchTimePerSync,
+        maxFetchTimePerSyncSecs,
         new PubsubQueueClient()
     );
   }
@@ -112,7 +112,8 @@ public class PubsubMessagesFetcher {
       long startTime = System.currentTimeMillis();
       long unAckedMessages = pubsubQueueClient.getNumUnAckedMessages(this.pubsubSubscriptionId);
       LOG.info("Found unacked messages " + unAckedMessages);
-      while (messageList.size() < unAckedMessages && messageList.size() < maxMessagesPerSync && (System.currentTimeMillis() - startTime < maxFetchTimePerSync)) {
+      while (messageList.size() < unAckedMessages && messageList.size() < maxMessagesPerSync
+          && ((System.currentTimeMillis() - startTime) < (maxFetchTimePerSyncSecs * 1000))) {
         PullResponse pullResponse = pubsubQueueClient.makePullRequest(subscriber, subscriptionName, batchSize);
         messageList.addAll(pullResponse.getReceivedMessagesList());
       }
