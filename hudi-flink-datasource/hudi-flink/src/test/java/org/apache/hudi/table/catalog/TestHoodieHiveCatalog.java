@@ -203,11 +203,11 @@ public class TestHoodieHiveCatalog {
     Map<String, String> options = new HashMap<>();
     options.put(FactoryUtil.CONNECTOR.key(), "hudi");
 
-    Map<String, String> propMap = createTableAndReturnTableProperties(options, new ObjectPath(db, "tablenew1"));
+    Map<String, String> propMap = createTableAndReturnTableProperties(options, new ObjectPath(db, "tmptb1"));
     assertFalse(propMap.containsKey("hoodie.table.precombine.field"));
 
     options.put(PRECOMBINE_FIELD.key(), "ts_3");
-    propMap = createTableAndReturnTableProperties(options, new ObjectPath(db, "tablenew2"));
+    propMap = createTableAndReturnTableProperties(options, new ObjectPath(db, "tmptb2"));
     assertTrue(propMap.containsKey("hoodie.table.precombine.field"));
     assertEquals("ts_3", propMap.get("hoodie.table.precombine.field"));
   }
