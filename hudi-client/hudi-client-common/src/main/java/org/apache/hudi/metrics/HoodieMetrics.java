@@ -21,6 +21,7 @@ package org.apache.hudi.metrics;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -302,7 +303,14 @@ public class HoodieMetrics {
 
   @VisibleForTesting
   public String getMetricsName(String action, String metric) {
-    return config == null ? null : String.format("%s.%s.%s", config.getMetricReporterMetricsNamePrefix(), action, metric);
+    if (config == null) {
+      return null;
+    }
+    if (StringUtils.isNullOrEmpty(config.getMetricReporterMetricsNamePrefix())) {
+      return String.format("%s.%s", action, metric);
+    } else {
+      return String.format("%s.%s.%s", config.getMetricReporterMetricsNamePrefix(), action, metric);
+    }
   }
 
   public void updateClusteringFileCreationMetrics(long durationInMs) {
