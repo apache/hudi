@@ -220,6 +220,13 @@ CREATE TABLE hudi_table (
 PARTITIONED BY (city);
 ```
 
+:::note NOTE:
+If you're running this tutorial locally and if you are facing `java.io.IOException: Mkdirs failed to create file:/user/hive/warehouse/hudi_table/.hoodie` issue,
+it's likely because of the spark-hive integration. To get around this, you can follow either of the two options mentioned below:
+1. Create a database i.e. `CREATE DATABASE hudidb;` and use it i.e. `USE hudidb;` before running the DDL statement.
+2. Or provide a path using `LOCATION` keyword to persist the data with the DDL statement.
+:::
+
 For more options for creating Hudi tables, please refer to [SQL DDL](/docs/next/sql_ddl) reference guide.  
 
 </TabItem>
