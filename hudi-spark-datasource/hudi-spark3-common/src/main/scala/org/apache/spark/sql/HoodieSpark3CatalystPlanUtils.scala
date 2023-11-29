@@ -91,7 +91,7 @@ object HoodieSpark3CatalystPlanUtils extends SparkAdapterSupport {
     ff.isProjected = true
     val tableSchema = fs.location.asInstanceOf[SparkHoodieTableFileIndex].schema
     val resolvedSchema = logicalRelation.resolve(tableSchema, fs.sparkSession.sessionState.analyzer.resolver)
-    if (scanOperation.sameOutput(logicalRelation)) {
+    if (!fs.partitionSchema.fields.isEmpty && scanOperation.sameOutput(logicalRelation)) {
       Project(resolvedSchema, scanOperation)
     } else {
       scanOperation
