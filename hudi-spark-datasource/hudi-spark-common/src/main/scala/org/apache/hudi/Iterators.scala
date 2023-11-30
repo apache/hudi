@@ -32,7 +32,7 @@ import org.apache.hudi.common.engine.{EngineType, HoodieLocalEngineContext}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.model._
+import org.apache.hudi.common.model.{HoodieSparkRecord, _}
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
 import org.apache.hudi.common.util.{ConfigUtils, FileIOUtils, HoodieRecordUtils}
 import org.apache.hudi.config.HoodiePayloadConfig
@@ -108,6 +108,22 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
       maxCompactionMemoryInBytes, config, internalSchema)
   }
 
+  private val hasOperationField = logFileReaderAvroSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD) != null
+
+  protected def isDeleteData(r: InternalRow): Boolean = if (hasOperationField) {
+    val operation = r.getString(logFileReaderStructType.fieldIndex(HoodieRecord.OPERATION_METADATA_FIELD))
+    HoodieOperation.fromName(operation) == HoodieOperation.DELETE
+  } else {
+    false
+  }
+
+  protected def isDeleteData(r: GenericRecord): Boolean = if (hasOperationField) {
+    val operation = r.get(HoodieRecord.OPERATION_METADATA_FIELD).toString
+    HoodieOperation.fromName(operation) == HoodieOperation.DELETE
+  } else {
+    false
+  }
+
   def logRecordsPairIterator(): Iterator[(String, HoodieRecord[_])] = {
     logRecords.iterator
   }
@@ -134,12 +150,22 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
     logRecordsIterator.hasNext && {
       logRecordsIterator.next() match {
         case Some(r: HoodieAvroIndexedRecord) =>
-          val projectedAvroRecord = requiredSchemaAvroProjection(r.getData.asInstanceOf[GenericRecord])
-          nextRecord = deserialize(projectedAvroRecord)
-          true
+          val data = r.getData.asInstanceOf[GenericRecord]
+          if (isDeleteData(data)) {
+            this.hasNextInternal
+          } else {
+            val projectedAvroRecord = requiredSchemaAvroProjection(data)
+            nextRecord = deserialize(projectedAvroRecord)
+            true
+          }
         case Some(r: HoodieSparkRecord) =>
-          nextRecord = requiredSchemaRowProjection(r.getData)
-          true
+          val data = r.getData
+          if (isDeleteData(data)) {
+            this.hasNextInternal
+          } else {
+            nextRecord = requiredSchemaRowProjection(data)
+            true
+          }
         case None => this.hasNextInternal
       }
     }
@@ -248,7 +274,7 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
         true
       } else {
        val mergedRecordOpt = merge(curRow, updatedRecordOpt.get)
-        if (mergedRecordOpt.isEmpty) {
+        if (mergedRecordOpt.orNull == null) {
           // Record has been deleted, skipping
           this.hasNextInternal
         } else {
@@ -273,9 +299,14 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
         val result = recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps)
         toScalaOption(result)
           .map { r =>
-            val schema = HoodieInternalRowUtils.getCachedSchema(r.getRight)
-            val projection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema, structTypeSchema)
-            projection.apply(r.getLeft.getData.asInstanceOf[InternalRow])
+            val data = r.getLeft.getData.asInstanceOf[InternalRow]
+            if (isDeleteData(data)) {
+              null
+            } else {
+              val schema = HoodieInternalRowUtils.getCachedSchema(r.getRight)
+              val projection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema, structTypeSchema)
+              projection.apply(data)
+            }
           }
       case _ =>
         val curRecord = new HoodieAvroIndexedRecord(serialize(curRow))
@@ -283,7 +314,11 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
         toScalaOption(result)
           .map { r =>
             val avroRecord = r.getLeft.toIndexedRecord(r.getRight, payloadProps).get.getData.asInstanceOf[GenericRecord]
-            deserialize(requiredSchemaAvroProjection(avroRecord))
+            if (isDeleteData(avroRecord)) {
+              null
+            } else {
+              deserialize(requiredSchemaAvroProjection(avroRecord))
+            }
           }
     }
   }
