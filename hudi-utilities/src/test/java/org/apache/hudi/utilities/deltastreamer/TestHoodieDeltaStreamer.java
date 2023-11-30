@@ -1352,6 +1352,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
     deltaStreamer.sync();
     assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
+    deltaStreamer.shutdownGracefully();
 
     try {
       if (testEmptyBatch) {
@@ -1371,10 +1372,11 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         compareLatestTwoSchemas(metaClient);
         prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
             PARQUET_SOURCE_ROOT, false, "partition_path", "");
+        deltaStreamer.shutdownGracefully();
       }
 
-      int recordsSoFar = testEmptyBatch ? 100 : 200;
-
+      int recordsSoFar = 100;
+      deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
       // add 3 more batches and ensure all commits succeed.
       for (int i = 2; i < 5; i++) {
         prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, Integer.toString(i) + ".parquet", false, null, null);
@@ -1734,13 +1736,14 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
     deltaStreamer.sync();
     assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
+    deltaStreamer.shutdownGracefully();
 
     if (testEmptyBatch) {
       prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, "2.parquet", false, null, null);
       prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
           PARQUET_SOURCE_ROOT, false, "partition_path", "0");
-      deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
-      deltaStreamer.sync();
+      HoodieDeltaStreamer deltaStreamer1 = new HoodieDeltaStreamer(cfg, jsc);
+      deltaStreamer1.sync();
       // since we mimic'ed empty batch, total records should be same as first sync().
       assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(jsc.hadoopConfiguration()).build();
@@ -1752,6 +1755,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       compareLatestTwoSchemas(metaClient);
       prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
           PARQUET_SOURCE_ROOT, false, "partition_path", "");
+      deltaStreamer1.shutdownGracefully();
     }
 
     // proceed w/ non empty batch.
@@ -1765,6 +1769,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         .forEach(entry -> assertValidSchemaAndOperationTypeInCommitMetadata(
             entry, metaClient, WriteOperationType.INSERT));
     testNum++;
+    deltaStreamer.shutdownGracefully();
   }
 
   private void assertValidSchemaAndOperationTypeInCommitMetadata(HoodieInstant instant,
