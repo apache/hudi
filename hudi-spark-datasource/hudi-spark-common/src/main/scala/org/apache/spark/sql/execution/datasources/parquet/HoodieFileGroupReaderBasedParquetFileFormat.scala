@@ -37,7 +37,7 @@ import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.types.{StructField, StructType}
+import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.util.SerializableConfiguration
 
 import scala.annotation.tailrec
@@ -251,6 +251,13 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
   private def generateRequiredSchemaWithMandatory(requiredSchema: StructType,
                                                   dataSchema: StructType,
                                                   partitionSchema: StructType): StructType = {
+    val metaFields = Seq(
+      StructField(HoodieRecord.COMMIT_TIME_METADATA_FIELD, StringType),
+      StructField(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, StringType),
+      StructField(HoodieRecord.RECORD_KEY_METADATA_FIELD, StringType),
+      StructField(HoodieRecord.PARTITION_PATH_METADATA_FIELD, StringType),
+      StructField(HoodieRecord.FILENAME_METADATA_FIELD, StringType))
+
     // Helper method to get the StructField for nested fields
     @tailrec
     def findNestedField(schema: StructType, fieldParts: Array[String]): Option[StructField] = {
@@ -265,6 +272,10 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
       }
     }
 
+    def findMetaField(name: String): Option[StructField] = {
+      metaFields.find(f => f.name == name)
+    }
+
     // If not MergeOnRead or if projection is compatible
     if (isIncremental) {
       StructType(dataSchema.toArray ++ partitionSchema.fields)
@@ -276,6 +287,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
           val fieldParts = field.split("\\.")
           val fieldToAdd = findNestedField(dataSchema, fieldParts)
             .orElse(findNestedField(partitionSchema, fieldParts))
+            .orElse(findMetaField(field))
             .getOrElse(throw new IllegalArgumentException(s"Field $field does not exist in the table schema"))
           added.append(fieldToAdd)
         }
