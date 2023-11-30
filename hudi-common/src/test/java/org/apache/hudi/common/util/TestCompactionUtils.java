@@ -351,7 +351,7 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
       assertEquals(version == COMPACTION_METADATA_VERSION_1 ? df.getPath() : df.getFileName(),
           op.getDataFilePath(), "Same data-file");
     }
-    List<String> paths = slice.getLogFiles().map(l -> l.getPath().toString()).collect(Collectors.toList());
+    List<String> paths = slice.getLogFiles().map(l -> l.getLocation().toString()).collect(Collectors.toList());
     IntStream.range(0, paths.size()).boxed().forEach(idx -> assertEquals(
         version == COMPACTION_METADATA_VERSION_1 ? paths.get(idx) : new Path(paths.get(idx)).getName(),
         op.getDeltaFilePaths().get(idx), "Log File Index " + idx));

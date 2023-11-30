@@ -19,6 +19,8 @@
 package org.apache.hudi.common.table.timeline.dto;
 
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.HoodieFileInfo;
+import org.apache.hudi.storage.HoodieStorage;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -55,15 +57,15 @@ public class FileStatusDTO {
   @JsonProperty("symlink")
   FilePathDTO symlink;
 
-  public static FileStatusDTO fromFileStatus(FileStatus fileStatus) {
+  public static FileStatusDTO fromFileStatus(HoodieFileInfo fileStatus) {
     if (null == fileStatus) {
       return null;
     }
 
     FileStatusDTO dto = new FileStatusDTO();
     try {
-      dto.path = FilePathDTO.fromPath(fileStatus.getPath());
-      dto.length = fileStatus.getLen();
+      dto.path = FilePathDTO.fromPath(fileStatus.getLocation());
+      dto.length = fileStatus.getLength();
       dto.isdir = fileStatus.isDirectory();
       dto.blockReplication = fileStatus.getReplication();
       dto.blocksize = fileStatus.getBlockSize();
@@ -81,11 +83,12 @@ public class FileStatusDTO {
    * Used to safely handle FileStatus calls which might fail on some FileSystem implementation.
    * (DeprecatedLocalFileSystem)
    */
-  private static void safeReadAndSetMetadata(FileStatusDTO dto, FileStatus fileStatus) {
+  private static void safeReadAndSetMetadata(FileStatusDTO dto, HoodieFileInfo fileStatus) throws IOException {
     try {
       dto.owner = fileStatus.getOwner();
       dto.group = fileStatus.getGroup();
-      dto.permission = FSPermissionDTO.fromFsPermission(fileStatus.getPermission());
+      // TODO(HUDI-6497)
+      //dto.permission = FSPermissionDTO.fromFsPermission(fileStatus.getPermission());
     } catch (IllegalArgumentException ie) {
       // Deprecated File System (testing) does not work well with this call
       // skipping
@@ -100,5 +103,9 @@ public class FileStatusDTO {
     return new FileStatus(dto.length, dto.isdir, dto.blockReplication, dto.blocksize, dto.modificationTime,
         dto.accessTime, FSPermissionDTO.fromFsPermissionDTO(dto.permission), dto.owner, dto.group,
         FilePathDTO.toPath(dto.symlink), FilePathDTO.toPath(dto.path));
+  }
+
+  public static HoodieFileInfo toFileInfo(HoodieStorage storage, FileStatusDTO dto) {
+    return storage.toHoodieFileInfo(dto);
   }
 }

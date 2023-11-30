@@ -496,7 +496,7 @@ class HoodieCDCRDD(
     private def loadBeforeFileSliceIfNeeded(fileSlice: FileSlice): Unit = {
       val files = List(fileSlice.getBaseFile.get().getPath) ++
         fileSlice.getLogFiles.collect(Collectors.toList[HoodieLogFile]).asScala
-          .map(f => pathToString(f.getPath)).toList
+          .map(f => pathToString(f.getLocation)).toList
       val same = files.sorted == beforeImageFiles.sorted.toList
       if (!same) {
         // clear up the beforeImageRecords

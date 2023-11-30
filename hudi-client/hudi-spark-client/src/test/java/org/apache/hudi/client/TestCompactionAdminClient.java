@@ -144,17 +144,17 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
     List<Pair<HoodieLogFile, HoodieLogFile>> undoFiles =
         result.stream().flatMap(r -> getRenamingActionsToAlignWithCompactionOperation(metaClient,
             compactionInstant, r.getOperation(), Option.empty()).stream()).map(rn -> {
-              try {
-                renameLogFile(metaClient, rn.getKey(), rn.getValue());
-              } catch (IOException e) {
-                throw new HoodieIOException(e.getMessage(), e);
-              }
-              return rn;
-            }).collect(Collectors.toList());
+          try {
+            renameLogFile(metaClient, rn.getKey(), rn.getValue());
+          } catch (IOException e) {
+            throw new HoodieIOException(e.getMessage(), e);
+          }
+          return rn;
+        }).collect(Collectors.toList());
     Map<String, String> renameFilesFromUndo = undoFiles.stream()
-        .collect(Collectors.toMap(p -> p.getRight().getPath().toString(), x -> x.getLeft().getPath().toString()));
+        .collect(Collectors.toMap(p -> p.getRight().getLocation().toString(), x -> x.getLeft().getLocation().toString()));
     Map<String, String> expRenameFiles = renameFiles.stream()
-        .collect(Collectors.toMap(p -> p.getLeft().getPath().toString(), x -> x.getRight().getPath().toString()));
+        .collect(Collectors.toMap(p -> p.getLeft().getLocation().toString(), x -> x.getRight().getLocation().toString()));
     if (expNumRepairs > 0) {
       assertFalse(renameFiles.isEmpty(), "Rename Files must be non-empty");
     } else {

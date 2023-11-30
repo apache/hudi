@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.timeline.dto;
 
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.storage.HoodieStorage;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -53,10 +54,10 @@ public class FileSliceDTO {
     return dto;
   }
 
-  public static FileSlice toFileSlice(FileSliceDTO dto) {
+  public static FileSlice toFileSlice(HoodieStorage storage, FileSliceDTO dto) {
     FileSlice slice = new FileSlice(dto.partitionPath, dto.baseInstantTime, dto.fileId);
-    slice.setBaseFile(BaseFileDTO.toHoodieBaseFile(dto.baseFile));
-    dto.logFiles.stream().forEach(lf -> slice.addLogFile(LogFileDTO.toHoodieLogFile(lf)));
+    slice.setBaseFile(BaseFileDTO.toHoodieBaseFile(storage, dto.baseFile));
+    dto.logFiles.stream().forEach(lf -> slice.addLogFile(LogFileDTO.toHoodieLogFile(storage, lf)));
     return slice;
   }
 }

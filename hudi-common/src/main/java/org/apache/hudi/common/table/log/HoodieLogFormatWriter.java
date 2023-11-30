@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.log.HoodieLogFormat.WriterBuilder;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -50,6 +51,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   private HoodieLogFile logFile;
   private FSDataOutputStream output;
 
+  private final HoodieStorage storage;
   private final FileSystem fs;
   private final long sizeThreshold;
   private final Integer bufferSize;
@@ -60,8 +62,9 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
   private static final String APPEND_UNAVAILABLE_EXCEPTION_MESSAGE = "not sufficiently replicated yet";
 
-  HoodieLogFormatWriter(FileSystem fs, HoodieLogFile logFile, Integer bufferSize, Short replication, Long sizeThreshold, String rolloverLogWriteToken) {
-    this.fs = fs;
+  HoodieLogFormatWriter(HoodieStorage storage, HoodieLogFile logFile, Integer bufferSize, Short replication, Long sizeThreshold, String rolloverLogWriteToken) {
+    this.storage = storage;
+    this.fs = (FileSystem) storage.getFileSystem();
     this.logFile = logFile;
     this.sizeThreshold = sizeThreshold;
     this.bufferSize = bufferSize;
@@ -71,7 +74,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   }
 
   public FileSystem getFs() {
-    return fs;
+    return (FileSystem) storage.getFileSystem();
   }
 
   @Override
@@ -91,9 +94,9 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
    */
   private FSDataOutputStream getOutputStream() throws IOException, InterruptedException {
     if (this.output == null) {
-      Path path = logFile.getPath();
+      Path path = new Path(logFile.getLocation().toString());
       if (fs.exists(path)) {
-        boolean isAppendSupported = StorageSchemes.isAppendSupported(fs.getScheme());
+        boolean isAppendSupported = StorageSchemes.isAppendSupported(storage.getScheme());
         if (isAppendSupported) {
           LOG.info(logFile + " exists. Appending to existing file");
           try {
@@ -225,13 +228,13 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
   private void rollOver() throws IOException {
     closeStream();
-    this.logFile = logFile.rollOver(fs, rolloverLogWriteToken);
+    this.logFile = logFile.rollOver(storage, rolloverLogWriteToken);
     this.closed = false;
   }
 
   private void createNewFile() throws IOException {
     this.output =
-        fs.create(this.logFile.getPath(), false, bufferSize, replication, WriterBuilder.DEFAULT_SIZE_THRESHOLD, null);
+        fs.create(new Path(this.logFile.getLocation().toString()), false, bufferSize, replication, WriterBuilder.DEFAULT_SIZE_THRESHOLD, null);
   }
 
   @Override

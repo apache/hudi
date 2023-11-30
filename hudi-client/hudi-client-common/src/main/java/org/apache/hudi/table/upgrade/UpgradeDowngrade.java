@@ -28,8 +28,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.storage.HoodieLocation;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,7 +49,6 @@ public class UpgradeDowngrade {
   private HoodieTableMetaClient metaClient;
   protected HoodieWriteConfig config;
   protected HoodieEngineContext context;
-  private transient FileSystem fs;
   private Path updatedPropsFilePath;
   private Path propsFilePath;
 
@@ -59,7 +58,6 @@ public class UpgradeDowngrade {
     this.metaClient = metaClient;
     this.config = config;
     this.context = context;
-    this.fs = metaClient.getFs();
     this.updatedPropsFilePath = new Path(metaClient.getMetaPath(), HOODIE_UPDATED_PROPERTY_FILE);
     this.propsFilePath = new Path(metaClient.getMetaPath(), HoodieTableConfig.HOODIE_PROPERTIES_FILE);
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;
@@ -113,7 +111,7 @@ public class UpgradeDowngrade {
       String metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(
           metaClient.getBasePathV2().toString());
       try {
-        if (metaClient.getFs().exists(new Path(metadataTablePath))) {
+        if (metaClient.getHoodieStorage().exists(new HoodieLocation(metadataTablePath))) {
           HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
               .setConf(metaClient.getHadoopConf()).setBasePath(metadataTablePath).build();
           HoodieWriteConfig mdtWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(
@@ -159,7 +157,8 @@ public class UpgradeDowngrade {
     }
     metaClient.getTableConfig().setTableVersion(toVersion);
 
-    HoodieTableConfig.update(metaClient.getFs(), new Path(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
+    HoodieTableConfig.update(metaClient.getHoodieStorage(),
+        new HoodieLocation(metaClient.getMetaPath()), metaClient.getTableConfig().getProps());
   }
 
   protected Map<ConfigProperty, String> upgrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion, String instantTime) {

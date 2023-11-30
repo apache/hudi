@@ -26,14 +26,15 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
+import org.apache.hudi.storage.HoodieLocation;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedWriter;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -70,8 +71,8 @@ public class ManifestFileWriter {
       } else {
         LOG.info("Writing base file names to manifest file: " + baseFiles.size());
       }
-      final Path manifestFilePath = getManifestFilePath(useAbsolutePath);
-      try (FSDataOutputStream outputStream = metaClient.getFs().create(manifestFilePath, true);
+      final HoodieLocation manifestFilePath = getManifestFilePath(useAbsolutePath);
+      try (OutputStream outputStream = metaClient.getHoodieStorage().create(manifestFilePath, true);
            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8))) {
         for (String f : baseFiles) {
           writer.write(f);
@@ -100,16 +101,16 @@ public class ManifestFileWriter {
     }
   }
 
-  public Path getManifestFolder(boolean useAbsolutePath) {
-    return new Path(metaClient.getMetaPath(), useAbsolutePath ? ABSOLUTE_PATH_MANIFEST_FOLDER_NAME : MANIFEST_FOLDER_NAME);
+  public HoodieLocation getManifestFolder(boolean useAbsolutePath) {
+    return new HoodieLocation(metaClient.getMetaPath(), useAbsolutePath ? ABSOLUTE_PATH_MANIFEST_FOLDER_NAME : MANIFEST_FOLDER_NAME);
   }
 
-  public Path getManifestFilePath(boolean useAbsolutePath) {
-    return new Path(getManifestFolder(useAbsolutePath), MANIFEST_FILE_NAME);
+  public HoodieLocation getManifestFilePath(boolean useAbsolutePath) {
+    return new HoodieLocation(getManifestFolder(useAbsolutePath), MANIFEST_FILE_NAME);
   }
 
   public String getManifestSourceUri(boolean useAbsolutePath) {
-    return new Path(getManifestFolder(useAbsolutePath), "*").toUri().toString();
+    return new Path(getManifestFolder(useAbsolutePath).toString(), "*").toUri().toString();
   }
 
   public static Builder builder() {

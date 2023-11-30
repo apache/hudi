@@ -84,9 +84,9 @@ public class TestHoodieLogFile {
     assertEquals(logVersion, hoodieLogFile.getLogVersion());
     assertEquals(writeToken, hoodieLogFile.getLogWriteToken());
     assertEquals(fileExtension, hoodieLogFile.getFileExtension());
-    assertEquals(new Path(pathStr), hoodieLogFile.getPath());
+    assertEquals(new Path(pathStr), hoodieLogFile.getLocation());
     assertEquals(fileLength, hoodieLogFile.getFileSize());
-    assertEquals(fileStatus, hoodieLogFile.getFileStatus());
+    assertEquals(fileStatus, hoodieLogFile.getFileInfo());
     assertEquals(suffix, hoodieLogFile.getSuffix());
   }
 }

@@ -20,12 +20,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.hadoop.CachingPath;
-
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
-
-import static org.apache.hudi.hadoop.CachingPath.createRelativePathUnsafe;
+import org.apache.hudi.storage.HoodieFileInfo;
 
 /**
  * Hoodie base file - Represents metadata about Hudi file in DFS.
@@ -47,12 +42,12 @@ public class HoodieBaseFile extends BaseFile {
     this.commitTime = dataFile.getCommitTime();
   }
 
-  public HoodieBaseFile(FileStatus fileStatus) {
+  public HoodieBaseFile(HoodieFileInfo fileStatus) {
     this(fileStatus, null);
   }
 
-  public HoodieBaseFile(FileStatus fileStatus, BaseFile bootstrapBaseFile) {
-    this(fileStatus, getFileIdAndCommitTimeFromFileName(fileStatus.getPath().getName()), bootstrapBaseFile);
+  public HoodieBaseFile(HoodieFileInfo fileStatus, BaseFile bootstrapBaseFile) {
+    this(fileStatus, getFileIdAndCommitTimeFromFileName(fileStatus.getLocation().getName()), bootstrapBaseFile);
   }
 
   public HoodieBaseFile(String filePath) {
@@ -74,11 +69,11 @@ public class HoodieBaseFile extends BaseFile {
     this.commitTime = commitTime;
   }
 
-  private HoodieBaseFile(FileStatus fileStatus, String[] fileIdAndCommitTime, BaseFile bootstrapBaseFile) {
+  private HoodieBaseFile(HoodieFileInfo fileStatus, String[] fileIdAndCommitTime, BaseFile bootstrapBaseFile) {
     this(fileStatus, fileIdAndCommitTime[0], fileIdAndCommitTime[1], bootstrapBaseFile);
   }
 
-  public HoodieBaseFile(FileStatus fileStatus, String fileId, String commitTime, BaseFile bootstrapBaseFile) {
+  public HoodieBaseFile(HoodieFileInfo fileStatus, String fileId, String commitTime, BaseFile bootstrapBaseFile) {
     super(maybeHandleExternallyGeneratedFileName(fileStatus, fileId));
     this.bootstrapBaseFile = Option.ofNullable(bootstrapBaseFile);
     this.fileId = fileId;
@@ -131,21 +126,25 @@ public class HoodieBaseFile extends BaseFile {
   /**
    * If the file was created externally, the original file path will have a '_[commitTime]_hudiext' suffix when stored in the metadata table. That suffix needs to be removed from the FileStatus so
    * that the actual file can be found and read.
+   *
    * @param fileStatus an input file status that may require updating
-   * @param fileId the fileId for the file
+   * @param fileId     the fileId for the file
    * @return the original file status if it was not externally created, or a new FileStatus with the original file name if it was externally created
    */
-  private static FileStatus maybeHandleExternallyGeneratedFileName(FileStatus fileStatus, String fileId) {
+  private static HoodieFileInfo maybeHandleExternallyGeneratedFileName(HoodieFileInfo fileStatus, String fileId) {
     if (fileStatus == null) {
       return null;
     }
-    if (ExternalFilePathUtil.isExternallyCreatedFile(fileStatus.getPath().getName())) {
+    if (ExternalFilePathUtil.isExternallyCreatedFile(fileStatus.getLocation().getName())) {
       // fileId is the same as the original file name for externally created files
-      Path parent = fileStatus.getPath().getParent();
-      return new FileStatus(fileStatus.getLen(), fileStatus.isDirectory(), fileStatus.getReplication(),
+      String parent = fileStatus.getLocation().getParent().toString();
+      // TODO(HUDI-6497): fix the logic here
+      return fileStatus;
+      /*
+      return new FileStatus(fileStatus.getLength(), fileStatus.isDirectory(), fileStatus.getReplication(),
           fileStatus.getBlockSize(), fileStatus.getModificationTime(), fileStatus.getAccessTime(),
           fileStatus.getPermission(), fileStatus.getOwner(), fileStatus.getGroup(),
-          new CachingPath(parent, createRelativePathUnsafe(fileId)));
+          new CachingPath(parent, createRelativePathUnsafe(fileId)));*/
     } else {
       return fileStatus;
     }

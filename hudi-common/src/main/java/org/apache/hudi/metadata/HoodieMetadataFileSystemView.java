@@ -25,9 +25,8 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.storage.HoodieFileInfo;
+import org.apache.hudi.storage.HoodieLocation;
 
 import java.io.IOException;
 import java.util.List;
@@ -63,7 +62,7 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
    * @throws IOException
    */
   @Override
-  protected FileStatus[] listPartition(Path partitionPath) throws IOException {
+  protected List<HoodieFileInfo> listPartition(HoodieLocation partitionPath) throws IOException {
     return tableMetadata.getAllFilesInPartition(partitionPath);
   }
 
@@ -73,8 +72,9 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
   }
   
   @Override
-  protected Map<Pair<String, Path>, FileStatus[]> listPartitions(List<Pair<String, Path>> partitionPathList) throws IOException {
-    Map<String, Pair<String, Path>> absoluteToPairMap = partitionPathList.stream()
+  protected Map<Pair<String, HoodieLocation>, List<HoodieFileInfo>> listPartitions(
+      List<Pair<String, HoodieLocation>> partitionPathList) throws IOException {
+    Map<String, Pair<String, HoodieLocation>> absoluteToPairMap = partitionPathList.stream()
         .collect(Collectors.toMap(
             pair -> pair.getRight().toString(),
             Function.identity()

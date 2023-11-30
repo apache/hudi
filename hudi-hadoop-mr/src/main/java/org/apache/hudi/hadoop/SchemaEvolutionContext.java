@@ -35,6 +35,9 @@ import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
+import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
@@ -109,9 +112,11 @@ public class SchemaEvolutionContext {
 
   private HoodieTableMetaClient setUpHoodieTableMetaClient() throws IOException {
     try {
-      Path inputPath = ((FileSplit)split).getPath();
-      FileSystem fs =  inputPath.getFileSystem(job);
-      Option<Path> tablePath = TablePathUtils.getTablePath(fs, inputPath);
+      Path inputPath = ((FileSplit) split).getPath();
+      HoodieLocation loc = new HoodieLocation(inputPath.toString());
+      FileSystem fs = inputPath.getFileSystem(job);
+      HoodieStorage storage = HoodieStorageUtils.getHoodieStorage(fs);
+      Option<HoodieLocation> tablePath = TablePathUtils.getTablePath(storage, loc);
       return HoodieTableMetaClient.builder().setBasePath(tablePath.get().toString()).setConf(job).build();
     } catch (Exception e) {
       LOG.warn(String.format("Not a valid hoodie table, table path: %s", ((FileSplit)split).getPath()), e);

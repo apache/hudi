@@ -71,6 +71,9 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.hadoop.SerializablePath;
+import org.apache.hudi.storage.HoodieFileInfo;
+import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.hadoop.conf.Configuration;
@@ -656,7 +659,11 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     List<DirectoryInfo> dirinfoList = new LinkedList<>();
     List<String> allPartitionPaths = metadata.getAllPartitionPaths().stream()
         .map(partitionPath -> dataWriteConfig.getBasePath() + "/" + partitionPath).collect(Collectors.toList());
-    Map<String, FileStatus[]> partitionFileMap = metadata.getAllFilesInPartitions(allPartitionPaths);
+    Map<String, FileStatus[]> partitionFileMap = metadata.getAllFilesInPartitions(allPartitionPaths)
+        .entrySet()
+        .stream()
+        .collect(Collectors.toMap(e -> e.getKey(),
+            e -> e.getValue().stream().map(info -> FSUtils.convertFileInfoToFileStatus(info)).toArray(FileStatus[]::new)));
     for (Map.Entry<String, FileStatus[]> entry : partitionFileMap.entrySet()) {
       dirinfoList.add(new DirectoryInfo(entry.getKey(), entry.getValue(), initializationTime));
     }
@@ -676,14 +683,14 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   private void initializeFileGroups(HoodieTableMetaClient dataMetaClient, MetadataPartitionType metadataPartition, String instantTime,
                                     int fileGroupCount) throws IOException {
     // Remove all existing file groups or leftover files in the partition
-    final Path partitionPath = new Path(metadataWriteConfig.getBasePath(), metadataPartition.getPartitionPath());
-    FileSystem fs = metadataMetaClient.getFs();
+    final HoodieLocation partitionPath = new HoodieLocation(metadataWriteConfig.getBasePath(), metadataPartition.getPartitionPath());
+    HoodieStorage storage = metadataMetaClient.getHoodieStorage();
     try {
-      final FileStatus[] existingFiles = fs.listStatus(partitionPath);
-      if (existingFiles.length > 0) {
+      final List<HoodieFileInfo> existingFiles = storage.listFiles(partitionPath);
+      if (existingFiles.size() > 0) {
         LOG.warn("Deleting all existing files found in MDT partition " + metadataPartition.getPartitionPath());
-        fs.delete(partitionPath, true);
-        ValidationUtils.checkState(!fs.exists(partitionPath), "Failed to delete MDT partition " + metadataPartition);
+        storage.delete(partitionPath, true);
+        ValidationUtils.checkState(!storage.exists(partitionPath), "Failed to delete MDT partition " + metadataPartition);
       }
     } catch (FileNotFoundException ignored) {
       // If the partition did not exist yet, it will be created below
@@ -712,13 +719,14 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         final HoodieDeleteBlock block = new HoodieDeleteBlock(new DeleteRecord[0], blockHeader);
 
         HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
-            .onParentPath(FSUtils.getPartitionPath(metadataWriteConfig.getBasePath(), metadataPartition.getPartitionPath()))
+            .onParentPath(FSUtils.getPartitionPath(
+                new HoodieLocation(metadataWriteConfig.getBasePath()), metadataPartition.getPartitionPath()))
             .withFileId(fileGroupFileId)
             .overBaseCommit(instantTime)
             .withLogVersion(HoodieLogFile.LOGFILE_BASE_VERSION)
             .withFileSize(0L)
             .withSizeThreshold(metadataWriteConfig.getLogFileMaxSize())
-            .withFs(dataMetaClient.getFs())
+            .withFs(dataMetaClient.getHoodieStorage())
             .withRolloverLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
             .withLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
@@ -736,7 +744,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       // first update table config
       dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionType, false);
       LOG.warn("Deleting Metadata Table partition: " + partitionPath);
-      dataMetaClient.getFs().delete(new Path(metadataWriteConfig.getBasePath(), partitionPath), true);
+      dataMetaClient.getHoodieStorage().delete(new HoodieLocation(metadataWriteConfig.getBasePath(), partitionPath), true);
       // delete corresponding pending indexing instant file in the timeline
       LOG.warn("Deleting pending indexing instant from the timeline for partition: " + partitionPath);
       deletePendingIndexingInstant(dataMetaClient, partitionPath);
@@ -1335,25 +1343,25 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
                                                            Map<String, List<String>> partitionFilesToDelete, List<String> partitionsToDelete) throws IOException {
 
     for (String partition : metadata.fetchAllPartitionPaths()) {
-      Path partitionPath = null;
+      HoodieLocation partitionPath = null;
       if (StringUtils.isNullOrEmpty(partition) && !dataMetaClient.getTableConfig().isTablePartitioned()) {
-        partitionPath = new Path(dataWriteConfig.getBasePath());
+        partitionPath = new HoodieLocation(dataWriteConfig.getBasePath());
       } else {
-        partitionPath = new Path(dataWriteConfig.getBasePath(), partition);
+        partitionPath = new HoodieLocation(dataWriteConfig.getBasePath(), partition);
       }
       final String partitionId = HoodieTableMetadataUtil.getPartitionIdentifier(partition);
-      FileStatus[] metadataFiles = metadata.getAllFilesInPartition(partitionPath);
+      List<HoodieFileInfo> metadataFiles = metadata.getAllFilesInPartition(partitionPath);
       if (!dirInfoMap.containsKey(partition)) {
         // Entire partition has been deleted
         partitionsToDelete.add(partitionId);
-        if (metadataFiles != null && metadataFiles.length > 0) {
-          partitionFilesToDelete.put(partitionId, Arrays.stream(metadataFiles).map(f -> f.getPath().getName()).collect(Collectors.toList()));
+        if (metadataFiles != null && metadataFiles.size() > 0) {
+          partitionFilesToDelete.put(partitionId, metadataFiles.stream().map(f -> f.getLocation().getName()).collect(Collectors.toList()));
         }
       } else {
         // Some files need to be cleaned and some to be added in the partition
         Map<String, Long> fsFiles = dirInfoMap.get(partition).getFileNameToSizeMap();
-        List<String> mdtFiles = Arrays.stream(metadataFiles).map(mdtFile -> mdtFile.getPath().getName()).collect(Collectors.toList());
-        List<String> filesDeleted = Arrays.stream(metadataFiles).map(f -> f.getPath().getName())
+        List<String> mdtFiles = metadataFiles.stream().map(mdtFile -> mdtFile.getLocation().getName()).collect(Collectors.toList());
+        List<String> filesDeleted = metadataFiles.stream().map(f -> f.getLocation().getName())
             .filter(n -> !fsFiles.containsKey(n)).collect(Collectors.toList());
         Map<String, Long> filesToAdd = new HashMap<>();
         // new files could be added to DT due to restore that just happened which may not be tracked in RestoreMetadata.

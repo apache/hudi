@@ -25,7 +25,6 @@ import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.MetadataConversionUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
@@ -57,6 +56,8 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.marker.WriteMarkers;
@@ -71,17 +72,21 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.client.utils.ArchivalUtils.getMinAndMaxInstantsToKeep;
+import static org.apache.hudi.common.table.timeline.HoodieArchivedTimeline.ARCHIVE_FILE_PATTERN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
@@ -94,7 +99,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieTimelineArchiver.class);
 
-  private final Path archiveFilePath;
+  private final HoodieLocation archiveFilePath;
   private final HoodieWriteConfig config;
   private Writer writer;
   private final int maxInstantsToKeep;
@@ -108,7 +113,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     this.table = table;
     this.metaClient = table.getMetaClient();
     this.archiveFilePath = HoodieArchivedTimeline.getArchiveLogPath(metaClient.getArchivePath());
-    this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
+    this.txnManager = new TransactionManager(config, table.getMetaClient().getHoodieStorage());
     Pair<Integer, Integer> minAndMaxInstants = getMinAndMaxInstantsToKeep(table, metaClient);
     this.minInstantsToKeep = minAndMaxInstants.getLeft();
     this.maxInstantsToKeep = minAndMaxInstants.getRight();
@@ -119,7 +124,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       if (this.writer == null) {
         return HoodieLogFormat.newWriterBuilder().onParentPath(archiveFilePath.getParent())
             .withFileId(archiveFilePath.getName()).withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION)
-            .withFs(metaClient.getFs()).overBaseCommit("").build();
+            .withFs(metaClient.getHoodieStorage()).overBaseCommit("").build();
       } else {
         return this.writer;
       }
@@ -190,7 +195,8 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   }
 
   public boolean shouldMergeSmallArchiveFiles() {
-    return config.getArchiveMergeEnable() && !StorageSchemes.isAppendSupported(metaClient.getFs().getScheme());
+    return config.getArchiveMergeEnable()
+        && !StorageSchemes.isAppendSupported(metaClient.getHoodieStorage().getScheme());
   }
 
   /**
@@ -210,10 +216,10 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     // Flush remained content if existed and open a new write
     reOpenWriter();
     // List all archive files
-    FileStatus[] fsStatuses = metaClient.getFs().globStatus(
+    FileStatus[] fsStatuses = ((FileSystem) metaClient.getHoodieStorage().getFileSystem()).globStatus(
         new Path(metaClient.getArchivePath() + "/.commits_.archive*"));
     // Sort files by version suffix in reverse (implies reverse chronological order)
-    Arrays.sort(fsStatuses, new HoodieArchivedTimeline.ArchiveFileVersionComparator());
+    Arrays.sort(fsStatuses, new ArchiveFileStatusVersionComparator());
 
     int archiveMergeFilesBatchSize = config.getArchiveMergeFilesBatchSize();
     long smallFileLimitBytes = config.getArchiveMergeSmallFileLimitBytes();
@@ -231,7 +237,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       deleteFilesParallelize(metaClient, candidateFiles, context, true);
       LOG.info("Success to delete replaced small archive files.");
       // finally, delete archiveMergePlan which means merging small archive files operation is successful.
-      metaClient.getFs().delete(planPath, false);
+      ((FileSystem) metaClient.getHoodieStorage().getFileSystem()).delete(planPath, false);
       LOG.info("Success to merge small archive files.");
     }
   }
@@ -260,7 +266,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
    */
   private String computeLogFileName() throws IOException {
     String logWriteToken = writer.getLogFile().getLogWriteToken();
-    HoodieLogFile hoodieLogFile = writer.getLogFile().rollOver(metaClient.getFs(), logWriteToken);
+    HoodieLogFile hoodieLogFile = writer.getLogFile().rollOver(metaClient.getHoodieStorage(), logWriteToken);
     return hoodieLogFile.getFileName();
   }
 
@@ -272,39 +278,41 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
    */
   private void verifyLastMergeArchiveFilesIfNecessary(HoodieEngineContext context) throws IOException {
     if (shouldMergeSmallArchiveFiles()) {
-      Path planPath = new Path(metaClient.getArchivePath(), HoodieArchivedTimeline.MERGE_ARCHIVE_PLAN_NAME);
-      HoodieWrapperFileSystem fs = metaClient.getFs();
+      HoodieLocation planPath = new HoodieLocation(
+          metaClient.getArchivePath(), HoodieArchivedTimeline.MERGE_ARCHIVE_PLAN_NAME);
+      HoodieStorage storage = metaClient.getHoodieStorage();
       // If plan exist, last merge small archive files was failed.
       // we need to revert or complete last action.
-      if (fs.exists(planPath)) {
+      if (storage.exists(planPath)) {
         HoodieMergeArchiveFilePlan plan = null;
         try {
-          plan = TimelineMetadataUtils.deserializeAvroMetadata(FileIOUtils.readDataFromPath(fs, planPath).get(), HoodieMergeArchiveFilePlan.class);
+          plan = TimelineMetadataUtils.deserializeAvroMetadata(FileIOUtils.readDataFromPath(storage, planPath).get(), HoodieMergeArchiveFilePlan.class);
         } catch (IOException e) {
           LOG.warn("Parsing merge archive plan failed.", e);
           // Reading partial plan file which means last merge action is failed during writing plan file.
-          fs.delete(planPath);
+          storage.delete(planPath);
           return;
         }
-        Path mergedArchiveFile = new Path(metaClient.getArchivePath(), plan.getMergedArchiveFileName());
+        HoodieLocation mergedArchiveFile = new HoodieLocation(
+            metaClient.getArchivePath(), plan.getMergedArchiveFileName());
         List<Path> candidates = plan.getCandidate().stream().map(Path::new).collect(Collectors.toList());
         if (candidateAllExists(candidates)) {
           // Last merge action is failed during writing merged archive file.
           // But all the small archive files are not deleted.
           // Revert last action by deleting mergedArchiveFile if existed.
-          if (fs.exists(mergedArchiveFile)) {
-            fs.delete(mergedArchiveFile, false);
+          if (storage.exists(mergedArchiveFile)) {
+            storage.delete(mergedArchiveFile, false);
           }
         } else {
           // Last merge action is failed during deleting small archive files.
           // But the merged files is completed.
           // Try to complete last action
-          if (fs.exists(mergedArchiveFile)) {
+          if (storage.exists(mergedArchiveFile)) {
             deleteFilesParallelize(metaClient, plan.getCandidate(), context, true);
           }
         }
 
-        fs.delete(planPath);
+        storage.delete(planPath);
       }
     }
   }
@@ -315,7 +323,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
    */
   private boolean candidateAllExists(List<Path> candidates) throws IOException {
     for (Path archiveFile : candidates) {
-      if (!metaClient.getFs().exists(archiveFile)) {
+      if (!((FileSystem) metaClient.getHoodieStorage().getFileSystem()).exists(archiveFile)) {
         // candidate is deleted
         return false;
       }
@@ -331,7 +339,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         .build();
     Option<byte[]> content = TimelineMetadataUtils.serializeAvroMetadata(plan, HoodieMergeArchiveFilePlan.class);
     // building merge archive files plan.
-    FileIOUtils.createFileInPath(metaClient.getFs(), planPath, content);
+    FileIOUtils.createFileInPath((FileSystem) metaClient.getHoodieStorage().getFileSystem(), planPath, content);
     LOG.info("Success to build archive merge plan");
   }
 
@@ -342,8 +350,8 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       List<IndexedRecord> records = new ArrayList<>();
       for (FileStatus fs : compactCandidate) {
         // Read the archived file
-        try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(metaClient.getFs(),
-            new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema())) {
+        try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(metaClient.getHoodieStorage(),
+            new HoodieLogFile(fs.getPath().toString()), HoodieArchivedMetaEntry.getClassSchema())) {
           // Read the avro blocks
           while (reader.hasNext()) {
             HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();
@@ -366,12 +374,12 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   private Map<String, Boolean> deleteFilesParallelize(HoodieTableMetaClient metaClient, List<String> paths, HoodieEngineContext context, boolean ignoreFailed) {
 
     return FSUtils.parallelizeFilesProcess(context,
-        metaClient.getFs(),
+        (FileSystem) metaClient.getHoodieStorage().getFileSystem(),
         config.getArchiveDeleteParallelism(),
         pairOfSubPathAndConf -> {
-          Path file = new Path(pairOfSubPathAndConf.getKey());
+          HoodieLocation file = new HoodieLocation(pairOfSubPathAndConf.getKey());
           try {
-            FileSystem fs = metaClient.getFs();
+            HoodieStorage fs = metaClient.getHoodieStorage();
             if (fs.exists(file)) {
               return fs.delete(file, false);
             }
@@ -651,5 +659,30 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   private IndexedRecord convertToAvroRecord(HoodieInstant hoodieInstant)
       throws IOException {
     return MetadataConversionUtils.createMetaWrapper(hoodieInstant, metaClient);
+  }
+
+  /**
+   * Sort files by reverse order of version suffix in file name.
+   */
+  public static class ArchiveFileStatusVersionComparator implements Comparator<FileStatus>, Serializable {
+    @Override
+    public int compare(FileStatus f1, FileStatus f2) {
+      return Integer.compare(getArchivedFileSuffix(f2), getArchivedFileSuffix(f1));
+    }
+
+    private int getArchivedFileSuffix(FileStatus f) {
+      try {
+        Matcher fileMatcher = ARCHIVE_FILE_PATTERN.matcher(f.getPath().getName());
+        if (fileMatcher.matches()) {
+          return Integer.parseInt(fileMatcher.group(1));
+        }
+      } catch (NumberFormatException e) {
+        // log and ignore any format warnings
+        LOG.warn("error getting suffix for archived file: " + f.getPath());
+      }
+
+      // return default value in case of any errors
+      return 0;
+    }
   }
 }

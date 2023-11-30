@@ -30,7 +30,7 @@ import org.apache.hudi.LogFileIterator._
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.engine.{EngineType, HoodieLocalEngineContext}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.fs.FSUtils.{buildInlineConf, getRelativePartitionPath}
+import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
@@ -335,7 +335,7 @@ object LogFileIterator extends SparkAdapterSupport {
       val logRecordScannerBuilder = HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(fs)
         .withBasePath(tablePath)
-        .withLogFilePaths(logFiles.map(logFile => logFile.getPath.toString).asJava)
+        .withLogFilePaths(logFiles.map(logFile => logFile.getLocation.toString).asJava)
         .withReaderSchema(logSchema)
         // NOTE: This part shall only be reached when at least one log is present in the file-group
         //       entailing that table has to have at least one commit
@@ -362,7 +362,7 @@ object LogFileIterator extends SparkAdapterSupport {
 
       if (logFiles.nonEmpty) {
         logRecordScannerBuilder.withPartition(
-          getRelativePartitionPath(new Path(tableState.tablePath), logFiles.head.getPath.getParent))
+          getRelativePartitionPath(new Path(tableState.tablePath), logFiles.head.getLocation.getParent))
       }
 
       logRecordScannerBuilder.withRecordMerger(
@@ -389,7 +389,7 @@ object LogFileIterator extends SparkAdapterSupport {
     //    - Some log file
     split.dataFile.map(baseFile =>
       sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(baseFile))
-      .getOrElse(split.logFiles.head.getPath)
+      .getOrElse(split.logFiles.head.getLocation)
       .getParent
   }
 }

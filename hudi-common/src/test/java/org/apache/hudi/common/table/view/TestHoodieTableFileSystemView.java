@@ -1955,7 +1955,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     // Verify log files
     assertEquals(expectedState.logFilesCurrentlyPresent, tableFileSystemView.getAllFileSlices(partitionPath)
         .flatMap(FileSlice::getLogFiles)
-        .map(logFile -> logFile.getPath().getName())
+        .map(logFile -> logFile.getLocation().getName())
         .collect(Collectors.toSet()));
     // Verify file groups part of pending compaction operations
     assertEquals(expectedState.pendingCompactionFgIdsCurrentlyPresent, tableFileSystemView.getPendingCompactionOperations()

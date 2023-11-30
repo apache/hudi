@@ -29,8 +29,8 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -41,11 +41,11 @@ import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.storage.HoodieFileInfo;
+import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -139,7 +139,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    * @param partitionPath The absolute path of the partition to list
    */
   @Override
-  public FileStatus[] getAllFilesInPartition(Path partitionPath) throws IOException {
+  public List<HoodieFileInfo> getAllFilesInPartition(HoodieLocation partitionPath) throws IOException {
     ValidationUtils.checkArgument(isMetadataTableInitialized);
     try {
       return fetchAllFilesInPartition(partitionPath);
@@ -149,14 +149,14 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   }
 
   @Override
-  public Map<String, FileStatus[]> getAllFilesInPartitions(Collection<String> partitions) throws IOException {
+  public Map<String, List<HoodieFileInfo>> getAllFilesInPartitions(Collection<String> partitions) throws IOException {
     ValidationUtils.checkArgument(isMetadataTableInitialized);
     if (partitions.isEmpty()) {
       return Collections.emptyMap();
     }
 
     try {
-      List<Path> partitionPaths = partitions.stream().map(Path::new).collect(Collectors.toList());
+      List<HoodieLocation> partitionPaths = partitions.stream().map(HoodieLocation::new).collect(Collectors.toList());
       return fetchAllFilesInPartitionPaths(partitionPaths);
     } catch (Exception e) {
       throw new HoodieMetadataException("Failed to retrieve files in partition from metadata", e);
@@ -340,8 +340,8 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    *
    * @param partitionPath The absolute path of the partition
    */
-  FileStatus[] fetchAllFilesInPartition(Path partitionPath) throws IOException {
-    String relativePartitionPath = FSUtils.getRelativePartitionPath(dataBasePath.get(), partitionPath);
+  List<HoodieFileInfo> fetchAllFilesInPartition(HoodieLocation partitionPath) throws IOException {
+    String relativePartitionPath = FSUtils.getRelativePartitionPathFromLocation(dataBasePath, partitionPath);
     String recordKey = relativePartitionPath.isEmpty() ? NON_PARTITIONED_NAME : relativePartitionPath;
 
     HoodieTimer timer = HoodieTimer.start();
@@ -349,27 +349,28 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
         MetadataPartitionType.FILES.getPartitionPath());
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
 
-    FileStatus[] statuses = recordOpt.map(record -> {
-      HoodieMetadataPayload metadataPayload = record.getData();
-      checkForSpuriousDeletes(metadataPayload, recordKey);
-      try {
-        return metadataPayload.getFileStatuses(getHadoopConf(), partitionPath);
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to extract file-statuses from the payload", e);
-      }
-    })
-        .orElse(new FileStatus[0]);
+    List<HoodieFileInfo> statuses = recordOpt
+        .map(record -> {
+          HoodieMetadataPayload metadataPayload = record.getData();
+          checkForSpuriousDeletes(metadataPayload, recordKey);
+          try {
+            return metadataPayload.getFileStatuses(getHadoopConf(), partitionPath);
+          } catch (IOException e) {
+            throw new HoodieIOException("Failed to extract file-statuses from the payload", e);
+          }
+        })
+        .orElse(Collections.emptyList());
 
-    LOG.info("Listed file in partition from metadata: partition=" + relativePartitionPath + ", #files=" + statuses.length);
+    LOG.info("Listed file in partition from metadata: partition=" + relativePartitionPath + ", #files=" + statuses.size());
     return statuses;
   }
 
-  Map<String, FileStatus[]> fetchAllFilesInPartitionPaths(List<Path> partitionPaths) throws IOException {
-    Map<String, Path> partitionIdToPathMap =
+  Map<String, List<HoodieFileInfo>> fetchAllFilesInPartitionPaths(List<HoodieLocation> partitionPaths) throws IOException {
+    Map<String, HoodieLocation> partitionIdToPathMap =
         partitionPaths.parallelStream()
             .collect(
                 Collectors.toMap(partitionPath -> {
-                  String partitionId = FSUtils.getRelativePartitionPath(dataBasePath.get(), partitionPath);
+                  String partitionId = FSUtils.getRelativePartitionPathFromLocation(dataBasePath, partitionPath);
                   return partitionId.isEmpty() ? NON_PARTITIONED_NAME : partitionId;
                 }, Function.identity())
             );
@@ -379,17 +380,17 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
         getRecordsByKeys(new ArrayList<>(partitionIdToPathMap.keySet()), MetadataPartitionType.FILES.getPartitionPath());
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
 
-    FileSystem fs = partitionPaths.get(0).getFileSystem(getHadoopConf());
+    HoodieStorage fs = FSUtils.getHoodieStorage(partitionPaths.get(0).toString(), getHadoopConf());
 
-    Map<String, FileStatus[]> partitionPathToFilesMap = partitionIdRecordPairs.entrySet().stream()
+    Map<String, List<HoodieFileInfo>> partitionPathToFilesMap = partitionIdRecordPairs.entrySet().stream()
         .map(e -> {
           final String partitionId = e.getKey();
-          Path partitionPath = partitionIdToPathMap.get(partitionId);
+          HoodieLocation partitionPath = partitionIdToPathMap.get(partitionId);
 
           HoodieMetadataPayload metadataPayload = e.getValue().getData();
           checkForSpuriousDeletes(metadataPayload, partitionId);
 
-          FileStatus[] files = metadataPayload.getFileStatuses(fs, partitionPath);
+          List<HoodieFileInfo> files = metadataPayload.getFileStatuses(fs, partitionPath);
           return Pair.of(partitionPath.toString(), files);
         })
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));

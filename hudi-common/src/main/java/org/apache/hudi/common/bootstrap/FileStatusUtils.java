@@ -22,6 +22,8 @@ import org.apache.hudi.avro.model.HoodieFSPermission;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.avro.model.HoodiePath;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.HoodieFileInfo;
+import org.apache.hudi.storage.HoodieLocation;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -81,6 +83,16 @@ public class FileStatusUtils {
         fileStatus.getBlockReplication(), fileStatus.getBlockSize(), fileStatus.getModificationTime(),
         fileStatus.getAccessTime(), toFSPermission(fileStatus.getPermission()), fileStatus.getOwner(),
         fileStatus.getGroup(), toPath(fileStatus.getSymlink()), toPath(fileStatus.getPath()));
+  }
+
+  public static HoodieFileInfo toFileInfo(HoodieFileStatus fileStatus) {
+    if (null == fileStatus) {
+      return null;
+    }
+
+    return new HoodieFileInfo(
+        new HoodieLocation(fileStatus.getPath().toString()), fileStatus.getLength(),
+        fileStatus.getIsDir() == null ? false : fileStatus.getIsDir(), fileStatus.getModificationTime());
   }
 
   public static HoodieFileStatus fromFileStatus(FileStatus fileStatus) {

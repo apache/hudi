@@ -20,6 +20,7 @@ package org.apache.hudi.common.table.timeline.dto;
 
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.storage.HoodieStorage;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -43,30 +44,33 @@ public class BaseFileDTO {
   @JsonProperty("bootstrapBaseFile")
   private BaseFileDTO bootstrapBaseFile;
 
-  public static HoodieBaseFile toHoodieBaseFile(BaseFileDTO dto) {
+  public static HoodieBaseFile toHoodieBaseFile(HoodieStorage storage, BaseFileDTO dto) {
     if (null == dto) {
       return null;
     }
 
     HoodieBaseFile baseFile;
     if (null != dto.fileStatus) {
-      baseFile = new HoodieBaseFile(FileStatusDTO.toFileStatus(dto.fileStatus), dto.fileId, dto.commitTime, toBaseFile(dto.bootstrapBaseFile));
+      baseFile = new HoodieBaseFile(
+          FileStatusDTO.toFileInfo(storage, dto.fileStatus), dto.fileId, dto.commitTime,
+          toBaseFile(storage, dto.bootstrapBaseFile));
     } else {
-      baseFile = new HoodieBaseFile(dto.fullPath, dto.fileId, dto.commitTime, toBaseFile(dto.bootstrapBaseFile));
+      baseFile = new HoodieBaseFile(
+          dto.fullPath, dto.fileId, dto.commitTime, toBaseFile(storage, dto.bootstrapBaseFile));
       baseFile.setFileLen(dto.fileLen);
     }
 
     return baseFile;
   }
 
-  private static BaseFile toBaseFile(BaseFileDTO dto) {
+  private static BaseFile toBaseFile(HoodieStorage storage, BaseFileDTO dto) {
     if (null == dto) {
       return null;
     }
 
     BaseFile baseFile;
     if (null != dto.fileStatus) {
-      baseFile = new BaseFile(FileStatusDTO.toFileStatus(dto.fileStatus));
+      baseFile = new BaseFile(FileStatusDTO.toFileInfo(storage, dto.fileStatus));
     } else {
       baseFile = new BaseFile(dto.fullPath);
       baseFile.setFileLen(dto.fileLen);

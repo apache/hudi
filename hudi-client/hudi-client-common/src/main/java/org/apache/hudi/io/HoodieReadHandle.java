@@ -24,9 +24,9 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
@@ -53,8 +53,8 @@ public abstract class HoodieReadHandle<T, I, K, O> extends HoodieIOHandle<T, I, 
   }
 
   @Override
-  public FileSystem getFileSystem() {
-    return hoodieTable.getMetaClient().getFs();
+  public HoodieStorage getHoodieStorage() {
+    return hoodieTable.getMetaClient().getHoodieStorage();
   }
 
   public Pair<String, String> getPartitionPathFileIDPair() {

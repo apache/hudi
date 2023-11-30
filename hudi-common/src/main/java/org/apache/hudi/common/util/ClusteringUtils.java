@@ -198,7 +198,7 @@ public class ClusteringUtils {
         .setPartitionPath(slice.getPartitionPath())
         .setFileId(slice.getFileId())
         .setDataFilePath(slice.getBaseFile().map(BaseFile::getPath).orElse(null))
-        .setDeltaFilePaths(slice.getLogFiles().map(f -> f.getPath().getName()).collect(Collectors.toList()))
+        .setDeltaFilePaths(slice.getLogFiles().map(f -> f.getLocation().getName()).collect(Collectors.toList()))
         .setBootstrapFilePath(slice.getBaseFile().map(bf -> bf.getBootstrapBaseFile().map(BaseFile::getPath).orElse(null)).orElse(null))
         .build()).collect(Collectors.toList());
   }

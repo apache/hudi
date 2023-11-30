@@ -39,9 +39,10 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.HoodieFileInfo;
+import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.HoodieStorage;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
@@ -79,9 +80,9 @@ public class HoodieCDCExtractor {
 
   private final HoodieTableMetaClient metaClient;
 
-  private final Path basePath;
+  private final HoodieLocation basePath;
 
-  private final FileSystem fs;
+  private final HoodieStorage storage;
 
   private final HoodieCDCSupplementalLoggingMode supplementalLoggingMode;
 
@@ -96,7 +97,7 @@ public class HoodieCDCExtractor {
       InstantRange range) {
     this.metaClient = metaClient;
     this.basePath = metaClient.getBasePathV2();
-    this.fs = metaClient.getFs().getFileSystem();
+    this.storage = metaClient.getHoodieStorage();
     this.supplementalLoggingMode = metaClient.getTableConfig().cdcSupplementalLoggingMode();
     this.instantRange = range;
     init();
@@ -183,15 +184,15 @@ public class HoodieCDCExtractor {
       }
     }
     try {
-      List<FileStatus> touchedFiles = new ArrayList<>();
+      List<HoodieFileInfo> touchedFiles = new ArrayList<>();
       for (String touchedPartition : touchedPartitions) {
-        Path partitionPath = FSUtils.getPartitionPath(basePath, touchedPartition);
-        touchedFiles.addAll(Arrays.asList(fs.listStatus(partitionPath)));
+        HoodieLocation partitionPath = FSUtils.getPartitionPath(basePath, touchedPartition);
+        touchedFiles.addAll(storage.listFiles(partitionPath));
       }
       return new HoodieTableFileSystemView(
           metaClient,
           metaClient.getCommitsTimeline().filterCompletedInstants(),
-          touchedFiles.toArray(new FileStatus[0])
+          touchedFiles
       );
     } catch (Exception e) {
       throw new HoodieException("Fail to init FileSystem View for CDC", e);
@@ -243,8 +244,8 @@ public class HoodieCDCExtractor {
       HoodieInstant instant,
       HoodieWriteStat writeStat,
       WriteOperationType operation) {
-    final Path basePath = metaClient.getBasePathV2();
-    final FileSystem fs = metaClient.getFs().getFileSystem();
+    final HoodieLocation basePath = metaClient.getBasePathV2();
+    final HoodieStorage storage = metaClient.getHoodieStorage();
     final String instantTs = instant.getTimestamp();
 
     HoodieCDCFileSplit cdcFileSplit;
@@ -291,7 +292,7 @@ public class HoodieCDCExtractor {
           );
           FileSlice beforeFileSlice = null;
           FileSlice currentFileSlice = new FileSlice(fileGroupId, instant.getTimestamp(),
-              new HoodieBaseFile(fs.getFileStatus(new Path(basePath, writeStat.getPath()))), new ArrayList<>());
+              new HoodieBaseFile(storage.getFileInfo(new HoodieLocation(basePath, writeStat.getPath()))), new ArrayList<>());
           if (supplementalLoggingMode == HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY) {
             beforeFileSlice = new FileSlice(fileGroupId, writeStat.getPrevCommit(), beforeBaseFile, new ArrayList<>());
           }
@@ -313,7 +314,7 @@ public class HoodieCDCExtractor {
       HoodieFileGroupId fgId,
       HoodieInstant instant,
       String currentLogFile) {
-    Path partitionPath = FSUtils.getPartitionPath(basePath, fgId.getPartitionPath());
+    HoodieLocation partitionPath = FSUtils.getPartitionPath(basePath, fgId.getPartitionPath());
     if (instant.getAction().equals(DELTA_COMMIT_ACTION)) {
       String currentLogFileName = new Path(currentLogFile).getName();
       Option<Pair<String, List<String>>> fileSliceOpt =
@@ -323,12 +324,12 @@ public class HoodieCDCExtractor {
         Pair<String, List<String>> fileSlice = fileSliceOpt.get();
         try {
           HoodieBaseFile baseFile = new HoodieBaseFile(
-              fs.getFileStatus(new Path(partitionPath, fileSlice.getLeft())));
-          Path[] logFilePaths = fileSlice.getRight().stream()
+              storage.getFileInfo(new HoodieLocation(partitionPath, fileSlice.getLeft())));
+          List<HoodieLocation> logFilePaths = fileSlice.getRight().stream()
               .filter(logFile -> !logFile.equals(currentLogFileName))
-              .map(logFile -> new Path(partitionPath, logFile))
-              .toArray(Path[]::new);
-          List<HoodieLogFile> logFiles = Arrays.stream(fs.listStatus(logFilePaths))
+              .map(logFile -> new HoodieLocation(partitionPath, logFile))
+              .collect(Collectors.toList());
+          List<HoodieLogFile> logFiles = storage.listFiles(logFilePaths).stream()
               .map(HoodieLogFile::new).collect(Collectors.toList());
           return Option.of(new FileSlice(fgId, instant.getTimestamp(), baseFile, logFiles));
         } catch (Exception e) {

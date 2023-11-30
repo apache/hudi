@@ -131,7 +131,7 @@ case class HoodieFileIndex(spark: SparkSession,
     getAllInputFileSlices.values.asScala.flatMap(_.asScala)
       .flatMap(fs => {
         val baseFileStatusOpt = getBaseFileStatus(Option.apply(fs.getBaseFile.orElse(null)))
-        val logFilesStatus = fs.getLogFiles.map[FileStatus](JFunction.toJavaFunction[HoodieLogFile, FileStatus](lf => lf.getFileStatus))
+        val logFilesStatus = fs.getLogFiles.map[FileStatus](JFunction.toJavaFunction[HoodieLogFile, FileStatus](lf => lf.getFileInfo))
         val files = logFilesStatus.collect(Collectors.toList[FileStatus]).asScala
         baseFileStatusOpt.foreach(f => files.append(f))
         files
@@ -153,7 +153,7 @@ case class HoodieFileIndex(spark: SparkSession,
             if (slice.getBaseFile.isPresent) {
               slice.getBaseFile.get().getFileStatus
             } else if (slice.getLogFiles.findAny().isPresent) {
-              slice.getLogFiles.findAny().get().getFileStatus
+              slice.getLogFiles.findAny().get().getFileInfo
             } else {
               null
             }
@@ -171,7 +171,7 @@ case class HoodieFileIndex(spark: SparkSession,
           val allCandidateFiles: Seq[FileStatus] = fileSlices.flatMap(fs => {
             val baseFileStatusOpt = getBaseFileStatus(Option.apply(fs.getBaseFile.orElse(null)))
             val logFilesStatus = if (includeLogFiles) {
-              fs.getLogFiles.map[FileStatus](JFunction.toJavaFunction[HoodieLogFile, FileStatus](lf => lf.getFileStatus))
+              fs.getLogFiles.map[FileStatus](JFunction.toJavaFunction[HoodieLogFile, FileStatus](lf => lf.getFileInfo))
             } else {
               java.util.stream.Stream.empty()
             }
@@ -240,7 +240,7 @@ case class HoodieFileIndex(spark: SparkSession,
           // Filter in candidate files based on the col-stats or record level index lookup
           val candidateFileSlices: Seq[FileSlice] = {
             fileSlices.filter(fs => {
-              val fileSliceFiles = fs.getLogFiles.map[String](JFunction.toJavaFunction[HoodieLogFile, String](lf => lf.getPath.getName))
+              val fileSliceFiles = fs.getLogFiles.map[String](JFunction.toJavaFunction[HoodieLogFile, String](lf => lf.getLocation.getName))
                 .collect(Collectors.toSet[String])
               val baseFileStatusOpt = getBaseFileStatus(Option.apply(fs.getBaseFile.orElse(null)))
               baseFileStatusOpt.exists(f => fileSliceFiles.add(f.getPath.getName))

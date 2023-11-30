@@ -313,7 +313,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     }).collect(Collectors.toList());
 
     List<String> logFilePaths = logFiles.stream().map(logFile -> {
-      return logFile.getPath().toString();
+      return logFile.getLocation().toString();
     }).collect(Collectors.toList());
 
     // Verify the on-disk raw records before they get materialized
@@ -334,8 +334,8 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
    */
   private void verifyMetadataRawRecords(HoodieTable table, List<HoodieLogFile> logFiles) throws IOException {
     for (HoodieLogFile logFile : logFiles) {
-      FileStatus[] fsStatus = fs.listStatus(logFile.getPath());
-      MessageType writerSchemaMsg = TableSchemaResolver.readSchemaFromLogFile(fs, logFile.getPath());
+      FileStatus[] fsStatus = fs.listStatus(logFile.getLocation());
+      MessageType writerSchemaMsg = TableSchemaResolver.readSchemaFromLogFile(fs, logFile.getLocation());
       if (writerSchemaMsg == null) {
         // not a data block
         continue;
@@ -373,7 +373,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
   private void verifyMetadataMergedRecords(HoodieTableMetaClient metadataMetaClient, List<String> logFilePaths, String latestCommitTimestamp) {
     Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
     HoodieMetadataLogRecordReader logRecordReader = HoodieMetadataLogRecordReader.newBuilder()
-        .withFileSystem(metadataMetaClient.getFs())
+        .withHoodieStorage(metadataMetaClient.getFs())
         .withBasePath(metadataMetaClient.getBasePath())
         .withLogFilePaths(logFilePaths)
         .withLatestInstantTime(latestCommitTimestamp)

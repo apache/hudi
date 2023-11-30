@@ -27,7 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.hadoop.CachingPath;
+import org.apache.hudi.storage.HoodieLocation;
 import org.apache.hudi.sync.common.model.Partition;
 import org.apache.hudi.sync.common.model.PartitionEvent;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
@@ -184,8 +184,8 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
     partitionsToDrop.forEach(storageValue -> {
       String storagePath = paths.get(storageValue);
       try {
-        String relativePath = FSUtils.getRelativePartitionPath(
-            metaClient.getBasePathV2(), new CachingPath(storagePath));
+        String relativePath = FSUtils.getRelativePartitionPathFromLocation(
+            metaClient.getBasePathV2(), new HoodieLocation(storagePath));
         events.add(PartitionEvent.newPartitionDropEvent(relativePath));
       } catch (IllegalArgumentException e) {
         LOG.error("Cannot parse the path stored in the metastore, ignoring it for "

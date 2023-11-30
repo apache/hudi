@@ -63,7 +63,7 @@ public class MarkerBasedRollbackUtils {
   public static List<String> getAllMarkerPaths(HoodieTable table, HoodieEngineContext context,
                                                String instant, int parallelism) throws IOException {
     String markerDir = table.getMetaClient().getMarkerFolderPath(instant);
-    FileSystem fileSystem = table.getMetaClient().getFs();
+    FileSystem fileSystem = (FileSystem) table.getMetaClient().getHoodieStorage().getFileSystem();
     Option<MarkerType> markerTypeOption = readMarkerType(fileSystem, markerDir);
 
     // If there is no marker type file "MARKERS.type", first assume "DIRECT" markers are used.

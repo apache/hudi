@@ -190,9 +190,11 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     //       is appropriately carried over
     Configuration inlineConf = FSUtils.buildInlineConf(blockContentLoc.getHadoopConf());
 
+    Path path = new Path(blockContentLoc.getLogFile().getLocation().toString());
+
     Path inlinePath = InLineFSUtils.getInlineFilePath(
-        blockContentLoc.getLogFile().getPath(),
-        blockContentLoc.getLogFile().getPath().toUri().getScheme(),
+        path,
+        path.toUri().getScheme(),
         blockContentLoc.getContentPositionInLogFile(),
         blockContentLoc.getBlockSize());
 

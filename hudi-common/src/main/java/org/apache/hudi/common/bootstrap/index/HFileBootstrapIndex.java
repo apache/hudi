@@ -35,6 +35,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieHFileUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -98,14 +100,14 @@ public class HFileBootstrapIndex extends BootstrapIndex {
 
   public HFileBootstrapIndex(HoodieTableMetaClient metaClient) {
     super(metaClient);
-    Path indexByPartitionPath = partitionIndexPath(metaClient);
-    Path indexByFilePath = fileIdIndexPath(metaClient);
+    HoodieLocation indexByPartitionPath = partitionIndexPath(metaClient);
+    HoodieLocation indexByFilePath = fileIdIndexPath(metaClient);
     try {
-      FileSystem fs = metaClient.getFs();
+      HoodieStorage storage = metaClient.getHoodieStorage();
       // The metadata table is never bootstrapped, so the bootstrap index is always absent
       // for the metadata table.  The fs.exists calls are avoided for metadata table.
       isPresent = !HoodieTableMetadata.isMetadataTable(metaClient.getBasePathV2().toString())
-          && fs.exists(indexByPartitionPath) && fs.exists(indexByFilePath);
+          && storage.exists(indexByPartitionPath) && storage.exists(indexByFilePath);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
@@ -151,14 +153,14 @@ public class HFileBootstrapIndex extends BootstrapIndex {
     return key + KEY_VALUE_SEPARATOR + value;
   }
 
-  private static Path partitionIndexPath(HoodieTableMetaClient metaClient) {
-    return new Path(metaClient.getBootstrapIndexByPartitionFolderPath(),
+  private static HoodieLocation partitionIndexPath(HoodieTableMetaClient metaClient) {
+    return new HoodieLocation(metaClient.getBootstrapIndexByPartitionFolderPath(),
         FSUtils.makeBootstrapIndexFileName(HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS, BOOTSTRAP_INDEX_FILE_ID,
             HoodieFileFormat.HFILE.getFileExtension()));
   }
 
-  private static Path fileIdIndexPath(HoodieTableMetaClient metaClient) {
-    return new Path(metaClient.getBootstrapIndexByFileIdFolderNameFolderPath(),
+  private static HoodieLocation fileIdIndexPath(HoodieTableMetaClient metaClient) {
+    return new HoodieLocation(metaClient.getBootstrapIndexByFileIdFolderNameFolderPath(),
         FSUtils.makeBootstrapIndexFileName(HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS, BOOTSTRAP_INDEX_FILE_ID,
             HoodieFileFormat.HFILE.getFileExtension()));
   }
@@ -166,6 +168,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
   /**
    * HFile stores cell key in the format example : "2020/03/18//LATEST_TIMESTAMP/Put/vlen=3692/seqid=0".
    * This API returns only the user key part from it.
+   *
    * @param cellKey HFIle Cell Key
    * @return
    */
@@ -199,11 +202,11 @@ public class HFileBootstrapIndex extends BootstrapIndex {
   @Override
   public void dropIndex() {
     try {
-      Path[] indexPaths = new Path[]{partitionIndexPath(metaClient), fileIdIndexPath(metaClient)};
-      for (Path indexPath : indexPaths) {
-        if (metaClient.getFs().exists(indexPath)) {
+      HoodieLocation[] indexPaths = new HoodieLocation[] {partitionIndexPath(metaClient), fileIdIndexPath(metaClient)};
+      for (HoodieLocation indexPath : indexPaths) {
+        if (metaClient.getHoodieStorage().exists(indexPath)) {
           LOG.info("Dropping bootstrap index. Deleting file : " + indexPath);
-          metaClient.getFs().delete(indexPath);
+          metaClient.getHoodieStorage().delete(indexPath);
         }
       }
     } catch (IOException ioe) {
@@ -236,8 +239,8 @@ public class HFileBootstrapIndex extends BootstrapIndex {
 
     public HFileBootstrapIndexReader(HoodieTableMetaClient metaClient) {
       super(metaClient);
-      Path indexByPartitionPath = partitionIndexPath(metaClient);
-      Path indexByFilePath = fileIdIndexPath(metaClient);
+      HoodieLocation indexByPartitionPath = partitionIndexPath(metaClient);
+      HoodieLocation indexByFilePath = fileIdIndexPath(metaClient);
       this.indexByPartitionPath = indexByPartitionPath.toString();
       this.indexByFileIdPath = indexByFilePath.toString();
       initIndexInfo();
@@ -268,8 +271,8 @@ public class HFileBootstrapIndex extends BootstrapIndex {
         synchronized (this) {
           if (null == indexByPartitionReader) {
             LOG.info("Opening partition index :" + indexByPartitionPath);
-            this.indexByPartitionReader =
-                createReader(indexByPartitionPath, metaClient.getHadoopConf(), metaClient.getFs());
+            this.indexByPartitionReader = createReader(
+                indexByPartitionPath, metaClient.getHadoopConf(), (FileSystem) metaClient.getHoodieStorage().getFileSystem());
           }
         }
       }
@@ -281,8 +284,8 @@ public class HFileBootstrapIndex extends BootstrapIndex {
         synchronized (this) {
           if (null == indexByFileIdReader) {
             LOG.info("Opening fileId index :" + indexByFileIdPath);
-            this.indexByFileIdReader =
-                createReader(indexByFileIdPath, metaClient.getHadoopConf(), metaClient.getFs());
+            this.indexByFileIdReader = createReader(
+                indexByFileIdPath, metaClient.getHadoopConf(), (FileSystem) metaClient.getHoodieStorage().getFileSystem());
           }
         }
       }
@@ -396,8 +399,8 @@ public class HFileBootstrapIndex extends BootstrapIndex {
   public static class HFileBootstrapIndexWriter extends BootstrapIndex.IndexWriter {
 
     private final String bootstrapBasePath;
-    private final Path indexByPartitionPath;
-    private final Path indexByFileIdPath;
+    private final HoodieLocation indexByPartitionPath;
+    private final HoodieLocation indexByFileIdPath;
     private HFile.Writer indexByPartitionWriter;
     private HFile.Writer indexByFileIdWriter;
 
@@ -415,7 +418,8 @@ public class HFileBootstrapIndex extends BootstrapIndex {
         this.indexByPartitionPath = partitionIndexPath(metaClient);
         this.indexByFileIdPath = fileIdIndexPath(metaClient);
 
-        if (metaClient.getFs().exists(indexByPartitionPath) || metaClient.getFs().exists(indexByFileIdPath)) {
+        if (metaClient.getHoodieStorage().exists(indexByPartitionPath)
+            || metaClient.getHoodieStorage().exists(indexByFileIdPath)) {
           String errMsg = "Previous version of bootstrap index exists. Partition Index Path :" + indexByPartitionPath
               + ", FileId index Path :" + indexByFileIdPath;
           LOG.info(errMsg);
@@ -530,10 +534,12 @@ public class HFileBootstrapIndex extends BootstrapIndex {
       try {
         HFileContext meta = new HFileContextBuilder().withCellComparator(new HoodieKVComparator()).build();
         this.indexByPartitionWriter = HFile.getWriterFactory(metaClient.getHadoopConf(),
-            new CacheConfig(metaClient.getHadoopConf())).withPath(metaClient.getFs(), indexByPartitionPath)
+                new CacheConfig(metaClient.getHadoopConf()))
+            .withPath((FileSystem) metaClient.getHoodieStorage().getFileSystem(), new Path(indexByPartitionPath.toString()))
             .withFileContext(meta).create();
         this.indexByFileIdWriter = HFile.getWriterFactory(metaClient.getHadoopConf(),
-            new CacheConfig(metaClient.getHadoopConf())).withPath(metaClient.getFs(), indexByFileIdPath)
+                new CacheConfig(metaClient.getHadoopConf()))
+            .withPath((FileSystem) metaClient.getHoodieStorage().getFileSystem(), new Path(indexByFileIdPath.toString()))
             .withFileContext(meta).create();
       } catch (IOException ioe) {
         throw new HoodieIOException(ioe.getMessage(), ioe);

@@ -20,8 +20,8 @@ package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.hadoop.InputSplitUtils;
+import org.apache.hudi.storage.HoodieLocation;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.InputSplitWithLocationInfo;
@@ -43,7 +43,7 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
    * @return
    */
   default List<String> getDeltaLogPaths() {
-    return getDeltaLogFiles().stream().map(entry -> entry.getPath().toString()).collect(Collectors.toList());
+    return getDeltaLogFiles().stream().map(entry -> entry.getLocation().toString()).collect(Collectors.toList());
   }
 
   List<HoodieLogFile> getDeltaLogFiles();
@@ -99,7 +99,7 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
 
     out.writeInt(getDeltaLogFiles().size());
     for (HoodieLogFile logFile : getDeltaLogFiles()) {
-      InputSplitUtils.writeString(logFile.getPath().toString(), out);
+      InputSplitUtils.writeString(logFile.getLocation().toString(), out);
       out.writeLong(logFile.getFileSize());
     }
 
@@ -128,7 +128,7 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
     for (int i = 0; i < totalLogFiles; i++) {
       String logFilePath = InputSplitUtils.readString(in);
       long logFileSize = in.readLong();
-      deltaLogPaths.add(new HoodieLogFile(new CachingPath(logFilePath), logFileSize));
+      deltaLogPaths.add(new HoodieLogFile(new HoodieLocation(logFilePath), logFileSize));
     }
     setDeltaLogFiles(deltaLogPaths);
 

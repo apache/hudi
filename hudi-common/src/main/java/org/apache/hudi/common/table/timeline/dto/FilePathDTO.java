@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.timeline.dto;
 
 import org.apache.hudi.hadoop.CachingPath;
+import org.apache.hudi.storage.HoodieLocation;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -36,12 +37,12 @@ public class FilePathDTO {
   @JsonProperty("uri")
   private String uri;
 
-  public static FilePathDTO fromPath(Path path) {
+  public static FilePathDTO fromPath(HoodieLocation path) {
     if (null == path) {
       return null;
     }
     FilePathDTO dto = new FilePathDTO();
-    dto.uri = path.toUri().toString();
+    dto.uri = path.toString();
     return dto;
   }
 

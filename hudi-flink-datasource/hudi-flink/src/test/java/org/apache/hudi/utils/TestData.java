@@ -885,7 +885,7 @@ public class TestData {
         HoodieMergedLogRecordScanner scanner = null;
         List<String> logPaths = fileSlice.getLogFiles()
             .sorted(HoodieLogFile.getLogFileComparator())
-            .map(logFile -> logFile.getPath().toString())
+            .map(logFile -> logFile.getLocation().toString())
             .collect(Collectors.toList());
         if (logPaths.size() > 0) {
           scanner = getScanner(fs, basePath, logPaths, schema, latestInstant);

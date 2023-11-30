@@ -464,7 +464,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     HoodieTimer timer = HoodieTimer.start();
     List<String> sortedLogFilePaths = logFiles.stream()
         .sorted(HoodieLogFile.getLogFileComparator())
-        .map(o -> o.getPath().toString())
+        .map(o -> o.getLocation().toString())
         .collect(Collectors.toList());
 
     // Only those log files which have a corresponding completed instant on the dataset should be read
@@ -481,7 +481,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
     HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().fromProperties(metadataConfig.getProps()).build();
     HoodieMetadataLogRecordReader logRecordScanner = HoodieMetadataLogRecordReader.newBuilder()
-        .withFileSystem(metadataMetaClient.getFs())
+        .withHoodieStorage(metadataMetaClient.getHoodieStorage())
         .withBasePath(metadataBasePath)
         .withLogFilePaths(sortedLogFilePaths)
         .withReaderSchema(schema)

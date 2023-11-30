@@ -121,6 +121,6 @@ public class FlinkAppendHandle<T, I, K, O>
 
   @Override
   public Path getWritePath() {
-    return writer.getLogFile().getPath();
+    return writer.getLogFile().getLocation();
   }
 }

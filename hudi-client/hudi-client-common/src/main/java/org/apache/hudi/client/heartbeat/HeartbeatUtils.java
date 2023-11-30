@@ -92,7 +92,8 @@ public class HeartbeatUtils {
     try {
       if (config.getFailedWritesCleanPolicy().isLazy() && heartbeatClient.isHeartbeatExpired(instantTime)) {
         throw new HoodieException("Heartbeat for instant " + instantTime + " has expired, last heartbeat "
-            + getLastHeartbeatTime(table.getMetaClient().getFs(), config.getBasePath(), instantTime));
+            + getLastHeartbeatTime(
+            (FileSystem) table.getMetaClient().getHoodieStorage().getFileSystem(), config.getBasePath(), instantTime));
       }
     } catch (IOException io) {
       throw new HoodieException("Unable to read heartbeat", io);

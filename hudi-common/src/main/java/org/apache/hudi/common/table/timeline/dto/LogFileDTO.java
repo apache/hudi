@@ -19,10 +19,11 @@
 package org.apache.hudi.common.table.timeline.dto;
 
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.storage.HoodieFileInfo;
+import org.apache.hudi.storage.HoodieStorage;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.hadoop.fs.FileStatus;
 
 /**
  * The data transfer object of log file.
@@ -37,8 +38,8 @@ public class LogFileDTO {
   @JsonProperty("len")
   private long fileLen;
 
-  public static HoodieLogFile toHoodieLogFile(LogFileDTO dto) {
-    FileStatus status = FileStatusDTO.toFileStatus(dto.fileStatus);
+  public static HoodieLogFile toHoodieLogFile(HoodieStorage storage, LogFileDTO dto) {
+    HoodieFileInfo status = FileStatusDTO.toFileInfo(storage, dto.fileStatus);
     HoodieLogFile logFile = (status == null) ? new HoodieLogFile(dto.pathStr) : new HoodieLogFile(status);
     logFile.setFileLen(dto.fileLen);
     return logFile;
@@ -47,8 +48,8 @@ public class LogFileDTO {
   public static LogFileDTO fromHoodieLogFile(HoodieLogFile dataFile) {
     LogFileDTO logFile = new LogFileDTO();
     logFile.fileLen = dataFile.getFileSize();
-    logFile.pathStr = dataFile.getPath().toString();
-    logFile.fileStatus = FileStatusDTO.fromFileStatus(dataFile.getFileStatus());
+    logFile.pathStr = dataFile.getLocation().toString();
+    logFile.fileStatus = FileStatusDTO.fromFileStatus(dataFile.getFileInfo());
     return logFile;
   }
 }

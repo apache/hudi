@@ -18,6 +18,10 @@
 
 package org.apache.hudi.common.fs;
 
+import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -65,7 +69,8 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
     FileSystem fileSystem = new HoodieRetryWrapperFileSystem(fakeFs, maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, "");
 
     HoodieWrapperFileSystem fs = new HoodieWrapperFileSystem(fileSystem, new NoOpConsistencyGuard());
-    metaClient.setFs(fs);
+    HoodieStorage storage = HoodieStorageUtils.getHoodieStorage(fs);
+    metaClient.setHoodieStorage(storage);
   }
 
   // Test the scenario that fs keeps retrying until it fails.
@@ -74,10 +79,11 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
     FakeRemoteFileSystem fakeFs = new FakeRemoteFileSystem(FSUtils.getFs(metaClient.getMetaPath(), metaClient.getHadoopConf()), 100);
     FileSystem fileSystem = new HoodieRetryWrapperFileSystem(fakeFs, maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, "");
     HoodieWrapperFileSystem fs = new HoodieWrapperFileSystem(fileSystem, new NoOpConsistencyGuard());
-    metaClient.setFs(fs);
+    HoodieStorage storage = HoodieStorageUtils.getHoodieStorage(fs);
+    metaClient.setHoodieStorage(storage);
     List<String> folders =
-            Arrays.asList("2016/04/15", ".hoodie/.temp/2/2016/04/15");
-    folders.forEach(f -> assertThrows(RuntimeException.class, () -> metaClient.getFs().mkdirs(new Path(new Path(basePath), f))));
+        Arrays.asList("2016/04/15", ".hoodie/.temp/2/2016/04/15");
+    folders.forEach(f -> assertThrows(RuntimeException.class, () -> metaClient.getHoodieStorage().mkdirs(new HoodieLocation(new HoodieLocation(basePath), f))));
   }
 
   @Test

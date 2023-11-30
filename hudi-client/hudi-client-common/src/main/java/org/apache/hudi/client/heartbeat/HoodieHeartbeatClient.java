@@ -22,6 +22,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieHeartbeatException;
+import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -225,9 +226,9 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
     LOG.info("Stopped heartbeat for instant " + heartbeat.getInstantTime());
   }
 
-  public static Boolean heartbeatExists(FileSystem fs, String basePath, String instantTime) throws IOException {
+  public static Boolean heartbeatExists(HoodieStorage storage, String basePath, String instantTime) throws IOException {
     Path heartbeatFilePath = new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + Path.SEPARATOR + instantTime);
-    return fs.exists(heartbeatFilePath);
+    return ((FileSystem) storage.getFileSystem()).exists(heartbeatFilePath);
   }
 
   public boolean isHeartbeatExpired(String instantTime) throws IOException {

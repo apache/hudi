@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.view;
 
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BootstrapBaseFileMapping;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
@@ -33,9 +34,8 @@ import org.apache.hudi.common.util.RocksDBSchemaHelper;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.RocksDBDAO;
+import org.apache.hudi.storage.HoodieFileInfo;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -81,7 +81,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   }
 
   public RocksDbBasedFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
-      FileStatus[] fileStatuses, FileSystemViewStorageConfig config) {
+                                    List<HoodieFileInfo> fileStatuses, FileSystemViewStorageConfig config) {
     this(metaClient, visibleActiveTimeline, config);
     addFilesToView(fileStatuses);
   }
@@ -320,10 +320,10 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
                 rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForDataFileView(fg, oldSlice));
 
                 Map<String, HoodieLogFile> logFiles = oldSlice.getLogFiles()
-                    .map(lf -> Pair.of(Path.getPathWithoutSchemeAndAuthority(lf.getPath()).toString(), lf))
+                    .map(lf -> Pair.of(FSUtils.getLocationWithoutSchemeAndAuthority(lf.getLocation()).toString(), lf))
                     .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
                 Map<String, HoodieLogFile> deltaLogFiles =
-                    fs.getLogFiles().map(lf -> Pair.of(Path.getPathWithoutSchemeAndAuthority(lf.getPath()).toString(), lf))
+                    fs.getLogFiles().map(lf -> Pair.of(FSUtils.getLocationWithoutSchemeAndAuthority(lf.getLocation()).toString(), lf))
                         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
                 switch (mode) {

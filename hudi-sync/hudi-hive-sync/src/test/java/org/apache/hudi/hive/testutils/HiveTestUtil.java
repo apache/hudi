@@ -406,7 +406,7 @@ public class HiveTestUtil {
         HoodieLogFile logFile = generateLogData(path, isLogSchemaSimple);
         HoodieDeltaWriteStat writeStat = new HoodieDeltaWriteStat();
         writeStat.setFileId(dataFile.getFileId());
-        writeStat.setPath(logFile.getPath().toString());
+        writeStat.setPath(logFile.getLocation().toString());
         commitMetadata.addWriteStat(partitionPath, writeStat);
       }
     }

@@ -31,9 +31,9 @@ import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.BaseFileUtils;
-import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
@@ -230,8 +230,8 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
         List<String> logPaths = fileSlice.getLogFiles()
             .sorted(HoodieLogFile.getLogFileComparator())
             // filter out crushed files
-            .filter(logFile -> isValidFile(logFile.getFileStatus()))
-            .map(logFile -> logFile.getPath().toString())
+            .filter(logFile -> isValidFile(logFile.getFileInfo()))
+            .map(logFile -> logFile.getLocation().toString())
             .collect(toList());
 
         try (HoodieMergedLogRecordScanner scanner = FormatUtils.logScanner(logPaths, schema, latestCommitTime.get().getTimestamp(),

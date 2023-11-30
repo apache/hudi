@@ -104,7 +104,7 @@ public class HoodieMetadataMetrics implements Serializable {
 
       for (FileSlice slice : latestSlices) {
         if (slice.getBaseFile().isPresent()) {
-          totalBaseFileSizeInBytes += slice.getBaseFile().get().getFileStatus().getLen();
+          totalBaseFileSizeInBytes += slice.getBaseFile().get().getFileStatus().getLength();
           ++baseFileCount;
         }
         Iterator<HoodieLogFile> it = slice.getLogFiles().iterator();

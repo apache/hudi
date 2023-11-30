@@ -78,7 +78,7 @@ public class CompactionOperation implements Serializable {
       this.dataFileCommitTime = Option.empty();
       this.bootstrapFilePath = Option.empty();
     }
-    this.deltaFileNames = logFiles.stream().map(s -> s.getPath().getName()).collect(Collectors.toList());
+    this.deltaFileNames = logFiles.stream().map(s -> s.getLocation().getName()).collect(Collectors.toList());
     this.metrics = metrics;
   }
 

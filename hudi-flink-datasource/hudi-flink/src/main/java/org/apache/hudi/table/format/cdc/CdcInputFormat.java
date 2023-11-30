@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.format.cdc;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
@@ -28,9 +27,9 @@ import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.log.HoodieCDCLogRecordIterator;
-import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -60,6 +59,7 @@ import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.RowKind;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
 import java.io.ByteArrayInputStream;
@@ -733,7 +733,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
       long maxCompactionMemoryInBytes) {
     Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
         .sorted(HoodieLogFile.getLogFileComparator())
-        .map(logFile -> logFile.getPath().toString())
+        .map(logFile -> logFile.getLocation().toString())
         // filter out the cdc logs
         .filter(path -> !path.endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
         .collect(Collectors.toList()));

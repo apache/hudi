@@ -43,6 +43,9 @@ import org.apache.hudi.hadoop.realtime.HoodieHFileRealtimeInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimePath;
+import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.hadoop.HoodieFileInfoWithFileStatus;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -63,6 +66,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -353,15 +357,15 @@ public class HoodieInputFormatUtils {
    */
   public static HoodieTableMetaClient getTableMetaClientForBasePathUnchecked(Configuration conf, Path partitionPath) throws IOException {
     Path baseDir = partitionPath;
-    FileSystem fs = partitionPath.getFileSystem(conf);
-    if (HoodiePartitionMetadata.hasPartitionMetadata(fs, partitionPath)) {
-      HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(fs, partitionPath);
+    HoodieStorage storage = FSUtils.getHoodieStorage(partitionPath.toString(), conf);
+    if (HoodiePartitionMetadata.hasPartitionMetadata(storage, new HoodieLocation(partitionPath.toString()))) {
+      HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(storage, new HoodieLocation(partitionPath.toString()));
       metadata.readFromFS();
       int levels = metadata.getPartitionDepth();
       baseDir = HoodieHiveUtils.getNthParent(partitionPath, levels);
     } else {
       for (int i = 0; i < partitionPath.depth(); i++) {
-        if (fs.exists(new Path(baseDir, METAFOLDER_NAME))) {
+        if (storage.exists(new HoodieLocation(baseDir.toString(), METAFOLDER_NAME))) {
           break;
         } else if (i == partitionPath.depth() - 1) {
           throw new TableNotFoundException(partitionPath.toString());
@@ -371,20 +375,26 @@ public class HoodieInputFormatUtils {
       }
     }
     LOG.info("Reading hoodie metadata from path " + baseDir.toString());
-    return HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(baseDir.toString()).build();
+    return HoodieTableMetaClient.builder().setConf(
+        ((FileSystem) storage.getFileSystem()).getConf()).setBasePath(baseDir.toString()).build();
   }
 
   public static FileStatus getFileStatus(HoodieBaseFile baseFile) throws IOException {
+    FileStatus fileStatus = FSUtils.convertFileInfoToFileStatus(baseFile.getFileStatus());
+
+    // TODO(HUDI-6497): check why we need this
     if (baseFile.getBootstrapBaseFile().isPresent()) {
-      if (baseFile.getFileStatus() instanceof LocatedFileStatus) {
-        return new LocatedFileStatusWithBootstrapBaseFile((LocatedFileStatus) baseFile.getFileStatus(),
-            baseFile.getBootstrapBaseFile().get().getFileStatus());
+      if (fileStatus instanceof LocatedFileStatus) {
+        return new LocatedFileStatusWithBootstrapBaseFile((LocatedFileStatus) fileStatus,
+            FSUtils.convertFileInfoToFileStatus(
+                baseFile.getBootstrapBaseFile().get().getFileStatus()));
       } else {
-        return new FileStatusWithBootstrapBaseFile(baseFile.getFileStatus(),
-            baseFile.getBootstrapBaseFile().get().getFileStatus());
+        return new FileStatusWithBootstrapBaseFile(fileStatus,
+            FSUtils.convertFileInfoToFileStatus(
+                baseFile.getBootstrapBaseFile().get().getFileStatus()));
       }
     }
-    return baseFile.getFileStatus();
+    return fileStatus;
   }
 
   /**
@@ -399,7 +409,10 @@ public class HoodieInputFormatUtils {
    */
   public static List<FileStatus> filterIncrementalFileStatus(Job job, HoodieTableMetaClient tableMetaClient,
                                                              HoodieTimeline timeline, FileStatus[] fileStatuses, List<HoodieInstant> commitsToCheck) throws IOException {
-    TableFileSystemView.BaseFileOnlyView roView = new HoodieTableFileSystemView(tableMetaClient, timeline, fileStatuses);
+    TableFileSystemView.BaseFileOnlyView roView = new HoodieTableFileSystemView(tableMetaClient, timeline,
+        Arrays.stream(fileStatuses)
+            .map(e -> new HoodieFileInfoWithFileStatus(e))
+            .collect(Collectors.toList()));
     List<String> commitsList = commitsToCheck.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
     List<HoodieBaseFile> filteredFiles = roView.getLatestBaseFilesInRange(commitsList).collect(Collectors.toList());
     List<FileStatus> returns = new ArrayList<>();
@@ -480,12 +493,12 @@ public class HoodieInputFormatUtils {
    * @return
    */
   private static HoodieBaseFile refreshFileStatus(Configuration conf, HoodieBaseFile dataFile) {
-    Path dataPath = dataFile.getFileStatus().getPath();
+    HoodieLocation dataPath = dataFile.getFileStatus().getLocation();
     try {
       if (dataFile.getFileSize() == 0) {
-        FileSystem fs = dataPath.getFileSystem(conf);
+        HoodieStorage storage = FSUtils.getHoodieStorage(dataPath, conf);
         LOG.info("Refreshing file status " + dataFile.getPath());
-        return new HoodieBaseFile(fs.getFileStatus(dataPath), dataFile.getBootstrapBaseFile().orElse(null));
+        return new HoodieBaseFile(storage.getFileInfo(dataPath), dataFile.getBootstrapBaseFile().orElse(null));
       }
       return dataFile;
     } catch (IOException e) {

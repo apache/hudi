@@ -177,12 +177,12 @@ public class TimelineCommand {
   private Map<String, Map<HoodieInstant.State, HoodieInstantWithModTime>> getInstantInfoFromTimeline(
       FileSystem fs, String metaPath) throws IOException {
     Map<String, Map<HoodieInstant.State, HoodieInstantWithModTime>> instantMap = new HashMap<>();
-    Stream<HoodieInstantWithModTime> instantStream = Arrays.stream(
+    Stream<HoodieInstantWithModTime> instantStream =
         HoodieTableMetaClient.scanFiles(fs, new Path(metaPath), path -> {
           // Include only the meta files with extensions that needs to be included
           String extension = HoodieInstant.getTimelineFileExtension(path.getName());
           return HoodieActiveTimeline.VALID_EXTENSIONS_IN_ACTIVE_TIMELINE.contains(extension);
-        })).map(HoodieInstantWithModTime::new);
+        }).stream().map(HoodieInstantWithModTime::new);
     instantStream.forEach(instant -> {
       instantMap.computeIfAbsent(instant.getTimestamp(), t -> new HashMap<>())
           .put(instant.getState(), instant);

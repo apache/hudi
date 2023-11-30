@@ -39,6 +39,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.metrics.HoodieMetrics;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.HoodieTable;
 
 import com.codahale.metrics.Timer;
@@ -61,6 +62,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
 
   private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieClient.class);
 
+  protected final transient HoodieStorage storage;
   protected final transient FileSystem fs;
   protected final transient HoodieEngineContext context;
   protected final transient Configuration hadoopConf;
@@ -85,7 +87,8 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   protected BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig,
       Option<EmbeddedTimelineService> timelineServer) {
     this.hadoopConf = context.getHadoopConf().get();
-    this.fs = FSUtils.getFs(clientConfig.getBasePath(), hadoopConf);
+    this.storage = FSUtils.getHoodieStorage(clientConfig.getBasePath(), hadoopConf);
+    this.fs = (FileSystem) storage.getFileSystem();
     this.context = context;
     this.basePath = clientConfig.getBasePath();
     this.config = clientConfig;
@@ -94,7 +97,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     this.heartbeatClient = new HoodieHeartbeatClient(this.fs, this.basePath,
         clientConfig.getHoodieClientHeartbeatIntervalInMs(), clientConfig.getHoodieClientHeartbeatTolerableMisses());
     this.metrics = new HoodieMetrics(config);
-    this.txnManager = new TransactionManager(config, fs);
+    this.txnManager = new TransactionManager(config, storage);
     startEmbeddedServerView();
     initWrapperFSMetrics();
     runClientInitCallbacks();

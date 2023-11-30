@@ -587,7 +587,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
 
     String s = "Dummy Content";
     // stain the current merged archive file.
-    FileIOUtils.createFileInPath(metaClient.getFs(), writer.getLogFile().getPath(), Option.of(s.getBytes()));
+    FileIOUtils.createFileInPath(metaClient.getFs(), writer.getLogFile().getLocation(), Option.of(s.getBytes()));
 
     // do another archive actions with merge small archive files.
     for (int i = 1; i < 10; i++) {
@@ -802,7 +802,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
 
     String s = "Dummy Content";
     // stain the current merged archive file.
-    FileIOUtils.createFileInPath(metaClient.getFs(), writer.getLogFile().getPath(), Option.of(s.getBytes()));
+    FileIOUtils.createFileInPath(metaClient.getFs(), writer.getLogFile().getLocation(), Option.of(s.getBytes()));
 
     // if there's only a damaged merged archive file, we need to ignore the exception while reading this damaged file.
     HoodieActiveTimeline rawActiveTimeline1 = new HoodieActiveTimeline(metaClient, false);

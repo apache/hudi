@@ -30,6 +30,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
+import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
@@ -91,7 +93,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
   private transient HoodieLocalEngineContext engineContext;
 
 
-  private transient FileSystem fs;
+  private transient HoodieStorage storage;
 
   public HoodieROTablePathFilter() {
     this(new Configuration());
@@ -129,8 +131,8 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
     }
     Path folder = null;
     try {
-      if (fs == null) {
-        fs = path.getFileSystem(conf.get());
+      if (storage == null) {
+        storage = FSUtils.getHoodieStorage(new HoodieLocation(path.toString()), conf.get());
       }
 
       // Assumes path is a file
@@ -163,8 +165,8 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
 
       // Perform actual checking.
       Path baseDir;
-      if (HoodiePartitionMetadata.hasPartitionMetadata(fs, folder)) {
-        HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(fs, folder);
+      if (HoodiePartitionMetadata.hasPartitionMetadata(storage, new HoodieLocation(folder.toString()))) {
+        HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(storage, new HoodieLocation(folder.toString()));
         metadata.readFromFS();
         baseDir = HoodieHiveUtils.getNthParent(folder, metadata.getPartitionDepth());
       } else {
@@ -183,7 +185,8 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
         try {
           HoodieTableMetaClient metaClient = metaClientCache.get(baseDir.toString());
           if (null == metaClient) {
-            metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(baseDir.toString()).setLoadActiveTimelineOnLoad(true).build();
+            metaClient = HoodieTableMetaClient.builder().setConf(
+                ((FileSystem) storage.getFileSystem()).getConf()).setBasePath(baseDir.toString()).setLoadActiveTimelineOnLoad(true).build();
             metaClientCache.put(baseDir.toString(), metaClient);
           }
 
