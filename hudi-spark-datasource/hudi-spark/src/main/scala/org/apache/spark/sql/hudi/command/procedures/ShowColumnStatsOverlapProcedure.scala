@@ -38,7 +38,7 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.{Function, Supplier}
-import scala.collection.JavaConversions.`deprecated asScalaBuffer`
+import scala.collection.convert.ImplicitConversions.`list asScalaBuffer`
 import scala.collection.{JavaConversions, mutable}
 import scala.jdk.CollectionConverters.{asScalaBufferConverter, asScalaIteratorConverter, seqAsJavaListConverter}
 
@@ -157,6 +157,7 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
 
   def getFileSlices(partitionPaths: util.List[String], fsView: HoodieTableFileSystemView): Set[FileSlice] = {
     partitionPaths
+      .asScala
       .flatMap(path => fsView.getLatestFileSlices(path).iterator().asScala)
       .toSet
   }
