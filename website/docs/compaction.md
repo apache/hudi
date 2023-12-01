@@ -231,5 +231,3 @@ Offline compaction needs to submit the Flink task on the command line. The progr
 | `--seq` | `LIFO`  (Optional)   | The order in which compaction tasks are executed. Executing from the latest compaction plan by default. `LIFO`: executing from the latest plan. `FIFO`: executing from the oldest plan. |
 | `--service` | `false`  (Optional)  | Whether to start a monitoring service that checks and schedules new compaction task in configured interval. |
 | `--min-compaction-interval-seconds` | `600(s)` (optional)  | The checking interval for service mode, by default 10 minutes. |
-
-

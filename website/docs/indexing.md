@@ -162,4 +162,3 @@ partition path value could change due to an update e.g users table partitioned b
 <h3>Videos</h3>
 
 * [Global Bloom Index: Remove duplicates & guarantee uniquness - Hudi Labs](https://youtu.be/XlRvMFJ7g9c)
-* [Advantages of Metadata Indexing and Asynchronous Indexing in Hudi - Hands on Lab](https://www.youtube.com/watch?v=TSphQCsY4pY)
