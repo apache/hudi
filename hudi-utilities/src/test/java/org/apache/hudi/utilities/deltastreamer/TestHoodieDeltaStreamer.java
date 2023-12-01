@@ -115,6 +115,7 @@ import org.apache.spark.sql.api.java.UDF4;
 import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructField;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -231,6 +232,11 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     addRecordMerger(recordType, scheduleClusteringConfig.configs);
     scheduleClusteringConfig.configs.addAll(getAllMultiWriterConfigs());
     return new HoodieClusteringJob(jsc, scheduleClusteringConfig);
+  }
+
+  @AfterEach
+  public void perTestAfterEach() {
+    testNum++;
   }
 
   @Test
