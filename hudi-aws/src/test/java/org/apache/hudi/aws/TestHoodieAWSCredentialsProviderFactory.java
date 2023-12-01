@@ -51,6 +51,7 @@ public class TestHoodieAWSCredentialsProviderFactory {
     cfg.setValue(HoodieAWSConfig.AWS_SESSION_TOKEN, "random-session-token");
     cfg.setValue(HoodieAWSConfig.AWS_ASSUME_ROLE_ARN, "invalid-role-arn");
     AwsSessionCredentials credentials = (AwsSessionCredentials) org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(cfg.getProps()).resolveCredentials();
+    System.clearProperty("aws.region");
     assertEquals("random-access-key", credentials.accessKeyId());
     assertEquals("random-secret-key", credentials.secretAccessKey());
     assertEquals("random-session-token", credentials.sessionToken());
