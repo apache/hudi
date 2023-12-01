@@ -418,6 +418,10 @@ public class StreamWriteOperatorCoordinator
       }
       commitInstant(instant);
     }
+    // stop the heartbeat for old instant
+    if (writeClient.getConfig().getFailedWritesCleanPolicy().isLazy() && !WriteMetadataEvent.BOOTSTRAP_INSTANT.equals(this.instant)) {
+      writeClient.getHeartbeatClient().stop(this.instant);
+    }
     // starts a new instant
     startInstant();
     // upgrade downgrade
