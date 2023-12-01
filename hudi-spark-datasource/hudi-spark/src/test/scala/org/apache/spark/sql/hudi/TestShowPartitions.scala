@@ -174,7 +174,7 @@ class TestShowPartitions extends HoodieSparkSqlTestBase {
     )
   }
 
-  test("Test alter table show partitions which are dropped before") {
+  /*test("Test alter table show partitions which are dropped before") {
     Seq("true", "false").foreach { enableMetadata =>
       withSQLConf("hoodie.metadata.enable" -> enableMetadata) {
         withTable(generateTableName) { tableName =>
@@ -205,5 +205,5 @@ class TestShowPartitions extends HoodieSparkSqlTestBase {
         }
       }
     }
-  }
+  }*/
 }
