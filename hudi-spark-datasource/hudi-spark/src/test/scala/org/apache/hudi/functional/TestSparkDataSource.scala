@@ -27,7 +27,9 @@ import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
+import org.apache.spark.SparkConf
 import org.apache.spark.sql._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Disabled
@@ -37,6 +39,8 @@ import org.junit.jupiter.params.provider.CsvSource
 import scala.collection.JavaConversions._
 
 class TestSparkDataSource extends SparkClientFunctionalTestHarness {
+
+  override def conf: SparkConf = conf(getSparkSqlConf)
 
   val parallelism: Integer = 4
 

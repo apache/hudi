@@ -56,6 +56,8 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
                                  requiredFilters: Seq[Filter]
                                 ) extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait {
 
+  override def getRequiredFilters: Seq[Filter] = requiredFilters
+
   override def isSplitable(sparkSession: SparkSession,
                            options: Map[String, String],
                            path: Path): Boolean = {
@@ -83,7 +85,7 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
                                               filters: Seq[Filter],
                                               options: Map[String, String],
                                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
-
+    assert(dataSchema.fields.isEmpty)
     val outputSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
 
     val requiredSchemaWithMandatory = if (!isMOR || MergeOnReadSnapshotRelation.isProjectionCompatible(tableState.value)) {

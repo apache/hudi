@@ -71,6 +71,7 @@ public class HoodiePayloadProps {
    */
   private static final HashSet<String> PROJECTION_COMPATIBLE_PAYLOAD_CLASSES = new HashSet<String>() {{
       add(OverwriteWithLatestAvroPayload.class.getName());
+      //add(DefaultHoodieRecordPayload.class.getName());
     }};
 
   public static boolean isProjectionCompatible(String payloadClassName) {

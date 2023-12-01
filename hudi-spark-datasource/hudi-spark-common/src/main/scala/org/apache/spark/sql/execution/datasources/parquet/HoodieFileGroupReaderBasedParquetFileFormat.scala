@@ -47,6 +47,7 @@ trait HoodieFormatTrait {
 
   // Used so that the planner only projects once and does not stack overflow
   var isProjected: Boolean = false
+  def getRequiredFilters: Seq[Filter]
 }
 
 /**
@@ -64,6 +65,8 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                                                   shouldUseRecordPosition: Boolean,
                                                   requiredFilters: Seq[Filter]
                                            ) extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait {
+
+  override def getRequiredFilters: Seq[Filter] = requiredFilters
 
   /**
    * Support batch needs to remain consistent, even if one side of a bootstrap merge can support
@@ -104,7 +107,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     val requiredWithoutMeta = StructType(requiredSchemaSplits._2)
     val augmentedHadoopConf = FSUtils.buildInlineConf(hadoopConf)
     val (baseFileReader, preMergeBaseFileReader, readerMaps) = buildFileReaders(
-      spark, dataSchema, partitionSchema, if (isIncremental) requiredSchemaWithMandatory else requiredSchema,
+      spark, dataSchema, partitionSchema, requiredSchema,
       filters, options, augmentedHadoopConf, requiredSchemaWithMandatory, requiredWithoutMeta, requiredMeta)
 
     val requestedAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(requiredSchema, sanitizedTableName)
@@ -233,9 +236,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     }
 
     // If not MergeOnRead or if projection is compatible
-    if (isIncremental) {
-      StructType(dataSchema.toArray ++ partitionSchema.fields)
-    } else if (!isMOR || MergeOnReadSnapshotRelation.isProjectionCompatible(tableState)) {
+    if (!isMOR || MergeOnReadSnapshotRelation.isProjectionCompatible(tableState)) {
       val added: mutable.Buffer[StructField] = mutable.Buffer[StructField]()
       for (field <- mandatoryFields) {
         if (requiredSchema.getFieldIndex(field).isEmpty) {
@@ -268,6 +269,8 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     val baseFileReader = super.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema,
       filters ++ requiredFilters, options, new Configuration(hadoopConf))
     m.put(generateKey(dataSchema, requiredSchema), baseFileReader)
+    m.put(0, super.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema,
+      filters ++ requiredFilters, options, new Configuration(hadoopConf)))
 
     //file reader for reading a hudi base file that needs to be merged with log files
     val preMergeBaseFileReader = if (isMOR) {
