@@ -108,17 +108,24 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
       maxCompactionMemoryInBytes, config, internalSchema)
   }
 
-  private val hasOperationField = logFileReaderAvroSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD) != null
+  private val (hasOperationField, operationFieldPos) = {
+    val operationField = logFileReaderAvroSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD)
+    if (operationField != null) {
+      (true, operationField.pos())
+    } else {
+      (false, -1)
+    }
+  }
 
-  protected def isDeleteData(r: InternalRow): Boolean = if (hasOperationField) {
-    val operation = r.getString(logFileReaderStructType.fieldIndex(HoodieRecord.OPERATION_METADATA_FIELD))
+  protected def isDeleteOperation(r: InternalRow): Boolean = if (hasOperationField) {
+    val operation = r.getString(operationFieldPos)
     HoodieOperation.fromName(operation) == HoodieOperation.DELETE
   } else {
     false
   }
 
-  protected def isDeleteData(r: GenericRecord): Boolean = if (hasOperationField) {
-    val operation = r.get(HoodieRecord.OPERATION_METADATA_FIELD).toString
+  protected def isDeleteOperation(r: GenericRecord): Boolean = if (hasOperationField) {
+    val operation = r.get(operationFieldPos).toString
     HoodieOperation.fromName(operation) == HoodieOperation.DELETE
   } else {
     false
@@ -151,7 +158,7 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
       logRecordsIterator.next() match {
         case Some(r: HoodieAvroIndexedRecord) =>
           val data = r.getData.asInstanceOf[GenericRecord]
-          if (isDeleteData(data)) {
+          if (isDeleteOperation(data)) {
             this.hasNextInternal
           } else {
             val projectedAvroRecord = requiredSchemaAvroProjection(data)
@@ -160,7 +167,7 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
           }
         case Some(r: HoodieSparkRecord) =>
           val data = r.getData
-          if (isDeleteData(data)) {
+          if (isDeleteOperation(data)) {
             this.hasNextInternal
           } else {
             nextRecord = requiredSchemaRowProjection(data)
@@ -274,7 +281,7 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
         true
       } else {
        val mergedRecordOpt = merge(curRow, updatedRecordOpt.get)
-        if (mergedRecordOpt.orNull == null) {
+        if (mergedRecordOpt.isEmpty) {
           // Record has been deleted, skipping
           this.hasNextInternal
         } else {
@@ -298,26 +305,26 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
         val curRecord = new HoodieSparkRecord(curRow, readerSchema)
         val result = recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps)
         toScalaOption(result)
-          .map { r =>
+          .flatMap { r =>
             val data = r.getLeft.getData.asInstanceOf[InternalRow]
-            if (isDeleteData(data)) {
-              null
+            if (isDeleteOperation(data)) {
+              None
             } else {
               val schema = HoodieInternalRowUtils.getCachedSchema(r.getRight)
               val projection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema, structTypeSchema)
-              projection.apply(data)
+              Some(projection.apply(data))
             }
           }
       case _ =>
         val curRecord = new HoodieAvroIndexedRecord(serialize(curRow))
         val result = recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps)
         toScalaOption(result)
-          .map { r =>
+          .flatMap { r =>
             val avroRecord = r.getLeft.toIndexedRecord(r.getRight, payloadProps).get.getData.asInstanceOf[GenericRecord]
-            if (isDeleteData(avroRecord)) {
-              null
+            if (isDeleteOperation(avroRecord)) {
+              None
             } else {
-              deserialize(requiredSchemaAvroProjection(avroRecord))
+              Some(deserialize(requiredSchemaAvroProjection(avroRecord)))
             }
           }
     }
