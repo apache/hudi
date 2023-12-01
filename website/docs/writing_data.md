@@ -9,7 +9,15 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 In this section, we will cover ways to ingest new changes from external sources or even other Hudi tables.
-The two main tools available are the [Hudi Streamer](/docs/hoodie_streaming_ingestion#hudi-streamer) tool, as well as the [Spark Hudi datasource](#spark-datasource-writer).
+Currently Hudi supports following ways to write the data.
+- [Hudi Streamer](/docs/hoodie_streaming_ingestion#hudi-streamer)
+- [Spark Hudi Datasource](#spark-datasource-writer)
+- [Spark Structured Streaming](/docs/hoodie_streaming_ingestion#structured-streaming)
+- [Spark SQL](/docs/next/sql_ddl#spark-sql)
+- [Flink Writer](/docs/next/hoodie_streaming_ingestion#flink-ingestion)
+- [Flink SQL](/docs/next/sql_ddl#flink)
+- [Java Writer](#java-writer)
+- [Kafka Connect](/docs/next/hoodie_streaming_ingestion#kafka-connect-sink)
 
 ## Spark Datasource Writer
 
@@ -534,6 +542,7 @@ INSERT INTO hudi_table select ... from ...;
 
 **Note**: INSERT OVERWRITE is not supported yet but already on the roadmap.
 
+
 ### Non-Blocking Concurrency Control (Experimental)
 
 Hudi Flink supports a new non-blocking concurrency control mode, where multiple writer tasks can be executed
@@ -609,3 +618,8 @@ to `NON_BLOCKING_CONCURRENCY_CONTROL`. The `write.tasks` option is used to speci
 be used for writing to the table. The `compaction.schedule.enabled`, `compaction.async.enabled`
 and `clean.async.enabled` options are used to disable the compaction and cleaning services for the second pipeline.
 This is done to ensure that the compaction and cleaning services are not executed twice for the same table.
+
+
+## Java Writer
+We can use plain java to write to hudi tables. To use Java client we can refere [here](https://github.com/apache/hudi/blob/master/hudi-examples/hudi-examples-java/src/main/java/org/apache/hudi/examples/java/HoodieJavaWriteClientExample.java)
+

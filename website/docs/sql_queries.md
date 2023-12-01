@@ -102,6 +102,10 @@ relying on the custom Hudi input formats like Hive. Typically, notebook users an
 By default, Flink SQL will try to use its optimized native readers (for e.g. reading parquet files) instead of Hive SerDes.
 Additionally, partition pruning is applied by Flink if a partition predicate is specified in the filter. Filters push down may not be supported yet (please check Flink roadmap).
 
+```sql
+select * from hudi_table/*+ OPTIONS('metadata.enabled'='true', 'read.data.skipping.enabled'='false','hoodie.metadata.index.column.stats.enable'='true')*/;
+```
+
 #### Options
 |  Option Name  | Required | Default | Remarks |
 |  -----------  | -------  | ------- | ------- |
@@ -116,7 +120,7 @@ mode by setting option `read.streaming.enabled` as `true`. Sets up option `read.
 value as `earliest` if you want to consume all the history data set.
 
 ```sql
--- Show an example query.
+select * from hudi_table/*+ OPTIONS('read.streaming.enabled'='true', 'read.start-commit'='earliest')*/;
 ```
 
 #### Options
@@ -141,6 +145,10 @@ There are 3 use cases for incremental query:
 2. Batch query: specify the start commit with option `read.start-commit` and end commit with option `read.end-commit`,
    the interval is a closed one: both start commit and end commit are inclusive;
 3. Time Travel: consume as batch for an instant time, specify the `read.end-commit` is enough because the start commit is latest by default.
+
+```sql
+select * from hudi_table/*+ OPTIONS('read.start-commit'='earliest', 'read.end-commit'='20231122155636355')*/;
+```
 
 #### Options
 |  Option Name  | Required | Default | Remarks |

@@ -522,24 +522,118 @@ CREATE CATALOG hoodie_catalog
 
 ### Create Table
 
-The following is an example of creating a Flink table. Read the [Flink Quick Start](/docs/flink-quick-start-guide) guide for more examples.
+You can create tables using standard FLINK SQL CREATE TABLE syntax, which supports partitioning and passing Flink options using WITH.
 
-```sql 
-CREATE TABLE hudi_table2(
-  id int, 
-  name string, 
-  price double
+```sql
+CREATE TABLE [IF NOT EXISTS] [catalog_name.][db_name.]table_name
+  (
+    { <physical_column_definition> 
+    [ <table_constraint> ][ , ...n]
+  )
+  [COMMENT table_comment]
+  [PARTITIONED BY (partition_column_name1, partition_column_name2, ...)]
+  WITH (key1=val1, key2=val2, ...)
+```
+
+### Create non-partitioned table
+
+Creating a non-partitioned table is as simple as creating a regular table.
+
+```sql
+-- create a Hudi table
+CREATE TABLE hudi_table(
+  id BIGINT,
+  name STRING,
+  price DOUBLE
 )
 WITH (
 'connector' = 'hudi',
-'path' = 's3://bucket-name/hudi/',
-'table.type' = 'MERGE_ON_READ' -- this creates a MERGE_ON_READ table, default is COPY_ON_WRITE
+'path' = 'file:///tmp/hudi_table',
+'table.type' = 'MERGE_ON_READ'
+);
+```
+
+### Create partitioned table
+
+The following is an example of creating a Flink partitioned table.
+
+```sql 
+CREATE TABLE hudi_table(
+  id BIGINT,
+  name STRING,
+  dt STRING,
+  hh STRING
+)
+PARTITIONED BY (`dt`)
+WITH (
+'connector' = 'hudi',
+'path' = 'file:///tmp/hudi_table',
+'table.type' = 'MERGE_ON_READ'
+);
+```
+
+### Create table with record keys and ordering fields
+
+The following is an example of creating a Flink table with record key and ordering field similarly to spark.
+
+```sql
+CREATE TABLE hudi_table(
+  id BIGINT PRIMARY KEY NOT ENFORCED,
+  name STRING,
+  price DOUBLE,
+  ts BIGINT
+)
+PARTITIONED BY (`dt`)
+WITH (
+'connector' = 'hudi',
+'path' = 'file:///tmp/hudi_table',
+'table.type' = 'MERGE_ON_READ',
+'precombine.field' = 'ts'
 );
 ```
 
 ### Alter Table
 ```sql
 ALTER TABLE tableA RENAME TO tableB;
+```
+
+### Setting Hudi configs
+
+#### Using table options
+You can configure hoodie configs in table options when creating a table. You can refer Flink specific hoodie configs [here](/docs/next/configurations#FLINK_SQL)
+These configs will be applied to all the operations on that table.
+
+```sql
+CREATE TABLE IF NOT EXISTS tableName (
+  colName1 colType1 PRIMARY KEY NOT ENFORCED,
+  colName2 colType2,
+  ...
+)
+WITH (
+  'connector' = 'hudi',
+  'path' = '${path}',
+  ${hoodie.config.key1} = '${hoodie.config.value1}',
+  ${hoodie.config.key2} = '${hoodie.config.value2}',
+  ....
+);
+
+e.g.
+CREATE TABLE hudi_table(
+  id BIGINT PRIMARY KEY NOT ENFORCED,
+  name STRING,
+  price DOUBLE,
+  ts BIGINT
+)
+PARTITIONED BY (`dt`)
+WITH (
+'connector' = 'hudi',
+'path' = 'file:///tmp/hudi_table',
+'table.type' = 'MERGE_ON_READ',
+'precombine.field' = 'ts',
+'hoodie.cleaner.fileversions.retained' = '20',
+'hoodie.keep.max.commits' = '20',
+'hoodie.datasource.write.hive_style_partitioning' = 'true'
+);
 ```
 
 ## Supported Types
