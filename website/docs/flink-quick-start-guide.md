@@ -22,26 +22,11 @@ This page introduces Flink-Hudi integration. We can feel the unique charm of how
 | 0.11.x          | 1.13.x, 1.14.x                          |
 
 
-<Tabs
-defaultValue="flinksql"
-values={[
-{ label: 'Flink SQL', value: 'flinksql', },
-{ label: 'DataStream API', value: 'dataStream', },
-]}
->
-
-<TabItem value="flinksql">
-
-We use the [Flink Sql Client](https://ci.apache.org/projects/flink/flink-docs-release-1.13/docs/dev/table/sqlclient/) because it's a good
-quick start tool for SQL users.
-
-### Download Flink
+### Download Flink and Start Flink cluster
 
 Hudi works with Flink 1.13, Flink 1.14, Flink 1.15, Flink 1.16 and Flink 1.17. You can follow the
-instructions [here](https://flink.apache.org/downloads) for setting up Flink.
-
-### Start Flink cluster
-Start a standalone Flink cluster within hadoop environment. In case we are trying on local setup, then we could download hadoop binaries and set HADOOP_HOME.
+instructions [here](https://flink.apache.org/downloads) for setting up Flink. Then, start a standalone Flink cluster 
+within hadoop environment. In case we are trying on local setup, then we could download hadoop binaries and set HADOOP_HOME.
 
 ```bash
 # HADOOP_HOME is your hadoop root directory after unpack the binary package.
@@ -50,6 +35,26 @@ export HADOOP_CLASSPATH=`$HADOOP_HOME/bin/hadoop classpath`
 # Start the Flink standalone cluster
 ./bin/start-cluster.sh
 ```
+<div className="notice--info">
+  <h4>Please note the following: </h4>
+<ul>
+  <li>We suggest hadoop 2.9.x+ version because some of the object storage has filesystem implementation only after that</li>
+  <li>The flink-parquet and flink-avro formats are already packaged into the hudi-flink-bundle jar</li>
+</ul>
+</div>
+
+<Tabs
+defaultValue="flinksql"
+values={[
+{ label: 'Flink SQL', value: 'flinksql', },
+{ label: 'DataStream API', value: 'dataStream', },
+]}
+>
+<TabItem value="flinksql">
+
+We use the [Flink Sql Client](https://ci.apache.org/projects/flink/flink-docs-release-1.13/docs/dev/table/sqlclient/) because it's a good
+quick start tool for SQL users.
+
 ### Start Flink SQL client
 
 Hudi supports packaged bundle jar for Flink, which should be loaded in the Flink SQL Client when it starts up.
@@ -65,14 +70,6 @@ export HUDI_VERSION=0.14.0
 wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-flink${FLINK_VERSION}-bundle/${HUDI_VERSION}/hudi-flink${FLINK_VERSION}-bundle-${HUDI_VERSION}.jar -P $FLINK_HOME/lib/
 ./bin/sql-client.sh embedded -j lib/hudi-flink${FLINK_VERSION}-bundle-${HUDI_VERSION}.jar shell
 ```
-
-<div className="notice--info">
-  <h4>Please note the following: </h4>
-<ul>
-  <li>We suggest hadoop 2.9.x+ version because some of the object storage has filesystem implementation only after that</li>
-  <li>The flink-parquet and flink-avro formats are already packaged into the hudi-flink-bundle jar</li>
-</ul>
-</div>
 
 Setup table name, base path and operate using SQL for this guide.
 The SQL CLI only executes the SQL line by line.
@@ -306,6 +303,11 @@ Hudi tables can be updated by either inserting reocrds with same primary key or 
 SET 'execution.runtime-mode' = 'batch';
 UPDATE hudi_table SET fare = 25.0 WHERE uuid = '334e26e9-8355-45cc-97c6-c31daf0df330';
 ```
+
+:::note
+The `UPDATE` statement is supported since Flink 1.17, so only Hudi Flink bundle compiled with Flink 1.17+ supplies this functionality.
+Only **batch** queries on Hudi table with primary key work correctly.
+:::
 </TabItem>
 
 <TabItem value="dataStream">
@@ -323,10 +325,7 @@ Refer Update Example [here](https://github.com/ad1happy2go/hudi-examples/blob/ma
 
 [Querying](#query-data) the data again will now show updated records. Each write operation generates a new [commit](/docs/concepts) 
 denoted by the timestamp.
-:::note
-The `UPDATE` statement is supported since Flink 1.17, so only Hudi Flink bundle compiled with Flink 1.17+ supplies this functionality.
-Only **batch** queries on Hudi table with primary key work correctly. 
-:::
+
 
 ## Delete Data {#deletes}
 <Tabs
