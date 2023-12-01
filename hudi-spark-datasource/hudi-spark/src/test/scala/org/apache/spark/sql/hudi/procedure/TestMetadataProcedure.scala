@@ -215,6 +215,63 @@ class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
+  test("Test Call show_metadata_column_stats_overlap Procedure") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  c1 int,
+           |  c2 boolean,
+           |  c3 date,
+           |  c4 double,
+           |  c5 float,
+           |  c6 long,
+           |  c7 string,
+           |  c8 timestamp
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  hoodie.metadata.enable="true",
+           |  hoodie.metadata.index.column.stats.enable="true"
+           | )
+       """.stripMargin)
+      // insert data to table
+      spark.sql("set hoodie.parquet.small.file.limit=0")
+      spark.sql(
+        s"""
+           |insert into table $tableName
+           |values (1, true, CAST('2021-01-01' AS DATE), 3.14, 2.5, 1000, 'example string', CAST('2021-02-02 00:00:00' AS TIMESTAMP))
+           |""".stripMargin)
+
+      spark.sql(
+        s"""
+           |insert into table $tableName
+           |values
+           |(10, false, CAST('2022-02-02' AS DATE), 6.28, 3.14, 2000, 'another string', CAST('2022-02-02 00:00:00' AS TIMESTAMP)),
+           |(0, false, CAST('2020-02-02' AS DATE), 7.28, 2.1, 3000, 'third string', CAST('2021-01-01 00:00:00' AS TIMESTAMP))
+           |""".stripMargin)
+
+      val maxResult = Array(2, 1, 2, 1, 2, 1, 2, 2)
+      val valueResult = Array(3, 2, 3, 3, 3, 3, 3, 3)
+      // collect column stats for table
+      for (i <- maxResult.indices) {
+        val columnName = s"c${i + 1}"
+        val metadataStats = spark.sql(s"""call show_metadata_column_stats_overlap(table => '$tableName', targetColumns => '$columnName')""").collect()
+        assertResult(1) {
+          metadataStats.length
+        }
+        assertResult(maxResult(i)) {
+          metadataStats(0)(3)
+        }
+        assertResult(valueResult(i)) {
+          metadataStats(0)(9)
+        }
+      }
+    }
+  }
+
   test("Test Call show_metadata_table_stats Procedure") {
     withTempDir { tmp =>
       val tableName = generateTableName
