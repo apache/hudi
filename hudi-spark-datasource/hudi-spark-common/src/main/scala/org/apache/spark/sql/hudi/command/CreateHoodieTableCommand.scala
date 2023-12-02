@@ -18,11 +18,9 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.common.model.{HoodieFileFormat, HoodieTableType}
+import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.ConfigUtils
-import org.apache.hudi.hadoop.HoodieParquetInputFormat
-import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils
 import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
 import org.apache.spark.sql.catalyst.analysis.NoSuchDatabaseException
@@ -33,11 +31,10 @@ import org.apache.spark.sql.hive.HiveExternalCatalog._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
 import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlCommonUtils}
 import org.apache.spark.sql.internal.StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{ByteType, IntegerType, ShortType, StructField, StructType}
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.{SPARK_VERSION, SparkConf}
 
-import java.io.{PrintWriter, StringWriter}
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.util.control.NonFatal
@@ -149,7 +146,7 @@ object CreateHoodieTableCommand {
     val newTable = table.copy(
       identifier = newTableIdentifier,
       storage = newStorage,
-      schema = hoodieCatalogTable.tableSchema,
+      schema = convertFieldTypes(hoodieCatalogTable.tableSchema),
       partitionColumnNames = partitionColumnNames,
       createVersion = SPARK_VERSION,
       properties = newTblProperties
@@ -162,6 +159,20 @@ object CreateHoodieTableCommand {
     } else {
       catalog.createTable(newTable, ignoreIfExists = false, validateLocation = false)
     }
+  }
+
+  private def convertFieldTypes(fieldTypes: StructType): StructType = {
+    val fields = new Array[StructField](fieldTypes.fields.length)
+    var index = 0
+    fieldTypes.fields.foreach(f => {
+      if (f.dataType == ShortType || f.dataType == ByteType) {
+        fields(index) = StructField(f.name, IntegerType, f.nullable, f.metadata)
+      } else {
+        fields(index) = f
+      }
+      index = index + 1
+    })
+    new StructType(fields)
   }
 
   /**
