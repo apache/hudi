@@ -28,6 +28,8 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieCatalogException;
+import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
+import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -59,6 +61,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -66,6 +69,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
+import static org.apache.hudi.table.catalog.HoodieCatalogTestUtils.createHiveConf;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -187,6 +191,29 @@ public class TestHoodieHiveCatalog {
 
     CatalogBaseTable table2 = hoodieCatalog.getTable(tablePath);
     assertEquals("id", table2.getOptions().get(FlinkOptions.RECORD_KEY_FIELD.key()));
+
+    // validate key generator for partitioned table
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient
+        .builder()
+        .setConf(createHiveConf())
+        .setBasePath(hoodieCatalog.inferTablePath(tablePath, table))
+        .build();
+    String keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
+    assertEquals(keyGeneratorClassName, SimpleAvroKeyGenerator.class.getName());
+
+    // validate key generator for non partitioned table
+    ObjectPath nonPartitionPath = new ObjectPath("default", "tb_" + tableType);
+    CatalogTable nonPartitionTable =
+        new CatalogTableImpl(schema, new ArrayList<>(), options, "hudi table");
+    hoodieCatalog.createTable(nonPartitionPath, nonPartitionTable, false);
+
+    metaClient = HoodieTableMetaClient
+        .builder()
+        .setConf(createHiveConf())
+        .setBasePath(hoodieCatalog.inferTablePath(nonPartitionPath, nonPartitionTable))
+        .build();
+    keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
+    assertEquals(keyGeneratorClassName, NonpartitionedAvroKeyGenerator.class.getName());
   }
 
   @Test
