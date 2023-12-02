@@ -149,7 +149,7 @@ public class HoodieIndexer {
 
     if (cfg.help || args.length == 0) {
       cmd.usage();
-      System.exit(1);
+      throw new HoodieException("Indexing failed for basePath : " + cfg.basePath);
     }
 
     final JavaSparkContext jsc = UtilHelpers.buildSparkContext("indexing-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory);
@@ -157,11 +157,10 @@ public class HoodieIndexer {
     int result = indexer.start(cfg.retry);
     String resultMsg = String.format("Indexing with basePath: %s, tableName: %s, runningMode: %s",
         cfg.basePath, cfg.tableName, cfg.runningMode);
-    if (result == -1) {
-      LOG.error(resultMsg + " failed");
-    } else {
-      LOG.info(resultMsg + " success");
+    if (result != 0) {
+      throw new HoodieException(resultMsg + " failed");
     }
+    LOG.info(resultMsg + " success");
     jsc.stop();
   }
 
