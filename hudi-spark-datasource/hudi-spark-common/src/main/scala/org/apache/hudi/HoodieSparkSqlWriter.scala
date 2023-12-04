@@ -509,6 +509,7 @@ class HoodieSparkSqlWriterInternal {
               case e: HoodieException =>
                 // close the write client in all cases
                 handleWriteClientClosure(client, tableConfig, parameters, jsc.hadoopConfiguration())
+                throw e
             }
         }
 
