@@ -32,6 +32,7 @@ import org.apache.hudi.metadata.{HoodieTableMetadata, HoodieTableMetadataUtil}
 import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
+import org.apache.spark.sql.hudi.command.procedures.ShowColumnStatsOverlapProcedure.{MAX_VALUE_TYPE, MIN_VALUE_TYPE}
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
@@ -190,8 +191,8 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
             val fileName = allFileNamesMap.getOrElse(c.getFileName, c.getColumnName)
             val dataType = schema(c.getColumnName).dataType.typeName
             Seq(
-              new ColumnStatsPoint(fileName, c.getColumnName, minValueOption.get(), "min", dataType),
-              new ColumnStatsPoint(fileName, c.getColumnName, maxValueOption.get(), "max", dataType)
+              new ColumnStatsPoint(fileName, c.getColumnName, minValueOption.get(), MIN_VALUE_TYPE, dataType),
+              new ColumnStatsPoint(fileName, c.getColumnName, maxValueOption.get(), MAX_VALUE_TYPE, dataType)
             )
           case _ => Seq.empty
         }
@@ -215,7 +216,7 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
       val valueToCountMap: mutable.ListMap[String, Int] = mutable.ListMap.empty[String, Int]
 
       sortedPoints.foreach { point =>
-        if (point.pType == "min") {
+        if (point.pType == MIN_VALUE_TYPE) {
           currentCount += 1
           maxCount = Math.max(maxCount, currentCount)
           valueToCountMap(point.value) = currentCount
@@ -298,8 +299,8 @@ class ColumnStatsPoint(val partitionPath: String, val columnName: String, val va
     if (valueComparison != 0) {
       valueComparison
     } else {
-      if (this.pType == "min" && that.pType == "max") -1
-      else if (this.pType == "max" && that.pType == "min") 1
+      if (this.pType == MIN_VALUE_TYPE && that.pType == MAX_VALUE_TYPE) -1
+      else if (this.pType == MAX_VALUE_TYPE && that.pType == MIN_VALUE_TYPE) 1
       else 0
     }
   }
@@ -328,7 +329,8 @@ class ColumnStatsPoint(val partitionPath: String, val columnName: String, val va
 
 object ShowColumnStatsOverlapProcedure {
   val NAME = "show_metadata_column_stats_overlap"
-
+  val MIN_VALUE_TYPE = "min"
+  val MAX_VALUE_TYPE = "max"
   def builder: Supplier[ProcedureBuilder] = new Supplier[ProcedureBuilder] {
     override def get() = new ShowColumnStatsOverlapProcedure()
   }
