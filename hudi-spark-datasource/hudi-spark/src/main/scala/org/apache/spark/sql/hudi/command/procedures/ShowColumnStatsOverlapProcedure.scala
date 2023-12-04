@@ -127,7 +127,7 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     rows.toList.sortBy(row => (row.getString(1), row.getDouble(2)))
   }
 
-  def getTargetColumnsSeq(args: ProcedureArgs): Seq[String] = {
+  private def getTargetColumnsSeq(args: ProcedureArgs): Seq[String] = {
     val targetColumns = getArgValueOrDefault(args, PARAMETERS(2)).getOrElse("").toString
     if (targetColumns != "") {
       targetColumns.split(",").toSeq
@@ -154,14 +154,14 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     }
   }
 
-  def getFileSlices(partitionPaths: util.List[String], fsView: HoodieTableFileSystemView): Set[FileSlice] = {
+  private def getFileSlices(partitionPaths: util.List[String], fsView: HoodieTableFileSystemView): Set[FileSlice] = {
     partitionPaths
       .asScala
       .flatMap(path => fsView.getLatestFileSlices(path).iterator().asScala)
       .toSet
   }
 
-  def getAllFileNamesMap(allFileSlices: Set[FileSlice]): Map[String, String] = {
+  private def getAllFileNamesMap(allFileSlices: Set[FileSlice]): Map[String, String] = {
     allFileSlices.map { fileSlice =>
       val fileName = fileSlice.getBaseFile.get().getFileName
       val partitionPath = fileSlice.getPartitionPath
@@ -169,18 +169,18 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     }.toMap
   }
 
-  def getColStatsRecords(targetColumnsSeq: Seq[String], columnStatsIndex: ColumnStatsIndexSupport, schema: StructType): HoodieData[HoodieMetadataColumnStats] = {
-    if (!targetColumnsSeq.isEmpty) {
-      columnStatsIndex.loadColumnStatsIndexRecords(targetColumnsSeq, false)
+  private def getColStatsRecords(targetColumnsSeq: Seq[String], columnStatsIndex: ColumnStatsIndexSupport, schema: StructType): HoodieData[HoodieMetadataColumnStats] = {
+    if (targetColumnsSeq.nonEmpty) {
+      columnStatsIndex.loadColumnStatsIndexRecords(targetColumnsSeq, shouldReadInMemory = false)
     } else {
       columnStatsIndex.loadColumnStatsIndexRecords(
         schema.fields.filter(field => !HoodieRecord.HOODIE_META_COLUMNS.contains(field.name)).map(_.name).toSeq,
-        false
+        shouldReadInMemory = false
       )
     }
   }
 
-  def getPointList(colStatsRecords: HoodieData[HoodieMetadataColumnStats], allFileNamesMap: Map[String, String], schema: StructType): List[ColumnStatsPoint] = {
+  private def getPointList(colStatsRecords: HoodieData[HoodieMetadataColumnStats], allFileNamesMap: Map[String, String], schema: StructType): List[ColumnStatsPoint] = {
     colStatsRecords.collectAsList().asScala
       .filter(c => allFileNamesMap.keySet.contains(c.getFileName))
       .flatMap(c => {
@@ -207,9 +207,9 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
    * @param fileSlicesSizeByPartition Calculated number of file slices by partition path
    * @param rows                      List of rows storing the results
    */
-  def addStatisticsToRows(groupedPoints: Map[(String, String), List[ColumnStatsPoint]],
-                          fileSlicesSizeByPartition: Map[String, Int],
-                          rows: util.ArrayList[Row]): Unit = {
+  private def addStatisticsToRows(groupedPoints: Map[(String, String), List[ColumnStatsPoint]],
+                                  fileSlicesSizeByPartition: Map[String, Int],
+                                  rows: util.ArrayList[Row]): Unit = {
     groupedPoints.map { case ((partitionPath, columnName), points) =>
       val sortedPoints = points.sorted
       var maxCount, currentCount = 0
@@ -248,7 +248,7 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     }
   }
 
-  def calculatePercentile(values: List[Int], percentile: Double): Int = {
+  private def calculatePercentile(values: List[Int], percentile: Double): Int = {
     val index = (percentile / 100.0 * (values.size - 1)).toInt
     values(index)
   }
@@ -289,7 +289,7 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
  * @param partitionPath The partition path
  * @param columnName    The name of the column
  * @param value         The point value
- * @param operationType The type of operation, either "min" or "max"
+ * @param pType The type of operation, either "min" or "max"
  * @param schemaType    The schema type, such as "string", "int", etc.
  */
 class ColumnStatsPoint(val partitionPath: String, val columnName: String, val value: String, val pType: String, val schemaType: String) extends Ordered[ColumnStatsPoint] with Logging {
@@ -305,7 +305,7 @@ class ColumnStatsPoint(val partitionPath: String, val columnName: String, val va
     }
   }
 
-  def compareValue(o1: Any, o2: Any, oType: String): Int = {
+  private def compareValue(o1: Any, o2: Any, oType: String): Int = {
     oType match {
       case "string" | "boolean" =>
         Ordering[String].compare(o1.toString, o2.toString)
