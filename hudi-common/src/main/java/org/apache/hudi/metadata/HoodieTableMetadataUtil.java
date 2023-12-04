@@ -295,7 +295,7 @@ public class HoodieTableMetadataUtil {
 
   public static Option<String> getColumnStatsValueAsString(Object statsValue) {
     if (statsValue == null) {
-      System.out.println("Invalid value: " + statsValue);
+      LOG.info("Invalid column stats value: " + statsValue);
       return Option.empty();
     }
     Class<?> statsValueClass = statsValue.getClass();

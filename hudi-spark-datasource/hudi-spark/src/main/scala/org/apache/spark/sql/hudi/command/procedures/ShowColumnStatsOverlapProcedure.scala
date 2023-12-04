@@ -43,13 +43,13 @@ import scala.jdk.CollectionConverters.{asScalaBufferConverter, asScalaIteratorCo
 
 /**
  * Calculate the degree of overlap between column stats.
- * <p>
- * The overlap represents the extent to which the min-max ranges cover each other.
+ *
+ * <p> The overlap represents the extent to which the min-max ranges cover each other.
  * By referring to the overlap, we can visually demonstrate the degree of data skipping
  * for different columns under the current table's data layout.
  * The calculation is performed at the partition level (assuming that data skipping is based on partition pruning).
- * <p>
- * For example, consider three files: a.parquet, b.parquet, and c.parquet.
+ *
+ * <p> For example, consider three files: a.parquet, b.parquet, and c.parquet.
  * Taking an integer-type column 'id' as an example, the range (min-max) for 'a' is 1–5,
  * for 'b' is 3–7, and for 'c' is 7–8. This results in their values overlapping on the coordinate axis as follows:
  * Value Range: 1 2 3 4 5 6 7 8
@@ -60,8 +60,8 @@ import scala.jdk.CollectionConverters.{asScalaBufferConverter, asScalaIteratorCo
  * If the filter conditions for 'id' during data skipping include these values,
  * multiple files will be filtered out. For a simpler case, if it's an equality query,
  * 2 files will be filtered within these ranges, and no more than one file will be filtered in other cases (possibly outside of the range).
- * <p>
- * Additionally, calculating the degree of overlap based solely on the maximum values
+ *
+ * <p> Additionally, calculating the degree of overlap based solely on the maximum values
  * may not provide sufficient information. Therefore, we sample and calculate the overlap degree
  * for all values involved in the min-max range. We also compute the degree of overlap
  * at different percentiles and tally the count of these values.An example of a result is as follows:
