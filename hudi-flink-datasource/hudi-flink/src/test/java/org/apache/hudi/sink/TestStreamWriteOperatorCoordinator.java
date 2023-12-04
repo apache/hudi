@@ -69,6 +69,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -194,13 +195,12 @@ public class TestStreamWriteOperatorCoordinator {
     reset();
     // override the default configuration
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(), HoodieFailedWritesCleaningPolicy.LAZY.name());
     OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 1);
     coordinator = new StreamWriteOperatorCoordinator(conf, context);
     coordinator.start();
     coordinator.setExecutor(new MockCoordinatorExecutor(context));
 
-    coordinator.getWriteClient().getConfig()
-        .setValue(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY, HoodieFailedWritesCleaningPolicy.LAZY.name());
     assertTrue(coordinator.getWriteClient().getConfig().getFailedWritesCleanPolicy().isLazy());
 
     final WriteMetadataEvent event0 = WriteMetadataEvent.emptyBootstrap(0);
@@ -209,7 +209,7 @@ public class TestStreamWriteOperatorCoordinator {
     coordinator.handleEventFromOperator(0, event0);
     String instant = coordinator.getInstant();
     HoodieHeartbeatClient heartbeatClient = coordinator.getWriteClient().getHeartbeatClient();
-    assertNotEquals(null, heartbeatClient.getHeartbeat(instant), "Heartbeat should not null");
+    assertNotNull(heartbeatClient.getHeartbeat(instant), "Heartbeat is missing");
 
     String basePath = tempFile.getAbsolutePath();
     HoodieWrapperFileSystem fs = coordinator.getWriteClient().getHoodieTable().getMetaClient().getFs();
@@ -220,7 +220,7 @@ public class TestStreamWriteOperatorCoordinator {
     WriteMetadataEvent event1 = WriteMetadataEvent.emptyBootstrap(0);
     coordinator.handleEventFromOperator(0, event1);
 
-    assertFalse(HoodieHeartbeatClient.heartbeatExists(fs, basePath, instant), "Heartbeat is stopped and not existed");
+    assertFalse(HoodieHeartbeatClient.heartbeatExists(fs, basePath, instant), "Heartbeat is stopped and cleared");
   }
 
   @Test
