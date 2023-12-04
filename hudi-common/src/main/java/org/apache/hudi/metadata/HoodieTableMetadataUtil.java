@@ -20,12 +20,21 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.ConvertingGenericData;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.avro.model.BooleanWrapper;
+import org.apache.hudi.avro.model.DateWrapper;
+import org.apache.hudi.avro.model.DoubleWrapper;
+import org.apache.hudi.avro.model.FloatWrapper;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
+import org.apache.hudi.avro.model.IntWrapper;
+import org.apache.hudi.avro.model.LongWrapper;
+import org.apache.hudi.avro.model.StringWrapper;
+import org.apache.hudi.avro.model.TimeMicrosWrapper;
+import org.apache.hudi.avro.model.TimestampMicrosWrapper;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
@@ -76,6 +85,7 @@ import org.apache.hudi.util.Lazy;
 import org.apache.avro.AvroTypeException;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -137,6 +147,11 @@ public class HoodieTableMetadataUtil {
   public static final String PARTITION_NAME_BLOOM_FILTERS = "bloom_filters";
   public static final String PARTITION_NAME_RECORD_INDEX = "record_index";
   public static final String PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX = "func_index_";
+
+  public static final Set<Class<?>> COLUMN_STATS_RECORD_SUPPORTED_TYPES = new HashSet<>(Arrays.asList(
+      IntWrapper.class, BooleanWrapper.class, DateWrapper.class,
+      DoubleWrapper.class, FloatWrapper.class, LongWrapper.class,
+      StringWrapper.class, TimeMicrosWrapper.class, TimestampMicrosWrapper.class));
 
   // Suffix to use for various operations on MDT
   private enum OperationSuffix {
@@ -276,6 +291,19 @@ public class HoodieTableMetadataUtil {
         columnStats.getValueCount(),
         columnStats.getTotalSize(),
         columnStats.getTotalUncompressedSize());
+  }
+
+  public static Option<String> getColumnStatsValueAsString(Object statsValue) {
+    if (statsValue == null) {
+      System.out.println("Invalid value: " + statsValue);
+      return Option.empty();
+    }
+    Class<?> statsValueClass = statsValue.getClass();
+    if (COLUMN_STATS_RECORD_SUPPORTED_TYPES.contains(statsValueClass)) {
+      return Option.of(String.valueOf(((IndexedRecord) statsValue).get(0)));
+    } else {
+      throw new RuntimeException("Unsupported type: " + statsValueClass.getSimpleName());
+    }
   }
 
   /**

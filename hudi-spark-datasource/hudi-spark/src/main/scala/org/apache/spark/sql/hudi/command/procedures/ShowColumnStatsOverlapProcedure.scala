@@ -17,9 +17,8 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.avro.generic.IndexedRecord
 import org.apache.hadoop.fs.{FileStatus, Path}
-import org.apache.hudi.avro.model._
+import org.apache.hudi.avro.model.HoodieMetadataColumnStats
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieData
@@ -29,8 +28,7 @@ import org.apache.hudi.common.table.timeline.{HoodieDefaultTimeline, HoodieInsta
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{Option => HOption}
-import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.metadata.HoodieTableMetadata
+import org.apache.hudi.metadata.{HoodieTableMetadata, HoodieTableMetadataUtil}
 import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
@@ -44,11 +42,12 @@ import scala.jdk.CollectionConverters.{asScalaBufferConverter, asScalaIteratorCo
 
 /**
  * Calculate the degree of overlap between column stats.
+ * <p>
  * The overlap represents the extent to which the min-max ranges cover each other.
  * By referring to the overlap, we can visually demonstrate the degree of data skipping
  * for different columns under the current table's data layout.
  * The calculation is performed at the partition level (assuming that data skipping is based on partition pruning).
- *
+ * <p>
  * For example, consider three files: a.parquet, b.parquet, and c.parquet.
  * Taking an integer-type column 'id' as an example, the range (min-max) for 'a' is 1–5,
  * for 'b' is 3–7, and for 'c' is 7–8. This results in their values overlapping on the coordinate axis as follows:
@@ -60,7 +59,7 @@ import scala.jdk.CollectionConverters.{asScalaBufferConverter, asScalaIteratorCo
  * If the filter conditions for 'id' during data skipping include these values,
  * multiple files will be filtered out. For a simpler case, if it's an equality query,
  * 2 files will be filtered within these ranges, and no more than one file will be filtered in other cases (possibly outside of the range).
- *
+ * <p>
  * Additionally, calculating the degree of overlap based solely on the maximum values
  * may not provide sufficient information. Therefore, we sample and calculate the overlap degree
  * for all values involved in the min-max range. We also compute the degree of overlap
@@ -68,7 +67,6 @@ import scala.jdk.CollectionConverters.{asScalaBufferConverter, asScalaIteratorCo
  * |Partition path |Field name |Average overlap  |Maximum file overlap |Total file number |50% overlap        |75% overlap        |95% overlap        |99% overlap        |Total value number |
  * ----------------------------------------------------------------------
  * |path           |c8         |1.33             |2                   |2                |1                 |1                 |1                 |1                 |3                  |
-
  */
 class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
@@ -184,16 +182,20 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
   def getPointList(colStatsRecords: HoodieData[HoodieMetadataColumnStats], allFileNamesMap: Map[String, String], schema: StructType): List[ColumnStatsPoint] = {
     colStatsRecords.collectAsList().asScala
       .filter(c => allFileNamesMap.keySet.contains(c.getFileName))
-      .flatMap(c =>
-        (getColumnStatsValue(c.getMinValue), getColumnStatsValue(c.getMaxValue)) match {
-          case (Some(minValue), Some(maxValue)) =>
+      .flatMap(c => {
+        val minValueOption = HoodieTableMetadataUtil.getColumnStatsValueAsString(c.getMinValue)
+        val maxValueOption = HoodieTableMetadataUtil.getColumnStatsValueAsString(c.getMaxValue)
+        (minValueOption.isPresent, maxValueOption.isPresent) match {
+          case (true, true) =>
+            val fileName = allFileNamesMap.getOrElse(c.getFileName, c.getColumnName)
+            val dataType = schema(c.getColumnName).dataType.typeName
             Seq(
-              new ColumnStatsPoint(allFileNamesMap.get(c.getFileName).getOrElse(c.getColumnName), c.getColumnName, minValue, "min", schema(c.getColumnName).dataType.typeName),
-              new ColumnStatsPoint(allFileNamesMap.get(c.getFileName).getOrElse(c.getColumnName), c.getColumnName, maxValue, "max", schema(c.getColumnName).dataType.typeName)
+              new ColumnStatsPoint(fileName, c.getColumnName, minValueOption.get(), "min", dataType),
+              new ColumnStatsPoint(fileName, c.getColumnName, maxValueOption.get(), "max", dataType)
             )
           case _ => Seq.empty
         }
-      )
+      })
       .toList
   }
 
@@ -273,27 +275,6 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
       new java.util.ArrayList[HoodieInstant](JavaConversions.asJavaCollection(instants.toList)).stream(), details)
 
     new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses.toArray(new Array[FileStatus](statuses.size)))
-  }
-
-  def getColumnStatsValue(stats_value: Any): Option[String] = {
-    if (stats_value == null) {
-      logInfo("invalid value " + stats_value)
-      None
-    } else {
-      stats_value match {
-        case _: IntWrapper |
-             _: BooleanWrapper |
-             _: DateWrapper |
-             _: DoubleWrapper |
-             _: FloatWrapper |
-             _: LongWrapper |
-             _: StringWrapper |
-             _: TimeMicrosWrapper |
-             _: TimestampMicrosWrapper =>
-          Some(String.valueOf(stats_value.asInstanceOf[IndexedRecord].get(0)))
-        case _ => throw new HoodieException(s"Unsupported type: ${stats_value.getClass.getSimpleName}")
-      }
-    }
   }
 
   override def build: Procedure = new ShowColumnStatsOverlapProcedure()
