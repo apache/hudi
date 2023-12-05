@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.catalog;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
@@ -45,7 +46,6 @@ import org.apache.flink.table.catalog.exceptions.TableAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
 import org.apache.flink.table.factories.FactoryUtil;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
 import org.apache.hadoop.hive.metastore.api.Partition;
@@ -59,9 +59,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -70,6 +68,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
 import static org.apache.hudi.configuration.FlinkOptions.PRECOMBINE_FIELD;
+import static org.apache.hudi.table.catalog.HoodieCatalogTestUtils.createHiveConf;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -203,42 +202,23 @@ public class TestHoodieHiveCatalog {
     Map<String, String> options = new HashMap<>();
     options.put(FactoryUtil.CONNECTOR.key(), "hudi");
 
-    Map<String, String> propMap = createTableAndReturnTableProperties(options, new ObjectPath(db, "tmptb1"));
-    assertFalse(propMap.containsKey("hoodie.table.precombine.field"));
+    TypedProperties props = createTableAndReturnTableProperties(options, new ObjectPath(db, "tmptb1"));
+    assertFalse(props.containsKey("hoodie.table.precombine.field"));
 
     options.put(PRECOMBINE_FIELD.key(), "ts_3");
-    propMap = createTableAndReturnTableProperties(options, new ObjectPath(db, "tmptb2"));
-    assertTrue(propMap.containsKey("hoodie.table.precombine.field"));
-    assertEquals("ts_3", propMap.get("hoodie.table.precombine.field"));
+    props = createTableAndReturnTableProperties(options, new ObjectPath(db, "tmptb2"));
+    assertTrue(props.containsKey("hoodie.table.precombine.field"));
+    assertEquals("ts_3", props.get("hoodie.table.precombine.field"));
   }
 
-  private Map<String, String> createTableAndReturnTableProperties(Map<String, String> options, ObjectPath tablePath)
-      throws IOException, TableAlreadyExistException, DatabaseNotExistException, TableNotExistException {
+  private TypedProperties createTableAndReturnTableProperties(Map<String, String> options, ObjectPath tablePath)
+      throws TableAlreadyExistException, DatabaseNotExistException, TableNotExistException {
     CatalogTable table =
         new CatalogTableImpl(schema, partitions, options, "hudi table");
-
     hoodieCatalog.createTable(tablePath, table, true);
 
-    CatalogBaseTable table1 = hoodieCatalog.getTable(tablePath);
-
-    String path = table1.getOptions().get("path");
-    FileSystem fs = FSUtils.getFs(path, new Configuration());
-
-    BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(new Path(path + "/.hoodie/hoodie.properties"))));
-
-    Map<String, String> propMap = new HashMap<>();
-    String line;
-    while ((line = reader.readLine()) != null) {
-      if (!line.contains("=")) {
-        continue;
-      }
-      String[] prop = line.split("=");
-      propMap.put(prop[0], prop[1]);
-    }
-
-    reader.close();
-    fs.close();
-    return propMap;
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(hoodieCatalog.inferTablePath(tablePath, table), createHiveConf());
+    return metaClient.getTableConfig().getProps();
   }
 
   @Test
