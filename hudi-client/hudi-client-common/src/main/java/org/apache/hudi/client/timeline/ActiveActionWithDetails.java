@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.collection.Pair;
 
 import javax.annotation.Nullable;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -50,7 +51,7 @@ public class ActiveActionWithDetails extends ActiveAction {
       Option<byte[]> inflightDetails,
       HoodieInstant completed,
       Option<byte[]> completedDetails) {
-    super(requested, inflight, completed);
+    super(requested, inflight, Collections.singletonList(completed));
     this.requestedDetails = requestedDetails;
     this.inflightDetails = inflightDetails;
     this.completedDetails = completedDetails;
@@ -96,18 +97,18 @@ public class ActiveActionWithDetails extends ActiveAction {
     return this.inflightDetails;
   }
 
-  public byte[] getCleanPlan(HoodieTableMetaClient metaClient) {
+  public Option<byte[]> getCleanPlan(HoodieTableMetaClient metaClient) {
     ValidationUtils.checkState(this.requestedDetails.isPresent(), "clean plan does not exist");
-    return this.requestedDetails.get();
+    return this.requestedDetails;
   }
 
-  public byte[] getCompactionPlan(HoodieTableMetaClient metaClient) {
+  public Option<byte[]> getCompactionPlan(HoodieTableMetaClient metaClient) {
     ValidationUtils.checkState(this.requestedDetails.isPresent(), "compaction plan does not exist");
-    return this.requestedDetails.get();
+    return this.requestedDetails;
   }
 
-  public byte[] getLogCompactionPlan(HoodieTableMetaClient metaClient) {
+  public Option<byte[]> getLogCompactionPlan(HoodieTableMetaClient metaClient) {
     ValidationUtils.checkState(this.requestedDetails.isPresent(), "log compaction plan does not exist");
-    return this.requestedDetails.get();
+    return this.requestedDetails;
   }
 }
