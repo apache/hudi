@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -93,7 +94,7 @@ public class TestDataSourceReadWithDeletes extends SparkClientFunctionalTestHarn
 
     String[] dataset1 = new String[] {"I,id1,Danny,23,1,par1", "I,id2,Tony,20,1,par1"};
     SparkRDDWriteClient client = getHoodieWriteClient(config);
-    String insertTime1 = client.createNewInstantTime();
+    String insertTime1 = HoodieActiveTimeline.createNewInstantTime();
     List<WriteStatus> writeStatuses1 = writeData(client, insertTime1, dataset1);
     client.commit(insertTime1, jsc().parallelize(writeStatuses1));
 
@@ -102,7 +103,7 @@ public class TestDataSourceReadWithDeletes extends SparkClientFunctionalTestHarn
         "D,id2,Tony,20,2,par1",
         "I,id3,Julian,40,2,par1",
         "D,id4,Stephan,35,2,par1"};
-    String insertTime2 = client.createNewInstantTime();
+    String insertTime2 = HoodieActiveTimeline.createNewInstantTime();
     List<WriteStatus> writeStatuses2 = writeData(client, insertTime2, dataset2);
     client.commit(insertTime2, jsc().parallelize(writeStatuses2));
 
