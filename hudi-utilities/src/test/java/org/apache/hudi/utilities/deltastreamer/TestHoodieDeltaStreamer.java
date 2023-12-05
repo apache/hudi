@@ -161,6 +161,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
+import static org.apache.hudi.utilities.UtilHelpers.createMetaClient;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerTestBase.TestHelpers.assertAtLeastNCommitsAfterRollback;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_OFFSET_COLUMN;
@@ -506,7 +507,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     try {
       ds.sync();
       Dataset<Row> res = sqlContext.read().format("org.apache.hudi").load(newDatasetBasePath);
-
+      LOG.info("Schema :");
+      res.printSchema();
       assertRecordCount(1950, newDatasetBasePath, sqlContext);
       res.registerTempTable("bootstrapped");
       assertEquals(1950, sqlContext.sql("select distinct _hoodie_record_key from bootstrapped").count());
@@ -992,7 +994,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       assertFalse(replacedFilePaths.isEmpty());
 
       // Step 4 : Add commits with insert of 1 record and trigger sync/async cleaner and archive.
-      List<String> configs = getAsyncServicesConfigs(1, "true", "true", "6", "", "");
+      List<String> configs = getTableServicesConfigs(1, "true", "true", "6", "", "");
       configs.add(String.format("%s=%s", HoodieCleanConfig.CLEANER_POLICY.key(), "KEEP_LATEST_COMMITS"));
       configs.add(String.format("%s=%s", HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "1"));
       configs.add(String.format("%s=%s", HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "4"));
@@ -1691,14 +1693,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       ds = new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf());
 
       //now assert that hoodie.properties file now has updated payload class name
-      Properties props = new Properties();
-      String metaPath = dataSetBasePath + "/.hoodie/hoodie.properties";
-      FileSystem fs = FSUtils.getFs(cfg.targetBasePath, jsc.hadoopConfiguration());
-      try (FSDataInputStream inputStream = fs.open(new Path(metaPath))) {
-        props.load(inputStream);
-      }
-
-      assertEquals(new HoodieConfig(props).getString(HoodieTableConfig.PAYLOAD_CLASS_NAME), DummyAvroPayload.class.getName());
+      HoodieTableMetaClient metaClient = createMetaClient(jsc, dataSetBasePath, false);
+      assertEquals(metaClient.getTableConfig().getPayloadClass(), DummyAvroPayload.class.getName());
     } finally {
       ds.shutdownGracefully();
     }
@@ -1716,13 +1712,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       assertRecordCount(1000, dataSetBasePath, sqlContext);
 
       //now assert that hoodie.properties file now has updated payload class name
-      Properties props = new Properties();
-      String metaPath = dataSetBasePath + "/.hoodie/hoodie.properties";
-      FileSystem fs = FSUtils.getFs(cfg.targetBasePath, jsc.hadoopConfiguration());
-      try (FSDataInputStream inputStream = fs.open(new Path(metaPath))) {
-        props.load(inputStream);
-      }
-      assertEquals(new HoodieConfig(props).getString(HoodieTableConfig.PAYLOAD_CLASS_NAME), PartialUpdateAvroPayload.class.getName());
+      HoodieTableMetaClient metaClient = createMetaClient(jsc, dataSetBasePath, false);
+      assertEquals(metaClient.getTableConfig().getPayloadClass(), PartialUpdateAvroPayload.class.getName());
     } finally {
       ds.shutdownGracefully();
     }
@@ -1884,13 +1875,19 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
                 : ParquetDFSSource.class.getName(),
             transformerClassNames, PROPS_FILENAME_TEST_PARQUET, false,
             useSchemaProvider, 100000, false, null, null, "timestamp", null);
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
     try {
       deltaStreamer.sync();
       assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
-
+    } finally {
+      deltaStreamer.shutdownGracefully();
+    }
+    HoodieDeltaStreamer deltaStreamer1 = new HoodieDeltaStreamer(cfg, jsc);
       if (testEmptyBatch) {
         prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, "2.parquet", false, null, null);
-        deltaStreamer.sync();
+        prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc",
+                PROPS_FILENAME_TEST_PARQUET, PARQUET_SOURCE_ROOT, false, "partition_path", "0");
+        deltaStreamer1.sync();
         // since we mimic'ed empty batch, total records should be same as first sync().
         assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
         HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(jsc.hadoopConfiguration()).build();
@@ -1898,6 +1895,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         // validate table schema fetches valid schema from last but one commit.
         TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
         assertNotEquals(tableSchemaResolver.getTableAvroSchema(), Schema.create(Schema.Type.NULL).toString());
+        // schema from latest commit and last but one commit should match
+        compareLatestTwoSchemas(metaClient);
+        prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
+                PARQUET_SOURCE_ROOT, false, "partition_path", "");
       }
 
       // proceed w/ non empty batch.
@@ -1909,7 +1910,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants().forEach(entry -> assertValidSchemaInCommitMetadata(entry, metaClient));
       testNum++;
     } finally {
-      deltaStreamer.shutdownGracefully();
+      deltaStreamer1.shutdownGracefully();
     }
   }
 
