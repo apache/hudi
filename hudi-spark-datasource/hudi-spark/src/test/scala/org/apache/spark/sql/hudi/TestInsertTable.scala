@@ -1170,8 +1170,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test nested field as primaryKey and preCombineField") {
-    // TODO(HUDI-7080)
-    /*
     withRecordType()(withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
@@ -1201,7 +1199,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           Seq("name_1", 10.0, 1000, "a", 999)
         )
       }
-    })*/
+    })
   }
 
   test("Test Insert Into With Catalog Identifier for spark >= 3.2.0") {
