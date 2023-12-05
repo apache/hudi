@@ -250,7 +250,7 @@ class TestShowPartitions extends HoodieSparkSqlTestBase {
       // Insert overwrite table
       spark.sql(
         s"""
-           | insert overwrite $tableName
+           | insert overwrite table $tableName
            | values
            |   (4, 'a4', 10, 1000, '2023', '12', '01'),
            |   (2, 'a2', 10, 1000, '2023', '12', '04')
