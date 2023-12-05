@@ -76,9 +76,9 @@ public abstract class HoodieTestSuiteWriter implements Serializable {
     this.deltaStreamerWrapper = new HoodieDeltaStreamerWrapper(cfg, jsc);
     this.hoodieReadClient = new HoodieReadClient(context, cfg.targetBasePath);
     this.writeConfig = getHoodieClientConfig(cfg, props, schema);
-    if (!cfg.useDeltaStreamer) {
-      this.writeClient = new SparkRDDWriteClient(context, writeConfig);
-    }
+    //if (!cfg.useDeltaStreamer) {
+    this.writeClient = new SparkRDDWriteClient(context, writeConfig);
+    //}
     this.cfg = cfg;
     this.configuration = jsc.hadoopConfiguration();
     this.sparkContext = jsc;
