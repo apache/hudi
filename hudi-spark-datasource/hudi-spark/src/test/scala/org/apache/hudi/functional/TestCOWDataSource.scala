@@ -431,11 +431,12 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .load(basePath)
     assertEquals(10, snapshotDF1.count())
 
-    val records2 = recordsToStrings(dataGen.generateInserts("100", 4)).toList
-    val records3 = recordsToStrings(dataGen.generateUniqueUpdates("100", 4)).toList
+    val records3 = recordsToStrings(dataGen.generateUniqueUpdates("101", 4)).toList
+    val records2 = recordsToStrings(dataGen.generateInserts("101", 4)).toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 1))
     val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 1))
-    val inputDF4 = inputDF2.withColumn("batchId", lit("batch2")).union(inputDF3.withColumn("batchId", lit("batch3")))
+    val inputDF4 = inputDF2.withColumn("batchId", lit("batch2"))
+      .union(inputDF3.withColumn("batchId", lit("batch3")))
 
     inputDF4.write.format("org.apache.hudi")
       .options(writeOpts)
@@ -485,7 +486,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val snapshotDF2 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .load(basePath)
-    assertEquals(snapshotDF2.count(), (validRecordsFromBatch1 + validRecordsFromBatch2).asInstanceOf[Long])
+    assertEquals(snapshotDF2.count(), (validRecordsFromBatch1 + validRecordsFromBatch2))
   }
 
   /**
