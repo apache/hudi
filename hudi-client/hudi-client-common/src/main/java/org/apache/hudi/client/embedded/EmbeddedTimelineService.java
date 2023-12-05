@@ -182,7 +182,7 @@ public class EmbeddedTimelineService {
     this.serviceConfig = timelineServiceConfBuilder.build();
 
     server = timelineServiceCreator.create(context, hadoopConf.newCopy(), serviceConfig,
-        FSUtils.getFs(writeConfig.getBasePath(), hadoopConf.newCopy()), createViewManager());
+        FSUtils.getFs(writeConfig.getBasePath(), hadoopConf.newCopy()), viewManager);
     serverPort = server.startService();
     LOG.info("Started embedded timeline server at " + hostAddr + ":" + serverPort);
   }
