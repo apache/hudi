@@ -29,6 +29,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
+import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -252,13 +253,10 @@ public class TestHoodieCatalog {
         () -> catalog.createTable(tablePath, EXPECTED_CATALOG_TABLE, false));
 
     // validate key generator for partitioned table
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient
-        .builder()
-        .setConf(new org.apache.hadoop.conf.Configuration())
-        .setBasePath(catalog.inferTablePath(catalogPathStr, tablePath))
-        .build();
+    HoodieTableMetaClient metaClient =
+        StreamerUtil.createMetaClient(catalog.inferTablePath(catalogPathStr, tablePath), new org.apache.hadoop.conf.Configuration());
     String keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
-    assertEquals(keyGeneratorClassName, NonpartitionedAvroKeyGenerator.class.getName());
+    assertEquals(keyGeneratorClassName, SimpleAvroKeyGenerator.class.getName());
 
     // validate key generator for non partitioned table
     ObjectPath nonPartitionPath = new ObjectPath(TEST_DEFAULT_DATABASE, "tb");
@@ -273,11 +271,8 @@ public class TestHoodieCatalog {
 
     catalog.createTable(nonPartitionPath, nonPartitionCatalogTable, false);
 
-    metaClient = HoodieTableMetaClient
-        .builder()
-        .setConf(new org.apache.hadoop.conf.Configuration())
-        .setBasePath(catalog.inferTablePath(catalogPathStr, nonPartitionPath))
-        .build();
+    metaClient =
+        StreamerUtil.createMetaClient(catalog.inferTablePath(catalogPathStr, nonPartitionPath), new org.apache.hadoop.conf.Configuration());
     keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
     assertEquals(keyGeneratorClassName, NonpartitionedAvroKeyGenerator.class.getName());
   }

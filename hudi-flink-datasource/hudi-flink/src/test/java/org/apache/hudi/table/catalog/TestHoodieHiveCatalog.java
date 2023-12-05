@@ -193,11 +193,8 @@ public class TestHoodieHiveCatalog {
     assertEquals("id", table2.getOptions().get(FlinkOptions.RECORD_KEY_FIELD.key()));
 
     // validate key generator for partitioned table
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient
-        .builder()
-        .setConf(createHiveConf())
-        .setBasePath(hoodieCatalog.inferTablePath(tablePath, table))
-        .build();
+    HoodieTableMetaClient metaClient =
+        StreamerUtil.createMetaClient(hoodieCatalog.inferTablePath(tablePath, table), createHiveConf());
     String keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
     assertEquals(keyGeneratorClassName, SimpleAvroKeyGenerator.class.getName());
 
@@ -207,11 +204,7 @@ public class TestHoodieHiveCatalog {
         new CatalogTableImpl(schema, new ArrayList<>(), options, "hudi table");
     hoodieCatalog.createTable(nonPartitionPath, nonPartitionTable, false);
 
-    metaClient = HoodieTableMetaClient
-        .builder()
-        .setConf(createHiveConf())
-        .setBasePath(hoodieCatalog.inferTablePath(nonPartitionPath, nonPartitionTable))
-        .build();
+    metaClient = StreamerUtil.createMetaClient(hoodieCatalog.inferTablePath(nonPartitionPath, nonPartitionTable), createHiveConf());
     keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
     assertEquals(keyGeneratorClassName, NonpartitionedAvroKeyGenerator.class.getName());
   }
