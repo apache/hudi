@@ -295,15 +295,23 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     }
 
     // For archive, we need to include instant's all states.
+    // The re-instantiation of the timeline may result in inconsistencies with the existing meta client active timeline,
+    // When there is no lock guard of the archiving process, the 'raw' timeline could contain less distinct instants
+    // because of the metadata file removing from another archiving process.
     HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
     Map<Pair<String, String>, List<HoodieInstant>> groupByTsAction = rawActiveTimeline.getInstantsAsStream()
         .collect(Collectors.groupingBy(i -> Pair.of(i.getTimestamp(),
             HoodieInstant.getComparableAction(i.getAction()))));
 
-    return instantsToArchive.stream().map(hoodieInstant -> {
+    return instantsToArchive.stream().flatMap(hoodieInstant -> {
       List<HoodieInstant> instantsToStream = groupByTsAction.get(Pair.of(hoodieInstant.getTimestamp(),
           HoodieInstant.getComparableAction(hoodieInstant.getAction())));
-      return ActiveAction.fromInstants(instantsToStream);
+      if (instantsToStream != null) {
+        return Stream.of(ActiveAction.fromInstants(instantsToStream));
+      } else {
+        // if a concurrent writer archived the instant
+        return Stream.empty();
+      }
     });
   }
 
@@ -314,7 +322,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     List<HoodieInstant> completedInstants = new ArrayList<>();
 
     for (ActiveAction activeAction : activeActions) {
-      completedInstants.add(activeAction.getCompleted());
+      completedInstants.addAll(activeAction.getCompletedInstants());
       pendingInstants.addAll(activeAction.getPendingInstants());
     }
 
@@ -347,7 +355,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   private void deleteAnyLeftOverMarkers(HoodieEngineContext context, ActiveAction activeAction) {
     WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, activeAction.getInstantTime());
     if (writeMarkers.deleteMarkerDir(context, config.getMarkersDeleteParallelism())) {
-      LOG.info("Cleaned up left over marker directory for instant :" + activeAction.getCompleted());
+      LOG.info("Cleaned up left over marker directory for instant :" + activeAction);
     }
   }
 }
