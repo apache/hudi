@@ -164,4 +164,8 @@ public enum WriteOperationType {
   public static boolean isDelete(WriteOperationType operation) {
     return operation == DELETE || operation == DELETE_PREPPED;
   }
+
+  public static boolean isDeletePartition(WriteOperationType operation) {
+    return operation == DELETE_PARTITION || operation == INSERT_OVERWRITE_TABLE;
+  }
 }
