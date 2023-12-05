@@ -866,7 +866,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       meta.getActiveTimeline().transitionReplaceRequestedToInflight(clusteringRequest, Option.empty());
 
       // do another ingestion with inline clustering enabled
-      cfg.configs.addAll(getAsyncServicesConfigs(totalRecords, "false", "true", "2", "", ""));
+      cfg.configs.addAll(getTableServicesConfigs(totalRecords, "false", "true", "2", "", ""));
       cfg.retryLastPendingInlineClusteringJob = true;
       ds2 = new HoodieDeltaStreamer(cfg, jsc);
       ds2.sync();
@@ -1883,6 +1883,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       deltaStreamer.shutdownGracefully();
     }
     HoodieDeltaStreamer deltaStreamer1 = new HoodieDeltaStreamer(cfg, jsc);
+    try {
       if (testEmptyBatch) {
         prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, "2.parquet", false, null, null);
         prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc",
@@ -1907,7 +1908,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       assertRecordCount(parquetRecordsCount + 100, tableBasePath, sqlContext);
       // validate commit metadata for all completed commits to have valid schema in extra metadata.
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(jsc.hadoopConfiguration()).build();
-      metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants().forEach(entry -> assertValidSchemaInCommitMetadata(entry, metaClient));
+      metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants()
+              .forEach(entry -> assertValidSchemaAndOperationTypeInCommitMetadata(
+                      entry, metaClient, WriteOperationType.INSERT));
       testNum++;
     } finally {
       deltaStreamer1.shutdownGracefully();
