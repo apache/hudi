@@ -196,8 +196,9 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     Set<String> partitionIDFileIDStrings = new HashSet<>();
     Map<String, Pair<String, String>> fileToKeyMap = new HashMap<>();
     partitionNameFileNameList.forEach(partitionNameFileNamePair -> {
+      String partitionIdentifier = HoodieTableMetadataUtil.getPartitionIdentifier(partitionNameFileNamePair.getLeft());
       final String bloomFilterIndexKey = HoodieMetadataPayload.getBloomFilterIndexKey(
-          new PartitionIndexID(partitionNameFileNamePair.getLeft()), new FileIndexID(partitionNameFileNamePair.getRight()));
+          new PartitionIndexID(partitionIdentifier), new FileIndexID(partitionNameFileNamePair.getRight()));
       partitionIDFileIDStrings.add(bloomFilterIndexKey);
       fileToKeyMap.put(bloomFilterIndexKey, partitionNameFileNamePair);
     });
@@ -244,8 +245,9 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     Set<String> columnStatKeyset = new HashSet<>();
     final ColumnIndexID columnIndexID = new ColumnIndexID(columnName);
     for (Pair<String, String> partitionNameFileNamePair : partitionNameFileNameList) {
+      String partitionIdentifier = HoodieTableMetadataUtil.getPartitionIdentifier(partitionNameFileNamePair.getLeft());
       final String columnStatsIndexKey = HoodieMetadataPayload.getColumnStatsIndexKey(
-          new PartitionIndexID(partitionNameFileNamePair.getLeft()),
+          new PartitionIndexID(partitionIdentifier),
           new FileIndexID(partitionNameFileNamePair.getRight()),
           columnIndexID);
       columnStatKeyset.add(columnStatsIndexKey);

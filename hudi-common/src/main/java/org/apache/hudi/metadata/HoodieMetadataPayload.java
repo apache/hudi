@@ -358,7 +358,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     checkArgument(!baseFileName.contains(Path.SEPARATOR)
             && FSUtils.isBaseFile(new Path(baseFileName)),
         "Invalid base file '" + baseFileName + "' for MetaIndexBloomFilter!");
-    final String bloomFilterIndexKey = new PartitionIndexID(partitionName).asBase64EncodedString()
+    String partitionIdentifier = HoodieTableMetadataUtil.getPartitionIdentifier(partitionName);
+    final String bloomFilterIndexKey = new PartitionIndexID(partitionIdentifier).asBase64EncodedString()
         .concat(new FileIndexID(baseFileName).asBase64EncodedString());
     HoodieKey key = new HoodieKey(bloomFilterIndexKey, MetadataPartitionType.BLOOM_FILTERS.getPartitionPath());
 
@@ -615,8 +616,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   public static Stream<HoodieRecord> createColumnStatsRecords(String partitionName,
                                                               Collection<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList,
                                                               boolean isDeleted) {
+    String partitionIdentifier = HoodieTableMetadataUtil.getPartitionIdentifier(partitionName);
     return columnRangeMetadataList.stream().map(columnRangeMetadata -> {
-      HoodieKey key = new HoodieKey(getColumnStatsIndexKey(partitionName, columnRangeMetadata),
+      HoodieKey key = new HoodieKey(getColumnStatsIndexKey(partitionIdentifier, columnRangeMetadata),
           MetadataPartitionType.COLUMN_STATS.getPartitionPath());
 
       HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(),
