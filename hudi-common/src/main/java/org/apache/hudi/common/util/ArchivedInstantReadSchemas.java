@@ -24,7 +24,25 @@ import org.apache.avro.Schema;
  * Avro schema for different archived instant read cases.
  */
 public abstract class ArchivedInstantReadSchemas {
-  public static final Schema TIMELINE_LSM_SLIM_READ_SCHEMA = new Schema.Parser().parse("{\n"
+  public static final Schema TIMELINE_LSM_READ_SCHEMA_WITH_TIME = new Schema.Parser().parse("{\n"
+      + "   \"type\":\"record\",\n"
+      + "   \"name\":\"HoodieArchivedMetaEntryV2\",\n"
+      + "   \"namespace\":\"org.apache.hudi.avro.model\",\n"
+      + "   \"fields\":[\n"
+      + "      {\n"
+      + "         \"name\":\"instantTime\",\n"
+      + "         \"type\":[\"null\",\"string\"],\n"
+      + "         \"default\": null\n"
+      + "      },\n"
+      + "      {\n"
+      + "         \"name\":\"completionTime\",\n"
+      + "         \"type\":[\"null\",\"string\"],\n"
+      + "         \"default\": null\n"
+      + "      }\n"
+      + "   ]\n"
+      + "}");
+
+  public static final Schema TIMELINE_LSM_READ_SCHEMA_WITH_ACTION = new Schema.Parser().parse("{\n"
       + "   \"type\":\"record\",\n"
       + "   \"name\":\"HoodieArchivedMetaEntryV2\",\n"
       + "   \"namespace\":\"org.apache.hudi.avro.model\",\n"

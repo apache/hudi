@@ -235,18 +235,32 @@ object DefaultSource {
       Option(schema)
     }
 
-    val useNewPaquetFileFormat =  parameters.getOrElse(USE_NEW_HUDI_PARQUET_FILE_FORMAT.key,
-      USE_NEW_HUDI_PARQUET_FILE_FORMAT.defaultValue).toBoolean && !metaClient.isMetadataTable
+    val useNewParquetFileFormat =
+      parameters.getOrElse(
+        USE_NEW_HUDI_PARQUET_FILE_FORMAT.key,
+        USE_NEW_HUDI_PARQUET_FILE_FORMAT.defaultValue).toBoolean &&
+      !metaClient.isMetadataTable &&
+      (globPaths == null || globPaths.isEmpty) &&
+      parameters.getOrElse(REALTIME_MERGE.key(), REALTIME_MERGE.defaultValue())
+        .equalsIgnoreCase(REALTIME_PAYLOAD_COMBINE_OPT_VAL)
+
     if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
       new EmptyRelation(sqlContext, resolveSchema(metaClient, parameters, Some(schema)))
     } else if (isCdcQuery) {
+      if (useNewParquetFileFormat) {
+        if (tableType == COPY_ON_WRITE) {
+          new HoodieCopyOnWriteCDCHadoopFsRelationFactory(
+            sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
+        } else {
+          new HoodieMergeOnReadCDCHadoopFsRelationFactory(
+            sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
+        }
+      } else {
         CDCRelation.getCDCRelation(sqlContext, metaClient, parameters)
+      }
     } else {
       lazy val fileFormatUtils = if ((isMultipleBaseFileFormatsEnabled && !isBootstrappedTable)
-        || (useNewPaquetFileFormat
-        && (globPaths == null || globPaths.isEmpty)
-        && parameters.getOrElse(REALTIME_MERGE.key(), REALTIME_MERGE.defaultValue())
-        .equalsIgnoreCase(REALTIME_PAYLOAD_COMBINE_OPT_VAL))) {
+        || (useNewParquetFileFormat)) {
         val formatUtils = new HoodieSparkFileFormatUtils(sqlContext, metaClient, parameters, userSchema)
         if (formatUtils.hasSchemaOnRead) Option.empty else Some(formatUtils)
       } else {

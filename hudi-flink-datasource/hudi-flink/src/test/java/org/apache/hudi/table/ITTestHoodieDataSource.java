@@ -49,6 +49,7 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.CollectionUtil;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -1622,6 +1623,7 @@ public class ITTestHoodieDataSource {
         + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
   }
 
+  @Disabled("for being flaky by HUDI-7174")
   @Test
   void testMultipleLogBlocksWithDataSkipping() {
     TableEnvironment tableEnv = batchTableEnv;

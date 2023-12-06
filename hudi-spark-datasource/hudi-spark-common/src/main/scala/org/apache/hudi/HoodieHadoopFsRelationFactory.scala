@@ -40,7 +40,7 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.{SQLContext, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.BucketSpec
-import org.apache.spark.sql.execution.datasources.parquet.{HoodieFileGroupReaderBasedParquetFileFormat, NewHoodieParquetFileFormat}
+import org.apache.spark.sql.execution.datasources.parquet.{HoodieFileGroupReaderBasedParquetFileFormat, NewHoodieParquetFileFormat, ParquetFileFormat}
 import org.apache.spark.sql.execution.datasources.{FileFormat, FileIndex, FileStatusCache, HadoopFsRelation, HoodieMultipleBaseFileFormat}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.types.StructType
@@ -64,7 +64,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
                                                  val schemaSpec: Option[StructType]
                                                 ) extends SparkAdapterSupport with HoodieHadoopFsRelationFactory {
   protected lazy val sparkSession: SparkSession = sqlContext.sparkSession
-  protected lazy val optParams: Map[String, String] = options.filter(kv => !kv._1.equals(DATA_QUERIES_ONLY.key()))
+  protected lazy val optParams: Map[String, String] = options
   protected lazy val hadoopConfig: Configuration = new Configuration(sqlContext.sparkContext.hadoopConfiguration)
   protected lazy val jobConf = new JobConf(hadoopConfig)
 
@@ -229,7 +229,6 @@ class HoodieMergeOnReadSnapshotHadoopFsRelationFactory(override val sqlContext: 
       recordMergerImpls = recordMergerImpls,
       recordMergerStrategy = recordMergerStrategy
     )
-
   val mandatoryFields: Seq[String] = mandatoryFieldsForMerging
 
   override def buildFileIndex(): FileIndex = fileIndex
@@ -377,6 +376,10 @@ class HoodieMergeOnReadCDCHadoopFsRelationFactory(override val sqlContext: SQLCo
   extends HoodieMergeOnReadIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
   override val fileIndex = new HoodieCDCFileIndex(
     sparkSession, metaClient, schemaSpec, options, FileStatusCache.getOrCreate(sparkSession), true, true)
+
+  override def buildDataSchema(): StructType = fileIndex.cdcRelation.schema
+
+  override def buildPartitionSchema(): StructType = StructType(Nil)
 }
 
 class HoodieCopyOnWriteCDCHadoopFsRelationFactory(override val sqlContext: SQLContext,
@@ -387,6 +390,10 @@ class HoodieCopyOnWriteCDCHadoopFsRelationFactory(override val sqlContext: SQLCo
   extends HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
   override val fileIndex = new HoodieCDCFileIndex(
     sparkSession, metaClient, schemaSpec, options, FileStatusCache.getOrCreate(sparkSession), false, isBootstrap)
+
+  override def buildDataSchema(): StructType = fileIndex.cdcRelation.schema
+
+  override def buildPartitionSchema(): StructType = StructType(Nil)
 }
 
 

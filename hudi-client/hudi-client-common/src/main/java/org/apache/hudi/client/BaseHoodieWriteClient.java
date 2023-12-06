@@ -265,7 +265,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       if (null == commitCallback) {
         commitCallback = HoodieCommitCallbackFactory.create(config);
       }
-      commitCallback.call(new HoodieWriteCommitCallbackMessage(instantTime, config.getTableName(), config.getBasePath(), stats));
+      commitCallback.call(new HoodieWriteCommitCallbackMessage(
+          instantTime, config.getTableName(), config.getBasePath(), stats, Option.of(commitActionType), extraMetadata));
     }
     return true;
   }
@@ -1357,6 +1358,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     // before this point
     this.index.close();
     this.tableServiceClient.close();
+    // shutdown metrics
+    if (this.metrics != null && this.metrics.getMetrics() != null) {
+      this.metrics.getMetrics().shutdown();
+    }
   }
 
   public void setWriteTimer(String commitType) {
