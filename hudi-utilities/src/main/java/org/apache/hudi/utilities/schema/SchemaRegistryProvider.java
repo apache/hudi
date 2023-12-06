@@ -203,7 +203,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
       if (cachedSourceSchema == null) {
         cachedSourceSchema = parseSchemaFromRegistry(this.srcSchemaRegistryUrl);
       }
-      return cachedSchema;
+      return cachedSourceSchema;
     } catch (Exception e) {
       throw new HoodieSchemaFetchException(String.format(
           "Error reading source schema from registry. Please check %s is configured correctly. Truncated URL: %s",

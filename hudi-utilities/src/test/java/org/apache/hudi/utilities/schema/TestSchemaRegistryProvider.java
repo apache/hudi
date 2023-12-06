@@ -145,7 +145,7 @@ class TestSchemaRegistryProvider {
     assertNotNull(actual);
     verify(spyUnderTest, times(1)).parseSchemaFromRegistry(Mockito.any());
 
-    assert spyUnderTest.cachedSchema != null;
+    assert spyUnderTest.cachedSourceSchema != null;
 
     Schema actualTwo = spyUnderTest.getSourceSchema();
     

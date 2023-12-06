@@ -58,7 +58,7 @@ public class FilebasedSchemaProvider extends SchemaProvider {
     super(props, jssc);
     checkRequiredConfigProperties(props, Collections.singletonList(FilebasedSchemaProviderConfig.SOURCE_SCHEMA_FILE));
     this.sourceFile = getStringWithAltKeys(props, FilebasedSchemaProviderConfig.SOURCE_SCHEMA_FILE);
-    this.targetFile = getStringWithAltKeys(props, FilebasedSchemaProviderConfig.TARGET_SCHEMA_FILE);
+    this.targetFile = getStringWithAltKeys(props, FilebasedSchemaProviderConfig.TARGET_SCHEMA_FILE, sourceFile);
     this.shouldSanitize = SanitizationUtils.shouldSanitize(props);
     this.invalidCharMask = SanitizationUtils.getInvalidCharMask(props);
     this.fs = FSUtils.getFs(sourceFile, jssc.hadoopConfiguration(), true);
@@ -68,7 +68,7 @@ public class FilebasedSchemaProvider extends SchemaProvider {
     }
   }
 
-  private Schema parseSchema(String schemaFile){
+  private Schema parseSchema(String schemaFile) {
     return readAvroSchemaFromFile(schemaFile, this.fs, shouldSanitize, invalidCharMask);
   }
 
