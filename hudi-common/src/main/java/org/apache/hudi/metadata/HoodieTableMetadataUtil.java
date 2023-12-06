@@ -400,8 +400,6 @@ public class HoodieTableMetadataUtil {
               String partitionStatName = entry.getKey();
               List<HoodieWriteStat> writeStats = entry.getValue();
 
-              String partition = getPartitionIdentifier(partitionStatName);
-
               HashMap<String, Long> updatedFilesToSizesMapping =
                   writeStats.stream().reduce(new HashMap<>(writeStats.size()),
                       (map, stat) -> {
@@ -431,7 +429,7 @@ public class HoodieTableMetadataUtil {
                       CollectionUtils::combine);
 
               newFileCount.add(updatedFilesToSizesMapping.size());
-              return HoodieMetadataPayload.createPartitionFilesRecord(partition, updatedFilesToSizesMapping,
+              return HoodieMetadataPayload.createPartitionFilesRecord(partitionStatName, updatedFilesToSizesMapping,
                   Collections.emptyList());
             })
             .collect(Collectors.toList());
@@ -447,7 +445,7 @@ public class HoodieTableMetadataUtil {
   private static List<String> getPartitionsAdded(HoodieCommitMetadata commitMetadata) {
     return commitMetadata.getPartitionToWriteStats().keySet().stream()
         // We need to make sure we properly handle case of non-partitioned tables
-        .map(HoodieTableMetadataUtil::getPartitionIdentifier)
+        .map(HoodieTableMetadataUtil::getPartitionIdentifierForFilesPartition)
         .collect(Collectors.toList());
   }
 
@@ -557,10 +555,9 @@ public class HoodieTableMetadataUtil {
     int[] fileDeleteCount = {0};
     List<String> deletedPartitions = new ArrayList<>();
     cleanMetadata.getPartitionMetadata().forEach((partitionName, partitionMetadata) -> {
-      final String partition = getPartitionIdentifier(partitionName);
       // Files deleted from a partition
       List<String> deletedFiles = partitionMetadata.getDeletePathPatterns();
-      HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Collections.emptyMap(),
+      HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partitionName, Collections.emptyMap(),
           deletedFiles);
       records.add(record);
       fileDeleteCount[0] += deletedFiles.size();
@@ -712,7 +709,7 @@ public class HoodieTableMetadataUtil {
           dataTableMetaClient.getActiveTimeline().readRollbackInfoAsBytes(requested).get(), HoodieRollbackPlan.class);
 
       rollbackPlan.getRollbackRequests().forEach(rollbackRequest -> {
-        final String partitionId = getPartitionIdentifier(rollbackRequest.getPartitionPath());
+        final String partitionId = getPartitionIdentifierForFilesPartition(rollbackRequest.getPartitionPath());
         partitionToFilesMap.computeIfAbsent(partitionId, s -> new HashMap<>());
         // fetch only log files that are expected to be RB'd in DT as part of this rollback. these log files will not be deleted, but rendered
         // invalid once rollback is complete.
@@ -759,7 +756,7 @@ public class HoodieTableMetadataUtil {
       // Has this rollback produced new files?
       boolean hasRollbackLogFiles = pm.getRollbackLogFiles() != null && !pm.getRollbackLogFiles().isEmpty();
       final String partition = pm.getPartitionPath();
-      final String partitionId = getPartitionIdentifier(partition);
+      final String partitionId = getPartitionIdentifierForFilesPartition(partition);
 
       BiFunction<Long, Long, Long> fileMergeFn = (oldSize, newSizeCopy) -> {
         // if a file exists in both written log files and rollback log files, we want to pick the one that is higher
@@ -792,20 +789,19 @@ public class HoodieTableMetadataUtil {
 
     partitionToDeletedFiles.forEach((partitionName, deletedFiles) -> {
       fileChangeCount[0] += deletedFiles.size();
-      final String partition = getPartitionIdentifier(partitionName);
 
       Map<String, Long> filesAdded = Collections.emptyMap();
       if (partitionToAppendedFiles.containsKey(partitionName)) {
         filesAdded = partitionToAppendedFiles.remove(partitionName);
       }
 
-      HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, filesAdded,
+      HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partitionName, filesAdded,
           deletedFiles);
       records.add(record);
     });
 
     partitionToAppendedFiles.forEach((partitionName, appendedFileMap) -> {
-      final String partition = getPartitionIdentifier(partitionName);
+      final String partition = getPartitionIdentifierForFilesPartition(partitionName);
       fileChangeCount[1] += appendedFileMap.size();
 
       // Validate that no appended file has been deleted
@@ -825,10 +821,22 @@ public class HoodieTableMetadataUtil {
     return records;
   }
 
+  public static String getColumnStatsIndexPartitionIdentifier(String partitionName) {
+    return getPartitionIdentifier(partitionName);
+  }
+
+  public static String getBloomFilterIndexPartitionIdentifier(String partitionName) {
+    return getPartitionIdentifier(partitionName);
+  }
+
+  public static String getPartitionIdentifierForFilesPartition(String relativePartitionPath) {
+    return getPartitionIdentifier(relativePartitionPath);
+  }
+
   /**
    * Returns partition name for the given path.
    */
-  public static String getPartitionIdentifier(@Nonnull String relativePartitionPath) {
+  private static String getPartitionIdentifier(@Nonnull String relativePartitionPath) {
     return EMPTY_PARTITION_NAME.equals(relativePartitionPath) ? NON_PARTITIONED_NAME : relativePartitionPath;
   }
 
@@ -868,9 +876,8 @@ public class HoodieTableMetadataUtil {
         }
       }
 
-      final String partition = getPartitionIdentifier(partitionName);
       return Stream.<HoodieRecord>of(HoodieMetadataPayload.createBloomFilterMetadataRecord(
-              partition, filename, instantTime, recordsGenerationParams.getBloomFilterType(), bloomFilterBuffer, partitionFileFlagTuple.f2))
+              partitionName, filename, instantTime, recordsGenerationParams.getBloomFilterType(), bloomFilterBuffer, partitionFileFlagTuple.f2))
           .iterator();
     });
   }
@@ -909,8 +916,7 @@ public class HoodieTableMetadataUtil {
       }
 
       final String filePathWithPartition = partitionName + "/" + filename;
-      final String partitionId = getPartitionIdentifier(partitionName);
-      return getColumnStatsRecords(partitionId, filePathWithPartition, dataTableMetaClient, columnsToIndex, isDeleted).iterator();
+      return getColumnStatsRecords(partitionName, filePathWithPartition, dataTableMetaClient, columnsToIndex, isDeleted).iterator();
     });
   }
 

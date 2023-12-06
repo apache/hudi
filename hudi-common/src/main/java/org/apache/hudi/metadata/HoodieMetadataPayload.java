@@ -72,7 +72,6 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.hadoop.CachingPath.createRelativePathUnsafe;
 import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_LIST;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionIdentifier;
 
 /**
  * MetadataTable records are persisted with the schema defined in HoodieMetadata.avsc.
@@ -310,7 +309,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    */
   public static HoodieRecord<HoodieMetadataPayload> createPartitionListRecord(List<String> partitions, boolean isDeleted) {
     Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>();
-    partitions.forEach(partition -> fileInfo.put(getPartitionIdentifier(partition), new HoodieMetadataFileInfo(0L, isDeleted)));
+    partitions.forEach(partition -> fileInfo.put(HoodieTableMetadataUtil.getPartitionIdentifierForFilesPartition(partition), new HoodieMetadataFileInfo(0L, isDeleted)));
 
     HoodieKey key = new HoodieKey(RECORDKEY_PARTITION_LIST, MetadataPartitionType.FILES.getPartitionPath());
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_PARTITION_LIST,
@@ -328,13 +327,14 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   public static HoodieRecord<HoodieMetadataPayload> createPartitionFilesRecord(String partition,
                                                                                Map<String, Long> filesAdded,
                                                                                List<String> filesDeleted) {
+    String partitionIdentifier = HoodieTableMetadataUtil.getPartitionIdentifierForFilesPartition(partition);
     int size = filesAdded.size() + filesDeleted.size();
     Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>(size, 1);
     filesAdded.forEach((fileName, fileSize) -> fileInfo.put(fileName, new HoodieMetadataFileInfo(fileSize, false)));
 
     filesDeleted.forEach(fileName -> fileInfo.put(fileName, DELETE_FILE_METADATA));
 
-    HoodieKey key = new HoodieKey(partition, MetadataPartitionType.FILES.getPartitionPath());
+    HoodieKey key = new HoodieKey(partitionIdentifier, MetadataPartitionType.FILES.getPartitionPath());
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_FILE_LIST, fileInfo);
     return new HoodieAvroRecord<>(key, payload);
   }
@@ -358,9 +358,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     checkArgument(!baseFileName.contains(Path.SEPARATOR)
             && FSUtils.isBaseFile(new Path(baseFileName)),
         "Invalid base file '" + baseFileName + "' for MetaIndexBloomFilter!");
-    String partitionIdentifier = HoodieTableMetadataUtil.getPartitionIdentifier(partitionName);
-    final String bloomFilterIndexKey = new PartitionIndexID(partitionIdentifier).asBase64EncodedString()
-        .concat(new FileIndexID(baseFileName).asBase64EncodedString());
+    final String bloomFilterIndexKey = getBloomFilterRecordKey(partitionName, baseFileName);
     HoodieKey key = new HoodieKey(bloomFilterIndexKey, MetadataPartitionType.BLOOM_FILTERS.getPartitionPath());
 
     HoodieMetadataBloomFilter metadataBloomFilter =
@@ -407,6 +405,11 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       default:
         throw new HoodieMetadataException("Unknown type of HoodieMetadataPayload: " + type);
     }
+  }
+
+  private static String getBloomFilterRecordKey(String partitionName, String fileName) {
+    return new PartitionIndexID(HoodieTableMetadataUtil.getBloomFilterIndexPartitionIdentifier(partitionName)).asBase64EncodedString()
+        .concat(new FileIndexID(fileName).asBase64EncodedString());
   }
 
   private HoodieMetadataBloomFilter combineBloomFilterMetadata(HoodieMetadataPayload previousRecord) {
@@ -607,7 +610,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * @return Column stats index key
    */
   public static String getColumnStatsIndexKey(String partitionName, HoodieColumnRangeMetadata<Comparable> columnRangeMetadata) {
-    final PartitionIndexID partitionIndexID = new PartitionIndexID(partitionName);
+
+    final PartitionIndexID partitionIndexID = new PartitionIndexID(HoodieTableMetadataUtil.getColumnStatsIndexPartitionIdentifier(partitionName));
     final FileIndexID fileIndexID = new FileIndexID(new Path(columnRangeMetadata.getFilePath()).getName());
     final ColumnIndexID columnIndexID = new ColumnIndexID(columnRangeMetadata.getColumnName());
     return getColumnStatsIndexKey(partitionIndexID, fileIndexID, columnIndexID);
@@ -616,9 +620,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   public static Stream<HoodieRecord> createColumnStatsRecords(String partitionName,
                                                               Collection<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList,
                                                               boolean isDeleted) {
-    String partitionIdentifier = HoodieTableMetadataUtil.getPartitionIdentifier(partitionName);
     return columnRangeMetadataList.stream().map(columnRangeMetadata -> {
-      HoodieKey key = new HoodieKey(getColumnStatsIndexKey(partitionIdentifier, columnRangeMetadata),
+      HoodieKey key = new HoodieKey(getColumnStatsIndexKey(partitionName, columnRangeMetadata),
           MetadataPartitionType.COLUMN_STATS.getPartitionPath());
 
       HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(),
