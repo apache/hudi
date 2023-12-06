@@ -128,7 +128,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
 
   @Override
   public UnaryOperator<InternalRow> projectRecord(Schema from, Schema to) {
-    UnsafeProjection projection = HoodieInternalRowUtils.getCachedUnsafeProjection(AvroConversionUtils.convertAvroSchemaToStructType(from),
+    UnsafeProjection projection = HoodieInternalRowUtils.generateUnsafeProjectionAlias(AvroConversionUtils.convertAvroSchemaToStructType(from),
         AvroConversionUtils.convertAvroSchemaToStructType(to));
     return projection::apply;
   }

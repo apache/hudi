@@ -46,10 +46,9 @@ import scala.collection.mutable
  *
  * This uses Spark parquet reader to read parquet data files or parquet log blocks.
  *
- * @param baseFileReader  A reader that transforms a {@link PartitionedFile} to an iterator of
- *                        {@link InternalRow}. This is required for reading the base file and
- *                        not required for reading a file group with only log files.
- * @param partitionValues The values for a partition in which the file group lives.
+ * @param readermaps our intention is to build the reader inside of getFileRecordIterator, but since it is called from
+ *                   the executor, we will need to port a bunch of the code from ParquetFileFormat for each spark version
+ *                   for now, we pass in a map of the different readers we expect to create
  */
 class SparkFileFormatInternalRowReaderContext(readerMaps: mutable.Map[Long, PartitionedFile => Iterator[InternalRow]]) extends BaseSparkInternalRowReaderContext {
   lazy val sparkAdapter = SparkAdapterSupport.sparkAdapter
@@ -78,7 +77,7 @@ class SparkFileFormatInternalRowReaderContext(readerMaps: mutable.Map[Long, Part
           }
         }).asInstanceOf[ClosableIterator[InternalRow]]
     } else {
-      val key = generateKey(dataSchema, requiredSchema)
+      val key = schemaPairHashKey(dataSchema, requiredSchema)
       if (!readerMaps.contains(key)) {
         throw new IllegalStateException("schemas don't hash to a known reader")
       }
@@ -86,7 +85,7 @@ class SparkFileFormatInternalRowReaderContext(readerMaps: mutable.Map[Long, Part
     }
   }
 
-  private def generateKey(dataSchema: Schema, requestedSchema: Schema): Long = {
+  private def schemaPairHashKey(dataSchema: Schema, requestedSchema: Schema): Long = {
     dataSchema.hashCode() + requestedSchema.hashCode()
   }
 
@@ -110,7 +109,6 @@ class SparkFileFormatInternalRowReaderContext(readerMaps: mutable.Map[Long, Part
     doBootstrapMerge(skeletonFileIterator.asInstanceOf[ClosableIterator[Any]],
       dataFileIterator.asInstanceOf[ClosableIterator[Any]])
   }
-
 
   protected def doBootstrapMerge(skeletonFileIterator: ClosableIterator[Any], dataFileIterator: ClosableIterator[Any]): ClosableIterator[InternalRow] = {
     new ClosableIterator[Any] {

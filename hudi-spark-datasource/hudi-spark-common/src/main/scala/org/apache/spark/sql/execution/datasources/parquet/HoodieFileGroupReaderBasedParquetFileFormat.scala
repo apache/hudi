@@ -235,7 +235,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     // If not MergeOnRead or if projection is compatible
     if (isIncremental) {
       StructType(dataSchema.toArray ++ partitionSchema.fields)
-    } else if (!isMOR || MergeOnReadSnapshotRelation.isProjectionCompatible(tableState)) {
+    } else {
       val added: mutable.Buffer[StructField] = mutable.Buffer[StructField]()
       for (field <- mandatoryFields) {
         if (requiredSchema.getFieldIndex(field).isEmpty) {
@@ -249,8 +249,6 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
       }
       val addedFields = StructType(added.toArray)
       StructType(requiredSchema.toArray ++ addedFields.fields)
-    } else {
-      dataSchema
     }
   }
 

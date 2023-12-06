@@ -98,7 +98,6 @@ object HoodieSpark3CatalystPlanUtils extends SparkAdapterSupport {
     }
   }
 
-
   /**
    * This is an extractor to accommodate for [[ResolvedTable]] signature change in Spark 3.2
    */

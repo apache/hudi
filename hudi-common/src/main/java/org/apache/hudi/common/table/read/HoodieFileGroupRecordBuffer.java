@@ -34,8 +34,7 @@ import java.util.Map;
 public interface HoodieFileGroupRecordBuffer<T> {
   enum BufferType {
     KEY_BASED,
-    POSITION_BASED,
-    SIMPLE
+    POSITION_BASED
   }
 
   /**
