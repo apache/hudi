@@ -23,7 +23,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.AutoRecordKeyGenerationUtils.mayBeValidateParamsForAutoGenerationOfRecordKeys
 import org.apache.hudi.AvroConversionUtils.{convertAvroSchemaToStructType, convertStructTypeToAvroSchema, getAvroRecordNameAndNamespace}
-import org.apache.hudi.DataSourceOptionsHelper.fetchMissingWriteConfigsFromTableConfig
+import org.apache.hudi.DataSourceOptionsHelper.{fetchMissingWriteConfigsFromTableConfig, mayBeDerivePartitionPath}
 import org.apache.hudi.DataSourceUtils.tryOverrideParquetWriteLegacyFormatProperty
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
@@ -32,7 +32,6 @@ import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.client.embedded.EmbeddedTimelineService
 import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
 import org.apache.hudi.commit.{DatasetBulkInsertCommitActionExecutor, DatasetBulkInsertOverwriteCommitActionExecutor, DatasetBulkInsertOverwriteTableCommitActionExecutor}
 import org.apache.hudi.common.config._
@@ -56,7 +55,6 @@ import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
-import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName
 import org.apache.hudi.keygen.{BaseKeyGenerator, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.metrics.Metrics
 import org.apache.hudi.sync.common.HoodieSyncConfig
@@ -1054,8 +1052,8 @@ class HoodieSparkSqlWriterInternal {
   private def mergeParamsAndGetHoodieConfig(optParams: Map[String, String],
                                             tableConfig: HoodieTableConfig, mode: SaveMode,
                                             isStreamingWrite: Boolean): (Map[String, String], HoodieConfig) = {
-    val translatedOptions = DataSourceWriteOptions.mayBeDerivePartitionPath(optParams)
-    var translatedOptsWithMappedTableConfig = mutable.Map.empty ++ translatedOptions.toMap
+    val translatedOptions = mayBeDerivePartitionPath(optParams)
+    var translatedOptsWithMappedTableConfig = mutable.Map.empty ++ translatedOptions
     if (tableConfig != null && mode != SaveMode.Overwrite) {
       // for missing write configs corresponding to table configs, fill them up.
       fetchMissingWriteConfigsFromTableConfig(tableConfig, optParams).foreach((kv) => translatedOptsWithMappedTableConfig += (kv._1 -> kv._2))

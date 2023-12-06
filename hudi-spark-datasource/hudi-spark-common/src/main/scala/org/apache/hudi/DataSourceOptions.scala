@@ -18,6 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_SNAPSHOT_OPT_VAL}
+import org.apache.hudi.DataSourceWriteOptions.PARTITIONPATH_FIELD
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.common.config._
 import org.apache.hudi.common.fs.ConsistencyGuardConfig
@@ -323,47 +324,6 @@ object DataSourceWriteOptions {
    * operations are already prepped.
    */
   val SPARK_SQL_WRITES_PREPPED_KEY = "_hoodie.spark.sql.writes.prepped";
-
-  /**
-   * May be derive partition path from incoming df if not explicitly set.
-   *
-   * @param optParams Parameters to be translated
-   * @return Parameters after translation
-   */
-  def mayBeDerivePartitionPath(optParams: Map[String, String]): Map[String, String] = {
-    var translatedOptParams = optParams
-    // translate the api partitionBy of spark DataFrameWriter to PARTITIONPATH_FIELD
-    // we should set hoodie's partition path only if its not set by the user.
-    if (optParams.contains(SparkDataSourceUtils.PARTITIONING_COLUMNS_KEY)
-      && !optParams.contains(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())) {
-      val partitionColumns = optParams.get(SparkDataSourceUtils.PARTITIONING_COLUMNS_KEY)
-        .map(SparkDataSourceUtils.decodePartitioningColumns)
-        .getOrElse(Nil)
-      val keyGeneratorClass = optParams.getOrElse(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key(),
-        DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.defaultValue)
-
-      keyGeneratorClass match {
-        // CustomKeyGenerator needs special treatment, because it needs to be specified in a way
-        // such as "field1:PartitionKeyType1,field2:PartitionKeyType2".
-        // partitionBy can specify the partition like this: partitionBy("p1", "p2:SIMPLE", "p3:TIMESTAMP")
-        case c if (c.nonEmpty && c == classOf[CustomKeyGenerator].getName) =>
-          val partitionPathField = partitionColumns.map(e => {
-            if (e.contains(":")) {
-              e
-            } else {
-              s"$e:SIMPLE"
-            }
-          }).mkString(",")
-          translatedOptParams = optParams ++ Map(PARTITIONPATH_FIELD.key -> partitionPathField)
-        case c if (c.isEmpty || !keyGeneratorClass.equals(classOf[NonpartitionedKeyGenerator].getName)) =>
-          // for any key gen other than NonPartitioned key gen, we can override the partition field config.
-          val partitionPathField = partitionColumns.mkString(",")
-          translatedOptParams = optParams ++ Map(PARTITIONPATH_FIELD.key -> partitionPathField)
-        case _ => // no op incase of NonPartitioned Key gen.
-      }
-    }
-    translatedOptParams
-  }
 
   val TABLE_NAME: ConfigProperty[String] = ConfigProperty
     .key(HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY)
@@ -1008,6 +968,47 @@ object DataSourceOptionsHelper {
 
   def inferKeyGenClazz(recordsKeyFields: String, partitionFields: String): String = {
     getKeyGeneratorClassNameFromType(inferKeyGeneratorType(Option.ofNullable(recordsKeyFields), partitionFields))
+  }
+
+  /**
+   * May be derive partition path from incoming df if not explicitly set.
+   *
+   * @param optParams Parameters to be translated
+   * @return Parameters after translation
+   */
+  def mayBeDerivePartitionPath(optParams: Map[String, String]): Map[String, String] = {
+    var translatedOptParams = optParams
+    // translate the api partitionBy of spark DataFrameWriter to PARTITIONPATH_FIELD
+    // we should set hoodie's partition path only if its not set by the user.
+    if (optParams.contains(SparkDataSourceUtils.PARTITIONING_COLUMNS_KEY)
+      && !optParams.contains(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())) {
+      val partitionColumns = optParams.get(SparkDataSourceUtils.PARTITIONING_COLUMNS_KEY)
+        .map(SparkDataSourceUtils.decodePartitioningColumns)
+        .getOrElse(Nil)
+      val keyGeneratorClass = optParams.getOrElse(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key(),
+        DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.defaultValue)
+
+      keyGeneratorClass match {
+        // CustomKeyGenerator needs special treatment, because it needs to be specified in a way
+        // such as "field1:PartitionKeyType1,field2:PartitionKeyType2".
+        // partitionBy can specify the partition like this: partitionBy("p1", "p2:SIMPLE", "p3:TIMESTAMP")
+        case c if (c.nonEmpty && c == classOf[CustomKeyGenerator].getName) =>
+          val partitionPathField = partitionColumns.map(e => {
+            if (e.contains(":")) {
+              e
+            } else {
+              s"$e:SIMPLE"
+            }
+          }).mkString(",")
+          translatedOptParams = optParams ++ Map(PARTITIONPATH_FIELD.key -> partitionPathField)
+        case c if (c.isEmpty || !keyGeneratorClass.equals(classOf[NonpartitionedKeyGenerator].getName)) =>
+          // for any key gen other than NonPartitioned key gen, we can override the partition field config.
+          val partitionPathField = partitionColumns.mkString(",")
+          translatedOptParams = optParams ++ Map(PARTITIONPATH_FIELD.key -> partitionPathField)
+        case _ => // no op incase of NonPartitioned Key gen.
+      }
+    }
+    translatedOptParams
   }
 
   implicit def convert[T, U](prop: ConfigProperty[T])(implicit converter: T => U): ConfigProperty[U] = {
