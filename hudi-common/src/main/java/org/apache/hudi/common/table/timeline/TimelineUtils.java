@@ -97,7 +97,7 @@ public class TimelineUtils {
             throw new HoodieIOException("Failed to get partitions modified at " + instant, e);
           }
         })
-        .filter(pair -> WriteOperationType.isDeletePartition(pair.getRight().getOperationType()))
+        .filter(pair -> isDeletePartition(pair.getRight().getOperationType()))
         .flatMap(pair -> pair.getRight().getPartitionToReplaceFileIds().keySet().stream()
             .map(partition -> new AbstractMap.SimpleEntry<>(partition, pair.getLeft().getTimestamp()))
         ).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (existing, replace) -> replace));
@@ -105,8 +105,7 @@ public class TimelineUtils {
     Map<String, String> partitionToLatestWriteTimestamp = completedTimeline.getInstants().stream()
         .flatMap(instant -> {
           try {
-            HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-                completedTimeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+            HoodieCommitMetadata commitMetadata = getCommitMetadata(instant, completedTimeline);
             return commitMetadata.getWritePartitionPaths().stream()
                 .map(partition -> new AbstractMap.SimpleEntry<>(partition, instant.getTimestamp()));
           } catch (IOException e) {
@@ -443,5 +442,11 @@ public class TimelineUtils {
                                               HoodieTableMetaClient metaClient) {
     return new HoodieDefaultTimeline(Stream.concat(timeline1.getInstantsAsStream(), timeline2.getInstantsAsStream()).sorted(),
         instant -> metaClient.getActiveTimeline().getInstantDetails(instant));
+  }
+
+  public static boolean isDeletePartition(WriteOperationType operation) {
+    return operation == WriteOperationType.DELETE_PARTITION
+        || operation == WriteOperationType.INSERT_OVERWRITE_TABLE
+        || operation == WriteOperationType.INSERT_OVERWRITE;
   }
 }
