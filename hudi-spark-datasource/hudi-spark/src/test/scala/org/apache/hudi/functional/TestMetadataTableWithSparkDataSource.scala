@@ -26,7 +26,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
-import org.apache.hudi.common.util.ParquetUtils
+import org.apache.hudi.common.util.{ParquetUtils, StringUtils}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.metadata.{BaseTableMetadata, HoodieBackedTableMetadata, HoodieTableMetadata, MetadataPartitionType}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
@@ -116,7 +116,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     // Query w/ 0 requested columns should be working fine
     assertEquals(4, filesPartitionDF.count())
 
-    val expectedKeys = Seq("2015/03/16", "2015/03/17", "2016/03/15", "__all_partitions__")
+    val expectedKeys = Seq("2015/03/16", "2015/03/17", "2016/03/15", HoodieTableMetadata.RECORDKEY_PARTITION_LIST)
     val keys = filesPartitionDF.select("key")
       .collect()
       .map(_.getString(0))
@@ -167,7 +167,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     // Query w/ 0 requested columns should be working fine
     assertEquals(2, filesPartitionDF.count())
 
-    val expectedKeys = Seq(".", "__all_partitions__")
+    val expectedKeys = Seq(HoodieTableMetadata.EMPTY_PARTITION_NAME, HoodieTableMetadata.RECORDKEY_PARTITION_LIST)
     val keys = filesPartitionDF.select("key")
       .collect()
       .map(_.getString(0))
@@ -189,7 +189,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     val allPartitionPaths = baseTableMetada.getAllPartitionPaths
     assertEquals(allPartitionPaths.size(), 1)
-    assertEquals(allPartitionPaths.get(0), "")
+    assertEquals(allPartitionPaths.get(0), HoodieTableMetadata.EMPTY_PARTITION_NAME)
 
     val fileStatuses = baseTableMetada.getAllFilesInPartition(new Path(s"$basePath/"))
     val fileName = fileStatuses.apply(0).getPath.getName
