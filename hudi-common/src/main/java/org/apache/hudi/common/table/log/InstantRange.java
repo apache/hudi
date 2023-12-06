@@ -22,9 +22,12 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ValidationUtils;
 
 import java.io.Serializable;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * A instant commits range used for incremental reader filtering.
@@ -60,8 +63,8 @@ public abstract class InstantRange implements Serializable {
   @Override
   public String toString() {
     return "InstantRange{"
-        + "startInstant='" + startInstant == null ? "null" : startInstant + '\''
-        + ", endInstant='" + endInstant == null ? "null" : endInstant + '\''
+        + "startInstant='" + (startInstant == null ? "null" : startInstant) + '\''
+        + ", endInstant='" + (endInstant == null ? "null" : endInstant) + '\''
         + ", rangeType='" + this.getClass().getSimpleName() + '\''
         + '}';
   }
@@ -73,8 +76,8 @@ public abstract class InstantRange implements Serializable {
   /**
    * Represents a range type.
    */
-  public static enum RangeType {
-    OPEN_CLOSE, CLOSE_CLOSE, EXPLICIT_MATCH
+  public enum RangeType {
+    OPEN_CLOSE, CLOSE_CLOSE, EXPLICIT_MATCH, COMPOSITION
   }
 
   private static class OpenCloseRange extends InstantRange {
@@ -166,6 +169,28 @@ public abstract class InstantRange implements Serializable {
     }
   }
 
+  /**
+   * Composition of multiple instant ranges in disjunctive form.
+   */
+  private static class CompositionRange extends InstantRange {
+    List<InstantRange> instantRanges;
+
+    public CompositionRange(List<InstantRange> instantRanges) {
+      super(null, null);
+      this.instantRanges = Objects.requireNonNull(instantRanges, "Instant ranges should not be null");
+    }
+
+    @Override
+    public boolean isInRange(String instant) {
+      for (InstantRange range : instantRanges) {
+        if (range.isInRange(instant)) {
+          return true;
+        }
+      }
+      return false;
+    }
+  }
+
   // -------------------------------------------------------------------------
   //  Inner Class
   // -------------------------------------------------------------------------
@@ -179,6 +204,7 @@ public abstract class InstantRange implements Serializable {
     private RangeType rangeType;
     private boolean nullableBoundary = false;
     private Set<String> explicitInstants;
+    private List<InstantRange> instantRanges;
 
     private Builder() {
     }
@@ -208,6 +234,11 @@ public abstract class InstantRange implements Serializable {
       return this;
     }
 
+    public Builder instantRanges(InstantRange... instantRanges) {
+      this.instantRanges = Arrays.stream(instantRanges).collect(Collectors.toList());
+      return this;
+    }
+
     public InstantRange build() {
       ValidationUtils.checkState(this.rangeType != null, "Range type is required");
       switch (rangeType) {
@@ -221,6 +252,8 @@ public abstract class InstantRange implements Serializable {
               : new CloseCloseRange(startInstant, endInstant);
         case EXPLICIT_MATCH:
           return new ExplicitMatchRange(this.explicitInstants);
+        case COMPOSITION:
+          return new CompositionRange(this.instantRanges);
         default:
           throw new AssertionError();
       }

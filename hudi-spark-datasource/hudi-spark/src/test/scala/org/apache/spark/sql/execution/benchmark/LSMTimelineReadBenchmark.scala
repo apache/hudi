@@ -94,7 +94,7 @@ object LSMTimelineReadBenchmark extends HoodieBenchmarkBase {
         }
       }
       benchmark.addCase("read start time") { _ =>
-        new CompletionTimeQueryView(metaClient).getStartTimeSet(startTs + 1 + 1000 + "", startTs + commitsNum + 1000 + "", earliestStartTimeFunc)
+        new CompletionTimeQueryView(metaClient).getStartTimes(startTs + 1 + 1000 + "", startTs + commitsNum + 1000 + "", earliestStartTimeFunc)
       }
       benchmark.run()
       val totalSize = LSMTimeline.latestSnapshotManifest(metaClient).getFiles.asScala
