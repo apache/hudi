@@ -9,7 +9,15 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 In this section, we will cover ways to ingest new changes from external sources or even other Hudi tables.
-The two main tools available are the [Hudi Streamer](/docs/hoodie_streaming_ingestion#hudi-streamer) tool, as well as the [Spark Hudi datasource](#spark-datasource-writer).
+Currently Hudi supports following ways to write the data.
+- [Hudi Streamer](/docs/hoodie_streaming_ingestion#hudi-streamer)
+- [Spark Hudi Datasource](#spark-datasource-writer)
+- [Spark Structured Streaming](/docs/hoodie_streaming_ingestion#structured-streaming)
+- [Spark SQL](/docs/next/sql_ddl#spark-sql)
+- [Flink Writer](/docs/next/hoodie_streaming_ingestion#flink-ingestion)
+- [Flink SQL](/docs/next/sql_ddl#flink)
+- [Java Writer](#java-writer)
+- [Kafka Connect](/docs/next/hoodie_streaming_ingestion#kafka-connect-sink)
 
 ## Spark Datasource Writer
 
@@ -533,3 +541,85 @@ INSERT INTO hudi_table select ... from ...;
 ```
 
 **Note**: INSERT OVERWRITE is not supported yet but already on the roadmap.
+
+
+### Non-Blocking Concurrency Control (Experimental)
+
+Hudi Flink supports a new non-blocking concurrency control mode, where multiple writer tasks can be executed
+concurrently without blocking each other. One can read more about this mode in
+the [concurrency control](/docs/next/concurrency_control#model-c-multi-writer) docs. Let us see it in action here.
+
+In the below example, we have two streaming ingestion pipelines that concurrently update the same table. One of the
+pipeline is responsible for the compaction and cleaning table services, while the other pipeline is just for data
+ingestion.
+
+```sql
+-- set the interval as 30 seconds
+execution.checkpointing.interval: 30000
+state.backend: rocksdb
+
+-- This is a datagen source that can generates records continuously
+CREATE TABLE sourceT (
+    uuid varchar(20),
+    name varchar(10),
+    age int,
+    ts timestamp(3),
+    `partition` as 'par1'
+) WITH (
+    'connector' = 'datagen',
+    'rows-per-second' = '200'
+);
+
+-- pipeline1: by default enable the compaction and cleaning services
+CREATE TABLE t1(
+    uuid varchar(20),
+    name varchar(10),
+    age int,
+    ts timestamp(3),
+    `partition` varchar(20)
+) WITH (
+    'connector' = 'hudi',
+    'path' = '/Users/chenyuzhao/workspace/hudi-demo/t1',
+    'table.type' = 'MERGE_ON_READ',
+    'index.type' = 'BUCKET',
+    'hoodie.write.concurrency.mode' = 'NON_BLOCKING_CONCURRENCY_CONTROL',
+    'write.tasks' = '2'
+);
+
+-- pipeline2: disable the compaction and cleaning services manually
+CREATE TABLE t1_2(
+    uuid varchar(20),
+    name varchar(10),
+    age int,
+    ts timestamp(3),
+    `partition` varchar(20)
+) WITH (
+    'connector' = 'hudi',
+    'path' = '/Users/chenyuzhao/workspace/hudi-demo/t1',
+    'table.type' = 'MERGE_ON_READ',
+    'index.type' = 'BUCKET',
+    'hoodie.write.concurrency.mode' = 'NON_BLOCKING_CONCURRENCY_CONTROL',
+    'write.tasks' = '2',
+    'compaction.schedule.enabled' = 'false',
+    'compaction.async.enabled' = 'false',
+    'clean.async.enabled' = 'false'
+);
+
+-- submit the pipelines
+insert into t1 select * from sourceT;
+insert into t1_2 select * from sourceT;
+
+select * from t1 limit 20;
+```
+
+As you can see from the above example, we have two pipelines with multiple tasks that concurrently write to the
+same table. To use the new concurrency mode, all you need to do is set the `hoodie.write.concurrency.mode`
+to `NON_BLOCKING_CONCURRENCY_CONTROL`. The `write.tasks` option is used to specify the number of write tasks that will
+be used for writing to the table. The `compaction.schedule.enabled`, `compaction.async.enabled`
+and `clean.async.enabled` options are used to disable the compaction and cleaning services for the second pipeline.
+This is done to ensure that the compaction and cleaning services are not executed twice for the same table.
+
+
+## Java Writer
+We can use plain java to write to hudi tables. To use Java client we can refere [here](https://github.com/apache/hudi/blob/master/hudi-examples/hudi-examples-java/src/main/java/org/apache/hudi/examples/java/HoodieJavaWriteClientExample.java)
+

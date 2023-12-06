@@ -7,29 +7,26 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 This page introduces Flink-Hudi integration. We can feel the unique charm of how Flink brings in the power of streaming into Hudi.
-This guide helps you quickly start using Flink on Hudi, and learn different modes for reading/writing Hudi by Flink.
 
 ## Setup
-<Tabs
-defaultValue="flinksql"
-values={[
-{ label: 'Flink SQL', value: 'flinksql', },
-{ label: 'DataStream API', value: 'dataStream', },
-]}
->
 
-<TabItem value="flinksql">
 
-We use the [Flink Sql Client](https://ci.apache.org/projects/flink/flink-docs-release-1.13/docs/dev/table/sqlclient/) because it's a good
-quick start tool for SQL users.
+### Flink Support Matrix
 
-### Download Flink
+
+| Hudi            | Supported Flink version                 |
+|:----------------|:----------------------------------------|
+| 0.14.x          | 1.13.x, 1.14.x, 1.15.x, 1.16.x, 1.17.x  |
+| 0.13.x          | 1.13.x, 1.14.x, 1.15.x, 1.16.x          |
+| 0.12.x          | 1.13.x, 1.14.x, 1.15.x                  |
+| 0.11.x          | 1.13.x, 1.14.x                          |
+
+
+### Download Flink and Start Flink cluster
 
 Hudi works with Flink 1.13, Flink 1.14, Flink 1.15, Flink 1.16 and Flink 1.17. You can follow the
-instructions [here](https://flink.apache.org/downloads) for setting up Flink.
-
-### Start Flink cluster
-Start a standalone Flink cluster within hadoop environment. In case we are trying on local setup, then we could download hadoop binaries and set HADOOP_HOME.
+instructions [here](https://flink.apache.org/downloads) for setting up Flink. Then, start a standalone Flink cluster 
+within hadoop environment. In case we are trying on local setup, then we could download hadoop binaries and set HADOOP_HOME.
 
 ```bash
 # HADOOP_HOME is your hadoop root directory after unpack the binary package.
@@ -38,6 +35,26 @@ export HADOOP_CLASSPATH=`$HADOOP_HOME/bin/hadoop classpath`
 # Start the Flink standalone cluster
 ./bin/start-cluster.sh
 ```
+<div className="notice--info">
+  <h4>Please note the following: </h4>
+<ul>
+  <li>We suggest hadoop 2.9.x+ version because some of the object storage has filesystem implementation only after that</li>
+  <li>The flink-parquet and flink-avro formats are already packaged into the hudi-flink-bundle jar</li>
+</ul>
+</div>
+
+<Tabs
+defaultValue="flinksql"
+values={[
+{ label: 'Flink SQL', value: 'flinksql', },
+{ label: 'DataStream API', value: 'dataStream', },
+]}
+>
+<TabItem value="flinksql">
+
+We use the [Flink Sql Client](https://ci.apache.org/projects/flink/flink-docs-release-1.13/docs/dev/table/sqlclient/) because it's a good
+quick start tool for SQL users.
+
 ### Start Flink SQL client
 
 Hudi supports packaged bundle jar for Flink, which should be loaded in the Flink SQL Client when it starts up.
@@ -53,26 +70,6 @@ export HUDI_VERSION=0.14.0
 wget https://repo1.maven.org/maven2/org/apache/hudi/hudi-flink${FLINK_VERSION}-bundle/${HUDI_VERSION}/hudi-flink${FLINK_VERSION}-bundle-${HUDI_VERSION}.jar -P $FLINK_HOME/lib/
 ./bin/sql-client.sh embedded -j lib/hudi-flink${FLINK_VERSION}-bundle-${HUDI_VERSION}.jar shell
 ```
-
-
-### Flink Support Matrix
-
-
-| Hudi            | Supported Flink version                 |
-|:----------------|:----------------------------------------|
-| 0.14.x          | 1.13.x, 1.14.x, 1.15.x, 1.16.x, 1.17.x  |
-| 0.13.x          | 1.13.x, 1.14.x, 1.15.x, 1.16.x          |
-| 0.12.x          | 1.13.x, 1.14.x, 1.15.x                  |
-| 0.11.x          | 1.13.x, 1.14.x                          |
-
-
-<div className="notice--info">
-  <h4>Please note the following: </h4>
-<ul>
-  <li>We suggest hadoop 2.9.x+ version because some of the object storage has filesystem implementation only after that</li>
-  <li>The flink-parquet and flink-avro formats are already packaged into the hudi-flink-bundle jar</li>
-</ul>
-</div>
 
 Setup table name, base path and operate using SQL for this guide.
 The SQL CLI only executes the SQL line by line.
@@ -164,7 +161,7 @@ values={[
 
 <TabItem value="flinksql">
 
-Creates a Flink Hudi table first and insert data into the Hudi table using SQL `VALUES` as below.
+Insert data into the Hudi table using SQL `VALUES`.
 
 ```sql
 -- insert data using values
@@ -183,7 +180,7 @@ VALUES
 
 <TabItem value="dataStream">
 
-Creates a Flink Hudi table first and insert data into the Hudi table using DataStream API as below.
+Add some streaming source to flink and load the data in hudi table. Since, this is the first write, it will also auto-create the table.
 
 ```java
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -215,9 +212,9 @@ HoodiePipeline.Builder builder = HoodiePipeline.builder(targetTable)
 
 builder.sink(dataStream, false); // The second parameter indicating whether the input data stream is bounded
 env.execute("Api_Sink");
-
-// Full Quickstart Example - https://gist.github.com/ad1happy2go/1716e2e8aef6dcfe620792d6e6d86d36
 ```
+Refer Full Quickstart Example [here](https://github.com/ad1happy2go/hudi-examples/blob/main/flink/src/main/java/com/hudi/flink/quickstart/HudiDataStreamWriter.java)
+
 </TabItem>
 
 </Tabs
@@ -275,6 +272,8 @@ DataStream<RowData> rowDataDataStream = builder.source(env);
 rowDataDataStream.print();
 env.execute("Api_Source");
 ```
+Refer Full Streaming Reader Example [here](https://github.com/ad1happy2go/hudi-examples/blob/main/flink/src/main/java/com/hudi/flink/quickstart/HudiDataStreamReader.java)
+
 </TabItem>
 
 </Tabs
@@ -287,23 +286,60 @@ Refers to [Table types and queries](/docs/concepts#table-types--queries) for mor
 
 This is similar to inserting new data.
 
+<Tabs
+defaultValue="flinksql"
+values={[
+{ label: 'Flink SQL', value: 'flinksql', },
+{ label: 'DataStream API', value: 'dataStream', },
+]}
+>
+
+<TabItem value="flinksql">
+
+Hudi tables can be updated by either inserting reocrds with same primary key or using a standard UPDATE statement shown as below.
+
 ```sql
+-- Update Queries only works with batch execution mode
 SET 'execution.runtime-mode' = 'batch';
 UPDATE hudi_table SET fare = 25.0 WHERE uuid = '334e26e9-8355-45cc-97c6-c31daf0df330';
 ```
 
-Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
-[Querying](#query-data) the data again will now show updated records. Each write operation generates a new [commit](/docs/concepts) 
-denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `age` fields for the same `_hoodie_record_key`s in previous commit.
-
 :::note
 The `UPDATE` statement is supported since Flink 1.17, so only Hudi Flink bundle compiled with Flink 1.17+ supplies this functionality.
-Only **batch** queries on Hudi table with primary key work correctly. 
+Only **batch** queries on Hudi table with primary key work correctly.
 :::
+</TabItem>
+
+<TabItem value="dataStream">
+
+Add some streaming source to flink and load the data in hudi table using DataStream API as [above](#insert-data).
+When new rows with the same primary key arrive in stream, then it will be be updated.
+In the insert example incoming row with same record id will be updated.
+
+Refer Update Example [here](https://github.com/ad1happy2go/hudi-examples/blob/main/flink/src/main/java/com/hudi/flink/quickstart/HudiDataStreamWriter.java)
+
+</TabItem>
+
+</Tabs
+>
+
+[Querying](#query-data) the data again will now show updated records. Each write operation generates a new [commit](/docs/concepts) 
+denoted by the timestamp.
+
 
 ## Delete Data {#deletes}
+<Tabs
+defaultValue="flinksql"
+values={[
+{ label: 'Flink SQL', value: 'flinksql', },
+{ label: 'DataStream API', value: 'dataStream', },
+]}
+>
+
+<TabItem value="flinksql">
 
 ### Row-level Delete
+
 When consuming data in streaming query, Hudi Flink source can also accept the change logs from the upstream data source if the `RowKind` is set up per-row,
 it can then apply the UPDATE and DELETE in row level. You can then sync a NEAR-REAL-TIME snapshot on Hudi for all kinds
 of RDBMS.
@@ -321,6 +357,21 @@ DELETE FROM t1 WHERE age > 23;
 The `DELETE` statement is supported since Flink 1.17, so only Hudi Flink bundle compiled with Flink 1.17+ supplies this functionality.
 Only **batch** queries on Hudi table with primary key work correctly.
 :::
+
+</TabItem>
+
+<TabItem value="dataStream">
+
+Creates a Flink Hudi table first and insert data into the Hudi table using DataStream API as below.
+When new rows with the same primary key and Row Kind as Delete arrive in stream, then it will be be deleted.
+
+Refer Delete Example [here](https://github.com/ad1happy2go/hudi-examples/blob/main/flink/src/main/java/com/hudi/flink/quickstart/HudiDataStreamWriter.java)
+
+</TabItem
+>
+
+</Tabs
+>
 
 ## Streaming Query
 
@@ -404,12 +455,12 @@ feature is that it now lets you author streaming pipelines on streaming or batch
 ## Where To Go From Here?
 - **Quick Start** : Read [Quick Start](#quick-start) to get started quickly Flink sql client to write to(read from) Hudi.
 - **Configuration** : For [Global Configuration](/docs/next/flink_tuning#global-configurations), sets up through `$FLINK_HOME/conf/flink-conf.yaml`. For per job configuration, sets up through [Table Option](/docs/next/flink_tuning#table-options).
-- **Writing Data** : Flink supports different modes for writing, such as [CDC Ingestion](/docs/hoodie_streaming_ingestion#cdc-ingestion), [Bulk Insert](/docs/hoodie_streaming_ingestion#bulk-insert), [Index Bootstrap](/docs/hoodie_streaming_ingestion#index-bootstrap), [Changelog Mode](/docs/hoodie_streaming_ingestion#changelog-mode) and [Append Mode](/docs/hoodie_streaming_ingestion#append-mode).
+- **Writing Data** : Flink supports different modes for writing, such as [CDC Ingestion](/docs/hoodie_streaming_ingestion#cdc-ingestion), [Bulk Insert](/docs/hoodie_streaming_ingestion#bulk-insert), [Index Bootstrap](/docs/hoodie_streaming_ingestion#index-bootstrap), [Changelog Mode](/docs/hoodie_streaming_ingestion#changelog-mode) and [Append Mode](/docs/hoodie_streaming_ingestion#append-mode). Flink also supports multiple streaming writers with [non-blocking concurrency control](/docs/next/writing_data#non-blocking-concurrency-control-experimental).
 - **Querying Data** : Flink supports different modes for reading, such as [Streaming Query](/docs/querying_data#streaming-query) and [Incremental Query](/docs/querying_data#incremental-query).
 - **Tuning** : For write/read tasks, this guide gives some tuning suggestions, such as [Memory Optimization](/docs/next/flink_tuning#memory-optimization) and [Write Rate Limit](/docs/next/flink_tuning#write-rate-limit).
 - **Optimization**: Offline compaction is supported [Offline Compaction](/docs/compaction#flink-offline-compaction).
 - **Query Engines**: Besides Flink, many other engines are integrated: [Hive Query](/docs/syncing_metastore#flink-setup), [Presto Query](/docs/querying_data#prestodb).
-- **Catalog**: A Hudi specific catalog is supported: [Hudi Catalog](/docs/querying_data/#hudi-catalog).
+- **Catalog**: A Hudi specific catalog is supported: [Hudi Catalog](/docs/sql_ddl/#create-catalog).
 
 If you are relatively new to Apache Hudi, it is important to be familiar with a few core concepts:
   - [Hudi Timeline](/docs/next/timeline) – How Hudi manages transactions and other table services

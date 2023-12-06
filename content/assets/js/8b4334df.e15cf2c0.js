@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[9336],{81051:s=>{s.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/elastic-search","name":"elastic search","count":2,"permalink":"/videos/tags/elastic-search"}')}}]);
