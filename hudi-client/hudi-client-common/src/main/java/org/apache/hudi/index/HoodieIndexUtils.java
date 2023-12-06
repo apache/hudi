@@ -387,6 +387,12 @@ public class HoodieIndexUtils {
     }
   }
 
+  /**
+   * Get the partition name from the metadata partition type.
+   * NOTE: For certain types of metadata partition, such as functional index and secondary index,
+   * partition path defined enum is just the prefix to denote the type of metadata partition.
+   * The actual partition name is contained in the index definition.
+   */
   public static String getPartitionNameFromPartitionType(MetadataPartitionType partitionType, HoodieTableMetaClient metaClient, String indexName) {
     if (MetadataPartitionType.FUNCTIONAL_INDEX.equals(partitionType)) {
       checkArgument(metaClient.getFunctionalIndexMetadata().isPresent(), "Index definition is not present");

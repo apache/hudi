@@ -132,7 +132,7 @@ public class HiveTestUtil {
   private static DateTimeFormatter dtfOut;
   private static Set<String> createdTablesSet = new HashSet<>();
 
-  public static void setUp(Option<TypedProperties> hiveSyncProperties) throws IOException, InterruptedException, HiveException, MetaException {
+  public static void setUp(Option<TypedProperties> hiveSyncProperties, boolean shouldClearBasePathAndTables) throws IOException, InterruptedException, HiveException, MetaException {
     configuration = new Configuration();
     if (zkServer == null) {
       zkService = new ZookeeperTestService(configuration);
@@ -145,7 +145,8 @@ public class HiveTestUtil {
 
     if (hiveSyncProperties.isPresent()) {
       hiveSyncProps = hiveSyncProperties.get();
-      basePath = Files.createTempDirectory(hiveSyncProps.getProperty(META_SYNC_BASE_PATH.key())).toUri().toString();
+      hiveSyncProps.setProperty(HIVE_URL.key(), hiveTestService.getJdbcHive2Url());
+      basePath = hiveSyncProps.getProperty(META_SYNC_BASE_PATH.key());
     } else {
       basePath = Files.createTempDirectory("hivesynctest" + Instant.now().toEpochMilli()).toUri().toString();
 
@@ -167,7 +168,9 @@ public class HiveTestUtil {
     dtfOut = DateTimeFormatter.ofPattern("yyyy/MM/dd");
     ddlExecutor = new HiveQueryDDLExecutor(hiveSyncConfig, IMetaStoreClientUtil.getMSC(hiveSyncConfig.getHiveConf()));
 
-    clear();
+    if (shouldClearBasePathAndTables) {
+      clear();
+    }
   }
 
   public static void clear() throws IOException, HiveException, MetaException {

@@ -24,8 +24,9 @@ import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.hive.HiveSyncConfigHolder._
-import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor
+import org.apache.hudi.hive.{HiveSyncTool, SlashEncodedDayPartitionValueExtractor}
 import org.apache.hudi.hive.testutils.HiveTestUtil
+import org.apache.hudi.hive.testutils.HiveTestUtil.{hiveSyncProps, hiveTestService}
 import org.apache.hudi.sync.common.HoodieSyncConfig.{META_SYNC_BASE_PATH, META_SYNC_DATABASE_NAME, META_SYNC_PARTITION_EXTRACTOR_CLASS, META_SYNC_TABLE_NAME}
 import org.apache.spark.sql.catalyst.analysis.Analyzer
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
@@ -169,9 +170,12 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
                | partitioned by(ts)
                | location '$basePath'
        """.stripMargin)
+          // ts=1000 and from_unixtime(ts, 'yyyy-MM-dd') = '1970-01-01'
           spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-          spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
-          spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
+          // ts=100000 and from_unixtime(ts, 'yyyy-MM-dd') = '1970-01-02'
+          spark.sql(s"insert into $tableName values(2, 'a2', 10, 100000)")
+          // ts=10000000 and from_unixtime(ts, 'yyyy-MM-dd') = '1970-04-26'
+          spark.sql(s"insert into $tableName values(3, 'a3', 10, 10000000)")
 
           val createIndexSql = s"create index idx_datestr on $tableName using column_stats(ts) options(func='from_unixtime', format='yyyy-MM-dd')"
           spark.sql(createIndexSql)
@@ -186,21 +190,22 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
 
           // sync to hive without partition metadata
           val hiveSyncProps = new TypedProperties()
-          hiveSyncProps.setProperty(HIVE_URL.key, "jdbc:hive2://localhost:10000")
           hiveSyncProps.setProperty(HIVE_USER.key, "")
           hiveSyncProps.setProperty(HIVE_PASS.key, "")
           hiveSyncProps.setProperty(META_SYNC_DATABASE_NAME.key, databaseName)
           hiveSyncProps.setProperty(META_SYNC_TABLE_NAME.key, tableName)
           hiveSyncProps.setProperty(META_SYNC_BASE_PATH.key, basePath)
           hiveSyncProps.setProperty(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key, "false")
-          // hiveSyncProps.setProperty(META_SYNC_PARTITION_FIELDS.key, "datestr")
-          hiveSyncProps.setProperty(META_SYNC_PARTITION_EXTRACTOR_CLASS.key, classOf[SlashEncodedDayPartitionValueExtractor].getName)
-          hiveSyncProps.setProperty(HIVE_BATCH_SYNC_PARTITION_NUM.key, "3")
-          HiveTestUtil.setUp(Option.of(hiveSyncProps))
+          HiveTestUtil.setUp(Option.of(hiveSyncProps), false)
+          val tool = new HiveSyncTool(hiveSyncProps, HiveTestUtil.getHiveConf)
+          tool.syncHoodieTable()
 
           // check query result
-          val queryResult = spark.sql(s"select * from $tableName where datestr='1970-01-02'")
-          assertResult(1)(queryResult.count())
+          checkAnswer(s"select id, name from $tableName where from_unixtime(ts, 'yyyy-MM-dd') = '1970-01-01'")(
+            Seq(1, "a1")
+          )
+
+          // teardown Hive
           HiveTestUtil.clear()
           HiveTestUtil.shutdown()
         }

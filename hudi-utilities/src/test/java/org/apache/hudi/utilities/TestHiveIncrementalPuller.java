@@ -65,7 +65,7 @@ public class TestHiveIncrementalPuller {
 
   @BeforeEach
   public void setUp() throws Exception {
-    HiveTestUtil.setUp(Option.empty());
+    HiveTestUtil.setUp(Option.empty(), true);
   }
 
   @AfterEach
