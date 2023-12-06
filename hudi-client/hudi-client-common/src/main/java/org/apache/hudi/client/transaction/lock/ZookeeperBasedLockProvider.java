@@ -155,8 +155,6 @@ public class ZookeeperBasedLockProvider implements LockProvider<InterProcessMute
   private void checkRequiredProps(final LockConfiguration config) {
     ValidationUtils.checkArgument(config.getConfig().getString(ZK_CONNECT_URL_PROP_KEY) != null);
     ValidationUtils.checkArgument(config.getConfig().getString(ZK_BASE_PATH_PROP_KEY) != null);
-    ValidationUtils.checkArgument(config.getConfig().getString(ZK_SESSION_TIMEOUT_MS_PROP_KEY) != null);
-    ValidationUtils.checkArgument(config.getConfig().getString(ZK_CONNECTION_TIMEOUT_MS_PROP_KEY) != null);
     ValidationUtils.checkArgument(config.getConfig().getString(ZK_LOCK_KEY_PROP_KEY) != null);
   }
 
