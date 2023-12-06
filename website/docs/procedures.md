@@ -1166,7 +1166,7 @@ Show file system views of a table.
 | include_in_flight  | Boolean | N        | false         | Include in flight                    |
 | exclude_compaction | Boolean | N        | false         | Exclude compaction                   |
 | limit              | Int     | N        | 10            | Max number of records to be returned |
-| path_regex         | String  | N        | "*/*/*"       | Pattern of path                      |
+| path_regex         | String  | N        | "\*\/\*\/\*"  | Pattern of path                      |
 
 **Output**
 
@@ -1204,7 +1204,7 @@ Show latest file system view of a table.
 | include_max        | Boolean | N        | false         | Include max instant                  |
 | include_in_flight  | Boolean | N        | false         | Include in flight                    |
 | exclude_compaction | Boolean | N        | false         | Exclude compaction                   |
-| partition_path     | String  | Y        | ""            | Partition path                       |
+| partition_path     | String  | Y        | None          | Partition path                       |
 | merge              | Boolean | N        | false         | Merge results                        |
 
 **Output**
@@ -1228,7 +1228,7 @@ Show latest file system view of a table.
 **Example**
 
 ```
-call show_fsview_latest(table => 'test_hudi_table');
+call show_fsview_latest(table => 'test_hudi_table'， partition => 'dt=2021-05-03');
 ```
 
 | partition     | file_id                                | base_instant      | data_file                                                                | data_file_size | num_delta_files | total_delta_file_size | delta_files                                                             |
