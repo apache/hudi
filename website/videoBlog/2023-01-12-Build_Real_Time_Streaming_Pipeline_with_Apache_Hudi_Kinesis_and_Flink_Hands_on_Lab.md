@@ -11,7 +11,7 @@ tags:
 - streaming ingestion
 - real-time-datalake
 - merge on read
-- MOR
+- mor
 - amazon kinesis
 - apache flink
 - apache hudi

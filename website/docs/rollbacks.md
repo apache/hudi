@@ -66,4 +66,7 @@ file is no longer updated, so other writers can deduce the failed write after a 
 ![An example illustration of multi writer rollbacks](/assets/images/blog/rollbacks/multi_writer_rollback.png)
 _Figure 2: multi-writer with lazy cleaning of failed commits_
 
+## Related Resources
+<h3>Videos</h3>
 
+* [How to Rollback to Previous Checkpoint during Disaster in Apache Hudi using Glue 4.0 Demo](https://www.youtube.com/watch?v=Vi25q4vzogs)

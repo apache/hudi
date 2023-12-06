@@ -10,6 +10,6 @@ tags:
 - guide
 - commit notification
 - event notification
-- HTTP endpoint
+- http endpoint
 - apache hudi
 ---

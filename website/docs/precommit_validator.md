@@ -94,3 +94,8 @@ void validateRecordsBeforeAndAfter(Dataset<Row> before,
 Hudi offers a [commit notification service](https://hudi.apache.org/docs/next/writing_data/#commit-notifications) that can be configured to trigger notifications about write commits.
 
 The commit notification service can be combined with pre-commit validators to send a notification when a commit fails a validation. This is possible by passing details about the validation as a custom value to the HTTP endpoint.
+
+## Related Resources
+<h3>Videos</h3>
+
+* [Learn About Apache Hudi Pre Commit Validator with Hands on Lab](https://www.youtube.com/watch?v=KNzs9dj_Btc)

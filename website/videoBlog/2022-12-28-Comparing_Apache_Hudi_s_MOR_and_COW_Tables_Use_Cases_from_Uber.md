@@ -10,8 +10,8 @@ tags:
 - deep-dive
 - copy on write
 - merge on read
-- COW
-- MOR
+- cow
+- mor
 - use-case
 - apache hudi
 ---

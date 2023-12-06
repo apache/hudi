@@ -192,3 +192,9 @@ hoodie.write.lock.provider=<distributed-lock-provider-classname>
 
 Note that there are different external [lock providers available](/docs/concurrency_control#external-locking-and-lock-providers)
 to choose from.
+
+## Related Resources
+<h3>Blogs</h3>
+
+* [Multi-Modal Index for the Lakehouse in Apache Hudi](https://www.onehouse.ai/blog/introducing-multi-modal-index-for-the-lakehouse-in-apache-hudi)
+* [Table service deployment models in Apache Hudi](https://medium.com/@simpsons/table-service-deployment-models-in-apache-hudi-9cfa5a44addf)

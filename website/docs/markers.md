@@ -88,3 +88,4 @@ with direct markers because the file system metadata is efficiently cached in me
 | `hoodie.write.markers.type`     | timeline_server_based | Marker type to use.  Two modes are supported: (1) `direct`: individual marker file corresponding to each data file is directly created by the executor; (2) `timeline_server_based`: marker operations are all handled at the timeline service which serves as a proxy.  New marker entries are batch processed and stored in a limited number of underlying files for efficiency. |
 | `hoodie.markers.timeline_server_based.batch.num_threads` | 20 | Number of threads to use for batch processing marker creation requests at the timeline server. | 
 | `hoodie.markers.timeline_server_based.batch.interval_ms` | 50 | The batch interval in milliseconds for marker creation batch processing. |
+
