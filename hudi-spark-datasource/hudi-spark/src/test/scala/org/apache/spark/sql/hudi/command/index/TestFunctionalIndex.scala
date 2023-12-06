@@ -22,12 +22,12 @@ package org.apache.spark.sql.hudi.command.index
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.hive.HiveSyncConfigHolder._
-import org.apache.hudi.hive.{HiveSyncTool, SlashEncodedDayPartitionValueExtractor}
+import org.apache.hudi.hive.HiveSyncTool
 import org.apache.hudi.hive.testutils.HiveTestUtil
-import org.apache.hudi.hive.testutils.HiveTestUtil.{hiveSyncProps, hiveTestService}
-import org.apache.hudi.sync.common.HoodieSyncConfig.{META_SYNC_BASE_PATH, META_SYNC_DATABASE_NAME, META_SYNC_PARTITION_EXTRACTOR_CLASS, META_SYNC_TABLE_NAME}
+import org.apache.hudi.sync.common.HoodieSyncConfig.{META_SYNC_BASE_PATH, META_SYNC_DATABASE_NAME, META_SYNC_TABLE_NAME}
 import org.apache.spark.sql.catalyst.analysis.Analyzer
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.parser.ParserInterface
@@ -148,7 +148,10 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
   }
 
   test("Test Functional Index With Hive Sync Non Partitioned Table") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    // There is a big difference between Java class loader architecture of versions 1.8 and 17.
+    // Hive 2.3.7 is compiled with Java 1.8, and the class loader used there throws error when Hive APIs are run on Java 17.
+    // So we special case this test only for Java 8.
+    if (HoodieSparkUtils.gteqSpark3_2 && HoodieTestUtils.getJavaVersion == 8) {
       withTempDir { tmp =>
         Seq("mor").foreach { tableType =>
           val databaseName = "default"
