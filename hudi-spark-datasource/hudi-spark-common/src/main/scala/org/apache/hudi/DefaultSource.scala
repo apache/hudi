@@ -247,6 +247,8 @@ object DefaultSource {
     if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
       new EmptyRelation(sqlContext, resolveSchema(metaClient, parameters, Some(schema)))
     } else if (isCdcQuery) {
+      CDCRelation.getCDCRelation(sqlContext, metaClient, parameters)
+      /*
       if (useNewParquetFileFormat) {
         if (tableType == COPY_ON_WRITE) {
           new HoodieCopyOnWriteCDCHadoopFsRelationFactory(
@@ -258,6 +260,7 @@ object DefaultSource {
       } else {
         CDCRelation.getCDCRelation(sqlContext, metaClient, parameters)
       }
+       */
     } else {
       lazy val fileFormatUtils = if ((isMultipleBaseFileFormatsEnabled && !isBootstrappedTable)
         || (useNewParquetFileFormat)) {
