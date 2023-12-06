@@ -88,7 +88,6 @@ public class SchemaRegistryProvider extends SchemaProvider {
   private final String srcSchemaRegistryUrl;
   private final String targetSchemaRegistryUrl;
 
-
   @FunctionalInterface
   public interface SchemaConverter {
     /**
