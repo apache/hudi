@@ -27,6 +27,15 @@ CREATE TABLE [IF NOT EXISTS] [db_name.]table_name
   [AS select_statement];
 ```
 
+:::note NOTE:
+For users running this tutorial locally and have a Spark-Hive(HMS) integration in their environment: If you use
+`default` database or if you don't provide `[LOCATION path]` with the DDL statement, Spark will return
+`java.io.IOException: Mkdirs failed to create file:/user/hive/warehouse/hudi_table/.hoodie` error.
+To get around this, you can follow either of the two options mentioned below:
+1. Create a database i.e. `CREATE DATABASE hudidb;` and use it i.e. `USE hudidb;` before running the DDL statement.
+2. Or provide a path using `LOCATION` keyword to persist the data with the DDL statement.
+:::
+
 ### Create non-partitioned table
 
 Creating a non-partitioned table is as simple as creating a regular table.
@@ -39,13 +48,6 @@ CREATE TABLE IF NOT EXISTS hudi_table (
   price DOUBLE
 ) USING hudi;
 ```
-
-:::note NOTE:
-If you're running this tutorial locally and if you are facing `java.io.IOException: Mkdirs failed to create file:/user/hive/warehouse/hudi_table/.hoodie` issue,
-it's likely because of the spark-hive integration. To get around this, you can follow either of the two options mentioned below:
-1. Create a database i.e. `CREATE DATABASE hudidb;` and use it i.e. `USE hudidb;` before running the DDL statement.
-2. Or provide a path using `LOCATION` keyword to persist the data with the DDL statement.
-:::
 
 ### Create partitioned table
 A partitioned table can be created by adding a `partitioned by` clause. Partitioning helps to organize the data into multiple folders 
