@@ -1358,6 +1358,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     // before this point
     this.index.close();
     this.tableServiceClient.close();
+    // shutdown metrics
+    if (this.metrics != null && this.metrics.getMetrics() != null) {
+      this.metrics.getMetrics().shutdown();
+    }
   }
 
   public void setWriteTimer(String commitType) {
