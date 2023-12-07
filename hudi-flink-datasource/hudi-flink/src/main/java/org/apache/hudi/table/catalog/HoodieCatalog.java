@@ -90,6 +90,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.util.Preconditions.checkArgument;
+import static org.apache.hudi.configuration.FlinkOptions.RECORD_KEY_FIELD;
 import static org.apache.hudi.table.catalog.CatalogOptions.CATALOG_PATH;
 import static org.apache.hudi.table.catalog.CatalogOptions.DEFAULT_DATABASE;
 
@@ -313,7 +314,7 @@ public class HoodieCatalog extends AbstractCatalog {
     Configuration conf = Configuration.fromMap(options);
     conf.setString(FlinkOptions.PATH, tablePathStr);
     ResolvedSchema resolvedSchema = resolvedTable.getResolvedSchema();
-    if (!resolvedSchema.getPrimaryKey().isPresent()) {
+    if (!resolvedSchema.getPrimaryKey().isPresent() && !conf.containsKey(RECORD_KEY_FIELD.key())) {
       throw new CatalogException("Primary key definition is missing");
     }
     final String avroSchema = AvroSchemaConverter.convertToSchema(
@@ -327,10 +328,19 @@ public class HoodieCatalog extends AbstractCatalog {
     // because the HoodieTableMetaClient is a heavy impl, we try to avoid initializing it
     // when calling #getTable.
 
-    final String pkColumns = String.join(",", resolvedSchema.getPrimaryKey().get().getColumns());
-    conf.setString(FlinkOptions.RECORD_KEY_FIELD, pkColumns);
-    options.put(TableOptionProperties.PK_CONSTRAINT_NAME, resolvedSchema.getPrimaryKey().get().getName());
-    options.put(TableOptionProperties.PK_COLUMNS, pkColumns);
+    //set pk
+    if (resolvedSchema.getPrimaryKey().isPresent()
+            && !conf.containsKey(FlinkOptions.RECORD_KEY_FIELD.key())) {
+      final String pkColumns = String.join(",", resolvedSchema.getPrimaryKey().get().getColumns());
+      conf.setString(RECORD_KEY_FIELD, pkColumns);
+    }
+
+    if (resolvedSchema.getPrimaryKey().isPresent()) {
+      options.put(TableOptionProperties.PK_CONSTRAINT_NAME, resolvedSchema.getPrimaryKey().get().getName());
+    }
+    if (conf.containsKey(RECORD_KEY_FIELD.key())) {
+      options.put(TableOptionProperties.PK_COLUMNS, conf.getString(RECORD_KEY_FIELD));
+    }
 
     // check preCombine
     final String preCombineField = conf.getString(FlinkOptions.PRECOMBINE_FIELD);
