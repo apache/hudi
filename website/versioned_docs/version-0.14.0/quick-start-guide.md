@@ -203,7 +203,10 @@ values={[
 </TabItem>
 <TabItem value="sparksql">
 
-
+:::note NOTE:
+For users who have Spark-Hive integration in their environment, this guide assumes that you have the appropriate
+settings configured to allow Spark to create tables and register in Hive Metastore.
+:::
 
 Here is an example of creating a Hudi table.
 
@@ -220,7 +223,7 @@ CREATE TABLE hudi_table (
 PARTITIONED BY (city);
 ```
 
-For more options for creating Hudi tables, please refer to [SQL DDL](/docs/sql_ddl) reference guide.  
+For more options for creating Hudi tables or if you're running into any issues, please refer to [SQL DDL](/docs/sql_ddl) reference guide.
 
 </TabItem>
 
