@@ -72,7 +72,7 @@ class TestHoodieLogFileProcedure extends HoodieSparkProcedureTestBase {
            |  name string,
            |  price double,
            |  ts long,
-           |  partition int
+           |  partition long
            |) using hudi
            | partitioned by (partition)
            | location '$tablePath'
@@ -84,7 +84,7 @@ class TestHoodieLogFileProcedure extends HoodieSparkProcedureTestBase {
        """.stripMargin)
       // insert data to table
       spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000, 1000")
-      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500, 1000")
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500, 1500")
       spark.sql(s"update $tableName set name = 'b1' where id = 1")
       spark.sql(s"update $tableName set name = 'b2' where id = 2")
 

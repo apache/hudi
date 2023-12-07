@@ -85,7 +85,7 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
                                               filters: Seq[Filter],
                                               options: Map[String, String],
                                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
-    assert(dataSchema.fields.isEmpty)
+
     val outputSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
 
     val requiredSchemaWithMandatory = if (!isMOR || MergeOnReadSnapshotRelation.isProjectionCompatible(tableState.value)) {
