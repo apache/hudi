@@ -167,7 +167,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     // Query w/ 0 requested columns should be working fine
     assertEquals(2, filesPartitionDF.count())
 
-    val expectedKeys = Seq(HoodieTableMetadata.EMPTY_PARTITION_NAME, HoodieTableMetadata.RECORDKEY_PARTITION_LIST)
+    val expectedKeys = Seq(HoodieTableMetadata.NON_PARTITIONED_NAME, HoodieTableMetadata.RECORDKEY_PARTITION_LIST)
     val keys = filesPartitionDF.select("key")
       .collect()
       .map(_.getString(0))
