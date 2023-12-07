@@ -1020,7 +1020,6 @@ public class ITTestHoodieDataSource {
 
     // case2: empty table without data files
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    conf.setString(FlinkOptions.TABLE_TYPE, "MERGE_ON_READ");
     StreamerUtil.initTableIfNotExists(conf);
 
     List<Row> rows2 = execSelectSql(streamTableEnv, "select * from t1", 10);

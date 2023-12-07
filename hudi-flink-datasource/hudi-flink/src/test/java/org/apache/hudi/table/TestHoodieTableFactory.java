@@ -210,10 +210,14 @@ public class TestHoodieTableFactory {
     final MockContext sourceContext2 = MockContext.getInstance(this.conf, schema, "f2");
     assertThrows(HoodieValidationException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext2));
 
-    // Valid inconsistent table type will throw exception
+    // Valid table type will be ok
     this.conf.set(FlinkOptions.TABLE_TYPE, "MERGE_ON_READ");
     final MockContext sourceContext3 = MockContext.getInstance(this.conf, schema, "f2");
-    assertThrows(HoodieValidationException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext3));
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext3));
+
+    // Setup the table type correctly for hoodie.properties
+    HoodieTableSink hoodieTableSink = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(sourceContext3);
+    assertThat(hoodieTableSink.getConf().get(FlinkOptions.TABLE_TYPE), is("COPY_ON_WRITE"));
 
     // Valid table type will be ok
     this.conf.set(FlinkOptions.TABLE_TYPE, "COPY_ON_WRITE");

@@ -100,6 +100,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     Configuration conf = FlinkOptions.fromMap(context.getCatalogTable().getOptions());
     checkArgument(!StringUtils.isNullOrEmpty(conf.getString(FlinkOptions.PATH)),
         "Option [path] should not be empty.");
+    checkTableType(conf);
     setupTableOptions(conf.getString(FlinkOptions.PATH), conf);
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     sanityCheck(conf, schema);
@@ -128,9 +129,11 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
           }
           if (tableConfig.contains(HoodieTableConfig.TYPE) && conf.contains(FlinkOptions.TABLE_TYPE)) {
             if (!tableConfig.getString(HoodieTableConfig.TYPE).equals(conf.get(FlinkOptions.TABLE_TYPE))) {
-              throw new HoodieValidationException(
-                  String.format("Table type conflict : %s in %s and %s in table options", tableConfig.getString(HoodieTableConfig.TYPE), HoodieTableConfig.HOODIE_PROPERTIES_FILE,
+              LOG.warn(
+                  String.format("Table type conflict : %s in %s and %s in table options. Fix the table type as to be in line with the hoodie.properties.",
+                      tableConfig.getString(HoodieTableConfig.TYPE), HoodieTableConfig.HOODIE_PROPERTIES_FILE,
                       conf.get(FlinkOptions.TABLE_TYPE)));
+              conf.setString(FlinkOptions.TABLE_TYPE, tableConfig.getString(HoodieTableConfig.TYPE));
             }
           }
           if (tableConfig.contains(HoodieTableConfig.TYPE)
