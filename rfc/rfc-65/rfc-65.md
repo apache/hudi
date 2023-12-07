@@ -47,13 +47,22 @@ hoodie.partition.ttl.days.retain=10
 
 The config `hoodie.partition.ttl.strategy.class` is to provide a strategy class (subclass of `PartitionTTLStrategy`) to get expired partition paths to delete. And `hoodie.partition.ttl.days.retain` is the strategy value used by `KeepByTimePartitionTTLStrategy` which means that we will expire partitions that haven't been modified for this strategy value set. We will cover the `KeepByTimeTTLStrategy` strategy in detail in the next section.
 
-The core definition of `PartitionTTLManagemenStrategy` looks like this: 
+The core definition of `PartitionTTLStrategy` looks like this: 
 
 ```java
 /**
  * Strategy for partition-level TTL management.
  */
 public abstract class PartitionTTLStrategy {
+
+  protected final HoodieTable hoodieTable;
+  protected final HoodieWriteConfig writeConfig;
+
+  public PartitionTTLStrategy(HoodieTable hoodieTable) {
+    this.writeConfig = hoodieTable.getConfig();
+    this.hoodieTable = hoodieTable;
+  }
+  
   /**
    * Get expired partition paths for a specific partition ttl management strategy.
    *
@@ -96,18 +105,26 @@ The `getPartitionPathsForTTL` method will look like this:
 /**
  * Strategy for partition-level TTL management.
  */
-public abstract class PartitionTTLManagemenStrategy {
+public abstract class PartitionTTLStrategy {
+  protected final HoodieTable hoodieTable;
+  protected final HoodieWriteConfig writeConfig;
+
+  public PartitionTTLStrategy(HoodieTable hoodieTable) {
+    this.writeConfig = hoodieTable.getConfig();
+    this.hoodieTable = hoodieTable;
+  }
+  
    /**
     * Scan and list all partitions for partition TTL management.
     *
     * @return Partitions to apply TTL strategy
     */
    protected List<String> getPartitionPathsForTTL() {
-      if (StringUtils.isNullOrEmpty(config.getTTLPartitionSelected())) {
+      if (StringUtils.isNullOrEmpty(writeConfig.getTTLPartitionSelected())) {
         return getMatchedPartitions();
       } else {
         // Return All partition paths
-        return FSUtils.getAllPartitionPaths(hoodieTable.getContext(), config.getMetadataConfig(), config.getBasePath());
+        return FSUtils.getAllPartitionPaths(hoodieTable.getContext(), writeConfig.getMetadataConfig(), writeConfig.getBasePath());
       }
    }
 }
@@ -166,7 +183,6 @@ We can do similar thing for partition TTL management. The config for async ttl m
 |------------------------------|--------------------------------------------------------------------------------------------------------------------|---------|
 | hoodie.ttl.async.enabled     | Enable running of TTL management service, asynchronously as writes happen on the table.                            | False   |
 | hoodie.ttl.async.max.commits | Control frequency of async TTL management by specifying after how many commits TTL management should be triggered. | 4       |
-
 
 We can easily implement async ttl management for both spark and flink engine since we only need to call `hoodieTable.managePartitionTTL`. And we can support synchronized ttl management if we want.
 
