@@ -32,6 +32,7 @@ import org.apache.avro.Schema;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 
 /**
  * HoodieMerge defines how to merge two records. It is a stateless component.
@@ -127,18 +128,20 @@ public interface HoodieRecordMerger extends Serializable {
 
   default String[] getMandatoryFieldsForMerging(HoodieTableConfig cfg) {
     ArrayList<String> requiredFields = new ArrayList<>();
+
     if (cfg.populateMetaFields()) {
       requiredFields.add(HoodieRecord.RECORD_KEY_METADATA_FIELD);
     } else {
-      cfg.getRecordKeyFieldStream().forEach(requiredFields::add);
+      Option<String[]> fields = cfg.getRecordKeyFields();
+      if (fields.isPresent()) {
+        requiredFields.addAll(Arrays.asList(fields.get()));
+      }
     }
-    String preCombine = cfg.getPreCombineField();
 
-    //maybe throw exception otherwise
+    String preCombine = cfg.getPreCombineField();
     if (!StringUtils.isNullOrEmpty(preCombine)) {
       requiredFields.add(preCombine);
     }
-
     return requiredFields.toArray(new String[0]);
   }
 

@@ -172,18 +172,12 @@ public class HoodieCompactor {
       throw new HoodieException("Fail to run compaction for " + cfg.tableName + ", return code: " + 1);
     }
     final JavaSparkContext jsc = UtilHelpers.buildSparkContext("compactor-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory);
-    int ret = 0;
-    try {
-      ret = new HoodieCompactor(jsc, cfg).compact(cfg.retry);
-    } catch (Throwable throwable) {
-      throw new HoodieException("Fail to run compaction for " + cfg.tableName + ", return code: " + ret, throwable);
-    } finally {
-      jsc.stop();
-    }
-
+    int ret = new HoodieCompactor(jsc, cfg).compact(cfg.retry);
     if (ret != 0) {
       throw new HoodieException("Fail to run compaction for " + cfg.tableName + ", return code: " + ret);
     }
+    LOG.info("Success to run compaction for " + cfg.tableName);
+    jsc.stop();
   }
 
   public int compact(int retry) {

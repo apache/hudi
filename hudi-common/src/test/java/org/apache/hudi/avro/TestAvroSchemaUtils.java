@@ -231,7 +231,7 @@ public class TestAvroSchemaUtils {
     AvroSchemaUtils.checkSchemaCompatible(FULL_SCHEMA, SHORT_SCHEMA, shouldValidate, false, Collections.singleton("c"));
   }
 
-  /* behavior is slightly modified currently
+  /* [HUDI-7045] should uncomment this test
   @Test
   public void testAppendFieldsToSchemaDedupNested() {
     Schema full_schema = new Schema.Parser().parse("{\n"

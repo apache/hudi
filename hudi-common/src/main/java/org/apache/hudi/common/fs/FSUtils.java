@@ -832,6 +832,20 @@ public class FSUtils {
     return result;
   }
 
+  public static List<FileStatus> getAllDataFileStatus(FileSystem fs, Path path) throws IOException {
+    List<FileStatus> statuses = new ArrayList<>();
+    for (FileStatus status : fs.listStatus(path)) {
+      if (!status.getPath().toString().contains(HoodieTableMetaClient.METAFOLDER_NAME)) {
+        if (status.isDirectory()) {
+          statuses.addAll(getAllDataFileStatus(fs, status.getPath()));
+        } else {
+          statuses.add(status);
+        }
+      }
+    }
+    return statuses;
+  }
+
   public static Map<String, Boolean> deleteFilesParallelize(
       HoodieTableMetaClient metaClient,
       List<String> paths,

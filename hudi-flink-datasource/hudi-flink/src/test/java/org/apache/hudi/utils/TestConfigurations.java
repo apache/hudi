@@ -110,12 +110,12 @@ public class TestConfigurations {
           DataTypes.FIELD("salary", DataTypes.DOUBLE()), // new field
           DataTypes.FIELD("ts", DataTypes.TIMESTAMP(6)),
           DataTypes.FIELD("f_struct", DataTypes.ROW(
-              DataTypes.FIELD("f0", DataTypes.INT()),
               DataTypes.FIELD("f2", DataTypes.INT()), // new field added in the middle of struct
               DataTypes.FIELD("f1", DataTypes.STRING()),
               DataTypes.FIELD("renamed_change_type", DataTypes.BIGINT()),
               DataTypes.FIELD("f3", DataTypes.STRING()),
-              DataTypes.FIELD("drop_add", DataTypes.STRING()))), // new field added at the end of struct
+              DataTypes.FIELD("drop_add", DataTypes.STRING()),
+              DataTypes.FIELD("f0", DataTypes.DECIMAL(20, 0)))),
           DataTypes.FIELD("f_map", DataTypes.MAP(DataTypes.STRING(), DataTypes.DOUBLE())),
           DataTypes.FIELD("f_array", DataTypes.ARRAY(DataTypes.DOUBLE())),
           DataTypes.FIELD("new_row_col", DataTypes.ROW(

@@ -20,7 +20,6 @@ package org.apache.hudi.common.model;
 
 import org.apache.avro.Schema;
 
-import java.util.HashSet;
 import java.util.Properties;
 
 /**
@@ -60,21 +59,4 @@ public class HoodiePayloadProps {
   public static final String PAYLOAD_EVENT_TIME_FIELD_PROP = PAYLOAD_EVENT_TIME_FIELD_PROP_KEY;
   @Deprecated
   public static String DEFAULT_PAYLOAD_EVENT_TIME_FIELD_VAL = "ts";
-
-  /**
-   * List of [[HoodieRecordPayload]] classes capable of merging projected records:
-   * in some cases, when for example, user is only interested in a handful of columns rather
-   * than the full row we will be able to optimize data throughput by only fetching the required
-   * columns. However, to properly fulfil MOR semantic particular [[HoodieRecordPayload]] in
-   * question should be able to merge records based on just such projected representation (including
-   * columns required for merging, such as primary-key, pre-combine key, etc)
-   */
-  private static final HashSet<String> PROJECTION_COMPATIBLE_PAYLOAD_CLASSES = new HashSet<String>() {{
-      add(OverwriteWithLatestAvroPayload.class.getName());
-      //add(DefaultHoodieRecordPayload.class.getName());
-    }};
-
-  public static boolean isProjectionCompatible(String payloadClassName) {
-    return PROJECTION_COMPATIBLE_PAYLOAD_CLASSES.contains(payloadClassName);
-  }
 }

@@ -119,8 +119,10 @@ public class LSMTimeline {
   // -------------------------------------------------------------------------
   public static Schema getReadSchema(HoodieArchivedTimeline.LoadMode loadMode) {
     switch (loadMode) {
-      case SLIM:
-        return ArchivedInstantReadSchemas.TIMELINE_LSM_SLIM_READ_SCHEMA;
+      case TIME:
+        return ArchivedInstantReadSchemas.TIMELINE_LSM_READ_SCHEMA_WITH_TIME;
+      case ACTION:
+        return ArchivedInstantReadSchemas.TIMELINE_LSM_READ_SCHEMA_WITH_ACTION;
       case METADATA:
         return ArchivedInstantReadSchemas.TIMELINE_LSM_READ_SCHEMA_WITH_METADATA;
       case PLAN:

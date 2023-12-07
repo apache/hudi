@@ -67,6 +67,7 @@ object HoodieProcedures {
       ,(UpgradeTableProcedure.NAME, UpgradeTableProcedure.builder)
       ,(DowngradeTableProcedure.NAME, DowngradeTableProcedure.builder)
       ,(ShowMetadataTableColumnStatsProcedure.NAME, ShowMetadataTableColumnStatsProcedure.builder)
+      ,(ShowColumnStatsOverlapProcedure.NAME, ShowColumnStatsOverlapProcedure.builder)
       ,(ShowMetadataTableFilesProcedure.NAME, ShowMetadataTableFilesProcedure.builder)
       ,(ShowMetadataTablePartitionsProcedure.NAME, ShowMetadataTablePartitionsProcedure.builder)
       ,(CreateMetadataTableProcedure.NAME, CreateMetadataTableProcedure.builder)

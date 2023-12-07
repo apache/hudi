@@ -62,7 +62,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.DATE_TIME_PARSER;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.INPUT_TIME_UNIT;
@@ -538,15 +537,6 @@ public class HoodieTableConfig extends HoodieConfig {
     } else {
       return Option.of(Arrays.stream(keyFieldsValue.split(","))
           .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[] {}));
-    }
-  }
-
-  public Stream<String> getRecordKeyFieldStream() {
-    String keyFieldsValue = getStringOrDefault(RECORDKEY_FIELDS, null);
-    if (keyFieldsValue == null) {
-      return Stream.empty();
-    } else {
-      return Arrays.stream(keyFieldsValue.split(",")).filter(p -> p.length() > 0);
     }
   }
 

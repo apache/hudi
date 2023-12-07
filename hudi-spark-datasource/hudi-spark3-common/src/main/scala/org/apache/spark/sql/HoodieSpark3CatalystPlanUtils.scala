@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql
 
-import org.apache.hudi.{SparkAdapterSupport, SparkHoodieTableFileIndex}
+import org.apache.hudi.{HoodieCDCFileIndex, SparkAdapterSupport, SparkHoodieTableFileIndex}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.TableOutputResolver
 import org.apache.spark.sql.catalyst.catalog.CatalogStorageFormat
@@ -91,7 +91,10 @@ object HoodieSpark3CatalystPlanUtils extends SparkAdapterSupport {
   def applyNewFileFormatChanges(scanOperation: LogicalPlan, logicalRelation: LogicalPlan, fs: HadoopFsRelation): LogicalPlan = {
     val ff = fs.fileFormat.asInstanceOf[ParquetFileFormat with HoodieFormatTrait]
     ff.isProjected = true
-    val tableSchema = fs.location.asInstanceOf[SparkHoodieTableFileIndex].schema
+    val tableSchema = fs.location match {
+      case index: HoodieCDCFileIndex => index.cdcRelation.schema
+      case index: SparkHoodieTableFileIndex => index.schema
+    }
     val resolvedSchema = logicalRelation.resolve(tableSchema, fs.sparkSession.sessionState.analyzer.resolver)
     val unfilteredPlan = if (!fs.partitionSchema.fields.isEmpty && scanOperation.sameOutput(logicalRelation)) {
       Project(resolvedSchema, scanOperation)
@@ -173,7 +176,6 @@ object HoodieSpark3CatalystPlanUtils extends SparkAdapterSupport {
       Filter(filterToExpression(f, n => toRef(n, tableSchema, resolvedSchema)).get, p)
     })
   }
-
 
   /**
    * This is an extractor to accommodate for [[ResolvedTable]] signature change in Spark 3.2

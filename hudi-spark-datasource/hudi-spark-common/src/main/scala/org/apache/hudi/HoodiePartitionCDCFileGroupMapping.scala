@@ -24,11 +24,10 @@ import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
 import org.apache.spark.sql.catalyst.InternalRow
 
 class HoodiePartitionCDCFileGroupMapping(partitionValues: InternalRow,
-                                         fileGroups: Map[HoodieFileGroupId, List[HoodieCDCFileSplit]]
-                                        )
+                                         fileSplits: List[HoodieCDCFileSplit])
   extends HoodiePartitionValues(partitionValues) {
 
-  def getFileSplitsFor(fileGroupId: HoodieFileGroupId): Option[List[HoodieCDCFileSplit]] = {
-    fileGroups.get(fileGroupId)
+  def getFileSplits(): List[HoodieCDCFileSplit] = {
+    fileSplits
   }
 }
