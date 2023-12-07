@@ -410,7 +410,8 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            | ) using hudi
            | tblproperties (
            |  type = 'mor',
-           |  primaryKey = 'id'
+           |  primaryKey = 'id',
+           |  preCombineField = 'price'
            | )
            | partitioned by(dt)
            | location '${tmp.getCanonicalPath}'
@@ -1216,7 +1217,8 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              | ) using hudi
              | tblproperties (
              |  type = 'mor',
-             |  primaryKey = 'id'
+             |  primaryKey = 'id',
+             |  preCombineField = 'price'
              | )
              | partitioned by(dt)
              | location '${tmp.getCanonicalPath}'

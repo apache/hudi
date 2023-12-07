@@ -197,6 +197,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
            | partitioned by (dt)
            | tblproperties (
            |  primaryKey = 'id',
+           |  preCombineField = 'ts',
            |  type = 'mor'
            | )
            | location '${tmp.getCanonicalPath}/h0'
@@ -299,6 +300,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              | create table $tableName1 using hudi
              | tblproperties(
              |    primaryKey = 'id',
+             |    preCombineField = 'ts',
              |    type = '$tableType'
              | )
              | location '${tmp.getCanonicalPath}/$tableName1'
@@ -321,6 +323,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              | partitioned by (dt)
              | tblproperties(
              |    primaryKey = 'id',
+             |    preCombineField = 'price',
              |    type = '$tableType'
              | )
              | location '${tmp.getCanonicalPath}/$tableName2'
@@ -346,6 +349,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
                | partitioned by (dt)
                | tblproperties(
                |    primaryKey = 'id',
+               |    preCombineField = 'price',
                |    type = '$tableType'
                | )
                | location '${tmp.getCanonicalPath}/$tableName3'
@@ -362,6 +366,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              | partitioned by (dt)
              | tblproperties(
              |    primaryKey = 'id',
+             |    preCombineField = 'price',
              |    type = '$tableType'
              | )
              | location '${tmp.getCanonicalPath}/$tableName3'
@@ -386,6 +391,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              | partitioned by (dt)
              | tblproperties(
              |    primaryKey = 'id',
+             |    preCombineField = 'price',
              |    type = '$tableType'
              | )
              | location '${tmp.getCanonicalPath}/$tableName4'
@@ -763,6 +769,41 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
            | select 1 as id, 'a1' as name, 1000 as ts
            | """.stripMargin
       )("Not support CTAS for the ro/rt table")
+    }
+  }
+
+  test("Test Create MOR no PreCombine") {
+    withTempDir { basePath =>
+      val tableName = generateTableName
+      assertThrows[IllegalArgumentException] {
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  ls long
+             |) using hudi
+             | tblproperties (
+             |  primaryKey = 'id',
+             |  type = 'mor'
+             | )
+             | location '$basePath/$tableName'
+          """.stripMargin)
+      }
+
+      assertThrows[IllegalArgumentException] {
+        spark.sql(
+          s"""
+             | create table $tableName using hudi
+             | tblproperties(
+             |    primaryKey = 'id',
+             |    type = 'mor'
+             | )
+             | AS
+             | select 1 as id, 'a1' as name, 10 as price, '2021-04-01' as dt, 1000 as ls
+           """.stripMargin
+        )
+      }
     }
   }
 

@@ -359,6 +359,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     withRecordType()(withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         withTable(generateTableName) { tableName =>
+          val preCombineKeyString = if (tableType == "mor") ", preCombineField = 'ts'" else ""
           // Create a partitioned table
           spark.sql(
             s"""
@@ -372,6 +373,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
                | tblproperties (
                |  type = '$tableType',
                |  primaryKey = 'id'
+               |  $preCombineKeyString
                | )
                | partitioned by (dt)
                | location '${tmp.getCanonicalPath}/$tableName'
@@ -675,6 +677,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       withRecordType()(withTempDir { tmp =>
         Seq("cow", "mor").foreach {tableType =>
           withTable(generateTableName) { tableName =>
+            val preCombineKeyString = if (tableType == "mor") ", preCombineField = 'price'" else ""
             spark.sql(
               s"""
                  |create table $tableName (
@@ -686,6 +689,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
                  | tblproperties (
                  |  type = '$tableType',
                  |  primaryKey = 'id'
+                 |  $preCombineKeyString
                  | )
                  | partitioned by (dt)
                  | location '${tmp.getCanonicalPath}/$tableName'
@@ -725,6 +729,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       withRecordType()(withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
           withTable(generateTableName) { tableMultiPartition =>
+            val preCombineKeyString = if (tableType == "mor") ", preCombineField = 'price'" else ""
             spark.sql(
               s"""
                  |create table $tableMultiPartition (
@@ -737,6 +742,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
                  | tblproperties (
                  |  type = '$tableType',
                  |  primaryKey = 'id'
+                 |  $preCombineKeyString
                  | )
                  | partitioned by (dt, hh)
                  | location '${tmp.getCanonicalPath}/$tableMultiPartition'
@@ -776,6 +782,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       withRecordType()(withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
           withTable(generateTableName) { nonPartitionedTable =>
+            val preCombineKeyString = if (tableType == "mor") ", preCombineField = 'price'" else ""
             spark.sql(
               s"""
                  |create table $nonPartitionedTable (
@@ -786,6 +793,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
                  | tblproperties (
                  |  type = '$tableType',
                  |  primaryKey = 'id'
+                 |  $preCombineKeyString
                  | )
                  | location '${tmp.getCanonicalPath}/$nonPartitionedTable'
          """.stripMargin)
@@ -808,6 +816,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       withRecordType()(withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
           withTable(generateTableName) { inputTable =>
+            val preCombineKeyString = if (tableType == "mor") ", preCombineField = 'price'" else ""
             spark.sql(
               s"""
                  |create table $inputTable (
@@ -819,6 +828,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
                  | tblproperties (
                  |  type = '$tableType',
                  |  primaryKey = 'id'
+                 |  $preCombineKeyString
                  | )
                  | partitioned by (dt)
                  | location '${tmp.getCanonicalPath}/$inputTable'
@@ -833,6 +843,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
                    |tblproperties(
                    | type = '$tableType',
                    | primaryKey = 'id'
+                   | $preCombineKeyString
                    |)
                    | location '${tmp.getCanonicalPath}/$target'
                    | as
@@ -957,6 +968,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       withRecordType()(withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
           withTable(generateTableName) { nonPartitionedTable =>
+            val preCombineKeyString = if (tableType == "mor") ", preCombineField = 'price'" else ""
             spark.sql(
               s"""
                  |create table $nonPartitionedTable (
@@ -967,6 +979,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
                  | tblproperties (
                  |  type = '$tableType',
                  |  primaryKey = 'id'
+                 |  $preCombineKeyString
                  | )
                  | location '${tmp.getCanonicalPath}/$nonPartitionedTable'
          """.stripMargin)
@@ -990,6 +1003,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       withRecordType()(withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
           withTable(generateTableName) { partitionedTable =>
+            val preCombineKeyString = if (tableType == "mor") ", preCombineField = 'price'" else ""
             spark.sql(
               s"""
                  |create table $partitionedTable (
@@ -1001,6 +1015,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
                  | tblproperties (
                  |  type = '$tableType',
                  |  primaryKey = 'id'
+                 |  $preCombineKeyString
                  | )
                  | partitioned by (dt)
                  | location '${tmp.getCanonicalPath}/$partitionedTable'
