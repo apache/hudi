@@ -97,7 +97,7 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
         ? Option.empty() : Option.of(partitionPaths[0]);
 
     buffer = new HoodiePositionBasedFileGroupRecordBuffer<>(
-        getHoodieReaderContext(getBasePath(), partitionValues),
+        getHoodieReaderContext(getBasePath(), avroSchema),
         avroSchema,
         avroSchema,
         partitionNameOpt,

@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql
 
-import org.apache.hudi.SparkHoodieTableFileIndex
+import org.apache.hudi.{HoodieCDCFileIndex, SparkHoodieTableFileIndex}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer
 import org.apache.spark.sql.catalyst.catalog.CatalogStorageFormat
@@ -27,7 +27,7 @@ import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoTable, Join, LogicalPlan, MergeIntoTable, Project}
 import org.apache.spark.sql.execution.command.{AlterTableRecoverPartitionsCommand, ExplainCommand}
-import org.apache.spark.sql.execution.datasources.parquet.NewHoodieParquetFileFormat
+import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, ParquetFileFormat}
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.internal.SQLConf
 
@@ -100,10 +100,20 @@ object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
 
   override def applyNewHoodieParquetFileFormatProjection(plan: LogicalPlan): LogicalPlan = {
     plan match {
-      case p@PhysicalOperation(_, _,
-      l@LogicalRelation(fs: HadoopFsRelation, _, _, _)) if fs.fileFormat.isInstanceOf[NewHoodieParquetFileFormat] && !fs.fileFormat.asInstanceOf[NewHoodieParquetFileFormat].isProjected =>
-        fs.fileFormat.asInstanceOf[NewHoodieParquetFileFormat].isProjected = true
-        Project(l.resolve(fs.location.asInstanceOf[SparkHoodieTableFileIndex].schema, fs.sparkSession.sessionState.analyzer.resolver), p)
+      case physicalOperation@PhysicalOperation(_, _,
+      logicalRelation@LogicalRelation(fs: HadoopFsRelation, _, _, _)) if fs.fileFormat.isInstanceOf[ParquetFileFormat with HoodieFormatTrait] && !fs.fileFormat.asInstanceOf[ParquetFileFormat with HoodieFormatTrait].isProjected =>
+        val ff = fs.fileFormat.asInstanceOf[ParquetFileFormat with HoodieFormatTrait]
+        ff.isProjected = true
+        val tableSchema = fs.location match {
+          case index: HoodieCDCFileIndex => index.cdcRelation.schema
+          case index: SparkHoodieTableFileIndex => index.schema
+        }
+        val resolvedSchema = logicalRelation.resolve(tableSchema, fs.sparkSession.sessionState.analyzer.resolver)
+        if (!fs.partitionSchema.fields.isEmpty) {
+          Project(resolvedSchema, physicalOperation)
+        } else {
+          physicalOperation
+        }
       case _ => plan
     }
   }

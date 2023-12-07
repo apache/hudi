@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.CachingIterator;
 
 import java.util.Iterator;
 import java.util.Map;
@@ -53,5 +54,10 @@ public class LogFileIterator<T> extends CachingIterator<HoodieRecord<T>> {
   @Override
   protected boolean doHasNext() {
     return hasNextInternal();
+  }
+
+  @Override
+  public void close() {
+    scanner.close();
   }
 }
