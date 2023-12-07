@@ -1604,7 +1604,6 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
     assertEquals(false, Metrics.isInitialized(basePath), "Metrics should be shutdown")
-    assertEquals(false, Metrics.isInitialized(basePath + "/.hoodie/metadata"), "Metrics should be shutdown for metadata table")
   }
 
   @ParameterizedTest
