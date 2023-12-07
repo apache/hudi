@@ -62,7 +62,6 @@ object HoodieDatasetBulkInsertHelper
   def prepareForBulkInsert(df: DataFrame,
                            config: HoodieWriteConfig,
                            partitioner: BulkInsertPartitioner[Dataset[Row]],
-                           shouldDropPartitionColumns: Boolean,
                            instantTime: String): Dataset[Row] = {
     val populateMetaFields = config.populateMetaFields()
     val schema = df.schema
@@ -128,16 +127,10 @@ object HoodieDatasetBulkInsertHelper
       HoodieUnsafeUtils.createDataFrameFrom(df.sparkSession, prependedQuery)
     }
 
-    val trimmedDF = if (shouldDropPartitionColumns) {
-      dropPartitionColumns(updatedDF, config)
-    } else {
-      updatedDF
-    }
-
     val targetParallelism =
-      deduceShuffleParallelism(trimmedDF, config.getBulkInsertShuffleParallelism)
+      deduceShuffleParallelism(updatedDF, config.getBulkInsertShuffleParallelism)
 
-    partitioner.repartitionRecords(trimmedDF, targetParallelism)
+    partitioner.repartitionRecords(updatedDF, targetParallelism)
   }
 
   /**
@@ -243,21 +236,17 @@ object HoodieDatasetBulkInsertHelper
     }
   }
 
-  private def dropPartitionColumns(df: DataFrame, config: HoodieWriteConfig): DataFrame = {
-    val partitionPathFields = getPartitionPathFields(config).toSet
-    val nestedPartitionPathFields = partitionPathFields.filter(f => f.contains('.'))
-    if (nestedPartitionPathFields.nonEmpty) {
-      logWarning(s"Can not drop nested partition path fields: $nestedPartitionPathFields")
-    }
-
-    val partitionPathCols = (partitionPathFields -- nestedPartitionPathFields).toSeq
-
-    df.drop(partitionPathCols: _*)
-  }
-
   private def getPartitionPathFields(config: HoodieWriteConfig): Seq[String] = {
     val keyGeneratorClassName = config.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME)
     val keyGenerator = ReflectionUtils.loadClass(keyGeneratorClassName, new TypedProperties(config.getProps)).asInstanceOf[BuiltinKeyGenerator]
     keyGenerator.getPartitionPathFields.asScala
   }
+
+   def getPartitionPathCols(config: HoodieWriteConfig): Seq[String] = {
+    val partitionPathFields = getPartitionPathFields(config).toSet
+    val nestedPartitionPathFields = partitionPathFields.filter(f => f.contains('.'))
+
+    return (partitionPathFields -- nestedPartitionPathFields).toSeq
+  }
+
 }
