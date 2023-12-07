@@ -140,6 +140,43 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   }
 
   @Test
+  def testLogicalPartitioning(): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO, Map())
+    // Insert Operation
+    val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+
+    // don't specify partition path field and enable logical partitioning
+    val commonOptsNoPreCombine = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+      DataSourceWriteOptions.LOGICAL_PARTITION_ENABLE.key -> "true",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
+    ) ++ writeOpts
+
+    inputDF.write.partitionBy("partition").format("hudi")
+      .options(commonOptsNoPreCombine)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    val snapshot0 = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
+    snapshot0.cache()
+    assertEquals(100, snapshot0.count())
+
+    // verify partition cols in meta fields
+    assertTrue(snapshot0.filter("_hoodie_partition_path = '" + HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH + "'").count() > 0)
+    assertTrue(snapshot0.filter("_hoodie_partition_path = '" + HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH + "'").count() > 0)
+    assertTrue(snapshot0.filter("_hoodie_partition_path = '" + HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH + "'").count() > 0)
+    // verify partition dirs are not created
+    val fs = new Path(basePath).getFileSystem(new Configuration())
+    assertFalse(fs.exists(new Path(basePath + "/" + HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)))
+    assertFalse(fs.exists(new Path(basePath + "/" + HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)))
+    assertFalse(fs.exists(new Path(basePath + "/" + HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH)))
+  }
+
+  @Test
   def testInferPartitionBy(): Unit = {
     val (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO, Map())
     // Insert Operation

@@ -96,10 +96,13 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     this.path = makeNewPath(partitionPath);
 
     try {
-      HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, instantTime,
-          new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath),
-          hoodieTable.getPartitionMetafileFormat());
-      partitionMetadata.trySave(getPartitionId());
+      // If logical partitioning is enabled, we need not save partition metadata
+      if (!hoodieTable.getMetaClient().getTableConfig().isLogicalPartitioningEnabled()) {
+        HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, instantTime,
+            new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath),
+            hoodieTable.getPartitionMetafileFormat());
+        partitionMetadata.trySave(getPartitionId());
+      }
       createMarkerFile(partitionPath, FSUtils.makeBaseFileName(this.instantTime, this.writeToken, this.fileId, hoodieTable.getBaseFileExtension()));
       this.fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable.getHadoopConf(), config,
         writeSchemaWithMetaFields, this.taskContextSupplier, config.getRecordMerger().getRecordType());

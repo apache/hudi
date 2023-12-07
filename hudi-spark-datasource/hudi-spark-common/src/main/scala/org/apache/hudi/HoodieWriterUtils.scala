@@ -86,6 +86,7 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(MAKE_NEW_COLUMNS_NULLABLE)
     hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS)
     hoodieConfig.setDefaultValue(KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED)
+    hoodieConfig.setDefaultValue(LOGICAL_PARTITION_ENABLE)
     Map() ++ hoodieConfig.getProps.asScala ++ globalProps ++ DataSourceOptionsHelper.translateConfigurations(parameters)
   }
 

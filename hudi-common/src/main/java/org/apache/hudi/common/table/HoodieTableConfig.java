@@ -298,6 +298,12 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Absolute path where the index definitions are stored");
 
+  public static final ConfigProperty<Boolean> LOGICAL_PARTITIONING_ENABLE = ConfigProperty
+      .key("hoodie.table.logical.partitioning.enable")
+      .defaultValue(false)
+      .sinceVersion("1.0.0")
+      .withDocumentation("When set to true, the tables need not be physically partitioned. Index will be used to prune the partitions.");
+
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
   public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName, String recordMergerStrategyId) {
@@ -468,6 +474,7 @@ public class HoodieTableConfig extends HoodieConfig {
         HoodieInstantTimeGenerator.setCommitTimeZone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getString(TIMELINE_TIMEZONE)));
       }
       hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS);
+      hoodieConfig.setDefaultValue(LOGICAL_PARTITIONING_ENABLE);
 
       storeProperties(hoodieConfig.getProps(), outputStream);
     }
@@ -695,6 +702,10 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public Boolean shouldDropPartitionColumns() {
     return getBooleanOrDefault(DROP_PARTITION_COLUMNS);
+  }
+
+  public Boolean isLogicalPartitioningEnabled() {
+    return getBooleanOrDefault(LOGICAL_PARTITIONING_ENABLE);
   }
 
   public boolean isMultipleBaseFileFormatsEnabled() {

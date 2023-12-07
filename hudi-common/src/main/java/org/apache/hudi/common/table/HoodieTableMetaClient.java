@@ -945,8 +945,8 @@ public class HoodieTableMetaClient implements Serializable {
     private String inflightMetadataPartitions;
     private String secondaryIndexesMetadata;
     private Boolean multipleBaseFileFormatsEnabled;
-
     private String indexDefinitionPath;
+    private Boolean isLogicalPartitioningEnabled;
 
     /**
      * Persist the configs that is written at the first time, and should not be changed.
@@ -1121,6 +1121,11 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    public PropertyBuilder setIsLogicalPartitioningEnabled(Boolean isLogicalPartitioningEnabled) {
+      this.isLogicalPartitioningEnabled = isLogicalPartitioningEnabled;
+      return this;
+    }
+
     public PropertyBuilder set(Map<String, Object> props) {
       for (ConfigProperty<String> configProperty : HoodieTableConfig.PERSISTED_CONFIG_LIST) {
         if (containsConfigProperty(props, configProperty)) {
@@ -1251,6 +1256,9 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.INDEX_DEFINITION_PATH)) {
         setIndexDefinitionPath(hoodieConfig.getString(HoodieTableConfig.INDEX_DEFINITION_PATH));
       }
+      if (hoodieConfig.contains(HoodieTableConfig.LOGICAL_PARTITIONING_ENABLE)) {
+        setShouldDropPartitionColumns(hoodieConfig.getBoolean(HoodieTableConfig.LOGICAL_PARTITIONING_ENABLE));
+      }
       return this;
     }
 
@@ -1364,6 +1372,9 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (null != indexDefinitionPath) {
         tableConfig.setValue(HoodieTableConfig.INDEX_DEFINITION_PATH, indexDefinitionPath);
+      }
+      if (null != isLogicalPartitioningEnabled) {
+        tableConfig.setValue(HoodieTableConfig.LOGICAL_PARTITIONING_ENABLE, Boolean.toString(isLogicalPartitioningEnabled));
       }
       return tableConfig.getProps();
     }

@@ -647,6 +647,8 @@ object DataSourceWriteOptions {
     .withDocumentation("Controls whether overwrite use dynamic or static mode, if not configured, " +
       "respect spark.sql.sources.partitionOverwriteMode")
 
+  val LOGICAL_PARTITION_ENABLE: ConfigProperty[java.lang.Boolean] = HoodieTableConfig.LOGICAL_PARTITIONING_ENABLE
+
   /** @deprecated Use {@link HIVE_USE_PRE_APACHE_INPUT_FORMAT} and its methods instead */
   @Deprecated
   val HIVE_USE_PRE_APACHE_INPUT_FORMAT_OPT_KEY = HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT.key()

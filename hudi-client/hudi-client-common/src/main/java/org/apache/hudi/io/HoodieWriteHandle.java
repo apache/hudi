@@ -113,6 +113,10 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   }
 
   public Path makeNewPath(String partitionPath) {
+    // If logical partitioning is enabled, we don't need to create a new partition path
+    if (hoodieTable.getMetaClient().getTableConfig().isLogicalPartitioningEnabled()) {
+      return new Path(config.getBasePath(), FSUtils.makeBaseFileName(instantTime, writeToken, fileId, hoodieTable.getBaseFileExtension()));
+    }
     Path path = FSUtils.getPartitionPath(config.getBasePath(), partitionPath);
     try {
       if (!fs.exists(path)) {
@@ -129,6 +133,10 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
    * Make new file path with given file name.
    */
   protected Path makeNewFilePath(String partitionPath, String fileName) {
+    // If logical partitioning is enabled, we don't need to create a new partition path
+    if (hoodieTable.getMetaClient().getTableConfig().isLogicalPartitioningEnabled()) {
+      return new Path(config.getBasePath(), fileName);
+    }
     String relativePath = new Path((partitionPath.isEmpty() ? "" : partitionPath + "/")
         + fileName).toString();
     return new Path(config.getBasePath(), relativePath);
@@ -239,8 +247,11 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
 
   protected HoodieLogFormat.Writer createLogWriter(String deltaCommitTime, String fileSuffix) {
     try {
+      // If logical partitioning is enabled, then data is not physically partitioned, and we need to create the log file under the base path
+      Path parentPath = hoodieTable.getMetaClient().getTableConfig().isLogicalPartitioningEnabled() ? hoodieTable.getMetaClient().getBasePathV2() :
+          FSUtils.getPartitionPath(hoodieTable.getMetaClient().getBasePath(), partitionPath);
       return HoodieLogFormat.newWriterBuilder()
-          .onParentPath(FSUtils.getPartitionPath(hoodieTable.getMetaClient().getBasePath(), partitionPath))
+          .onParentPath(parentPath)
           .withFileId(fileId)
           .withDeltaCommit(deltaCommitTime)
           .withFileSize(0L)
