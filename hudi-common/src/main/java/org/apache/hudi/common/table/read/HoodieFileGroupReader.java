@@ -53,7 +53,7 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchema;
+import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchemaDedupNested;
 import static org.apache.hudi.avro.AvroSchemaUtils.findNestedField;
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
@@ -168,7 +168,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
 
     return readerContext.getFileRecordIterator(baseFile.getHadoopPath(), start, length,
-         dataSchema, requiredSchema, hadoopConf);
+         dataSchema, requiredSchema, hadoopConf, logFiles.isEmpty());
   }
 
   private Schema generateRequiredSchema() {
@@ -179,7 +179,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
     List<Schema.Field> addedFields = new ArrayList<>();
     for (String field : recordMerger.getMandatoryFieldsForMerging(hoodieTableConfig)) {
-      if (requestedSchema.getField(field) == null) {
+      if (!findNestedField(requestedSchema, field).isPresent()) {
         Option<Schema.Field> foundFieldOpt  = findNestedField(dataSchema, field);
         if (!foundFieldOpt.isPresent()) {
           throw new IllegalArgumentException("Field: " + field + " does not exist in the table schema");
@@ -193,7 +193,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return maybeReorderForBootstrap(requestedSchema);
     }
 
-    return maybeReorderForBootstrap(appendFieldsToSchema(requestedSchema, addedFields));
+    return maybeReorderForBootstrap(appendFieldsToSchemaDedupNested(requestedSchema, addedFields));
   }
 
   private Schema maybeReorderForBootstrap(Schema input) {
@@ -232,11 +232,11 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
     Option<ClosableIterator<T>> dataFileIterator = requiredFields.getRight().isEmpty() ? Option.empty() :
         Option.of(readerContext.getFileRecordIterator(dataFile.getHadoopPath(), 0, dataFile.getFileLen(),
-            createSchemaFromFields(allFields.getRight()), createSchemaFromFields(requiredFields.getRight()), hadoopConf));
+            createSchemaFromFields(allFields.getRight()), createSchemaFromFields(requiredFields.getRight()), hadoopConf, false));
 
     Option<ClosableIterator<T>> skeletonFileIterator = requiredFields.getLeft().isEmpty() ? Option.empty() :
         Option.of(readerContext.getFileRecordIterator(baseFile.getHadoopPath(), 0, baseFile.getFileLen(),
-            createSchemaFromFields(allFields.getLeft()), createSchemaFromFields(requiredFields.getLeft()), hadoopConf));
+            createSchemaFromFields(allFields.getLeft()), createSchemaFromFields(requiredFields.getLeft()), hadoopConf, false));
     if (!dataFileIterator.isPresent() && !skeletonFileIterator.isPresent()) {
       throw new IllegalStateException("should not be here if only partition cols are required");
     } else if (!dataFileIterator.isPresent()) {

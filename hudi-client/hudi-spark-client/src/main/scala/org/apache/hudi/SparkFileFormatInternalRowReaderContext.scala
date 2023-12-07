@@ -37,6 +37,7 @@ import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import org.apache.spark.sql.HoodieInternalRowUtils
+import org.apache.spark.sql.sources.Filter
 
 import scala.collection.mutable
 
@@ -46,11 +47,12 @@ import scala.collection.mutable
  *
  * This uses Spark parquet reader to read parquet data files or parquet log blocks.
  *
- * @param readermaps our intention is to build the reader inside of getFileRecordIterator, but since it is called from
- *                   the executor, we will need to port a bunch of the code from ParquetFileFormat for each spark version
- *                   for now, we pass in a map of the different readers we expect to create
+ * @param baseFileReader  A reader that transforms a {@link PartitionedFile} to an iterator of
+ *                        {@link InternalRow}. This is required for reading the base file and
+ *                        not required for reading a file group with only log files.
+ * @param partitionValues The values for a partition in which the file group lives.
  */
-class SparkFileFormatInternalRowReaderContext(readerMaps: mutable.Map[Long, PartitionedFile => Iterator[InternalRow]]) extends BaseSparkInternalRowReaderContext {
+class SparkFileFormatInternalRowReaderContext(extraProps: Map[String, String], filters: Seq[Filter]) extends BaseSparkInternalRowReaderContext {
   lazy val sparkAdapter = SparkAdapterSupport.sparkAdapter
   lazy val sparkFileReaderFactory = new HoodieSparkFileReaderFactory
   val deserializerMap: mutable.Map[Schema, HoodieAvroDeserializer] = mutable.Map()
@@ -60,7 +62,8 @@ class SparkFileFormatInternalRowReaderContext(readerMaps: mutable.Map[Long, Part
                                      length: Long,
                                      dataSchema: Schema,
                                      requiredSchema: Schema,
-                                     conf: Configuration): ClosableIterator[InternalRow] = {
+                                     conf: Configuration,
+                                     useFilters: Boolean): ClosableIterator[InternalRow] = {
     // partition value is empty because the spark parquet reader will append the partition columns to
     // each row if they are given. That is the only usage of the partition values in the reader.
     val fileInfo = sparkAdapter.getSparkPartitionedFileUtils
@@ -79,16 +82,9 @@ class SparkFileFormatInternalRowReaderContext(readerMaps: mutable.Map[Long, Part
           }
         }).asInstanceOf[ClosableIterator[InternalRow]]
     } else {
-      val schemaPairHashKey = generateSchemaPairHashKey(dataSchema, requiredSchema)
-      if (!readerMaps.contains(schemaPairHashKey)) {
-        throw new IllegalStateException("schemas don't hash to a known reader")
-      }
-      new CloseableInternalRowIterator(readerMaps(schemaPairHashKey).apply(fileInfo))
+      new CloseableInternalRowIterator(sparkAdapter.getParquetReader(fileInfo,
+        HoodieInternalRowUtils.getCachedSchema(requiredSchema), if (useFilters) filters else Seq.empty, conf, extraProps))
     }
-  }
-
-  private def generateSchemaPairHashKey(dataSchema: Schema, requestedSchema: Schema): Long = {
-    dataSchema.hashCode() + requestedSchema.hashCode()
   }
 
   /**
