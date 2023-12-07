@@ -198,7 +198,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
   private Schema maybeReorderForBootstrap(Schema input) {
     if (this.hoodieBaseFileOption.isPresent() && this.hoodieBaseFileOption.get().getBootstrapBaseFile().isPresent()) {
-      Pair<List<Schema.Field>,List<Schema.Field>> requiredFields = getDataAndMetaCols(input);
+      Pair<List<Schema.Field>, List<Schema.Field>> requiredFields = getDataAndMetaCols(input);
       if (!(requiredFields.getLeft().isEmpty() || requiredFields.getRight().isEmpty())) {
         return createSchemaFromFields(Stream.concat(requiredFields.getLeft().stream(), requiredFields.getRight().stream())
             .collect(Collectors.toList()));
@@ -207,7 +207,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     return input;
   }
 
-  private static Pair<List<Schema.Field>,List<Schema.Field>> getDataAndMetaCols(Schema schema) {
+  private static Pair<List<Schema.Field>, List<Schema.Field>> getDataAndMetaCols(Schema schema) {
     Map<Boolean, List<Schema.Field>> fieldsByMeta = schema.getFields().stream()
         .collect(Collectors.partitioningBy(f -> HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(f.name())));
     return Pair.of(fieldsByMeta.getOrDefault(true, Collections.emptyList()),
