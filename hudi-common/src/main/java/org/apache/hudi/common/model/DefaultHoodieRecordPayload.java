@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.Schema;
@@ -33,6 +34,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * {@link HoodieRecordPayload} impl that honors ordering field in both preCombine and combineAndGetUpdateValue.
@@ -44,6 +46,8 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
   public static final String DELETE_KEY = "hoodie.payload.delete.field";
   public static final String DELETE_MARKER = "hoodie.payload.delete.marker";
   private Option<Object> eventTime = Option.empty();
+  private AtomicBoolean isDeleteComputed = new AtomicBoolean(false);
+  private boolean isDefaultRecordPayloadDeleted = false;
 
   public DefaultHoodieRecordPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
@@ -72,10 +76,13 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
      */
     eventTime = updateEventTime(incomingRecord, properties);
 
+    if (!isDeleteComputed.getAndSet(true)) {
+      isDefaultRecordPayloadDeleted = isDeleteRecord(incomingRecord, properties);
+    }
     /*
      * Now check if the incoming record is a delete record.
      */
-    return isDeleteRecord(incomingRecord, properties) ? Option.empty() : Option.of(incomingRecord);
+    return isDefaultRecordPayloadDeleted ? Option.empty() : Option.of(incomingRecord);
   }
 
   @Override
@@ -86,7 +93,25 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     GenericRecord incomingRecord = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
     eventTime = updateEventTime(incomingRecord, properties);
 
-    return isDeleteRecord(incomingRecord, properties) ? Option.empty() : Option.of(incomingRecord);
+    if (!isDeleteComputed.getAndSet(true)) {
+      isDefaultRecordPayloadDeleted = isDeleteRecord(incomingRecord, properties);
+    }
+    return isDefaultRecordPayloadDeleted ? Option.empty() : Option.of(incomingRecord);
+  }
+
+  public boolean isDeleted(Schema schema, Properties props) {
+    if (recordBytes.length == 0) {
+      return true;
+    }
+    try {
+      if (!isDeleteComputed.getAndSet(true)) {
+        GenericRecord incomingRecord = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
+        isDefaultRecordPayloadDeleted = isDeleteRecord(incomingRecord, props);
+      }
+      return isDefaultRecordPayloadDeleted;
+    } catch (IOException e) {
+      throw new HoodieIOException("Deserializing bytes to avro failed ", e);
+    }
   }
 
   /**

@@ -46,7 +46,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getInputFormatClassName;
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getOutputFormatClassName;
@@ -103,15 +102,19 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
 
   public HiveSyncTool(Properties props, Configuration hadoopConf) {
     super(props, hadoopConf);
-    String metastoreUris = props.getProperty(METASTORE_URIS.key());
-    // Give precedence to HiveConf.ConfVars.METASTOREURIS if it is set.
-    // Else if user has provided HiveSyncConfigHolder.METASTORE_URIS, then set that in hadoop conf.
-    if (isNullOrEmpty(hadoopConf.get(HiveConf.ConfVars.METASTOREURIS.varname)) && nonEmpty(metastoreUris)) {
-      LOG.info(String.format("Setting %s = %s", HiveConf.ConfVars.METASTOREURIS.varname, metastoreUris));
-      hadoopConf.set(HiveConf.ConfVars.METASTOREURIS.varname, metastoreUris);
+    String configuredMetastoreUris = props.getProperty(METASTORE_URIS.key());
+
+    final Configuration hadoopConfForSync; // the configuration to use for this instance of the sync tool
+    if (nonEmpty(configuredMetastoreUris)) {
+      // if metastore uri is configured, we can create a new configuration with the value set
+      hadoopConfForSync = new Configuration(hadoopConf);
+      hadoopConfForSync.set(HiveConf.ConfVars.METASTOREURIS.varname, configuredMetastoreUris);
+    } else {
+      // if the user did not provide any URIs, then we can use the provided configuration
+      hadoopConfForSync = hadoopConf;
     }
-    HiveSyncConfig config = new HiveSyncConfig(props, hadoopConf);
-    this.config = config;
+
+    this.config = new HiveSyncConfig(props, hadoopConfForSync);
     this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
     this.tableName = config.getStringOrDefault(META_SYNC_TABLE_NAME);
     initSyncClient(config);

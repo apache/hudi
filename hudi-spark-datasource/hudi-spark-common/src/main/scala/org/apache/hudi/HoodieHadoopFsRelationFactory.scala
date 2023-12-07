@@ -40,7 +40,7 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.{SQLContext, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.BucketSpec
-import org.apache.spark.sql.execution.datasources.parquet.{HoodieFileGroupReaderBasedParquetFileFormat, NewHoodieParquetFileFormat}
+import org.apache.spark.sql.execution.datasources.parquet.{HoodieFileGroupReaderBasedParquetFileFormat, NewHoodieParquetFileFormat, ParquetFileFormat}
 import org.apache.spark.sql.execution.datasources.{FileFormat, FileIndex, FileStatusCache, HadoopFsRelation, HoodieMultipleBaseFileFormat}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.types.StructType
@@ -64,7 +64,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
                                                  val schemaSpec: Option[StructType]
                                                 ) extends SparkAdapterSupport with HoodieHadoopFsRelationFactory {
   protected lazy val sparkSession: SparkSession = sqlContext.sparkSession
-  protected lazy val optParams: Map[String, String] = options.filter(kv => !kv._1.equals(DATA_QUERIES_ONLY.key()))
+  protected lazy val optParams: Map[String, String] = options
   protected lazy val hadoopConfig: Configuration = new Configuration(sqlContext.sparkContext.hadoopConfiguration)
   protected lazy val jobConf = new JobConf(hadoopConfig)
 
@@ -229,30 +229,24 @@ class HoodieMergeOnReadSnapshotHadoopFsRelationFactory(override val sqlContext: 
       recordMergerImpls = recordMergerImpls,
       recordMergerStrategy = recordMergerStrategy
     )
-
   val mandatoryFields: Seq[String] = mandatoryFieldsForMerging
-  val fileGroupReaderBasedFileFormat = new HoodieFileGroupReaderBasedParquetFileFormat(
-    tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
-    metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
-    true, isBootstrap, false, shouldUseRecordPosition, Seq.empty)
-
-  val newHoodieParquetFileFormat = new NewHoodieParquetFileFormat(sparkSession.sparkContext.broadcast(tableState),
-    sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
-    metaClient.getTableConfig.getTableName, mergeType, mandatoryFields, true, isBootstrap, false, Seq.empty)
-
-  val multipleBaseFileFormat = new HoodieMultipleBaseFileFormat(sparkSession.sparkContext.broadcast(tableState),
-    sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
-    metaClient.getTableConfig.getTableName, mergeType, mandatoryFields, true, false, Seq.empty)
 
   override def buildFileIndex(): FileIndex = fileIndex
 
   override def buildFileFormat(): FileFormat = {
     if (fileGroupReaderEnabled && !isBootstrap) {
-      fileGroupReaderBasedFileFormat
+      new HoodieFileGroupReaderBasedParquetFileFormat(
+        tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
+        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
+        true, isBootstrap, false, shouldUseRecordPosition, Seq.empty)
     } else if (metaClient.getTableConfig.isMultipleBaseFileFormatsEnabled && !isBootstrap) {
-      multipleBaseFileFormat
+      new HoodieMultipleBaseFileFormat(sparkSession.sparkContext.broadcast(tableState),
+        sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
+        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields, true, false, Seq.empty)
     } else {
-      newHoodieParquetFileFormat
+      new NewHoodieParquetFileFormat(sparkSession.sparkContext.broadcast(tableState),
+        sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
+        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields, true, isBootstrap, false, Seq.empty)
     }
   }
 
@@ -286,20 +280,24 @@ class HoodieMergeOnReadIncrementalHadoopFsRelationFactory(override val sqlContex
   override val fileIndex = new HoodieIncrementalFileIndex(
     sparkSession, metaClient, schemaSpec, options, FileStatusCache.getOrCreate(sparkSession), true, true)
 
-  override val fileGroupReaderBasedFileFormat = new HoodieFileGroupReaderBasedParquetFileFormat(
-    tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
-    metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
-    true, isBootstrap, true, shouldUseRecordPosition, fileIndex.getRequiredFilters)
-
-  override val newHoodieParquetFileFormat = new NewHoodieParquetFileFormat(sparkSession.sparkContext.broadcast(tableState),
-    sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
-    metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
-    true, isBootstrap, true, fileIndex.getRequiredFilters)
-
-  override val multipleBaseFileFormat = new HoodieMultipleBaseFileFormat(sparkSession.sparkContext.broadcast(tableState),
-    sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
-    metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
-    true, true, fileIndex.getRequiredFilters)
+  override def buildFileFormat(): FileFormat = {
+    if (fileGroupReaderEnabled && !isBootstrap) {
+      new HoodieFileGroupReaderBasedParquetFileFormat(
+        tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
+        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
+        true, isBootstrap, true, shouldUseRecordPosition, fileIndex.getRequiredFilters)
+    } else if (metaClient.getTableConfig.isMultipleBaseFileFormatsEnabled && !isBootstrap) {
+      new HoodieMultipleBaseFileFormat(sparkSession.sparkContext.broadcast(tableState),
+        sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
+        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
+        true, true, fileIndex.getRequiredFilters)
+    } else {
+      new NewHoodieParquetFileFormat(sparkSession.sparkContext.broadcast(tableState),
+        sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
+        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
+        true, isBootstrap, true, fileIndex.getRequiredFilters)
+    }
+  }
 }
 
 class HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(override val sqlContext: SQLContext,
@@ -319,18 +317,22 @@ class HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(override val sqlContext: 
     FileStatusCache.getOrCreate(sparkSession),
     shouldEmbedFileSlices = true)
 
-  override val fileGroupReaderBasedFileFormat = new HoodieFileGroupReaderBasedParquetFileFormat(
-    tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
-    metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
-    false, isBootstrap, false, shouldUseRecordPosition, Seq.empty)
-
-  override val newHoodieParquetFileFormat = new NewHoodieParquetFileFormat(sparkSession.sparkContext.broadcast(tableState),
-    sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
-  metaClient.getTableConfig.getTableName, mergeType, mandatoryFields, false, isBootstrap, false, Seq.empty)
-
-  override val multipleBaseFileFormat = new HoodieMultipleBaseFileFormat(sparkSession.sparkContext.broadcast(tableState),
-    sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
-    metaClient.getTableConfig.getTableName, mergeType, mandatoryFields, false, false, Seq.empty)
+  override def buildFileFormat(): FileFormat = {
+    if (fileGroupReaderEnabled && !isBootstrap) {
+      new HoodieFileGroupReaderBasedParquetFileFormat(
+        tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
+        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
+        false, isBootstrap, false, shouldUseRecordPosition, Seq.empty)
+    } else if (metaClient.getTableConfig.isMultipleBaseFileFormatsEnabled && !isBootstrap) {
+      new HoodieMultipleBaseFileFormat(sparkSession.sparkContext.broadcast(tableState),
+        sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
+        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields, false, false, Seq.empty)
+    } else {
+      new NewHoodieParquetFileFormat(sparkSession.sparkContext.broadcast(tableState),
+        sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
+        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields, false, isBootstrap, false, Seq.empty)
+    }
+  }
 }
 
 class HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(override val sqlContext: SQLContext,
@@ -346,20 +348,24 @@ class HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(override val sqlContex
   override val fileIndex = new HoodieIncrementalFileIndex(
     sparkSession, metaClient, schemaSpec, options, FileStatusCache.getOrCreate(sparkSession), false, isBootstrap)
 
-  override val fileGroupReaderBasedFileFormat = new HoodieFileGroupReaderBasedParquetFileFormat(
-    tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
-    metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
-    false, isBootstrap, true, shouldUseRecordPosition, fileIndex.getRequiredFilters)
-
-  override val newHoodieParquetFileFormat = new NewHoodieParquetFileFormat(sparkSession.sparkContext.broadcast(tableState),
-    sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
-    metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
-    false, isBootstrap, true, fileIndex.getRequiredFilters)
-
-  override val multipleBaseFileFormat = new HoodieMultipleBaseFileFormat(sparkSession.sparkContext.broadcast(tableState),
-    sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
-    metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
-    false, true, fileIndex.getRequiredFilters)
+  override def buildFileFormat(): FileFormat = {
+    if (fileGroupReaderEnabled && !isBootstrap) {
+      new HoodieFileGroupReaderBasedParquetFileFormat(
+        tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
+        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
+        false, isBootstrap, true, shouldUseRecordPosition, fileIndex.getRequiredFilters)
+    } else if (metaClient.getTableConfig.isMultipleBaseFileFormatsEnabled && !isBootstrap) {
+      new HoodieMultipleBaseFileFormat(sparkSession.sparkContext.broadcast(tableState),
+        sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
+        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
+        false, true, fileIndex.getRequiredFilters)
+    } else {
+      new NewHoodieParquetFileFormat(sparkSession.sparkContext.broadcast(tableState),
+        sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
+        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
+        false, isBootstrap, true, fileIndex.getRequiredFilters)
+    }
+  }
 }
 
 class HoodieMergeOnReadCDCHadoopFsRelationFactory(override val sqlContext: SQLContext,
@@ -370,6 +376,10 @@ class HoodieMergeOnReadCDCHadoopFsRelationFactory(override val sqlContext: SQLCo
   extends HoodieMergeOnReadIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
   override val fileIndex = new HoodieCDCFileIndex(
     sparkSession, metaClient, schemaSpec, options, FileStatusCache.getOrCreate(sparkSession), true, true)
+
+  override def buildDataSchema(): StructType = fileIndex.cdcRelation.schema
+
+  override def buildPartitionSchema(): StructType = StructType(Nil)
 }
 
 class HoodieCopyOnWriteCDCHadoopFsRelationFactory(override val sqlContext: SQLContext,
@@ -380,6 +390,10 @@ class HoodieCopyOnWriteCDCHadoopFsRelationFactory(override val sqlContext: SQLCo
   extends HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
   override val fileIndex = new HoodieCDCFileIndex(
     sparkSession, metaClient, schemaSpec, options, FileStatusCache.getOrCreate(sparkSession), false, isBootstrap)
+
+  override def buildDataSchema(): StructType = fileIndex.cdcRelation.schema
+
+  override def buildPartitionSchema(): StructType = StructType(Nil)
 }
 
 

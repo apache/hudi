@@ -53,7 +53,17 @@ public class CloudSourceConfig extends HoodieConfig {
       .defaultValue(10)
       .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.cloud.meta.batch.size")
       .markAdvanced()
-      .withDocumentation("Number of metadata messages to pull at a time");
+      .withDocumentation("Number of metadata messages to pull in one API call to the cloud events queue. "
+          + "Multiple API calls with this batch size are sent to cloud events queue, until we consume hoodie.streamer.source.cloud.meta.max.num.messages.per.sync"
+          + "from the queue or hoodie.streamer.source.cloud.meta.max.fetch.time.per.sync.ms amount of time has passed or queue is empty. ");
+
+  public static final ConfigProperty<Integer> MAX_NUM_MESSAGES_PER_SYNC = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.cloud.meta.max.num.messages.per.sync")
+      .defaultValue(1000)
+      .markAdvanced()
+      .sinceVersion("0.14.1")
+      .withDocumentation("Maximum number of messages to consume per sync round. Multiple rounds of "
+          + BATCH_SIZE_CONF.key() + " could be invoked to reach max messages as configured by this config");
 
   public static final ConfigProperty<Boolean> ACK_MESSAGES = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.cloud.meta.ack")
@@ -108,7 +118,7 @@ public class CloudSourceConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> DATAFILE_FORMAT = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.datafile.format")
-      .defaultValue("parquet")
+      .defaultValue(HoodieIncrSourceConfig.SOURCE_FILE_FORMAT.defaultValue())
       .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.cloud.data.datafile.format")
       .markAdvanced()
       .withDocumentation("Format of the data file. By default, this will be the same as hoodie.streamer.source.hoodieincr.file.format");
@@ -137,4 +147,12 @@ public class CloudSourceConfig extends HoodieConfig {
       .sinceVersion("0.14.1")
       .withDocumentation("specify this value in bytes, to coalesce partitions of source dataset not greater than specified limit");
 
+  public static final ConfigProperty<Integer> MAX_FETCH_TIME_PER_SYNC_SECS = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.cloud.meta.max.fetch.time.per.sync.secs")
+      .defaultValue(60)
+      .markAdvanced()
+      .sinceVersion("0.14.1")
+      .withDocumentation("Max time in secs to consume " + MAX_NUM_MESSAGES_PER_SYNC.key() + " messages from cloud queue. Cloud event queues like SQS, "
+          + "PubSub can return empty responses even when messages are available the queue, this config ensures we don't wait forever "
+          + "to consume MAX_MESSAGES_CONF messages, but time out and move on further.");
 }

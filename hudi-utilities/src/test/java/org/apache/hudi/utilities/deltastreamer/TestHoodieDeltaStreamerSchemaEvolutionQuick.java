@@ -466,8 +466,8 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
           .stream().anyMatch(t -> t.getType().equals(Schema.Type.STRING)));
       assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
     } catch (Exception e) {
-      assertTrue(e.getMessage().contains("java.lang.NullPointerException")
-          || e.getMessage().contains("Incoming batch schema is not compatible with the table's one"));
+      assertTrue(containsErrorMessage(e, "java.lang.NullPointerException",
+          "Incoming batch schema is not compatible with the table's one"));
     }
   }
 

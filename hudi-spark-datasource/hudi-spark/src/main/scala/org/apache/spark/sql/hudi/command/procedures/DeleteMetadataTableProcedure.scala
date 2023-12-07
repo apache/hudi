@@ -44,16 +44,22 @@ class DeleteMetadataTableProcedure extends BaseProcedure with ProcedureBuilder w
     super.checkArgs(PARAMETERS, args)
 
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
-    val basePath = getBasePath(tableName)
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val tableNames = tableName.get.asInstanceOf[String].split(",")
+    var metadataPaths = ""
+    for (tb <- tableNames) {
+      val basePath = getBasePath(Option.apply(tb))
+      val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
 
-    try {
-      val metadataTableBasePath = deleteMetadataTable(metaClient, new HoodieSparkEngineContext(jsc), false)
-      Seq(Row(s"Deleted Metadata Table at '$metadataTableBasePath'"))
-    } catch {
-      case e: FileNotFoundException =>
-        Seq(Row("File not found: " + e.getMessage))
+      try {
+        val metadataTableBasePath = deleteMetadataTable(metaClient, new HoodieSparkEngineContext(jsc), false)
+        metadataPaths = s"$metadataPaths,$metadataTableBasePath"
+        Seq(Row(s"Deleted Metadata Table at '$metadataTableBasePath'"))
+      } catch {
+        case e: FileNotFoundException =>
+          Seq(Row("File not found: " + e.getMessage))
+      }
     }
+    Seq(Row(s"Deleted Metadata Table at '$metadataPaths'"))
   }
 
   override def build = new DeleteMetadataTableProcedure()

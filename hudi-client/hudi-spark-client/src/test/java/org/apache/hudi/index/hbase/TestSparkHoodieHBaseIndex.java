@@ -86,6 +86,7 @@ import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_QUORUM;
 import static org.apache.hadoop.hbase.HConstants.ZOOKEEPER_ZNODE_PARENT;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atMost;
@@ -221,11 +222,10 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
   }
 
   @Test
-  public void testTagLocationAndPartitionPathUpdate() throws Exception {
+  public void testTagLocationAndPartitionPathUpdateDisabled() throws Exception {
     final String newCommitTime = "001";
-    final int numRecords = 10;
     final String oldPartitionPath = "1970/01/01";
-    final String emptyHoodieRecordPayloadClassName = EmptyHoodieRecordPayload.class.getName();
+    final int numRecords = 10;
 
     List<HoodieRecord> newRecords = dataGen.generateInserts(newCommitTime, numRecords);
     List<HoodieRecord> oldRecords = new LinkedList();
@@ -238,39 +238,68 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
     JavaRDD<HoodieRecord> newWriteRecords = jsc().parallelize(newRecords, 1);
     JavaRDD<HoodieRecord> oldWriteRecords = jsc().parallelize(oldRecords, 1);
 
-    HoodieWriteConfig config = getConfig(true, false);
-    SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(getConfig(true, false));
+    HoodieWriteConfig config = getConfigBuilder(100, false, false).build();
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
+    writeClient.startCommitWithTime(newCommitTime);
+    JavaRDD<WriteStatus> writeStatues = writeClient.upsert(oldWriteRecords, newCommitTime);
+    writeClient.commit(newCommitTime, writeStatues);
+    assertNoWriteErrors(writeStatues.collect());
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);
+    List<HoodieRecord> notAllowPathChangeRecords = tagLocation(index, newWriteRecords, hoodieTable).collect();
+    assertEquals(numRecords, notAllowPathChangeRecords.stream().count());
 
-    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config);) {
-      // allowed path change test
-      metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    String newCommitTime1 = "002";
+    writeClient.startCommitWithTime(newCommitTime1);
+    JavaRDD<WriteStatus> writeStatues1 = writeClient.upsert(newWriteRecords, newCommitTime1);
+    writeClient.commit(newCommitTime1, writeStatues1);
+    assertNoWriteErrors(writeStatues1.collect());
+    assertEquals(numRecords, writeStatues1.map(writeStatus -> writeStatus.getTotalRecords()).reduce(Long::sum));
+    assertEquals(0, writeStatues1.filter(writeStatus -> !writeStatus.getPartitionPath().equals(oldPartitionPath)).count());
+  }
 
-      JavaRDD<HoodieRecord> oldHoodieRecord = tagLocation(index, oldWriteRecords, hoodieTable);
-      assertEquals(0, oldHoodieRecord.filter(record -> record.isCurrentLocationKnown()).count());
-      writeClient.startCommitWithTime(newCommitTime);
-      JavaRDD<WriteStatus> writeStatues = writeClient.upsert(oldWriteRecords, newCommitTime);
-      writeClient.commit(newCommitTime, writeStatues);
-      assertNoWriteErrors(writeStatues.collect());
-      updateLocation(index, writeStatues, hoodieTable);
+  @Test
+  public void testTagLocationAndPartitionPathUpdateEnabled() throws Exception {
+    final String newCommitTime = "001";
+    final String oldPartitionPath = "1970/01/01";
+    final int numRecords = 10;
 
-      metaClient = HoodieTableMetaClient.reload(metaClient);
-      hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-      List<HoodieRecord> taggedRecords = tagLocation(index, newWriteRecords, hoodieTable).collect();
-      assertEquals(numRecords * 2L, taggedRecords.stream().count());
-      // Verify the number of deleted records
-      assertEquals(numRecords, taggedRecords.stream().filter(record -> record.getKey().getPartitionPath().equals(oldPartitionPath)
-          && record.getData().getClass().getName().equals(emptyHoodieRecordPayloadClassName)).count());
-      // Verify the number of inserted records
-      assertEquals(numRecords, taggedRecords.stream().filter(record -> !record.getKey().getPartitionPath().equals(oldPartitionPath)).count());
-
-      // not allowed path change test
-      index = new SparkHoodieHBaseIndex(getConfig(false, false));
-      List<HoodieRecord> notAllowPathChangeRecords = tagLocation(index, newWriteRecords, hoodieTable).collect();
-      assertEquals(numRecords, notAllowPathChangeRecords.stream().count());
-      assertEquals(numRecords, taggedRecords.stream().filter(hoodieRecord -> hoodieRecord.isCurrentLocationKnown()
-          && hoodieRecord.getKey().getPartitionPath().equals(oldPartitionPath)).count());
+    List<HoodieRecord> newRecords = dataGen.generateInserts(newCommitTime, numRecords);
+    List<HoodieRecord> oldRecords = new LinkedList();
+    for (HoodieRecord newRecord: newRecords) {
+      HoodieKey key = new HoodieKey(newRecord.getRecordKey(), oldPartitionPath);
+      HoodieRecord hoodieRecord = new HoodieAvroRecord(key, (HoodieRecordPayload) newRecord.getData());
+      oldRecords.add(hoodieRecord);
     }
+
+    JavaRDD<HoodieRecord> newWriteRecords = jsc().parallelize(newRecords, 1);
+    JavaRDD<HoodieRecord> oldWriteRecords = jsc().parallelize(oldRecords, 1);
+
+    HoodieWriteConfig config = getConfigBuilder(100, true, false).build();
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
+    writeClient.startCommitWithTime(newCommitTime);
+    JavaRDD<WriteStatus> writeStatues = writeClient.upsert(oldWriteRecords, newCommitTime);
+    writeClient.commit(newCommitTime, writeStatues);
+    assertNoWriteErrors(writeStatues.collect());
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);
+    List<HoodieRecord> pathChangeRecords = tagLocation(index, newWriteRecords, hoodieTable).collect();
+    assertEquals(numRecords * 2, pathChangeRecords.stream().count());
+    assertEquals(numRecords, pathChangeRecords.stream().filter(HoodieRecord::isCurrentLocationKnown).count());
+
+    String newCommitTime1 = "002";
+    writeClient.startCommitWithTime(newCommitTime1);
+    JavaRDD<WriteStatus> writeStatues1 = writeClient.upsert(newWriteRecords, newCommitTime1);
+    writeClient.commit(newCommitTime1, writeStatues1);
+    assertNoWriteErrors(writeStatues1.collect());
+    assertEquals(numRecords * 2, writeStatues1.map(writeStatus -> writeStatus.getTotalRecords()).reduce(Long::sum));
+    assertNotEquals(0, writeStatues1.filter(writeStatus -> writeStatus.getPartitionPath().equals(oldPartitionPath)).count());
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    List<HoodieRecord> pathChangeRecords1 = tagLocation(index, newWriteRecords, hoodieTable).collect();
+    assertEquals(numRecords, pathChangeRecords1.stream().filter(HoodieRecord::isCurrentLocationKnown).count());
   }
 
   @Test

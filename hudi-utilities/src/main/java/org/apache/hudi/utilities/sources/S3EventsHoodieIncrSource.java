@@ -51,6 +51,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.DATAFILE_FORMAT;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.ENABLE_EXISTS_CHECK;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH;
@@ -70,6 +71,7 @@ import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getMiss
 public class S3EventsHoodieIncrSource extends HoodieIncrSource {
 
   private static final Logger LOG = LoggerFactory.getLogger(S3EventsHoodieIncrSource.class);
+  private static final String EMPTY_STRING = "";
   private final String srcPath;
   private final int numInstantsPerFetch;
   private final boolean checkIfFileExists;
@@ -79,6 +81,8 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
   private final CloudDataFetcher cloudDataFetcher;
 
   private final Option<SchemaProvider> schemaProvider;
+
+  private final Option<SnapshotLoadQuerySplitter> snapshotLoadQuerySplitter;
 
   public static class Config {
     // control whether we do existence check for files before consuming them
@@ -133,11 +137,18 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     this.srcPath = getStringWithAltKeys(props, HOODIE_SRC_BASE_PATH);
     this.numInstantsPerFetch = getIntWithAltKeys(props, NUM_INSTANTS_PER_FETCH);
     this.checkIfFileExists = getBooleanWithAltKeys(props, ENABLE_EXISTS_CHECK);
-    this.fileFormat = getStringWithAltKeys(props, SOURCE_FILE_FORMAT, true);
+
+    // This is to ensure backward compatibility where we were using the
+    // config SOURCE_FILE_FORMAT for file format in previous versions.
+    this.fileFormat = StringUtils.isNullOrEmpty(getStringWithAltKeys(props, DATAFILE_FORMAT, EMPTY_STRING))
+        ? getStringWithAltKeys(props, SOURCE_FILE_FORMAT, true)
+        : getStringWithAltKeys(props, DATAFILE_FORMAT, EMPTY_STRING);
+
     this.missingCheckpointStrategy = getMissingCheckpointStrategy(props);
     this.queryRunner = queryRunner;
     this.cloudDataFetcher = cloudDataFetcher;
     this.schemaProvider = Option.ofNullable(schemaProvider);
+    this.snapshotLoadQuerySplitter = SnapshotLoadQuerySplitter.getInstance(props);
   }
 
   @Override
@@ -158,9 +169,9 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
       LOG.warn("Already caught up. No new data to process");
       return Pair.of(Option.empty(), queryInfo.getEndInstant());
     }
-
-    Dataset<Row> source = queryRunner.run(queryInfo);
-    Dataset<Row> filteredSourceData = applyFilter(source, fileFormat);
+    Pair<QueryInfo, Dataset<Row>> queryInfoDatasetPair = queryRunner.run(queryInfo, snapshotLoadQuerySplitter);
+    queryInfo = queryInfoDatasetPair.getLeft();
+    Dataset<Row> filteredSourceData = applyFilter(queryInfoDatasetPair.getRight(), fileFormat);
 
     LOG.info("Adjusting end checkpoint:" + queryInfo.getEndInstant() + " based on sourceLimit :" + sourceLimit);
     Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> checkPointAndDataset =

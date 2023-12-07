@@ -18,6 +18,7 @@
 
 package org.apache.hudi
 
+import org.apache.avro.Schema.Type
 import org.apache.avro.generic.GenericRecord
 import org.apache.avro.{JsonProperties, Schema}
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
@@ -241,5 +242,13 @@ object AvroConversionUtils {
     val qualifiedName = AvroSchemaUtils.getAvroRecordQualifiedName(tableName)
     val nameParts = qualifiedName.split('.')
     (nameParts.last, nameParts.init.mkString("."))
+  }
+
+  private def handleUnion(schema: Schema): Schema = {
+    if (schema.getType == Type.UNION) {
+      val index = if (schema.getTypes.get(0).getType == Schema.Type.NULL) 1 else 0
+      return schema.getTypes.get(index)
+    }
+    schema
   }
 }
