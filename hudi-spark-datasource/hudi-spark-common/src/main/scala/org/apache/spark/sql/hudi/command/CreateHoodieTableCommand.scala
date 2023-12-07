@@ -21,6 +21,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.ConfigUtils
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.HoodieParquetInputFormat
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils
@@ -82,7 +83,7 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
       CreateHoodieTableCommand.createTableInCatalog(sparkSession, hoodieCatalogTable, ignoreIfExists, queryAsProp)
     } catch {
       case NonFatal(e) =>
-        logWarning("Failed to create catalog table in metastore", e)
+        throw new HoodieException("Failed to create catalog table in metastore", e)
     }
     Seq.empty[Row]
   }
