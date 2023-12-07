@@ -18,12 +18,13 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hadoop.fs.{FileStatus, Path}
-import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.fs.{FSUtils, HoodieWrapperFileSystem}
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieDefaultTimeline, HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util
+import org.apache.hudi.common.util.StringUtils
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
@@ -92,8 +93,12 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
     val basePath = getBasePath(table)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
     val fs = metaClient.getFs
-    val globPath = String.format("%s/%s/*", basePath, globRegex)
-    val statuses = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(globPath))
+    val statuses = if (globRegex == PARAMETERS_ALL.apply(6).default) {
+      FSUtils.getAllDataFileStatus(fs, new Path(basePath))
+    } else {
+      val globPath = String.format("%s/%s/*", basePath, globRegex)
+      FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(globPath))
+    }
     var timeline: HoodieTimeline = if (excludeCompaction) {
       metaClient.getActiveTimeline.getCommitsTimeline
     } else {
