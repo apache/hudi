@@ -61,6 +61,8 @@ class SparkFileFormatInternalRowReaderContext(readerMaps: mutable.Map[Long, Part
                                      dataSchema: Schema,
                                      requiredSchema: Schema,
                                      conf: Configuration): ClosableIterator[InternalRow] = {
+    // partition value is empty because the spark parquet reader will append the partition columns to
+    // each row if they are given. That is the only usage of the partition values in the reader.
     val fileInfo = sparkAdapter.getSparkPartitionedFileUtils
       .createPartitionedFile(InternalRow.empty, filePath, start, length)
     if (FSUtils.isLogFile(filePath)) {
@@ -77,15 +79,15 @@ class SparkFileFormatInternalRowReaderContext(readerMaps: mutable.Map[Long, Part
           }
         }).asInstanceOf[ClosableIterator[InternalRow]]
     } else {
-      val key = schemaPairHashKey(dataSchema, requiredSchema)
-      if (!readerMaps.contains(key)) {
+      val schemaPairHashKey = generateSchemaPairHashKey(dataSchema, requiredSchema)
+      if (!readerMaps.contains(schemaPairHashKey)) {
         throw new IllegalStateException("schemas don't hash to a known reader")
       }
-      new CloseableInternalRowIterator(readerMaps(key).apply(fileInfo))
+      new CloseableInternalRowIterator(readerMaps(schemaPairHashKey).apply(fileInfo))
     }
   }
 
-  private def schemaPairHashKey(dataSchema: Schema, requestedSchema: Schema): Long = {
+  private def generateSchemaPairHashKey(dataSchema: Schema, requestedSchema: Schema): Long = {
     dataSchema.hashCode() + requestedSchema.hashCode()
   }
 
