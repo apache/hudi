@@ -129,7 +129,7 @@ public class HoodieStorageConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> PARQUET_WRITE_LEGACY_FORMAT_ENABLED = ConfigProperty
       .key("hoodie.parquet.writelegacyformat.enabled")
-      .defaultValue("false")
+      .noDefaultValue("Parquet writeLegacyFormat will only be enforced when explicitly set, else, it is up to Hudi's internal logic to decide what to use")
       .markAdvanced()
       .withDocumentation("Sets spark.sql.parquet.writeLegacyFormat. If true, data will be written in a way of Spark 1.4 and earlier. "
           + "For example, decimal values will be written in Parquet's fixed-length byte array format which other systems such as Apache Hive and Apache Impala use. "
