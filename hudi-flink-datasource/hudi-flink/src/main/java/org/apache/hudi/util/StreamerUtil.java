@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -41,6 +42,7 @@ import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
 import org.apache.hudi.sink.transform.ChainedTransformer;
@@ -464,5 +466,24 @@ public class StreamerUtil {
     return tableType == HoodieTableType.MERGE_ON_READ
         ? !instant.getAction().equals(HoodieTimeline.COMMIT_ACTION) // not a compaction
         : !ClusteringUtil.isClusteringInstant(instant, timeline);   // not a clustering
+  }
+
+  /**
+   * Validate pre_combine key.
+   */
+  public static void checkPreCombineKey(Configuration conf, List<String> fields) {
+    String preCombineField = conf.get(FlinkOptions.PRECOMBINE_FIELD);
+    if (!fields.contains(preCombineField)) {
+      if (OptionsResolver.isDefaultHoodieRecordPayloadClazz(conf)) {
+        throw new HoodieValidationException("Option '" + FlinkOptions.PRECOMBINE_FIELD.key()
+                + "' is required for payload class: " + DefaultHoodieRecordPayload.class.getName());
+      }
+      if (preCombineField.equals(FlinkOptions.PRECOMBINE_FIELD.defaultValue())) {
+        conf.setString(FlinkOptions.PRECOMBINE_FIELD, FlinkOptions.NO_PRE_COMBINE);
+      } else if (!preCombineField.equals(FlinkOptions.NO_PRE_COMBINE)) {
+        throw new HoodieValidationException("Field " + preCombineField + " does not exist in the table schema."
+                + "Please check '" + FlinkOptions.PRECOMBINE_FIELD.key() + "' option.");
+      }
+    }
   }
 }

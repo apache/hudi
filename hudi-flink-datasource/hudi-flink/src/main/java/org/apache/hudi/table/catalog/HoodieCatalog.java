@@ -21,7 +21,6 @@ package org.apache.hudi.table.catalog;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -30,9 +29,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
-import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieMetadataException;
-import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
@@ -343,19 +340,7 @@ public class HoodieCatalog extends AbstractCatalog {
     }
 
     // check preCombine
-    final String preCombineField = conf.getString(FlinkOptions.PRECOMBINE_FIELD);
-    if (!resolvedSchema.getColumnNames().contains(preCombineField)) {
-      if (OptionsResolver.isDefaultHoodieRecordPayloadClazz(conf)) {
-        throw new HoodieValidationException("Option '" + FlinkOptions.PRECOMBINE_FIELD.key()
-            + "' is required for payload class: " + DefaultHoodieRecordPayload.class.getName());
-      }
-      if (preCombineField.equals(FlinkOptions.PRECOMBINE_FIELD.defaultValue())) {
-        conf.setString(FlinkOptions.PRECOMBINE_FIELD, FlinkOptions.NO_PRE_COMBINE);
-      } else if (!preCombineField.equals(FlinkOptions.NO_PRE_COMBINE)) {
-        throw new HoodieValidationException("Field " + preCombineField + " does not exist in the table schema."
-            + "Please check '" + FlinkOptions.PRECOMBINE_FIELD.key() + "' option.");
-      }
-    }
+    StreamerUtil.checkPreCombineKey(conf, resolvedSchema.getColumnNames());
 
     if (resolvedTable.isPartitioned()) {
       final String partitions = String.join(",", resolvedTable.getPartitionKeys());
