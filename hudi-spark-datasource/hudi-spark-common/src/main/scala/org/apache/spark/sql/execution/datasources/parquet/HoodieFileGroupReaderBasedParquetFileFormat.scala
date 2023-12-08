@@ -26,21 +26,18 @@ import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
-import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, MergeOnReadSnapshotRelation, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieTableSchema, HoodieTableState, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.SerializableConfiguration
 
-import scala.annotation.tailrec
-import scala.collection.mutable
 import scala.jdk.CollectionConverters.asScalaIteratorConverter
 
 trait HoodieFormatTrait {
@@ -92,24 +89,25 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                                               filters: Seq[Filter],
                                               options: Map[String, String],
                                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
-    //dataSchema is not always right due to spark bugs
-    val partitionColumns = partitionSchema.fieldNames
-    val dataSchema = StructType(tableSchema.structTypeSchema.fields.filterNot(f => partitionColumns.contains(f.name)))
     val outputSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
     spark.conf.set("spark.sql.parquet.enableVectorizedReader", supportBatchResult)
-    val requiredSchemaWithMandatory = generateRequiredSchemaWithMandatory(requiredSchema, dataSchema, partitionSchema)
-    val isCount = requiredSchemaWithMandatory.isEmpty
-    val requiredSchemaSplits = requiredSchemaWithMandatory.fields.partition(f => HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(f.name))
-    val requiredMeta = StructType(requiredSchemaSplits._1)
-    val requiredWithoutMeta = StructType(requiredSchemaSplits._2)
+    val isCount = requiredSchema.isEmpty && !isMOR && !isIncremental
     val augmentedHadoopConf = FSUtils.buildInlineConf(hadoopConf)
-    val (baseFileReader, preMergeBaseFileReader, readerMaps, cdcFileReader) = buildFileReaders(
-      spark, dataSchema, partitionSchema, if (isIncremental) requiredSchemaWithMandatory else requiredSchema,
-      filters, options, augmentedHadoopConf, requiredSchemaWithMandatory, requiredWithoutMeta, requiredMeta)
+    val baseFileReader = super.buildReaderWithPartitionValues(spark, dataSchema, partitionSchema, requiredSchema,
+      filters ++ requiredFilters, options, new Configuration(hadoopConf))
+    val cdcFileReader = super.buildReaderWithPartitionValues(
+      spark,
+      tableSchema.structTypeSchema,
+      StructType(Nil),
+      tableSchema.structTypeSchema,
+      Nil,
+      options,
+      new Configuration(hadoopConf))
+
 
     val requestedAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(requiredSchema, sanitizedTableName)
     val dataAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName)
-
+    val extraProps = spark.sparkContext.broadcast(sparkAdapter.getExtraProps(supportBatchResult, spark.sessionState.conf, options))
     val broadcastedHadoopConf = spark.sparkContext.broadcast(new SerializableConfiguration(augmentedHadoopConf))
     val broadcastedDataSchema =  spark.sparkContext.broadcast(dataAvroSchema)
     val broadcastedRequestedSchema =  spark.sparkContext.broadcast(requestedAvroSchema)
@@ -131,8 +129,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                 val hoodieBaseFile = fileSlice.getBaseFile.get()
                 baseFileReader(createPartitionedFile(fileSliceMapping.getPartitionValues, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen))
               } else {
-                val readerContext: HoodieReaderContext[InternalRow] = new SparkFileFormatInternalRowReaderContext(
-                  readerMaps)
+                val readerContext: HoodieReaderContext[InternalRow] = new SparkFileFormatInternalRowReaderContext(extraProps.value, filters)
                 val serializedHadoopConf = broadcastedHadoopConf.value.value
                 val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
                   .builder().setConf(serializedHadoopConf).setBasePath(tableState.tablePath).build
@@ -212,146 +209,6 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                             to: StructType): Iterator[InternalRow] = {
     val unsafeProjection = generateUnsafeProjection(from, to)
     iter.map(d => unsafeProjection(d))
-  }
-
-  private def generateRequiredSchemaWithMandatory(requiredSchema: StructType,
-                                                  dataSchema: StructType,
-                                                  partitionSchema: StructType): StructType = {
-    val metaFields = Seq(
-      StructField(HoodieRecord.COMMIT_TIME_METADATA_FIELD, StringType),
-      StructField(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, StringType),
-      StructField(HoodieRecord.RECORD_KEY_METADATA_FIELD, StringType),
-      StructField(HoodieRecord.PARTITION_PATH_METADATA_FIELD, StringType),
-      StructField(HoodieRecord.FILENAME_METADATA_FIELD, StringType))
-
-    // Helper method to get the StructField for nested fields
-    @tailrec
-    def findNestedField(schema: StructType, fieldParts: Array[String]): Option[StructField] = {
-      fieldParts.toList match {
-        case head :: Nil => schema.fields.find(_.name == head) // If it's the last part, find and return the field
-        case head :: tail => // If there are more parts, find the field and its nested fields
-          schema.fields.find(_.name == head) match {
-            case Some(StructField(_, nested: StructType, _, _)) => findNestedField(nested, tail.toArray)
-            case _ => None // The path is not valid
-          }
-        case _ => None // Empty path, should not happen if the input is correct
-      }
-    }
-
-    def findMetaField(name: String): Option[StructField] = {
-      metaFields.find(f => f.name == name)
-    }
-
-    // If not MergeOnRead or if projection is compatible
-    if (isIncremental) {
-      StructType(dataSchema.toArray ++ partitionSchema.fields)
-    } else {
-      val added: mutable.Buffer[StructField] = mutable.Buffer[StructField]()
-      for (field <- mandatoryFields) {
-        if (requiredSchema.getFieldIndex(field).isEmpty) {
-          // Support for nested fields
-          val fieldParts = field.split("\\.")
-          val fieldToAdd = findNestedField(dataSchema, fieldParts)
-            .orElse(findNestedField(partitionSchema, fieldParts))
-            .orElse(findMetaField(field))
-            .getOrElse(throw new IllegalArgumentException(s"Field $field does not exist in the table schema"))
-          added.append(fieldToAdd)
-        }
-      }
-      val addedFields = StructType(added.toArray)
-      StructType(requiredSchema.toArray ++ addedFields.fields)
-    }
-  }
-
-  protected def buildFileReaders(sparkSession: SparkSession, dataSchema: StructType, partitionSchema: StructType,
-                                 requiredSchema: StructType, filters: Seq[Filter], options: Map[String, String],
-                                 hadoopConf: Configuration, requiredSchemaWithMandatory: StructType,
-                                 requiredWithoutMeta: StructType, requiredMeta: StructType):
-  (PartitionedFile => Iterator[InternalRow],
-    PartitionedFile => Iterator[InternalRow],
-    mutable.Map[Long, PartitionedFile => Iterator[InternalRow]],
-    PartitionedFile => Iterator[InternalRow]) = {
-
-    val m = scala.collection.mutable.Map[Long, PartitionedFile => Iterator[InternalRow]]()
-
-    val recordKeyRelatedFilters = getRecordKeyRelatedFilters(filters, tableState.recordKeyField)
-    val baseFileReader = super.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema,
-      filters ++ requiredFilters, options, new Configuration(hadoopConf))
-    m.put(generateKey(dataSchema, requiredSchema), baseFileReader)
-
-    //file reader for reading a hudi base file that needs to be merged with log files
-    val preMergeBaseFileReader = if (isMOR) {
-      // Add support for reading files using inline file system.
-      super.buildReaderWithPartitionValues(sparkSession, dataSchema, StructType(Seq.empty), requiredSchemaWithMandatory,
-        if (shouldUseRecordPosition) requiredFilters else recordKeyRelatedFilters ++ requiredFilters,
-        options, new Configuration(hadoopConf))
-    } else {
-      _: PartitionedFile => Iterator.empty
-    }
-    m.put(generateKey(dataSchema, requiredSchemaWithMandatory), preMergeBaseFileReader)
-
-    val cdcFileReader = super.buildReaderWithPartitionValues(
-      sparkSession,
-      tableSchema.structTypeSchema,
-      StructType(Nil),
-      tableSchema.structTypeSchema,
-      Nil,
-      options,
-      new Configuration(hadoopConf))
-
-    //Rules for appending partitions and filtering in the bootstrap readers:
-    // 1. if it is mor, we don't want to filter data or append partitions
-    // 2. if we need to merge the bootstrap base and skeleton files then we cannot filter
-    // 3. if we need to merge the bootstrap base and skeleton files then we should never append partitions to the
-    //    skeleton reader
-    val needMetaCols = requiredMeta.nonEmpty
-    val needDataCols = requiredWithoutMeta.nonEmpty
-
-    //file reader for bootstrap skeleton files
-    if (needMetaCols && isBootstrap) {
-      val key = generateKey(HoodieSparkUtils.getMetaSchema, requiredMeta)
-      if (needDataCols || isMOR) {
-        // no filter and no append
-        m.put(key, super.buildReaderWithPartitionValues(sparkSession, HoodieSparkUtils.getMetaSchema, StructType(Seq.empty),
-          requiredMeta, Seq.empty, options, new Configuration(hadoopConf)))
-      } else {
-        // filter
-        m.put(key, super.buildReaderWithPartitionValues(sparkSession, HoodieSparkUtils.getMetaSchema, StructType(Seq.empty),
-          requiredMeta, filters ++ requiredFilters, options, new Configuration(hadoopConf)))
-      }
-
-      val requestedMeta = StructType(requiredSchema.fields.filter(sf => isMetaField(sf.name)))
-      m.put(generateKey(HoodieSparkUtils.getMetaSchema, requestedMeta),
-        super.buildReaderWithPartitionValues(sparkSession, HoodieSparkUtils.getMetaSchema, StructType(Seq.empty), requestedMeta,
-          Seq.empty, options, new Configuration(hadoopConf)))
-    }
-
-    //file reader for bootstrap base files
-    if (needDataCols && isBootstrap) {
-      val dataSchemaWithoutMeta = StructType(dataSchema.fields.filterNot(sf => isMetaField(sf.name)))
-      val key = generateKey(dataSchemaWithoutMeta, requiredWithoutMeta)
-      if (isMOR || needMetaCols) {
-        m.put(key, super.buildReaderWithPartitionValues(sparkSession, dataSchemaWithoutMeta, StructType(Seq.empty), requiredWithoutMeta,
-          Seq.empty, options, new Configuration(hadoopConf)))
-        // no filter and no append
-
-      } else {
-        // filter
-        m.put(key, super.buildReaderWithPartitionValues(sparkSession, dataSchemaWithoutMeta, StructType(Seq.empty), requiredWithoutMeta,
-          filters ++ requiredFilters, options, new Configuration(hadoopConf)))
-      }
-
-      val requestedWithoutMeta = StructType(requiredSchema.fields.filterNot(sf => isMetaField(sf.name)))
-      m.put(generateKey(dataSchemaWithoutMeta, requestedWithoutMeta),
-        super.buildReaderWithPartitionValues(sparkSession, dataSchemaWithoutMeta, StructType(Seq.empty), requestedWithoutMeta,
-          Seq.empty, options, new Configuration(hadoopConf)))
-    }
-
-    (baseFileReader, preMergeBaseFileReader, m, cdcFileReader)
-  }
-
-  protected def generateKey(dataSchema: StructType, requestedSchema: StructType): Long = {
-    AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName).hashCode() + AvroConversionUtils.convertStructTypeToAvroSchema(requestedSchema, sanitizedTableName).hashCode()
   }
 
   protected def getRecordKeyRelatedFilters(filters: Seq[Filter], recordKeyColumn: String): Seq[Filter] = {

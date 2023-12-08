@@ -26,7 +26,7 @@ import org.apache.hudi.common.config.HoodieReaderConfig.FILE_GROUP_READER_ENABLE
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
-import org.apache.hudi.{AvroConversionUtils, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.{AvroConversionUtils, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
@@ -44,7 +44,7 @@ import scala.collection.JavaConversions._
  * Tests {@link HoodieFileGroupReader} with {@link SparkFileFormatInternalRowReaderContext}
  * on Spark
  */
-class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[InternalRow] {
+class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[InternalRow] with SparkAdapterSupport {
   var spark: SparkSession = _
 
   @BeforeEach
@@ -82,15 +82,8 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   }
 
   override def getHoodieReaderContext(tablePath: String, avroSchema: Schema): HoodieReaderContext[InternalRow] = {
-    val parquetFileFormat = new ParquetFileFormat
-    val structTypeSchema = AvroConversionUtils.convertAvroSchemaToStructType(avroSchema)
-
-    val recordReaderIterator = parquetFileFormat.buildReaderWithPartitionValues(
-      spark, structTypeSchema, StructType(Seq.empty), structTypeSchema, Seq.empty, Map.empty, getHadoopConf)
-
-    val m = scala.collection.mutable.Map[Long, PartitionedFile => Iterator[InternalRow]]()
-    m.put(2*avroSchema.hashCode(), recordReaderIterator)
-    new SparkFileFormatInternalRowReaderContext(m)
+    val extraProps = sparkAdapter.getExtraProps(vectorized = false, spark.sessionState.conf, Map.empty)
+    new SparkFileFormatInternalRowReaderContext(extraProps, Seq.empty)
   }
 
   override def commitToTable(recordList: util.List[String], operation: String, options: util.Map[String, String]): Unit = {

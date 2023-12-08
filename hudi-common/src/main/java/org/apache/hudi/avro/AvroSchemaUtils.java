@@ -251,7 +251,13 @@ public class AvroSchemaUtils {
     if (!nestedPart.isPresent()) {
       return Option.empty();
     }
-    return nestedPart;
+    boolean isUnion = false;
+    if (foundSchema.getType().equals(Schema.Type.UNION)) {
+      isUnion = true;
+      foundSchema = resolveNullableSchema(foundSchema);
+    }
+    Schema newSchema = Schema.createRecord(foundSchema.getName(), foundSchema.getDoc(), foundSchema.getNamespace(), false, Collections.singletonList(nestedPart.get()));
+    return Option.of(new Schema.Field(foundField.name(), isUnion ? createNullableSchema(newSchema) : newSchema, foundField.doc(), foundField.defaultVal()));
   }
 
   public static Schema appendFieldsToSchemaDedupNested(Schema schema, List<Schema.Field> newFields) {
