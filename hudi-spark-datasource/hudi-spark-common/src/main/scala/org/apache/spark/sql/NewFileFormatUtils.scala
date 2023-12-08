@@ -130,14 +130,17 @@ object NewFileFormatUtils extends SparkAdapterSupport {
       Try(Literal(value)).toOption
     }
 
-    def toRef(attr: String, structSchema: StructType, attrSchema: Seq[Attribute]): Option[NamedExpression] = {
-      structSchema.getFieldIndex(attr).map { index =>
-        attrSchema(index)
+    def toRef(attr: String): Option[NamedExpression] = {
+      tableSchema.getFieldIndex(attr).map { index =>
+        resolvedSchema(index)
       }
     }
 
-    filters.foldLeft(plan)((p, f) => {
-      Filter(filterToExpression(f, n => toRef(n, tableSchema, resolvedSchema)).get, p)
-    })
+    val expressionFilters = filters.map(f => filterToExpression(f, n => toRef(n)).get)
+    if (expressionFilters.nonEmpty) {
+      Filter(expressionFilters.reduceLeft(And), plan)
+    } else {
+      plan
+    }
   }
 }
