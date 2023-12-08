@@ -197,22 +197,22 @@ public class HFileTrailer {
 
   @Override
   public String toString() {
-    return "HFileTrailer{" +
-        "fileInfoOffset=" + fileInfoOffset +
-        ", loadOnOpenDataOffset=" + loadOnOpenDataOffset +
-        ", dataIndexCount=" + dataIndexCount +
-        ", uncompressedDataIndexSize=" + uncompressedDataIndexSize +
-        ", metaIndexCount=" + metaIndexCount +
-        ", totalUncompressedBytes=" + totalUncompressedBytes +
-        ", entryCount=" + entryCount +
-        ", compressionCodec=" + compressionCodec +
-        ", numDataIndexLevels=" + numDataIndexLevels +
-        ", firstDataBlockOffset=" + firstDataBlockOffset +
-        ", lastDataBlockOffset=" + lastDataBlockOffset +
-        ", comparatorClassName='" + comparatorClassName + '\'' +
-        ", encryptionKey=" + Arrays.toString(encryptionKey) +
-        ", majorVersion=" + majorVersion +
-        ", minorVersion=" + minorVersion +
-        '}';
+    return "HFileTrailer{"
+        + "fileInfoOffset=" + fileInfoOffset
+        + ", loadOnOpenDataOffset=" + loadOnOpenDataOffset
+        + ", dataIndexCount=" + dataIndexCount
+        + ", uncompressedDataIndexSize=" + uncompressedDataIndexSize
+        + ", metaIndexCount=" + metaIndexCount
+        + ", totalUncompressedBytes=" + totalUncompressedBytes
+        + ", entryCount=" + entryCount
+        + ", compressionCodec=" + compressionCodec
+        + ", numDataIndexLevels=" + numDataIndexLevels
+        + ", firstDataBlockOffset=" + firstDataBlockOffset
+        + ", lastDataBlockOffset=" + lastDataBlockOffset
+        + ", comparatorClassName='" + comparatorClassName + '\''
+        + ", encryptionKey=" + Arrays.toString(encryptionKey)
+        + ", majorVersion=" + majorVersion
+        + ", minorVersion=" + minorVersion
+        + '}';
   }
 }

@@ -26,11 +26,11 @@ import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
-import static org.apache.hudi.io.hfile.ByteUtils.readInt;
 import static org.apache.hudi.io.hfile.DataSize.MAGIC_LENGTH;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_BYTE;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT32;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT64;
+import static org.apache.hudi.io.util.IOUtils.readInt;
 
 /**
  * Represents a block in a HFile. The types of blocks are defined in {@link HFileBlockType}.
@@ -53,6 +53,7 @@ public abstract class HFileBlock {
    * Each checksum value is an integer that can be stored in 4 bytes.
    */
   static final int CHECKSUM_SIZE = SIZEOF_INT32;
+  static final int BYTES_PER_CHECKSUM = 16384;
 
   static class Header {
     // Format of header is:
@@ -103,7 +104,8 @@ public abstract class HFileBlock {
    * @return The {@link HFileBlock} instance based on the input; {@code null} if not able to parse.
    * @throws IOException
    */
-  public static HFileBlock parse(HFileContext context, byte[] byteBuff, int startOffsetInBuff) throws IOException {
+  public static HFileBlock parse(HFileContext context, byte[] byteBuff, int startOffsetInBuff)
+      throws IOException {
     HFileBlockType blockType = HFileBlockType.parse(byteBuff, startOffsetInBuff);
     switch (blockType) {
       case ROOT_INDEX:
@@ -115,6 +117,36 @@ public abstract class HFileBlock {
       default:
         return null;
     }
+  }
+
+  /**
+   * Returns the number of bytes needed to store the checksums for
+   * a specified data size.
+   *
+   * @param numBytes number of bytes of data.
+   * @return The number of bytes needed to store the checksum values.
+   */
+  static int numBytes(long numBytes) {
+    return numChunks(numBytes, BYTES_PER_CHECKSUM) * HFileBlock.CHECKSUM_SIZE;
+  }
+
+  /**
+   * Returns the number of checksum chunks needed to store the checksums for
+   * a specified data size.
+   *
+   * @param numBytes         number of bytes of data
+   * @param bytesPerChecksum number of bytes in a checksum chunk
+   * @return The number of checksum chunks
+   */
+  static int numChunks(long numBytes, int bytesPerChecksum) {
+    long numChunks = numBytes / bytesPerChecksum;
+    if (numBytes % bytesPerChecksum != 0) {
+      numChunks++;
+    }
+    if (numChunks > Integer.MAX_VALUE / HFileBlock.CHECKSUM_SIZE) {
+      throw new IllegalArgumentException("The number of chunks is too large: " + numChunks);
+    }
+    return (int) numChunks;
   }
 
   /**
@@ -168,7 +200,7 @@ public abstract class HFileBlock {
    * bytes.
    */
   protected byte[] allocateBuffer() {
-    int checksumSize = (int) ChecksumUtils.numBytes(getOnDiskSizeWithHeader(), 16384);
+    int checksumSize = numBytes(getOnDiskSizeWithHeader());
     int headerSize = HFILEBLOCK_HEADER_SIZE;
     int capacity = headerSize + uncompressedSizeWithoutHeader + checksumSize;
     byte[] newByteBuff = new byte[capacity];

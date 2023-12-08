@@ -28,13 +28,13 @@ import java.io.OutputStream;
  */
 public interface HoodieDecompressor {
   /**
-   * Decompresses the data from {@link InputStream} and writes the decompressed data to the target.
+   * Decompresses the data from {@link InputStream} and writes the decompressed data to the target
    * {@link OutputStream}.
    *
-   * @param compressedInput Compressed data in {@link InputStream}.
-   * @param targetByteArray Target byte array to store the decompressed data.
-   * @param offset          Offset in the target byte array to start to write data.
-   * @param length          Maximum amount of decompressed data to write.
+   * @param compressedInput compressed data in {@link InputStream}.
+   * @param targetByteArray target byte array to store the decompressed data.
+   * @param offset          offset in the target byte array to start to write data.
+   * @param length          maximum amount of decompressed data to write.
    * @throws IOException upon error.
    */
   void decompress(InputStream compressedInput, byte[] targetByteArray, int offset, int length) throws IOException;

@@ -22,11 +22,11 @@ package org.apache.hudi.io.hfile;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.apache.hudi.io.hfile.ByteUtils.copy;
-import static org.apache.hudi.io.hfile.ByteUtils.decodeVLongSizeOnDisk;
-import static org.apache.hudi.io.hfile.ByteUtils.readInt;
-import static org.apache.hudi.io.hfile.ByteUtils.readLong;
-import static org.apache.hudi.io.hfile.ByteUtils.readVLong;
+import static org.apache.hudi.io.util.IOUtils.copy;
+import static org.apache.hudi.io.util.IOUtils.decodeVarLongSizeOnDisk;
+import static org.apache.hudi.io.util.IOUtils.readInt;
+import static org.apache.hudi.io.util.IOUtils.readLong;
+import static org.apache.hudi.io.util.IOUtils.readVarLong;
 
 /**
  * Represents a {@link HFileBlockType#ROOT_INDEX} block in the "Load-on-open" section.
@@ -50,12 +50,12 @@ public class HFileRootIndexBlock extends HFileBlock {
     for (int i = 0; i < numEntries; i++) {
       long offset = readLong(byteBuff, buffOffset);
       int size = readInt(byteBuff, buffOffset + 8);
-      int vLongSizeOnDist = decodeVLongSizeOnDisk(byteBuff, buffOffset + 12);
-      int keyLength = (int) readVLong(byteBuff, buffOffset + 12, vLongSizeOnDist);
-      byte[] firstKeyBytes = copy(byteBuff, buffOffset + 12 + vLongSizeOnDist, keyLength);
+      int varLongSizeOnDist = decodeVarLongSizeOnDisk(byteBuff, buffOffset + 12);
+      int keyLength = (int) readVarLong(byteBuff, buffOffset + 12, varLongSizeOnDist);
+      byte[] firstKeyBytes = copy(byteBuff, buffOffset + 12 + varLongSizeOnDist, keyLength);
       Key firstKey = new Key(firstKeyBytes, 0, firstKeyBytes.length);
       entryList.add(new BlockIndexEntry(firstKey, offset, size));
-      buffOffset += (12 + vLongSizeOnDist + keyLength);
+      buffOffset += (12 + varLongSizeOnDist + keyLength);
     }
     return entryList;
   }

@@ -19,18 +19,15 @@
 
 package org.apache.hudi.io.hfile;
 
-import static org.apache.hudi.io.hfile.ByteUtils.readInt;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT32;
+import static org.apache.hudi.io.util.IOUtils.readInt;
 
 /**
  * Represents a key-value pair in the data block.
  */
 public class KeyValue {
   // Key part starts after the key length (integer) and value length (integer)
-  private static final int KEY_OFFSET = SIZEOF_INT32 * 2;
-
-  public static final int ROW_KEY_OFFSET = ROW_OFFSET + KEY_LENGTH_SIZE;
-
+  public static final int KEY_OFFSET = SIZEOF_INT32 * 2;
   private final byte[] bytes;
   private final int offset;
   private final int length;

@@ -19,7 +19,9 @@
 
 package org.apache.hudi.io.hfile;
 
-import static org.apache.hudi.io.hfile.KeyValue.ROW_OFFSET;
+import org.apache.hudi.io.util.IOUtils;
+
+import static org.apache.hudi.io.hfile.KeyValue.KEY_OFFSET;
 
 /**
  * Represents a {@link HFileBlockType#DATA} block in the "Scanned block" section.
@@ -46,7 +48,7 @@ public class HFileDataBlock extends HFileBlock {
       // Full length is not known yet until parsing
       KeyValue kv = new KeyValue(byteBuff, offset, -1);
       // TODO: Reading long instead of two integers per HBase
-      int comp = ByteUtils.compareTo(kv.getBytes(), kv.getKeyContentOffset(), kv.getKeyContentLength(),
+      int comp = IOUtils.compareTo(kv.getBytes(), kv.getKeyContentOffset(), kv.getKeyContentLength(),
           key.getBytes(), key.getContentOffset(), key.getContentLength());
       if (comp == 0) {
         return kv;
@@ -54,7 +56,7 @@ public class HFileDataBlock extends HFileBlock {
         return null;
       }
       // TODO: check what's the extra byte
-      long incr = (long) ROW_OFFSET + (long) kv.getKeyLength() + (long) kv.getValueLength() + 1L;
+      long incr = (long) KEY_OFFSET + (long) kv.getKeyLength() + (long) kv.getValueLength() + 1L;
       offset += incr;
     }
     return null;

@@ -33,7 +33,6 @@ import java.io.InputStream;
  * codec using airlift aircompressor's GZIP decompressor.
  */
 public class HoodieAirliftGzipDecompressor implements HoodieDecompressor {
-
   private final JdkGzipHadoopStreams gzipStreams;
 
   public HoodieAirliftGzipDecompressor() {
@@ -41,7 +40,10 @@ public class HoodieAirliftGzipDecompressor implements HoodieDecompressor {
   }
 
   @Override
-  public void decompress(InputStream compressedInput, byte[] targetByteArray, int offset, int length) throws IOException {
+  public void decompress(InputStream compressedInput,
+                         byte[] targetByteArray,
+                         int offset,
+                         int length) throws IOException {
     try (HadoopInputStream stream = gzipStreams.createInputStream(compressedInput)) {
       stream.read(targetByteArray, offset, length);
     }

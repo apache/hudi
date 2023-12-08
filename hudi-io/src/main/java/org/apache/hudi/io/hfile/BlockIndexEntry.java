@@ -19,6 +19,8 @@
 
 package org.apache.hudi.io.hfile;
 
+import org.apache.hudi.io.util.IOUtils;
+
 /**
  * Represents the index entry of a data block in the Data Index stored in the
  * {@link HFileBlockType#ROOT_INDEX} block in the "Load-on-open" section.
@@ -53,20 +55,20 @@ public class BlockIndexEntry implements Comparable<BlockIndexEntry> {
 
   @Override
   public int compareTo(BlockIndexEntry o) {
-    return ByteUtils.compareTo(firstKey.getBytes(), firstKey.getContentOffset(), firstKey.getContentLength(),
-        o.getFirstKey().getBytes(), o.getFirstKey().getContentOffset(), o.getFirstKey().getContentLength());
+    return IOUtils.compareTo(
+        firstKey.getBytes(), firstKey.getContentOffset(), firstKey.getContentLength(),
+        o.getFirstKey().getBytes(), o.getFirstKey().getContentOffset(),
+        o.getFirstKey().getContentLength());
   }
 
   @Override
   public String toString() {
-    StringBuilder sb = new StringBuilder();
-    sb.append("BlockIndexEntry{firstKey=");
-    sb.append(firstKey.toString());
-    sb.append(", offset=");
-    sb.append(offset);
-    sb.append(", size=");
-    sb.append(size);
-    sb.append("}");
-    return sb.toString();
+    return "BlockIndexEntry{firstKey="
+        + firstKey.toString()
+        + ", offset="
+        + offset
+        + ", size="
+        + size
+        + "}";
   }
 }

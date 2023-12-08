@@ -19,8 +19,8 @@
 
 package org.apache.hudi.io.hfile;
 
-import static org.apache.hudi.io.hfile.ByteUtils.readShort;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
+import static org.apache.hudi.io.util.IOUtils.readShort;
 
 /**
  * Represents the key part only.

@@ -167,7 +167,8 @@ public enum HFileBlockType {
     return compareByteArray(bytes1.length, bytes1, 0, bytes2, 0);
   }
 
-  private static boolean compareByteArray(int length, byte[] bytes1, int offset1, byte[] bytes2, int offset2) {
+  private static boolean compareByteArray(int length, byte[] bytes1, int offset1, byte[] bytes2,
+                                          int offset2) {
     for (int i = 0; i < length; i++) {
       if (bytes1[offset1 + i] != bytes2[offset2 + i]) {
         return false;

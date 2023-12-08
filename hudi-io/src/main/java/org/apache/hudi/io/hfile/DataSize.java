@@ -23,30 +23,20 @@ package org.apache.hudi.io.hfile;
  * Sizes of different primitive data structures used by HFile.
  */
 public class DataSize {
-  /**
-   * Size of boolean in bytes
-   */
+  // Size of boolean in bytes
   public static final int SIZEOF_BOOLEAN = 1;
 
-  /**
-   * Size of byte in bytes
-   */
+  // Size of byte in bytes
   public static final int SIZEOF_BYTE = 1;
 
-  /**
-   * Size of int in bytes
-   */
+  // Size of int in bytes
   public static final int SIZEOF_INT32 = 4;
 
-  /**
-   * Size of short in bytes
-   */
+  // Size of short in bytes
   public static final int SIZEOF_INT16 = 2;
 
-  /**
-   * Size of long in bytes
-   */
-  public static final int SIZEOF_INT64 = 4;
+  // Size of long in bytes
+  public static final int SIZEOF_INT64 = 8;
 
   public static final int MAGIC_LENGTH = 8;
 }
