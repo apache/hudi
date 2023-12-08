@@ -468,6 +468,12 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     return commitInstant;
   }
 
+  private void createFileInAuxiliaryFolder(HoodieInstant instant, Option<byte[]> data) {
+    // This will be removed in future release. See HUDI-546
+    Path fullPath = new Path(metaClient.getMetaAuxiliaryPath(), instant.getFileName());
+    FileIOUtils.createFileInPath(metaClient.getFs(), fullPath, data);
+  }
+
   /**
    * Transition Log Compaction State from inflight to Committed.
    *
@@ -687,8 +693,20 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     saveToCompactionRequested(instant, content, false);
   }
 
+  public void saveToCompactionRequestedOptionallyAuxFolder(HoodieInstant instant, Option<byte[]> content, boolean writetoAuxFolder) {
+    saveToCompactionRequested(instant, content, false, writetoAuxFolder);
+  }
+
   public void saveToCompactionRequested(HoodieInstant instant, Option<byte[]> content, boolean overwrite) {
+    saveToCompactionRequested(instant, content, overwrite, false);
+  }
+
+  public void saveToCompactionRequested(HoodieInstant instant, Option<byte[]> content, boolean overwrite, boolean writeToAuxFolder) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION));
+    if (writeToAuxFolder) {
+      // Write workload to auxiliary folder
+      createFileInAuxiliaryFolder(instant, content);
+    }
     createFileInMetaPath(instant.getFileName(), content, overwrite);
   }
 
@@ -697,7 +715,15 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   public void saveToLogCompactionRequested(HoodieInstant instant, Option<byte[]> content, boolean overwrite) {
+    saveToLogCompactionRequested(instant, content, overwrite, false);
+  }
+
+  public void saveToLogCompactionRequested(HoodieInstant instant, Option<byte[]> content, boolean overwrite, boolean writeToAuxFolder) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION));
+    if (writeToAuxFolder) {
+      // Write workload to auxiliary folder
+      createFileInAuxiliaryFolder(instant, content);
+    }
     createFileInMetaPath(instant.getFileName(), content, overwrite);
   }
 

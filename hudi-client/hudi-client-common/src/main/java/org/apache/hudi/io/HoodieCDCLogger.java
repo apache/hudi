@@ -103,6 +103,7 @@ public class HoodieCDCLogger implements Closeable {
   private final SizeEstimator<HoodieAvroPayload> sizeEstimator;
 
   private final List<Path> cdcAbsPaths;
+  private int logBlockVersionToWrite;
 
   public HoodieCDCLogger(
       String commitTime,
@@ -142,7 +143,7 @@ public class HoodieCDCLogger implements Closeable {
           config.getCommonConfig().isBitCaskDiskMapCompressionEnabled());
       this.transformer = getTransformer();
       this.maxBlockSize = config.getLogFileDataBlockMaxSize();
-
+      this.logBlockVersionToWrite = config.doMaintainBackwardsCompatibleWritesWith0140() ? 2 : 3;
       this.cdcAbsPaths = new ArrayList<>();
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to initialize HoodieCDCLogger", e);
@@ -193,7 +194,7 @@ public class HoodieCDCLogger implements Closeable {
             throw new HoodieIOException("Failed to get cdc record", e);
           }
         }
-        HoodieLogBlock block = new HoodieCDCDataBlock(records, cdcDataBlockHeader, keyField);
+        HoodieLogBlock block = new HoodieCDCDataBlock(records, cdcDataBlockHeader, keyField, logBlockVersionToWrite);
         AppendResult result = cdcWriter.appendBlocks(Collections.singletonList(block));
 
         Path cdcAbsPath = result.logFile().getPath();

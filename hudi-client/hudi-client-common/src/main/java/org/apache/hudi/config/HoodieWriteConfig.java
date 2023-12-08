@@ -735,6 +735,19 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "The class must be a subclass of `org.apache.hudi.callback.HoodieClientInitCallback`."
           + "By default, no Hudi client init callback is executed.");
 
+  public static final ConfigProperty<Boolean> MAINTAIN_BACKWARDS_COMPATIBLE_WRITES_WITH_0_14_0 = ConfigProperty
+      .key("hoodie.maintain.backwards.compatible.writes.with.0.14.0")
+      .defaultValue(true)
+      .markAdvanced()
+      .withDocumentation("When enabled, writes will be backwards compatible. 0.12.x, athena will be able to read tables written with 0.14.0. ");
+
+  public static final ConfigProperty<Boolean> WRITE_COMPACTION_PLAN_TO_AUX_FOLDER = ConfigProperty
+      .key("hoodie.write.compaction.plan.to.aux.folder")
+      .defaultValue(false)
+      .markAdvanced()
+      .withDocumentation("When enabled, compaction plan will be written to aux in addition to timeline. This might be required to not break athena which might use hudi 0.13.x to read "
+          + "these tables written using 0.14.x ");
+
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
    * operation are already prepped.
@@ -2592,6 +2605,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return props.getInteger(WRITES_FILEID_ENCODING, HoodieMetadataPayload.RECORD_INDEX_FIELD_FILEID_ENCODING_UUID);
   }
 
+  public boolean doMaintainBackwardsCompatibleWritesWith0140() {
+    return getBoolean(MAINTAIN_BACKWARDS_COMPATIBLE_WRITES_WITH_0_14_0);
+  }
+
+  public boolean doWriteCompactionPlanToAuxFolder() {
+    return getBoolean(WRITE_COMPACTION_PLAN_TO_AUX_FOLDER);
+  }
+
   public static class Builder {
 
     protected final HoodieWriteConfig writeConfig = new HoodieWriteConfig();
@@ -3081,6 +3102,16 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withWritesFileIdEncoding(Integer fileIdEncoding) {
       writeConfig.setValue(WRITES_FILEID_ENCODING, Integer.toString(fileIdEncoding));
+      return this;
+    }
+
+    public Builder withMaintainBackwardsCompatibleWritesWith0140(boolean maintainBackwardsCompatibleWritesWith0140) {
+      writeConfig.setValue(MAINTAIN_BACKWARDS_COMPATIBLE_WRITES_WITH_0_14_0, String.valueOf(maintainBackwardsCompatibleWritesWith0140));
+      return this;
+    }
+
+    public Builder withCompactionPlanToAuxFolder(boolean writeCompactionPlanToAuxFolder) {
+      writeConfig.setValue(WRITE_COMPACTION_PLAN_TO_AUX_FOLDER, String.valueOf(writeCompactionPlanToAuxFolder));
       return this;
     }
 

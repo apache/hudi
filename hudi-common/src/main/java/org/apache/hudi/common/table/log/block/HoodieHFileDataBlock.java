@@ -83,7 +83,8 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
                               Map<HeaderMetadataType, String> footer,
                               boolean enablePointLookups,
                               Path pathForReader) {
-    super(content, inputStreamSupplier, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, HoodieAvroHFileReader.KEY_FIELD_NAME, enablePointLookups);
+    super(content, inputStreamSupplier, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer,
+        HoodieAvroHFileReader.KEY_FIELD_NAME, enablePointLookups, HoodieLogBlock.version);
     this.compressionAlgorithm = Option.empty();
     this.pathForReader = pathForReader;
   }
@@ -91,8 +92,9 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   public HoodieHFileDataBlock(List<HoodieRecord> records,
                               Map<HeaderMetadataType, String> header,
                               Compression.Algorithm compressionAlgorithm,
-                              Path pathForReader) {
-    super(records, header, new HashMap<>(), HoodieAvroHFileReader.KEY_FIELD_NAME);
+                              Path pathForReader,
+                              int logBlockVersionToWrite) {
+    super(records, header, new HashMap<>(), HoodieAvroHFileReader.KEY_FIELD_NAME, logBlockVersionToWrite);
     this.compressionAlgorithm = Option.of(compressionAlgorithm);
     this.pathForReader = pathForReader;
   }

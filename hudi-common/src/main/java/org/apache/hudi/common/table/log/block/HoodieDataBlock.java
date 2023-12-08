@@ -63,6 +63,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   private final boolean enablePointLookups;
 
   protected Schema readerSchema;
+  protected int logBlockVersionToWrite;
 
   //  Map of string schema to parsed schema.
   private static ConcurrentHashMap<String, Schema> schemaMap = new ConcurrentHashMap<>();
@@ -73,13 +74,15 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   public HoodieDataBlock(List<HoodieRecord> records,
                          Map<HeaderMetadataType, String> header,
                          Map<HeaderMetadataType, String> footer,
-                         String keyFieldName) {
+                         String keyFieldName,
+                         int logBlockVersionToWrite) {
     super(header, footer, Option.empty(), Option.empty(), null, false);
     this.records = Option.of(records);
     this.keyFieldName = keyFieldName;
     // If no reader-schema has been provided assume writer-schema as one
     this.readerSchema = getWriterSchema(super.getLogBlockHeader());
     this.enablePointLookups = false;
+    this.logBlockVersionToWrite = logBlockVersionToWrite;
   }
 
   /**
@@ -93,13 +96,15 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
                             Map<HeaderMetadataType, String> headers,
                             Map<HeaderMetadataType, String> footer,
                             String keyFieldName,
-                            boolean enablePointLookups) {
+                            boolean enablePointLookups,
+                            int logBlockVersionToWrite) {
     super(headers, footer, blockContentLocation, content, inputStreamSupplier, readBlockLazily);
     this.records = Option.empty();
     this.keyFieldName = keyFieldName;
     // If no reader-schema has been provided assume writer-schema as one
     this.readerSchema = readerSchema.orElseGet(() -> getWriterSchema(super.getLogBlockHeader()));
     this.enablePointLookups = enablePointLookups;
+    this.logBlockVersionToWrite = logBlockVersionToWrite;
   }
 
   @Override

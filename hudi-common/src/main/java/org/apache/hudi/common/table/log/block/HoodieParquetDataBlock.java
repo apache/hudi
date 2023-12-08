@@ -70,7 +70,8 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
                                 Map<HeaderMetadataType, String> header,
                                 Map<HeaderMetadataType, String> footer,
                                 String keyField) {
-    super(content, inputStreamSupplier, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, keyField, false);
+    super(content, inputStreamSupplier, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, keyField,
+        false, HoodieLogBlock.version);
 
     this.compressionCodecName = Option.empty();
     this.expectedCompressionRatio = Option.empty();
@@ -82,10 +83,10 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
                                 String keyField,
                                 CompressionCodecName compressionCodecName,
                                 double expectedCompressionRatio,
-                                boolean useDictionaryEncoding
+                                boolean useDictionaryEncoding,
+                                int logBlockVersionToWrite
   ) {
-    super(records, header, new HashMap<>(), keyField);
-
+    super(records, header, new HashMap<>(), keyField, logBlockVersionToWrite);
     this.compressionCodecName = Option.of(compressionCodecName);
     this.expectedCompressionRatio = Option.of(expectedCompressionRatio);
     this.useDictionaryEncoding = Option.of(useDictionaryEncoding);

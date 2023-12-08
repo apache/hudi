@@ -118,13 +118,13 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
         if (operationType.equals(WriteOperationType.COMPACT)) {
           HoodieInstant compactionInstant = new HoodieInstant(HoodieInstant.State.REQUESTED,
               HoodieTimeline.COMPACTION_ACTION, instantTime);
-          table.getActiveTimeline().saveToCompactionRequested(compactionInstant,
-              TimelineMetadataUtils.serializeCompactionPlan(plan));
+          table.getActiveTimeline().saveToCompactionRequestedOptionallyAuxFolder(compactionInstant,
+              TimelineMetadataUtils.serializeCompactionPlan(plan), config.doWriteCompactionPlanToAuxFolder());
         } else {
           HoodieInstant logCompactionInstant = new HoodieInstant(HoodieInstant.State.REQUESTED,
               HoodieTimeline.LOG_COMPACTION_ACTION, instantTime);
           table.getActiveTimeline().saveToLogCompactionRequested(logCompactionInstant,
-              TimelineMetadataUtils.serializeCompactionPlan(plan));
+              TimelineMetadataUtils.serializeCompactionPlan(plan), config.doWriteCompactionPlanToAuxFolder());
         }
       } catch (IOException ioe) {
         throw new HoodieIOException("Exception scheduling compaction", ioe);

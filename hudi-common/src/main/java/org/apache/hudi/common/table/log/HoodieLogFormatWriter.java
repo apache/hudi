@@ -56,17 +56,20 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   private final Short replication;
   private final String rolloverLogWriteToken;
   private boolean closed = false;
+  private int logBlockVersionToWrite;
   private transient Thread shutdownThread = null;
 
   private static final String APPEND_UNAVAILABLE_EXCEPTION_MESSAGE = "not sufficiently replicated yet";
 
-  HoodieLogFormatWriter(FileSystem fs, HoodieLogFile logFile, Integer bufferSize, Short replication, Long sizeThreshold, String rolloverLogWriteToken) {
+  HoodieLogFormatWriter(FileSystem fs, HoodieLogFile logFile, Integer bufferSize, Short replication, Long sizeThreshold, String rolloverLogWriteToken,
+                        int logBlockVersionToWrite) {
     this.fs = fs;
     this.logFile = logFile;
     this.sizeThreshold = sizeThreshold;
     this.bufferSize = bufferSize;
     this.replication = replication;
     this.rolloverLogWriteToken = rolloverLogWriteToken;
+    this.logBlockVersionToWrite = logBlockVersionToWrite;
     addShutDownHook();
   }
 

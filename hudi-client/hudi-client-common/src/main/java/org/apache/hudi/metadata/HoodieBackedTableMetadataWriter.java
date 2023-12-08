@@ -699,11 +699,12 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         .mapToObj(i -> HoodieTableMetadataUtil.getFileIDForFileGroup(metadataPartition, i))
         .collect(Collectors.toList());
     ValidationUtils.checkArgument(fileGroupFileIds.size() == fileGroupCount);
+    int logBlockVersionToWrite = dataWriteConfig.doMaintainBackwardsCompatibleWritesWith0140() ? 2 : 3;
     engineContext.setJobStatus(this.getClass().getSimpleName(), msg);
     engineContext.foreach(fileGroupFileIds, fileGroupFileId -> {
       try {
         final Map<HeaderMetadataType, String> blockHeader = Collections.singletonMap(HeaderMetadataType.INSTANT_TIME, instantTime);
-        final HoodieDeleteBlock block = new HoodieDeleteBlock(new DeleteRecord[0], blockHeader);
+        final HoodieDeleteBlock block = new HoodieDeleteBlock(new DeleteRecord[0], blockHeader, logBlockVersionToWrite);
 
         HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
             .onParentPath(FSUtils.getPartitionPath(metadataWriteConfig.getBasePath(), metadataPartition.getPartitionPath()))
@@ -715,7 +716,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
             .withFs(dataMetaClient.getFs())
             .withRolloverLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
             .withLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
-            .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
+            .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+            .withLogBlockVersionToWrite(logBlockVersionToWrite)
+            .build();
         writer.appendBlock(block);
         writer.close();
       } catch (InterruptedException e) {

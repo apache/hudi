@@ -146,6 +146,8 @@ public interface HoodieLogFormat {
     // Rollover Log file write token
     private String rolloverLogWriteToken;
 
+    private int logBlockVersionToWrite = HoodieLogBlock.version;
+
     public WriterBuilder withBufferSize(int bufferSize) {
       this.bufferSize = bufferSize;
       return this;
@@ -208,6 +210,11 @@ public interface HoodieLogFormat {
 
     public WriterBuilder onParentPath(Path parentPath) {
       this.parentPath = parentPath;
+      return this;
+    }
+
+    public WriterBuilder withLogBlockVersionToWrite(int logBlockVersionToWrite) {
+      this.logBlockVersionToWrite = logBlockVersionToWrite;
       return this;
     }
 
@@ -279,7 +286,7 @@ public interface HoodieLogFormat {
       if (sizeThreshold == null) {
         sizeThreshold = DEFAULT_SIZE_THRESHOLD;
       }
-      return new HoodieLogFormatWriter(fs, logFile, bufferSize, replication, sizeThreshold, rolloverLogWriteToken);
+      return new HoodieLogFormatWriter(fs, logFile, bufferSize, replication, sizeThreshold, rolloverLogWriteToken, logBlockVersionToWrite);
     }
   }
 

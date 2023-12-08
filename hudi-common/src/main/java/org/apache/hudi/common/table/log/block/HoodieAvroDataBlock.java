@@ -73,6 +73,17 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
 
   private final ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();
 
+  /**
+   * Constructor used in read path.
+   * @param inputStreamSupplier
+   * @param content
+   * @param readBlockLazily
+   * @param logBlockContentLocation
+   * @param readerSchema
+   * @param header
+   * @param footer
+   * @param keyField
+   */
   public HoodieAvroDataBlock(Supplier<FSDataInputStream> inputStreamSupplier,
                              Option<byte[]> content,
                              boolean readBlockLazily,
@@ -81,14 +92,22 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
                              Map<HeaderMetadataType, String> header,
                              Map<HeaderMetadataType, String> footer,
                              String keyField) {
-    super(content, inputStreamSupplier, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, keyField, false);
+    super(content, inputStreamSupplier, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer,
+        keyField, false, HoodieLogBlock.version);
   }
 
   public HoodieAvroDataBlock(@Nonnull List<HoodieRecord> records,
                              @Nonnull Map<HeaderMetadataType, String> header,
-                             @Nonnull String keyField
+                             @Nonnull String keyField) {
+    this(records, header, keyField, HoodieLogBlock.version);
+  }
+
+  public HoodieAvroDataBlock(@Nonnull List<HoodieRecord> records,
+                             @Nonnull Map<HeaderMetadataType, String> header,
+                             @Nonnull String keyField,
+                             @Nonnull int logBlockVersionToWrite
   ) {
-    super(records, header, new HashMap<>(), keyField);
+    super(records, header, new HashMap<>(), keyField, logBlockVersionToWrite);
   }
 
   @Override
@@ -104,7 +123,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     DataOutputStream output = new DataOutputStream(baos);
 
     // 1. Write out the log block version
-    output.writeInt(HoodieLogBlock.version);
+    output.writeInt(logBlockVersionToWrite);
 
     // 2. Write total number of records
     output.writeInt(records.size());
@@ -227,7 +246,8 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
    */
   @Deprecated
   public HoodieAvroDataBlock(List<HoodieRecord> records, Schema schema) {
-    super(records, Collections.singletonMap(HeaderMetadataType.SCHEMA, schema.toString()), new HashMap<>(), HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    super(records, Collections.singletonMap(HeaderMetadataType.SCHEMA, schema.toString()), new HashMap<>(), HoodieRecord.RECORD_KEY_METADATA_FIELD,
+        HoodieLogBlock.version);
   }
 
   public static HoodieAvroDataBlock getBlock(byte[] content, Schema readerSchema) throws IOException {

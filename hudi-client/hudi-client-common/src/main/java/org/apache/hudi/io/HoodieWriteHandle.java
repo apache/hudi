@@ -255,7 +255,9 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
         .withRolloverLogWriteToken(writeToken)
         .withLogWriteToken(latestLogFile.map(HoodieLogFile::getLogWriteToken).orElse(writeToken))
         .withSuffix(suffix)
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+        .withLogBlockVersionToWrite(config.doMaintainBackwardsCompatibleWritesWith0140() ? 2 : 3)
+        .build();
   }
 
   protected HoodieLogFormat.Writer createLogWriter(String baseCommitTime, String fileSuffix) {
