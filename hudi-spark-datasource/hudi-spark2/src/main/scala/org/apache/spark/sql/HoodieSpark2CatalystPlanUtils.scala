@@ -98,22 +98,21 @@ object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
     Join(left, right, joinType, condition)
   }
 
-  override def applyNewHoodieParquetFileFormatProjection(plan: LogicalPlan): LogicalPlan = {
+  override def sameOutput(a: LogicalPlan, b: LogicalPlan): Boolean = {
+    val thisOutput = a.output
+    val otherOutput = b.output
+    thisOutput.length == otherOutput.length && thisOutput.zip(otherOutput).forall {
+      case (a1, a2) => a1.semanticEquals(a2)
+    }
+  }
+
+  override def maybeApplyForNewFileFormat(plan: LogicalPlan): LogicalPlan = {
     plan match {
       case physicalOperation@PhysicalOperation(_, _,
-      logicalRelation@LogicalRelation(fs: HadoopFsRelation, _, _, _)) if fs.fileFormat.isInstanceOf[ParquetFileFormat with HoodieFormatTrait] && !fs.fileFormat.asInstanceOf[ParquetFileFormat with HoodieFormatTrait].isProjected =>
-        val ff = fs.fileFormat.asInstanceOf[ParquetFileFormat with HoodieFormatTrait]
-        ff.isProjected = true
-        val tableSchema = fs.location match {
-          case index: HoodieCDCFileIndex => index.cdcRelation.schema
-          case index: SparkHoodieTableFileIndex => index.schema
-        }
-        val resolvedSchema = logicalRelation.resolve(tableSchema, fs.sparkSession.sessionState.analyzer.resolver)
-        if (!fs.partitionSchema.fields.isEmpty) {
-          Project(resolvedSchema, physicalOperation)
-        } else {
-          physicalOperation
-        }
+      logicalRelation@LogicalRelation(fs: HadoopFsRelation, _, _, _))
+        if fs.fileFormat.isInstanceOf[ParquetFileFormat with HoodieFormatTrait]
+          && !fs.fileFormat.asInstanceOf[ParquetFileFormat with HoodieFormatTrait].isProjected =>
+          NewFileFormatUtils.applyNewFileFormatChanges(physicalOperation, logicalRelation, fs)
       case _ => plan
     }
   }

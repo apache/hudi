@@ -48,13 +48,13 @@ object HoodieSpark32CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
     }
   }
 
-  override def applyNewHoodieParquetFileFormatProjection(plan: LogicalPlan): LogicalPlan = {
+  override def maybeApplyForNewFileFormat(plan: LogicalPlan): LogicalPlan = {
     plan match {
       case s@ScanOperation(_, _,
       l@LogicalRelation(fs: HadoopFsRelation, _, _, _))
         if fs.fileFormat.isInstanceOf[ParquetFileFormat with HoodieFormatTrait]
           && !fs.fileFormat.asInstanceOf[ParquetFileFormat with HoodieFormatTrait].isProjected =>
-        HoodieSpark3CatalystPlanUtils.applyNewFileFormatChanges(s, l, fs)
+        NewFileFormatUtils.applyNewFileFormatChanges(s, l, fs)
       case _ => plan
     }
   }
