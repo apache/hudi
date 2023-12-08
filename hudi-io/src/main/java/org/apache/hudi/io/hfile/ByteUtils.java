@@ -198,9 +198,7 @@ public class ByteUtils {
   public static int compareTo(byte[] buffer1, int offset1, int length1,
                               byte[] buffer2, int offset2, int length2) {
     // Short circuit equal case
-    if (buffer1 == buffer2 &&
-        offset1 == offset2 &&
-        length1 == length2) {
+    if (buffer1 == buffer2 && offset1 == offset2 && length1 == length2) {
       return 0;
     }
     // Bring WritableComparator code local
@@ -231,7 +229,8 @@ public class ByteUtils {
     if (length < 0) {
       throw new IllegalArgumentException("Length must not be negative: " + length);
     }
-    int remain = length, count;
+    int remain = length;
+    int count;
     while (remain > 0) {
       count = in.read(buffer, 0, Math.min(remain, buffer.length));
       if (count < 0) {

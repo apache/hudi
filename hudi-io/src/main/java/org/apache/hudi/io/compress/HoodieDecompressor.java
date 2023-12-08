@@ -19,26 +19,23 @@
 
 package org.apache.hudi.io.compress;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+
 /**
- * Available compression codecs.
- * There should not be any assumption on the ordering or ordinal of the defined enums.
+ * Provides decompression on input data.
  */
-public enum CompressionCodec {
-  NONE("none"),
-  BZIP2("bz2"),
-  GZIP("gz"),
-  LZ4("lz4"),
-  LZO("lzo"),
-  SNAPPY("snappy"),
-  ZSTD("zstd");
-
-  private final String name;
-
-  CompressionCodec(final String name) {
-    this.name = name;
-  }
-
-  public String getName() {
-    return name;
-  }
+public interface HoodieDecompressor {
+  /**
+   * Decompresses the data from {@link InputStream} and writes the decompressed data to the target.
+   * {@link OutputStream}.
+   *
+   * @param compressedInput Compressed data in {@link InputStream}.
+   * @param targetByteArray Target byte array to store the decompressed data.
+   * @param offset          Offset in the target byte array to start to write data.
+   * @param length          Maximum amount of decompressed data to write.
+   * @throws IOException upon error.
+   */
+  void decompress(InputStream compressedInput, byte[] targetByteArray, int offset, int length) throws IOException;
 }

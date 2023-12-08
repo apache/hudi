@@ -17,28 +17,21 @@
  * under the License.
  */
 
-package org.apache.hudi.io.compress;
+package org.apache.hudi.io.compress.builtin;
+
+import org.apache.hudi.io.compress.CompressionCodec;
+import org.apache.hudi.io.compress.HoodieDecompressor;
+
+import java.io.IOException;
+import java.io.InputStream;
 
 /**
- * Available compression codecs.
- * There should not be any assumption on the ordering or ordinal of the defined enums.
+ * Implementation of {@link HoodieDecompressor} for {@link CompressionCodec#NONE} compression
+ * codec (no compression) by directly reading the input stream.
  */
-public enum CompressionCodec {
-  NONE("none"),
-  BZIP2("bz2"),
-  GZIP("gz"),
-  LZ4("lz4"),
-  LZO("lzo"),
-  SNAPPY("snappy"),
-  ZSTD("zstd");
-
-  private final String name;
-
-  CompressionCodec(final String name) {
-    this.name = name;
-  }
-
-  public String getName() {
-    return name;
+public class HoodieBuiltInNoneDecompressor implements HoodieDecompressor {
+  @Override
+  public void decompress(InputStream compressedInput, byte[] targetByteArray, int offset, int length) throws IOException {
+    compressedInput.read(targetByteArray, offset, length);
   }
 }

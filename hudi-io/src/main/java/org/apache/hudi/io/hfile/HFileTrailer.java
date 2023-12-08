@@ -19,7 +19,7 @@
 
 package org.apache.hudi.io.hfile;
 
-import org.apache.hudi.io.hfile.compress.Compression;
+import org.apache.hudi.io.compress.CompressionCodec;
 import org.apache.hudi.io.hfile.protobuf.generated.HFileProtos;
 
 import java.io.DataInputStream;
@@ -82,7 +82,7 @@ public class HFileTrailer {
   /**
    * The compression codec used for all blocks.
    */
-  private Compression.Algorithm compressionCodec = Compression.Algorithm.NONE;
+  private CompressionCodec compressionCodec = CompressionCodec.NONE;
 
   /**
    * The number of levels in the potentially multi-level data index. Used from
@@ -136,7 +136,7 @@ public class HFileTrailer {
     return dataIndexCount;
   }
 
-  public Compression.Algorithm getCompressionCodec() {
+  public CompressionCodec getCompressionCodec() {
     return compressionCodec;
   }
 
@@ -184,9 +184,10 @@ public class HFileTrailer {
       comparatorClassName = trailerProto.getComparatorClassName();
     }
     if (trailerProto.hasCompressionCodec()) {
-      compressionCodec = Compression.Algorithm.values()[trailerProto.getCompressionCodec()];
+      compressionCodec = HFileCompressionCodec.values()[trailerProto.getCompressionCodec()]
+          .toHoodieCompressionCodec();
     } else {
-      compressionCodec = Compression.Algorithm.NONE;
+      compressionCodec = CompressionCodec.NONE;
     }
     if (trailerProto.hasEncryptionKey()) {
       encryptionKey = trailerProto.getEncryptionKey().toByteArray();

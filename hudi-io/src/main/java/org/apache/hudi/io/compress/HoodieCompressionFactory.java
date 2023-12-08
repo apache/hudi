@@ -19,22 +19,22 @@
 
 package org.apache.hudi.io.compress;
 
-import java.lang.annotation.Documented;
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+import org.apache.hudi.io.compress.airlift.HoodieAirliftGzipDecompressor;
+import org.apache.hudi.io.compress.builtin.HoodieBuiltInNoneDecompressor;
 
 /**
- * This is a marker annotation that marks a compressor or decompressor
- * type as not to be pooled.
- * <p>
- * This class is copied from
- * {@code org.apache.hadoop.io.compress.DoNotPool}
+ * Factory for {@link HoodieDecompressor}.
  */
-@Retention(RetentionPolicy.RUNTIME)
-@Target(ElementType.TYPE)
-@Documented
-public @interface DoNotPool {
-
+public class HoodieCompressionFactory {
+  public static HoodieDecompressor getDecompressor(CompressionCodec compressionCodec) {
+    switch (compressionCodec) {
+      case NONE:
+        return new HoodieBuiltInNoneDecompressor();
+      case GZIP:
+        return new HoodieAirliftGzipDecompressor();
+      default:
+        throw new IllegalArgumentException(
+            "The decompression is not supported for compression codec: " + compressionCodec);
+    }
+  }
 }

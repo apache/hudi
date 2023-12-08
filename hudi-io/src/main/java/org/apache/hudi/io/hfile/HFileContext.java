@@ -19,20 +19,28 @@
 
 package org.apache.hudi.io.hfile;
 
-import org.apache.hudi.io.hfile.compress.Compression;
+import org.apache.hudi.io.compress.CompressionCodec;
+import org.apache.hudi.io.compress.HoodieCompressionFactory;
+import org.apache.hudi.io.compress.HoodieDecompressor;
 
 /**
  * The context of HFile that contains information of the blocks.
  */
 public class HFileContext {
-  private Compression.Algorithm compressAlgo;
+  private final CompressionCodec compressionCodec;
+  private final HoodieDecompressor decompressor;
 
-  private HFileContext(Compression.Algorithm compressAlgo) {
-    this.compressAlgo = compressAlgo;
+  private HFileContext(CompressionCodec compressionCodec) {
+    this.compressionCodec = compressionCodec;
+    this.decompressor = HoodieCompressionFactory.getDecompressor(compressionCodec);
   }
 
-  Compression.Algorithm getCompressAlgo() {
-    return compressAlgo;
+  CompressionCodec getCompressionCodec() {
+    return compressionCodec;
+  }
+
+  HoodieDecompressor getDecompressor() {
+    return decompressor;
   }
 
   public static Builder builder() {
@@ -40,18 +48,18 @@ public class HFileContext {
   }
 
   public static class Builder {
-    private Compression.Algorithm compressAlgo = Compression.Algorithm.NONE;
+    private CompressionCodec compressionCodec = CompressionCodec.NONE;
 
     public Builder() {
     }
 
-    public Builder compressAlgo(Compression.Algorithm compressAlgo) {
-      this.compressAlgo = compressAlgo;
+    public Builder compressAlgo(CompressionCodec compressionCodec) {
+      this.compressionCodec = compressionCodec;
       return this;
     }
 
     public HFileContext build() {
-      return new HFileContext(compressAlgo);
+      return new HFileContext(compressionCodec);
     }
   }
 }

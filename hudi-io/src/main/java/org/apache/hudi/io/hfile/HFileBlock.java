@@ -19,13 +19,12 @@
 
 package org.apache.hudi.io.hfile;
 
-import org.apache.hudi.io.hfile.compress.Compression;
+import org.apache.hudi.io.compress.CompressionCodec;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.ByteBuffer;
 
 import static org.apache.hudi.io.hfile.ByteUtils.readInt;
 import static org.apache.hudi.io.hfile.DataSize.MAGIC_LENGTH;
@@ -146,17 +145,17 @@ public abstract class HFileBlock {
    */
   public HFileBlock unpack() throws IOException {
     // Should only be called for compressed blocks
-    Compression.Algorithm compression = context.getCompressAlgo();
-    if (compression != Compression.Algorithm.NONE) {
+    CompressionCodec compression = context.getCompressionCodec();
+    if (compression != CompressionCodec.NONE) {
       HFileBlock unpacked = this.cloneForUnpack();
-      ByteBuffer blockBufferWithoutHeader = ByteBuffer.wrap(
-          unpacked.getByteBuff(),
-          HFILEBLOCK_HEADER_SIZE,
-          unpacked.getByteBuff().length - HFILEBLOCK_HEADER_SIZE);
       final InputStream byteBuffInputStream = new ByteArrayInputStream(
           byteBuff, startOffsetInBuff + HFILEBLOCK_HEADER_SIZE, onDiskSizeWithoutHeader);
       InputStream dataInputStream = new DataInputStream(byteBuffInputStream);
-      Compression.decompress(blockBufferWithoutHeader, dataInputStream, uncompressedSizeWithoutHeader, compression);
+      context.getDecompressor().decompress(
+          dataInputStream,
+          unpacked.getByteBuff(),
+          HFILEBLOCK_HEADER_SIZE,
+          unpacked.getByteBuff().length - HFILEBLOCK_HEADER_SIZE);
       return unpacked;
     }
     return this;
