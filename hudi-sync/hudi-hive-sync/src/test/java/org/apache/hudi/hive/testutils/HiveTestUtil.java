@@ -192,6 +192,10 @@ public class HiveTestUtil {
     return hiveServer.getHiveConf();
   }
 
+  public static HiveSyncConfig getHiveSyncConfig() {
+    return hiveSyncConfig;
+  }
+
   public static void shutdown() throws IOException {
     if (hiveServer != null) {
       hiveServer.stop();

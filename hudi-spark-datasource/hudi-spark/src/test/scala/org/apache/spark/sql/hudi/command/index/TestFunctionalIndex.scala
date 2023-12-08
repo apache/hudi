@@ -25,9 +25,9 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.hive.HiveSyncConfigHolder._
-import org.apache.hudi.hive.HiveSyncTool
+import org.apache.hudi.hive.{HiveSyncTool, HoodieHiveSyncClient}
 import org.apache.hudi.hive.testutils.HiveTestUtil
-import org.apache.hudi.sync.common.HoodieSyncConfig.{META_SYNC_BASE_PATH, META_SYNC_DATABASE_NAME, META_SYNC_TABLE_NAME}
+import org.apache.hudi.sync.common.HoodieSyncConfig.{META_SYNC_BASE_PATH, META_SYNC_DATABASE_NAME, META_SYNC_NO_PARTITION_METADATA, META_SYNC_TABLE_NAME}
 import org.apache.spark.sql.catalyst.analysis.Analyzer
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.parser.ParserInterface
@@ -154,7 +154,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
     if (HoodieSparkUtils.gteqSpark3_2 && HoodieTestUtils.getJavaVersion == 8) {
       withTempDir { tmp =>
         Seq("mor").foreach { tableType =>
-          val databaseName = "default"
+          val databaseName = "testdb"
           val tableName = generateTableName
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
           spark.sql(
@@ -199,9 +199,17 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           hiveSyncProps.setProperty(META_SYNC_TABLE_NAME.key, tableName)
           hiveSyncProps.setProperty(META_SYNC_BASE_PATH.key, basePath)
           hiveSyncProps.setProperty(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key, "false")
+          hiveSyncProps.setProperty(META_SYNC_NO_PARTITION_METADATA.key, "true")
           HiveTestUtil.setUp(Option.of(hiveSyncProps), false)
           val tool = new HiveSyncTool(hiveSyncProps, HiveTestUtil.getHiveConf)
           tool.syncHoodieTable()
+
+          // assert table created and no partition metadata
+          val hiveClient = new HoodieHiveSyncClient(HiveTestUtil.getHiveSyncConfig)
+          assertTrue(hiveClient.tableExists("h0_ro"))
+          assertTrue(hiveClient.tableExists("h0_rt"))
+          assertEquals(0, hiveClient.getAllPartitions("h0_ro").size())
+          assertEquals(0, hiveClient.getAllPartitions("h0_rt").size())
 
           // check query result
           checkAnswer(s"select id, name from $tableName where from_unixtime(ts, 'yyyy-MM-dd') = '1970-01-01'")(

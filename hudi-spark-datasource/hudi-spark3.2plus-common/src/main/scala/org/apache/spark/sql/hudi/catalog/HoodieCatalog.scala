@@ -38,7 +38,7 @@ import org.apache.spark.sql.connector.catalog._
 import org.apache.spark.sql.connector.expressions.{FieldReference, IdentityTransform, Transform}
 import org.apache.spark.sql.execution.datasources.DataSource
 import org.apache.spark.sql.hudi.analysis.HoodieSpark32PlusAnalysis.HoodieV1OrV2Table
-import org.apache.spark.sql.hudi.catalog.HoodieCatalog.buildPartitionTransforms
+import org.apache.spark.sql.hudi.catalog.HoodieCatalog.{buildPartitionTransforms, isTablePartitioned}
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.{HoodieSqlCommonUtils, ProvidesHoodieConfig}
 import org.apache.spark.sql.types.{StructField, StructType}
@@ -59,7 +59,10 @@ class HoodieCatalog extends DelegatingCatalogExtension
   override def stageCreate(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
     if (sparkAdapter.isHoodieTable(properties)) {
       val locUriAndTableType = deduceTableLocationURIAndTableType(ident, properties)
-      val partitionTransforms = if (partitions.isEmpty) buildPartitionTransforms(spark, locUriAndTableType._1.getPath) else partitions
+      val partitionTransforms =
+        if (partitions.isEmpty && isTablePartitioned(getExistingTableIfExists(ident.asTableIdentifier)))
+          buildPartitionTransforms(spark, locUriAndTableType._1.getPath)
+        else partitions
       HoodieStagedTable(ident, locUriAndTableType, this, schema, partitionTransforms,
         properties, TableCreationMode.STAGE_CREATE)
     } else {
@@ -73,7 +76,10 @@ class HoodieCatalog extends DelegatingCatalogExtension
   override def stageReplace(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
     if (sparkAdapter.isHoodieTable(properties)) {
       val locUriAndTableType = deduceTableLocationURIAndTableType(ident, properties)
-      val partitionTransforms = if (partitions.isEmpty) buildPartitionTransforms(spark, locUriAndTableType._1.getPath) else partitions
+      val partitionTransforms =
+        if (partitions.isEmpty && isTablePartitioned(getExistingTableIfExists(ident.asTableIdentifier)))
+          buildPartitionTransforms(spark, locUriAndTableType._1.getPath)
+        else partitions
       HoodieStagedTable(ident, locUriAndTableType, this, schema, partitionTransforms,
         properties, TableCreationMode.STAGE_REPLACE)
     } else {
@@ -91,7 +97,10 @@ class HoodieCatalog extends DelegatingCatalogExtension
                                     properties: util.Map[String, String]): StagedTable = {
     if (sparkAdapter.isHoodieTable(properties)) {
       val locUriAndTableType = deduceTableLocationURIAndTableType(ident, properties)
-      val partitionTransforms = if (partitions.isEmpty) buildPartitionTransforms(spark, locUriAndTableType._1.getPath) else partitions
+      val partitionTransforms =
+        if (partitions.isEmpty && isTablePartitioned(getExistingTableIfExists(ident.asTableIdentifier)))
+          buildPartitionTransforms(spark, locUriAndTableType._1.getPath)
+        else partitions
       HoodieStagedTable(ident, locUriAndTableType, this, schema, partitionTransforms,
         properties, TableCreationMode.CREATE_OR_REPLACE)
     } else {
@@ -148,7 +157,10 @@ class HoodieCatalog extends DelegatingCatalogExtension
                            properties: util.Map[String, String]): Table = {
     if (sparkAdapter.isHoodieTable(properties)) {
       val locUriAndTableType = deduceTableLocationURIAndTableType(ident, properties)
-      val partitionTransforms = if (partitions.isEmpty) buildPartitionTransforms(spark, locUriAndTableType._1.getPath) else partitions
+      val partitionTransforms =
+        if (partitions.isEmpty && isTablePartitioned(getExistingTableIfExists(ident.asTableIdentifier)))
+          buildPartitionTransforms(spark, locUriAndTableType._1.getPath)
+        else partitions
       createHoodieTable(ident, schema, locUriAndTableType, partitionTransforms, properties,
         Map.empty, Option.empty, TableCreationMode.CREATE)
     } else {
@@ -377,6 +389,10 @@ object HoodieCatalog {
     }
 
     (identityCols, bucketSpec)
+  }
+
+  def isTablePartitioned(table: Option[CatalogTable]): Boolean = {
+    table.exists(_.partitionColumnNames.nonEmpty)
   }
 
   def buildPartitionTransforms(spark: SparkSession,
