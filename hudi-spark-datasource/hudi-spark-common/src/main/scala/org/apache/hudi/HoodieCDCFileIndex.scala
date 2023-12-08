@@ -28,6 +28,7 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, GenericInternalRow}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
+import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
 import scala.jdk.CollectionConverters.{asScalaBufferConverter, mapAsScalaMapConverter}
@@ -77,5 +78,9 @@ class HoodieCDCFileIndex (override val spark: SparkSession,
       val fileGroupId = fileGroupSplit._1
       new Path(fileGroupId.getPartitionPath, fileGroupId.getFileId).toString
     }.toArray
+  }
+
+  override def getRequiredFilters: Seq[Filter] = {
+    Seq.empty
   }
 }
