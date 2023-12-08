@@ -100,7 +100,6 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     Configuration conf = FlinkOptions.fromMap(context.getCatalogTable().getOptions());
     checkArgument(!StringUtils.isNullOrEmpty(conf.getString(FlinkOptions.PATH)),
         "Option [path] should not be empty.");
-    checkTableType(conf);
     setupTableOptions(conf.getString(FlinkOptions.PATH), conf);
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     sanityCheck(conf, schema);
