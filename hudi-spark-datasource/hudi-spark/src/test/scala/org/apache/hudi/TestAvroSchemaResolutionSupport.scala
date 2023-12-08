@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
@@ -386,15 +387,17 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     // upsert
     upsertData(df2, tempRecordPath, isCow)
 
-    // read out the table
-    val readDf = spark.read.format("hudi")
-      // NOTE: long to int type change is not supported for the custom file format and the filegroup reader
-      //       HUDI-7045 and PR#10007 in progress to fix the issue
-      .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
-      .load(tempRecordPath)
-    readDf.printSchema()
-    readDf.show(false)
-    readDf.foreach(_ => {})
+    withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "false") {
+      // read out the table
+      val readDf = spark.read.format("hudi")
+        // NOTE: long to int type change is not supported for the custom file format and the filegroup reader
+        //       HUDI-7045 and PR#10007 in progress to fix the issue
+        .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
+        .load(tempRecordPath)
+      readDf.printSchema()
+      readDf.show(false)
+      readDf.foreach(_ => {})
+    }
   }
 
   @ParameterizedTest
@@ -482,15 +485,18 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     // upsert
     upsertData(df2, tempRecordPath, isCow)
 
-    // read out the table
-    val readDf = spark.read.format("hudi")
-      // NOTE: type promotion is not supported for the custom file format and the filegroup reader
-      //       HUDI-7045 and PR#10007 in progress to fix the issue
-      .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
-      .load(tempRecordPath)
-    readDf.printSchema()
-    readDf.show(false)
-    readDf.foreach(_ => {})
+    withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "false") {
+      // read out the table
+      val readDf = spark.read.format("hudi")
+        // NOTE: type promotion is not supported for the custom file format and the filegroup reader
+        //       HUDI-7045 and PR#10007 in progress to fix the issue
+        .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
+        .option("spark.sql.parquet.enableNestedColumnVectorizedReader", "false")
+        .load(tempRecordPath)
+      readDf.printSchema()
+      readDf.show(false)
+      readDf.foreach(_ => {})
+    }
   }
 
   @ParameterizedTest
@@ -548,15 +554,17 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     // upsert
     upsertData(df2, tempRecordPath, isCow)
 
-    // read out the table
-    val readDf = spark.read.format("hudi")
-      // NOTE: type promotion is not supported for the custom file format and the filegroup reader
-      //       HUDI-7045 and PR#10007 in progress to fix the issue
-      .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
-      .load(tempRecordPath)
-    readDf.printSchema()
-    readDf.show(false)
-    readDf.foreach(_ => {})
+    withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "false") {
+      // read out the table
+      val readDf = spark.read.format("hudi")
+        // NOTE: type promotion is not supported for the custom file format and the filegroup reader
+        //       HUDI-7045 and PR#10007 in progress to fix the issue
+        .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
+        .load(tempRecordPath)
+      readDf.printSchema()
+      readDf.show(false)
+      readDf.foreach(_ => {})
+    }
   }
 
   @ParameterizedTest
@@ -828,4 +836,21 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     readDf.show(false)
     readDf.foreach(_ => {})
   }
+
+  protected def withSQLConf[T](pairs: (String, String)*)(f: => T): T = {
+    val conf = spark.sessionState.conf
+    val currentValues = pairs.unzip._1.map { k =>
+      if (conf.contains(k)) {
+        Some(conf.getConfString(k))
+      } else None
+    }
+    pairs.foreach { case (k, v) => conf.setConfString(k, v) }
+    try f finally {
+      pairs.unzip._1.zip(currentValues).foreach {
+        case (key, Some(value)) => conf.setConfString(key, value)
+        case (key, None) => conf.unsetConf(key)
+      }
+    }
+  }
+
 }
