@@ -26,6 +26,7 @@ import java.io.DataInputStream;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * A reader reading a HFile.
@@ -73,15 +74,15 @@ public class HFileReader {
    *
    * @param key Key to look up.
    * @return The {@link KeyValue} instance in the block that contains the exact same key as the
-   * lookup key; or {@link null} if the lookup key does not exist.
+   * lookup key; or empty {@link Optional} if the lookup key does not exist.
    * @throws IOException upon error.
    */
-  public KeyValue seekTo(Key key) throws IOException {
+  public Optional<KeyValue> seekTo(Key key) throws IOException {
     BlockIndexEntry lookUpKey = new BlockIndexEntry(key, -1, -1);
     int rootLevelBlockIndex = searchBlockByKey(lookUpKey);
     if (rootLevelBlockIndex < 0) {
       // Key smaller than the start key of the first block
-      return null;
+      return Optional.empty();
     }
     BlockIndexEntry blockToRead = blockIndexEntryList.get(rootLevelBlockIndex);
     HFileBlockReader blockReader = new HFileBlockReader(
@@ -169,9 +170,9 @@ public class HFileReader {
    * @param dataBlock The data block to seek.
    * @param key       The key to lookup.
    * @return The {@link KeyValue} instance in the block that contains the exact same key as the
-   * lookup key; or {@link null} if the lookup key does not exist.
+   * lookup key; or empty {@link Optional} if the lookup key does not exist.
    */
-  private KeyValue seekToKeyInBlock(HFileDataBlock dataBlock, Key key) {
+  private Optional<KeyValue> seekToKeyInBlock(HFileDataBlock dataBlock, Key key) {
     return dataBlock.seekTo(key);
   }
 }

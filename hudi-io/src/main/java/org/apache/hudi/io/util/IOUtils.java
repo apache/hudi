@@ -19,8 +19,9 @@
 
 package org.apache.hudi.io.util;
 
-import java.io.IOException;
-
+/**
+ * Util methods on I/O.
+ */
 public class IOUtils {
   /**
    * Reads four bytes starting from the offset in the input and returns {@code int} value.
@@ -132,21 +133,6 @@ public class IOUtils {
   }
 
   /**
-   * Reads a variable-length encoded number from input bytes and returns it as a {@code int}.
-   *
-   * @param bytes  input byte array.
-   * @param offset offset to start reading.
-   * @return decoded int from the input.
-   */
-  public static int readVInt(byte[] bytes, int offset) throws IOException {
-    long n = readVarLong(bytes, offset);
-    if ((n > Integer.MAX_VALUE) || (n < Integer.MIN_VALUE)) {
-      throw new IOException("value too long to fit in integer");
-    }
-    return (int) n;
-  }
-
-  /**
    * Given the first byte of a variable-length encoded number, determines the sign.
    *
    * @param value the first byte.
@@ -171,26 +157,24 @@ public class IOUtils {
   /**
    * Lexicographically compares two byte arrays.
    *
-   * @param buffer1 left operand.
-   * @param buffer2 right operand.
+   * @param bytes1  left operand.
+   * @param bytes2  right operand.
    * @param offset1 where to start comparing in the left buffer.
    * @param offset2 where to start comparing in the right buffer.
    * @param length1 how much to compare from the left buffer.
    * @param length2 how much to compare from the right buffer.
    * @return 0 if equal, < 0 if left is less than right, etc.
    */
-  public static int compareTo(byte[] buffer1, int offset1, int length1,
-                              byte[] buffer2, int offset2, int length2) {
-    // Short circuit equal case
-    if (buffer1 == buffer2 && offset1 == offset2 && length1 == length2) {
+  public static int compareTo(byte[] bytes1, int offset1, int length1,
+                              byte[] bytes2, int offset2, int length2) {
+    if (bytes1 == bytes2 && offset1 == offset2 && length1 == length2) {
       return 0;
     }
-    // Bring WritableComparator code local
     int end1 = offset1 + length1;
     int end2 = offset2 + length2;
     for (int i = offset1, j = offset2; i < end1 && j < end2; i++, j++) {
-      int a = (buffer1[i] & 0xff);
-      int b = (buffer2[j] & 0xff);
+      int a = (bytes1[i] & 0xff);
+      int b = (bytes2[j] & 0xff);
       if (a != b) {
         return a - b;
       }

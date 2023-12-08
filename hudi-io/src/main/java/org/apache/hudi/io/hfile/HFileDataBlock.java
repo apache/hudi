@@ -21,6 +21,8 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.io.util.IOUtils;
 
+import java.util.Optional;
+
 import static org.apache.hudi.io.hfile.KeyValue.KEY_OFFSET;
 
 /**
@@ -38,9 +40,9 @@ public class HFileDataBlock extends HFileBlock {
    *
    * @param key Key to look up.
    * @return The {@link KeyValue} instance in the block that contains the exact same key as the
-   * lookup key; or {@link null} if the lookup key does not exist.
+   * lookup key; or empty {@link Optional} if the lookup key does not exist.
    */
-  public KeyValue seekTo(Key key) {
+  public Optional<KeyValue> seekTo(Key key) {
     int offset = startOffsetInBuff + HFILEBLOCK_HEADER_SIZE;
     int endOffset = offset + onDiskSizeWithoutHeader;
     // TODO: check last 4 bytes in the data block
@@ -48,18 +50,20 @@ public class HFileDataBlock extends HFileBlock {
       // Full length is not known yet until parsing
       KeyValue kv = new KeyValue(byteBuff, offset, -1);
       // TODO: Reading long instead of two integers per HBase
-      int comp = IOUtils.compareTo(kv.getBytes(), kv.getKeyContentOffset(), kv.getKeyContentLength(),
-          key.getBytes(), key.getContentOffset(), key.getContentLength());
+      int comp =
+          IOUtils.compareTo(kv.getBytes(), kv.getKeyContentOffset(), kv.getKeyContentLength(),
+              key.getBytes(), key.getContentOffset(), key.getContentLength());
       if (comp == 0) {
-        return kv;
+        return Optional.of(kv);
       } else if (comp > 0) {
-        return null;
+        return Optional.empty();
       }
       // TODO: check what's the extra byte
-      long incr = (long) KEY_OFFSET + (long) kv.getKeyLength() + (long) kv.getValueLength() + 1L;
-      offset += incr;
+      long increment =
+          (long) KEY_OFFSET + (long) kv.getKeyLength() + (long) kv.getValueLength() + 1L;
+      offset += increment;
     }
-    return null;
+    return Optional.empty();
   }
 
   @Override

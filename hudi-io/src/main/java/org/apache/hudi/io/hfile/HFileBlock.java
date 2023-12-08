@@ -36,16 +36,12 @@ import static org.apache.hudi.io.util.IOUtils.readInt;
  * Represents a block in a HFile. The types of blocks are defined in {@link HFileBlockType}.
  */
 public abstract class HFileBlock {
-  /**
-   * The HFile block header size without checksum
-   */
+  // The HFile block header size without checksum
   public static final int HFILEBLOCK_HEADER_SIZE_NO_CHECKSUM =
       MAGIC_LENGTH + 2 * SIZEOF_INT32 + SIZEOF_INT64;
-  /**
-   * The HFile block header size with checksum
-   * There is a 1 byte checksum type, followed by a 4 byte bytesPerChecksum
-   * followed by another 4 byte value to store sizeofDataOnDisk.
-   */
+  // The HFile block header size with checksum
+  // There is a 1 byte checksum type, followed by a 4 byte bytesPerChecksum
+  // followed by another 4 byte value to store sizeofDataOnDisk.
   public static final int HFILEBLOCK_HEADER_SIZE =
       HFILEBLOCK_HEADER_SIZE_NO_CHECKSUM + SIZEOF_BYTE + 2 * SIZEOF_INT32;
 
@@ -101,8 +97,8 @@ public abstract class HFileBlock {
    * @param context           HFile context.
    * @param byteBuff          Input data.
    * @param startOffsetInBuff Offset to start parsing.
-   * @return The {@link HFileBlock} instance based on the input; {@code null} if not able to parse.
-   * @throws IOException
+   * @return The {@link HFileBlock} instance based on the input.
+   * @throws IOException if the block cannot be parsed.
    */
   public static HFileBlock parse(HFileContext context, byte[] byteBuff, int startOffsetInBuff)
       throws IOException {
@@ -115,7 +111,8 @@ public abstract class HFileBlock {
       case DATA:
         return new HFileDataBlock(context, byteBuff, startOffsetInBuff);
       default:
-        return null;
+        throw new IOException(
+            "Parsing of the HFile block type " + blockType + " is not supported");
     }
   }
 

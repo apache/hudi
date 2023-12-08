@@ -21,8 +21,8 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hadoop.fs.FSDataInputStream;
 
+import java.io.EOFException;
 import java.io.IOException;
-import java.util.Optional;
 
 /**
  * A reader to read one or more HFile blocks based on the start and end offsets.
@@ -68,7 +68,7 @@ public class HFileBlockReader {
    */
   public HFileBlock nextBlock(HFileBlockType expectedBlockType) throws IOException {
     if (offset >= byteBuff.length) {
-      return null;
+      throw new EOFException("No more data to read");
     }
 
     HFileBlock block = HFileBlock.parse(context, byteBuff, offset).unpack();

@@ -79,16 +79,14 @@ public class KeyValue {
    * @return the value offset
    */
   public int getValueOffset() {
-    int voffset = getKeyOffset() + getKeyLength();
-    return voffset;
+    return getKeyOffset() + getKeyLength();
   }
 
   /**
    * @return Value length
    */
   public int getValueLength() {
-    int vlength = readInt(this.bytes, this.offset + SIZEOF_INT32);
-    return vlength;
+    return readInt(this.bytes, this.offset + SIZEOF_INT32);
   }
 
   @Override
