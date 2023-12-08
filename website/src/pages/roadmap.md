@@ -10,12 +10,8 @@ down by areas on our [stack](blog/2021/07/21/streaming-data-lake-platform/#hudi-
 
 ## Future Releases
 
-Next major release : [0.14.0](https://issues.apache.org/jira/projects/HUDI/versions/12352700) (September 2023)
+Next upcoming release : [0.14.1](https://issues.apache.org/jira/projects/HUDI/versions/12353493) (Dec 2023)
 
-| Release                                                                  | Timeline |
-|--------------------------------------------------------------------------|----------|
-| [0.14.0](https://issues.apache.org/jira/projects/HUDI/versions/12352700) | Sep 2023 |
-| [1.0.0](https://issues.apache.org/jira/projects/HUDI/versions/12351210)  | Oct 2023 |
 
 ## Transactional Database Layer
 
