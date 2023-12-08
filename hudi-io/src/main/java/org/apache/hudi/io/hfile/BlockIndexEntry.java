@@ -29,17 +29,17 @@ package org.apache.hudi.io.hfile;
  * are compared in lexicographical order.
  */
 public class BlockIndexEntry implements Comparable<BlockIndexEntry> {
-  private final KeyValue firstKey;
+  private final Key firstKey;
   private final long offset;
   private final int size;
 
-  public BlockIndexEntry(KeyValue firstKey, long offset, int size) {
+  public BlockIndexEntry(Key firstKey, long offset, int size) {
     this.firstKey = firstKey;
     this.offset = offset;
     this.size = size;
   }
 
-  public KeyValue getFirstKey() {
+  public Key getFirstKey() {
     return firstKey;
   }
 
@@ -53,8 +53,8 @@ public class BlockIndexEntry implements Comparable<BlockIndexEntry> {
 
   @Override
   public int compareTo(BlockIndexEntry o) {
-    return ByteUtils.compareTo(firstKey.getBytes(), firstKey.getRowOffset(), firstKey.getRowLength(),
-        o.getFirstKey().getBytes(), o.getFirstKey().getRowOffset(), o.getFirstKey().getRowLength());
+    return ByteUtils.compareTo(firstKey.getBytes(), firstKey.getContentOffset(), firstKey.getContentLength(),
+        o.getFirstKey().getBytes(), o.getFirstKey().getContentOffset(), o.getFirstKey().getContentLength());
   }
 
   @Override

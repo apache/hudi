@@ -53,7 +53,7 @@ public class HFileRootIndexBlock extends HFileBlock {
       int vLongSizeOnDist = decodeVLongSizeOnDisk(byteBuff, buffOffset + 12);
       int keyLength = (int) readVLong(byteBuff, buffOffset + 12, vLongSizeOnDist);
       byte[] firstKeyBytes = copy(byteBuff, buffOffset + 12 + vLongSizeOnDist, keyLength);
-      KeyOnlyKeyValue firstKey = new KeyOnlyKeyValue(firstKeyBytes, 0, firstKeyBytes.length);
+      Key firstKey = new Key(firstKeyBytes, 0, firstKeyBytes.length);
       entryList.add(new BlockIndexEntry(firstKey, offset, size));
       buffOffset += (12 + vLongSizeOnDist + keyLength);
     }

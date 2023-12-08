@@ -22,6 +22,7 @@ package org.apache.hudi.io.hfile;
 import org.apache.hadoop.fs.FSDataInputStream;
 
 import java.io.IOException;
+import java.util.Optional;
 
 /**
  * A reader to read one or more HFile blocks based on the start and end offsets.
@@ -47,7 +48,14 @@ public class HFileBlockReader {
     this.context = context;
     this.offset = 0;
     stream.seek(startOffset);
-    this.byteBuff = new byte[(int) (endOffset - startOffset)];
+    long length = endOffset - startOffset;
+    if (length >= 0 && length <= Integer.MAX_VALUE) {
+      this.byteBuff = new byte[(int) length];
+    } else {
+      throw new IllegalArgumentException(
+          "The range of bytes is too large or invalid: ["
+              + startOffset + ", " + endOffset + "], length=" + length);
+    }
     stream.readFully(byteBuff);
   }
 

@@ -20,35 +20,27 @@
 package org.apache.hudi.io.hfile;
 
 import static org.apache.hudi.io.hfile.ByteUtils.readInt;
-import static org.apache.hudi.io.hfile.ByteUtils.readShort;
-import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT;
-import static org.apache.hudi.io.hfile.DataSize.SIZEOF_SHORT;
+import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT32;
 
 /**
  * Represents a key-value pair in the data block.
  */
 public class KeyValue {
-  /** Size of the row length field in bytes */
-  public static final int ROW_LENGTH_SIZE = SIZEOF_SHORT;
-  // How far into the key the row starts at. First thing to read is the short
-  // that says how long the row is.
-  public static final int ROW_OFFSET =
-      SIZEOF_INT /*keylength*/ + SIZEOF_INT /*valuelength*/;
+  // Key part starts after the key length (integer) and value length (integer)
+  private static final int KEY_OFFSET = SIZEOF_INT32 * 2;
 
-  public static final int ROW_KEY_OFFSET = ROW_OFFSET + ROW_LENGTH_SIZE;
+  public static final int ROW_KEY_OFFSET = ROW_OFFSET + KEY_LENGTH_SIZE;
 
-  protected final byte[] bytes;
-  protected final int offset;
-  protected final int length;
-
-  public KeyValue(byte[] bytes) {
-    this(bytes, 0, bytes.length);
-  }
+  private final byte[] bytes;
+  private final int offset;
+  private final int length;
+  private final Key key;
 
   public KeyValue(byte[] bytes, int offset, int length) {
     this.bytes = bytes;
     this.offset = offset;
     this.length = length;
+    this.key = new Key(bytes, offset + KEY_OFFSET, readInt(bytes, offset));
   }
 
   /**
@@ -61,29 +53,29 @@ public class KeyValue {
   /**
    * @return Row offset
    */
-  public int getRowOffset() {
-    return this.offset + ROW_KEY_OFFSET;
+  public int getKeyContentOffset() {
+    return key.getContentOffset();
   }
 
   /**
    * @return Length of key portion.
    */
   public int getKeyLength() {
-    return readInt(this.bytes, this.offset);
+    return key.getLength();
   }
 
   /**
    * @return Key offset in backing buffer..
    */
   public int getKeyOffset() {
-    return this.offset + ROW_OFFSET;
+    return key.getOffset();
   }
 
   /**
    * @return Row length
    */
-  public short getRowLength() {
-    return readShort(this.bytes, getKeyOffset());
+  public int getKeyContentLength() {
+    return key.getContentLength();
   }
 
   /**
@@ -98,16 +90,16 @@ public class KeyValue {
    * @return Value length
    */
   public int getValueLength() {
-    int vlength = readInt(this.bytes, this.offset + SIZEOF_INT);
+    int vlength = readInt(this.bytes, this.offset + SIZEOF_INT32);
     return vlength;
   }
 
   @Override
   public String toString() {
-    if (length > 0) {
-      return new String(bytes, offset, length);
-    }
-    // TODO: fix length
-    return new String(bytes, offset, 22);
+    return "KeyValue{key="
+        + key.toString()
+        + ", length="
+        + length
+        + "}";
   }
 }

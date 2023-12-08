@@ -57,7 +57,6 @@ public class HFileReader {
     this.context = HFileContext.builder()
         .compressAlgo(trailer.getCompressionCodec())
         .build();
-    // At this point, HFileContext is not known yet until we parse the trailer
     HFileBlockReader blockReader = new HFileBlockReader(
         context, stream, trailer.getLoadOnOpenDataOffset(), fileSize - HFileTrailer.getTrailerSize());
     HFileRootIndexBlock dataIndexBlock =
@@ -77,7 +76,7 @@ public class HFileReader {
    * lookup key; or {@link null} if the lookup key does not exist.
    * @throws IOException upon error.
    */
-  public KeyValue seekTo(KeyValue key) throws IOException {
+  public KeyValue seekTo(Key key) throws IOException {
     BlockIndexEntry lookUpKey = new BlockIndexEntry(key, -1, -1);
     int rootLevelBlockIndex = searchBlockByKey(lookUpKey);
     if (rootLevelBlockIndex < 0) {
@@ -172,7 +171,7 @@ public class HFileReader {
    * @return The {@link KeyValue} instance in the block that contains the exact same key as the
    * lookup key; or {@link null} if the lookup key does not exist.
    */
-  private KeyValue seekToKeyInBlock(HFileDataBlock dataBlock, KeyValue key) {
+  private KeyValue seekToKeyInBlock(HFileDataBlock dataBlock, Key key) {
     return dataBlock.seekTo(key);
   }
 }

@@ -31,23 +31,22 @@ public class DataSize {
   /**
    * Size of byte in bytes
    */
-  public static final int SIZEOF_BYTE = SIZEOF_BOOLEAN;
+  public static final int SIZEOF_BYTE = 1;
 
   /**
    * Size of int in bytes
    */
-  public static final int SIZEOF_INT = Integer.SIZE / Byte.SIZE;
+  public static final int SIZEOF_INT32 = 4;
 
   /**
    * Size of short in bytes
    */
-  public static final int SIZEOF_SHORT = Short.SIZE / Byte.SIZE;
+  public static final int SIZEOF_INT16 = 2;
 
   /**
    * Size of long in bytes
    */
-  public static final int SIZEOF_LONG = Long.SIZE / Byte.SIZE;
-
+  public static final int SIZEOF_INT64 = 4;
 
   public static final int MAGIC_LENGTH = 8;
 }

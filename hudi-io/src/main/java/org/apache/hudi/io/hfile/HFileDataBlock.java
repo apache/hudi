@@ -38,7 +38,7 @@ public class HFileDataBlock extends HFileBlock {
    * @return The {@link KeyValue} instance in the block that contains the exact same key as the
    * lookup key; or {@link null} if the lookup key does not exist.
    */
-  public KeyValue seekTo(KeyValue key) {
+  public KeyValue seekTo(Key key) {
     int offset = startOffsetInBuff + HFILEBLOCK_HEADER_SIZE;
     int endOffset = offset + onDiskSizeWithoutHeader;
     // TODO: check last 4 bytes in the data block
@@ -46,8 +46,8 @@ public class HFileDataBlock extends HFileBlock {
       // Full length is not known yet until parsing
       KeyValue kv = new KeyValue(byteBuff, offset, -1);
       // TODO: Reading long instead of two integers per HBase
-      int comp = ByteUtils.compareTo(kv.getBytes(), kv.getRowOffset(), kv.getRowLength(),
-          key.getBytes(), key.getRowOffset(), key.getRowLength());
+      int comp = ByteUtils.compareTo(kv.getBytes(), kv.getKeyContentOffset(), kv.getKeyContentLength(),
+          key.getBytes(), key.getContentOffset(), key.getContentLength());
       if (comp == 0) {
         return kv;
       } else if (comp > 0) {

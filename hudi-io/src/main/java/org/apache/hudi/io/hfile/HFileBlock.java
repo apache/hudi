@@ -29,8 +29,8 @@ import java.io.InputStream;
 import static org.apache.hudi.io.hfile.ByteUtils.readInt;
 import static org.apache.hudi.io.hfile.DataSize.MAGIC_LENGTH;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_BYTE;
-import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT;
-import static org.apache.hudi.io.hfile.DataSize.SIZEOF_LONG;
+import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT32;
+import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT64;
 
 /**
  * Represents a block in a HFile. The types of blocks are defined in {@link HFileBlockType}.
@@ -40,19 +40,19 @@ public abstract class HFileBlock {
    * The HFile block header size without checksum
    */
   public static final int HFILEBLOCK_HEADER_SIZE_NO_CHECKSUM =
-      MAGIC_LENGTH + 2 * SIZEOF_INT + SIZEOF_LONG;
+      MAGIC_LENGTH + 2 * SIZEOF_INT32 + SIZEOF_INT64;
   /**
    * The HFile block header size with checksum
    * There is a 1 byte checksum type, followed by a 4 byte bytesPerChecksum
    * followed by another 4 byte value to store sizeofDataOnDisk.
    */
   public static final int HFILEBLOCK_HEADER_SIZE =
-      HFILEBLOCK_HEADER_SIZE_NO_CHECKSUM + SIZEOF_BYTE + 2 * SIZEOF_INT;
+      HFILEBLOCK_HEADER_SIZE_NO_CHECKSUM + SIZEOF_BYTE + 2 * SIZEOF_INT32;
 
   /**
    * Each checksum value is an integer that can be stored in 4 bytes.
    */
-  static final int CHECKSUM_SIZE = SIZEOF_INT;
+  static final int CHECKSUM_SIZE = SIZEOF_INT32;
 
   static class Header {
     // Format of header is:

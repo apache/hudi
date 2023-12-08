@@ -24,9 +24,10 @@ import org.apache.hudi.io.hfile.protobuf.generated.HFileProtos;
 
 import java.io.DataInputStream;
 import java.io.IOException;
+import java.util.Arrays;
 
 import static org.apache.hudi.io.hfile.DataSize.MAGIC_LENGTH;
-import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT;
+import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT32;
 
 /**
  * Represents a HFile trailer, which is serialized and deserialized using
@@ -35,7 +36,7 @@ import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT;
 public class HFileTrailer {
   // This is the trailer size for HFile V3
   public static final int TRAILER_SIZE = 1024 * 4;
-  private static final int NOT_PB_SIZE = MAGIC_LENGTH + SIZEOF_INT;
+  private static final int NOT_PB_SIZE = MAGIC_LENGTH + SIZEOF_INT32;
 
 
   /**
@@ -192,5 +193,26 @@ public class HFileTrailer {
     if (trailerProto.hasEncryptionKey()) {
       encryptionKey = trailerProto.getEncryptionKey().toByteArray();
     }
+  }
+
+  @Override
+  public String toString() {
+    return "HFileTrailer{" +
+        "fileInfoOffset=" + fileInfoOffset +
+        ", loadOnOpenDataOffset=" + loadOnOpenDataOffset +
+        ", dataIndexCount=" + dataIndexCount +
+        ", uncompressedDataIndexSize=" + uncompressedDataIndexSize +
+        ", metaIndexCount=" + metaIndexCount +
+        ", totalUncompressedBytes=" + totalUncompressedBytes +
+        ", entryCount=" + entryCount +
+        ", compressionCodec=" + compressionCodec +
+        ", numDataIndexLevels=" + numDataIndexLevels +
+        ", firstDataBlockOffset=" + firstDataBlockOffset +
+        ", lastDataBlockOffset=" + lastDataBlockOffset +
+        ", comparatorClassName='" + comparatorClassName + '\'' +
+        ", encryptionKey=" + Arrays.toString(encryptionKey) +
+        ", majorVersion=" + majorVersion +
+        ", minorVersion=" + minorVersion +
+        '}';
   }
 }

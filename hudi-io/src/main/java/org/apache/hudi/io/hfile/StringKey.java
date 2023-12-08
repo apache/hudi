@@ -19,42 +19,23 @@
 
 package org.apache.hudi.io.hfile;
 
-import static org.apache.hudi.io.hfile.DataSize.SIZEOF_SHORT;
+import java.nio.charset.StandardCharsets;
 
 /**
- * Represents the key part only.
+ * Represent a String key only, with no length information encoded.
  */
-public class KeyOnlyKeyValue extends KeyValue {
-  public KeyOnlyKeyValue(byte[] bytes) {
-    this(bytes, 0, bytes.length);
-  }
-
-  public KeyOnlyKeyValue(byte[] bytes, int offset, int length) {
-    super(bytes, offset, length);
+public class StringKey extends Key {
+  public StringKey(String key) {
+    super(key.getBytes(StandardCharsets.UTF_8));
   }
 
   @Override
-  public int getKeyOffset() {
-    return this.offset;
+  public int getContentOffset() {
+    return getOffset();
   }
 
   @Override
-  public int getRowOffset() {
-    return getKeyOffset() + SIZEOF_SHORT;
-  }
-
-  @Override
-  public int getKeyLength() {
-    return length;
-  }
-
-  @Override
-  public int getValueOffset() {
-    throw new IllegalArgumentException("KeyOnlyKeyValue does not work with values.");
-  }
-
-  @Override
-  public int getValueLength() {
-    throw new IllegalArgumentException("KeyOnlyKeyValue does not work with values.");
+  public int getContentLength() {
+    return getLength();
   }
 }

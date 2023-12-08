@@ -19,23 +19,45 @@
 
 package org.apache.hudi.io.hfile;
 
-import java.nio.charset.StandardCharsets;
+import static org.apache.hudi.io.hfile.ByteUtils.readShort;
+import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
 
 /**
- * Represent a String key only, with no length information encoded.
+ * Represents the key part only.
  */
-public class StringKeyOnlyKeyValue extends KeyOnlyKeyValue {
-  public StringKeyOnlyKeyValue(String key) {
-    super(key.getBytes(StandardCharsets.UTF_8));
+public class Key {
+  private static final int CONTENT_LENGTH_SIZE = SIZEOF_INT16;
+  private final byte[] bytes;
+  private final int offset;
+  private final int length;
+
+  public Key(byte[] bytes) {
+    this(bytes, 0, bytes.length);
   }
 
-  @Override
-  public int getRowOffset() {
-    return offset;
+  public Key(byte[] bytes, int offset, int length) {
+    this.bytes = bytes;
+    this.offset = offset;
+    this.length = length;
   }
 
-  @Override
-  public short getRowLength() {
-    return (short) length;
+  public byte[] getBytes() {
+    return bytes;
+  }
+
+  public int getOffset() {
+    return this.offset;
+  }
+
+  public int getLength() {
+    return length;
+  }
+
+  public int getContentOffset() {
+    return getOffset() + CONTENT_LENGTH_SIZE;
+  }
+
+  public int getContentLength() {
+    return readShort(bytes, getOffset());
   }
 }
