@@ -119,6 +119,11 @@ public class TestData {
           TimestampData.fromEpochMillis(8), StringData.fromString("par4"))
   );
 
+  public static List<RowData> DATA_SET_INSERT_PARTITION_IS_NULL = Arrays.asList(
+      insertRow(StringData.fromString("idNull"), StringData.fromString("He"), 30,
+          TimestampData.fromEpochMillis(9), null)
+  );
+
   public static List<RowData> DATA_SET_UPDATE_INSERT = Arrays.asList(
       // advance the age by 1
       insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 24,
