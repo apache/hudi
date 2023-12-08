@@ -19,34 +19,61 @@
 
 package org.apache.hudi.utilities.schema.converter;
 
+import org.apache.hudi.common.config.TypedProperties;
+
 import org.apache.avro.Schema;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.IOException;
 
 import static org.apache.hudi.common.util.FileIOUtils.readAsUTFString;
+import static org.apache.hudi.utilities.schema.converter.JsonToAvroSchemaConverter.stripQuotesFromStringValue;
+import static org.apache.hudi.utilities.schema.converter.JsonToAvroSchemaConverterConfig.STRIP_DEFAULT_VALUE_QUOTES;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class TestJsonToAvroSchemaConverter {
 
   @ParameterizedTest
-  @ValueSource(strings = {
-      "enum-properties",
-      "example-address",
-      "example-calendar",
-      "example-card",
-      "example-geographical-location",
-      "multiple-properties",
-      "nested-properties",
-      "single-properties"
+  @CsvSource({
+      "enum-properties,",
+      "example-address,",
+      "example-calendar,",
+      "example-card,",
+      "example-geographical-location,",
+      "multiple-properties,",
+      "nested-properties,",
+      "single-properties,",
+      "schema-repeating-names,",
+      "complex-json-union-types,",
+      "not-null-default-value-schema,_no_stripping_quotes",
+      "not-null-default-value-schema,_stripping_quotes",
+      "array-with-item-type-union,"
   })
-  void testConvertJsonSchemaToAvroSchema(String inputCase) throws IOException {
+  void testConvertJsonSchemaToAvroSchema(String inputCase, String avroSchemaFileSuffix) throws IOException {
     String jsonSchema = loadJsonSchema(inputCase);
-    String avroSchema = new JsonToAvroSchemaConverter().convert(jsonSchema);
+    TypedProperties config = new TypedProperties();
+    if ("_no_stripping_quotes".equals(avroSchemaFileSuffix)) {
+      config.put(STRIP_DEFAULT_VALUE_QUOTES.key(), "false");
+    }
+    String avroSchema = new JsonToAvroSchemaConverter(config).convert(jsonSchema);
     Schema schema = new Schema.Parser().parse(avroSchema);
-    Schema expected = new Schema.Parser().parse(loadAvroSchema(inputCase));
+    Schema expected = new Schema.Parser().parse(loadAvroSchema(inputCase, avroSchemaFileSuffix));
     assertEquals(expected, schema);
+  }
+
+  @Test
+  void testStripQuotesFromStringValue() {
+    assertNull(stripQuotesFromStringValue(null));
+    assertEquals("", stripQuotesFromStringValue(""));
+    assertEquals("\"", stripQuotesFromStringValue("\""));
+    assertEquals("", stripQuotesFromStringValue("\"\""));
+    assertEquals("\"", stripQuotesFromStringValue("\"\"\""));
+    assertEquals("123", stripQuotesFromStringValue("123"));
+    assertEquals("123", stripQuotesFromStringValue("\"123\""));
+    assertEquals("x", stripQuotesFromStringValue("x"));
   }
 
   private String loadJsonSchema(String inputCase) throws IOException {
@@ -55,9 +82,10 @@ class TestJsonToAvroSchemaConverter {
         .getResourceAsStream(String.format("schema-provider/json/%s/input.json", inputCase)));
   }
 
-  private String loadAvroSchema(String inputCase) throws IOException {
+  private String loadAvroSchema(String inputCase, String avroSchemaFileSuffix) throws IOException {
     return readAsUTFString(getClass()
         .getClassLoader()
-        .getResourceAsStream(String.format("schema-provider/json/%s/expected.json", inputCase)));
+        .getResourceAsStream(String.format("schema-provider/json/%s/expected%s.json", inputCase,
+            avroSchemaFileSuffix == null ? "" : avroSchemaFileSuffix)));
   }
 }

@@ -125,6 +125,9 @@ class TestSchemaRegistryProvider {
 
   public static class DummySchemaConverter implements SchemaRegistryProvider.SchemaConverter {
 
+    public DummySchemaConverter(TypedProperties properties) {
+    }
+
     @Override
     public String convert(String schema) throws IOException {
       return ((ObjectNode) new ObjectMapper()

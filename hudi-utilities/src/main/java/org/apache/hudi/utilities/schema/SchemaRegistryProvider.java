@@ -98,7 +98,8 @@ public class SchemaRegistryProvider extends SchemaProvider {
     try {
       String schemaConverter = getStringWithAltKeys(config, HoodieSchemaProviderConfig.SCHEMA_CONVERTER, true);
       SchemaConverter converter = !StringUtils.isNullOrEmpty(schemaConverter)
-          ? ReflectionUtils.loadClass(schemaConverter)
+          ? (SchemaConverter) ReflectionUtils.loadClass(
+          schemaConverter, new Class<?>[] {TypedProperties.class}, config)
           : s -> s;
       return new Schema.Parser().parse(converter.convert(schema));
     } catch (Exception e) {

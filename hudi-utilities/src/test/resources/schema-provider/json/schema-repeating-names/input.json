@@ -1,0 +1,124 @@
+{
+  "type": "object",
+  "title": "schema_repeating_names",
+  "properties": {
+    "op": {
+      "type": "string"
+    },
+    "before": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "title": "ValueSchema",
+          "properties": {
+            "fileName": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "functionCode": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "after": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "title": "ValueSchema",
+          "properties": {
+            "fileName": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "functionCode": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "source": {
+      "type": "object",
+      "title": "io.debezium.connector.mysql.Source",
+      "properties": {
+        "query": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "thread": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "version": {
+          "type": "string"
+        },
+        "pos": {
+          "type": "integer"
+        },
+        "ts_ms": {
+          "type": "integer",
+          "connect.type": "int64"
+        }
+      }
+    },
+    "program": {
+      "type": "string"
+    },
+    "ts_ms": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "integer"
+        }
+      ]
+    }
+  }
+}

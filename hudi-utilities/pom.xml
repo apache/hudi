@@ -188,7 +188,7 @@
       <version>${kafka.version}</version>
     </dependency>
 
-    <!-- Pulsar -->
+  <!-- Pulsar -->
     <dependency>
       <groupId>org.apache.pulsar</groupId>
       <artifactId>pulsar-client</artifactId>
@@ -367,6 +367,18 @@
       <groupId>io.confluent</groupId>
       <artifactId>kafka-schema-registry-client</artifactId>
       <version>${confluent.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.confluent</groupId>
+      <artifactId>kafka-json-schema-serializer</artifactId>
+      <version>${confluent.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.kafka</groupId>
+      <artifactId>kafka-streams-test-utils</artifactId>
+      <version>3.4.0</version>
+      <scope>test</scope>
     </dependency>
 
     <!-- Httpcomponents -->
