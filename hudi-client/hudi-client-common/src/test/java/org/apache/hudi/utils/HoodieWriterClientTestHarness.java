@@ -35,6 +35,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
@@ -158,6 +159,7 @@ public class HoodieWriterClientTestHarness extends HoodieCommonTestHarness {
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024).parquetMaxFileSize(1024 * 1024).orcMaxFileSize(1024 * 1024).build())
         .forTable(RAW_TRIPS_TEST_NAME)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
+        .withPayloadConfig(HoodiePayloadConfig.newBuilder().withPayloadOrderingField("timestamp").build())
         .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withEnableBackupForRemoteFileSystemView(false) // Fail test if problem connecting to timeline-server
             .withRemoteServerPort(timelineServicePort)

@@ -164,7 +164,8 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
       HoodieRecord<T> combinedRecord = combinedRecordAndSchema.getLeft();
 
       // If pre-combine returns existing record, no need to update it
-      if (combinedRecord.getData() != existingRecordMetadataPair.getLeft().get()) {
+      if ((!existingRecordMetadataPair.getLeft().isPresent())
+          || combinedRecord.getData() != existingRecordMetadataPair.getLeft().get()) {
         return Option.of(Pair.of(
             combinedRecord.getData(),
             enablePartialMerging
