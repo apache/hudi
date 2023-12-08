@@ -491,7 +491,6 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         // NOTE: type promotion is not supported for the custom file format and the filegroup reader
         //       HUDI-7045 and PR#10007 in progress to fix the issue
         .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
-        .option("spark.sql.parquet.enableNestedColumnVectorizedReader", "false")
         .load(tempRecordPath)
       readDf.printSchema()
       readDf.show(false)
