@@ -1,0 +1,66 @@
+{
+  "type": "record",
+  "name": "json_schema_with_complex_union_types",
+  "doc": "",
+  "fields": [
+    {
+      "name": "field1",
+      "type": [
+        "null",
+        {
+          "type": "record",
+          "name": "field1",
+          "fields": [
+            {
+              "name": "property1",
+              "type": [
+                "null",
+                "string"
+              ],
+              "doc": "",
+              "default": null
+            },
+            {
+              "name": "property2",
+              "type": [
+                "null",
+                "double"
+              ],
+              "doc": "",
+              "default": null
+            }
+          ]
+        }
+      ],
+      "doc": "",
+      "default": null
+    },
+    {
+      "name": "field2",
+      "type": [
+        "null",
+        {
+          "type": "array",
+          "items": "string"
+        },
+        {
+          "type": "record",
+          "name": "field21",
+          "fields": [
+            {
+              "name": "property3",
+              "type": [
+                "null",
+                "long"
+              ],
+              "doc": "",
+              "default": null
+            }
+          ]
+        }
+      ],
+      "doc": "",
+      "default": null
+    }
+  ]
+}
