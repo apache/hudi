@@ -140,7 +140,7 @@ public class AvroSchemaEvolutionUtils {
    * @return schema (based off {@code source} one) that has nullability constraints and datatypes reconciled
    */
   public static Schema reconcileSchemaRequirements(Schema sourceSchema, Schema targetSchema, Map<String, String> opts) {
-    if (targetSchema.getFields().isEmpty()) {
+    if (targetSchema.getType() == Schema.Type.NULL || targetSchema.getFields().isEmpty()) {
       return sourceSchema;
     }
 
