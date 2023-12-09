@@ -205,20 +205,31 @@ public class TestHoodieTableFactory {
     final MockContext sourceContext1 = MockContext.getInstance(this.conf, schema, "f2");
     assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext1));
 
-    // Invalid table type will throw exception
+    // Invalid table type will throw exception if the hoodie.properties does not exist.
+    this.conf.setString(FlinkOptions.PATH, tempFile.getAbsolutePath() + "_NOT_EXIST_TABLE_PATH");
     this.conf.set(FlinkOptions.TABLE_TYPE, "INVALID_TABLE_TYPE");
     final MockContext sourceContext2 = MockContext.getInstance(this.conf, schema, "f2");
     assertThrows(HoodieValidationException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext2));
+    this.conf.setString(FlinkOptions.PATH, tempFile.getAbsolutePath());
 
-    // Valid table type will be ok
-    this.conf.set(FlinkOptions.TABLE_TYPE, "MERGE_ON_READ");
+    // Invalid table type will be ok if the hoodie.properties exists.
+    this.conf.set(FlinkOptions.TABLE_TYPE, "INVALID_TABLE_TYPE");
     final MockContext sourceContext3 = MockContext.getInstance(this.conf, schema, "f2");
     assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext3));
 
     // Valid table type will be ok
-    this.conf.set(FlinkOptions.TABLE_TYPE, "COPY_ON_WRITE");
+    this.conf.set(FlinkOptions.TABLE_TYPE, "MERGE_ON_READ");
     final MockContext sourceContext4 = MockContext.getInstance(this.conf, schema, "f2");
     assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext4));
+
+    // Setup the table type correctly for hoodie.properties
+    HoodieTableSink hoodieTableSink = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(sourceContext4);
+    assertThat(hoodieTableSink.getConf().get(FlinkOptions.TABLE_TYPE), is("COPY_ON_WRITE"));
+
+    // Valid table type will be ok
+    this.conf.set(FlinkOptions.TABLE_TYPE, "COPY_ON_WRITE");
+    final MockContext sourceContext5 = MockContext.getInstance(this.conf, schema, "f2");
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext5));
   }
 
   @Test
