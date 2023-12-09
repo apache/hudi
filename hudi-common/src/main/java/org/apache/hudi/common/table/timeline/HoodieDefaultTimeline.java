@@ -424,13 +424,13 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public boolean containsInstant(HoodieInstant instant) {
-    return getOrCreateInstantSet().contains(instant);
+    return getInstantsAsStream().anyMatch(s -> s.equals(instant));
   }
 
   @Override
   public boolean containsInstant(String ts) {
     // Check for 0.10.0+ timestamps which have msec granularity
-    if (getInstantsAsStream().anyMatch(s -> s.getTimestamp().equals(ts))) {
+    if (getOrCreateInstantSet().contains(ts)) {
       return true;
     }
 
