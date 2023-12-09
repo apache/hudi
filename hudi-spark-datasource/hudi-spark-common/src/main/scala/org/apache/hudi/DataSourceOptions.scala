@@ -110,6 +110,27 @@ object DataSourceReadOptions {
     .withDocumentation("Start offset to pull data from hoodie streaming source. allow earliest, latest, and " +
       "specified start instant time")
 
+  val STREAM_MAX_FILES_PER_TRIGGER: ConfigProperty[Int] = ConfigProperty
+    .key("hoodie.datasource.streaming.max.files.per.trigger")
+    .defaultValue(Integer.MAX_VALUE)
+    .markAdvanced
+    .sinceVersion("1.0.0")
+    .withDocumentation("Number of max files per trigger to pull data from hoodie streaming source.")
+
+  val STREAM_MAX_BYTES_PER_TRIGGER: ConfigProperty[Int] = ConfigProperty
+    .key("hoodie.datasource.streaming.max.bytes.per.trigger")
+    .defaultValue(Integer.MAX_VALUE)
+    .markAdvanced
+    .sinceVersion("1.0.0")
+    .withDocumentation("Number of max bytes per trigger to pull data from hoodie streaming source.")
+
+  val STREAM_MAX_ROWS_PER_TRIGGER: ConfigProperty[Int] = ConfigProperty
+    .key("hoodie.datasource.streaming.max.rows.per.trigger")
+    .defaultValue(Integer.MAX_VALUE)
+    .markAdvanced
+    .sinceVersion("1.0.0")
+    .withDocumentation("Number of max rows per trigger to pull data from hoodie streaming source.")
+
   val BEGIN_INSTANTTIME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.begin.instanttime")
     .noDefaultValue()

@@ -18,6 +18,9 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -204,5 +207,16 @@ public class CommitUtils {
     } catch (IOException e) {
       throw new HoodieIOException("Failed to parse checkpoint as map", e);
     }
+  }
+
+  public static FileStatus writeStatToFileStatus(Path basePath, HoodieWriteStat writeStat) {
+    String relativeFilePath = writeStat.getPath();
+    Path fullPath = relativeFilePath != null ? FSUtils.getPartitionPath(basePath, relativeFilePath) : null;
+    if (fullPath != null) {
+      // Return a dummy block size here
+      return new FileStatus(writeStat.getFileSizeInBytes(), false, 0, 128 * 1024 * 1024,
+          0, fullPath);
+    }
+    return null;
   }
 }

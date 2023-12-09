@@ -237,6 +237,17 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline findInstantsAfterOrEquals(String commitTime, int numCommits);
 
   /**
+   * Create a new Timeline with all the instants after or equals startCompletionTime.
+   */
+  HoodieTimeline findInstantsAfterOrEqualsCompletionTime(String completionTime, int numCommits);
+
+  /**
+   * Create a new Timeline with instants after startOffset and before or on endOffset.
+   */
+  HoodieTimeline findInstantsInRange(InstantOffsetRange.InstantOffset startOffset,
+                                     InstantOffsetRange.InstantOffset endOffset);
+
+  /**
    * Create a new Timeline with instants after startTs and before or on endTs.
    */
   HoodieTimeline findInstantsInRange(String startTs, String endTs);
@@ -245,6 +256,19 @@ public interface HoodieTimeline extends Serializable {
    * Create a new Timeline with instants after or equals startTs and before or on endTs.
    */
   HoodieTimeline findInstantsInClosedRange(String startTs, String endTs);
+
+  /**
+   * Create a new Timeline with instants after or equals startTs and before or on endTs
+   * by completionTime.
+   */
+  HoodieTimeline findInstantsInClosedRangeByCompletionTime(String startTs, String endTs);
+
+  /**`
+   * Create a new Timeline with instants after startOffset and before or on endOffset
+   * by completion timestamp of actions.
+   */
+  HoodieTimeline findInstantsInRangeByCompletionTime(InstantOffsetRange.InstantOffset startOffset,
+                                                     InstantOffsetRange.InstantOffset endOffset);
 
   /**`
    * Create a new Timeline with instants after startTs and before or on endTs

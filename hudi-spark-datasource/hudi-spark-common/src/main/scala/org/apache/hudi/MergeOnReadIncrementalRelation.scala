@@ -20,15 +20,16 @@ package org.apache.hudi
 import org.apache.hadoop.fs.{FileStatus, GlobPattern}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieSparkConfUtils.getHollowCommitHandling
-import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
+import org.apache.hudi.common.model.{FileSlice, HoodieRecord, HoodieWriteStat}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.InstantOffsetRange.InstantOffset
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
 import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, concatTimeline, getCommitMetadata, handleHollowCommitIfNeeded}
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, InstantOffsetRange}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
-import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.common.util.{CommitUtils, StringUtils}
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.{getWritePartitionPaths, listAffectedFilesForCommits}
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.{getAffectedPartitionPaths, getWritePartitionPaths, listAffectedFilesForCommits}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
@@ -36,12 +37,10 @@ import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.StructType
 
+import java.util.{List => JList}
 import scala.collection.JavaConverters._
 import scala.collection.immutable
 
-/**
- * @Experimental
- */
 case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
                                           override val optParams: Map[String, String],
                                           override val metaClient: HoodieTableMetaClient,
@@ -61,10 +60,10 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
     } else {
       val completeTimeline = if (hollowCommitHandling == HollowCommitHandling.USE_TRANSITION_TIME) {
         metaClient.getCommitsTimeline.filterCompletedInstants()
-          .findInstantsInRangeByCompletionTime(startTimestamp, endTimestamp)
+          .findInstantsInRangeByCompletionTime(startOffset, endOffset)
       } else {
         handleHollowCommitIfNeeded(metaClient.getCommitsTimeline.filterCompletedInstants(), metaClient, hollowCommitHandling)
-          .findInstantsInRange(startTimestamp, endTimestamp)
+          .findInstantsInRange(startOffset, endOffset)
       }
       // Need to add pending compaction instants to avoid data missing, see HUDI-5990 for details.
       val pendingCompactionTimeline = metaClient.getCommitsAndCompactionTimeline.filterPendingMajorOrMinorCompactionTimeline()
@@ -98,17 +97,17 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
   }
 
   override protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
-    if (includedCommits.isEmpty) {
+    if (timeline.empty()) {
       List()
     } else {
       val fileSlices = if (fullTableScan) {
         listLatestFileSlices(Seq(), partitionFilters, dataFilters)
       } else {
-        val latestCommit = includedCommits.last.getTimestamp
+        val latestCommit = timeline.lastInstant().get().getTimestamp
 
         val fsView = new HoodieTableFileSystemView(metaClient, timeline, affectedFilesInCommits)
 
-        val modifiedPartitions = getWritePartitionPaths(commitsMetadata)
+        val modifiedPartitions = getAffectedPartitionPaths(affectedWriteStats)
 
         modifiedPartitions.asScala.flatMap { relativePartitionPath =>
           fsView.getLatestMergedFileSlicesBeforeOrOn(relativePartitionPath, latestCommit).iterator().asScala
@@ -126,9 +125,9 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
       val fileSlices = if (fullTableScan) {
         listLatestFileSlices(Seq(), partitionFilters, dataFilters)
       } else {
-        val latestCommit = includedCommits.last.getTimestamp
+        val latestCommit = timeline.lastInstant().get().getTimestamp
         val fsView = new HoodieTableFileSystemView(metaClient, timeline, affectedFilesInCommits)
-        val modifiedPartitions = getWritePartitionPaths(commitsMetadata)
+        val modifiedPartitions = getAffectedPartitionPaths(affectedWriteStats)
 
         fileIndex.listMatchingPartitionPaths(HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilters))
           .map(p => p.path).filter(p => modifiedPartitions.contains(p))
@@ -179,16 +178,17 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
 
   protected val hollowCommitHandling: HollowCommitHandling = getHollowCommitHandling(optParams)
 
-  protected def startTimestamp: String = optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key)
+  protected def startOffset: InstantOffset = InstantOffset
+    .fromString(optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key))
 
-  protected def endTimestamp: String = optParams.getOrElse(
-    DataSourceReadOptions.END_INSTANTTIME.key,
-    if (hollowCommitHandling == USE_TRANSITION_TIME) super.timeline.lastInstant().get.getCompletionTime
-    else super.timeline.lastInstant().get.getTimestamp)
+  protected def endOffset: InstantOffset = InstantOffset.fromString(
+    optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key,
+      if (hollowCommitHandling == USE_TRANSITION_TIME) super.timeline.lastInstant().get.getCompletionTime
+      else super.timeline.lastInstant().get.getTimestamp))
 
-  protected def startInstantArchived: Boolean = super.timeline.isBeforeTimelineStarts(startTimestamp)
+  protected def startInstantArchived: Boolean = super.timeline.isBeforeTimelineStarts(startOffset.instantTime)
 
-  protected def endInstantArchived: Boolean = super.timeline.isBeforeTimelineStarts(endTimestamp)
+  protected def endInstantArchived: Boolean = super.timeline.isBeforeTimelineStarts(endOffset.instantTime)
 
   // Fallback to full table scan if any of the following conditions matches:
   //   1. the start commit is archived
@@ -206,27 +206,35 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
       // If endTimestamp commit is not archived, will filter instants
       // before endTimestamp.
       if (hollowCommitHandling == USE_TRANSITION_TIME) {
-        super.timeline.findInstantsInRangeByCompletionTime(startTimestamp, endTimestamp).getInstants.asScala.toList
+        super.timeline.findInstantsInRangeByCompletionTime(startOffset.instantTime, endOffset.instantTime).getInstants.asScala.toList
       } else {
-        super.timeline.findInstantsInRange(startTimestamp, endTimestamp).getInstants.asScala.toList
+        super.timeline.findInstantsInRange(startOffset.instantTime, endOffset.instantTime).getInstants.asScala.toList
       }
     } else {
       super.timeline.getInstants.asScala.toList
     }
   }
 
-  protected lazy val commitsMetadata = includedCommits.map(getCommitMetadata(_, super.timeline)).asJava
+  protected lazy val affectedWriteStats: JList[HoodieWriteStat] = InstantOffsetRange.newBuilder()
+    .withCompletionTimeEnabled(hollowCommitHandling == USE_TRANSITION_TIME)
+    .build(startOffset, endOffset, super.timeline)
+    .getWriteStatsBetween
 
   protected lazy val affectedFilesInCommits: Array[FileStatus] = {
-    listAffectedFilesForCommits(conf, metaClient.getBasePathV2, commitsMetadata)
+    affectedWriteStats
+      .asScala
+      .map(stat => Some(CommitUtils.writeStatToFileStatus(metaClient.getBasePathV2, stat)))
+      .filter(_.nonEmpty)
+      .map(_.get)
+      .toArray
   }
 
   protected lazy val (includeStartTime, startTs) = if (startInstantArchived) {
-    (false, startTimestamp)
+    (false, startOffset.instantTime)
   } else {
     (true, includedCommits.head.getTimestamp)
   }
-  protected lazy val endTs: String = if (endInstantArchived) endTimestamp else includedCommits.last.getTimestamp
+  protected lazy val endTs: String = if (endInstantArchived) endOffset.instantTime else includedCommits.last.getTimestamp
 
   // Record filters making sure that only records w/in the requested bounds are being fetched as part of the
   // scan collected by this relation

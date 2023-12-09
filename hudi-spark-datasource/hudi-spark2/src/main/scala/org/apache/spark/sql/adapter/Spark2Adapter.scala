@@ -32,9 +32,11 @@ import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable}
 import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark24LegacyHoodieParquetFileFormat}
+import org.apache.spark.sql.execution.streaming.Source
 import org.apache.spark.sql.execution.vectorized.MutableColumnarRow
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.hudi.parser.HoodieSpark2ExtendedSqlParser
+import org.apache.spark.sql.hudi.streaming.HoodieStreamSource
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
@@ -157,6 +159,13 @@ class Spark2Adapter extends SparkAdapter {
                               parameters: java.util.Map[String, String]): BaseRelation = {
     val dataSchema = Option(schema).map(AvroConversionUtils.convertAvroSchemaToStructType).orNull
     DefaultSource.createRelation(sqlContext, metaClient, dataSchema, globPaths, parameters.asScala.toMap)
+  }
+
+  override def createStreamSource(sqlContext: SQLContext,
+                                  metadataPath: String,
+                                  schemaOption: Option[StructType],
+                                  parameters: Map[String, String]): Source = {
+    new HoodieStreamSource(sqlContext, metadataPath, schemaOption, parameters)
   }
 
   override def createHoodieFileScanRDD(sparkSession: SparkSession,
