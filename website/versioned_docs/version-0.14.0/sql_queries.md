@@ -302,13 +302,10 @@ REFRESH database.table_name
 ```
 
 ## Redshift Spectrum
+Latest version of Redshift spectrum supports snapshot queries on Hudi Copy-on-Write tables and Read Optimized queries on Hudi Merge-on-Read tables.
 
-Copy on Write Tables in Apache Hudi versions 0.5.2, 0.6.0, 0.7.0, 0.8.0, 0.9.0, 0.10.x and 0.11.x can be queried
-via Amazon Redshift Spectrum external tables. To be able to query Hudi versions 0.10.0 and above please try latest
-versions of Redshift.
-:::note
-Hudi tables are supported only when AWS Glue Data Catalog is used. It's not supported when you use an Apache
-Hive metastore as the external catalog.
+:::note NOTE:
+Hudi tables are supported only when AWS Glue Data Catalog is used. It's not supported when you use an Apache Hive metastore as the external catalog.
 :::
 
 Please refer
@@ -329,10 +326,8 @@ will be supported in the future.
 
 ## StarRocks
 
-Copy on Write tables in Apache Hudi 0.10.0 and above can be queried via StarRocks external tables from StarRocks version
-2.2.0. Only snapshot queries are supported currently. In future releases Merge on Read tables will also be supported.
-Please refer to [StarRocks Hudi external table](https://docs.starrocks.io/en-us/latest/using_starrocks/External_table#hudi-external-table)
-for more details on the setup.
+As of StarRocks v3.1, there's complete support for both Hudi Copy-on-Write and Merge-on-Read tables.
+Please refer [StarRocks docs](https://docs.starrocks.io/docs/data_source/catalog/hudi_catalog/) to get started.
 
 ## ClickHouse
 
@@ -366,7 +361,7 @@ Following tables show whether a given query is supported on specific query engin
 | **Impala**            | Y                | N                   |
 | **Redshift Spectrum** | Y                | N                   |
 | **Doris**             | Y                | N                   |
-| **StarRocks**         | Y                | N                   |
+| **StarRocks**         | Y                | Y                   |
 | **ClickHouse**        | Y                | N                   |
 
 ### Merge-On-Read tables
@@ -384,7 +379,7 @@ Following tables show whether a given query is supported on specific query engin
 | **Impala**            | N                | N                   | Y                      |
 | **Redshift Spectrum** | N                | N                   | Y                      |
 | **Doris**             | N                | N                   | N                      |
-| **StarRocks**         | Y                | N                   | Y                      |
+| **StarRocks**         | Y                | Y                   | Y                      |
 | **ClickHouse**        | N                | N                   | N                      |
 
 
