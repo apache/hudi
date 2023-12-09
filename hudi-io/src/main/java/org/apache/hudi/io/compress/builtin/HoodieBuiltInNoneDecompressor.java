@@ -31,10 +31,10 @@ import java.io.InputStream;
  */
 public class HoodieBuiltInNoneDecompressor implements HoodieDecompressor {
   @Override
-  public void decompress(InputStream compressedInput,
-                         byte[] targetByteArray,
-                         int offset,
-                         int length) throws IOException {
-    compressedInput.read(targetByteArray, offset, length);
+  public int decompress(InputStream compressedInput,
+                        byte[] targetByteArray,
+                        int offset,
+                        int length) throws IOException {
+    return compressedInput.read(targetByteArray, offset, length);
   }
 }

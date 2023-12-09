@@ -40,12 +40,21 @@ public class HoodieAirliftGzipDecompressor implements HoodieDecompressor {
   }
 
   @Override
-  public void decompress(InputStream compressedInput,
-                         byte[] targetByteArray,
-                         int offset,
-                         int length) throws IOException {
+  public int decompress(InputStream compressedInput,
+                        byte[] targetByteArray,
+                        int offset,
+                        int length) throws IOException {
+    int totalBytesRead = 0;
     try (HadoopInputStream stream = gzipStreams.createInputStream(compressedInput)) {
-      stream.read(targetByteArray, offset, length);
+      int bytesRead;
+      while (totalBytesRead < length) {
+        bytesRead = stream.read(targetByteArray, offset + totalBytesRead, length - totalBytesRead);
+        if (bytesRead < 0) {
+          break;
+        }
+        totalBytesRead += bytesRead;
+      }
     }
+    return totalBytesRead;
   }
 }

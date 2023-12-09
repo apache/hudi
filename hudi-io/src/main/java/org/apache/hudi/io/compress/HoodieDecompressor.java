@@ -35,7 +35,11 @@ public interface HoodieDecompressor {
    * @param targetByteArray target byte array to store the decompressed data.
    * @param offset          offset in the target byte array to start to write data.
    * @param length          maximum amount of decompressed data to write.
+   * @return size of bytes read.
    * @throws IOException upon error.
    */
-  void decompress(InputStream compressedInput, byte[] targetByteArray, int offset, int length) throws IOException;
+  int decompress(InputStream compressedInput,
+                 byte[] targetByteArray,
+                 int offset,
+                 int length) throws IOException;
 }
