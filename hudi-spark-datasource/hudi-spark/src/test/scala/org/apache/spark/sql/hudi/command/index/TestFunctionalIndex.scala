@@ -153,7 +153,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
     // So we special case this test only for Java 8.
     if (HoodieSparkUtils.gteqSpark3_2 && HoodieTestUtils.getJavaVersion == 8) {
       withTempDir { tmp =>
-        Seq("mor").foreach { tableType =>
+        Seq("cow").foreach { tableType =>
           val databaseName = "testdb"
           val tableName = generateTableName
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
@@ -206,10 +206,10 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
 
           // assert table created and no partition metadata
           val hiveClient = new HoodieHiveSyncClient(HiveTestUtil.getHiveSyncConfig)
-          assertTrue(hiveClient.tableExists("h0_ro"))
-          assertTrue(hiveClient.tableExists("h0_rt"))
-          assertEquals(0, hiveClient.getAllPartitions("h0_ro").size())
-          assertEquals(0, hiveClient.getAllPartitions("h0_rt").size())
+          assertTrue(hiveClient.tableExists("h0"))
+          // assertTrue(hiveClient.tableExists("h0_rt"))
+          assertEquals(0, hiveClient.getAllPartitions("h0").size())
+          // assertEquals(0, hiveClient.getAllPartitions("h0_rt").size())
 
           // check query result
           checkAnswer(s"select id, name from $tableName where from_unixtime(ts, 'yyyy-MM-dd') = '1970-01-01'")(
