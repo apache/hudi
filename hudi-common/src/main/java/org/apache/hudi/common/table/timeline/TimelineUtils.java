@@ -42,6 +42,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.AbstractMap;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -87,7 +88,7 @@ public class TimelineUtils {
     HoodieTimeline completedTimeline = timeline.getWriteTimeline().filterCompletedInstants();
     HoodieTimeline replaceCommitTimeline = completedTimeline.getCompletedReplaceTimeline();
 
-    Map<String, String> partitionToLatestDeleteTimestamp = replaceCommitTimeline.getInstants().stream()
+    Map<String, String> partitionToLatestDeleteTimestamp = replaceCommitTimeline.getInstantsAsStream()
         .map(instant -> {
           try {
             HoodieReplaceCommitMetadata commitMetadata = HoodieReplaceCommitMetadata.fromBytes(
@@ -102,7 +103,15 @@ public class TimelineUtils {
             .map(partition -> new AbstractMap.SimpleEntry<>(partition, pair.getLeft().getTimestamp()))
         ).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (existing, replace) -> replace));
 
-    Map<String, String> partitionToLatestWriteTimestamp = completedTimeline.getInstants().stream()
+    if (partitionToLatestDeleteTimestamp.isEmpty()) {
+      // There is no dropped partitions
+      return Collections.emptyList();
+    }
+    String earliestDeleteTimestamp = partitionToLatestDeleteTimestamp.values().stream()
+        .reduce((left, right) -> compareTimestamps(left, LESSER_THAN, right) ? left : right)
+        .get();
+    Map<String, String> partitionToLatestWriteTimestamp = completedTimeline.getInstantsAsStream()
+        .filter(instant -> compareTimestamps(instant.getTimestamp(), GREATER_THAN_OR_EQUALS, earliestDeleteTimestamp))
         .flatMap(instant -> {
           try {
             HoodieCommitMetadata commitMetadata = getCommitMetadata(instant, completedTimeline);
@@ -115,8 +124,7 @@ public class TimelineUtils {
 
     return partitionToLatestDeleteTimestamp.entrySet().stream()
         .filter(entry -> !partitionToLatestWriteTimestamp.containsKey(entry.getKey())
-            || HoodieTimeline.compareTimestamps(entry.getValue(), HoodieTimeline.GREATER_THAN,
-            partitionToLatestWriteTimestamp.get(entry.getKey()))
+            || compareTimestamps(entry.getValue(), GREATER_THAN, partitionToLatestWriteTimestamp.get(entry.getKey()))
         ).map(Map.Entry::getKey).filter(partition -> !partition.isEmpty()).collect(Collectors.toList());
   }
 
