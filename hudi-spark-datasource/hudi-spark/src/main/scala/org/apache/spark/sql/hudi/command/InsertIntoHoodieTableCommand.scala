@@ -110,22 +110,6 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     success
   }
 
-  private def getStaticOverwritePartitionPath(hoodieCatalogTable: HoodieCatalogTable,
-                                              partitionsSpec: Map[String, Option[String]],
-                                              isOverWritePartition: Boolean): Option[String] = {
-    if (isOverWritePartition) {
-      val staticPartitionValues = filterStaticPartitionValues(partitionsSpec)
-      val isStaticOverwritePartition = staticPartitionValues.keys.size == hoodieCatalogTable.partitionFields.length
-      if (isStaticOverwritePartition) {
-        Option.apply(makePartitionPath(hoodieCatalogTable, staticPartitionValues))
-      } else {
-        Option.empty
-      }
-    } else {
-      Option.empty
-    }
-  }
-
   /**
    * Align provided [[query]]'s output with the expected [[catalogTable]] schema by
    *

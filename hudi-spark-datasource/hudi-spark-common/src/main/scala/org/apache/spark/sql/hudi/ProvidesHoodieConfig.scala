@@ -338,6 +338,10 @@ trait ProvidesHoodieConfig extends Logging {
 
   /**
    * Deduce the overwrite config based on writeOperation and overwriteMode config.
+   * If hoodie.datasource.write.operation is insert_overwrite/insert_overwrite_table, use dynamic overwrite;
+   * else if hoodie.datasource.overwrite.mode is configured, use it;
+   * else use spark.sql.sources.partitionOverwriteMode.
+   *
    * The returned staticOverwritePartitionPathOpt is defined only in static insert_overwrite case.
    *
    * @return (overwriteMode, isOverWriteTable, isOverWritePartition, staticOverwritePartitionPathOpt)
@@ -349,14 +353,16 @@ trait ProvidesHoodieConfig extends Logging {
     val combinedOpts: Map[String, String] = combineOptions(catalogTable, catalogTable.tableConfig, sparkSession.sqlContext.conf,
       defaultOpts = Map.empty, overridingOpts = extraOptions)
     val operation = combinedOpts.getOrElse(OPERATION.key, null)
+    val isOverwriteOperation = operation != null &&
+      (operation.equals(INSERT_OVERWRITE_OPERATION_OPT_VAL) || operation.equals(INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL))
     // If hoodie.datasource.overwrite.mode configured, respect it, otherwise respect spark.sql.sources.partitionOverwriteMode
     val hoodieOverwriteMode = combinedOpts.getOrElse(OVERWRITE_MODE.key,
       sparkSession.sqlContext.getConf(PARTITION_OVERWRITE_MODE.key)).toUpperCase()
-    val isStaticOverwrite = hoodieOverwriteMode match {
+    val isStaticOverwrite = !isOverwriteOperation && (hoodieOverwriteMode match {
       case "STATIC" => true
       case "DYNAMIC" => false
       case _ => throw new IllegalArgumentException("Config hoodie.datasource.overwrite.mode is illegal")
-    }
+    })
     val isOverWriteTable = operation match {
       case INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL => true
       case INSERT_OVERWRITE_OPERATION_OPT_VAL => false
