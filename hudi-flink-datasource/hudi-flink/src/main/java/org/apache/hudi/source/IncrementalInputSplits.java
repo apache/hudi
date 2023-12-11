@@ -210,9 +210,9 @@ public class IncrementalInputSplits implements Serializable {
         LOG.warn("No partitions found for reading in user provided path.");
         return Result.EMPTY;
       }
-      FileStatus[] files = WriteProfiles.getFilesFromMetadata(path, metaClient.getHadoopConf(), metadataList, metaClient.getTableType(), false);
-      if (files == null) {
-        LOG.warn("Found deleted files in metadata, fall back to full table scan.");
+      Boolean skipNotExistsFile = conf.getBoolean(FlinkOptions.READ_STREAMING_SKIP_NOT_EXIST_FILE);
+      if (!skipNotExistsFile) {
+        LOG.warn("Not allow to skip not exists file, fall back to full table scan.");
         // fallback to full table scan
         // reading from the earliest, scans the partitions and files directly.
         FileIndex fileIndex = getFileIndex();
@@ -223,7 +223,7 @@ public class IncrementalInputSplits implements Serializable {
         }
         fileStatuses = fileIndex.getFilesInPartitions();
       } else {
-        fileStatuses = files;
+        fileStatuses = WriteProfiles.getFilesFromMetadata(path, metaClient.getHadoopConf(), metadataList, metaClient.getTableType());
       }
     }
 
@@ -356,7 +356,22 @@ public class IncrementalInputSplits implements Serializable {
       LOG.warn("No partitions found for reading under path: " + path);
       return Collections.emptyList();
     }
-    FileStatus[] fileStatuses = WriteProfiles.getFilesFromMetadata(path, hadoopConf, metadataList, metaClient.getTableType());
+    final FileStatus[] fileStatuses;
+    Boolean skipNotExistsFile = conf.getBoolean(FlinkOptions.READ_STREAMING_SKIP_NOT_EXIST_FILE);
+    if (!skipNotExistsFile) {
+      LOG.warn("Not Allow to skip not exists file, fall back to full table scan.");
+      // fallback to full table scan
+      // reading from the earliest, scans the partitions and files directly.
+      FileIndex fileIndex = getFileIndex();
+      readPartitions = new TreeSet<>(fileIndex.getOrBuildPartitionPaths());
+      if (readPartitions.size() == 0) {
+        LOG.warn("No partitions found for reading in user provided path.");
+        return Collections.emptyList();
+      }
+      fileStatuses = fileIndex.getFilesInPartitions();
+    } else {
+      fileStatuses = WriteProfiles.getFilesFromMetadata(path, metaClient.getHadoopConf(), metadataList, metaClient.getTableType());
+    }
 
     if (fileStatuses.length == 0) {
       LOG.warn("No files found for reading under path: " + path);

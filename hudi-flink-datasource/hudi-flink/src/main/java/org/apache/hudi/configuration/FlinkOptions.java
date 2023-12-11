@@ -329,6 +329,12 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Whether to skip clustering instants to avoid reading base files of clustering operations for streaming read "
           + "to improve read performance.");
 
+  public static final ConfigOption<Boolean> READ_STREAMING_SKIP_NOT_EXIST_FILE = ConfigOptions
+          .key("read.streaming.skip_not_exist_file")
+          .booleanType()
+          .defaultValue(false)
+          .withDescription("Whether to skip not exist file when read streaming");
+
   public static final String START_COMMIT_EARLIEST = "earliest";
   public static final ConfigOption<String> READ_START_COMMIT = ConfigOptions
       .key("read.start-commit")
