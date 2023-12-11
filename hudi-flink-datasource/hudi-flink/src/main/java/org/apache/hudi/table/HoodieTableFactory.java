@@ -32,6 +32,7 @@ import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
+import org.apache.hudi.util.OptionUtils;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.ConfigOption;
@@ -86,6 +87,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     setupTableOptions(conf.getString(FlinkOptions.PATH), conf);
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     setupConfOptions(conf, context.getObjectIdentifier(), context.getCatalogTable(), schema);
+    OptionUtils.printOptions(factoryIdentifier(), conf.toMap());
     return new HoodieTableSource(
         schema,
         path,
@@ -104,6 +106,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     sanityCheck(conf, schema);
     setupConfOptions(conf, context.getObjectIdentifier(), context.getCatalogTable(), schema);
     setupSortOptions(conf, context.getConfiguration());
+    OptionUtils.printOptions(factoryIdentifier(), conf.toMap());
     return new HoodieTableSink(conf, schema);
   }
 
