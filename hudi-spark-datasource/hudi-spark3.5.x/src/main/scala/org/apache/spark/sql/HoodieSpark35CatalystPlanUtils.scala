@@ -51,7 +51,7 @@ object HoodieSpark35CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
       l@LogicalRelation(fs: HadoopFsRelation, _, _, _))
         if fs.fileFormat.isInstanceOf[ParquetFileFormat with HoodieFormatTrait]
           && !fs.fileFormat.asInstanceOf[ParquetFileFormat with HoodieFormatTrait].isProjected =>
-        NewFileFormatUtils.applyNewFileFormatChanges(s, l, fs)
+        FileFormatUtilsForFileGroupReader.applyNewFileFormatChanges(s, l, fs)
       case _ => plan
     }
   }
