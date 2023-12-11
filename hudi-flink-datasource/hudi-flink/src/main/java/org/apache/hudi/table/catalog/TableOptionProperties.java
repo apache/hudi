@@ -191,10 +191,10 @@ public class TableOptionProperties {
         .filter(e -> KEY_MAPPING.containsKey(e.getKey()) && !catalogTable.getOptions().containsKey(KEY_MAPPING.get(e.getKey())))
         .collect(Collectors.toMap(e -> KEY_MAPPING.get(e.getKey()),
             e -> {
-              if(e.getKey().equalsIgnoreCase(FlinkOptions.TABLE_TYPE.key())) {
+              if (e.getKey().equalsIgnoreCase(FlinkOptions.TABLE_TYPE.key())) {
                   String sparkTableType = VALUE_MAPPING.get(e.getValue());
-                  if(sparkTableType == null) {
-                     throw new HoodieValidationException(String.format("%s's value is invalid", e.getKey()));
+                  if (sparkTableType == null) {
+                    throw new HoodieValidationException(String.format("%s's value is invalid", e.getKey()));
                   }
                   return sparkTableType;
               }
