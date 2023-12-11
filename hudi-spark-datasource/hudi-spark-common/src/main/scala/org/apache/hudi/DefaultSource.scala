@@ -308,18 +308,10 @@ object DefaultSource {
             HoodieBootstrapMORRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
           }
 
-        case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, true) =>
+        case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
           if (fileFormatUtils.isDefined) {
             new HoodieMergeOnReadIncrementalHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, isBootstrap = true).build()
-          } else {
-            MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
-          }
-
-        case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, false) =>
-          if (fileFormatUtils.isDefined) {
-            new HoodieMergeOnReadIncrementalHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
+              sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
           } else {
             MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
           }

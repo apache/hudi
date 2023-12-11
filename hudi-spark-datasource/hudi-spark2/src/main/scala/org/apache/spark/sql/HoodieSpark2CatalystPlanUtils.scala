@@ -98,7 +98,7 @@ object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
     Join(left, right, joinType, condition)
   }
 
-  override def sameOutput(a: LogicalPlan, b: LogicalPlan): Boolean = {
+  override def produceSameOutput(a: LogicalPlan, b: LogicalPlan): Boolean = {
     val thisOutput = a.output
     val otherOutput = b.output
     thisOutput.length == otherOutput.length && thisOutput.zip(otherOutput).forall {

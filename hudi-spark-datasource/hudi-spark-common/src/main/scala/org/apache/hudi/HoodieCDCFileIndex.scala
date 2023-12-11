@@ -33,7 +33,7 @@ import org.apache.spark.sql.types.StructType
 
 import scala.jdk.CollectionConverters.{asScalaBufferConverter, mapAsScalaMapConverter}
 
-class HoodieCDCFileIndex(override val spark: SparkSession,
+class HoodieCDCFileIndex (override val spark: SparkSession,
                           override val metaClient: HoodieTableMetaClient,
                           override val schemaSpec: Option[StructType],
                           override val options: Map[String, String],

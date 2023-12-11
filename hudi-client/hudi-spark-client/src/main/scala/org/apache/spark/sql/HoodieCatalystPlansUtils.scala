@@ -143,5 +143,8 @@ trait HoodieCatalystPlansUtils {
 
   def createMITJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType, condition: Option[Expression], hint: String): LogicalPlan
 
-  def sameOutput(a: LogicalPlan, b: LogicalPlan): Boolean
+  /**
+   * true if both plans produce the same attributes in the the same order
+   */
+  def produceSameOutput(a: LogicalPlan, b: LogicalPlan): Boolean
 }

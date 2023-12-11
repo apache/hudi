@@ -66,7 +66,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                                                   requiredFilters: Seq[Filter]
                                            ) extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait {
 
-  override def getRequiredFilters: Seq[Filter] = requiredFilters
+  def getRequiredFilters: Seq[Filter] = requiredFilters
 
   /**
    * Support batch needs to remain consistent, even if one side of a bootstrap merge can support
@@ -276,8 +276,6 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     val baseFileReader = super.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema,
       filters ++ requiredFilters, options, new Configuration(hadoopConf))
     m.put(generateKey(dataSchema, requiredSchema), baseFileReader)
-    m.put(0, super.buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema,
-      filters ++ requiredFilters, options, new Configuration(hadoopConf)))
 
     //file reader for reading a hudi base file that needs to be merged with log files
     val preMergeBaseFileReader = if (isMOR) {

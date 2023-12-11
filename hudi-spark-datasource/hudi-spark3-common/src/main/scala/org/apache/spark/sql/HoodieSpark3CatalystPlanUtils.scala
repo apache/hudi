@@ -81,7 +81,7 @@ trait HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
     Join(left, right, joinType, condition, JoinHint.NONE)
   }
 
-  override def sameOutput(a: LogicalPlan, b: LogicalPlan): Boolean = {
+  override def produceSameOutput(a: LogicalPlan, b: LogicalPlan): Boolean = {
     a.sameOutput(b)
   }
 }
