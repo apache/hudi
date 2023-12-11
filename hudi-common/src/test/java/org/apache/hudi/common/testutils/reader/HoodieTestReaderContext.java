@@ -163,7 +163,9 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
-  public ClosableIterator<IndexedRecord> mergeBootstrapReaders(ClosableIterator<IndexedRecord> skeletonFileIterator, ClosableIterator<IndexedRecord> dataFileIterator) {
+  public ClosableIterator<IndexedRecord> mergeBootstrapReaders(
+      ClosableIterator<IndexedRecord> skeletonFileIterator,
+      ClosableIterator<IndexedRecord> dataFileIterator) {
     return null;
   }
 
