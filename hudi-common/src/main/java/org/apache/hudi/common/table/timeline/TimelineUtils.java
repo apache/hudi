@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieTimeTravelException;
@@ -39,7 +40,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.AbstractMap;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -82,22 +85,47 @@ public class TimelineUtils {
    * Does not include internal operations such as clean in the timeline.
    */
   public static List<String> getDroppedPartitions(HoodieTimeline timeline) {
-    HoodieTimeline replaceCommitTimeline = timeline.getWriteTimeline().filterCompletedInstants().getCompletedReplaceTimeline();
+    HoodieTimeline completedTimeline = timeline.getWriteTimeline().filterCompletedInstants();
+    HoodieTimeline replaceCommitTimeline = completedTimeline.getCompletedReplaceTimeline();
 
-    return replaceCommitTimeline.getInstantsAsStream().flatMap(instant -> {
-      try {
-        HoodieReplaceCommitMetadata commitMetadata = HoodieReplaceCommitMetadata.fromBytes(
-            replaceCommitTimeline.getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
-        if (WriteOperationType.DELETE_PARTITION.equals(commitMetadata.getOperationType())) {
-          Map<String, List<String>> partitionToReplaceFileIds = commitMetadata.getPartitionToReplaceFileIds();
-          return partitionToReplaceFileIds.keySet().stream();
-        } else {
-          return Stream.empty();
-        }
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to get partitions modified at " + instant, e);
-      }
-    }).distinct().filter(partition -> !partition.isEmpty()).collect(Collectors.toList());
+    Map<String, String> partitionToLatestDeleteTimestamp = replaceCommitTimeline.getInstantsAsStream()
+        .map(instant -> {
+          try {
+            HoodieReplaceCommitMetadata commitMetadata = HoodieReplaceCommitMetadata.fromBytes(
+                replaceCommitTimeline.getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
+            return Pair.of(instant, commitMetadata);
+          } catch (IOException e) {
+            throw new HoodieIOException("Failed to get partitions modified at " + instant, e);
+          }
+        })
+        .filter(pair -> isDeletePartition(pair.getRight().getOperationType()))
+        .flatMap(pair -> pair.getRight().getPartitionToReplaceFileIds().keySet().stream()
+            .map(partition -> new AbstractMap.SimpleEntry<>(partition, pair.getLeft().getTimestamp()))
+        ).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (existing, replace) -> replace));
+
+    if (partitionToLatestDeleteTimestamp.isEmpty()) {
+      // There is no dropped partitions
+      return Collections.emptyList();
+    }
+    String earliestDeleteTimestamp = partitionToLatestDeleteTimestamp.values().stream()
+        .reduce((left, right) -> compareTimestamps(left, LESSER_THAN, right) ? left : right)
+        .get();
+    Map<String, String> partitionToLatestWriteTimestamp = completedTimeline.getInstantsAsStream()
+        .filter(instant -> compareTimestamps(instant.getTimestamp(), GREATER_THAN_OR_EQUALS, earliestDeleteTimestamp))
+        .flatMap(instant -> {
+          try {
+            HoodieCommitMetadata commitMetadata = getCommitMetadata(instant, completedTimeline);
+            return commitMetadata.getWritePartitionPaths().stream()
+                .map(partition -> new AbstractMap.SimpleEntry<>(partition, instant.getTimestamp()));
+          } catch (IOException e) {
+            throw new HoodieIOException("Failed to get partitions writes at " + instant, e);
+          }
+        }).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (existing, replace) -> replace));
+
+    return partitionToLatestDeleteTimestamp.entrySet().stream()
+        .filter(entry -> !partitionToLatestWriteTimestamp.containsKey(entry.getKey())
+            || compareTimestamps(entry.getValue(), GREATER_THAN, partitionToLatestWriteTimestamp.get(entry.getKey()))
+        ).map(Map.Entry::getKey).filter(partition -> !partition.isEmpty()).collect(Collectors.toList());
   }
 
   /**
@@ -413,5 +441,11 @@ public class TimelineUtils {
 
   public enum HollowCommitHandling {
     FAIL, BLOCK, USE_TRANSITION_TIME;
+  }
+
+  public static boolean isDeletePartition(WriteOperationType operation) {
+    return operation == WriteOperationType.DELETE_PARTITION
+        || operation == WriteOperationType.INSERT_OVERWRITE_TABLE
+        || operation == WriteOperationType.INSERT_OVERWRITE;
   }
 }
