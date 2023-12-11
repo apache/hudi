@@ -53,11 +53,11 @@ Please refer to [configurations](/docs/configurations#SPARK_DATASOURCE) section,
 
 Additionally, `HoodieReadClient` offers the following functionality using Hudi's implicit indexing.
 
-| **API** | **Description** |
-|-------|--------|
-| read(keys) | Read out the data corresponding to the keys as a DataFrame, using Hudi's own index for faster lookup |
-| filterExists() | Filter out already existing records from the provided `RDD[HoodieRecord]`. Useful for de-duplication |
-| checkExists(keys) | Check if the provided keys exist in a Hudi table |
+| **API**           | **Description**                                                                                      |
+|-------------------|------------------------------------------------------------------------------------------------------|
+| read(keys)        | Read out the data corresponding to the keys as a DataFrame, using Hudi's own index for faster lookup |
+| filterExists()    | Filter out already existing records from the provided `RDD[HoodieRecord]`. Useful for de-duplication |
+| checkExists(keys) | Check if the provided keys exist in a Hudi table                                                     |
 
 ### Spark SQL
 Once the Hudi tables have been registered to the Hive metastore, they can be queried using the Spark-Hive integration.
@@ -134,12 +134,12 @@ mode by setting option `read.streaming.enabled` as `true`. Sets up option `read.
 value as `earliest` if you want to consume all the history data set.
 
 #### Options
-|  Option Name  | Required | Default | Remarks |
-|  -----------  | -------  | ------- | ------- |
-| `read.streaming.enabled` | false | `false` | Specify `true` to read as streaming |
-| `read.start-commit` | false | the latest commit | Start commit time in format 'yyyyMMddHHmmss', use `earliest` to consume from the start commit |
-| `read.streaming.skip_compaction` | false | `false` | Whether to skip compaction instants for streaming read, generally for two purpose: 1) Avoid consuming duplications from compaction instants created for created by Hudi versions < 0.11.0 or when `hoodie.compaction.preserve.commit.metadata` is disabled 2) When change log mode is enabled, to only consume change for right semantics. |
-| `clean.retain_commits` | false | `10` | The max number of commits to retain before cleaning, when change log mode is enabled, tweaks this option to adjust the change log live time. For example, the default strategy keeps 50 minutes of change logs if the checkpoint interval is set up as 5 minutes. |
+| Option Name                      | Required | Default           | Remarks                                                                                                                                                                                                                                                                                                                                    |
+|----------------------------------|----------|-------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `read.streaming.enabled`         | false    | `false`           | Specify `true` to read as streaming                                                                                                                                                                                                                                                                                                        |
+| `read.start-commit`              | false    | the latest commit | Start commit time in format 'yyyyMMddHHmmss', use `earliest` to consume from the start commit                                                                                                                                                                                                                                              |
+| `read.streaming.skip_compaction` | false    | `false`           | Whether to skip compaction instants for streaming read, generally for two purpose: 1) Avoid consuming duplications from compaction instants created for created by Hudi versions < 0.11.0 or when `hoodie.compaction.preserve.commit.metadata` is disabled 2) When change log mode is enabled, to only consume change for right semantics. |
+| `clean.retain_commits`           | false    | `10`              | The max number of commits to retain before cleaning, when change log mode is enabled, tweaks this option to adjust the change log live time. For example, the default strategy keeps 50 minutes of change logs if the checkpoint interval is set up as 5 minutes.                                                                          |
 
 :::note
 When option `read.streaming.skip_compaction` is enabled and the streaming reader lags behind by commits of number
@@ -171,10 +171,10 @@ There are 3 use cases for incremental query:
 3. TimeTravel: consume as batch for an instant time, specify the `read.end-commit` is enough because the start commit is latest by default.
 
 #### Options
-|  Option Name  | Required | Default | Remarks |
-|  -----------  | -------  | ------- | ------- |
-| `read.start-commit` | `false` | the latest commit | Specify `earliest` to consume from the start commit |
-| `read.end-commit` | `false` | the latest commit | -- |
+| Option Name         | Required | Default           | Remarks                                             |
+|---------------------|----------|-------------------|-----------------------------------------------------|
+| `read.start-commit` | `false`  | the latest commit | Specify `earliest` to consume from the start commit |
+| `read.end-commit`   | `false`  | the latest commit | --                                                  |
 
 ### Metadata Table
 The metadata table holds the metadata index per hudi table, it holds the file list and all kinds of indexes that we called multi-model index.
@@ -197,12 +197,12 @@ In general, enable the metadata table would increase the commit time, it is not 
 And for these use cases you should test the stability first.
 
 #### Options
-|  Option Name  | Required | Default | Remarks |
-|  -----------  | -------  | ------- | ------- |
-| `metadata.enabled` | `false` | false | Set to `true` to enable |
-| `read.data.skipping.enabled` | `false` | false | Whether to enable data skipping for batch snapshot read, by default disabled |
-| `hoodie.metadata.index.column.stats.enable` | `false` | false | Whether to enable column statistics (max/min) |
-| `hoodie.metadata.index.column.stats.column.list` | `false` | N/A | Columns(separated by comma) to collect the column statistics  |
+| Option Name                                      | Required | Default | Remarks                                                                      |
+|--------------------------------------------------|----------|---------|------------------------------------------------------------------------------|
+| `metadata.enabled`                               | `false`  | false   | Set to `true` to enable                                                      |
+| `read.data.skipping.enabled`                     | `false`  | false   | Whether to enable data skipping for batch snapshot read, by default disabled |
+| `hoodie.metadata.index.column.stats.enable`      | `false`  | false   | Whether to enable column statistics (max/min)                                |
+| `hoodie.metadata.index.column.stats.column.list` | `false`  | N/A     | Columns(separated by comma) to collect the column statistics                 |
 
 ## Hive
 To setup Hive for querying Hudi, see the [Query Engine Setup](/docs/0.13.0/query_engine_setup#hive) page.
@@ -215,22 +215,22 @@ e.g: `/app/incremental-hql/intermediate/{source_table_name}_temp/{last_commit_in
 
 The following are the configuration options for HiveIncrementalPuller
 
-| **Config** | **Description** | **Default** |
-|-------|--------|--------|
-|hiveUrl| Hive Server 2 URL to connect to |  |
-|hiveUser| Hive Server 2 Username |  |
-|hivePass| Hive Server 2 Password |  |
-|queue| YARN Queue name |  |
-|tmp| Directory where the temporary delta data is stored in DFS. The directory structure will follow conventions. Please see the below section.  |  |
-|extractSQLFile| The SQL to execute on the source table to extract the data. The data extracted will be all the rows that changed since a particular point in time. |  |
-|sourceTable| Source Table Name. Needed to set hive environment properties. |  |
-|sourceDb| Source DB name. Needed to set hive environment properties.| |
-|targetTable| Target Table Name. Needed for the intermediate storage directory structure.  |  |
-|targetDb| Target table's DB name.| |
-|tmpdb| The database to which the intermediate temp delta table will be created | hoodie_temp |
-|fromCommitTime| This is the most important parameter. This is the point in time from which the changed records are queried from.  |  |
-|maxCommits| Number of commits to include in the query. Setting this to -1 will include all the commits from fromCommitTime. Setting this to a value > 0, will include records that ONLY changed in the specified number of commits after fromCommitTime. This may be needed if you need to catch up say 2 commits at a time. | 3 |
-|help| Utility Help |  |
+| **Config**     | **Description**                                                                                                                                                                                                                                                                                                  | **Default** |
+|----------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------|
+| hiveUrl        | Hive Server 2 URL to connect to                                                                                                                                                                                                                                                                                  |             |
+| hiveUser       | Hive Server 2 Username                                                                                                                                                                                                                                                                                           |             |
+| hivePass       | Hive Server 2 Password                                                                                                                                                                                                                                                                                           |             |
+| queue          | YARN Queue name                                                                                                                                                                                                                                                                                                  |             |
+| tmp            | Directory where the temporary delta data is stored in DFS. The directory structure will follow conventions. Please see the below section.                                                                                                                                                                        |             |
+| extractSQLFile | The SQL to execute on the source table to extract the data. The data extracted will be all the rows that changed since a particular point in time.                                                                                                                                                               |             |
+| sourceTable    | Source Table Name. Needed to set hive environment properties.                                                                                                                                                                                                                                                    |             |
+| sourceDb       | Source DB name. Needed to set hive environment properties.                                                                                                                                                                                                                                                       |             |
+| targetTable    | Target Table Name. Needed for the intermediate storage directory structure.                                                                                                                                                                                                                                      |             |
+| targetDb       | Target table's DB name.                                                                                                                                                                                                                                                                                          |             |
+| tmpdb          | The database to which the intermediate temp delta table will be created                                                                                                                                                                                                                                          | hoodie_temp |
+| fromCommitTime | This is the most important parameter. This is the point in time from which the changed records are queried from.                                                                                                                                                                                                 |             |
+| maxCommits     | Number of commits to include in the query. Setting this to -1 will include all the commits from fromCommitTime. Setting this to a value > 0, will include records that ONLY changed in the specified number of commits after fromCommitTime. This may be needed if you need to catch up say 2 commits at a time. | 3           |
+| help           | Utility Help                                                                                                                                                                                                                                                                                                     |             |
 
 
 Setting fromCommitTime=0 and maxCommits=-1 will fetch the entire source table and can be used to initiate backfills. If the target table is a Hudi table,
@@ -288,7 +288,7 @@ To set up Redshift Spectrum for querying Hudi, see the [Query Engine Setup](/doc
 To set up Doris for querying Hudi, see the [Query Engine Setup](/docs/0.13.0/query_engine_setup#doris) page.
 
 ## StarRocks
-To set up StarRocks for querying Hudi, see the [Query Engine Setup](/docs/0.13.0/query_engine_setup#starrocks) page.
+Refer to [Query Engine Setup](/docs/0.13.0/query_engine_setup#starrocks) page, for more information.
 
 ## Support Matrix
 
@@ -296,18 +296,18 @@ Following tables show whether a given query is supported on specific query engin
 
 ### Copy-On-Write tables
 
-| Query Engine          |Snapshot Queries|Incremental Queries|
-|-----------------------|--------|-----------|
-| **Hive**              |Y|Y|
-| **Spark SQL**         |Y|Y|
-| **Spark Datasource**  |Y|Y|
-| **Flink SQL**         |Y|N|
-| **PrestoDB**          |Y|N|
-| **Trino**             |Y|N|
-| **Impala**            |Y|N|
-| **Redshift Spectrum** |Y|N|
-| **Doris**             |Y|N|
-| **StarRocks**         |Y|N|
+| Query Engine          | Snapshot Queries | Incremental Queries |
+|-----------------------|------------------|---------------------|
+| **Hive**              | Y                | Y                   |
+| **Spark SQL**         | Y                | Y                   |
+| **Spark Datasource**  | Y                | Y                   |
+| **Flink SQL**         | Y                | N                   |
+| **PrestoDB**          | Y                | N                   |
+| **Trino**             | Y                | N                   |
+| **Impala**            | Y                | N                   |
+| **Redshift Spectrum** | Y                | N                   |
+| **Doris**             | Y                | N                   |
+| **StarRocks**         | Y                | Y                   |
 
 
 
@@ -315,13 +315,15 @@ Note that `Read Optimized` queries are not applicable for COPY_ON_WRITE tables.
 
 ### Merge-On-Read tables
 
-|Query Engine|Snapshot Queries|Incremental Queries|Read Optimized Queries|
-|------------|--------|-----------|--------------|
-|**Hive**|Y|Y|Y|
-|**Spark SQL**|Y|Y|Y|
-|**Spark Datasource**|Y|Y|Y|
-|**Flink SQL**|Y|Y|Y|
-|**PrestoDB**|Y|N|Y|
-|**Trino**|N|N|Y|
-|**Impala**|N|N|Y|
+| Query Engine          | Snapshot Queries | Incremental Queries | Read Optimized Queries |
+|-----------------------|------------------|---------------------|------------------------|
+| **Hive**              | Y                | Y                   | Y                      |
+| **Spark SQL**         | Y                | Y                   | Y                      |
+| **Spark Datasource**  | Y                | Y                   | Y                      |
+| **Flink SQL**         | Y                | Y                   | Y                      |
+| **PrestoDB**          | Y                | N                   | Y                      |
+| **Trino**             | N                | N                   | Y                      |
+| **Impala**            | N                | N                   | Y                      |
+| **Redshift Spectrum** | N                | N                   | Y                      |
+| **StarRocks**         | Y                | Y                   | Y                      |
 
