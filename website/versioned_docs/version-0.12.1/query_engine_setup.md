@@ -16,21 +16,21 @@ and executors. Alternatively, hudi-spark-bundle can also fetched via the `--pack
 PrestoDB is a popular query engine, providing interactive query performance.
 One can use both Hive or Hudi connector (Presto version 0.275 onwards) for querying Hudi tables.
 Both connectors currently support snapshot querying on COPY_ON_WRITE tables, and
-snapshot and read optimized queries on MERGE_ON_READ Hudi tables. 
+snapshot and read optimized queries on MERGE_ON_READ Hudi tables.
 
 Since PrestoDB-Hudi integration has evolved over time, the installation
-instructions for PrestoDB would vary based on versions. 
+instructions for PrestoDB would vary based on versions.
 Please check the below table for query types supported and installation instructions
 for different versions of PrestoDB.
 
-| **PrestoDB Version** | **Installation description** | **Query types supported** |
-|----------------------|------------------------------|---------------------------|
-| < 0.233              | Requires the `hudi-presto-bundle` jar to be placed into `<presto_install>/plugin/hive-hadoop2/`, across the installation. | Snapshot querying on COW tables. Read optimized querying on MOR tables. |
-| >= 0.233             | No action needed. Hudi (0.5.1-incubating) is a compile time dependency. | Snapshot querying on COW tables. Read optimized querying on MOR tables. |
-| >= 0.240             | No action needed. Hudi 0.5.3 version is a compile time dependency. | Snapshot querying on both COW and MOR tables. |
-| >= 0.268             | No action needed. Hudi 0.9.0 version is a compile time dependency. | Snapshot querying on bootstrap tables. |
-| >= 0.272             | No action needed. Hudi 0.10.1 version is a compile time dependency. | File listing optimizations. Improved query performance. |
-| >= 0.275             | No action needed. Hudi 0.11.0 version is a compile time dependency. | All of the above. Native Hudi connector that is on par with Hive connector. |
+| **PrestoDB Version** | **Installation description**                                                                                              | **Query types supported**                                                   |
+|----------------------|---------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------|
+| < 0.233              | Requires the `hudi-presto-bundle` jar to be placed into `<presto_install>/plugin/hive-hadoop2/`, across the installation. | Snapshot querying on COW tables. Read optimized querying on MOR tables.     |
+| >= 0.233             | No action needed. Hudi (0.5.1-incubating) is a compile time dependency.                                                   | Snapshot querying on COW tables. Read optimized querying on MOR tables.     |
+| >= 0.240             | No action needed. Hudi 0.5.3 version is a compile time dependency.                                                        | Snapshot querying on both COW and MOR tables.                               |
+| >= 0.268             | No action needed. Hudi 0.9.0 version is a compile time dependency.                                                        | Snapshot querying on bootstrap tables.                                      |
+| >= 0.272             | No action needed. Hudi 0.10.1 version is a compile time dependency.                                                       | File listing optimizations. Improved query performance.                     |
+| >= 0.275             | No action needed. Hudi 0.11.0 version is a compile time dependency.                                                       | All of the above. Native Hudi connector that is on par with Hive connector. |
 
 To learn more about the usage of Hudi connector, please checkout [prestodb documentation](https://prestodb.io/docs/current/connector/hudi.html).
 
@@ -76,11 +76,11 @@ Just like PrestoDB, there are two ways to query Hudi tables using Trino i.e. eit
 
 ### Hive Connector
 
-| **Trino Version** | **Installation description** | **Query types supported** |
-|-------------------|------------------------------|---------------------------|
-| < 406             | Requires the `hudi-trino-bundle` jar to be placed into `<trino_install>/plugin/hive` | Snapshot querying on COW tables. Read optimized querying on MOR tables. |
-| > = 406           | Requires the `hudi-trino-bundle` jar to be placed into `<trino_install>/plugin/hive` | Snapshot querying on COW tables. Read optimized querying on MOR tables. **Redirection to Hudi catalog also supported.** |
-| > = 411           | NA | Snapshot querying on COW tables. Read optimized querying on MOR tables. Hudi tables can be **only** queried by [table redirection](https://trino.io/docs/current/connector/hive.html#table-redirection). |
+| **Trino Version** | **Installation description**                                                         | **Query types supported**                                                                                                                                                                                |
+|-------------------|--------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| < 406             | Requires the `hudi-trino-bundle` jar to be placed into `<trino_install>/plugin/hive` | Snapshot querying on COW tables. Read optimized querying on MOR tables.                                                                                                                                  |
+| > = 406           | Requires the `hudi-trino-bundle` jar to be placed into `<trino_install>/plugin/hive` | Snapshot querying on COW tables. Read optimized querying on MOR tables. **Redirection to Hudi catalog also supported.**                                                                                  |
+| > = 411           | NA                                                                                   | Snapshot querying on COW tables. Read optimized querying on MOR tables. Hudi tables can be **only** queried by [table redirection](https://trino.io/docs/current/connector/hive.html#table-redirection). |
 
 If you are using Trino version 411 or greater, and also using Hive connector to query Hudi tables, please set the below config to support table redirection.
 ```
@@ -90,9 +90,9 @@ It is recommended to use `hudi-trino-bundle` version 0.12.2 or later for optimal
 
 ### Hudi Connector
 
-| **Trino Version** | **Installation description** | **Query types supported** |
-|-------------------|------------------------------|---------------------------|
-| < 398             | NA - can only use Hive connector to query Hudi tables | Same as that of Hive connector version < 406. |
+| **Trino Version** | **Installation description**                                                    | **Query types supported**                                               |
+|-------------------|---------------------------------------------------------------------------------|-------------------------------------------------------------------------|
+| < 398             | NA - can only use Hive connector to query Hudi tables                           | Same as that of Hive connector version < 406.                           |
 | > = 398           | NA - no need to place bundle jars manually, as they are compile-time dependency | Snapshot querying on COW tables. Read optimized querying on MOR tables. |
 
 To learn more about the usage of Hudi connector, please check out
@@ -117,9 +117,9 @@ to `org.apache.hadoop.hive.ql.io.HiveInputFormat`. Then proceed to query the tab
 
 
 ## Redshift Spectrum
-Copy on Write Tables in Apache Hudi versions 0.5.2, 0.6.0, 0.7.0, 0.8.0, 0.9.0, 0.10.x, 0.11.x and 0.12.x can be queried via Amazon Redshift Spectrum external tables.
-To be able to query Hudi versions 0.10.0 and above please try latest versions of Redshift.
-:::note
+Latest version of Redshift spectrum supports snapshot queries on Hudi Copy-on-Write tables and Read Optimized queries on Hudi Merge-on-Read tables.
+
+:::note NOTE:
 Hudi tables are supported only when AWS Glue Data Catalog is used. It's not supported when you use an Apache Hive metastore as the external catalog.
 :::
 
@@ -127,7 +127,5 @@ Please refer to [Redshift Spectrum Integration with Apache Hudi](https://docs.aw
 for more details.
 
 ## StarRocks
-Copy on Write tables in Apache Hudi 0.10.0 and above can be queried via StarRocks external tables from StarRocks version 2.2.0.
-Only snapshot queries are supported currently. In future releases Merge on Read tables will also be supported.
-Please refer to [StarRocks Hudi external table](https://docs.starrocks.io/en-us/2.2/data_source/External_table#hudi-external-table)
-for more details on the setup.
+As of StarRocks v3.1, there's complete support for both Hudi Copy-on-Write and Merge-on-Read tables.
+Please refer [StarRocks docs](https://docs.starrocks.io/docs/data_source/catalog/hudi_catalog/) to get started.

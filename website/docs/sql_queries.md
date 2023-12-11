@@ -2,7 +2,7 @@
 title: SQL Queries
 summary: "In this page, we go over querying Hudi tables using SQL"
 toc: true
-last_modified_at: 
+last_modified_at: 11/28/2023
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -86,7 +86,7 @@ FROM hudi_table_changes(
 
 :::info Incremental vs CDC Queries
 Incremental queries offer even better query efficiency than even the CDC queries above, since they amortize the cost of compactions across your data lake.
-For e.g the table has received 10 million modifications across 1 million records over a time window, incremental queries can fetch the latest value for
+For e.g. the table has received 10 million modifications across 1 million records over a time window, incremental queries can fetch the latest value for
 1 million records using Hudi's record level metadata. On the other hand, the CDC queries will process 10 million records and useful in cases, where you want to
 see all changes in a given time window and not just the latest values.
 :::
@@ -98,21 +98,17 @@ Once the Flink Hudi tables have been registered to the Flink catalog, they can b
 relying on the custom Hudi input formats like Hive. Typically, notebook users and Flink SQL CLI users leverage flink sql for querying Hudi tables. Please add hudi-flink-bundle as described in the [Flink Quickstart](/docs/flink-quick-start-guide).
 
 
-### Snapshot Query 
+### Snapshot Query
 By default, Flink SQL will try to use its optimized native readers (for e.g. reading parquet files) instead of Hive SerDes.
 Additionally, partition pruning is applied by Flink if a partition predicate is specified in the filter. Filters push down may not be supported yet (please check Flink roadmap).
 
-```sql
-select * from hudi_table/*+ OPTIONS('metadata.enabled'='true', 'read.data.skipping.enabled'='false','hoodie.metadata.index.column.stats.enable'='true')*/;
-```
-
 #### Options
-|  Option Name  | Required | Default | Remarks |
-|  -----------  | -------  | ------- | ------- |
-| `metadata.enabled` | `false` | false | Set to `true` to enable |
-| `read.data.skipping.enabled` | `false` | false | Whether to enable data skipping for batch snapshot read, by default disabled |
-| `hoodie.metadata.index.column.stats.enable` | `false` | false | Whether to enable column statistics (max/min) |
-| `hoodie.metadata.index.column.stats.column.list` | `false` | N/A | Columns(separated by comma) to collect the column statistics  |
+| Option Name                                      | Required | Default | Remarks                                                                      |
+|--------------------------------------------------|----------|---------|------------------------------------------------------------------------------|
+| `metadata.enabled`                               | `false`  | false   | Set to `true` to enable                                                      |
+| `read.data.skipping.enabled`                     | `false`  | false   | Whether to enable data skipping for batch snapshot read, by default disabled |
+| `hoodie.metadata.index.column.stats.enable`      | `false`  | false   | Whether to enable column statistics (max/min)                                |
+| `hoodie.metadata.index.column.stats.column.list` | `false`  | N/A     | Columns(separated by comma) to collect the column statistics                 |
 
 ### Streaming Query
 By default, the hoodie table is read as batch, that is to read the latest snapshot data set and returns. Turns on the streaming read
@@ -120,22 +116,22 @@ mode by setting option `read.streaming.enabled` as `true`. Sets up option `read.
 value as `earliest` if you want to consume all the history data set.
 
 ```sql
-select * from hudi_table/*+ OPTIONS('read.streaming.enabled'='true', 'read.start-commit'='earliest')*/;
+-- Show an example query.
 ```
 
 #### Options
-|  Option Name  | Required | Default | Remarks |
-|  -----------  | -------  | ------- | ------- |
-| `read.streaming.enabled` | false | `false` | Specify `true` to read as streaming |
-| `read.start-commit` | false | the latest commit | Start commit time in format 'yyyyMMddHHmmss', use `earliest` to consume from the start commit |
-| `read.streaming.skip_compaction` | false | `false` | Whether to skip compaction instants for streaming read, generally for two purpose: 1) Avoid consuming duplications from compaction instants created for created by Hudi versions < 0.11.0 or when `hoodie.compaction.preserve.commit.metadata` is disabled 2) When change log mode is enabled, to only consume change for right semantics. |
-| `clean.retain_commits` | false | `10` | The max number of commits to retain before cleaning, when change log mode is enabled, tweaks this option to adjust the change log live time. For example, the default strategy keeps 50 minutes of change logs if the checkpoint interval is set up as 5 minutes. |
+| Option Name                      | Required | Default           | Remarks                                                                                                                                                                                                                                                                                                                                    |
+|----------------------------------|----------|-------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `read.streaming.enabled`         | false    | `false`           | Specify `true` to read as streaming                                                                                                                                                                                                                                                                                                        |
+| `read.start-commit`              | false    | the latest commit | Start commit time in format 'yyyyMMddHHmmss', use `earliest` to consume from the start commit                                                                                                                                                                                                                                              |
+| `read.streaming.skip_compaction` | false    | `false`           | Whether to skip compaction instants for streaming read, generally for two purpose: 1) Avoid consuming duplications from compaction instants created for created by Hudi versions < 0.11.0 or when `hoodie.compaction.preserve.commit.metadata` is disabled 2) When change log mode is enabled, to only consume change for right semantics. |
+| `clean.retain_commits`           | false    | `10`              | The max number of commits to retain before cleaning, when change log mode is enabled, tweaks this option to adjust the change log live time. For example, the default strategy keeps 50 minutes of change logs if the checkpoint interval is set up as 5 minutes.                                                                          |
 
 :::note
 Users are encouraged to use Hudi versions > 0.12.3, for the best experience and discouraged from using any older versions.
 Specifically, `read.streaming.skip_compaction` should only be enabled if the MOR table is compacted by Hudi with versions `< 0.11.0`.
 This is so as the `hoodie.compaction.preserve.commit.metadata` feature is only introduced in Hudi versions `>=0.11.0`.
-Older versions will overwrite the original commit time for each row with the compaction plan's instant time and cause 
+Older versions will overwrite the original commit time for each row with the compaction plan's instant time and cause
 row-level instant range checks to not work properly.
 :::
 
@@ -146,15 +142,11 @@ There are 3 use cases for incremental query:
    the interval is a closed one: both start commit and end commit are inclusive;
 3. Time Travel: consume as batch for an instant time, specify the `read.end-commit` is enough because the start commit is latest by default.
 
-```sql
-select * from hudi_table/*+ OPTIONS('read.start-commit'='earliest', 'read.end-commit'='20231122155636355')*/;
-```
-
 #### Options
-|  Option Name  | Required | Default | Remarks |
-|  -----------  | -------  | ------- | ------- |
-| `read.start-commit` | `false` | the latest commit | Specify `earliest` to consume from the start commit |
-| `read.end-commit` | `false` | the latest commit | -- |
+| Option Name         | Required | Default           | Remarks                                             |
+|---------------------|----------|-------------------|-----------------------------------------------------|
+| `read.start-commit` | `false`  | the latest commit | Specify `earliest` to consume from the start commit |
+| `read.end-commit`   | `false`  | the latest commit | --                                                  |
 
 ### Catalog
 A Hudi catalog can manage the tables created by Flink, table metadata is persisted to avoid redundant table creation.
@@ -187,14 +179,14 @@ WITH (
 
 In order for Hive to recognize Hudi tables and query correctly, the `hudi-hadoop-mr-bundle-<hudi.version>.jar` needs to be
 provided to Hive2Server [aux jars path](https://www.cloudera.com/documentation/enterprise/5-6-x/topics/cm_mc_hive_udf.html#concept_nc3_mms_lr), as well as
-additionally, the bundle needs to be put on the hadoop/hive installation across the cluster. In addition to setup above, for beeline cli access,
+additionally, the bundle needs to be put on the hadoop/hive installation across the cluster. In addition to the setup above, for beeline cli access,
 the `hive.input.format` variable needs to be set to the fully qualified path name of the inputformat `org.apache.hudi.hadoop.HoodieParquetInputFormat`.
 For Tez, additionally, the `hive.tez.input.format` needs to be set to `org.apache.hadoop.hive.ql.io.HiveInputFormat`.
 
 Then users should be able to issue snapshot queries against the table like any other Hive table.
 
 
-### Incremental Query 
+### Incremental Query
 
 ```sql
 # set hive session properties for incremental querying like below
@@ -226,14 +218,14 @@ COPY_ON_WRITE tables and snapshot and read optimized queries on MERGE_ON_READ Hu
 Since Presto-Hudi integration has evolved over time, the installation instructions for PrestoDB would vary based on versions.
 Please check the below table for query types supported and installation instructions.
 
-| **PrestoDB Version** | **Installation description** | **Query types supported** |
-|----------------------|------------------------------|---------------------------|
-| < 0.233              | Requires the `hudi-presto-bundle` jar to be placed into `<presto_install>/plugin/hive-hadoop2/`, across the installation. | Snapshot querying on COW tables. Read optimized querying on MOR tables. |
-| > = 0.233             | No action needed. Hudi (0.5.1-incubating) is a compile time dependency. | Snapshot querying on COW tables. Read optimized querying on MOR tables. |
-| > = 0.240             | No action needed. Hudi 0.5.3 version is a compile time dependency. | Snapshot querying on both COW and MOR tables. |
-| > = 0.268             | No action needed. Hudi 0.9.0 version is a compile time dependency. | Snapshot querying on bootstrap tables. |
-| > = 0.272             | No action needed. Hudi 0.10.1 version is a compile time dependency. | File listing optimizations. Improved query performance. |
-| > = 0.275             | No action needed. Hudi 0.11.0 version is a compile time dependency. | All of the above. Native Hudi connector that is on par with Hive connector. |
+| **PrestoDB Version** | **Installation description**                                                                                              | **Query types supported**                                                   |
+|----------------------|---------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------|
+| < 0.233              | Requires the `hudi-presto-bundle` jar to be placed into `<presto_install>/plugin/hive-hadoop2/`, across the installation. | Snapshot querying on COW tables. Read optimized querying on MOR tables.     |
+| > = 0.233            | No action needed. Hudi (0.5.1-incubating) is a compile time dependency.                                                   | Snapshot querying on COW tables. Read optimized querying on MOR tables.     |
+| > = 0.240            | No action needed. Hudi 0.5.3 version is a compile time dependency.                                                        | Snapshot querying on both COW and MOR tables.                               |
+| > = 0.268            | No action needed. Hudi 0.9.0 version is a compile time dependency.                                                        | Snapshot querying on bootstrap tables.                                      |
+| > = 0.272            | No action needed. Hudi 0.10.1 version is a compile time dependency.                                                       | File listing optimizations. Improved query performance.                     |
+| > = 0.275            | No action needed. Hudi 0.11.0 version is a compile time dependency.                                                       | All of the above. Native Hudi connector that is on par with Hive connector. |
 
 
 :::note
@@ -267,20 +259,20 @@ hive.hudi-catalog-name=hudi
 We recommend using `hudi-trino-bundle` version 0.12.2 or later for optimal query performance with Hive connector. Table below
 summarizes how the support for Hudi is achieved across different versions of Trino.
 
-| **Trino Version** | **Installation description** | **Query types supported** |
-|-------------------|------------------------------|---------------------------|
-| < 398             | NA - can only use Hive connector to query Hudi tables | Same as that of Hive connector version < 406. |
-| > = 398           | NA - no need to place bundle jars manually, as they are compile-time dependency | Snapshot querying on COW tables. Read optimized querying on MOR tables. |
-| < 406             | `hudi-trino-bundle` jar to be placed into `<trino_install>/plugin/hive` | Snapshot querying on COW tables. Read optimized querying on MOR tables. |
-| > = 406           | `hudi-trino-bundle` jar to be placed into `<trino_install>/plugin/hive` | Snapshot querying on COW tables. Read optimized querying on MOR tables. **Redirection to Hudi catalog also supported.** |
-| > = 411           | NA | Snapshot querying on COW tables. Read optimized querying on MOR tables. Hudi tables can be **only** queried by [table redirection](https://trino.io/docs/current/connector/hive.html#table-redirection). |
+| **Trino Version** | **Installation description**                                                    | **Query types supported**                                                                                                                                                                                |
+|-------------------|---------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| < 398             | NA - can only use Hive connector to query Hudi tables                           | Same as that of Hive connector version < 406.                                                                                                                                                            |
+| > = 398           | NA - no need to place bundle jars manually, as they are compile-time dependency | Snapshot querying on COW tables. Read optimized querying on MOR tables.                                                                                                                                  |
+| < 406             | `hudi-trino-bundle` jar to be placed into `<trino_install>/plugin/hive`         | Snapshot querying on COW tables. Read optimized querying on MOR tables.                                                                                                                                  |
+| > = 406           | `hudi-trino-bundle` jar to be placed into `<trino_install>/plugin/hive`         | Snapshot querying on COW tables. Read optimized querying on MOR tables. **Redirection to Hudi catalog also supported.**                                                                                  |
+| > = 411           | NA                                                                              | Snapshot querying on COW tables. Read optimized querying on MOR tables. Hudi tables can be **only** queried by [table redirection](https://trino.io/docs/current/connector/hive.html#table-redirection). |
 :::
 
 For details on the Hudi connector, see the [connector documentation](https://trino.io/docs/current/connector/hudi.html).
 Both connectors offer 'Snapshot' queries for COW tables and 'Read Optimized' queries for MOR tables.
 Support for [MOR table snapshot queries](https://github.com/trinodb/trino/pull/14786) is anticipated shortly.
 
-## Impala 
+## Impala
 
 Impala (versions > 3.4) is able to query Hudi Copy-on-write tables as an [EXTERNAL TABLES](https://docs.cloudera.com/documentation/enterprise/6/6.3/topics/impala_tables.html#external_tables).
 
@@ -310,13 +302,10 @@ REFRESH database.table_name
 ```
 
 ## Redshift Spectrum
+Latest version of Redshift spectrum supports snapshot queries on Hudi Copy-on-Write tables and Read Optimized queries on Hudi Merge-on-Read tables.
 
-Copy on Write Tables in Apache Hudi versions 0.5.2, 0.6.0, 0.7.0, 0.8.0, 0.9.0, 0.10.x and 0.11.x can be queried
-via Amazon Redshift Spectrum external tables. To be able to query Hudi versions 0.10.0 and above please try latest
-versions of Redshift.
-:::note
-Hudi tables are supported only when AWS Glue Data Catalog is used. It's not supported when you use an Apache
-Hive metastore as the external catalog.
+:::note NOTE:
+Hudi tables are supported only when AWS Glue Data Catalog is used. It's not supported when you use an Apache Hive metastore as the external catalog.
 :::
 
 Please refer
@@ -337,10 +326,8 @@ will be supported in the future.
 
 ## StarRocks
 
-Copy on Write tables in Apache Hudi 0.10.0 and above can be queried via StarRocks external tables from StarRocks version
-2.2.0. Only snapshot queries are supported currently. In future releases Merge on Read tables will also be supported.
-Please refer to [StarRocks Hudi external table](https://docs.starrocks.io/en-us/latest/using_starrocks/External_table#hudi-external-table)
-for more details on the setup.
+As of v3.1, StarRocks provides complete support for both Hudi Copy-on-Write and Merge-on-Read tables.
+Please refer [StarRocks docs](https://docs.starrocks.io/docs/data_source/catalog/hudi_catalog/) for more details.
 
 ## ClickHouse
 
@@ -362,37 +349,37 @@ Following tables show whether a given query is supported on specific query engin
 
 ### Copy-On-Write tables
 
-| Query Engine          |Snapshot Queries|Incremental Queries|
-|-----------------------|--------|-----------|
-| **Hive**              |Y|Y|
-| **Spark SQL**         |Y|Y|
-| **Flink SQL**         |Y|N|
-| **PrestoDB**          |Y|N|
-| **Trino**             |Y|N|
-| **AWS Athena**        |Y|N|
-| **BigQuery**          |Y|N|
-| **Impala**            |Y|N|
-| **Redshift Spectrum** |Y|N|
-| **Doris**             |Y|N|
-| **StarRocks**         |Y|N|
-| **ClickHouse**        |Y|N|
+| Query Engine          | Snapshot Queries | Incremental Queries |
+|-----------------------|------------------|---------------------|
+| **Hive**              | Y                | Y                   |
+| **Spark SQL**         | Y                | Y                   |
+| **Flink SQL**         | Y                | N                   |
+| **PrestoDB**          | Y                | N                   |
+| **Trino**             | Y                | N                   |
+| **AWS Athena**        | Y                | N                   |
+| **BigQuery**          | Y                | N                   |
+| **Impala**            | Y                | N                   |
+| **Redshift Spectrum** | Y                | N                   |
+| **Doris**             | Y                | N                   |
+| **StarRocks**         | Y                | Y                   |
+| **ClickHouse**        | Y                | N                   |
 
 ### Merge-On-Read tables
 
-| Query Engine        |Snapshot Queries|Incremental Queries|Read Optimized Queries|
-|---------------------|--------|-----------|--------------|
-| **Hive**            |Y|Y|Y|
-| **Spark SQL**       |Y|Y|Y|
-| **Spark Datasource** |Y|Y|Y|
-| **Flink SQL**       |Y|Y|Y|
-| **PrestoDB**        |Y|N|Y|
-| **AWS Athena**      |Y|N|Y|
-| **Big Query**       |Y|N|Y|
-| **Trino**           |N|N|Y|
-| **Impala**          |N|N|Y|
-| **Redshift Spectrum** |N|N|N|
-| **Doris**           |N|N|N|
-| **StarRocks**       |N|N|N|
-| **ClickHouse**      |N|N|N|
+| Query Engine          | Snapshot Queries | Incremental Queries | Read Optimized Queries |
+|-----------------------|------------------|---------------------|------------------------|
+| **Hive**              | Y                | Y                   | Y                      |
+| **Spark SQL**         | Y                | Y                   | Y                      |
+| **Spark Datasource**  | Y                | Y                   | Y                      |
+| **Flink SQL**         | Y                | Y                   | Y                      |
+| **PrestoDB**          | Y                | N                   | Y                      |
+| **AWS Athena**        | Y                | N                   | Y                      |
+| **Big Query**         | Y                | N                   | Y                      |
+| **Trino**             | N                | N                   | Y                      |
+| **Impala**            | N                | N                   | Y                      |
+| **Redshift Spectrum** | N                | N                   | Y                      |
+| **Doris**             | N                | N                   | N                      |
+| **StarRocks**         | Y                | Y                   | Y                      |
+| **ClickHouse**        | N                | N                   | N                      |
 
 
