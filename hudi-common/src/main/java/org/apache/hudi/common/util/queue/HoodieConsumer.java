@@ -29,6 +29,11 @@ public interface HoodieConsumer<I, O> {
   void consume(I record) throws Exception;
 
   /**
+   * Abort the consumer if error occurs.
+   */
+  void abort();
+
+  /**
    * Notifies implementation that we have exhausted consuming records from queue.
    */
   O finish();

@@ -21,9 +21,12 @@ package org.apache.hudi.io;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.FileSystem;
+
+import java.util.Iterator;
 
 public abstract class HoodieIOHandle<T, I, K, O> {
 
@@ -40,4 +43,25 @@ public abstract class HoodieIOHandle<T, I, K, O> {
   }
 
   public abstract FileSystem getFileSystem();
+
+  protected final void stopIfAborted() {
+    if (hoodieTable.getTaskContextSupplier().isAborted()) {
+      throw new HoodieIOException("The task is already aborted, stop handling new records...");
+    }
+  }
+
+  protected final <V> Iterator<V> interruptibleIterator(Iterator<V> iterator) {
+    return new Iterator<V>() {
+      @Override
+      public boolean hasNext() {
+        stopIfAborted();
+        return iterator.hasNext();
+      }
+
+      @Override
+      public V next() {
+        return iterator.next();
+      }
+    };
+  }
 }

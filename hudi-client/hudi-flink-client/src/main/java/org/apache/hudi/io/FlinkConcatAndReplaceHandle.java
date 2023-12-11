@@ -49,14 +49,14 @@ public class FlinkConcatAndReplaceHandle<T, I, K, O>
                                      Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                                      TaskContextSupplier taskContextSupplier, Path basePath) {
     super(config, instantTime, hoodieTable, Collections.emptyIterator(), partitionPath, fileId, taskContextSupplier, basePath);
-    this.recordItr = recordItr;
+    this.recordItr = interruptibleIterator(recordItr);
   }
 
   /**
    * Write old record as is w/o merging with incoming record.
    */
   @Override
-  public void write(HoodieRecord oldRecord) {
+  protected void writeInternal(HoodieRecord oldRecord) {
     Schema oldSchema = config.populateMetaFields() ? writeSchemaWithMetaFields : writeSchema;
     String key = oldRecord.getRecordKey(oldSchema, keyGeneratorOpt);
     try {

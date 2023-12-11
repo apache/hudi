@@ -95,4 +95,8 @@ public class SparkTaskContextSupplier extends TaskContextSupplier implements Ser
     throw new HoodieException("Unknown engine property :" + prop);
   }
 
+  @Override
+  public boolean isAborted() {
+    return TaskContext.get() != null && TaskContext.get().isInterrupted();
+  }
 }

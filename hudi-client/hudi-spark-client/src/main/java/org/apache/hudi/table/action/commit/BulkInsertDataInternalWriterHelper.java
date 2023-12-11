@@ -72,7 +72,7 @@ public class BulkInsertDataInternalWriterHelper {
    *       conversion (deserialization) b/w {@link UTF8String} and {@link String}
    */
   protected UTF8String lastKnownPartitionPath = null;
-  protected HoodieRowCreateHandle handle;
+  protected HoodieRowCreateHandle currentHandle;
   protected int numFilesWritten = 0;
 
   public BulkInsertDataInternalWriterHelper(HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
@@ -117,14 +117,14 @@ public class BulkInsertDataInternalWriterHelper {
   public void write(InternalRow row) throws IOException {
     try {
       UTF8String partitionPath = extractPartitionPath(row);
-      if (lastKnownPartitionPath == null || !Objects.equals(lastKnownPartitionPath, partitionPath) || !handle.canWrite()) {
-        handle = getRowCreateHandle(partitionPath.toString());
+      if (lastKnownPartitionPath == null || !Objects.equals(lastKnownPartitionPath, partitionPath) || !currentHandle.canWrite()) {
+        currentHandle = getRowCreateHandle(partitionPath.toString());
         // NOTE: It's crucial to make a copy here, since [[UTF8String]] could be pointing into
         //       a mutable underlying buffer
         lastKnownPartitionPath = partitionPath.clone();
       }
 
-      handle.write(row);
+      currentHandle.write(row);
     } catch (Throwable t) {
       LOG.error("Global error thrown while trying to write records in HoodieRowCreateHandle ", t);
       throw t;
@@ -136,7 +136,11 @@ public class BulkInsertDataInternalWriterHelper {
     return writeStatusList;
   }
 
-  public void abort() {}
+  public void abort() {
+    for (HoodieRowCreateHandle rowCreateHandle : handles.values()) {
+      rowCreateHandle.tryCleanWrittenFiles();
+    }
+  }
 
   public void close() throws IOException {
     for (HoodieRowCreateHandle rowCreateHandle : handles.values()) {
@@ -144,7 +148,7 @@ public class BulkInsertDataInternalWriterHelper {
       writeStatusList.add(rowCreateHandle.close());
     }
     handles.clear();
-    handle = null;
+    currentHandle = null;
   }
 
   protected UTF8String extractPartitionPath(InternalRow row) {

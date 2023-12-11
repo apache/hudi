@@ -94,6 +94,17 @@ public class FlinkMergeAndReplaceHandleWithChangeLog<T, I, K, O>
   }
 
   @Override
+  public void tryCleanWrittenFiles() {
+    try {
+      super.tryCleanWrittenFiles();
+      LOG.warn("Cleaning cdcLogger file " + cdcLogger.getPath());
+      fs.delete(cdcLogger.getPath(), false);
+    } catch (IOException e) {
+      // No ops.
+    }
+  }
+
+  @Override
   public List<WriteStatus> close() {
     List<WriteStatus> writeStatuses = super.close();
     cdcLogger.close();

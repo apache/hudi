@@ -33,8 +33,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -45,8 +43,6 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
   private static final Logger LOG = LoggerFactory.getLogger(BucketBulkInsertDataInternalWriterHelper.class);
 
   private Pair<UTF8String, Integer> lastFileId; // for efficient code path
-  // p -> (fileId -> handle)
-  private final Map<Pair<UTF8String, Integer>, HoodieRowCreateHandle> handles;
   protected final String indexKeyFields;
   protected final int bucketNum;
 
@@ -62,7 +58,6 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
     super(hoodieTable, writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, structType, populateMetaFields, arePartitionRecordsSorted, shouldPreserveHoodieMetadata);
     this.indexKeyFields = writeConfig.getStringOrDefault(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD, writeConfig.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()));
     this.bucketNum = writeConfig.getInt(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS);
-    this.handles = new HashMap<>();
   }
 
   public void write(InternalRow row) throws IOException {
@@ -74,10 +69,10 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
         // NOTE: It's crucial to make a copy here, since [[UTF8String]] could be pointing into
         //       a mutable underlying buffer
         Pair<UTF8String, Integer> fileId = Pair.of(partitionPath.clone(), bucketId);
-        handle = getBucketRowCreateHandle(fileId, bucketId);
+        currentHandle = getBucketRowCreateHandle(fileId, bucketId);
         lastFileId = fileId;
       }
-      handle.write(row);
+      currentHandle.write(row);
     } catch (Throwable t) {
       LOG.error("Global error thrown while trying to write records in HoodieRowCreateHandle ", t);
       throw new IOException(t);
@@ -99,8 +94,13 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
     }
   }
 
+  private String getHandleIdentifier(Pair<UTF8String, Integer> fileId) {
+    return fileId.getKey().toString() + "_" + fileId.getRight();
+  }
+
   protected HoodieRowCreateHandle getBucketRowCreateHandle(Pair<UTF8String, Integer> fileId, int bucketId) throws Exception {
-    if (!handles.containsKey(fileId)) { // if there is no handle corresponding to the fileId
+    String identifier = getHandleIdentifier(fileId);
+    if (!handles.containsKey(identifier)) { // if there is no handle corresponding to the fileId
       if (this.arePartitionRecordsSorted) {
         // if records are sorted, we can close all existing handles
         close();
@@ -109,19 +109,9 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
       LOG.info("Creating new file for partition path " + partitionPath);
       HoodieRowCreateHandle rowCreateHandle = new HoodieRowCreateHandle(hoodieTable, writeConfig, partitionPath, getNextBucketFileId(bucketId),
           instantTime, taskPartitionId, taskId, taskEpochId, structType, shouldPreserveHoodieMetadata);
-      handles.put(fileId, rowCreateHandle);
+      handles.put(identifier, rowCreateHandle);
     }
-    return handles.get(fileId);
-  }
-
-  @Override
-  public void close() throws IOException {
-    for (HoodieRowCreateHandle handle : handles.values()) {
-      LOG.info("Closing bulk insert file " + handle.getFileName());
-      writeStatusList.add(handle.close());
-    }
-    handles.clear();
-    handle = null;
+    return handles.get(identifier);
   }
 
   protected String getNextBucketFileId(int bucketInt) {

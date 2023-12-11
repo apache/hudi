@@ -77,6 +77,11 @@ public class  TestSimpleExecutionInSpark extends HoodieSparkClientTestHarness {
           }
 
           @Override
+          public void abort() {
+            // No ops.
+          }
+
+          @Override
           public Integer finish() {
             return count;
           }
@@ -144,6 +149,11 @@ public class  TestSimpleExecutionInSpark extends HoodieSparkClientTestHarness {
           }
 
           @Override
+          public void abort() {
+            // No ops.
+          }
+
+          @Override
           public Integer finish() {
             return count;
           }
@@ -187,6 +197,11 @@ public class  TestSimpleExecutionInSpark extends HoodieSparkClientTestHarness {
           public void consume(HoodieRecord payload) throws Exception {
             // Read recs and ensure we have covered all producer recs.
             count++;
+          }
+
+          @Override
+          public void abort() {
+            // No ops.
           }
 
           @Override

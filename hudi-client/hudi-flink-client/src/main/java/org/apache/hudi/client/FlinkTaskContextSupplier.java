@@ -67,4 +67,8 @@ public class FlinkTaskContextSupplier extends TaskContextSupplier {
     return () -> -1;
   }
 
+  @Override
+  public boolean isAborted() {
+    return false;
+  }
 }

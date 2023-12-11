@@ -72,7 +72,7 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I,
    * Go through an old record. Here if we detect a newer version shows up, we write the new one to the file.
    */
   @Override
-  public void write(HoodieRecord oldRecord) {
+  protected void writeInternal(HoodieRecord oldRecord) {
     Schema oldSchema = config.populateMetaFields() ? writeSchemaWithMetaFields : writeSchema;
     Schema newSchema = useWriterSchemaForCompaction ? writeSchemaWithMetaFields : writeSchema;
     String key = oldRecord.getRecordKey(oldSchema, keyGeneratorOpt);
@@ -100,7 +100,7 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I,
       }
     }
 
-    super.write(oldRecord);
+    super.writeInternal(oldRecord);
   }
 
   @Override

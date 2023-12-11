@@ -50,4 +50,9 @@ public class DummyTaskContextSupplier extends TaskContextSupplier {
   public Supplier<Integer> getAttemptNumberSupplier() {
     return null;
   }
+
+  @Override
+  public boolean isAborted() {
+    return false;
+  }
 }

@@ -516,6 +516,18 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   @Override
+  public void tryCleanWrittenFiles() {
+    try {
+      if (writer != null && writer.getLogFile() != null) {
+        LOG.warn("Cleaning logFile " + writer.getLogFile().getPath());
+        fs.delete(writer.getLogFile().getPath(), false);
+      }
+    } catch (IOException e) {
+      // No ops.
+    }
+  }
+
+  @Override
   public List<WriteStatus> close() {
     try {
       if (isClosed()) {
