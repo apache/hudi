@@ -20,8 +20,7 @@
 package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.io.util.IOUtils;
-
-import java.util.Optional;
+import org.apache.hudi.io.util.Option;
 
 import static org.apache.hudi.io.hfile.KeyValue.KEY_OFFSET;
 
@@ -44,9 +43,9 @@ public class HFileDataBlock extends HFileBlock {
    *
    * @param key Key to look up.
    * @return The {@link KeyValue} instance in the block that contains the exact same key as the
-   * lookup key; or empty {@link Optional} if the lookup key does not exist.
+   * lookup key; or empty {@link Option} if the lookup key does not exist.
    */
-  public Optional<KeyValue> seekTo(Key key) {
+  public Option<KeyValue> seekTo(Key key) {
     int offset = startOffsetInBuff + HFILEBLOCK_HEADER_SIZE;
     int endOffset = offset + onDiskSizeWithoutHeader;
     while (offset + HFILEBLOCK_HEADER_SIZE < endOffset) {
@@ -56,16 +55,16 @@ public class HFileDataBlock extends HFileBlock {
           IOUtils.compareTo(kv.getBytes(), kv.getKeyContentOffset(), kv.getKeyContentLength(),
               key.getBytes(), key.getContentOffset(), key.getContentLength());
       if (comp == 0) {
-        return Optional.of(kv);
+        return Option.of(kv);
       } else if (comp > 0) {
-        return Optional.empty();
+        return Option.empty();
       }
       long increment =
           (long) KEY_OFFSET + (long) kv.getKeyLength() + (long) kv.getValueLength()
               + ZERO_TS_VERSION_BYTE_LENGTH;
       offset += increment;
     }
-    return Optional.empty();
+    return Option.empty();
   }
 
   @Override

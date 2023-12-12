@@ -19,6 +19,8 @@
 
 package org.apache.hudi.io.hfile;
 
+import org.apache.hudi.io.util.Option;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileStatus;
@@ -29,7 +31,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -45,19 +46,19 @@ public class TestHFileReader {
     try (FSDataInputStream stream = fs.open(path, bufSize)) {
       HFileReader reader = new HFileReader(stream, fileStatus.getLen());
       reader.initializeMetadata();
-      Optional<KeyValue> kv0 = reader.seekTo(new UTF8StringKey("abc-00000000"));
+      Option<KeyValue> kv0 = reader.seekTo(new UTF8StringKey("abc-00000000"));
       assertFalse(kv0.isPresent());
-      Optional<KeyValue> kv1 = reader.seekTo(new UTF8StringKey("key-00000000"));
+      Option<KeyValue> kv1 = reader.seekTo(new UTF8StringKey("key-00000000"));
       assertEquals("val-00000000", getValue(kv1.get()));
-      Optional<KeyValue> kv2 = reader.seekTo(new UTF8StringKey("key-00000050"));
+      Option<KeyValue> kv2 = reader.seekTo(new UTF8StringKey("key-00000050"));
       assertEquals("val-00000050", getValue(kv2.get()));
-      Optional<KeyValue> kv3 = reader.seekTo(new UTF8StringKey("key-00000536"));
+      Option<KeyValue> kv3 = reader.seekTo(new UTF8StringKey("key-00000536"));
       assertEquals("val-00000536", getValue(kv3.get()));
-      Optional<KeyValue> kv4 = reader.seekTo(new UTF8StringKey("key-10000000"));
+      Option<KeyValue> kv4 = reader.seekTo(new UTF8StringKey("key-10000000"));
       assertFalse(kv4.isPresent());
-      Optional<KeyValue> kv5 = reader.seekTo(new UTF8StringKey("key-00000684"));
+      Option<KeyValue> kv5 = reader.seekTo(new UTF8StringKey("key-00000684"));
       assertEquals("val-00000684", getValue(kv5.get()));
-      Optional<KeyValue> kv6 = reader.seekTo(new UTF8StringKey("key-00000690"));
+      Option<KeyValue> kv6 = reader.seekTo(new UTF8StringKey("key-00000690"));
       assertEquals("val-00000690", getValue(kv6.get()));
     }
   }
@@ -75,11 +76,11 @@ public class TestHFileReader {
     try (FSDataInputStream stream = fs.open(path, bufSize)) {
       HFileReader reader = new HFileReader(stream, fileStatus.getLen());
       reader.initializeMetadata();
-      Optional<KeyValue> kv0 = reader.seekTo(new UTF8StringKey("key00"));
+      Option<KeyValue> kv0 = reader.seekTo(new UTF8StringKey("key00"));
       String v0 = getValue(kv0.get());
-      Optional<KeyValue> kv1 = reader.seekTo(new UTF8StringKey("key06"));
+      Option<KeyValue> kv1 = reader.seekTo(new UTF8StringKey("key06"));
       String v1 = getValue(kv1.get());
-      Optional<KeyValue> kv2 = reader.seekTo(new UTF8StringKey("key12"));
+      Option<KeyValue> kv2 = reader.seekTo(new UTF8StringKey("key12"));
       assertFalse(kv2.isPresent());
     }
   }

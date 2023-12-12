@@ -19,13 +19,14 @@
 
 package org.apache.hudi.io.hfile;
 
+import org.apache.hudi.io.util.Option;
+
 import org.apache.hadoop.fs.FSDataInputStream;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.util.Map;
-import java.util.Optional;
 import java.util.TreeMap;
 
 /**
@@ -74,10 +75,10 @@ public class HFileReader {
    *
    * @param key Key to look up.
    * @return The {@link KeyValue} instance in the block that contains the exact same key as the
-   * lookup key; or empty {@link Optional} if the lookup key does not exist.
+   * lookup key; or empty {@link Option} if the lookup key does not exist.
    * @throws IOException upon error.
    */
-  public Optional<KeyValue> seekTo(Key key) throws IOException {
+  public Option<KeyValue> seekTo(Key key) throws IOException {
     // Searches the block that may contain the lookup key based the starting keys of
     // all blocks (sorted in the TreeMap of block index entries), using binary search.
     // The result contains the greatest key less than or equal to the given key,
@@ -85,7 +86,7 @@ public class HFileReader {
     Map.Entry<Key, BlockIndexEntry> floorEntry = blockIndexEntryMap.floorEntry(key);
     if (floorEntry == null) {
       // Key smaller than the start key of the first block
-      return Optional.empty();
+      return Option.empty();
     }
     BlockIndexEntry blockToRead = floorEntry.getValue();
     HFileBlockReader blockReader = new HFileBlockReader(
@@ -145,9 +146,9 @@ public class HFileReader {
    * @param dataBlock The data block to seek.
    * @param key       The key to lookup.
    * @return The {@link KeyValue} instance in the block that contains the exact same key as the
-   * lookup key; or empty {@link Optional} if the lookup key does not exist.
+   * lookup key; or empty {@link Option} if the lookup key does not exist.
    */
-  private Optional<KeyValue> seekToKeyInBlock(HFileDataBlock dataBlock, Key key) {
+  private Option<KeyValue> seekToKeyInBlock(HFileDataBlock dataBlock, Key key) {
     return dataBlock.seekTo(key);
   }
 }
