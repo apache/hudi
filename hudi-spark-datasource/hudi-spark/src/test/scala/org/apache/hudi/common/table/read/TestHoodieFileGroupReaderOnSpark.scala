@@ -26,18 +26,16 @@ import org.apache.hudi.common.config.HoodieReaderConfig.FILE_GROUP_READER_ENABLE
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.{AvroConversionUtils, SparkFileFormatInternalRowReaderContext}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
+import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Dataset, HoodieInternalRowUtils, HoodieUnsafeUtils, Row, SaveMode, SparkSession}
-import org.apache.spark.unsafe.types.UTF8String
 import org.apache.spark.{HoodieSparkKryoRegistrar, SparkConf}
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.{AfterEach, BeforeEach}
 
 import java.util
 import scala.collection.JavaConversions._
@@ -68,6 +66,13 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     spark = SparkSession.builder.config(sparkConf).getOrCreate
   }
 
+  @AfterEach
+  def teardown() {
+    if (spark != null) {
+      spark.stop()
+    }
+  }
+
   override def getHadoopConf: Configuration = {
     FSUtils.buildInlineConf(new Configuration)
   }
@@ -76,31 +81,16 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     tempDir.toAbsolutePath.toUri.toString
   }
 
-  override def getHoodieReaderContext(tablePath: String,
-                                      partitionValues: Array[String]): HoodieReaderContext[InternalRow] = {
+  override def getHoodieReaderContext(tablePath: String, avroSchema: Schema): HoodieReaderContext[InternalRow] = {
     val parquetFileFormat = new ParquetFileFormat
-    val metaClient = HoodieTableMetaClient.builder.setConf(getHadoopConf).setBasePath(tablePath).build
-    val avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema
     val structTypeSchema = AvroConversionUtils.convertAvroSchemaToStructType(avroSchema)
-    val partitionFields = metaClient.getTableConfig.getPartitionFields
-    val partitionSchema = if (partitionFields.isPresent) {
-      new StructType(structTypeSchema.fields.filter(f => partitionFields.get().contains(f.name)))
-    } else {
-      new StructType()
-    }
 
     val recordReaderIterator = parquetFileFormat.buildReaderWithPartitionValues(
-      spark, structTypeSchema, partitionSchema, structTypeSchema, Seq.empty, Map.empty, getHadoopConf)
-    val numPartitionFields = if (partitionFields.isPresent) partitionFields.get().length else 0
-    assertEquals(numPartitionFields, partitionValues.length)
+      spark, structTypeSchema, StructType(Seq.empty), structTypeSchema, Seq.empty, Map.empty, getHadoopConf)
 
-    val partitionValuesEncoded = new Array[UTF8String](partitionValues.length)
-    for (i <- Range(0, numPartitionFields)) {
-      partitionValuesEncoded.update(i, UTF8String.fromString(partitionValues.apply(i)))
-    }
-
-    val partitionValueRow = new GenericInternalRow(partitionValuesEncoded.toArray[Any])
-    new SparkFileFormatInternalRowReaderContext(Option(recordReaderIterator), partitionValueRow)
+    val m = scala.collection.mutable.Map[Long, PartitionedFile => Iterator[InternalRow]]()
+    m.put(2*avroSchema.hashCode(), recordReaderIterator)
+    new SparkFileFormatInternalRowReaderContext(m)
   }
 
   override def commitToTable(recordList: util.List[String], operation: String, options: util.Map[String, String]): Unit = {
@@ -128,6 +118,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     assertEquals(expectedDf.count, actualRecordList.size)
     val actualDf = HoodieUnsafeUtils.createDataFrameFromInternalRows(
       spark, actualRecordList, HoodieInternalRowUtils.getCachedSchema(schema))
-    assertEquals(expectedDf.count, expectedDf.intersect(actualDf).count)
+    assertEquals(0, expectedDf.except(actualDf).count())
+    assertEquals(0, actualDf.except(expectedDf).count())
   }
 }

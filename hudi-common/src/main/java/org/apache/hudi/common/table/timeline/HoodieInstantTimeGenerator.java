@@ -105,6 +105,17 @@ public class HoodieInstantTimeGenerator {
     }
   }
 
+  public static String instantTimeMinusMillis(String timestamp, long milliseconds) {
+    try {
+      String timestampInMillis = fixInstantTimeCompatibility(timestamp);
+      LocalDateTime dt = LocalDateTime.parse(timestampInMillis, MILLIS_INSTANT_TIME_FORMATTER);
+      ZoneId zoneId = HoodieTimelineTimeZone.UTC.equals(commitTimeZone) ? ZoneId.of("UTC") : ZoneId.systemDefault();
+      return MILLIS_INSTANT_TIME_FORMATTER.format(dt.atZone(zoneId).toInstant().minusMillis(milliseconds).atZone(zoneId).toLocalDateTime());
+    } catch (DateTimeParseException e) {
+      throw new HoodieException(e);
+    }
+  }
+
   private static String fixInstantTimeCompatibility(String instantTime) {
     // Enables backwards compatibility with non-millisecond granularity instants
     if (isSecondGranularity(instantTime)) {

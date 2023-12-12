@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.HoodieSerializableFileStatus;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
@@ -158,9 +159,10 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
 
       // List all directories in parallel
       engineContext.setJobStatus(this.getClass().getSimpleName(), "Listing all partitions with prefix " + relativePathPrefix);
-      List<FileStatus> dirToFileListing = engineContext.flatMap(pathsToList, path -> {
+      // Need to use serializable file status here, see HUDI-5936
+      List<HoodieSerializableFileStatus> dirToFileListing = engineContext.flatMap(pathsToList, path -> {
         FileSystem fileSystem = path.getFileSystem(hadoopConf.get());
-        return Arrays.stream(fileSystem.listStatus(path));
+        return Arrays.stream(HoodieSerializableFileStatus.fromFileStatuses(fileSystem.listStatus(path)));
       }, listingParallelism);
       pathsToList.clear();
 
@@ -172,15 +174,16 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
         // and second entry holds optionally a directory path to be processed further.
         engineContext.setJobStatus(this.getClass().getSimpleName(), "Processing listed partitions");
         List<Pair<Option<String>, Option<Path>>> result = engineContext.map(dirToFileListing, fileStatus -> {
-          FileSystem fileSystem = fileStatus.getPath().getFileSystem(hadoopConf.get());
+          Path path = fileStatus.getPath();
+          FileSystem fileSystem = path.getFileSystem(hadoopConf.get());
           if (fileStatus.isDirectory()) {
-            if (HoodiePartitionMetadata.hasPartitionMetadata(fileSystem, fileStatus.getPath())) {
-              return Pair.of(Option.of(FSUtils.getRelativePartitionPath(dataBasePath.get(), fileStatus.getPath())), Option.empty());
-            } else if (!fileStatus.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
-              return Pair.of(Option.empty(), Option.of(fileStatus.getPath()));
+            if (HoodiePartitionMetadata.hasPartitionMetadata(fileSystem, path)) {
+              return Pair.of(Option.of(FSUtils.getRelativePartitionPath(dataBasePath.get(), path)), Option.empty());
+            } else if (!path.getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
+              return Pair.of(Option.empty(), Option.of(path));
             }
-          } else if (fileStatus.getPath().getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)) {
-            String partitionName = FSUtils.getRelativePartitionPath(dataBasePath.get(), fileStatus.getPath().getParent());
+          } else if (path.getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)) {
+            String partitionName = FSUtils.getRelativePartitionPath(dataBasePath.get(), path.getParent());
             return Pair.of(Option.of(partitionName), Option.empty());
           }
           return Pair.of(Option.empty(), Option.empty());
@@ -230,13 +233,14 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
     int parallelism = Math.min(DEFAULT_LISTING_PARALLELISM, partitionPaths.size());
 
     engineContext.setJobStatus(this.getClass().getSimpleName(), "Listing all files in " + partitionPaths.size() + " partitions");
-    List<Pair<String, FileStatus[]>> partitionToFiles = engineContext.map(new ArrayList<>(partitionPaths), partitionPathStr -> {
+    // Need to use serializable file status here, see HUDI-5936
+    List<Pair<String, HoodieSerializableFileStatus[]>> partitionToFiles = engineContext.map(new ArrayList<>(partitionPaths), partitionPathStr -> {
       Path partitionPath = new Path(partitionPathStr);
       FileSystem fs = partitionPath.getFileSystem(hadoopConf.get());
-      return Pair.of(partitionPathStr, FSUtils.getAllDataFilesInPartition(fs, partitionPath));
+      return Pair.of(partitionPathStr, HoodieSerializableFileStatus.fromFileStatuses(FSUtils.getAllDataFilesInPartition(fs, partitionPath)));
     }, parallelism);
 
-    return partitionToFiles.stream().collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
+    return partitionToFiles.stream().collect(Collectors.toMap(Pair::getLeft, pair -> HoodieSerializableFileStatus.toFileStatuses(pair.getRight())));
   }
 
   @Override

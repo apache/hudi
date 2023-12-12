@@ -173,4 +173,14 @@ public class StringUtils {
     }
     return input.substring(0, i);
   }
+
+  public static String truncate(String str, int headLength, int tailLength) {
+    if (isNullOrEmpty(str) || str.length() <= headLength + tailLength) {
+      return str;
+    }
+    String head = str.substring(0, headLength);
+    String tail = str.substring(str.length() - tailLength);
+
+    return head + "..." + tail;
+  }
 }

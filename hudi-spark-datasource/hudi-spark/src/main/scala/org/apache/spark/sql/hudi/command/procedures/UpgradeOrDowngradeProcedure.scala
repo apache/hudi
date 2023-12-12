@@ -20,16 +20,18 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion
-import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig, HoodieCleanConfig}
 import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.table.upgrade.{SparkUpgradeDowngradeHelper, UpgradeDowngrade}
+import org.apache.hudi.HoodieCLIUtils
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
+import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
 
 class UpgradeOrDowngradeProcedure extends BaseProcedure with ProcedureBuilder with Logging {
@@ -51,9 +53,8 @@ class UpgradeOrDowngradeProcedure extends BaseProcedure with ProcedureBuilder wi
 
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
     val toVersion = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[String]
-    val basePath = getBasePath(tableName)
-
-    val config = getWriteConfigWithTrue(basePath)
+    val config = getWriteConfigWithTrue(tableName)
+    val basePath = config.getBasePath
     val metaClient = HoodieTableMetaClient.builder
       .setConf(jsc.hadoopConfiguration)
       .setBasePath(config.getBasePath)
@@ -78,12 +79,16 @@ class UpgradeOrDowngradeProcedure extends BaseProcedure with ProcedureBuilder wi
     Seq(Row(result))
   }
 
-  private def getWriteConfigWithTrue(basePath: String) = {
+  private def getWriteConfigWithTrue(tableOpt: scala.Option[Any]) = {
+    val basePath = getBasePath(tableOpt)
+    val (tableName, database) = HoodieCLIUtils.getTableIdentifier(tableOpt.get.asInstanceOf[String])
     HoodieWriteConfig.newBuilder
+      .forTable(tableName)
       .withPath(basePath)
       .withRollbackUsingMarkers(true)
       .withCleanConfig(HoodieCleanConfig.newBuilder.withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER).build)
       .withIndexConfig(HoodieIndexConfig.newBuilder.withIndexType(HoodieIndex.IndexType.BLOOM).build)
+      .withProps(Map(HoodieTableConfig.DATABASE_NAME.key -> database.getOrElse(sparkSession.sessionState.catalog.getCurrentDatabase)).asJava)
       .build
   }
 

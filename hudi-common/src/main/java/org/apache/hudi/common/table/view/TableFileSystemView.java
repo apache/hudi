@@ -108,6 +108,19 @@ public interface TableFileSystemView {
     Stream<FileSlice> getLatestFileSlices(String partitionPath);
 
     /**
+     * Stream all the latest file slices in the given partition
+     * without caching the file group mappings.
+     *
+     * <p>This is useful for some table services such as compaction and clustering, these services may search around the files to clean
+     * within some ancient data partitions, if there triggers a full table service for enormous number of partitions, the cache could
+     * cause a huge memory pressure to the timeline server which induces an OOM exception.
+     *
+     * <p>The caching of these file groups does not benefit to writers most often because the writers
+     * write to recent data partitions usually.
+     */
+    Stream<FileSlice> getLatestFileSlicesStateless(String partitionPath);
+
+    /**
      * Get Latest File Slice for a given fileId in a given partition.
      */
     Option<FileSlice> getLatestFileSlice(String partitionPath, String fileId);
@@ -167,6 +180,18 @@ public interface TableFileSystemView {
    * Stream all the file groups for a given partition.
    */
   Stream<HoodieFileGroup> getAllFileGroups(String partitionPath);
+
+  /**
+   * Stream all the file groups for a given partition without caching the file group mappings.
+   *
+   * <p>This is useful for some table services such as cleaning, the cleaning service may search around the files to clean
+   * within some ancient data partitions, if there triggers a full table cleaning for enormous number of partitions, the cache could
+   * cause a huge memory pressure to the timeline server which induces an OOM exception.
+   *
+   * <p>The caching of these file groups does not benefit to writers most often because the writers
+   * write to recent data partitions usually.
+   */
+  Stream<HoodieFileGroup> getAllFileGroupsStateless(String partitionPath);
 
   /**
    * Return Pending Compaction Operations.

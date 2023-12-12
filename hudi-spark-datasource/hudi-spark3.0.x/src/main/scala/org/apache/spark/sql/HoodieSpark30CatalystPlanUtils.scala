@@ -18,16 +18,15 @@
 
 package org.apache.spark.sql
 
-import org.apache.hudi.HoodieFileIndexTrait
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.ResolvedTable
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression, ProjectionOverSchema}
 import org.apache.spark.sql.catalyst.planning.ScanOperation
-import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, MergeIntoTable, Project}
+import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, MergeIntoTable}
 import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
 import org.apache.spark.sql.execution.command.AlterTableRecoverPartitionsCommand
-import org.apache.spark.sql.execution.datasources.parquet.NewHoodieParquetFileFormat
-import org.apache.spark.sql.execution.datasources.{FileIndex, HadoopFsRelation, LogicalRelation}
+import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, ParquetFileFormat}
+import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.types.StructType
 
 object HoodieSpark30CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
@@ -46,12 +45,13 @@ object HoodieSpark30CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
     }
   }
 
-  override def applyNewHoodieParquetFileFormatProjection(plan: LogicalPlan): LogicalPlan = {
+  override def maybeApplyForNewFileFormat(plan: LogicalPlan): LogicalPlan = {
     plan match {
       case s@ScanOperation(_, _,
-      l@LogicalRelation(fs: HadoopFsRelation, _, _, _)) if fs.fileFormat.isInstanceOf[NewHoodieParquetFileFormat] && !fs.fileFormat.asInstanceOf[NewHoodieParquetFileFormat].isProjected =>
-        fs.fileFormat.asInstanceOf[NewHoodieParquetFileFormat].isProjected = true
-        Project(l.resolve(fs.location.asInstanceOf[FileIndex with HoodieFileIndexTrait].schema, fs.sparkSession.sessionState.analyzer.resolver), s)
+      l@LogicalRelation(fs: HadoopFsRelation, _, _, _))
+        if fs.fileFormat.isInstanceOf[ParquetFileFormat with HoodieFormatTrait]
+          && !fs.fileFormat.asInstanceOf[ParquetFileFormat with HoodieFormatTrait].isProjected =>
+        FileFormatUtilsForFileGroupReader.applyNewFileFormatChanges(s, l, fs)
       case _ => plan
     }
   }

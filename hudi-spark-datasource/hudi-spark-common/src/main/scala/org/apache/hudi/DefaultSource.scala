@@ -235,17 +235,31 @@ object DefaultSource {
       Option(schema)
     }
 
-    val useNewPaquetFileFormat =  parameters.getOrElse(USE_NEW_HUDI_PARQUET_FILE_FORMAT.key,
-      USE_NEW_HUDI_PARQUET_FILE_FORMAT.defaultValue).toBoolean && !metaClient.isMetadataTable
+    val useNewParquetFileFormat =
+      parameters.getOrElse(
+        USE_NEW_HUDI_PARQUET_FILE_FORMAT.key,
+        USE_NEW_HUDI_PARQUET_FILE_FORMAT.defaultValue).toBoolean &&
+      !metaClient.isMetadataTable &&
+      parameters.getOrElse(REALTIME_MERGE.key(), REALTIME_MERGE.defaultValue())
+        .equalsIgnoreCase(REALTIME_PAYLOAD_COMBINE_OPT_VAL)
+
     if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
       new EmptyRelation(sqlContext, resolveSchema(metaClient, parameters, Some(schema)))
     } else if (isCdcQuery) {
+      if (useNewParquetFileFormat) {
+        if (tableType == COPY_ON_WRITE) {
+          new HoodieCopyOnWriteCDCHadoopFsRelationFactory(
+            sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = false).build()
+        } else {
+          new HoodieMergeOnReadCDCHadoopFsRelationFactory(
+            sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = false).build()
+        }
+      } else {
         CDCRelation.getCDCRelation(sqlContext, metaClient, parameters)
+      }
     } else {
       lazy val fileFormatUtils = if ((isMultipleBaseFileFormatsEnabled && !isBootstrappedTable)
-        || (useNewPaquetFileFormat
-        && parameters.getOrElse(REALTIME_MERGE.key(), REALTIME_MERGE.defaultValue())
-        .equalsIgnoreCase(REALTIME_PAYLOAD_COMBINE_OPT_VAL))) {
+        || (useNewParquetFileFormat)) {
         val formatUtils = new HoodieSparkFileFormatUtils(sqlContext, metaClient, parameters, userSchema)
         if (formatUtils.hasSchemaOnRead) Option.empty else Some(formatUtils)
       } else {
@@ -263,14 +277,22 @@ object DefaultSource {
         case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
              (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
              (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
-          resolveBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
-
+          if (fileFormatUtils.isDefined) {
+            new HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(
+              sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = false).build()
+          } else {
+            resolveBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
+          }
         case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-          new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
+          if (fileFormatUtils.isDefined) {
+            new HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(
+              sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrappedTable).build()
+          } else {
+            new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
+          }
 
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
-          val isTimeTravelQuery = parameters.contains(TIME_TRAVEL_AS_OF_INSTANT.key())
-          if (fileFormatUtils.isDefined && !isTimeTravelQuery) {
+          if (fileFormatUtils.isDefined) {
             new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
               sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = false).build()
           } else {
@@ -286,7 +308,12 @@ object DefaultSource {
           }
 
         case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-          MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
+          if (fileFormatUtils.isDefined) {
+            new HoodieMergeOnReadIncrementalHadoopFsRelationFactory(
+              sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrappedTable).build()
+          } else {
+            MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
+          }
 
         case (_, _, true) =>
           if (fileFormatUtils.isDefined) {

@@ -19,6 +19,7 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+import org.apache.hudi.TestHoodieSparkUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -388,6 +389,85 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
       assertFalse(allowNullForDeletedCols || targetSchemaSameAsTableSchema);
       assertTrue(e.getMessage().contains("Incoming batch schema is not compatible with the table's one"));
       assertFalse(allowNullForDeletedCols);
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("testParamsWithSchemaTransformer")
+  public void testNonNullableColumnDrop(String tableType,
+                                Boolean rowWriterEnable,
+                                Boolean useKafkaSource,
+                                Boolean allowNullForDeletedCols,
+                                Boolean useTransformer,
+                                Boolean targetSchemaSameAsTableSchema) throws Exception {
+    this.tableType = tableType;
+    this.rowWriterEnable = rowWriterEnable;
+    this.useKafkaSource = useKafkaSource;
+    this.shouldCluster = false;
+    this.shouldCompact = false;
+    this.addFilegroups = false;
+    this.multiLogFiles = false;
+    this.useTransformer = useTransformer;
+    if (useKafkaSource || targetSchemaSameAsTableSchema) {
+      this.useSchemaProvider = true;
+    }
+
+    boolean isCow = tableType.equals("COPY_ON_WRITE");
+    PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + ++testNum;
+    tableBasePath = basePath + "test_parquet_table" + testNum;
+
+    //first write
+    String datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
+    Dataset<Row> df = sparkSession.read().json(datapath);
+    df = TestHoodieSparkUtils.setColumnNotNullable(df, "rider");
+    resetTopicAndDeltaStreamer(allowNullForDeletedCols);
+    addData(df, true);
+    deltaStreamer.sync();
+    int numRecords = 6;
+    int numFiles = 3;
+    assertRecordCount(numRecords);
+    assertFileNumber(numFiles, isCow);
+
+    //add extra log files
+    if (tableType.equals("MERGE_ON_READ")) {
+      datapath = String.class.getResource("/data/schema-evolution/extraLogFilesTestEverything.json").getPath();
+      df = sparkSession.read().json(datapath);
+      df = TestHoodieSparkUtils.setColumnNotNullable(df, "rider");
+      addData(df, false);
+      deltaStreamer.sync();
+      //this write contains updates for the 6 records from the first write, so
+      //although we have 2 files for each filegroup, we only see the log files
+      //represented in the read. So that is why numFiles is 3, not 6
+      assertRecordCount(numRecords);
+      assertFileNumber(numFiles, false);
+    }
+
+    if (targetSchemaSameAsTableSchema) {
+      TestSchemaProvider.setTargetSchema(TestSchemaProvider.sourceSchema);
+    }
+    resetTopicAndDeltaStreamer(allowNullForDeletedCols);
+
+    HoodieStreamer.Config dsConfig = deltaStreamer.getConfig();
+    HoodieTableMetaClient metaClient = getMetaClient(dsConfig);
+    HoodieInstant lastInstant = metaClient.getActiveTimeline().lastInstant().get();
+
+    // drop column
+    datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
+    df = sparkSession.read().json(datapath);
+    Dataset<Row> droppedColumnDf = df.drop("rider");
+    try {
+      addData(droppedColumnDf, true);
+      deltaStreamer.sync();
+      assertTrue(allowNullForDeletedCols || targetSchemaSameAsTableSchema);
+
+      metaClient.reloadActiveTimeline();
+      Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, fs, dsConfig.targetBasePath, metaClient);
+      assertTrue(latestTableSchemaOpt.get().getField("rider").schema().getTypes()
+          .stream().anyMatch(t -> t.getType().equals(Schema.Type.STRING)));
+      assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
+    } catch (Exception e) {
+      assertTrue(containsErrorMessage(e, "java.lang.NullPointerException",
+          "Incoming batch schema is not compatible with the table's one"));
     }
   }
 

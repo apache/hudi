@@ -18,12 +18,14 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -218,6 +220,65 @@ public class AvroSchemaUtils {
     return atomicTypeEqualityPredicate.apply(sourceSchema, targetSchema);
   }
 
+  public static Option<Schema.Field> findNestedField(Schema schema, String fieldName) {
+    return findNestedField(schema, fieldName.split("\\."), 0);
+  }
+
+  private static Option<Schema.Field> findNestedField(Schema schema, String[] fieldParts, int index) {
+    if (schema.getType().equals(Schema.Type.UNION)) {
+      Option<Schema.Field> notUnion = findNestedField(resolveNullableSchema(schema), fieldParts, index);
+      if (!notUnion.isPresent()) {
+        return Option.empty();
+      }
+      Schema.Field nu = notUnion.get();
+      return Option.of(new Schema.Field(nu.name(), nu.schema(), nu.doc(), nu.defaultVal()));
+    }
+    if (fieldParts.length <= index) {
+      return Option.empty();
+    }
+
+    Schema.Field foundField = schema.getField(fieldParts[index]);
+    if (foundField == null) {
+      return Option.empty();
+    }
+
+    if (index == fieldParts.length - 1) {
+      return Option.of(new Schema.Field(foundField.name(), foundField.schema(), foundField.doc(), foundField.defaultVal()));
+    }
+
+    Schema foundSchema = foundField.schema();
+    Option<Schema.Field> nestedPart = findNestedField(foundSchema, fieldParts, index + 1);
+    if (!nestedPart.isPresent()) {
+      return Option.empty();
+    }
+    return nestedPart;
+  }
+
+  public static Schema appendFieldsToSchemaDedupNested(Schema schema, List<Schema.Field> newFields) {
+    return appendFieldsToSchemaBase(schema, newFields, true);
+  }
+
+  public static Schema mergeSchemas(Schema a, Schema b) {
+    if (!a.getType().equals(Schema.Type.RECORD)) {
+      return a;
+    }
+    List<Schema.Field> fields = new ArrayList<>();
+    for (Schema.Field f : a.getFields()) {
+      Schema.Field foundField = b.getField(f.name());
+      fields.add(new Schema.Field(f.name(), foundField == null ? f.schema() : mergeSchemas(f.schema(), foundField.schema()),
+          f.doc(), f.defaultVal()));
+    }
+    for (Schema.Field f : b.getFields()) {
+      if (a.getField(f.name()) == null) {
+        fields.add(new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal()));
+      }
+    }
+
+    Schema newSchema = Schema.createRecord(a.getName(), a.getDoc(), a.getNamespace(), a.isError());
+    newSchema.setFields(fields);
+    return newSchema;
+  }
+
   /**
    * Appends provided new fields at the end of the given schema
    *
@@ -225,10 +286,25 @@ public class AvroSchemaUtils {
    *       of the source schema as is
    */
   public static Schema appendFieldsToSchema(Schema schema, List<Schema.Field> newFields) {
+    return appendFieldsToSchemaBase(schema, newFields, false);
+  }
+
+  private static Schema appendFieldsToSchemaBase(Schema schema, List<Schema.Field> newFields, boolean dedupNested) {
     List<Schema.Field> fields = schema.getFields().stream()
         .map(field -> new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()))
         .collect(Collectors.toList());
-    fields.addAll(newFields);
+    if (dedupNested) {
+      for (Schema.Field f : newFields) {
+        Schema.Field foundField = schema.getField(f.name());
+        if (foundField != null) {
+          fields.set(foundField.pos(), new Schema.Field(foundField.name(), mergeSchemas(foundField.schema(), f.schema()), foundField.doc(), foundField.defaultVal()));
+        } else {
+          fields.add(f);
+        }
+      }
+    } else {
+      fields.addAll(newFields);
+    }
 
     Schema newSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), schema.isError());
     newSchema.setFields(fields);
@@ -249,6 +325,11 @@ public class AvroSchemaUtils {
     }
 
     List<Schema> innerTypes = schema.getTypes();
+    if (innerTypes.size() == 2 && isNullable(schema)) {
+      // this is a basic nullable field so handle it more efficiently
+      return resolveNullableSchema(schema);
+    }
+
     Schema nonNullType =
         innerTypes.stream()
             .filter(it -> it.getType() != Schema.Type.NULL && Objects.equals(it.getFullName(), fieldSchemaFullName))
@@ -286,18 +367,19 @@ public class AvroSchemaUtils {
     }
 
     List<Schema> innerTypes = schema.getTypes();
-    Schema nonNullType =
-        innerTypes.stream()
-            .filter(it -> it.getType() != Schema.Type.NULL)
-            .findFirst()
-            .orElse(null);
 
-    if (innerTypes.size() != 2 || nonNullType == null) {
+    if (innerTypes.size() != 2) {
       throw new AvroRuntimeException(
           String.format("Unsupported Avro UNION type %s: Only UNION of a null type and a non-null type is supported", schema));
     }
-
-    return nonNullType;
+    Schema firstInnerType = innerTypes.get(0);
+    Schema secondInnerType = innerTypes.get(1);
+    if ((firstInnerType.getType() != Schema.Type.NULL && secondInnerType.getType() != Schema.Type.NULL)
+        || (firstInnerType.getType() == Schema.Type.NULL && secondInnerType.getType() == Schema.Type.NULL)) {
+      throw new AvroRuntimeException(
+          String.format("Unsupported Avro UNION type %s: Only UNION of a null type and a non-null type is supported", schema));
+    }
+    return firstInnerType.getType() == Schema.Type.NULL ? secondInnerType : firstInnerType;
   }
 
   /**

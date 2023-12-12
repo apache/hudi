@@ -38,6 +38,7 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.HoodieKeyLookupResult;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -284,7 +285,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
       }
 
       String bloomIndexEncodedKey =
-          getBloomFilterIndexKey(new PartitionIndexID(partitionPath), new FileIndexID(baseFileName));
+          getBloomFilterIndexKey(new PartitionIndexID(HoodieTableMetadataUtil.getBloomFilterIndexPartitionIdentifier(partitionPath)), new FileIndexID(baseFileName));
 
       // NOTE: It's crucial that [[targetPartitions]] be congruent w/ the number of
       //       actual file-groups in the Bloom Index in MT

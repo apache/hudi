@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.util.ChangelogModes;
 import org.apache.hudi.util.DataModificationInfos;
@@ -86,6 +87,10 @@ public class HoodieTableSink implements
 
       // bulk_insert mode
       if (OptionsResolver.isBulkInsertOperation(conf)) {
+        if (!context.isBounded()) {
+          throw new HoodieException(
+              "The bulk insert should be run in batch execution mode.");
+        }
         return Pipelines.bulkInsert(conf, rowType, dataStream);
       }
 

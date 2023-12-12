@@ -132,7 +132,7 @@ public class HiveTestUtil {
   private static DateTimeFormatter dtfOut;
   private static Set<String> createdTablesSet = new HashSet<>();
 
-  public static void setUp() throws IOException, InterruptedException, HiveException, MetaException {
+  public static void setUp(Option<TypedProperties> hiveSyncProperties, boolean shouldClearBasePathAndTables) throws IOException, InterruptedException, HiveException, MetaException {
     configuration = new Configuration();
     if (zkServer == null) {
       zkService = new ZookeeperTestService(configuration);
@@ -143,27 +143,34 @@ public class HiveTestUtil {
       hiveServer = hiveTestService.start();
     }
 
-    basePath = Files.createTempDirectory("hivesynctest" + Instant.now().toEpochMilli()).toUri().toString();
+    if (hiveSyncProperties.isPresent()) {
+      hiveSyncProps = hiveSyncProperties.get();
+      hiveSyncProps.setProperty(HIVE_URL.key(), hiveTestService.getJdbcHive2Url());
+      basePath = hiveSyncProps.getProperty(META_SYNC_BASE_PATH.key());
+    } else {
+      basePath = Files.createTempDirectory("hivesynctest" + Instant.now().toEpochMilli()).toUri().toString();
 
-    hiveSyncProps = new TypedProperties();
-    hiveSyncProps.setProperty(HIVE_URL.key(), hiveTestService.getJdbcHive2Url());
-    hiveSyncProps.setProperty(HIVE_USER.key(), "");
-    hiveSyncProps.setProperty(HIVE_PASS.key(), "");
-    hiveSyncProps.setProperty(META_SYNC_DATABASE_NAME.key(), DB_NAME);
-    hiveSyncProps.setProperty(META_SYNC_TABLE_NAME.key(), TABLE_NAME);
-    hiveSyncProps.setProperty(META_SYNC_BASE_PATH.key(), basePath);
-    hiveSyncProps.setProperty(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), "false");
-    hiveSyncProps.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");
-    hiveSyncProps.setProperty(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), SlashEncodedDayPartitionValueExtractor.class.getName());
-    hiveSyncProps.setProperty(HIVE_BATCH_SYNC_PARTITION_NUM.key(), "3");
-
+      hiveSyncProps = new TypedProperties();
+      hiveSyncProps.setProperty(HIVE_URL.key(), hiveTestService.getJdbcHive2Url());
+      hiveSyncProps.setProperty(HIVE_USER.key(), "");
+      hiveSyncProps.setProperty(HIVE_PASS.key(), "");
+      hiveSyncProps.setProperty(META_SYNC_DATABASE_NAME.key(), DB_NAME);
+      hiveSyncProps.setProperty(META_SYNC_TABLE_NAME.key(), TABLE_NAME);
+      hiveSyncProps.setProperty(META_SYNC_BASE_PATH.key(), basePath);
+      hiveSyncProps.setProperty(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), "false");
+      hiveSyncProps.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");
+      hiveSyncProps.setProperty(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), SlashEncodedDayPartitionValueExtractor.class.getName());
+      hiveSyncProps.setProperty(HIVE_BATCH_SYNC_PARTITION_NUM.key(), "3");
+    }
     hiveSyncConfig = new HiveSyncConfig(hiveSyncProps, hiveTestService.getHiveConf());
     fileSystem = hiveSyncConfig.getHadoopFileSystem();
 
     dtfOut = DateTimeFormatter.ofPattern("yyyy/MM/dd");
     ddlExecutor = new HiveQueryDDLExecutor(hiveSyncConfig, IMetaStoreClientUtil.getMSC(hiveSyncConfig.getHiveConf()));
 
-    clear();
+    if (shouldClearBasePathAndTables) {
+      clear();
+    }
   }
 
   public static void clear() throws IOException, HiveException, MetaException {
@@ -183,6 +190,10 @@ public class HiveTestUtil {
 
   public static HiveConf getHiveConf() {
     return hiveServer.getHiveConf();
+  }
+
+  public static HiveSyncConfig getHiveSyncConfig() {
+    return hiveSyncConfig;
   }
 
   public static void shutdown() throws IOException {

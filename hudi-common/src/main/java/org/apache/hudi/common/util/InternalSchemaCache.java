@@ -217,7 +217,11 @@ public class InternalSchemaCache {
     }
     InternalSchema fileSchema = InternalSchemaUtils.searchSchema(versionId, SerDeHelper.parseSchemas(latestHistorySchema));
     // step3:
-    return fileSchema.isEmptySchema() ? AvroInternalSchemaConverter.convert(HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(avroSchema))) : fileSchema;
+    return fileSchema.isEmptySchema()
+            ? StringUtils.isNullOrEmpty(avroSchema)
+              ? InternalSchema.getEmptyInternalSchema()
+              : AvroInternalSchemaConverter.convert(HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(avroSchema)))
+            : fileSchema;
   }
 
   public static InternalSchema getInternalSchemaByVersionId(long versionId, HoodieTableMetaClient metaClient) {

@@ -19,7 +19,6 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.avro.AvroSchemaUtils;
-import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.StringUtils;
@@ -126,6 +125,15 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
               && !conf.contains(FlinkOptions.HIVE_STYLE_PARTITIONING)) {
             conf.setBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING, tableConfig.getBoolean(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE));
           }
+          if (tableConfig.contains(HoodieTableConfig.TYPE) && conf.contains(FlinkOptions.TABLE_TYPE)) {
+            if (!tableConfig.getString(HoodieTableConfig.TYPE).equals(conf.get(FlinkOptions.TABLE_TYPE))) {
+              LOG.warn(
+                  String.format("Table type conflict : %s in %s and %s in table options. Fix the table type as to be in line with the hoodie.properties.",
+                      tableConfig.getString(HoodieTableConfig.TYPE), HoodieTableConfig.HOODIE_PROPERTIES_FILE,
+                      conf.get(FlinkOptions.TABLE_TYPE)));
+              conf.setString(FlinkOptions.TABLE_TYPE, tableConfig.getString(HoodieTableConfig.TYPE));
+            }
+          }
           if (tableConfig.contains(HoodieTableConfig.TYPE)
               && !conf.contains(FlinkOptions.TABLE_TYPE)) {
             conf.setString(FlinkOptions.TABLE_TYPE, tableConfig.getString(HoodieTableConfig.TYPE));
@@ -171,8 +179,8 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
 
     if (!OptionsResolver.isAppendMode(conf)) {
       checkRecordKey(conf, schema);
-      checkPreCombineKey(conf, schema);
     }
+    StreamerUtil.checkPreCombineKey(conf, schema.getColumnNames());
   }
 
   /**
@@ -212,26 +220,6 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
             throw new HoodieValidationException("Field '" + f + "' specified in option "
                 + "'" + FlinkOptions.RECORD_KEY_FIELD.key() + "' does not exist in the table schema.");
           });
-    }
-  }
-
-  /**
-   * Validate pre_combine key.
-   */
-  private void checkPreCombineKey(Configuration conf, ResolvedSchema schema) {
-    List<String> fields = schema.getColumnNames();
-    String preCombineField = conf.get(FlinkOptions.PRECOMBINE_FIELD);
-    if (!fields.contains(preCombineField)) {
-      if (OptionsResolver.isDefaultHoodieRecordPayloadClazz(conf)) {
-        throw new HoodieValidationException("Option '" + FlinkOptions.PRECOMBINE_FIELD.key()
-            + "' is required for payload class: " + DefaultHoodieRecordPayload.class.getName());
-      }
-      if (preCombineField.equals(FlinkOptions.PRECOMBINE_FIELD.defaultValue())) {
-        conf.setString(FlinkOptions.PRECOMBINE_FIELD, FlinkOptions.NO_PRE_COMBINE);
-      } else if (!preCombineField.equals(FlinkOptions.NO_PRE_COMBINE)) {
-        throw new HoodieValidationException("Field " + preCombineField + " does not exist in the table schema."
-            + "Please check '" + FlinkOptions.PRECOMBINE_FIELD.key() + "' option.");
-      }
     }
   }
 

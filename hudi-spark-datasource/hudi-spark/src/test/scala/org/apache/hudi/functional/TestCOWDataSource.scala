@@ -411,6 +411,84 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     }
   }
 
+  @Test
+  def testInsertOverWriteTableWithInsertDropDupes(): Unit = {
+
+    val (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO)
+
+    // Insert Operation
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 10)).toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.withColumn("batchId", lit("batch1")).write.format("org.apache.hudi")
+      .options(writeOpts)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+
+    val snapshotDF1 = spark.read.format("org.apache.hudi")
+      .options(readOpts)
+      .load(basePath)
+    assertEquals(10, snapshotDF1.count())
+
+    val records3 = recordsToStrings(dataGen.generateUniqueUpdates("101", 4)).toList
+    val records2 = recordsToStrings(dataGen.generateInserts("101", 4)).toList
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 1))
+    val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 1))
+    val inputDF4 = inputDF2.withColumn("batchId", lit("batch2"))
+      .union(inputDF3.withColumn("batchId", lit("batch3")))
+
+    inputDF4.write.format("org.apache.hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.INSERT_DROP_DUPS.key(), "true")
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val snapshotDF2 = spark.read.format("org.apache.hudi")
+      .options(readOpts)
+      .load(basePath)
+    assertEquals(snapshotDF2.count(), 8)
+  }
+
+  @Test
+  def testInsertOverWritePartitionWithInsertDropDupes(): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO)
+    // Insert Operation
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.withColumn("batchId", lit("batch1")).write.format("org.apache.hudi")
+      .options(writeOpts)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    val validRecordsFromBatch1 = inputDF1.where("partition!='2016/03/15'").count()
+
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+
+    val snapshotDF1 = spark.read.format("org.apache.hudi")
+      .options(readOpts)
+      .load(basePath)
+    assertEquals(100, snapshotDF1.count())
+
+    val records3 = recordsToStrings(dataGen.generateUniqueUpdates("100", 50)).toList
+    val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 1))
+    val inputDF4 = inputDF3.withColumn("batchId", lit("batch2")).where("partition='2016/03/15'")
+    inputDF4.cache()
+    val validRecordsFromBatch2 = inputDF4.count()
+
+    inputDF4.write.format("org.apache.hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OVERWRITE_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.INSERT_DROP_DUPS.key(), "true")
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val snapshotDF2 = spark.read.format("org.apache.hudi")
+      .options(readOpts)
+      .load(basePath)
+    assertEquals(snapshotDF2.count(), (validRecordsFromBatch1 + validRecordsFromBatch2))
+  }
+
   /**
    * This tests the case that query by with a specified partition condition on hudi table which is
    * different between the value of the partition field and the actual partition path,
@@ -1001,8 +1079,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       writer.save(basePath)
       fail("should fail when invalid PartitionKeyType is provided!")
     } catch {
-      case e: Exception =>
-        assertTrue(e.getCause.getMessage.contains("No enum constant org.apache.hudi.keygen.CustomAvroKeyGenerator.PartitionKeyType.DUMMY"))
+      case e: Exception => assertTrue(e.getCause.getMessage.contains("Unable to instantiate class org.apache.hudi.keygen.CustomKeyGenerator"))
     }
   }
 

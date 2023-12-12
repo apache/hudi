@@ -22,13 +22,17 @@ import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Arrays;
 
 /**
  * HoodieMerge defines how to merge two records. It is a stateless component.
@@ -120,6 +124,25 @@ public interface HoodieRecordMerger extends Serializable {
    **/
   default boolean shouldFlush(HoodieRecord record, Schema schema, TypedProperties props) throws IOException {
     return true;
+  }
+
+  default String[] getMandatoryFieldsForMerging(HoodieTableConfig cfg) {
+    ArrayList<String> requiredFields = new ArrayList<>();
+
+    if (cfg.populateMetaFields()) {
+      requiredFields.add(HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    } else {
+      Option<String[]> fields = cfg.getRecordKeyFields();
+      if (fields.isPresent()) {
+        requiredFields.addAll(Arrays.asList(fields.get()));
+      }
+    }
+
+    String preCombine = cfg.getPreCombineField();
+    if (!StringUtils.isNullOrEmpty(preCombine)) {
+      requiredFields.add(preCombine);
+    }
+    return requiredFields.toArray(new String[0]);
   }
 
   /**

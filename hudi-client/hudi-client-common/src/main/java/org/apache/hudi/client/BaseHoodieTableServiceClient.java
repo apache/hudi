@@ -57,6 +57,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieLogCompactException;
 import org.apache.hudi.exception.HoodieRollbackException;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -783,9 +784,14 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       return;
     }
     try {
+      final Timer.Context timerContext = metrics.getArchiveCtx();
       // We cannot have unbounded commit files. Archive commits if we have to archive
       HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(config, table);
-      archiver.archiveIfRequired(context, true);
+      int instantsToArchive = archiver.archiveIfRequired(context, true);
+      if (timerContext != null) {
+        long durationMs = metrics.getDurationInMs(timerContext.stop());
+        this.metrics.updateArchiveMetrics(durationMs, instantsToArchive);
+      }
     } catch (IOException ioe) {
       throw new HoodieIOException("Failed to archive", ioe);
     }
@@ -1083,6 +1089,9 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       table.rollbackBootstrap(context, createNewInstantTime());
       LOG.info("Finished rolling back pending bootstrap");
     }
+
+    // if bootstrap failed, lets delete metadata and restart from scratch
+    HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
   }
 
   /**

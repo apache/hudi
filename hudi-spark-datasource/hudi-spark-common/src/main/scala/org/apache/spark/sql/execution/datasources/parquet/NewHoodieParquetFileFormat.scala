@@ -26,7 +26,7 @@ import org.apache.hudi.MergeOnReadSnapshotRelation.createPartitionedFile
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{BaseFile, FileSlice, HoodieLogFile, HoodieRecord}
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.{HoodieBaseRelation, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, LogFileIterator, MergeOnReadSnapshotRelation, HoodiePartitionFileSliceMapping, RecordMergingFileIterator, SkipMergeIterator, SparkAdapterSupport}
+import org.apache.hudi.{HoodieBaseRelation, HoodiePartitionFileSliceMapping, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, LogFileIterator, MergeOnReadSnapshotRelation, RecordMergingFileIterator, SkipMergeIterator, SparkAdapterSupport}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
@@ -54,16 +54,15 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
                                  isBootstrap: Boolean,
                                  isIncremental: Boolean,
                                  requiredFilters: Seq[Filter]
-                                ) extends ParquetFileFormat with SparkAdapterSupport {
+                                ) extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait {
+
+  def getRequiredFilters: Seq[Filter] = requiredFilters
 
   override def isSplitable(sparkSession: SparkSession,
                            options: Map[String, String],
                            path: Path): Boolean = {
     false
   }
-
-  //Used so that the planner only projects once and does not stack overflow
-  var isProjected = false
 
   /**
    * Support batch needs to remain consistent, even if one side of a bootstrap merge can support

@@ -92,6 +92,32 @@ public class TestCompletionTimeQueryView {
     }
   }
 
+  @Test
+  void testReadStartTime() throws Exception {
+    String tableName = "testTable";
+    String tablePath = tempFile.getAbsolutePath() + Path.SEPARATOR + tableName;
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(new Configuration(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
+    prepareTimeline(tablePath, metaClient);
+    try (CompletionTimeQueryView view = new CompletionTimeQueryView(metaClient, String.format("%08d", 3))) {
+      // query start time from LSM timeline
+      assertThat(getInstantTimeSetFormattedString(view, 3 + 1000, 6 + 1000), is("00000003,00000004,00000005,00000006"));
+      // query start time from active timeline
+      assertThat(getInstantTimeSetFormattedString(view, 7 + 1000, 10 + 1000), is("00000007,00000008,00000009,00000010"));
+      // lazy loading
+      assertThat(getInstantTimeSetFormattedString(view, 1 + 1000, 2 + 1000), is("00000001,00000002"));
+      assertThat("The cursor instant should be slided", view.getCursorInstant(), is(String.format("%08d", 1)));
+      // query with partial non-existing completion time
+      assertThat(getInstantTimeSetFormattedString(view, 10 + 1000, 11 + 1000), is("00000010"));
+      // query with non-existing completion time
+      assertThat(getInstantTimeSetFormattedString(view, 12 + 1000, 15 + 1000), is(""));
+    }
+  }
+
+  private String getInstantTimeSetFormattedString(CompletionTimeQueryView view, int completionTime1, int completionTime2) {
+    return view.getStartTimeSet(String.format("%08d", completionTime1), String.format("%08d", completionTime2), s -> String.format("%08d", Integer.parseInt(s) - 1000))
+        .stream().sorted().collect(Collectors.joining(","));
+  }
+
   private void prepareTimeline(String tablePath, HoodieTableMetaClient metaClient) throws Exception {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(tablePath)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
@@ -103,7 +129,7 @@ public class TestCompletionTimeQueryView {
       String instantTime = String.format("%08d", i);
       String completionTime = String.format("%08d", i + 1000);
       HoodieCommitMetadata metadata = testTable.createCommitMetadata(instantTime, WriteOperationType.INSERT, Arrays.asList("par1", "par2"), 10, false);
-      testTable.addCommit(instantTime, Option.of(metadata));
+      testTable.addCommit(instantTime, Option.of(completionTime), Option.of(metadata));
       activeActions.add(
           new DummyActiveAction(
               new HoodieInstant(HoodieInstant.State.COMPLETED, "commit", instantTime, completionTime),

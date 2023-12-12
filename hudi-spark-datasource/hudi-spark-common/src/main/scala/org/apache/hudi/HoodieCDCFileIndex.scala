@@ -28,6 +28,7 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, GenericInternalRow}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
+import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
 import scala.jdk.CollectionConverters.{asScalaBufferConverter, mapAsScalaMapConverter}
@@ -43,29 +44,34 @@ class HoodieCDCFileIndex (override val spark: SparkSession,
   extends HoodieIncrementalFileIndex(
     spark, metaClient, schemaSpec, options, fileStatusCache, globPaths, includeLogFiles, shouldEmbedFileSlices
   ) with FileIndex {
+  private val emptyPartitionPath: String = "empty_partition_path";
   val cdcRelation: CDCRelation = CDCRelation.getCDCRelation(spark.sqlContext, metaClient, options)
   val cdcExtractor: HoodieCDCExtractor = cdcRelation.cdcExtractor
 
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
-    val partitionToFileGroups = cdcExtractor.extractCDCFileSplits().asScala.groupBy(_._1.getPartitionPath).toSeq
-    partitionToFileGroups.map {
-      case (partitionPath, fileGroups) =>
-        val fileGroupIds: List[FileStatus] = fileGroups.map { fileGroup => {
-          // We create a fake FileStatus to wrap the information of HoodieFileGroupId, which are used
-          // later to retrieve the corresponding CDC file group splits.
-          val fileGroupId: HoodieFileGroupId = fileGroup._1
-          new FileStatus(0, true, 0, 0, 0,
-            0, null, "", "", null,
-            new Path(fileGroupId.getPartitionPath, fileGroupId.getFileId))
-        }}.toList
-        val partitionValues: InternalRow = new GenericInternalRow(doParsePartitionColumnValues(
-          metaClient.getTableConfig.getPartitionFields.get(), partitionPath).asInstanceOf[Array[Any]])
-        PartitionDirectory(
+    cdcExtractor.extractCDCFileSplits().asScala.map {
+      case (fileGroupId, fileSplits) =>
+        val partitionPath = if (fileGroupId.getPartitionPath.isEmpty) emptyPartitionPath else fileGroupId.getPartitionPath
+        val partitionFields = metaClient.getTableConfig.getPartitionFields
+        val partitionValues: InternalRow = if (partitionFields.isPresent) {
+          new GenericInternalRow(doParsePartitionColumnValues(partitionFields.get(), partitionPath).asInstanceOf[Array[Any]])
+        } else {
+          InternalRow.empty
+        }
+
+        // Bogus file status, not used during read.
+        val fileStatus = new FileStatus(0, true, 0, 0, 0,
+          0, null, "", "", null,
+          new Path(partitionPath, fileGroupId.getFileId))
+
+        // Note that CDC file splits must be sorted based on their instant time.
+        // Otherwise, the resulting records may not be correct.
+        sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
           new HoodiePartitionCDCFileGroupMapping(
-            partitionValues, fileGroups.map(kv => kv._1 -> kv._2.asScala.toList).toMap),
-          fileGroupIds
+            partitionValues, fileSplits.asScala.sortBy(_.getInstant).toList),
+          Seq(fileStatus)
         )
-    }
+    }.toList
   }
 
   override def inputFiles: Array[String] = {
@@ -73,5 +79,9 @@ class HoodieCDCFileIndex (override val spark: SparkSession,
       val fileGroupId = fileGroupSplit._1
       new Path(fileGroupId.getPartitionPath, fileGroupId.getFileId).toString
     }.toArray
+  }
+
+  override def getRequiredFilters: Seq[Filter] = {
+    Seq.empty
   }
 }

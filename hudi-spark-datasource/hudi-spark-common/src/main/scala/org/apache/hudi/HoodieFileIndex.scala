@@ -85,7 +85,9 @@ case class HoodieFileIndex(spark: SparkSession,
     configProperties = getConfigProperties(spark, options),
     queryPaths = HoodieFileIndex.getQueryPaths(options),
     specifiedQueryInstant = options.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key).map(HoodieSqlCommonUtils.formatQueryInstant),
-    fileStatusCache = fileStatusCache
+    fileStatusCache = fileStatusCache,
+    beginInstantTime = options.get(DataSourceReadOptions.BEGIN_INSTANTTIME.key),
+    endInstantTime = options.get(DataSourceReadOptions.END_INSTANTTIME.key)
   )
     with FileIndex {
 
@@ -167,9 +169,11 @@ case class HoodieFileIndex(spark: SparkSession,
             || (f.getBaseFile.isPresent && f.getBaseFile.get().getBootstrapBaseFile.isPresent)).
             foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
           if (c.nonEmpty) {
-            PartitionDirectory(new HoodiePartitionFileSliceMapping(InternalRow.fromSeq(partitionOpt.get.values), c), baseFileStatusesAndLogFileOnly)
+            sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
+              new HoodiePartitionFileSliceMapping(InternalRow.fromSeq(partitionOpt.get.values), c), baseFileStatusesAndLogFileOnly)
           } else {
-            PartitionDirectory(InternalRow.fromSeq(partitionOpt.get.values), baseFileStatusesAndLogFileOnly)
+            sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
+              InternalRow.fromSeq(partitionOpt.get.values), baseFileStatusesAndLogFileOnly)
           }
 
         } else {
@@ -184,7 +188,8 @@ case class HoodieFileIndex(spark: SparkSession,
             baseFileStatusOpt.foreach(f => files.append(f))
             files
           })
-          PartitionDirectory(InternalRow.fromSeq(partitionOpt.get.values), allCandidateFiles)
+          sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
+            InternalRow.fromSeq(partitionOpt.get.values), allCandidateFiles)
         }
     }
 
