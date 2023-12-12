@@ -678,9 +678,6 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
       commitWithMdt(secondCommitTs, part2ToFileId, testTable, metadataWriter, true, true);
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
-      List<HoodieCleanStat> hoodieCleanStatsTwo = runCleaner(config, simulateFailureRetry, simulateMetadataFailure);
-      metaClient = HoodieTableMetaClient.reload(metaClient);
-
       // make next commit, with 1 insert per partition
       int minutesForThirdCommit = 90;
       String thirdCommitTs = HoodieActiveTimeline.formatDate(Date.from(commitDateTime.minusMinutes(minutesForThirdCommit).toInstant()));
@@ -696,7 +693,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
       commitWithMdt(thirdCommitTs, part3ToFileId, testTable, metadataWriter, true, true);
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
-      List<HoodieCleanStat> hoodieCleanStatsThree= runCleaner(config, simulateFailureRetry, simulateMetadataFailure);
+      List<HoodieCleanStat> hoodieCleanStatsThree = runCleaner(config, simulateFailureRetry, simulateMetadataFailure);
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
       assertEquals(2, hoodieCleanStatsThree.size(), "Should clean one file each from both the partitions");
