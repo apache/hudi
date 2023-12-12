@@ -267,7 +267,12 @@ object DefaultSource {
             resolveBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
           }
         case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-          new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
+          if (fileFormatUtils.isDefined) {
+            new HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(
+              sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
+          } else {
+            new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
+          }
 
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
           if (useNewParquetFileFormat) {
@@ -286,7 +291,12 @@ object DefaultSource {
           }
 
         case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-          MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
+          if (fileFormatUtils.isDefined) {
+            new HoodieMergeOnReadIncrementalHadoopFsRelationFactory(
+              sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
+          } else {
+            MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
+          }
 
         case (_, _, true) =>
           if (useNewParquetFileFormat) {

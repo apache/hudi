@@ -20,7 +20,14 @@
 package org.apache.spark.sql.hudi.command.index
 
 import org.apache.hudi.HoodieSparkUtils
+import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.common.util.Option
+import org.apache.hudi.hive.HiveSyncConfigHolder._
+import org.apache.hudi.hive.{HiveSyncTool, HoodieHiveSyncClient}
+import org.apache.hudi.hive.testutils.HiveTestUtil
+import org.apache.hudi.sync.common.HoodieSyncConfig.{META_SYNC_BASE_PATH, META_SYNC_DATABASE_NAME, META_SYNC_NO_PARTITION_METADATA, META_SYNC_TABLE_NAME}
 import org.apache.spark.sql.catalyst.analysis.Analyzer
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.parser.ParserInterface
@@ -29,6 +36,83 @@ import org.apache.spark.sql.hudi.command.{CreateIndexCommand, ShowIndexesCommand
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 class TestFunctionalIndex extends HoodieSparkSqlTestBase {
+
+  test("Test Functional Index With Hive Sync Non Partitioned Table") {
+    // There is a big difference between Java class loader architecture of versions 1.8 and 17.
+    // Hive 2.3.7 is compiled with Java 1.8, and the class loader used there throws error when Hive APIs are run on Java 17.
+    // So we special case this test only for Java 8.
+    if (HoodieSparkUtils.gteqSpark3_2 && HoodieTestUtils.getJavaVersion == 8) {
+      withTempDir { tmp =>
+        Seq("mor").foreach { tableType =>
+          val databaseName = "testdb"
+          val tableName = generateTableName
+          val basePath = s"${tmp.getCanonicalPath}/$tableName"
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | options (
+               |  primaryKey ='id',
+               |  type = '$tableType',
+               |  preCombineField = 'ts'
+               | )
+               | partitioned by(ts)
+               | location '$basePath'
+       """.stripMargin)
+          // ts=1000 and from_unixtime(ts, 'yyyy-MM-dd') = '1970-01-01'
+          spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+          // ts=100000 and from_unixtime(ts, 'yyyy-MM-dd') = '1970-01-02'
+          spark.sql(s"insert into $tableName values(2, 'a2', 10, 100000)")
+          // ts=10000000 and from_unixtime(ts, 'yyyy-MM-dd') = '1970-04-26'
+          spark.sql(s"insert into $tableName values(3, 'a3', 10, 10000000)")
+
+          val createIndexSql = s"create index idx_datestr on $tableName using column_stats(ts) options(func='from_unixtime', format='yyyy-MM-dd')"
+          spark.sql(createIndexSql)
+          val metaClient = HoodieTableMetaClient.builder()
+            .setBasePath(basePath)
+            .setConf(spark.sessionState.newHadoopConf())
+            .build()
+          assertTrue(metaClient.getFunctionalIndexMetadata.isPresent)
+          val functionalIndexMetadata = metaClient.getFunctionalIndexMetadata.get()
+          assertEquals(1, functionalIndexMetadata.getIndexDefinitions.size())
+          assertEquals("func_index_idx_datestr", functionalIndexMetadata.getIndexDefinitions.get("func_index_idx_datestr").getIndexName)
+
+          // sync to hive without partition metadata
+          val hiveSyncProps = new TypedProperties()
+          hiveSyncProps.setProperty(HIVE_USER.key, "")
+          hiveSyncProps.setProperty(HIVE_PASS.key, "")
+          hiveSyncProps.setProperty(META_SYNC_DATABASE_NAME.key, databaseName)
+          hiveSyncProps.setProperty(META_SYNC_TABLE_NAME.key, tableName)
+          hiveSyncProps.setProperty(META_SYNC_BASE_PATH.key, basePath)
+          hiveSyncProps.setProperty(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key, "false")
+          hiveSyncProps.setProperty(META_SYNC_NO_PARTITION_METADATA.key, "true")
+          HiveTestUtil.setUp(Option.of(hiveSyncProps), false)
+          val tool = new HiveSyncTool(hiveSyncProps, HiveTestUtil.getHiveConf)
+          tool.syncHoodieTable()
+
+          // assert table created and no partition metadata
+          val hiveClient = new HoodieHiveSyncClient(HiveTestUtil.getHiveSyncConfig)
+          assertTrue(hiveClient.tableExists("h0_ro"))
+          assertTrue(hiveClient.tableExists("h0_rt"))
+          assertEquals(0, hiveClient.getAllPartitions("h0_ro").size())
+          assertEquals(0, hiveClient.getAllPartitions("h0_rt").size())
+
+          // check query result
+          checkAnswer(s"select id, name from $tableName where from_unixtime(ts, 'yyyy-MM-dd') = '1970-01-01'")(
+            Seq(1, "a1")
+          )
+
+          // teardown Hive
+          HiveTestUtil.clear()
+          HiveTestUtil.shutdown()
+        }
+      }
+    }
+  }
 
   test("Test Create Functional Index Syntax") {
     if (HoodieSparkUtils.gteqSpark3_2) {

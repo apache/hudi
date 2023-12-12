@@ -102,9 +102,11 @@ trait HoodieCatalystPlansUtils {
    * Spark requires file formats to append the partition path fields to the end of the schema.
    * For tables where the partition path fields are not at the end of the schema, we don't want
    * to return the schema in the wrong order when they do a query like "select *". To fix this
-   * behavior, we apply a projection onto FileScan when the file format is NewHudiParquetFileFormat
+   * behavior, we apply a projection onto FileScan when the file format has HoodieFormatTrait
+   *
+   * Additionally, incremental queries require filters to be added to the plan
    */
-  def applyNewHoodieParquetFileFormatProjection(plan: LogicalPlan): LogicalPlan
+  def maybeApplyForNewFileFormat(plan: LogicalPlan): LogicalPlan
 
   /**
    * Decomposes [[InsertIntoStatement]] into its arguments allowing to accommodate for API
@@ -140,4 +142,9 @@ trait HoodieCatalystPlansUtils {
   def failAnalysisForMIT(a: Attribute, cols: String): Unit = {}
 
   def createMITJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType, condition: Option[Expression], hint: String): LogicalPlan
+
+  /**
+   * true if both plans produce the same attributes in the the same order
+   */
+  def produceSameOutput(a: LogicalPlan, b: LogicalPlan): Boolean
 }

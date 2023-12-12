@@ -127,12 +127,12 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
     runIncrementalQueryAndCompare(startArchivedCommitTs, endArchivedCommitTs, 1, true)
 
     // Test start commit is archived, end commit is not archived
-    shouldThrowIfFallbackIsFalse(tableType,
+    shouldThrowIfFallbackIsFalse(
       () => runIncrementalQueryAndCompare(startArchivedCommitTs, endUnarchivedCommitTs, nArchivedInstants + 1, false))
     runIncrementalQueryAndCompare(startArchivedCommitTs, endUnarchivedCommitTs, nArchivedInstants + 1, true)
 
     // Test both start commit and end commits are not archived but got cleaned
-    shouldThrowIfFallbackIsFalse(tableType,
+    shouldThrowIfFallbackIsFalse(
       () => runIncrementalQueryAndCompare(startUnarchivedCommitTs, endUnarchivedCommitTs, 1, false))
     runIncrementalQueryAndCompare(startUnarchivedCommitTs, endUnarchivedCommitTs, 1, true)
 
@@ -169,22 +169,13 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
     assertEquals(perBatchSize * batchNum, hoodieIncViewDF.count())
   }
 
-  private def shouldThrowIfFallbackIsFalse(tableType: HoodieTableType, fn: () => Unit): Unit = {
+  private def shouldThrowIfFallbackIsFalse(fn: () => Unit): Unit = {
     val msg = "Should fail with Path does not exist"
-    tableType match {
-      case HoodieTableType.COPY_ON_WRITE =>
-        assertThrows(classOf[HoodieIncrementalPathNotFoundException], new Executable {
-          override def execute(): Unit = {
-            fn()
-          }
-        }, msg)
-      case HoodieTableType.MERGE_ON_READ =>
-        val exp = assertThrows(classOf[SparkException], new Executable {
-          override def execute(): Unit = {
-            fn()
-          }
-        }, msg)
-        assertTrue(exp.getMessage.contains("FileNotFoundException"))
-    }
+    val exp = assertThrows(classOf[SparkException], new Executable {
+      override def execute(): Unit = {
+        fn()
+      }
+    }, msg)
+    assertTrue(exp.getMessage.contains("FileNotFoundException"))
   }
 }
