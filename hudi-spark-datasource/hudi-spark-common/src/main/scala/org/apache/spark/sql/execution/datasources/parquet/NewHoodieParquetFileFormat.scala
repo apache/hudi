@@ -56,6 +56,8 @@ class NewHoodieParquetFileFormat(tableState: Broadcast[HoodieTableState],
                                  requiredFilters: Seq[Filter]
                                 ) extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait {
 
+  def getRequiredFilters: Seq[Filter] = requiredFilters
+
   override def isSplitable(sparkSession: SparkSession,
                            options: Map[String, String],
                            path: Path): Boolean = {
