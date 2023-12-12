@@ -287,7 +287,7 @@ object DefaultSource {
         case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
           if (fileFormatUtils.isDefined) {
             new HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
+              sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
           } else {
             new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
           }
