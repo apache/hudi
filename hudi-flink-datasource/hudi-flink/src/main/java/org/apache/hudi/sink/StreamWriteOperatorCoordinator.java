@@ -299,9 +299,7 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public void subtaskFailed(int i, @Nullable Throwable throwable) {
-    // reset the event
-    this.eventBuffer[i] = null;
-    LOG.warn("Reset the event for task [" + i + "]", throwable);
+    // no operation
   }
 
   @Override
@@ -376,7 +374,8 @@ public class StreamWriteOperatorCoordinator
   }
 
   private void addEventToBuffer(WriteMetadataEvent event) {
-    if (this.eventBuffer[event.getTaskID()] != null) {
+    if (this.eventBuffer[event.getTaskID()] != null
+        && this.eventBuffer[event.getTaskID()].getInstantTime().equals(event.getInstantTime())) {
       this.eventBuffer[event.getTaskID()].mergeWith(event);
     } else {
       this.eventBuffer[event.getTaskID()] = event;

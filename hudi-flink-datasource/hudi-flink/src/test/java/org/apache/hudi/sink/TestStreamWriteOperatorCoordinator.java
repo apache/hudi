@@ -148,6 +148,35 @@ public class TestStreamWriteOperatorCoordinator {
   }
 
   @Test
+  public void testEventReset() {
+    CompletableFuture<byte[]> future = new CompletableFuture<>();
+    coordinator.checkpointCoordinator(1, future);
+    OperatorEvent event1 = WriteMetadataEvent.builder()
+        .taskID(0)
+        .instantTime("001")
+        .writeStatus(Collections.emptyList())
+        .build();
+    coordinator.handleEventFromOperator(0, event1);
+    coordinator.subtaskFailed(0, null);
+    assertNotNull(coordinator.getEventBuffer()[0], "Events should not be cleared by subTask failure");
+
+    OperatorEvent event2 = createOperatorEvent(0, "001", "par1", false, 0.1);
+    coordinator.handleEventFromOperator(0, event2);
+    coordinator.subtaskFailed(0, null);
+    assertNotNull(coordinator.getEventBuffer()[0], "Events should not be cleared by subTask failure");
+
+    OperatorEvent event3 = createOperatorEvent(0, "001", "par1", false, 0.1);
+    coordinator.handleEventFromOperator(0, event3);
+    assertThat("Multiple events of same instant should be merged",
+        coordinator.getEventBuffer()[0].getWriteStatuses().size(), is(2));
+
+    OperatorEvent event4 = createOperatorEvent(0, "002", "par1", false, 0.1);
+    coordinator.handleEventFromOperator(0, event4);
+    assertThat("The new event should override the old event",
+        coordinator.getEventBuffer()[0].getWriteStatuses().size(), is(1));
+  }
+
+  @Test
   public void testCheckpointCompleteWithPartialEvents() {
     final CompletableFuture<byte[]> future = new CompletableFuture<>();
     coordinator.checkpointCoordinator(1, future);
