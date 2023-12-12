@@ -405,7 +405,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
    */
   private boolean syncAllPartitions(String tableName) {
     try {
-      if (config.getSplitStrings(META_SYNC_PARTITION_FIELDS).isEmpty()) {
+      if (config.shouldNotSyncPartitionMetadata() || config.getSplitStrings(META_SYNC_PARTITION_FIELDS).isEmpty()) {
         return false;
       }
 
@@ -431,7 +431,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
    */
   private boolean syncPartitions(String tableName, List<String> writtenPartitionsSince, Set<String> droppedPartitions) {
     try {
-      if (writtenPartitionsSince.isEmpty() || config.getSplitStrings(META_SYNC_PARTITION_FIELDS).isEmpty()) {
+      if (config.shouldNotSyncPartitionMetadata() || writtenPartitionsSince.isEmpty() || config.getSplitStrings(META_SYNC_PARTITION_FIELDS).isEmpty()) {
         return false;
       }
 
