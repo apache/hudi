@@ -74,25 +74,25 @@ public class TestCleanPlanner {
 
   @BeforeEach
   void setUp() {
-      mockFsView = mock(SyncableFileSystemView.class);
-      when(mockHoodieTable.getHoodieView()).thenReturn(mockFsView);
-      SyncableFileSystemView sliceView = mock(SyncableFileSystemView.class);
-      when(mockHoodieTable.getSliceView()).thenReturn(sliceView);
-      when(sliceView.getPendingCompactionOperations()).thenReturn(Stream.empty());
-      when(sliceView.getPendingLogCompactionOperations()).thenReturn(Stream.empty());
-      HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
-      when(mockHoodieTable.getMetaClient()).thenReturn(metaClient);
-      HoodieTableConfig tableConfig = new HoodieTableConfig();
-      when(metaClient.getTableConfig()).thenReturn(tableConfig);
-      HoodieTimeline mockCompletedCommitsTimeline = mock(HoodieTimeline.class);
-      when(mockCompletedCommitsTimeline.countInstants()).thenReturn(100);
-      when(mockHoodieTable.getCompletedCommitsTimeline()).thenReturn(mockCompletedCommitsTimeline);
+    mockFsView = mock(SyncableFileSystemView.class);
+    when(mockHoodieTable.getHoodieView()).thenReturn(mockFsView);
+    SyncableFileSystemView sliceView = mock(SyncableFileSystemView.class);
+    when(mockHoodieTable.getSliceView()).thenReturn(sliceView);
+    when(sliceView.getPendingCompactionOperations()).thenReturn(Stream.empty());
+    when(sliceView.getPendingLogCompactionOperations()).thenReturn(Stream.empty());
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    when(mockHoodieTable.getMetaClient()).thenReturn(metaClient);
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    HoodieTimeline mockCompletedCommitsTimeline = mock(HoodieTimeline.class);
+    when(mockCompletedCommitsTimeline.countInstants()).thenReturn(100);
+    when(mockHoodieTable.getCompletedCommitsTimeline()).thenReturn(mockCompletedCommitsTimeline);
   }
-
 
   @ParameterizedTest
   @MethodSource("keepLatestByHoursArgs")
-  void keepLatestByHours(String earliestInstant, List<HoodieFileGroup> allFileGroups, List<Pair<String, Option<byte[]>>> savepoints, List<HoodieFileGroup> replacedFileGroups, Pair<Boolean, List<CleanFileInfo>> expected) {
+  void keepLatestByHours(String earliestInstant, List<HoodieFileGroup> allFileGroups, List<Pair<String, Option<byte[]>>> savepoints,
+                         List<HoodieFileGroup> replacedFileGroups, Pair<Boolean, List<CleanFileInfo>> expected) {
     // setup savepoint mocks
     Set<String> savepointTimestamps = savepoints.stream().map(Pair::getLeft).collect(Collectors.toSet());
     when(mockHoodieTable.getSavepointTimestamps()).thenReturn(savepointTimestamps);
@@ -140,14 +140,16 @@ public class TestCleanPlanner {
         Collections.emptyList(),
         Collections.emptyList(),
         Pair.of(false, Collections.singletonList(expectedCleanFileInfoForFirstFile)));
-    // File group with two slices, one is after the earliestInstant and the other is before the earliestInstant. We should keep both since base files are required for queries evaluating the table at time NOW - 24hrs (24hrs is configured for test)
+    // File group with two slices, one is after the earliestInstant and the other is before the earliestInstant.
+    // We should keep both since base files are required for queries evaluating the table at time NOW - 24hrs (24hrs is configured for test)
     Arguments twoFileSliceCase = Arguments.of(
         earliestInstant,
         Collections.singletonList(buildFileGroup(Arrays.asList("20231104194919610", "20231205194919610"))),
         Collections.emptyList(),
         Collections.emptyList(),
         Pair.of(false, Collections.emptyList()));
-    // File group with three slices, one is after the earliestInstant and the other two are before the earliestInstant. Oldest slice will be removed since it is not required for queries evaluating the table at time NOW - 24hrs
+    // File group with three slices, one is after the earliestInstant and the other two are before the earliestInstant.
+    // Oldest slice will be removed since it is not required for queries evaluating the table at time NOW - 24hrs
     String oldestFileInstant = "20231104194919610";
     HoodieFileGroup fileGroup = buildFileGroup(Arrays.asList(oldestFileInstant, "20231201194919610", "20231205194919610"));
     String oldestFilePath = fileGroup.getAllBaseFiles().filter(baseFile -> baseFile.getCommitTime().equals(oldestFileInstant)).findFirst().get().getPath();
@@ -177,7 +179,8 @@ public class TestCleanPlanner {
         Collections.singletonList(replacedFileGroup),
         Pair.of(false, Collections.singletonList(expectedReplaceCleanFileInfo)));
     // File group is replaced before the earliestInstant but referenced in a savepoint. Should be retained.
-    List<Pair<String, Option<byte[]>>> savepointsForReplacedGroup = Collections.singletonList(Pair.of(oldestFileInstant, getSavepointBytes("partition1", Collections.singletonList(replacedFilePath))));
+    List<Pair<String, Option<byte[]>>> savepointsForReplacedGroup = Collections.singletonList(Pair.of(oldestFileInstant,
+        getSavepointBytes("partition1", Collections.singletonList(replacedFilePath))));
     Arguments replaceFileGroupInSavepointCase = Arguments.of(
         earliestInstant,
         Collections.singletonList(buildFileGroup(Collections.singletonList("20231104194919610"))),
@@ -185,7 +188,8 @@ public class TestCleanPlanner {
         Collections.singletonList(replacedFileGroup),
         Pair.of(false, Collections.emptyList()));
 
-    return Stream.of(singleFileSliceCase, twoFileSlicesBeforeEarliestInstantCase, twoFileSliceCase, threeFileSliceCase, threeFileSliceCaseWithSavepointOnOldest, replaceFileGroupCase, replaceFileGroupInSavepointCase);
+    return Stream.of(singleFileSliceCase, twoFileSlicesBeforeEarliestInstantCase, twoFileSliceCase, threeFileSliceCase,
+        threeFileSliceCaseWithSavepointOnOldest, replaceFileGroupCase, replaceFileGroupInSavepointCase);
   }
 
   private static HoodieFileGroup buildFileGroup(List<String> baseFileCommitTimes) {
