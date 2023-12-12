@@ -267,31 +267,23 @@ object DefaultSource {
             resolveBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
           }
         case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-          if (fileFormatUtils.isDefined) {
+          if (useNewParquetFileFormat) {
             new HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(
               sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
           } else {
             new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
           }
 
-        case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
+        case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, _) =>
           if (useNewParquetFileFormat) {
             new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
+              sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
           } else {
             new MergeOnReadSnapshotRelation(sqlContext, parameters, metaClient, globPaths, userSchema)
           }
 
-        case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, true) =>
-          if (useNewParquetFileFormat) {
-            new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, isBootstrap = true).build()
-          } else {
-            HoodieBootstrapMORRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
-          }
-
         case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-          if (fileFormatUtils.isDefined) {
+          if (useNewParquetFileFormat) {
             new HoodieMergeOnReadIncrementalHadoopFsRelationFactory(
               sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
           } else {
