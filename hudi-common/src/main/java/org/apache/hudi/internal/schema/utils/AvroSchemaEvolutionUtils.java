@@ -77,7 +77,7 @@ public class AvroSchemaEvolutionUtils {
 
     // Remove redundancy from diffFromEvolutionSchema.
     // for example, now we add a struct col in evolvedSchema, the struct col is " user struct<name:string, age:int> "
-    // when we do diff operation: user, user.name, user.age will appeared in the resultSet which is redundancy, user.name and user.age should be excluded.
+    // when we do diff operation: user, user.name, user.age will appear in the resultSet which is redundancy, user.name and user.age should be excluded.
     // deal with add operation
     TreeMap<Integer, String> finalAddAction = new TreeMap<>();
     for (int i = 0; i < diffFromEvolutionColumns.size(); i++) {
