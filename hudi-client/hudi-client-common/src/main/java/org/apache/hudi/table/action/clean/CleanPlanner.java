@@ -351,20 +351,12 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
             continue;
           }
 
-          if (policy == HoodieCleaningPolicy.KEEP_LATEST_COMMITS) {
+          if (policy == HoodieCleaningPolicy.KEEP_LATEST_COMMITS || policy == HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS) {
             // Do not delete the latest commit and also the last commit before the earliest commit we
             // are retaining
             // The window of commit retain == max query run time. So a query could be running which
-            // still
-            // uses this file.
+            // still uses this file.
             if (fileCommitTime.equals(lastVersion) || (fileCommitTime.equals(lastVersionBeforeEarliestCommitToRetain))) {
-              // move on to the next file
-              continue;
-            }
-          } else if (policy == HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS) {
-            // This block corresponds to KEEP_LATEST_BY_HOURS policy
-            // Do not delete the latest commit.
-            if (fileCommitTime.equals(lastVersion)) {
               // move on to the next file
               continue;
             }
@@ -398,6 +390,15 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       }
     }
     return Pair.of(toDeletePartition, deletePaths);
+  }
+
+  /**
+   * Return
+   * @param fileSlices
+   * @return
+   */
+  private Stream<FileSlice> filterFileSlicesForKeepLatestByHours(List<FileSlice> fileSlices, ) {
+
   }
 
   /**
