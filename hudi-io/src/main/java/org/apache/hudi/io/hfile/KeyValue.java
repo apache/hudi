@@ -30,13 +30,11 @@ public class KeyValue {
   public static final int KEY_OFFSET = SIZEOF_INT32 * 2;
   private final byte[] bytes;
   private final int offset;
-  private final int length;
   private final Key key;
 
-  public KeyValue(byte[] bytes, int offset, int length) {
+  public KeyValue(byte[] bytes, int offset) {
     this.bytes = bytes;
     this.offset = offset;
-    this.length = length;
     this.key = new Key(bytes, offset + KEY_OFFSET, readInt(bytes, offset));
   }
 
@@ -93,8 +91,6 @@ public class KeyValue {
   public String toString() {
     return "KeyValue{key="
         + key.toString()
-        + ", length="
-        + length
         + "}";
   }
 }

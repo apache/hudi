@@ -49,10 +49,9 @@ public class HFileDataBlock extends HFileBlock {
   public Optional<KeyValue> seekTo(Key key) {
     int offset = startOffsetInBuff + HFILEBLOCK_HEADER_SIZE;
     int endOffset = offset + onDiskSizeWithoutHeader;
-    // TODO: check last 4 bytes in the data block
     while (offset + HFILEBLOCK_HEADER_SIZE < endOffset) {
       // Full length is not known yet until parsing
-      KeyValue kv = new KeyValue(byteBuff, offset, -1);
+      KeyValue kv = new KeyValue(byteBuff, offset);
       int comp =
           IOUtils.compareTo(kv.getBytes(), kv.getKeyContentOffset(), kv.getKeyContentLength(),
               key.getBytes(), key.getContentOffset(), key.getContentLength());
