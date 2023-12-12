@@ -111,6 +111,16 @@ public class TestCleanPlanner {
         Collections.emptyList(),
         Collections.emptyList(),
         Pair.of(false, Collections.emptyList()));
+    // File group with two slices, both are before the earliestInstant. Only the latest slice should be kept.
+    HoodieFileGroup fileGroupsBeforeInstant = buildFileGroup(Arrays.asList("20231104194919610", "20231105194919610"));
+    CleanFileInfo expectedCleanFileInfoForFirstFile = new CleanFileInfo(fileGroupsBeforeInstant.getAllBaseFiles()
+        .filter(baseFile -> baseFile.getCommitTime().equals("20231104194919610")).findFirst().get().getPath(), false);
+    Arguments twoFileSlicesBeforeEarliestInstantCase = Arguments.of(
+        earliestInstant,
+        Collections.singletonList(fileGroupsBeforeInstant),
+        Collections.emptyList(),
+        Collections.emptyList(),
+        Pair.of(false, Collections.singletonList(expectedCleanFileInfoForFirstFile)));
     // File group with two slices, one is after the earliestInstant and the other is before the earliestInstant. We should keep both since base files are required for queries evaluating the table at time NOW - 24hrs (24hrs is configured for test)
     Arguments twoFileSliceCase = Arguments.of(
         earliestInstant,
@@ -156,7 +166,7 @@ public class TestCleanPlanner {
         Collections.singletonList(replacedFileGroup),
         Pair.of(false, Collections.emptyList()));
 
-    return Stream.of(singleFileSliceCase, twoFileSliceCase, threeFileSliceCase, threeFileSliceCaseWithSavepointOnOldest, replaceFileGroupCase, replaceFileGroupInSavepointCase);
+    return Stream.of(singleFileSliceCase, twoFileSlicesBeforeEarliestInstantCase, twoFileSliceCase, threeFileSliceCase, threeFileSliceCaseWithSavepointOnOldest, replaceFileGroupCase, replaceFileGroupInSavepointCase);
   }
 
   private static HoodieFileGroup buildFileGroup(List<String> baseFileCommitTimes) {

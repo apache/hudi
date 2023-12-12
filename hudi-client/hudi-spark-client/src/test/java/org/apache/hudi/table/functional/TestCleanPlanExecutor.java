@@ -646,7 +646,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
           : UUID.randomUUID().toString();
       Instant instant = Instant.now();
       ZonedDateTime commitDateTime = ZonedDateTime.ofInstant(instant, ZoneId.systemDefault());
-      int minutesForFirstCommit = 150;
+      int minutesForFirstCommit = 180;
       String firstCommitTs = HoodieActiveTimeline.formatDate(Date.from(commitDateTime.minusMinutes(minutesForFirstCommit).toInstant()));
       Map<String, List<String>> part1ToFileId = Collections.unmodifiableMap(new HashMap<String, List<String>>() {
         {
@@ -664,7 +664,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
       assertTrue(testTable.baseFileExists(p1, firstCommitTs, file1P1C0));
 
       // make next commit, with 1 insert & 1 update per partition
-      int minutesForSecondCommit = 90;
+      int minutesForSecondCommit = 150;
       String secondCommitTs = HoodieActiveTimeline.formatDate(Date.from(commitDateTime.minusMinutes(minutesForSecondCommit).toInstant()));
       Map<String, String> partitionAndFileId002 = testTable.addInflightCommit(secondCommitTs).getFileIdsWithBaseFilesInPartitions(p0, p1);
       String file2P0C1 = partitionAndFileId002.get(p0);
@@ -681,7 +681,27 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
       List<HoodieCleanStat> hoodieCleanStatsTwo = runCleaner(config, simulateFailureRetry, simulateMetadataFailure);
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
-      assertEquals(2, hoodieCleanStatsTwo.size(), "Should clean one file each from both the partitions");
+      // make next commit, with 1 insert per partition
+      int minutesForThirdCommit = 90;
+      String thirdCommitTs = HoodieActiveTimeline.formatDate(Date.from(commitDateTime.minusMinutes(minutesForThirdCommit).toInstant()));
+      Map<String, String> partitionAndFileId003 = testTable.addInflightCommit(thirdCommitTs).getFileIdsWithBaseFilesInPartitions(p0, p1);
+      String file3P0C1 = partitionAndFileId003.get(p0);
+      String file3P1C1 = partitionAndFileId003.get(p1);
+      Map<String, List<String>> part3ToFileId = Collections.unmodifiableMap(new HashMap<String, List<String>>() {
+        {
+          put(p0, CollectionUtils.createImmutableList(file1P0C0, file2P0C1, file3P0C1));
+          put(p1, CollectionUtils.createImmutableList(file1P1C0, file2P1C1, file3P1C1));
+        }
+      });
+      commitWithMdt(thirdCommitTs, part3ToFileId, testTable, metadataWriter, true, true);
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      List<HoodieCleanStat> hoodieCleanStatsThree= runCleaner(config, simulateFailureRetry, simulateMetadataFailure);
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      assertEquals(2, hoodieCleanStatsThree.size(), "Should clean one file each from both the partitions");
+      assertTrue(testTable.baseFileExists(p0, thirdCommitTs, file3P0C1));
+      assertTrue(testTable.baseFileExists(p1, thirdCommitTs, file3P1C1));
       assertTrue(testTable.baseFileExists(p0, secondCommitTs, file2P0C1));
       assertTrue(testTable.baseFileExists(p1, secondCommitTs, file2P1C1));
       assertTrue(testTable.baseFileExists(p0, secondCommitTs, file1P0C0));
