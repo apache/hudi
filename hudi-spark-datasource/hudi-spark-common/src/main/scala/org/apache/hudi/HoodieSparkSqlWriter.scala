@@ -975,6 +975,13 @@ class HoodieSparkSqlWriterInternal {
       val metaSyncSuccess = metaSync(spark, HoodieWriterUtils.convertMapToHoodieConfig(parameters),
         tableInstantInfo.basePath, schema)
 
+      if (metaSyncSuccess) {
+        log.info("metaSyncSuccess " + tableInstantInfo.instantTime + " successful!")
+      }
+      else {
+        log.info("metaSyncSuccess " + tableInstantInfo.instantTime + " failed!")
+      }
+
       log.info(s"Is Async Compaction Enabled ? $asyncCompactionEnabled")
       (commitSuccess && metaSyncSuccess, compactionInstant, clusteringInstant)
     } else {
