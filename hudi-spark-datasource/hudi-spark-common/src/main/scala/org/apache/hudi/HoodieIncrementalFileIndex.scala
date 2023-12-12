@@ -17,7 +17,7 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.fs.FileStatus
+import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.util.JFunction
@@ -36,11 +36,16 @@ class HoodieIncrementalFileIndex(override val spark: SparkSession,
                                  override val schemaSpec: Option[StructType],
                                  override val options: Map[String, String],
                                  @transient override val fileStatusCache: FileStatusCache = NoopCache,
+                                 globPaths: Seq[Path],
                                  override val includeLogFiles: Boolean,
                                  override val shouldEmbedFileSlices: Boolean)
   extends HoodieFileIndex(
     spark, metaClient, schemaSpec, options, fileStatusCache, includeLogFiles, shouldEmbedFileSlices
   ) with FileIndex {
+
+  require(globPaths == null || globPaths.isEmpty, "glob paths not supported for incremental queries this way. " +
+    "Use the config: `hoodie.datasource.read.incr.path.glob`.")
+
   val mergeOnReadIncrementalRelation: MergeOnReadIncrementalRelation = MergeOnReadIncrementalRelation(
     spark.sqlContext, options, metaClient, schemaSpec, schemaSpec)
 

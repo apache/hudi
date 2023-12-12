@@ -240,7 +240,6 @@ object DefaultSource {
         USE_NEW_HUDI_PARQUET_FILE_FORMAT.key,
         USE_NEW_HUDI_PARQUET_FILE_FORMAT.defaultValue).toBoolean &&
       !metaClient.isMetadataTable &&
-      (globPaths == null || globPaths.isEmpty) &&
       parameters.getOrElse(REALTIME_MERGE.key(), REALTIME_MERGE.defaultValue())
         .equalsIgnoreCase(REALTIME_PAYLOAD_COMBINE_OPT_VAL)
 
@@ -250,10 +249,10 @@ object DefaultSource {
       if (useNewParquetFileFormat) {
         if (tableType == COPY_ON_WRITE) {
           new HoodieCopyOnWriteCDCHadoopFsRelationFactory(
-            sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
+            sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = false).build()
         } else {
           new HoodieMergeOnReadCDCHadoopFsRelationFactory(
-            sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
+            sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = false).build()
         }
       } else {
         CDCRelation.getCDCRelation(sqlContext, metaClient, parameters)
@@ -280,14 +279,14 @@ object DefaultSource {
              (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
           if (fileFormatUtils.isDefined) {
             new HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
+              sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = false).build()
           } else {
             resolveBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
           }
         case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
           if (fileFormatUtils.isDefined) {
             new HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
+              sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrappedTable).build()
           } else {
             new IncrementalRelation(sqlContext, parameters, userSchema, metaClient)
           }
@@ -295,7 +294,7 @@ object DefaultSource {
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
           if (fileFormatUtils.isDefined) {
             new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
+              sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = false).build()
           } else {
             new MergeOnReadSnapshotRelation(sqlContext, parameters, metaClient, globPaths, userSchema)
           }
@@ -303,7 +302,7 @@ object DefaultSource {
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, true) =>
           if (fileFormatUtils.isDefined) {
             new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, isBootstrap = true).build()
+              sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = true).build()
           } else {
             HoodieBootstrapMORRelation(sqlContext, userSchema, globPaths, metaClient, parameters)
           }
@@ -311,7 +310,7 @@ object DefaultSource {
         case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
           if (fileFormatUtils.isDefined) {
             new HoodieMergeOnReadIncrementalHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
+              sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrappedTable).build()
           } else {
             MergeOnReadIncrementalRelation(sqlContext, parameters, metaClient, userSchema)
           }
@@ -319,7 +318,7 @@ object DefaultSource {
         case (_, _, true) =>
           if (fileFormatUtils.isDefined) {
             new HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters, userSchema, isBootstrap = true).build()
+              sqlContext, metaClient, parameters, userSchema, globPaths, isBootstrap = true).build()
           } else {
             resolveHoodieBootstrapRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
           }

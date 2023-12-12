@@ -19,6 +19,7 @@
 package org.apache.spark.sql
 
 import org.apache.hudi.{HoodieCDCFileIndex, SparkAdapterSupport, SparkHoodieTableFileIndex}
+import org.apache.spark.execution.datasources.NewHoodieInMemoryFileIndex
 import org.apache.spark.sql.catalyst.expressions.{And, Attribute, AttributeSet, Contains, EndsWith, EqualNullSafe, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, NamedExpression, Not, Or, StartsWith}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, Join, LogicalPlan, Project}
 import org.apache.spark.sql.execution.datasources.HadoopFsRelation
@@ -35,6 +36,7 @@ object FileFormatUtilsForFileGroupReader extends SparkAdapterSupport {
     val tableSchema = fs.location match {
       case index: HoodieCDCFileIndex => index.cdcRelation.schema
       case index: SparkHoodieTableFileIndex => index.schema
+      case index: NewHoodieInMemoryFileIndex => index.schema
     }
     val resolvedSchema = logicalRelation.resolve(tableSchema, fs.sparkSession.sessionState.analyzer.resolver)
     val unfilteredPlan = if (!fs.partitionSchema.fields.isEmpty && sparkAdapter.getCatalystPlanUtils.produceSameOutput(scanOperation, logicalRelation)) {

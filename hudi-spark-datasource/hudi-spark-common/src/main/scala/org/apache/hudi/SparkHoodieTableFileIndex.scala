@@ -49,6 +49,11 @@ import scala.collection.JavaConverters._
 import scala.language.implicitConversions
 import scala.util.{Success, Try}
 
+trait HoodieFileIndexTrait {
+  def dataSchema: StructType
+  val schema: StructType
+}
+
 /**
  * Implementation of the [[BaseHoodieTableFileIndex]] for Spark
  *
@@ -84,7 +89,8 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     toJavaOption(endInstantTime)
   )
     with SparkAdapterSupport
-    with Logging {
+    with Logging
+    with HoodieFileIndexTrait {
 
   /**
    * Get the schema of the table.
