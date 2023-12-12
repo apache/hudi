@@ -196,7 +196,7 @@ public class TestCleanPlanner {
     String fileGroup = UUID.randomUUID() + "-0";
     HoodieFileGroupId fileGroupId =  new HoodieFileGroupId("partition1", UUID.randomUUID().toString());
     HoodieTimeline timeline = mock(HoodieTimeline.class);
-    when(timeline.lastInstant()).thenReturn(Option.of(new HoodieInstant(HoodieInstant.State.COMPLETED, "COMMIT", baseFileCommitTimes.get(baseFileCommitTimes.size() -1))));
+    when(timeline.lastInstant()).thenReturn(Option.of(new HoodieInstant(HoodieInstant.State.COMPLETED, "COMMIT", baseFileCommitTimes.get(baseFileCommitTimes.size() - 1))));
     HoodieFileGroup group = new HoodieFileGroup(fileGroupId, timeline);
     for (String baseFileCommitTime : baseFileCommitTimes) {
       when(timeline.containsOrBeforeTimelineStarts(baseFileCommitTime)).thenReturn(true);
