@@ -548,7 +548,7 @@ public class AvroSchemaCompatibility {
   }
 
   /**
-   * Identifies the type of a schema compatibility result.
+   * Identifies the type of schema compatibility result.
    */
   public enum SchemaCompatibilityType {
     COMPATIBLE, INCOMPATIBLE,
@@ -885,7 +885,7 @@ public class AvroSchemaCompatibility {
     private final Schema mWriter;
 
     /**
-     * Human readable description of this result.
+     * Human-readable description of this result.
      */
     private final String mDescription;
 
@@ -942,9 +942,9 @@ public class AvroSchemaCompatibility {
     }
 
     /**
-     * Gets a human readable description of this validation result.
+     * Gets a human-readable description of this validation result.
      *
-     * @return a human readable description of this validation result.
+     * @return a human-readable description of this validation result.
      */
     public String getDescription() {
       return mDescription;

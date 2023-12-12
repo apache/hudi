@@ -59,8 +59,8 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
     HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterPendingExcludingMajorAndMinorCompaction();
     List<String> commits = inflightTimeline.getReverseOrderedInstants().map(HoodieInstant::getTimestamp)
         .collect(Collectors.toList());
-    if (commits.size() > 0 && instantTime != null) {
-      // ignore the latest inflight commit since a new commit would have been started and we need to fix any pending commits from previous launch
+    if (!commits.isEmpty() && instantTime != null) {
+      // ignore the latest inflight commit since a new commit would have been started, and we need to fix any pending commits from previous launch
       commits.remove(instantTime);
     }
     for (String commit : commits) {
@@ -125,8 +125,8 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
 
   /**
    * Curates file name for marker from existing log file path.
-   * log file format     : partitionpath/.fileid_baseInstant.log.writetoken
-   * marker file format  : partitionpath/fileId_writetoken_baseinstant.basefileExtn.marker.APPEND
+   * log file format     : partitionPath/.fileid_baseInstant.log.writeToken
+   * marker file format  : partitionPath/fileId_writeToken_baseInstant.baseFileExtn.marker.APPEND
    *
    * @param logFilePath log file path for which marker file name needs to be generated.
    * @param table       {@link HoodieTable} instance to use
