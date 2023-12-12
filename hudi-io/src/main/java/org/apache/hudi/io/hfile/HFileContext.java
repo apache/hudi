@@ -53,7 +53,7 @@ public class HFileContext {
     public Builder() {
     }
 
-    public Builder compressAlgo(CompressionCodec compressionCodec) {
+    public Builder compressionCodec(CompressionCodec compressionCodec) {
       this.compressionCodec = compressionCodec;
       return this;
     }

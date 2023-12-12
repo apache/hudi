@@ -19,13 +19,15 @@
 
 package org.apache.hudi.io.hfile;
 
+import org.apache.hudi.io.util.IOUtils;
+
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
 import static org.apache.hudi.io.util.IOUtils.readShort;
 
 /**
  * Represents the key part only.
  */
-public class Key {
+public class Key implements Comparable<Key> {
   private static final int CONTENT_LENGTH_SIZE = SIZEOF_INT16;
   private final byte[] bytes;
   private final int offset;
@@ -59,5 +61,12 @@ public class Key {
 
   public int getContentLength() {
     return readShort(bytes, getOffset());
+  }
+
+  @Override
+  public int compareTo(Key o) {
+    return IOUtils.compareTo(
+        getBytes(), getContentOffset(), getContentLength(),
+        o.getBytes(), o.getContentOffset(), o.getContentLength());
   }
 }

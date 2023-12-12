@@ -29,6 +29,10 @@ import static org.apache.hudi.io.hfile.KeyValue.KEY_OFFSET;
  * Represents a {@link HFileBlockType#DATA} block in the "Scanned block" section.
  */
 public class HFileDataBlock extends HFileBlock {
+  // Hudi does not use HFile MVCC timestamp version so the version
+  // is always 0, thus the byte length of the version is always 1.
+  private static final long ZERO_TS_VERSION_BYTE_LENGTH = 1;
+
   protected HFileDataBlock(HFileContext context,
                            byte[] byteBuff,
                            int startOffsetInBuff) {
@@ -57,9 +61,9 @@ public class HFileDataBlock extends HFileBlock {
       } else if (comp > 0) {
         return Optional.empty();
       }
-      // TODO: check what's the extra byte
       long increment =
-          (long) KEY_OFFSET + (long) kv.getKeyLength() + (long) kv.getValueLength() + 1L;
+          (long) KEY_OFFSET + (long) kv.getKeyLength() + (long) kv.getValueLength()
+              + ZERO_TS_VERSION_BYTE_LENGTH;
       offset += increment;
     }
     return Optional.empty();

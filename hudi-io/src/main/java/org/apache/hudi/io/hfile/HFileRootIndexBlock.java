@@ -19,8 +19,7 @@
 
 package org.apache.hudi.io.hfile;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.TreeMap;
 
 import static org.apache.hudi.io.util.IOUtils.copy;
 import static org.apache.hudi.io.util.IOUtils.decodeVarLongSizeOnDisk;
@@ -39,13 +38,14 @@ public class HFileRootIndexBlock extends HFileBlock {
   }
 
   /**
-   * Reads the data index block.
+   * Reads the data index block and returns the block index entry to an in-memory {@link TreeMap}
+   * for searches.
    *
    * @param numEntries The number of entries in the block.
-   * @return A list of {@link BlockIndexEntry}.
+   * @return A {@link TreeMap} of block index entries.
    */
-  public List<BlockIndexEntry> readDataIndex(int numEntries) {
-    List<BlockIndexEntry> entryList = new ArrayList<>();
+  public TreeMap<Key, BlockIndexEntry> readDataIndex(int numEntries) {
+    TreeMap<Key, BlockIndexEntry> blockIndexEntryMap = new TreeMap<>();
     int buffOffset = startOffsetInBuff + HFILEBLOCK_HEADER_SIZE;
     for (int i = 0; i < numEntries; i++) {
       long offset = readLong(byteBuff, buffOffset);
@@ -54,10 +54,10 @@ public class HFileRootIndexBlock extends HFileBlock {
       int keyLength = (int) readVarLong(byteBuff, buffOffset + 12, varLongSizeOnDist);
       byte[] firstKeyBytes = copy(byteBuff, buffOffset + 12 + varLongSizeOnDist, keyLength);
       Key firstKey = new Key(firstKeyBytes, 0, firstKeyBytes.length);
-      entryList.add(new BlockIndexEntry(firstKey, offset, size));
+      blockIndexEntryMap.put(firstKey, new BlockIndexEntry(firstKey, offset, size));
       buffOffset += (12 + varLongSizeOnDist + keyLength);
     }
-    return entryList;
+    return blockIndexEntryMap;
   }
 
   @Override

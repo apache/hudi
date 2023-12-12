@@ -24,9 +24,9 @@ import org.apache.hadoop.fs.FSDataInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
-import java.util.Collections;
-import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 
 /**
  * A reader reading a HFile.
@@ -36,7 +36,7 @@ public class HFileReader {
   private final long fileSize;
   private boolean isMetadataInitialized = false;
   private HFileContext context;
-  private List<BlockIndexEntry> blockIndexEntryList;
+  private TreeMap<Key, BlockIndexEntry> blockIndexEntryMap;
   private HFileBlock metaIndexBlock;
   private HFileBlock fileInfoBlock;
 
@@ -56,13 +56,13 @@ public class HFileReader {
     // Read Trailer (serialized in Proto)
     HFileTrailer trailer = readTrailer(stream, fileSize);
     this.context = HFileContext.builder()
-        .compressAlgo(trailer.getCompressionCodec())
+        .compressionCodec(trailer.getCompressionCodec())
         .build();
     HFileBlockReader blockReader = new HFileBlockReader(
         context, stream, trailer.getLoadOnOpenDataOffset(), fileSize - HFileTrailer.getTrailerSize());
     HFileRootIndexBlock dataIndexBlock =
         (HFileRootIndexBlock) blockReader.nextBlock(HFileBlockType.ROOT_INDEX);
-    this.blockIndexEntryList = dataIndexBlock.readDataIndex(trailer.getDataIndexCount());
+    this.blockIndexEntryMap = dataIndexBlock.readDataIndex(trailer.getDataIndexCount());
     this.metaIndexBlock = blockReader.nextBlock(HFileBlockType.ROOT_INDEX);
     this.fileInfoBlock = blockReader.nextBlock(HFileBlockType.FILE_INFO);
 
@@ -78,15 +78,19 @@ public class HFileReader {
    * @throws IOException upon error.
    */
   public Optional<KeyValue> seekTo(Key key) throws IOException {
-    BlockIndexEntry lookUpKey = new BlockIndexEntry(key, -1, -1);
-    int rootLevelBlockIndex = searchBlockByKey(lookUpKey);
-    if (rootLevelBlockIndex < 0) {
+    // Searches the block that may contain the lookup key based the starting keys of
+    // all blocks (sorted in the TreeMap of block index entries), using binary search.
+    // The result contains the greatest key less than or equal to the given key,
+    // or null if there is no such key.
+    Map.Entry<Key, BlockIndexEntry> floorEntry = blockIndexEntryMap.floorEntry(key);
+    if (floorEntry == null) {
       // Key smaller than the start key of the first block
       return Optional.empty();
     }
-    BlockIndexEntry blockToRead = blockIndexEntryList.get(rootLevelBlockIndex);
+    BlockIndexEntry blockToRead = floorEntry.getValue();
     HFileBlockReader blockReader = new HFileBlockReader(
-        context, stream, blockToRead.getOffset(), blockToRead.getOffset() + (long) blockToRead.getSize());
+        context, stream, blockToRead.getOffset(),
+        blockToRead.getOffset() + (long) blockToRead.getSize());
     HFileDataBlock dataBlock = (HFileDataBlock) blockReader.nextBlock(HFileBlockType.DATA);
     return seekToKeyInBlock(dataBlock, key);
   }
@@ -133,35 +137,6 @@ public class HFileReader {
     HFileTrailer trailer = new HFileTrailer(majorVersion, minorVersion);
     trailer.deserialize(new DataInputStream(new ByteArrayInputStream(byteBuff)));
     return trailer;
-  }
-
-  /**
-   * Searches the block that may contain the lookup key based the starting keys
-   * of all blocks (sorted in the input list), using binary search.
-   *
-   * @param lookUpKey The key to lookup.
-   * @return Block index in the input. An index outside the range of input means the key does not
-   * exist in the HFile.
-   */
-  private int searchBlockByKey(BlockIndexEntry lookUpKey) {
-    int pos = Collections.binarySearch(blockIndexEntryList, lookUpKey);
-    // pos is between -(blockKeys.length + 1) to blockKeys.length - 1, see
-    // binarySearch's javadoc.
-
-    if (pos >= 0) {
-      // This means this is an exact match with an element of blockKeys.
-      assert pos < blockIndexEntryList.size();
-      return pos;
-    }
-
-    // Otherwise, pos = -(i + 1), where blockKeys[i - 1] < key < blockKeys[i],
-    // and i is in [0, blockKeys.length]. We are returning j = i - 1 such that
-    // blockKeys[j] <= key < blockKeys[j + 1]. In particular, j = -1 if
-    // key < blockKeys[0], meaning the file does not contain the given key.
-
-    int i = -pos - 1;
-    assert 0 <= i && i <= blockIndexEntryList.size();
-    return i - 1;
   }
 
   /**

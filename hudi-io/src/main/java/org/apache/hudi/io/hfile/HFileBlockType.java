@@ -139,6 +139,18 @@ public enum HFileBlockType {
   }
 
   /**
+   * Use this instead of {@link #ordinal()}. They work exactly the same, except
+   * DATA and ENCODED_DATA get the same id using this method (overridden for
+   * {@link #ENCODED_DATA}).
+   *
+   * @return block type id from 0 to the number of block types - 1
+   */
+  public int getId() {
+    // Default implementation, can be overridden for individual enum members.
+    return ordinal();
+  }
+
+  /**
    * Reads a magic record of the length {@link DataSize#MAGIC_LENGTH} from the given
    * stream and expects it to match this block type.
    */
