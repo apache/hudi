@@ -20,7 +20,7 @@
 package org.apache.hudi.io.compress;
 
 import org.apache.hudi.io.compress.airlift.HoodieAirliftGzipDecompressor;
-import org.apache.hudi.io.compress.builtin.HoodieBuiltInNoneDecompressor;
+import org.apache.hudi.io.compress.builtin.HoodieNoneDecompressor;
 
 /**
  * Factory for {@link HoodieDecompressor}.
@@ -29,7 +29,7 @@ public class HoodieCompressionFactory {
   public static HoodieDecompressor getDecompressor(CompressionCodec compressionCodec) {
     switch (compressionCodec) {
       case NONE:
-        return new HoodieBuiltInNoneDecompressor();
+        return new HoodieNoneDecompressor();
       case GZIP:
         return new HoodieAirliftGzipDecompressor();
       default:

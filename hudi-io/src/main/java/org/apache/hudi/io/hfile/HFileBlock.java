@@ -122,8 +122,8 @@ public abstract class HFileBlock {
    * @param numBytes number of bytes of data.
    * @return The number of bytes needed to store the checksum values.
    */
-  static int numBytes(long numBytes) {
-    return numChunks(numBytes, BYTES_PER_CHECKSUM) * HFileBlock.CHECKSUM_SIZE;
+  static int numChecksumBytes(long numBytes) {
+    return numChecksumChunks(numBytes, BYTES_PER_CHECKSUM) * HFileBlock.CHECKSUM_SIZE;
   }
 
   /**
@@ -134,7 +134,7 @@ public abstract class HFileBlock {
    * @param bytesPerChecksum number of bytes in a checksum chunk
    * @return The number of checksum chunks
    */
-  static int numChunks(long numBytes, int bytesPerChecksum) {
+  static int numChecksumChunks(long numBytes, int bytesPerChecksum) {
     long numChunks = numBytes / bytesPerChecksum;
     if (numBytes % bytesPerChecksum != 0) {
       numChunks++;
@@ -196,7 +196,7 @@ public abstract class HFileBlock {
    * bytes.
    */
   protected byte[] allocateBuffer() {
-    int checksumSize = numBytes(getOnDiskSizeWithHeader());
+    int checksumSize = numChecksumBytes(getOnDiskSizeWithHeader());
     int headerSize = HFILEBLOCK_HEADER_SIZE;
     int capacity = headerSize + uncompressedSizeWithoutHeader + checksumSize;
     byte[] newByteBuff = new byte[capacity];

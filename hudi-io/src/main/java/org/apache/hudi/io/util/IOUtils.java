@@ -157,6 +157,17 @@ public class IOUtils {
   /**
    * Lexicographically compares two byte arrays.
    *
+   * @param bytes1 left operand.
+   * @param bytes2 right operand.
+   * @return 0 if equal, < 0 if left is less than right, etc.
+   */
+  public static int compareTo(byte[] bytes1, byte[] bytes2) {
+    return compareTo(bytes1, 0, bytes1.length, bytes2, 0, bytes2.length);
+  }
+
+  /**
+   * Lexicographically compares two byte arrays.
+   *
    * @param bytes1  left operand.
    * @param bytes2  right operand.
    * @param offset1 where to start comparing in the left buffer.
@@ -180,5 +191,19 @@ public class IOUtils {
       }
     }
     return length1 - length2;
+  }
+
+  /**
+   * @param bytes  input byte array.
+   * @param offset offset to start reading.
+   * @param length length of bytes to read.
+   * @return {@link String} value based on the byte array.
+   */
+  public static String bytesToString(byte[] bytes, int offset, int length) {
+    StringBuilder sb = new StringBuilder();
+    for (int i = offset; i < offset + length; i++) {
+      sb.append((char) bytes[i]);
+    }
+    return sb.toString();
   }
 }

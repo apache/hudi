@@ -49,7 +49,6 @@ public class HFileDataBlock extends HFileBlock {
     while (offset + HFILEBLOCK_HEADER_SIZE < endOffset) {
       // Full length is not known yet until parsing
       KeyValue kv = new KeyValue(byteBuff, offset, -1);
-      // TODO: Reading long instead of two integers per HBase
       int comp =
           IOUtils.compareTo(kv.getBytes(), kv.getKeyContentOffset(), kv.getKeyContentLength(),
               key.getBytes(), key.getContentOffset(), key.getContentLength());

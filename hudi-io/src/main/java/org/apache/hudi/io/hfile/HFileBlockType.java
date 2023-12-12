@@ -19,6 +19,8 @@
 
 package org.apache.hudi.io.hfile;
 
+import org.apache.hudi.io.util.IOUtils;
+
 import java.io.DataInputStream;
 import java.io.IOException;
 
@@ -126,62 +128,26 @@ public enum HFileBlockType {
   public static HFileBlockType parse(byte[] buf, int offset)
       throws IOException {
     for (HFileBlockType blockType : values()) {
-      if (compareByteArray(MAGIC_LENGTH, blockType.magic, 0, buf, offset)) {
+      if (IOUtils.compareTo(
+          blockType.magic, 0, MAGIC_LENGTH, buf, offset, offset + MAGIC_LENGTH) == 0) {
         return blockType;
       }
     }
 
     throw new IOException("Invalid HFile block magic: "
-        + bytesToString(buf, offset, MAGIC_LENGTH));
-  }
-
-  /**
-   * Use this instead of {@link #ordinal()}. They work exactly the same, except
-   * DATA and ENCODED_DATA get the same id using this method (overridden for
-   * {@link #ENCODED_DATA}).
-   *
-   * @return block type id from 0 to the number of block types - 1
-   */
-  public int getId() {
-    // Default implementation, can be overridden for individual enum members.
-    return ordinal();
+        + IOUtils.bytesToString(buf, offset, MAGIC_LENGTH));
   }
 
   /**
    * Reads a magic record of the length {@link DataSize#MAGIC_LENGTH} from the given
    * stream and expects it to match this block type.
    */
-  public void readAndCheck(DataInputStream in) throws IOException {
+  public void readAndCheckMagic(DataInputStream in) throws IOException {
     byte[] buf = new byte[MAGIC_LENGTH];
     in.readFully(buf);
-    if (!compareByteArray(buf, magic)) {
+    if (IOUtils.compareTo(buf, magic) != 0) {
       throw new IOException("Invalid magic: expected "
           + new String(magic) + ", got " + new String(buf));
     }
-  }
-
-  private static boolean compareByteArray(byte[] bytes1, byte[] bytes2) {
-    if (bytes1.length != bytes2.length) {
-      return false;
-    }
-    return compareByteArray(bytes1.length, bytes1, 0, bytes2, 0);
-  }
-
-  private static boolean compareByteArray(int length, byte[] bytes1, int offset1, byte[] bytes2,
-                                          int offset2) {
-    for (int i = 0; i < length; i++) {
-      if (bytes1[offset1 + i] != bytes2[offset2 + i]) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  private static String bytesToString(byte[] bytes, int offset, int length) {
-    StringBuilder sb = new StringBuilder();
-    for (int i = offset; i < offset + length; i++) {
-      sb.append((char) bytes[i]);
-    }
-    return sb.toString();
   }
 }

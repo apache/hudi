@@ -17,25 +17,24 @@
  * under the License.
  */
 
-package org.apache.hudi.io.hfile;
+package org.apache.hudi.io.compress.builtin;
 
-import java.nio.charset.StandardCharsets;
+import org.apache.hudi.io.compress.CompressionCodec;
+import org.apache.hudi.io.compress.HoodieDecompressor;
+
+import java.io.IOException;
+import java.io.InputStream;
 
 /**
- * Represent a String key only, with no length information encoded.
+ * Implementation of {@link HoodieDecompressor} for {@link CompressionCodec#NONE} compression
+ * codec (no compression) by directly reading the input stream.
  */
-public class StringKey extends Key {
-  public StringKey(String key) {
-    super(key.getBytes(StandardCharsets.UTF_8));
-  }
-
+public class HoodieNoneDecompressor implements HoodieDecompressor {
   @Override
-  public int getContentOffset() {
-    return getOffset();
-  }
-
-  @Override
-  public int getContentLength() {
-    return getLength();
+  public int decompress(InputStream compressedInput,
+                        byte[] targetByteArray,
+                        int offset,
+                        int length) throws IOException {
+    return compressedInput.read(targetByteArray, offset, length);
   }
 }

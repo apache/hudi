@@ -45,19 +45,19 @@ public class TestHFileReader {
     try (FSDataInputStream stream = fs.open(path, bufSize)) {
       HFileReader reader = new HFileReader(stream, fileStatus.getLen());
       reader.initializeMetadata();
-      Optional<KeyValue> kv0 = reader.seekTo(new StringKey("abc-00000000"));
+      Optional<KeyValue> kv0 = reader.seekTo(new UTF8StringKey("abc-00000000"));
       assertFalse(kv0.isPresent());
-      Optional<KeyValue> kv1 = reader.seekTo(new StringKey("key-00000000"));
+      Optional<KeyValue> kv1 = reader.seekTo(new UTF8StringKey("key-00000000"));
       assertEquals("val-00000000", getValue(kv1.get()));
-      Optional<KeyValue> kv2 = reader.seekTo(new StringKey("key-00000050"));
+      Optional<KeyValue> kv2 = reader.seekTo(new UTF8StringKey("key-00000050"));
       assertEquals("val-00000050", getValue(kv2.get()));
-      Optional<KeyValue> kv3 = reader.seekTo(new StringKey("key-00000536"));
+      Optional<KeyValue> kv3 = reader.seekTo(new UTF8StringKey("key-00000536"));
       assertEquals("val-00000536", getValue(kv3.get()));
-      Optional<KeyValue> kv4 = reader.seekTo(new StringKey("key-10000000"));
+      Optional<KeyValue> kv4 = reader.seekTo(new UTF8StringKey("key-10000000"));
       assertFalse(kv4.isPresent());
-      Optional<KeyValue> kv5 = reader.seekTo(new StringKey("key-00000684"));
+      Optional<KeyValue> kv5 = reader.seekTo(new UTF8StringKey("key-00000684"));
       assertEquals("val-00000684", getValue(kv5.get()));
-      Optional<KeyValue> kv6 = reader.seekTo(new StringKey("key-00000690"));
+      Optional<KeyValue> kv6 = reader.seekTo(new UTF8StringKey("key-00000690"));
       assertEquals("val-00000690", getValue(kv6.get()));
     }
   }
@@ -75,11 +75,11 @@ public class TestHFileReader {
     try (FSDataInputStream stream = fs.open(path, bufSize)) {
       HFileReader reader = new HFileReader(stream, fileStatus.getLen());
       reader.initializeMetadata();
-      Optional<KeyValue> kv0 = reader.seekTo(new StringKey("key00"));
+      Optional<KeyValue> kv0 = reader.seekTo(new UTF8StringKey("key00"));
       String v0 = getValue(kv0.get());
-      Optional<KeyValue> kv1 = reader.seekTo(new StringKey("key06"));
+      Optional<KeyValue> kv1 = reader.seekTo(new UTF8StringKey("key06"));
       String v1 = getValue(kv1.get());
-      Optional<KeyValue> kv2 = reader.seekTo(new StringKey("key12"));
+      Optional<KeyValue> kv2 = reader.seekTo(new UTF8StringKey("key12"));
       assertFalse(kv2.isPresent());
     }
   }

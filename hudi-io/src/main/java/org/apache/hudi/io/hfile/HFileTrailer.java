@@ -142,7 +142,7 @@ public class HFileTrailer {
   }
 
   public void deserialize(DataInputStream stream) throws IOException {
-    HFileBlockType.TRAILER.readAndCheck(stream);
+    HFileBlockType.TRAILER.readAndCheckMagic(stream);
     // Read Protobuf
     int start = stream.available();
     HFileProtos.TrailerProto trailerProto =
