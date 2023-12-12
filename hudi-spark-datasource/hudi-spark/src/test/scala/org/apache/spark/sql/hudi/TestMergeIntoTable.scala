@@ -182,6 +182,82 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     }
   }
 
+
+  /**
+   * Test MIT with global index.
+   * HUDI-7131
+   */
+  test("Test ") {
+    spark.sql("set hoodie.index.type = GLOBAL_BLOOM")
+    if (HoodieSparkUtils.gteqSpark3_1) {
+      withRecordType()(withTempDir { tmp =>
+        val targetTable = generateTableName
+        spark.sql(
+          s"""
+             |create table ${targetTable} (
+             |  id int,
+             |  version int,
+             |  name string,
+             |  inc_day string
+             |) using hudi
+             |tblproperties (
+             |  type = 'cow',
+             |  primaryKey = 'id'
+             | )
+             |partitioned by (inc_day)
+             |location '${tmp.getCanonicalPath}/$targetTable'
+             |""".stripMargin)
+        spark.sql(
+          s"""
+             |merge into ${targetTable} as target
+             |using (
+             |select 1 as id, 1 as version, 'str_1' as name, '2023-10-01' as inc_day
+             |) source
+             |on source.id = target.id
+             |when matched then
+             |update set *
+             |when not matched then
+             |insert *
+             |""".stripMargin)
+        spark.sql(
+          s"""
+             |merge into ${targetTable} as target
+             |using (
+             |select 1 as id, 2 as version, 'str_2' as name, '2023-10-01' as inc_day
+             |) source
+             |on source.id = target.id
+             |when matched then
+             |update set *
+             |when not matched then
+             |insert *
+             |""".stripMargin)
+
+        checkAnswer(s"select id, version, name, inc_day from $targetTable")(
+          Seq(1, 2, "str_2", "2023-10-01")
+        )
+        // migrate the record to a new partition.
+
+        spark.sql(
+          s"""
+             |merge into ${targetTable} as target
+             |using (
+             |select 1 as id, 2 as version, 'str_2' as name, '2023-10-02' as inc_day
+             |) source
+             |on source.id = target.id
+             |when matched then
+             |update set *
+             |when not matched then
+             |insert *
+             |""".stripMargin)
+
+        checkAnswer(s"select id, version, name, inc_day from $targetTable")(
+          Seq(1, 2, "str_2", "2023-10-02")
+        )
+      })
+    }
+    spark.sql("unset hoodie.index.type")
+  }
+
   test("Test MergeInto with ignored record") {
     withRecordType()(withTempDir {tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
