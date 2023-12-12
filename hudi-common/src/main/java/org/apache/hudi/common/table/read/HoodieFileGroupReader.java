@@ -139,14 +139,12 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         : new HoodieKeyBasedFileGroupRecordBuffer<>(
         readerContext, requiredSchema, requiredSchema, Option.empty(), Option.empty(),
         recordMerger, props);
-
-
   }
 
   /**
    * Initialize internal iterators on the base and log files.
    */
-  public void initRecordIterators() {
+  public void initRecordIterators() throws IOException {
     ClosableIterator<T> iter = makeBaseFileIterator();
     if (logFiles.isEmpty()) {
       this.baseFileIterator = CachingIterator.wrap(iter, readerContext);
@@ -157,7 +155,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
   }
 
-  private ClosableIterator<T> makeBaseFileIterator() {
+  private ClosableIterator<T> makeBaseFileIterator() throws IOException {
     if (!hoodieBaseFileOption.isPresent()) {
       return new EmptyIterator<>();
     }
@@ -225,7 +223,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     return newSchema;
   }
 
-  private ClosableIterator<T> makeBootstrapBaseFileIterator(HoodieBaseFile baseFile) {
+  private ClosableIterator<T> makeBootstrapBaseFileIterator(HoodieBaseFile baseFile) throws IOException {
     BaseFile dataFile = baseFile.getBootstrapBaseFile().get();
     Pair<List<Schema.Field>,List<Schema.Field>> requiredFields = getDataAndMetaCols(requiredSchema);
     Pair<List<Schema.Field>,List<Schema.Field>> allFields = getDataAndMetaCols(dataSchema);
