@@ -123,17 +123,21 @@ public class TestCleanPlanner {
 
   static Stream<Arguments> keepLatestByHoursArgs() {
     String earliestInstant = "20231204194919610";
+    String earliestInstantPlusTwoDays = "20231205194919610";
+    String earliestInstantMinusThreeDays = "20231201194919610";
+    String earliestInstantMinusOneWeek = "20231127194919610";
+    String earliestInstantMinusOneMonth = "20231104194919610";
     // Only one file slice in the group: should still be kept even with commit earlier than "earliestInstant"
     Arguments singleFileSliceCase = Arguments.of(
         earliestInstant,
-        Collections.singletonList(buildFileGroup(Collections.singletonList("20231104194919610"))),
+        Collections.singletonList(buildFileGroup(Collections.singletonList(earliestInstantMinusOneMonth))),
         Collections.emptyList(),
         Collections.emptyList(),
         Pair.of(false, Collections.emptyList()));
     // File group with two slices, both are before the earliestInstant. Only the latest slice should be kept.
-    HoodieFileGroup fileGroupsBeforeInstant = buildFileGroup(Arrays.asList("20231104194919610", "20231105194919610"));
+    HoodieFileGroup fileGroupsBeforeInstant = buildFileGroup(Arrays.asList(earliestInstantMinusOneMonth, earliestInstantMinusOneWeek));
     CleanFileInfo expectedCleanFileInfoForFirstFile = new CleanFileInfo(fileGroupsBeforeInstant.getAllBaseFiles()
-        .filter(baseFile -> baseFile.getCommitTime().equals("20231104194919610")).findFirst().get().getPath(), false);
+        .filter(baseFile -> baseFile.getCommitTime().equals(earliestInstantMinusOneMonth)).findFirst().get().getPath(), false);
     Arguments twoFileSlicesBeforeEarliestInstantCase = Arguments.of(
         earliestInstant,
         Collections.singletonList(fileGroupsBeforeInstant),
@@ -144,14 +148,14 @@ public class TestCleanPlanner {
     // We should keep both since base files are required for queries evaluating the table at time NOW - 24hrs (24hrs is configured for test)
     Arguments twoFileSliceCase = Arguments.of(
         earliestInstant,
-        Collections.singletonList(buildFileGroup(Arrays.asList("20231104194919610", "20231205194919610"))),
+        Collections.singletonList(buildFileGroup(Arrays.asList(earliestInstantMinusOneMonth, earliestInstantPlusTwoDays))),
         Collections.emptyList(),
         Collections.emptyList(),
         Pair.of(false, Collections.emptyList()));
     // File group with three slices, one is after the earliestInstant and the other two are before the earliestInstant.
     // Oldest slice will be removed since it is not required for queries evaluating the table at time NOW - 24hrs
-    String oldestFileInstant = "20231104194919610";
-    HoodieFileGroup fileGroup = buildFileGroup(Arrays.asList(oldestFileInstant, "20231201194919610", "20231205194919610"));
+    String oldestFileInstant = earliestInstantMinusOneMonth;
+    HoodieFileGroup fileGroup = buildFileGroup(Arrays.asList(oldestFileInstant, earliestInstantMinusThreeDays, earliestInstantPlusTwoDays));
     String oldestFilePath = fileGroup.getAllBaseFiles().filter(baseFile -> baseFile.getCommitTime().equals(oldestFileInstant)).findFirst().get().getPath();
     CleanFileInfo expectedCleanFileInfo = new CleanFileInfo(oldestFilePath, false);
     Arguments threeFileSliceCase = Arguments.of(
@@ -169,12 +173,12 @@ public class TestCleanPlanner {
         Collections.emptyList(),
         Pair.of(false, Collections.emptyList()));
     // File group is replaced before the earliestInstant. Should be removed.
-    HoodieFileGroup replacedFileGroup = buildFileGroup(Collections.singletonList("20231104194919610"));
+    HoodieFileGroup replacedFileGroup = buildFileGroup(Collections.singletonList(earliestInstantMinusOneMonth));
     String replacedFilePath = replacedFileGroup.getAllBaseFiles().findFirst().get().getPath();
     CleanFileInfo expectedReplaceCleanFileInfo = new CleanFileInfo(replacedFilePath, false);
     Arguments replaceFileGroupCase = Arguments.of(
         earliestInstant,
-        Collections.singletonList(buildFileGroup(Collections.singletonList("20231104194919610"))),
+        Collections.singletonList(buildFileGroup(Collections.singletonList(earliestInstantMinusOneMonth))),
         Collections.emptyList(),
         Collections.singletonList(replacedFileGroup),
         Pair.of(false, Collections.singletonList(expectedReplaceCleanFileInfo)));
@@ -183,7 +187,7 @@ public class TestCleanPlanner {
         getSavepointBytes("partition1", Collections.singletonList(replacedFilePath))));
     Arguments replaceFileGroupInSavepointCase = Arguments.of(
         earliestInstant,
-        Collections.singletonList(buildFileGroup(Collections.singletonList("20231104194919610"))),
+        Collections.singletonList(buildFileGroup(Collections.singletonList(earliestInstantMinusOneMonth))),
         savepointsForReplacedGroup,
         Collections.singletonList(replacedFileGroup),
         Pair.of(false, Collections.emptyList()));
