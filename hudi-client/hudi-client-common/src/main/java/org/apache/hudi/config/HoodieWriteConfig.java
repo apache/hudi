@@ -765,6 +765,14 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Avro schema of the partial updates. This is automatically set by the "
           + "Hudi write client and user is not expected to manually change the value.");
 
+  public static final ConfigProperty<Boolean> IGNORE_ERROR_WRITE = ConfigProperty
+          .key("hoodie.write.ignore.error.write")
+          .defaultValue(true)
+          .markAdvanced()
+          .sinceVersion("1.0.0")
+          .withDocumentation("Whether ignore error and not throw exception when write occur errors."
+              + "if set false job would error out, default is true");
+
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
    * operation are already prepped.
@@ -1273,6 +1281,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean shouldAllowAutoEvolutionColumnDrop() {
     return getBooleanOrDefault(SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP);
+  }
+
+  public boolean ignoreErrorWhenWriteFailed() {
+    return getBoolean(IGNORE_ERROR_WRITE);
   }
 
   public String getTableName() {
