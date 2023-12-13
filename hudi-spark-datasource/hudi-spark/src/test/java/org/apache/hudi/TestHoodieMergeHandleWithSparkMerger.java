@@ -241,9 +241,6 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
         FILE_GROUP_READER_ENABLED.key(),
         "true");
     properties.put(
-        DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT().key(),
-        "true");
-    properties.put(
         WRITE_RECORD_POSITIONS.key(),
         "true");
     Dataset<Row> rows = spark()

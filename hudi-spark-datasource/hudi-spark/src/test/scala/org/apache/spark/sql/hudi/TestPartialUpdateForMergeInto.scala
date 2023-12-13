@@ -18,7 +18,6 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.avro.Schema
-import org.apache.hudi.DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT
 import org.apache.hudi.DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.avro.HoodieAvroUtils
@@ -75,7 +74,6 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
       spark.sql(s"set ${ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
       spark.sql(s"set ${FILE_GROUP_READER_ENABLED.key} = true")
-      spark.sql(s"set ${USE_NEW_HUDI_PARQUET_FILE_FORMAT.key} = true")
 
       // Create a table with five data fields
       spark.sql(
@@ -124,7 +122,6 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
       spark.sql(s"set ${ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
       spark.sql(s"set ${FILE_GROUP_READER_ENABLED.key} = true")
-      spark.sql(s"set ${USE_NEW_HUDI_PARQUET_FILE_FORMAT.key} = true")
       // Write inserts to log block
       spark.sql(s"set ${INDEX_TYPE.key} = INMEMORY")
 
@@ -183,7 +180,6 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       spark.sql(s"set ${ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
       spark.sql(s"set ${LOGFILE_DATA_BLOCK_FORMAT.key} = $logDataBlockFormat")
       spark.sql(s"set ${FILE_GROUP_READER_ENABLED.key} = true")
-      spark.sql(s"set ${USE_NEW_HUDI_PARQUET_FILE_FORMAT.key} = true")
 
       // Create a table with five data fields
       spark.sql(
@@ -287,7 +283,6 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       spark.sql(s"set ${ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
       spark.sql(s"set ${LOGFILE_DATA_BLOCK_FORMAT.key} = $logDataBlockFormat")
       spark.sql(s"set ${FILE_GROUP_READER_ENABLED.key} = true")
-      spark.sql(s"set ${USE_NEW_HUDI_PARQUET_FILE_FORMAT.key} = true")
 
       // Create a table with five data fields
       spark.sql(

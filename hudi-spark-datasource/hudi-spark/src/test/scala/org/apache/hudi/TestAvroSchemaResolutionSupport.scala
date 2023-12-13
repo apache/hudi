@@ -149,7 +149,6 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
             // NOTE: type promotion is not supported for the custom file format and the filegroup reader
             //       HUDI-7045 and PR#10007 in progress to fix the issue
             .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
-            .option(DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT.key(), "false")
             .load(tempRecordPath)
           readDf.printSchema()
           readDf.show(false)
@@ -392,7 +391,6 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
       // NOTE: long to int type change is not supported for the custom file format and the filegroup reader
       //       HUDI-7045 and PR#10007 in progress to fix the issue
       .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
-      .option(DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT.key(), "false")
       .load(tempRecordPath)
     readDf.printSchema()
     readDf.show(false)
@@ -489,7 +487,6 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
       // NOTE: type promotion is not supported for the custom file format and the filegroup reader
       //       HUDI-7045 and PR#10007 in progress to fix the issue
       .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
-      .option(DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT.key(), "false")
       .load(tempRecordPath)
     readDf.printSchema()
     readDf.show(false)
@@ -556,7 +553,6 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
       // NOTE: type promotion is not supported for the custom file format and the filegroup reader
       //       HUDI-7045 and PR#10007 in progress to fix the issue
       .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
-      .option(DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT.key(), "false")
       .load(tempRecordPath)
     readDf.printSchema()
     readDf.show(false)
@@ -827,7 +823,6 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
       // NOTE: type promotion is not supported for the custom file format and the filegroup reader
       //       HUDI-7045 and PR#10007 in progress to fix the issue
       .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
-      .option(DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT.key(), "false")
       .load(tempRecordPath)
     readDf.printSchema()
     readDf.show(false)
