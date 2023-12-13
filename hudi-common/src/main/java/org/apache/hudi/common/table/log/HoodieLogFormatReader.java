@@ -29,8 +29,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Hoodie log format reader.
@@ -38,8 +39,6 @@ import java.util.List;
 public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
 
   private final List<HoodieLogFile> logFiles;
-  // Readers for previously scanned log-files that are still open
-  private final List<HoodieLogFileReader> prevReadersInOpenState;
   private HoodieLogFileReader currentReader;
   private final FileSystem fs;
   private final Schema readerSchema;
@@ -49,6 +48,8 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   private final String recordKeyField;
   private final boolean enableInlineReading;
   private int bufferSize;
+  private Map<HoodieLogBlock, HoodieLogFileReader> logBlockToLogFileReaderMap = new HashMap<>();
+  private Map<HoodieLogFileReader, Integer> totalLogBlocks = new HashMap<>();
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieLogFormatReader.class);
 
@@ -61,7 +62,6 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     this.readBlocksLazily = readBlocksLazily;
     this.reverseLogReader = reverseLogReader;
     this.bufferSize = bufferSize;
-    this.prevReadersInOpenState = new ArrayList<>();
     this.recordKeyField = recordKeyField;
     this.enableInlineReading = enableRecordLookups;
     this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
@@ -74,17 +74,9 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
 
   @Override
   /**
-   * Note : In lazy mode, clients must ensure close() should be called only after processing all log-blocks as the
-   * underlying inputstream will be closed. TODO: We can introduce invalidate() API at HoodieLogBlock and this object
-   * can call invalidate on all returned log-blocks so that we check this scenario specifically in HoodieLogBlock
+   * Closes any resources held
    */
   public void close() throws IOException {
-
-    for (HoodieLogFileReader reader : prevReadersInOpenState) {
-      reader.close();
-    }
-
-    prevReadersInOpenState.clear();
 
     if (currentReader != null) {
       currentReader.close();
@@ -104,8 +96,6 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
         // First close previous reader only if readBlockLazily is false
         if (!readBlocksLazily) {
           this.currentReader.close();
-        } else {
-          this.prevReadersInOpenState.add(currentReader);
         }
         this.currentReader = new HoodieLogFileReader(fs, nextLogFile, readerSchema, bufferSize, readBlocksLazily, false,
             enableInlineReading, recordKeyField, internalSchema);
@@ -120,7 +110,11 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
 
   @Override
   public HoodieLogBlock next() {
-    return currentReader.next();
+    HoodieLogBlock logBlock = currentReader.next();
+    logBlockToLogFileReaderMap.put(logBlock, currentReader);
+    totalLogBlocks.putIfAbsent(currentReader, 0);
+    totalLogBlocks.put(currentReader, totalLogBlocks.get(currentReader) + 1);
+    return logBlock;
   }
 
   @Override
@@ -141,4 +135,25 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     return this.currentReader.prev();
   }
 
+  /**
+   * Clean up resources if any for the log block of interest.
+   * @param logBlock
+   */
+  public void cleanUpResources(HoodieLogBlock logBlock) {
+    if (logBlockToLogFileReaderMap.containsKey(logBlock)) {
+      HoodieLogFileReader hoodieLogFileReader = logBlockToLogFileReaderMap.get(logBlock);
+      if (totalLogBlocks.get(hoodieLogFileReader) == 1) {
+        totalLogBlocks.remove(hoodieLogFileReader);
+        try {
+          hoodieLogFileReader.close();
+          hoodieLogFileReader = null;
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+      } else {
+        totalLogBlocks.put(hoodieLogFileReader, totalLogBlocks.get(hoodieLogFileReader) - 1);
+      }
+    }
+    logBlockToLogFileReaderMap.remove(logBlock);
+  }
 }
