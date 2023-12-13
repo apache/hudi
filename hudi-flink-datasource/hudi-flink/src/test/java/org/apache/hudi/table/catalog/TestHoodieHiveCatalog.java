@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieCatalogException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
@@ -267,6 +268,20 @@ public class TestHoodieHiveCatalog {
       hoodieCatalog.createTable(tablePath, table, false);
     } catch (HoodieCatalogException e) {
       assertEquals("Unsupported connector identity hudi-fake, supported identity is hudi", e.getMessage());
+    }
+  }
+
+  @Test
+  public void testCreateHoodieTableWithWrongTableType() throws TableAlreadyExistException, DatabaseNotExistException {
+    HashMap<String,String> properties = new HashMap<>();
+    properties.put(FactoryUtil.CONNECTOR.key(), "hudi-fake");
+    properties.put("table.type","wrong type");
+    CatalogTable table =
+            new CatalogTableImpl(schema,  properties, "hudi table");
+    try {
+      hoodieCatalog.createTable(tablePath, table, false);
+    } catch (HoodieValidationException e) {
+      assertEquals("table.type's value is invalid", e.getMessage());
     }
   }
 
