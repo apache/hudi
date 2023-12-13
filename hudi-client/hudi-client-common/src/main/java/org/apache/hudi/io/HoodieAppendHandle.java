@@ -54,6 +54,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieTable;
@@ -508,6 +509,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       flushToDiskIfRequired(record, false);
       writeToBuffer(record);
     } catch (Throwable t) {
+      if (!config.ignoreErrorWhenWriteFailed()) {
+        throw new HoodieInsertException("Error writing record " + record, t);
+      }
       // Not throwing exception from here, since we don't want to fail the entire job
       // for a single record
       writeStatus.markFailure(record, t, recordMetadata);
