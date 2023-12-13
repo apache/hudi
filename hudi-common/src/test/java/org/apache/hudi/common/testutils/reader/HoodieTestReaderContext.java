@@ -54,9 +54,13 @@ import static org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils.R
 
 public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> {
   private Option<HoodieRecordMerger> customMerger;
+  private Option<String> payloadClass;
 
-  public HoodieTestReaderContext(Option<HoodieRecordMerger> customMerger) {
+  public HoodieTestReaderContext(
+      Option<HoodieRecordMerger> customMerger,
+      Option<String> payloadClass) {
     this.customMerger = customMerger;
+    this.payloadClass = payloadClass;
   }
 
   @Override
@@ -134,12 +138,16 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
       Option<IndexedRecord> recordOpt,
       Map<String, Object> metadataMap
   ) {
+    String appliedPayloadClass =
+        payloadClass.isPresent()
+            ? payloadClass.get()
+            : DefaultHoodieRecordPayload.class.getName();
     if (!recordOpt.isPresent()) {
       return SpillableMapUtils.generateEmptyPayload(
           (String) metadataMap.get(INTERNAL_META_RECORD_KEY),
           (String) metadataMap.get(INTERNAL_META_PARTITION_PATH),
           (Comparable<?>) metadataMap.get(INTERNAL_META_ORDERING_FIELD),
-          DefaultHoodieRecordPayload.class.getName());
+          appliedPayloadClass);
     }
     return new HoodieAvroIndexedRecord(recordOpt.get());
   }
