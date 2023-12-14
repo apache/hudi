@@ -63,6 +63,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -127,17 +128,15 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
   void testFilterInstantsByCondition() throws IOException {
     HoodieActiveTimeline timeline = new HoodieActiveTimeline(metaClient, true);
     Configuration conf = TestConfigurations.getDefaultConf(basePath);
-    IncrementalInputSplits iis = IncrementalInputSplits.builder()
-            .conf(conf)
-            .path(new Path(basePath))
-            .rowType(TestConfigurations.ROW_TYPE)
-            .build();
 
+    // commit1: delta commit
     HoodieInstant commit1 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "1");
-    HoodieInstant commit2 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "2");
-    HoodieInstant commit3 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "3");
     timeline.createCompleteInstant(commit1);
+    // commit2: delta commit
+    HoodieInstant commit2 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "2");
+    // commit3: clustering
     timeline.createCompleteInstant(commit2);
+    HoodieInstant commit3 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "3");
     timeline.createNewInstant(commit3);
     commit3 = timeline.transitionReplaceRequestedToInflight(commit3, Option.empty());
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(
@@ -150,12 +149,97 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     timeline.transitionReplaceInflightToComplete(true,
         HoodieTimeline.getReplaceCommitInflightInstant(commit3.getTimestamp()),
         serializeCommitMetadata(commitMetadata));
+    // commit4: insert overwrite
+    HoodieInstant commit4 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "4");
+    timeline.createNewInstant(commit4);
+    commit4 = timeline.transitionReplaceRequestedToInflight(commit4, Option.empty());
+    commitMetadata = CommitUtils.buildMetadata(
+            new ArrayList<>(),
+            new HashMap<>(),
+            Option.empty(),
+            WriteOperationType.INSERT_OVERWRITE,
+            "",
+            HoodieTimeline.REPLACE_COMMIT_ACTION);
+    timeline.transitionReplaceInflightToComplete(true,
+            HoodieTimeline.getReplaceCommitInflightInstant(commit4.getTimestamp()),
+            serializeCommitMetadata(commitMetadata));
+    // commit5: insert overwrite table
+    HoodieInstant commit5 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "5");
+    timeline.createNewInstant(commit5);
+    commit5 = timeline.transitionReplaceRequestedToInflight(commit5, Option.empty());
+    commitMetadata = CommitUtils.buildMetadata(
+            new ArrayList<>(),
+            new HashMap<>(),
+            Option.empty(),
+            WriteOperationType.INSERT_OVERWRITE_TABLE,
+            "",
+            HoodieTimeline.REPLACE_COMMIT_ACTION);
+    timeline.transitionReplaceInflightToComplete(true,
+            HoodieTimeline.getReplaceCommitInflightInstant(commit5.getTimestamp()),
+            serializeCommitMetadata(commitMetadata));
+    // commit6:  compaction
+    HoodieInstant commit6 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "6");
+    timeline.createNewInstant(commit6);
+    commit6 = timeline.transitionCompactionRequestedToInflight(commit6);
+    commit6 = timeline.transitionCompactionInflightToComplete(false, commit6, Option.empty());
+    timeline.createCompleteInstant(commit6);
+    conf.set(FlinkOptions.READ_END_COMMIT, "6");
     timeline = timeline.reload();
 
-    conf.set(FlinkOptions.READ_END_COMMIT, "3");
+    // will not filter commits by default
+    IncrementalInputSplits iis = IncrementalInputSplits.builder()
+            .conf(conf)
+            .path(new Path(basePath))
+            .rowType(TestConfigurations.ROW_TYPE)
+            .build();
     HoodieTimeline resTimeline = iis.filterInstantsAsPerUserConfigs(timeline);
-    // will not filter cluster commit by default
-    assertEquals(3, resTimeline.getInstants().size());
+    assertEquals(6, resTimeline.getInstants().size());
+
+    // filter cluster commits
+    IncrementalInputSplits iisSkipClustering = IncrementalInputSplits.builder()
+            .conf(conf)
+            .path(new Path(basePath))
+            .rowType(TestConfigurations.ROW_TYPE)
+            .skipClustering(true)
+            .build();
+    resTimeline = iisSkipClustering.filterInstantsAsPerUserConfigs(timeline);
+    assertEquals(5, resTimeline.getInstants().size());
+    assertFalse(resTimeline.containsInstant(commit3));
+
+    // cow table skip-compact does not take effect (because if it take effect will affect normal commits)
+    IncrementalInputSplits iisSkipCompactionCOW = IncrementalInputSplits.builder()
+            .conf(conf)
+            .path(new Path(basePath))
+            .rowType(TestConfigurations.ROW_TYPE)
+            .skipCompaction(true)
+            .build();
+    resTimeline = iisSkipCompactionCOW.filterInstantsAsPerUserConfigs(timeline);
+    assertEquals(6, resTimeline.getInstants().size());
+    assertTrue(resTimeline.containsInstant(commit6));
+
+    // filter compaction commits for mor table
+    conf.set(FlinkOptions.TABLE_TYPE, "MERGE_ON_READ");
+    IncrementalInputSplits iisSkipCompactionMOR = IncrementalInputSplits.builder()
+            .conf(conf)
+            .path(new Path(basePath))
+            .rowType(TestConfigurations.ROW_TYPE)
+            .skipCompaction(true)
+            .build();
+    resTimeline = iisSkipCompactionCOW.filterInstantsAsPerUserConfigs(timeline);
+    assertFalse(resTimeline.containsInstant(commit6));
+
+    // filter insert overwriter commits
+    IncrementalInputSplits iisSkipInsertOverWrite = IncrementalInputSplits.builder()
+            .conf(conf)
+            .path(new Path(basePath))
+            .rowType(TestConfigurations.ROW_TYPE)
+            .skipInsertOverwrite(true)
+            .build();
+    resTimeline = iisSkipInsertOverWrite.filterInstantsAsPerUserConfigs(timeline);
+    assertEquals(4, resTimeline.getInstants().size());
+    assertFalse(resTimeline.containsInstant(commit4));
+    assertFalse(resTimeline.containsInstant(commit5));
+
   }
 
   @Test

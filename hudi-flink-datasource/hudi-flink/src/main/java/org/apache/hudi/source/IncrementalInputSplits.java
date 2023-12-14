@@ -99,6 +99,8 @@ public class IncrementalInputSplits implements Serializable {
   private final boolean skipCompaction;
   // skip clustering
   private final boolean skipClustering;
+  // skip insert overwrite
+  private final boolean skipInsertOverwrite;
 
   private IncrementalInputSplits(
       Configuration conf,
@@ -107,7 +109,8 @@ public class IncrementalInputSplits implements Serializable {
       long maxCompactionMemoryInBytes,
       @Nullable PartitionPruners.PartitionPruner partitionPruner,
       boolean skipCompaction,
-      boolean skipClustering) {
+      boolean skipClustering,
+      boolean skipInsertOverwrite) {
     this.conf = conf;
     this.path = path;
     this.rowType = rowType;
@@ -115,6 +118,7 @@ public class IncrementalInputSplits implements Serializable {
     this.partitionPruner = partitionPruner;
     this.skipCompaction = skipCompaction;
     this.skipClustering = skipClustering;
+    this.skipInsertOverwrite = skipInsertOverwrite;
   }
 
   /**
@@ -643,6 +647,9 @@ public class IncrementalInputSplits implements Serializable {
     if (this.skipClustering) {
       timeline = timeline.filter(instant -> !ClusteringUtil.isClusteringInstant(instant, oriTimeline));
     }
+    if (this.skipInsertOverwrite) {
+      timeline = timeline.filter(instant -> !ClusteringUtil.isInsertOverwriteInstant(instant, oriTimeline));
+    }
     return timeline;
   }
 
@@ -718,6 +725,8 @@ public class IncrementalInputSplits implements Serializable {
     private boolean skipCompaction = false;
     // skip clustering
     private boolean skipClustering = false;
+    // skip insert overwrite
+    private boolean skipInsertOverwrite = false;
 
     public Builder() {
     }
@@ -757,10 +766,15 @@ public class IncrementalInputSplits implements Serializable {
       return this;
     }
 
+    public Builder skipInsertOverwrite(boolean skipInsertOverwrite) {
+      this.skipInsertOverwrite = skipInsertOverwrite;
+      return this;
+    }
+
     public IncrementalInputSplits build() {
       return new IncrementalInputSplits(
           Objects.requireNonNull(this.conf), Objects.requireNonNull(this.path), Objects.requireNonNull(this.rowType),
-          this.maxCompactionMemoryInBytes, this.partitionPruner, this.skipCompaction, this.skipClustering);
+          this.maxCompactionMemoryInBytes, this.partitionPruner, this.skipCompaction, this.skipClustering, this.skipInsertOverwrite);
     }
   }
 }
