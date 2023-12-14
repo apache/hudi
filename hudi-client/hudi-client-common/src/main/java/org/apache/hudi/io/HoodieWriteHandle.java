@@ -104,7 +104,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     this.recordMerger = config.getRecordMerger();
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         hoodieTable.shouldTrackSuccessRecords(), config.getWriteStatusFailureFraction());
-    this.ignoreWriteFailed = config.ignoreErrorWhenWriteFailed()
+    this.ignoreWriteFailed = config.ignoreErrorWhenWriteFailed();
   }
 
   /**
