@@ -142,6 +142,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private void addShutDownHook() {
     shutdownThread = new Thread(() -> {
       try {
+        LOG.warn("running HoodieLogFileReader shudown");
         close();
       } catch (Exception e) {
         LOG.warn("unable to close input stream for log file " + logFile, e);
