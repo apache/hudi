@@ -41,6 +41,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
@@ -333,6 +334,9 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       newRecord.deflate();
       return true;
     } catch (Exception e) {
+      if (!ignoreWriteFailed) {
+        throw new HoodieInsertException("Error writing record " + newRecord, e);
+      }
       LOG.error("Error writing record  " + newRecord, e);
       writeStatus.markFailure(newRecord, e, recordMetadata);
     }

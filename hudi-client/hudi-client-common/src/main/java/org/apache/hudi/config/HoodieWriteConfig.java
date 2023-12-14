@@ -766,7 +766,7 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "Hudi write client and user is not expected to manually change the value.");
 
   public static final ConfigProperty<Boolean> IGNORE_ERROR_WRITE = ConfigProperty
-          .key("hoodie.write.ignore.write.failed")
+          .key("hoodie.write.ignore.failed")
           .defaultValue(true)
           .markAdvanced()
           .sinceVersion("1.0.0")
