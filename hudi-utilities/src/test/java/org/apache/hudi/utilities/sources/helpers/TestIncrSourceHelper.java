@@ -122,7 +122,7 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
         "s3.object.key", "s3.object.size");
     Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> result = IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
         emptyDataset, 50L, queryInfo, new CloudObjectIncrCheckpoint(null, null));
-    assertEquals(INIT_INSTANT_TS, result.getKey().toString());
+    assertEquals("commit2", result.getKey().toString());
     assertTrue(!result.getRight().isPresent());
   }
 
