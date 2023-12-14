@@ -178,8 +178,8 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
         IncrSourceHelper.filterAndGenerateCheckpointBasedOnSourceLimit(
             filteredSourceData, sourceLimit, queryInfo, cloudObjectIncrCheckpoint);
     if (!checkPointAndDataset.getRight().isPresent()) {
-      LOG.info("Empty source, returning endpoint:" + queryInfo.getEndInstant());
-      return Pair.of(Option.empty(), queryInfo.getEndInstant());
+      LOG.info("Empty source, returning endpoint:" + checkPointAndDataset.getLeft().toString());
+      return Pair.of(Option.empty(), checkPointAndDataset.getLeft().toString());
     }
     LOG.info("Adjusted end checkpoint :" + checkPointAndDataset.getLeft());
 
