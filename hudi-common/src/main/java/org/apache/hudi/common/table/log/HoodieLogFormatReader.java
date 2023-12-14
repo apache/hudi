@@ -48,7 +48,9 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   private final String recordKeyField;
   private final boolean enableInlineReading;
   private int bufferSize;
+  // tracks LogFileReader for every log block
   private Map<HoodieLogBlock, HoodieLogFileReader> logBlockToLogFileReaderMap = new HashMap<>();
+  // tracks the number of log blocks per log file reader
   private Map<HoodieLogFileReader, Integer> totalLogBlocks = new HashMap<>();
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieLogFormatReader.class);
@@ -80,7 +82,10 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
 
     if (currentReader != null) {
       currentReader.close();
+      currentReader = null;
     }
+    logBlockToLogFileReaderMap.clear();
+    totalLogBlocks.clear();
   }
 
   @Override
