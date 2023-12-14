@@ -165,7 +165,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       // record successful.
       record.deflate();
     } catch (Throwable t) {
-      if (!config.ignoreErrorWhenWriteFailed()) {
+      if (!ignoreWriteFailed) {
         throw new HoodieInsertException("Error writing record " + record, t);
       }
       // Not throwing exception from here, since we don't want to fail the entire job
