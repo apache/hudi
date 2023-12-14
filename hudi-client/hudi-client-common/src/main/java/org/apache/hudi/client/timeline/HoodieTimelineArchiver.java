@@ -346,6 +346,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       // there may be hole in the timeline, which can lead to errors when reading data.
       // Therefore, the concurrency of deleting completed instants is temporarily disabled,
       // and instants are deleted in ascending order to prevent the occurrence of such holes.
+      // See HUDI-7207 and #10325.
       completedInstants.stream()
           .forEach(instant -> activeTimeline.deleteInstantFileIfExists(instant));
     }
