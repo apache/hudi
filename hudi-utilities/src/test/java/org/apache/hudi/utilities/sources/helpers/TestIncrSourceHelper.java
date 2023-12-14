@@ -261,6 +261,7 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
     filePathSizeAndCommitTime.add(Triple.of("path/to/file8.json", 100L, "commit3"));
     filePathSizeAndCommitTime.add(Triple.of("path/to/file6.json", 250L, "commit3"));
     filePathSizeAndCommitTime.add(Triple.of("path/to/file7.json", 50L, "commit3"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file8.json", 50L, "commit3"));
     Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);
 
     QueryInfo queryInfo = new QueryInfo(

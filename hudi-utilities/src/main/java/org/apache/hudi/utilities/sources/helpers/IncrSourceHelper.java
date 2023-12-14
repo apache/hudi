@@ -183,7 +183,7 @@ public class IncrSourceHelper {
                                                                                                                     long sourceLimit, QueryInfo queryInfo,
                                                                                                                     CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint) {
     if (sourceData.isEmpty()) {
-      return Pair.of(cloudObjectIncrCheckpoint, Option.empty());
+      return Pair.of(new CloudObjectIncrCheckpoint(queryInfo.getEndInstant(), null), Option.empty());
     }
     // Let's persist the dataset to avoid triggering the dag repeatedly
     sourceData.persist(StorageLevel.MEMORY_AND_DISK());
