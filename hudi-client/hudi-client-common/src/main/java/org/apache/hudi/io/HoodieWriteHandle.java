@@ -78,6 +78,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   protected final TaskContextSupplier taskContextSupplier;
   // For full schema evolution
   protected final boolean schemaOnReadEnabled;
+  protected boolean ignoreWriteFailed = true;
 
   private boolean closed = false;
 
@@ -103,6 +104,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     this.recordMerger = config.getRecordMerger();
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         hoodieTable.shouldTrackSuccessRecords(), config.getWriteStatusFailureFraction());
+    this.ignoreWriteFailed = config.ignoreErrorWhenWriteFailed()
   }
 
   /**
@@ -280,4 +282,5 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
       return Option.empty();
     }
   }
+
 }
