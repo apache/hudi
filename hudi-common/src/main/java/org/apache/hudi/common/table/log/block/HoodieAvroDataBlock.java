@@ -58,6 +58,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.function.Supplier;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 
@@ -72,7 +73,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
 
   private final ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();
 
-  public HoodieAvroDataBlock(FSDataInputStream inputStream,
+  public HoodieAvroDataBlock(Supplier<FSDataInputStream> inputStreamSupplier,
                              Option<byte[]> content,
                              boolean readBlockLazily,
                              HoodieLogBlockContentLocation logBlockContentLocation,
@@ -80,7 +81,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
                              Map<HeaderMetadataType, String> header,
                              Map<HeaderMetadataType, String> footer,
                              String keyField) {
-    super(content, inputStream, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, keyField, false);
+    super(content, inputStreamSupplier, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, keyField, false);
   }
 
   public HoodieAvroDataBlock(@Nonnull List<HoodieRecord> records,

@@ -40,6 +40,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Supplier;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -66,7 +67,7 @@ public abstract class HoodieLogBlock {
   // TODO : change this to just InputStream so this works for any FileSystem
   // create handlers to return specific type of inputstream based on FS
   // input stream corresponding to the log file where this logBlock belongs
-  private final FSDataInputStream inputStream;
+  private final Supplier<FSDataInputStream> inputStreamSupplier;
   // Toggle flag, whether to read blocks lazily (I/O intensive) or not (Memory intensive)
   protected boolean readBlockLazily;
 
@@ -75,13 +76,13 @@ public abstract class HoodieLogBlock {
       @Nonnull Map<HeaderMetadataType, String> logBlockFooter,
       @Nonnull Option<HoodieLogBlockContentLocation> blockContentLocation,
       @Nonnull Option<byte[]> content,
-      @Nullable FSDataInputStream inputStream,
+      @Nullable Supplier<FSDataInputStream> inputStreamSupplier,
       boolean readBlockLazily) {
     this.logBlockHeader = logBlockHeader;
     this.logBlockFooter = logBlockFooter;
     this.blockContentLocation = blockContentLocation;
     this.content = content;
-    this.inputStream = inputStream;
+    this.inputStreamSupplier = inputStreamSupplier;
     this.readBlockLazily = readBlockLazily;
   }
 
@@ -290,9 +291,9 @@ public abstract class HoodieLogBlock {
    */
   protected void inflate() throws HoodieIOException {
     checkState(!content.isPresent(), "Block has already been inflated");
-    checkState(inputStream != null, "Block should have input-stream provided");
+    checkState(inputStreamSupplier != null, "Block should have input-stream provided");
 
-    try {
+    try (FSDataInputStream inputStream = inputStreamSupplier.get()) {
       content = Option.of(new byte[(int) this.getBlockContentLocation().get().getBlockSize()]);
       inputStream.seek(this.getBlockContentLocation().get().getContentPositionInLogFile());
       inputStream.readFully(content.get(), 0, content.get().length);
