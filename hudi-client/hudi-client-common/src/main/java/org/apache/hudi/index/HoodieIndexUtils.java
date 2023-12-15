@@ -47,10 +47,13 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.io.HoodieMergedReadHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
@@ -255,7 +258,8 @@ public class HoodieIndexUtils {
       HoodieRecord<R> existing,
       Schema writeSchema,
       HoodieWriteConfig config,
-      HoodieRecordMerger recordMerger) throws IOException {
+      HoodieRecordMerger recordMerger,
+      BaseKeyGenerator keyGenerator) throws IOException {
     Schema existingSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
     Schema writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField());
     if (incoming.getData().getClass().getName().equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload")) {
@@ -265,8 +269,9 @@ public class HoodieIndexUtils {
         return Option.empty();
       }
       HoodieRecord<R> result = mergeResult.get().getLeft();
+      String partitionPath = keyGenerator.getPartitionPath((GenericRecord) result.getData());
       HoodieRecord<R> withMeta = result
-          .prependMetaFields(writeSchema, writeSchemaWithMetaFields, new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(incoming.getPartitionPath()), config.getProps());
+          .prependMetaFields(writeSchema, writeSchemaWithMetaFields, new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(partitionPath), config.getProps());
       return Option.of(withMeta
           .wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, config.getProps(), Option.empty(),
               config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema)));
@@ -314,6 +319,13 @@ public class HoodieIndexUtils {
     HoodieData<HoodieRecord<R>> existingRecords = getExistingRecords(globalLocations, config, hoodieTable);
 
     final HoodieRecordMerger recordMerger = config.getRecordMerger();
+    final BaseKeyGenerator keyGenerator;
+    try {
+      //Assume basekeygen
+      keyGenerator = (BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(config.getProps());
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
     HoodieData<HoodieRecord<R>> taggedUpdatingRecords = untaggedUpdatingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r))
         .leftOuterJoin(existingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r)))
         .values().flatMap(entry -> {
@@ -330,7 +342,7 @@ public class HoodieIndexUtils {
             return Collections.singletonList(tagRecord(incoming.newInstance(existing.getKey()), existing.getCurrentLocation())).iterator();
           }
 
-          Option<HoodieRecord<R>> mergedOpt = mergeIncomingWithExistingRecord(incoming, existing, writeSchema, config, recordMerger);
+          Option<HoodieRecord<R>> mergedOpt = mergeIncomingWithExistingRecord(incoming, existing, writeSchema, config, recordMerger, keyGenerator);
           if (!mergedOpt.isPresent()) {
             // merge resulted in delete: force tag the incoming to the old partition
             return Collections.singletonList(tagRecord(incoming.newInstance(existing.getKey()), existing.getCurrentLocation())).iterator();
