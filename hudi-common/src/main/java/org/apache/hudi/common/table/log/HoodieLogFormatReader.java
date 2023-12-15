@@ -29,9 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Hoodie log format reader.
@@ -44,14 +42,9 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   private final Schema readerSchema;
   private InternalSchema internalSchema = InternalSchema.getEmptyInternalSchema();
   private final boolean readBlocksLazily;
-  private final boolean reverseLogReader;
   private final String recordKeyField;
   private final boolean enableInlineReading;
   private int bufferSize;
-  // tracks LogFileReader for every log block
-  private Map<HoodieLogBlock, HoodieLogFileReader> logBlockToLogFileReaderMap = new HashMap<>();
-  // tracks the number of log blocks per log file reader
-  private Map<HoodieLogFileReader, Integer> totalLogBlocks = new HashMap<>();
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieLogFormatReader.class);
 
@@ -62,7 +55,6 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     this.fs = fs;
     this.readerSchema = readerSchema;
     this.readBlocksLazily = readBlocksLazily;
-    this.reverseLogReader = reverseLogReader;
     this.bufferSize = bufferSize;
     this.recordKeyField = recordKeyField;
     this.enableInlineReading = enableRecordLookups;
@@ -79,13 +71,10 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
    * Closes any resources held
    */
   public void close() throws IOException {
-
     if (currentReader != null) {
       currentReader.close();
       currentReader = null;
     }
-    logBlockToLogFileReaderMap.clear();
-    totalLogBlocks.clear();
   }
 
   @Override
@@ -115,11 +104,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
 
   @Override
   public HoodieLogBlock next() {
-    HoodieLogBlock logBlock = currentReader.next();
-    logBlockToLogFileReaderMap.put(logBlock, currentReader);
-    totalLogBlocks.putIfAbsent(currentReader, 0);
-    totalLogBlocks.put(currentReader, totalLogBlocks.get(currentReader) + 1);
-    return logBlock;
+    return currentReader.next();
   }
 
   @Override
@@ -138,27 +123,5 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   @Override
   public HoodieLogBlock prev() throws IOException {
     return this.currentReader.prev();
-  }
-
-  /**
-   * Clean up resources if any for the log block of interest.
-   * @param logBlock
-   */
-  public void cleanUpResources(HoodieLogBlock logBlock) {
-    if (logBlockToLogFileReaderMap.containsKey(logBlock)) {
-      HoodieLogFileReader hoodieLogFileReader = logBlockToLogFileReaderMap.get(logBlock);
-      if (totalLogBlocks.get(hoodieLogFileReader) == 1) {
-        totalLogBlocks.remove(hoodieLogFileReader);
-        try {
-          hoodieLogFileReader.close();
-          hoodieLogFileReader = null;
-        } catch (IOException e) {
-          e.printStackTrace();
-        }
-      } else {
-        totalLogBlocks.put(hoodieLogFileReader, totalLogBlocks.get(hoodieLogFileReader) - 1);
-      }
-    }
-    logBlockToLogFileReaderMap.remove(logBlock);
   }
 }

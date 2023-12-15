@@ -388,13 +388,13 @@ public abstract class AbstractHoodieLogRecordReader {
             currentInstantLogBlocks = new ArrayDeque<>();
             dedupedLogBlocksInfo.getValue().forEach(block -> currentInstantLogBlocks.push(block));
             LOG.info("Merging the final data blocks");
-            processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keySpecOpt, logFormatReaderWrapper);
+            processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keySpecOpt);
           }
         }
         if (!duplicateBlocksDetected) {
           // if there are no dups, we can take currentInstantLogBlocks as is.
           LOG.info("Merging the final data blocks");
-          processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keySpecOpt, logFormatReaderWrapper);
+          processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keySpecOpt);
         }
       }
 
@@ -721,7 +721,7 @@ public abstract class AbstractHoodieLogRecordReader {
       // merge the last read block when all the blocks are done reading
       if (!currentInstantLogBlocks.isEmpty() && !skipProcessingBlocks) {
         LOG.info("Merging the final data blocks");
-        processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keySpecOption, logFormatReaderWrapper);
+        processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keySpecOption);
       }
       // Done
       progress = 1.0f;
@@ -801,7 +801,7 @@ public abstract class AbstractHoodieLogRecordReader {
    * Process the set of log blocks belonging to the last instant which is read fully.
    */
   private void processQueuedBlocksForInstant(Deque<HoodieLogBlock> logBlocks, int numLogFilesSeen,
-                                             Option<KeySpec> keySpecOpt, HoodieLogFormatReader logFormatReaderWrapper) throws Exception {
+                                             Option<KeySpec> keySpecOpt) throws Exception {
     while (!logBlocks.isEmpty()) {
       LOG.info("Number of remaining logblocks to merge " + logBlocks.size());
       // poll the element at the bottom of the stack since that's the order it was inserted
@@ -821,7 +821,6 @@ public abstract class AbstractHoodieLogRecordReader {
         default:
           break;
       }
-      logFormatReaderWrapper.cleanUpResources(lastBlock);
     }
     // At this step the lastBlocks are consumed. We track approximate progress by number of log-files seen
     progress = (numLogFilesSeen - 1) / logFilePaths.size();

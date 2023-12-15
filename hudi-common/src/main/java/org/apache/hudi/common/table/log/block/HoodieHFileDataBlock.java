@@ -57,6 +57,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.TreeMap;
+import java.util.function.Supplier;
 
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
@@ -75,7 +76,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   // interpreted as the actual file path for the HFile data blocks
   private final Path pathForReader;
 
-  public HoodieHFileDataBlock(FSDataInputStream inputStream,
+  public HoodieHFileDataBlock(Supplier<FSDataInputStream> inputStreamSupplier,
                               Option<byte[]> content,
                               boolean readBlockLazily,
                               HoodieLogBlockContentLocation logBlockContentLocation,
@@ -84,7 +85,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
                               Map<HeaderMetadataType, String> footer,
                               boolean enablePointLookups,
                               Path pathForReader) {
-    super(content, inputStream, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, HoodieAvroHFileReader.KEY_FIELD_NAME, enablePointLookups);
+    super(content, inputStreamSupplier, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, HoodieAvroHFileReader.KEY_FIELD_NAME, enablePointLookups);
     this.compressionAlgorithm = Option.empty();
     this.pathForReader = pathForReader;
   }
