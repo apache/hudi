@@ -207,7 +207,10 @@ public class IncrSourceHelper {
         // queryInfo.getEndInstant() represents source table's last completed instant
         // If current checkpoint is c1#abc and queryInfo.getEndInstant() is c1, return c1#abc.
         // If current checkpoint is c1#abc and queryInfo.getEndInstant() is c2, return c2.
-        CloudObjectIncrCheckpoint updatedCheckpoint = queryInfo.getEndInstant() == cloudObjectIncrCheckpoint.getCommit() ? cloudObjectIncrCheckpoint : new CloudObjectIncrCheckpoint(queryInfo.getEndInstant(), null);
+        CloudObjectIncrCheckpoint updatedCheckpoint =
+            queryInfo.getEndInstant() == cloudObjectIncrCheckpoint.getCommit()
+                ? cloudObjectIncrCheckpoint
+                : new CloudObjectIncrCheckpoint(queryInfo.getEndInstant(), null);
         return Pair.of(updatedCheckpoint, Option.empty());
       }
     }
