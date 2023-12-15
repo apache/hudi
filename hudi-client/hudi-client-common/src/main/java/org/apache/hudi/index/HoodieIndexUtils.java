@@ -236,9 +236,6 @@ public class HoodieIndexUtils {
    */
   private static <R> HoodieData<HoodieRecord<R>> getExistingRecords(
       HoodieData<HoodieRecordGlobalLocation> partitionLocations, HoodieWriteConfig config, HoodieTable hoodieTable) {
-    if (config.getPayloadClass().equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload")) {
-      config.setValue(HoodiePayloadConfig.PAYLOAD_CLASS_NAME.key(), HoodiePayloadConfig.PAYLOAD_CLASS_NAME.defaultValue());
-    }
     final Option<String> instantTime = hoodieTable
         .getMetaClient()
         .getCommitsTimeline()
