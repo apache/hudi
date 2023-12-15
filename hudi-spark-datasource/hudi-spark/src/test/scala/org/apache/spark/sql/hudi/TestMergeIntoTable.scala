@@ -282,6 +282,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
       )
 
       spark.sql(s"insert into $sourceTable values(2, 2, 'str_2', CAST('2023-01-01 10:10:10' as TIMESTAMP), '2023-10-02')")
+      spark.sql(s"insert into $sourceTable values(3, 1, 'str_1', CAST('2023-12-15 18:38:10' as TIMESTAMP), '2023-10-01')")
 
       spark.sql(
         s"""
@@ -334,10 +335,12 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            | (select * from $sourceTable) as s
            | on t.id=s.id
            | when matched then update set *
+           | when not matched then insert *
          """.stripMargin)
       checkAnswer(s"select id,version,inc_day from $targetTable order by id")(
         Seq(1, 2, "2023-10-02"),
-        Seq(2, 1, "2023-10-01")
+        Seq(2, 1, "2023-10-01"),
+        Seq(3, 1, "2023-10-01")
       )
     })
   }

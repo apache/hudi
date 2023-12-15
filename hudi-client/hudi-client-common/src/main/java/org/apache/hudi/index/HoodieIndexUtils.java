@@ -251,6 +251,53 @@ public class HoodieIndexUtils {
   }
 
   /**
+   * getExistingRecords will create records with expression payload so we overwrite the config.
+   * Additionally, we don't want to restore this value because the write will fail later on.
+   * We also need the keygenerator so we can figure out the partition path after expression payload
+   * evaluates the merge.
+   */
+  private static BaseKeyGenerator maybeGetKeygenAndUpdatePayload(HoodieWriteConfig config) {
+    if (config.getPayloadClass().equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload")) {
+      config.setValue(HoodiePayloadConfig.PAYLOAD_CLASS_NAME.key(), HoodiePayloadConfig.PAYLOAD_CLASS_NAME.defaultValue());
+      try {
+        return (BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(config.getProps());
+      } catch (IOException e) {
+        throw new RuntimeException("KeyGenerator must inherit from BaseKeyGenerator to update a records partition path using spark sql merge into", e);
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Special merge handling for MIT
+   * We need to wait until after merging before we can add meta fields because
+   * ExpressionPayload does not allow rewriting
+   */
+  private static <R> Option<HoodieRecord<R>> mergeIncomingWithExistingRecordWithExpressionPayload(
+      HoodieRecord<R> incoming,
+      HoodieRecord<R> existing,
+      Schema writeSchema,
+      Schema existingSchema,
+      Schema writeSchemaWithMetaFields,
+      HoodieWriteConfig config,
+      HoodieRecordMerger recordMerger,
+      BaseKeyGenerator keyGenerator) throws IOException {
+    Option<Pair<HoodieRecord, Schema>> mergeResult = recordMerger.merge(existing, existingSchema,
+        incoming, writeSchemaWithMetaFields, config.getProps());
+    if (!mergeResult.isPresent()) {
+      return Option.empty();
+    }
+    HoodieRecord<R> result = mergeResult.get().getLeft();
+    String partitionPath = keyGenerator.getPartitionPath((GenericRecord) result.getData());
+    HoodieRecord<R> withMeta = result.prependMetaFields(writeSchema, writeSchemaWithMetaFields,
+            new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(partitionPath), config.getProps());
+    return Option.of(withMeta.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, config.getProps(), Option.empty(),
+        config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema)));
+
+  }
+
+
+  /**
    * Merge the incoming record with the matching existing record loaded via {@link HoodieMergedReadHandle}. The existing record is the latest version in the table.
    */
   private static <R> Option<HoodieRecord<R>> mergeIncomingWithExistingRecord(
@@ -262,19 +309,9 @@ public class HoodieIndexUtils {
       BaseKeyGenerator keyGenerator) throws IOException {
     Schema existingSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
     Schema writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField());
-    if (incoming.getData().getClass().getName().equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload")) {
-      Option<Pair<HoodieRecord, Schema>> mergeResult = recordMerger
-          .merge(existing, existingSchema, incoming, writeSchemaWithMetaFields, config.getProps());
-      if (!mergeResult.isPresent()) {
-        return Option.empty();
-      }
-      HoodieRecord<R> result = mergeResult.get().getLeft();
-      String partitionPath = keyGenerator.getPartitionPath((GenericRecord) result.getData());
-      HoodieRecord<R> withMeta = result
-          .prependMetaFields(writeSchema, writeSchemaWithMetaFields, new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(partitionPath), config.getProps());
-      return Option.of(withMeta
-          .wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, config.getProps(), Option.empty(),
-              config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema)));
+    if (keyGenerator != null) {
+      return mergeIncomingWithExistingRecordWithExpressionPayload(incoming, existing, writeSchema,
+          existingSchema, writeSchemaWithMetaFields, config, recordMerger, keyGenerator);
     }
     // prepend the hoodie meta fields as the incoming record does not have them
     HoodieRecord incomingPrepended = incoming
@@ -300,6 +337,7 @@ public class HoodieIndexUtils {
    */
   public static <R> HoodieData<HoodieRecord<R>> mergeForPartitionUpdatesIfNeeded(
       HoodieData<Pair<HoodieRecord<R>, Option<HoodieRecordGlobalLocation>>> incomingRecordsAndLocations, HoodieWriteConfig config, HoodieTable hoodieTable) {
+    final BaseKeyGenerator keyGenerator = maybeGetKeygenAndUpdatePayload(config);
     // completely new records
     HoodieData<HoodieRecord<R>> taggedNewRecords = incomingRecordsAndLocations.filter(p -> !p.getRight().isPresent()).map(Pair::getLeft);
     // the records found in existing base files
@@ -319,13 +357,6 @@ public class HoodieIndexUtils {
     HoodieData<HoodieRecord<R>> existingRecords = getExistingRecords(globalLocations, config, hoodieTable);
 
     final HoodieRecordMerger recordMerger = config.getRecordMerger();
-    final BaseKeyGenerator keyGenerator;
-    try {
-      //Assume basekeygen
-      keyGenerator = (BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(config.getProps());
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    }
     HoodieData<HoodieRecord<R>> taggedUpdatingRecords = untaggedUpdatingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r))
         .leftOuterJoin(existingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r)))
         .values().flatMap(entry -> {
