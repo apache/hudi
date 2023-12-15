@@ -29,7 +29,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -38,14 +37,11 @@ import java.util.List;
 public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
 
   private final List<HoodieLogFile> logFiles;
-  // Readers for previously scanned log-files that are still open
-  private final List<HoodieLogFileReader> prevReadersInOpenState;
   private HoodieLogFileReader currentReader;
   private final FileSystem fs;
   private final Schema readerSchema;
   private InternalSchema internalSchema = InternalSchema.getEmptyInternalSchema();
   private final boolean readBlocksLazily;
-  private final boolean reverseLogReader;
   private final String recordKeyField;
   private final boolean enableInlineReading;
   private int bufferSize;
@@ -59,9 +55,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     this.fs = fs;
     this.readerSchema = readerSchema;
     this.readBlocksLazily = readBlocksLazily;
-    this.reverseLogReader = reverseLogReader;
     this.bufferSize = bufferSize;
-    this.prevReadersInOpenState = new ArrayList<>();
     this.recordKeyField = recordKeyField;
     this.enableInlineReading = enableRecordLookups;
     this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
@@ -74,17 +68,9 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
 
   @Override
   /**
-   * Note : In lazy mode, clients must ensure close() should be called only after processing all log-blocks as the
-   * underlying inputstream will be closed. TODO: We can introduce invalidate() API at HoodieLogBlock and this object
-   * can call invalidate on all returned log-blocks so that we check this scenario specifically in HoodieLogBlock
+   * Closes latest reader.
    */
   public void close() throws IOException {
-
-    for (HoodieLogFileReader reader : prevReadersInOpenState) {
-      reader.close();
-    }
-
-    prevReadersInOpenState.clear();
 
     if (currentReader != null) {
       currentReader.close();
@@ -93,7 +79,6 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
 
   @Override
   public boolean hasNext() {
-
     if (currentReader == null) {
       return false;
     } else if (currentReader.hasNext()) {
@@ -101,12 +86,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     } else if (logFiles.size() > 0) {
       try {
         HoodieLogFile nextLogFile = logFiles.remove(0);
-        // First close previous reader only if readBlockLazily is false
-        if (!readBlocksLazily) {
-          this.currentReader.close();
-        } else {
-          this.prevReadersInOpenState.add(currentReader);
-        }
+        this.currentReader.close();
         this.currentReader = new HoodieLogFileReader(fs, nextLogFile, readerSchema, bufferSize, readBlocksLazily, false,
             enableInlineReading, recordKeyField, internalSchema);
       } catch (IOException io) {

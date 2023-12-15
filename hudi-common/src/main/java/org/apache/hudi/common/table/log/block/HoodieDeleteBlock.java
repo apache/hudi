@@ -47,6 +47,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
@@ -72,10 +73,10 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
     this.recordsToDelete = recordsToDelete;
   }
 
-  public HoodieDeleteBlock(Option<byte[]> content, FSDataInputStream inputStream, boolean readBlockLazily,
+  public HoodieDeleteBlock(Option<byte[]> content, Supplier<FSDataInputStream> inputStreamSupplier, boolean readBlockLazily,
                            Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
                            Map<HeaderMetadataType, String> footer) {
-    super(header, footer, blockContentLocation, content, inputStream, readBlockLazily);
+    super(header, footer, blockContentLocation, content, inputStreamSupplier, readBlockLazily);
   }
 
   @Override

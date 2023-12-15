@@ -78,6 +78,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private final Configuration hadoopConf;
   private final FSDataInputStream inputStream;
   private final HoodieLogFile logFile;
+  private int bufferSize;
   private final byte[] magicBuffer = new byte[6];
   private final Schema readerSchema;
   private final InternalSchema internalSchema;
@@ -117,6 +118,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     //       further
     Path updatedPath = FSUtils.makeQualified(fs, logFile.getPath());
     this.logFile = updatedPath.equals(logFile.getPath()) ? logFile : new HoodieLogFile(updatedPath, logFile.getFileSize());
+    this.bufferSize = bufferSize;
     this.inputStream = getFSDataInputStream(fs, this.logFile, bufferSize);
     this.readerSchema = readerSchema;
     this.readBlockLazily = readBlockLazily;
@@ -216,7 +218,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
         if (nextBlockVersion.getVersion() == HoodieLogFormatVersion.DEFAULT_VERSION) {
           return HoodieAvroDataBlock.getBlock(content.get(), readerSchema, internalSchema);
         } else {
-          return new HoodieAvroDataBlock(inputStream, content, readBlockLazily, logBlockContentLoc,
+          return new HoodieAvroDataBlock(() -> getFSDataInputStream(fs, this.logFile, bufferSize), content, readBlockLazily, logBlockContentLoc,
               getTargetReaderSchemaForBlock(), header, footer, keyField);
         }
 
@@ -224,24 +226,24 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
         checkState(nextBlockVersion.getVersion() != HoodieLogFormatVersion.DEFAULT_VERSION,
             String.format("HFile block could not be of version (%d)", HoodieLogFormatVersion.DEFAULT_VERSION));
 
-        return new HoodieHFileDataBlock(inputStream, content, readBlockLazily, logBlockContentLoc,
+        return new HoodieHFileDataBlock(() -> getFSDataInputStream(fs, this.logFile, bufferSize), content, readBlockLazily, logBlockContentLoc,
             Option.ofNullable(readerSchema), header, footer, enableRecordLookups, logFile.getPath());
 
       case PARQUET_DATA_BLOCK:
         checkState(nextBlockVersion.getVersion() != HoodieLogFormatVersion.DEFAULT_VERSION,
             String.format("Parquet block could not be of version (%d)", HoodieLogFormatVersion.DEFAULT_VERSION));
 
-        return new HoodieParquetDataBlock(inputStream, content, readBlockLazily, logBlockContentLoc,
+        return new HoodieParquetDataBlock(() -> getFSDataInputStream(fs, this.logFile, bufferSize), content, readBlockLazily, logBlockContentLoc,
             getTargetReaderSchemaForBlock(), header, footer, keyField);
 
       case DELETE_BLOCK:
-        return new HoodieDeleteBlock(content, inputStream, readBlockLazily, Option.of(logBlockContentLoc), header, footer);
+        return new HoodieDeleteBlock(content, () -> getFSDataInputStream(fs, this.logFile, bufferSize), readBlockLazily, Option.of(logBlockContentLoc), header, footer);
 
       case COMMAND_BLOCK:
-        return new HoodieCommandBlock(content, inputStream, readBlockLazily, Option.of(logBlockContentLoc), header, footer);
+        return new HoodieCommandBlock(content, () -> getFSDataInputStream(fs, this.logFile, bufferSize), readBlockLazily, Option.of(logBlockContentLoc), header, footer);
 
       case CDC_DATA_BLOCK:
-        return new HoodieCDCDataBlock(inputStream, content, readBlockLazily, logBlockContentLoc, readerSchema, header, keyField);
+        return new HoodieCDCDataBlock(() -> getFSDataInputStream(fs, this.logFile, bufferSize), content, readBlockLazily, logBlockContentLoc, readerSchema, header, keyField);
 
       default:
         throw new HoodieNotSupportedException("Unsupported Block " + blockType);
@@ -283,7 +285,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     Option<byte[]> corruptedBytes = HoodieLogBlock.tryReadContent(inputStream, corruptedBlockSize, readBlockLazily);
     HoodieLogBlock.HoodieLogBlockContentLocation logBlockContentLoc =
         new HoodieLogBlock.HoodieLogBlockContentLocation(hadoopConf, logFile, contentPosition, corruptedBlockSize, nextBlockOffset);
-    return new HoodieCorruptBlock(corruptedBytes, inputStream, readBlockLazily, Option.of(logBlockContentLoc), new HashMap<>(), new HashMap<>());
+    return new HoodieCorruptBlock(corruptedBytes, () -> getFSDataInputStream(fs, this.logFile, bufferSize), readBlockLazily, Option.of(logBlockContentLoc), new HashMap<>(), new HashMap<>());
   }
 
   private boolean isBlockCorrupted(int blocksize) throws IOException {
@@ -495,8 +497,13 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
    */
   private static FSDataInputStream getFSDataInputStream(FileSystem fs,
                                                         HoodieLogFile logFile,
-                                                        int bufferSize) throws IOException {
-    FSDataInputStream fsDataInputStream = fs.open(logFile.getPath(), bufferSize);
+                                                        int bufferSize) {
+    FSDataInputStream fsDataInputStream = null;
+    try {
+      fsDataInputStream = fs.open(logFile.getPath(), bufferSize);
+    } catch (IOException e) {
+      throw new HoodieIOException("Exception create input stream from file: " + logFile, e);
+    }
 
     if (FSUtils.isGCSFileSystem(fs)) {
       // in GCS FS, we might need to interceptor seek offsets as we might get EOF exception

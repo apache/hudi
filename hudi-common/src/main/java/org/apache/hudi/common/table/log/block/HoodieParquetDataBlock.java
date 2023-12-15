@@ -43,6 +43,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_BLOCK_SIZE;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME;
@@ -61,7 +62,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
   private final Option<Double> expectedCompressionRatio;
   private final Option<Boolean> useDictionaryEncoding;
 
-  public HoodieParquetDataBlock(FSDataInputStream inputStream,
+  public HoodieParquetDataBlock(Supplier<FSDataInputStream> inputStreamSupplier,
                                 Option<byte[]> content,
                                 boolean readBlockLazily,
                                 HoodieLogBlockContentLocation logBlockContentLocation,
@@ -69,7 +70,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
                                 Map<HeaderMetadataType, String> header,
                                 Map<HeaderMetadataType, String> footer,
                                 String keyField) {
-    super(content, inputStream, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, keyField, false);
+    super(content, inputStreamSupplier, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, keyField, false);
 
     this.compressionCodecName = Option.empty();
     this.expectedCompressionRatio = Option.empty();
