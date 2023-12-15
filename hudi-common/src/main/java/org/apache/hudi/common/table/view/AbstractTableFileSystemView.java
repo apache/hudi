@@ -308,7 +308,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * Clear the resource.
    */
   protected void clear() {
-    viewLock.hasWriteLock();
+    assert viewLock.hasWriteLock();
     addedPartitions.clear();
     resetViewState();
     bootstrapIndex = null;

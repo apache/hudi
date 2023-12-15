@@ -123,7 +123,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
 
     LOG.info("Timeline Diff Result is :" + diffResult);
 
-    viewLock.hasWriteLock();
+    assert viewLock.hasWriteLock();
     // First remove pending compaction instants which were completed
     diffResult.getFinishedCompactionInstants().stream().forEach(instant -> {
       try {
