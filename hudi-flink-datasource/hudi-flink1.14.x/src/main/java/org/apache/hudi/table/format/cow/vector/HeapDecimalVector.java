@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,26 +16,24 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.table.log;
+package org.apache.hudi.table.format.cow.vector;
 
-import java.util.Iterator;
+import org.apache.flink.table.data.DecimalData;
+import org.apache.flink.table.data.vector.DecimalColumnVector;
+import org.apache.flink.table.data.vector.heap.HeapBytesVector;
 
-public abstract class CachingIterator<T> implements Iterator<T> {
+/**
+ * This class represents a nullable heap map decimal vector.
+ */
+public class HeapDecimalVector extends HeapBytesVector implements DecimalColumnVector {
 
-  protected T nextRecord;
-
-  protected abstract boolean doHasNext();
-
-  @Override
-  public final boolean hasNext() {
-    return nextRecord != null || doHasNext();
+  public HeapDecimalVector(int len) {
+    super(len);
   }
 
   @Override
-  public final T next() {
-    T record = nextRecord;
-    nextRecord = null;
-    return record;
+  public DecimalData getDecimal(int i, int precision, int scale) {
+    return DecimalData.fromUnscaledBytes(
+        this.getBytes(i).getBytes(), precision, scale);
   }
-
 }

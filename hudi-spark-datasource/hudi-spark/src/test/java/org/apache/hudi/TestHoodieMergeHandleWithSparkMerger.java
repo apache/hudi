@@ -86,9 +86,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
     properties.setProperty(
         HoodieTableConfig.BASE_FILE_FORMAT.key(),
         HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
-    properties.setProperty(
-        PAYLOAD_ORDERING_FIELD_PROP_KEY,
-        HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName());
+    properties.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key(), "record_key");
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(),"partition_path");
     properties.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(),"partition_path");
     metaClient = getHoodieMetaClient(hadoopConf(), basePath(), HoodieTableType.MERGE_ON_READ, properties);
@@ -168,8 +166,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
         LOGFILE_DATA_BLOCK_FORMAT.key(),
         "parquet");
     extraProperties.setProperty(
-        PAYLOAD_ORDERING_FIELD_PROP_KEY,
-        HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName());
+        HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "record_key");
     extraProperties.setProperty(
         FILE_GROUP_READER_ENABLED.key(),
         "true");
@@ -242,9 +239,6 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
         HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName());
     properties.put(
         FILE_GROUP_READER_ENABLED.key(),
-        "true");
-    properties.put(
-        DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT().key(),
         "true");
     properties.put(
         WRITE_RECORD_POSITIONS.key(),

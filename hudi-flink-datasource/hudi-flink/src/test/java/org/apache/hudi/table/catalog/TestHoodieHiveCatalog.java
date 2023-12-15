@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.catalog;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
@@ -28,6 +29,8 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieCatalogException;
+import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
+import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -59,6 +62,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -66,10 +70,13 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
+import static org.apache.hudi.configuration.FlinkOptions.PRECOMBINE_FIELD;
+import static org.apache.hudi.table.catalog.HoodieCatalogTestUtils.createHiveConf;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -165,7 +172,7 @@ public class TestHoodieHiveCatalog {
     assertEquals("hudi", table1.getOptions().get(CONNECTOR.key()));
     assertEquals(tableType.toString(), table1.getOptions().get(FlinkOptions.TABLE_TYPE.key()));
     assertEquals("uuid", table1.getOptions().get(FlinkOptions.RECORD_KEY_FIELD.key()));
-    assertNull(table1.getOptions().get(FlinkOptions.PRECOMBINE_FIELD.key()), "preCombine key is not declared");
+    assertNull(table1.getOptions().get(PRECOMBINE_FIELD.key()), "preCombine key is not declared");
     String tableSchema = table1.getUnresolvedSchema().getColumns().stream()
         .map(Schema.UnresolvedColumn::toString)
         .collect(Collectors.joining(","));
@@ -187,6 +194,50 @@ public class TestHoodieHiveCatalog {
 
     CatalogBaseTable table2 = hoodieCatalog.getTable(tablePath);
     assertEquals("id", table2.getOptions().get(FlinkOptions.RECORD_KEY_FIELD.key()));
+
+    // validate key generator for partitioned table
+    HoodieTableMetaClient metaClient =
+        StreamerUtil.createMetaClient(hoodieCatalog.inferTablePath(tablePath, table), createHiveConf());
+    String keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
+    assertEquals(keyGeneratorClassName, SimpleAvroKeyGenerator.class.getName());
+
+    // validate key generator for non partitioned table
+    ObjectPath nonPartitionPath = new ObjectPath("default", "tb_" + tableType);
+    CatalogTable nonPartitionTable =
+        new CatalogTableImpl(schema, new ArrayList<>(), options, "hudi table");
+    hoodieCatalog.createTable(nonPartitionPath, nonPartitionTable, false);
+
+    metaClient = StreamerUtil.createMetaClient(hoodieCatalog.inferTablePath(nonPartitionPath, nonPartitionTable), createHiveConf());
+    keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
+    assertEquals(keyGeneratorClassName, NonpartitionedAvroKeyGenerator.class.getName());
+  }
+
+  @Test
+  void testCreateTableWithoutPreCombineKey() throws TableAlreadyExistException, DatabaseNotExistException, IOException, TableNotExistException {
+    String db = "default";
+    hoodieCatalog = HoodieCatalogTestUtils.createHiveCatalog();
+    hoodieCatalog.open();
+
+    Map<String, String> options = new HashMap<>();
+    options.put(FactoryUtil.CONNECTOR.key(), "hudi");
+
+    TypedProperties props = createTableAndReturnTableProperties(options, new ObjectPath(db, "tmptb1"));
+    assertFalse(props.containsKey("hoodie.table.precombine.field"));
+
+    options.put(PRECOMBINE_FIELD.key(), "ts_3");
+    props = createTableAndReturnTableProperties(options, new ObjectPath(db, "tmptb2"));
+    assertTrue(props.containsKey("hoodie.table.precombine.field"));
+    assertEquals("ts_3", props.get("hoodie.table.precombine.field"));
+  }
+
+  private TypedProperties createTableAndReturnTableProperties(Map<String, String> options, ObjectPath tablePath)
+      throws TableAlreadyExistException, DatabaseNotExistException, TableNotExistException {
+    CatalogTable table =
+        new CatalogTableImpl(schema, partitions, options, "hudi table");
+    hoodieCatalog.createTable(tablePath, table, true);
+
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(hoodieCatalog.inferTablePath(tablePath, table), createHiveConf());
+    return metaClient.getTableConfig().getProps();
   }
 
   @Test

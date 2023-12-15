@@ -260,7 +260,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
             && !HoodieTimeline.compareTimestamps(logBlock.getLogBlockHeader().get(INSTANT_TIME), HoodieTimeline.LESSER_THAN_OR_EQUALS, this.latestInstantTime
         )) {
           // hit a block with instant time greater than should be processed, stop processing further
-          break;
+          continue;
         }
         if (logBlock.getBlockType() != CORRUPT_BLOCK && logBlock.getBlockType() != COMMAND_BLOCK) {
           if (!completedInstantsTimeline.containsOrBeforeTimelineStarts(instantTime)
@@ -843,7 +843,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
 
     public abstract Builder withBasePath(String basePath);
 
-    public abstract Builder withLogFilePaths(List<String> logFilePaths);
+    public abstract Builder withLogFiles(List<HoodieLogFile> hoodieLogFiles);
 
     public abstract Builder withReaderSchema(Schema schema);
 

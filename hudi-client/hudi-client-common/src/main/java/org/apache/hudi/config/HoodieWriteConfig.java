@@ -1390,6 +1390,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(ALLOW_MULTI_WRITE_ON_SAME_INSTANT_ENABLE);
   }
 
+  public boolean shouldDropPartitionColumns() {
+    return getBoolean(HoodieTableConfig.DROP_PARTITION_COLUMNS);
+  }
+
   public String getWriteStatusClassName() {
     return getString(WRITE_STATUS_CLASS_NAME);
   }

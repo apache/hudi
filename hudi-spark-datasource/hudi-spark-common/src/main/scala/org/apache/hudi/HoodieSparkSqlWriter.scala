@@ -148,26 +148,34 @@ object HoodieSparkSqlWriter {
                          latestTableSchemaOpt: Option[Schema],
                          internalSchemaOpt: Option[InternalSchema],
                          props: TypedProperties): Schema = {
-    deduceWriterSchema(sourceSchema, latestTableSchemaOpt, internalSchemaOpt, props.toMap)
+    deduceWriterSchema(sourceSchema, latestTableSchemaOpt, internalSchemaOpt, HoodieConversionUtils.fromProperties(props))
   }
 
   def cleanup(): Unit = {
     Metrics.shutdownAllMetrics()
   }
 
-  def getBulkInsertRowConfig(writerSchema: Schema, hoodieConfig: HoodieConfig,
+  def getBulkInsertRowConfig(writerSchema: org.apache.hudi.common.util.Option[Schema], hoodieConfig: HoodieConfig,
                              basePath: String, tblName: String): HoodieWriteConfig = {
-    val writerSchemaStr = writerSchema.toString
-
+    var writerSchemaStr : String = null
+    if ( writerSchema.isPresent) {
+      writerSchemaStr = writerSchema.get().toString
+    }
     // Make opts mutable since it could be modified by tryOverrideParquetWriteLegacyFormatProperty
-    val opts = mutable.Map() ++ hoodieConfig.getProps.toMap ++
-      Map(HoodieWriteConfig.AVRO_SCHEMA_STRING.key -> writerSchemaStr)
+    val optsWithoutSchema = mutable.Map() ++ hoodieConfig.getProps.toMap
+    val opts = if (writerSchema.isPresent) {
+      optsWithoutSchema ++ Map(HoodieWriteConfig.AVRO_SCHEMA_STRING.key -> writerSchemaStr)
+    } else {
+      optsWithoutSchema
+    }
 
-    // Auto set the value of "hoodie.parquet.writelegacyformat.enabled"
-    tryOverrideParquetWriteLegacyFormatProperty(opts, convertAvroSchemaToStructType(writerSchema))
+    if (writerSchema.isPresent) {
+      // Auto set the value of "hoodie.parquet.writelegacyformat.enabled"
+      tryOverrideParquetWriteLegacyFormatProperty(opts, convertAvroSchemaToStructType(writerSchema.get))
+    }
+
     DataSourceUtils.createHoodieConfig(writerSchemaStr, basePath, tblName, opts)
   }
-
 }
 
 class HoodieSparkSqlWriterInternal {
@@ -357,7 +365,7 @@ class HoodieSparkSqlWriterInternal {
         }
       }
 
-      val (writeResult, writeClient: SparkRDDWriteClient[_]) =
+      val (writeResult: HoodieWriteResult, writeClient: SparkRDDWriteClient[_]) =
         operation match {
           case WriteOperationType.DELETE | WriteOperationType.DELETE_PREPPED =>
             mayBeValidateParamsForAutoGenerationOfRecordKeys(parameters, hoodieConfig)
@@ -495,15 +503,22 @@ class HoodieSparkSqlWriterInternal {
                 processedDataSchema, operation, instantTime, preppedSparkSqlWrites, preppedSparkSqlMergeInto, preppedWriteOperation))
 
             val dedupedHoodieRecords =
-              if (hoodieConfig.getBoolean(INSERT_DROP_DUPS)) {
+              if (hoodieConfig.getBoolean(INSERT_DROP_DUPS) && operation != WriteOperationType.INSERT_OVERWRITE_TABLE && operation != WriteOperationType.INSERT_OVERWRITE) {
                 DataSourceUtils.dropDuplicates(jsc, hoodieRecords, mapAsJavaMap(parameters))
               } else {
                 hoodieRecords
               }
             client.startCommitWithTime(instantTime, commitActionType)
-            val writeResult = DataSourceUtils.doWriteOperation(client, dedupedHoodieRecords, instantTime, operation,
-              preppedSparkSqlWrites || preppedWriteOperation)
-            (writeResult, client)
+            try {
+              val writeResult = DataSourceUtils.doWriteOperation(client, dedupedHoodieRecords, instantTime, operation,
+                preppedSparkSqlWrites || preppedWriteOperation)
+              (writeResult, client)
+            } catch {
+              case e: HoodieException =>
+                // close the write client in all cases
+                handleWriteClientClosure(client, tableConfig, parameters, jsc.hadoopConfiguration())
+                throw e
+            }
         }
 
       // Check for errors and commit the write.
@@ -516,14 +531,18 @@ class HoodieSparkSqlWriterInternal {
 
         (writeSuccessful, common.util.Option.ofNullable(instantTime), compactionInstant, clusteringInstant, writeClient, tableConfig)
       } finally {
-        // close the write client in all cases
-        val asyncCompactionEnabled = isAsyncCompactionEnabled(writeClient, tableConfig, parameters, jsc.hadoopConfiguration())
-        val asyncClusteringEnabled = isAsyncClusteringEnabled(writeClient, parameters)
-        if (!asyncCompactionEnabled && !asyncClusteringEnabled) {
-          log.info("Closing write client")
-          writeClient.close()
-        }
+        handleWriteClientClosure(writeClient, tableConfig, parameters, jsc.hadoopConfiguration())
       }
+    }
+  }
+
+  private def handleWriteClientClosure(writeClient: SparkRDDWriteClient[_], tableConfig : HoodieTableConfig, parameters: Map[String, String], configuration: Configuration): Unit =  {
+    // close the write client in all cases
+    val asyncCompactionEnabled = isAsyncCompactionEnabled(writeClient, tableConfig, parameters, configuration)
+    val asyncClusteringEnabled = isAsyncClusteringEnabled(writeClient, parameters)
+    if (!asyncCompactionEnabled && !asyncClusteringEnabled) {
+      log.warn("Closing write client")
+      writeClient.close()
     }
   }
 
@@ -779,7 +798,7 @@ class HoodieSparkSqlWriterInternal {
     val sqlContext = writeClient.getEngineContext.asInstanceOf[HoodieSparkEngineContext].getSqlContext
     val jsc = writeClient.getEngineContext.asInstanceOf[HoodieSparkEngineContext].getJavaSparkContext
 
-    val writeConfig = HoodieSparkSqlWriter.getBulkInsertRowConfig(writerSchema, hoodieConfig, basePath.toString, tblName)
+    val writeConfig = HoodieSparkSqlWriter.getBulkInsertRowConfig(org.apache.hudi.common.util.Option.of(writerSchema), hoodieConfig, basePath.toString, tblName)
     val overwriteOperationType = Option(hoodieConfig.getString(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE))
       .map(WriteOperationType.fromValue)
       .orNull

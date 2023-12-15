@@ -494,7 +494,7 @@ public class SparkMain {
     StructType structType = recordsToRewrite.schema();
     int partitionIndex = structType.fieldIndex(partitionFieldProp);
 
-    recordsToRewrite.withColumn(metaClient.getTableConfig().getPartitionFieldProp(), functions.lit(null).cast(structType.apply(partitionIndex).dataType()))
+    recordsToRewrite.withColumn(metaClient.getTableConfig().getPartitionFieldProp(), functions.lit(newPartition).cast(structType.apply(partitionIndex).dataType()))
         .write()
         .options(propsMap)
         .option("hoodie.datasource.write.operation", WriteOperationType.BULK_INSERT.value())

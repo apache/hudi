@@ -295,15 +295,23 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     }
 
     // For archive, we need to include instant's all states.
+    // The re-instantiation of the timeline may result in inconsistencies with the existing meta client active timeline,
+    // When there is no lock guard of the archiving process, the 'raw' timeline could contain less distinct instants
+    // because of the metadata file removing from another archiving process.
     HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
     Map<Pair<String, String>, List<HoodieInstant>> groupByTsAction = rawActiveTimeline.getInstantsAsStream()
         .collect(Collectors.groupingBy(i -> Pair.of(i.getTimestamp(),
             HoodieInstant.getComparableAction(i.getAction()))));
 
-    return instantsToArchive.stream().map(hoodieInstant -> {
+    return instantsToArchive.stream().flatMap(hoodieInstant -> {
       List<HoodieInstant> instantsToStream = groupByTsAction.get(Pair.of(hoodieInstant.getTimestamp(),
           HoodieInstant.getComparableAction(hoodieInstant.getAction())));
-      return ActiveAction.fromInstants(instantsToStream);
+      if (instantsToStream != null) {
+        return Stream.of(ActiveAction.fromInstants(instantsToStream));
+      } else {
+        // if a concurrent writer archived the instant
+        return Stream.empty();
+      }
     });
   }
 
@@ -314,7 +322,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     List<HoodieInstant> completedInstants = new ArrayList<>();
 
     for (ActiveAction activeAction : activeActions) {
-      completedInstants.add(activeAction.getCompleted());
+      completedInstants.addAll(activeAction.getCompletedInstants());
       pendingInstants.addAll(activeAction.getPendingInstants());
     }
 
@@ -334,11 +342,13 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       );
     }
     if (!completedInstants.isEmpty()) {
-      context.foreach(
-          completedInstants,
-          instant -> activeTimeline.deleteInstantFileIfExists(instant),
-          Math.min(completedInstants.size(), config.getArchiveDeleteParallelism())
-      );
+      // Due to the concurrency between deleting completed instants and reading data,
+      // there may be hole in the timeline, which can lead to errors when reading data.
+      // Therefore, the concurrency of deleting completed instants is temporarily disabled,
+      // and instants are deleted in ascending order to prevent the occurrence of such holes.
+      // See HUDI-7207 and #10325.
+      completedInstants.stream()
+          .forEach(instant -> activeTimeline.deleteInstantFileIfExists(instant));
     }
 
     return true;
@@ -347,7 +357,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   private void deleteAnyLeftOverMarkers(HoodieEngineContext context, ActiveAction activeAction) {
     WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, activeAction.getInstantTime());
     if (writeMarkers.deleteMarkerDir(context, config.getMarkersDeleteParallelism())) {
-      LOG.info("Cleaned up left over marker directory for instant :" + activeAction.getCompleted());
+      LOG.info("Cleaned up left over marker directory for instant :" + activeAction);
     }
   }
 }

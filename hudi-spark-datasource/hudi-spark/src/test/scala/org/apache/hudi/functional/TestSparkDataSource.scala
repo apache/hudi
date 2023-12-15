@@ -27,16 +27,19 @@ import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
+import org.apache.spark.SparkConf
 import org.apache.spark.sql._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
 import scala.collection.JavaConversions._
 
 class TestSparkDataSource extends SparkClientFunctionalTestHarness {
+
+  override def conf: SparkConf = conf(getSparkSqlConf)
 
   val parallelism: Integer = 4
 
@@ -50,7 +53,6 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
 
-  @Disabled("HUDI-7077: disabled temporarily due to test setup issue")
   @ParameterizedTest
   @CsvSource(value = Array(
     "COPY_ON_WRITE|false|false|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",
@@ -216,7 +218,6 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     inputDf3.unpersist(true)
   }
 
-  @Disabled("HUDI-7077: disabled temporarily due to test setup issue")
   @ParameterizedTest
   @CsvSource(value = Array(
     "COPY_ON_WRITE|insert|false|false|org.apache.hudi.keygen.SimpleKeyGenerator|BLOOM",

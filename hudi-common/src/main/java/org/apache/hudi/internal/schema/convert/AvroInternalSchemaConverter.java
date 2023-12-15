@@ -160,7 +160,7 @@ public class AvroInternalSchemaConverter {
    * @param schema a avro schema.
    * @param visited track the visit node when do traversal for avro schema; used to check if the name of avro record schema is correct.
    * @param firstVisitRoot track whether the current visited schema node is a root node.
-   * @param nextId a initial id which used to create id for all fields.
+   * @param nextId an initial id which used to create id for all fields.
    * @return a hudi type match avro schema.
    */
   private static Type visitAvroSchemaToBuildType(Schema schema, Deque<String> visited, Boolean firstVisitRoot, AtomicInteger nextId) {
@@ -275,7 +275,7 @@ public class AvroInternalSchemaConverter {
    *
    * @param type a hudi type.
    * @param recordName the record name
-   * @return a Avro schema match this type
+   * @return an Avro schema match this type
    */
   public static Schema buildAvroSchemaFromType(Type type, String recordName) {
     Map<Type, Schema> cache = new HashMap<>();
@@ -301,7 +301,7 @@ public class AvroInternalSchemaConverter {
    * @param cache use to cache intermediate convert result to save cost.
    * @param recordName auto-generated record name used as a fallback, in case
    * {@link org.apache.hudi.internal.schema.Types.RecordType} doesn't bear original record-name
-   * @return a Avro schema match this type
+   * @return an Avro schema match this type
    */
   private static Schema visitInternalSchemaToBuildAvroSchema(Type type, Map<Type, Schema> cache, String recordName) {
     switch (type.typeId()) {

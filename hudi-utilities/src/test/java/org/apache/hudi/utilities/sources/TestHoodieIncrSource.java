@@ -46,11 +46,11 @@ import org.apache.hudi.utilities.sources.helpers.TestSnapshotQuerySplitterImpl;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
@@ -72,6 +72,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
+
+  @Override
+  public SparkConf conf() {
+    return conf(SparkClientFunctionalTestHarness.getSparkSqlConf());
+  }
 
   private HoodieTestDataGenerator dataGen;
   private HoodieTableMetaClient metaClient;
@@ -215,7 +220,6 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     }
   }
 
-  @Disabled("HUDI-7080")
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
   public void testHoodieIncrSourceWithPendingTableServices(HoodieTableType tableType) throws IOException {

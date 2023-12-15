@@ -21,7 +21,6 @@ package org.apache.hudi.table.catalog;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -29,9 +28,8 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
-import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieMetadataException;
-import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.FlinkWriteClients;
@@ -88,6 +86,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.util.Preconditions.checkArgument;
+import static org.apache.hudi.configuration.FlinkOptions.RECORD_KEY_FIELD;
 import static org.apache.hudi.table.catalog.CatalogOptions.CATALOG_PATH;
 import static org.apache.hudi.table.catalog.CatalogOptions.DEFAULT_DATABASE;
 
@@ -311,7 +310,7 @@ public class HoodieCatalog extends AbstractCatalog {
     Configuration conf = Configuration.fromMap(options);
     conf.setString(FlinkOptions.PATH, tablePathStr);
     ResolvedSchema resolvedSchema = resolvedTable.getResolvedSchema();
-    if (!resolvedSchema.getPrimaryKey().isPresent()) {
+    if (!resolvedSchema.getPrimaryKey().isPresent() && !conf.containsKey(RECORD_KEY_FIELD.key())) {
       throw new CatalogException("Primary key definition is missing");
     }
     final String avroSchema = AvroSchemaConverter.convertToSchema(
@@ -325,30 +324,29 @@ public class HoodieCatalog extends AbstractCatalog {
     // because the HoodieTableMetaClient is a heavy impl, we try to avoid initializing it
     // when calling #getTable.
 
-    final String pkColumns = String.join(",", resolvedSchema.getPrimaryKey().get().getColumns());
-    conf.setString(FlinkOptions.RECORD_KEY_FIELD, pkColumns);
-    options.put(TableOptionProperties.PK_CONSTRAINT_NAME, resolvedSchema.getPrimaryKey().get().getName());
-    options.put(TableOptionProperties.PK_COLUMNS, pkColumns);
+    //set pk
+    if (resolvedSchema.getPrimaryKey().isPresent()
+            && !conf.containsKey(FlinkOptions.RECORD_KEY_FIELD.key())) {
+      final String pkColumns = String.join(",", resolvedSchema.getPrimaryKey().get().getColumns());
+      conf.setString(RECORD_KEY_FIELD, pkColumns);
+    }
+
+    if (resolvedSchema.getPrimaryKey().isPresent()) {
+      options.put(TableOptionProperties.PK_CONSTRAINT_NAME, resolvedSchema.getPrimaryKey().get().getName());
+    }
+    if (conf.containsKey(RECORD_KEY_FIELD.key())) {
+      options.put(TableOptionProperties.PK_COLUMNS, conf.getString(RECORD_KEY_FIELD));
+    }
 
     // check preCombine
-    final String preCombineField = conf.getString(FlinkOptions.PRECOMBINE_FIELD);
-    if (!resolvedSchema.getColumnNames().contains(preCombineField)) {
-      if (OptionsResolver.isDefaultHoodieRecordPayloadClazz(conf)) {
-        throw new HoodieValidationException("Option '" + FlinkOptions.PRECOMBINE_FIELD.key()
-            + "' is required for payload class: " + DefaultHoodieRecordPayload.class.getName());
-      }
-      if (preCombineField.equals(FlinkOptions.PRECOMBINE_FIELD.defaultValue())) {
-        conf.setString(FlinkOptions.PRECOMBINE_FIELD, FlinkOptions.NO_PRE_COMBINE);
-      } else if (!preCombineField.equals(FlinkOptions.NO_PRE_COMBINE)) {
-        throw new HoodieValidationException("Field " + preCombineField + " does not exist in the table schema."
-            + "Please check '" + FlinkOptions.PRECOMBINE_FIELD.key() + "' option.");
-      }
-    }
+    StreamerUtil.checkPreCombineKey(conf, resolvedSchema.getColumnNames());
 
     if (resolvedTable.isPartitioned()) {
       final String partitions = String.join(",", resolvedTable.getPartitionKeys());
       conf.setString(FlinkOptions.PARTITION_PATH_FIELD, partitions);
       options.put(TableOptionProperties.PARTITION_COLUMNS, partitions);
+    } else {
+      conf.setString(FlinkOptions.KEYGEN_CLASS_NAME.key(), NonpartitionedAvroKeyGenerator.class.getName());
     }
     conf.setString(FlinkOptions.TABLE_NAME, tablePath.getObjectName());
     try {

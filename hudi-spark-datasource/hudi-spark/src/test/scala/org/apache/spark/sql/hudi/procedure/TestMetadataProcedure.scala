@@ -55,6 +55,64 @@ class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
+  test("Test Call create_metadata_table then create_metadata_table with mutiltables") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+      // insert data to table
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
+
+      val tableName_1 = generateTableName
+      // create table
+      spark.sql(
+        s"""
+           |create table $tableName_1 (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName_1'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+      // insert data to table
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
+
+      val tables = s"$tableName,$tableName_1"
+
+      // The first step is delete the metadata
+      val ret = spark.sql(s"""call delete_metadata_table(table => '$tables')""").collect()
+      assertResult(1) {
+        ret.length
+      }
+
+      // The second step is create the metadata
+      val createResult = spark.sql(s"""call create_metadata_table(table => '$tableName')""").collect()
+      assertResult(1) {
+        createResult.length
+      }
+    }
+  }
+
   test("Test Call init_metadata_table Procedure") {
     withTempDir { tmp =>
       val tableName = generateTableName
@@ -152,6 +210,63 @@ class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
             assertResult(expectedMin)(minVal)
             assertResult(expectedMax)(maxVal)
           case None => // Do nothing if no expected values found
+        }
+      }
+    }
+  }
+
+  test("Test Call show_metadata_column_stats_overlap Procedure") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  c1 int,
+           |  c2 boolean,
+           |  c3 date,
+           |  c4 double,
+           |  c5 float,
+           |  c6 long,
+           |  c7 string,
+           |  c8 timestamp
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  hoodie.metadata.enable="true",
+           |  hoodie.metadata.index.column.stats.enable="true"
+           | )
+       """.stripMargin)
+      // insert data to table
+      spark.sql("set hoodie.parquet.small.file.limit=0")
+      spark.sql(
+        s"""
+           |insert into table $tableName
+           |values (1, true, CAST('2021-01-01' AS DATE), CAST(3.14 AS DOUBLE), CAST(2.5 AS FLOAT),1000, 'example string', CAST('2021-02-02 00:00:00' AS TIMESTAMP))
+           |""".stripMargin)
+
+      spark.sql(
+        s"""
+           |insert into table $tableName
+           |values
+           |(10, false, CAST('2022-02-02' AS DATE),CAST(6.28 AS DOUBLE), CAST(3.14 AS FLOAT), 2000, 'another string', CAST('2022-02-02 00:00:00' AS TIMESTAMP)),
+           |(0, false, CAST('2020-02-02' AS DATE), CAST(7.28 AS DOUBLE), CAST(2.1 AS FLOAT), 3000, 'third string', CAST('2021-01-01 00:00:00' AS TIMESTAMP))
+           |""".stripMargin)
+
+      val maxResult = Array(2, 1, 2, 1, 2, 1, 2, 2)
+      val valueResult = Array(3, 2, 3, 3, 3, 3, 3, 3)
+      // collect column stats for table
+      for (i <- maxResult.indices) {
+        val columnName = s"c${i + 1}"
+        val metadataStats = spark.sql(s"""call show_metadata_column_stats_overlap(table => '$tableName', targetColumns => '$columnName')""").collect()
+        assertResult(1) {
+          metadataStats.length
+        }
+        assertResult(maxResult(i)) {
+          metadataStats(0)(3)
+        }
+        assertResult(valueResult(i)) {
+          metadataStats(0)(9)
         }
       }
     }

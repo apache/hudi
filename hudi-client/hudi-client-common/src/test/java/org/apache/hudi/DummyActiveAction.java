@@ -23,6 +23,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 
+import java.util.Collections;
+
 /**
  * Instant triple for testing.
  */
@@ -35,7 +37,7 @@ public class DummyActiveAction extends ActiveAction {
   public DummyActiveAction(HoodieInstant completed, byte[] commitMetadata) {
     super(new HoodieInstant(HoodieInstant.State.REQUESTED, completed.getAction(), completed.getTimestamp()),
         new HoodieInstant(HoodieInstant.State.INFLIGHT, completed.getAction(), completed.getTimestamp()),
-        completed);
+        Collections.singletonList(completed));
     this.commitMetadata = commitMetadata;
   }
 

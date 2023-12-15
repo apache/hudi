@@ -31,8 +31,10 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.UnaryOperator;
 
 /**
  * An abstract reader context class for {@code HoodieFileGroupReader} to use, containing APIs for
@@ -77,7 +79,7 @@ public abstract class HoodieReaderContext<T> {
    * @return {@link ClosableIterator<T>} that can return all records through iteration.
    */
   public abstract ClosableIterator<T> getFileRecordIterator(
-      Path filePath, long start, long length, Schema dataSchema, Schema requiredSchema, Configuration conf);
+      Path filePath, long start, long length, Schema dataSchema, Schema requiredSchema, Configuration conf) throws IOException;
 
   /**
    * Converts an Avro record, e.g., serialized in the log files, to an engine-specific record.
@@ -188,4 +190,24 @@ public abstract class HoodieReaderContext<T> {
     meta.put(INTERNAL_META_SCHEMA, schema);
     return meta;
   }
+
+  /**
+   * Merge the skeleton file and data file iterators into a single iterator that will produce rows that contain all columns from the
+   * skeleton file iterator, followed by all columns in the data file iterator
+   *
+   * @param skeletonFileIterator iterator over bootstrap skeleton files that contain hudi metadata columns
+   * @param dataFileIterator iterator over data files that were bootstrapped into the hudi table
+   * @return iterator that concatenates the skeletonFileIterator and dataFileIterator
+   */
+  public abstract ClosableIterator<T> mergeBootstrapReaders(ClosableIterator<T> skeletonFileIterator, ClosableIterator<T> dataFileIterator);
+
+  /**
+   * Creates a function that will reorder records of schema "from" to schema of "to"
+   * all fields in "to" must be in "from", but not all fields in "from" must be in "to"
+   *
+   * @param from the schema of records to be passed into UnaryOperator
+   * @param to the schema of records produced by UnaryOperator
+   * @return a function that takes in a record and returns the record with reordered columns
+   */
+  public abstract UnaryOperator<T> projectRecord(Schema from, Schema to);
 }
