@@ -189,7 +189,7 @@ public class AdbSyncTool extends HoodieSyncTool {
     syncPartitions(tableName, writtenPartitionsSince);
 
     // Update sync commit time
-    // whether to skip syncing commit time stored in tbl properties, since it is time consuming.
+    // whether to skip syncing commit time stored in tbl properties, since it is time-consuming.
     if (!config.getBoolean(ADB_SYNC_SKIP_LAST_COMMIT_TIME_SYNC)) {
       syncClient.updateLastCommitTimeSynced(tableName);
     }

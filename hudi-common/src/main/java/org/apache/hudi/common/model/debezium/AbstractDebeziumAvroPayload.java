@@ -72,7 +72,7 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
     if (shouldPickCurrentRecord(currentValue, insertValue.get(), schema)) {
       return Option.of(currentValue);
     }
-    // Step 2: Pick the insert record (as a delete record if its a deleted event)
+    // Step 2: Pick the insert record (as a delete record if it is a deleted event)
     return getInsertValue(schema);
   }
 

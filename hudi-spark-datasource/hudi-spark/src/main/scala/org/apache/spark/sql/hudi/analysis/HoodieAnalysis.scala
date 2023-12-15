@@ -281,7 +281,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
             ut.copy(table = relation)
 
           case logicalPlan: LogicalPlan if logicalPlan.resolved =>
-            sparkAdapter.getCatalystPlanUtils.applyNewHoodieParquetFileFormatProjection(logicalPlan)
+            sparkAdapter.getCatalystPlanUtils.maybeApplyForNewFileFormat(logicalPlan)
         }
       }
 

@@ -47,6 +47,7 @@ trait HoodieFormatTrait {
 
   // Used so that the planner only projects once and does not stack overflow
   var isProjected: Boolean = false
+  def getRequiredFilters: Seq[Filter]
 }
 
 /**
@@ -64,6 +65,8 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                                                   shouldUseRecordPosition: Boolean,
                                                   requiredFilters: Seq[Filter]
                                            ) extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait {
+
+  def getRequiredFilters: Seq[Filter] = requiredFilters
 
   /**
    * Support batch needs to remain consistent, even if one side of a bootstrap merge can support
@@ -104,8 +107,8 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     val requiredWithoutMeta = StructType(requiredSchemaSplits._2)
     val augmentedHadoopConf = FSUtils.buildInlineConf(hadoopConf)
     val (baseFileReader, preMergeBaseFileReader, readerMaps, cdcFileReader) = buildFileReaders(
-      spark, dataSchema, partitionSchema, if (isIncremental) requiredSchemaWithMandatory else requiredSchema,
-      filters, options, augmentedHadoopConf, requiredSchemaWithMandatory, requiredWithoutMeta, requiredMeta)
+      spark, dataSchema, partitionSchema, requiredSchema, filters, options, augmentedHadoopConf,
+      requiredSchemaWithMandatory, requiredWithoutMeta, requiredMeta)
 
     val requestedAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(requiredSchema, sanitizedTableName)
     val dataAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName)
@@ -242,25 +245,20 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
       metaFields.find(f => f.name == name)
     }
 
-    // If not MergeOnRead or if projection is compatible
-    if (isIncremental) {
-      StructType(dataSchema.toArray ++ partitionSchema.fields)
-    } else {
-      val added: mutable.Buffer[StructField] = mutable.Buffer[StructField]()
-      for (field <- mandatoryFields) {
-        if (requiredSchema.getFieldIndex(field).isEmpty) {
-          // Support for nested fields
-          val fieldParts = field.split("\\.")
-          val fieldToAdd = findNestedField(dataSchema, fieldParts)
-            .orElse(findNestedField(partitionSchema, fieldParts))
-            .orElse(findMetaField(field))
-            .getOrElse(throw new IllegalArgumentException(s"Field $field does not exist in the table schema"))
-          added.append(fieldToAdd)
-        }
+    val added: mutable.Buffer[StructField] = mutable.Buffer[StructField]()
+    for (field <- mandatoryFields) {
+      if (requiredSchema.getFieldIndex(field).isEmpty) {
+        // Support for nested fields
+        val fieldParts = field.split("\\.")
+        val fieldToAdd = findNestedField(dataSchema, fieldParts)
+          .orElse(findNestedField(partitionSchema, fieldParts))
+          .orElse(findMetaField(field))
+          .getOrElse(throw new IllegalArgumentException(s"Field $field does not exist in the table schema"))
+        added.append(fieldToAdd)
       }
-      val addedFields = StructType(added.toArray)
-      StructType(requiredSchema.toArray ++ addedFields.fields)
     }
+    val addedFields = StructType(added.toArray)
+    StructType(requiredSchema.toArray ++ addedFields.fields)
   }
 
   protected def buildFileReaders(sparkSession: SparkSession, dataSchema: StructType, partitionSchema: StructType,
