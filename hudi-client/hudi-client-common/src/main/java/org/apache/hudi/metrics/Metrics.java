@@ -66,6 +66,7 @@ public class Metrics {
     reporters.forEach(MetricsReporter::start);
 
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+      LOG.warn("Shutting down Metrics " + this.toString());
       this.shutdown();
       LOG.warn("Shutdown Metrics");
     }));
