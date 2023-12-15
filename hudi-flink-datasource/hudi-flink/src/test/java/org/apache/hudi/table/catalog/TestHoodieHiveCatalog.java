@@ -272,17 +272,13 @@ public class TestHoodieHiveCatalog {
   }
 
   @Test
-  public void testCreateHoodieTableWithWrongTableType() throws TableAlreadyExistException, DatabaseNotExistException {
+  public void testCreateHoodieTableWithWrongTableType() {
     HashMap<String,String> properties = new HashMap<>();
     properties.put(FactoryUtil.CONNECTOR.key(), "hudi-fake");
     properties.put("table.type","wrong type");
     CatalogTable table =
             new CatalogTableImpl(schema,  properties, "hudi table");
-    try {
-      hoodieCatalog.createTable(tablePath, table, false);
-    } catch (HoodieValidationException e) {
-      assertEquals("table.type's value is invalid", e.getMessage());
-    }
+    assertThrows(HoodieValidationException.class, () -> hoodieCatalog.createTable(tablePath, table, false));
   }
 
   @ParameterizedTest
