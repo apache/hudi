@@ -41,6 +41,7 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.io.HoodieMergedReadHandle;
@@ -232,6 +233,9 @@ public class HoodieIndexUtils {
    */
   private static <R> HoodieData<HoodieRecord<R>> getExistingRecords(
       HoodieData<HoodieRecordGlobalLocation> partitionLocations, HoodieWriteConfig config, HoodieTable hoodieTable) {
+    if (config.getPayloadClass().equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload")) {
+      config.setValue(HoodiePayloadConfig.PAYLOAD_CLASS_NAME.key(), HoodiePayloadConfig.PAYLOAD_CLASS_NAME.defaultValue());
+    }
     final Option<String> instantTime = hoodieTable
         .getMetaClient()
         .getCommitsTimeline()
@@ -254,6 +258,19 @@ public class HoodieIndexUtils {
       HoodieRecordMerger recordMerger) throws IOException {
     Schema existingSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
     Schema writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField());
+    if (incoming.getData().getClass().getName().equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload")) {
+      Option<Pair<HoodieRecord, Schema>> mergeResult = recordMerger
+          .merge(existing, existingSchema, incoming, writeSchemaWithMetaFields, config.getProps());
+      if (!mergeResult.isPresent()) {
+        return Option.empty();
+      }
+      HoodieRecord<R> result = mergeResult.get().getLeft();
+      HoodieRecord<R> withMeta = result
+          .prependMetaFields(writeSchema, writeSchemaWithMetaFields, new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(incoming.getPartitionPath()), config.getProps());
+      return Option.of(withMeta
+          .wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, config.getProps(), Option.empty(),
+              config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema)));
+    }
     // prepend the hoodie meta fields as the incoming record does not have them
     HoodieRecord incomingPrepended = incoming
         .prependMetaFields(writeSchema, writeSchemaWithMetaFields, new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(incoming.getPartitionPath()), config.getProps());

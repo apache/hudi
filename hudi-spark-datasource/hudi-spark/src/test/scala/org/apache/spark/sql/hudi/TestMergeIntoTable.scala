@@ -261,6 +261,71 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     })
   }
 
+  test("Test MergeInto with changing partition") {
+    withRecordType()(withTempDir { tmp =>
+      val sourceTable = generateTableName
+      val targetTable = generateTableName
+      spark.sql(
+        s"""
+           | create table $sourceTable
+           | using parquet
+           | partitioned by (inc_day)
+           | location '${tmp.getCanonicalPath}/$sourceTable'
+           | as
+           | select
+           | 1 as id,
+           | 2 as version,
+           | 'str_2' as name,
+           | CAST('2023-01-01 12:12:12' as TIMESTAMP) as birthDate,
+           | '2023-10-02' as inc_day
+        """.stripMargin
+      )
+
+      // Create source table
+      spark.sql(
+        s"""
+           | create table $targetTable (
+           |  id int,
+           |  version int,
+           |  name string,
+           |  birthDate timestamp,
+           |  inc_day string
+           | ) using hudi
+           | partitioned by (inc_day)
+           | tblproperties (
+           |    'primaryKey' = 'id',
+           |    'type' = 'cow'
+           | )
+           | location '${tmp.getCanonicalPath}/$targetTable'
+         """.stripMargin)
+
+      spark.sql(
+        s"""
+           | insert into $targetTable
+           | select
+           | 1 as id,
+           | 1 as version,
+           |'str_1' as name,
+           |CAST('2023-01-01 11:11:11' AS TIMESTAMP) as birthDate,
+           |CAST('2023-10-01' AS DATE) as inc_day
+           |
+         """.stripMargin)
+
+      spark.sql(s" select * from $targetTable").show(100, false)
+      spark.sql("set hoodie.simple.index.update.partition.path=true")
+      spark.sql("set hoodie.index.type=GLOBAL_SIMPLE")
+
+      spark.sql(
+        s"""
+           | merge into $targetTable t using
+           | (select * from $sourceTable) as s
+           | on t.id=s.id
+           | when matched then update set *
+         """.stripMargin)
+      spark.sql(s" select * from $targetTable").show(100, false)
+    })
+  }
+
   test("Test MergeInto for MOR table ") {
     spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
     withRecordType()(withTempDir { tmp =>
