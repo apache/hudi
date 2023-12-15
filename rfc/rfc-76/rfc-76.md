@@ -14,15 +14,15 @@
   See the License for the specific language governing permissions and
   limitations under the License.
 -->
-# RFC-[74]: [support EventTimeBasedCompactionStrategy]
+# RFC-[76]: [support EventTimeBasedCompactionStrategy and metric for RO table]
 
 ## Proposers
 
 - @waitingF
 
 ## Approvers
- - @<approver1 github username>
- - @<approver2 github username>
+ - @danny0405
+ - @voonhous
 
 ## Status
 
@@ -37,185 +37,96 @@ compact log files into base file later. When querying the snapshot table (RT tab
 query side have to perform a compaction so that they can get all data, which is expected time-consuming causing query latency.
 At the time, hudi provide read-optimized table (RO table) for low query latency just like COW.
 
-But currently, there is no compaction strategy based on event time, so there is no data freshness guarantee for RO table.
-For cases, user want all data before a specified time, user have to query the RT table to get all data with expected high query latency.
+Generally the data to ingest arrives roughly in event time order. For cases some users read the hudi table,
+they may not concern with the immediate full data, but the data before a specified time T (eg. data before 0 clock).
+For such cases, user want all data before a specified time, user have to query the RT table to get all data with expected high query latency.
+
 Based on this, we want to implement the strategy based on the event time: `EventTimeBasedCompactionStrategy`. 
 
 
 ## Background
 
-Generally the data to ingest arrives roughly in event time order. For cases some users read the hudi table, 
-they may not concern with the immediate full data, but the data before a specified time T (eg. data before 0 clock).
+Currently, there is no compaction strategy based on event time, the only `DayBasedCompactionStrategy` need the table partitioned by day in specified format(yyyy/mm/dd), 
+which is not very general and has too large a time granularity. There is no data completion/freshness guarantee or metrics for RO table.
 
-Currently, reading the RT table will be more time-consuming than reading the RO table due to compaction. 
-Because the RO table can be thought as a COW table as it only contains base file.
+Based on this, we plan to 
+1. launch a compaction strategy based on event time: `EventTimeBasedCompactionStrategy`.
+2. report RO table data completion and freshness.
 
-And there is no compaction strategy based on event time. The only `DayBasedCompactionStrategy` need the table partitioned by day in specified format(yyyy/mm/dd), which is not very general and has too large a time granularity.
-
-Based on this, we plan to launch a compaction strategy based on event time: `EventTimeBasedCompactionStrategy`.
-
-With this strategy, we can expand use-case of RO table, and assign the event time attribute to the RO table without special partition. 
+With the data completion and freshness of RO table, we can expand use-case of RO table.
 That is given event time threshold T, the log files before T can be compacted, then resulting RO table obtains all data before T, with low query latency.
 
+Currently, we introduced new file slicing algorithm based on barrier and generating compaction plan based on completion time [[HUDI-6495][RFC-66]](https://github.com/apache/hudi/pull/7907).
+
+With the barrier file slicing, file slices are split by the barriers extracted from every instant time of base files 
+or the first instant of log file if no base file exists.
+
+When generating compaction plan, the scheduler will filter all log files with completion time before the `compactionInstant`. 
+And the compaction operation will generate a new base file with `compactionInstant` as its instant time;
+
+So the file slices are split naturally by the `compactionInstant` for MOR cases. 
+
+So we can replace the `compactionInstant` with `eventTimeInstant` computed by `EventTimeBasedCompactionStrategy` when generating plan. 
+In this case, file slices are split by `eventTimeInstant` instead of `compactionInstant`. 
+This is the base for `EventTimeBasedCompactionStrategy`.
+
+In .commit/.deltacommit metadata, we can extract the min/max event time for each base file or log file and take the min/max event time as data completion and freshness for that base file or log file. 
+This is the base for data completion and freshness of RO table.
 
 ## Implementation
 
-To support the `EventTimeBasedCompactionStrategy`, there are some steps:
-1. support PartialCompaction
-2. write min event time to the header of log block
-3. design the EventTimeBasedCompactionStrategy
-4. sync min event time to RO table property
-5. enrich related metrics
+With the ability of new file slice algorithm and compaction based on completion time, we can choose to
 
-### 1. support PartialCompaction
-Currently, one compaction operation will select all log files or no log file in the orderAndFilter method.
-
-To support event time based compaction strategy, there will be log files which match the time threshold and
-log files which not match the threshold, so we have to support the feature `PartialCompaction` first,
-which merges partial log files in one file slice while leaving the unselect log files. For those left log files, 
-they will not be visible if the compaction plan generated and new file slice generated, so we have to make those left log files visible in case of dataloss.
-
-Note:
-The feature `PartialCompaction` is different from `LogCompaction`, as `LogCompaction` compact some log files into a bigger log file
-while `PartialCompaction` merge some log files into base file.
-
-A simple diagram merging partial log files is shown below.
-
-![partial-compaction.png](partial-compaction.png)
-
-For those left log files, we can't simply `rename` to new instant for visibility, because they may still be queried. 
-The visibility can be achieved by:
-- creating symlinks for those log files, for file system support symlinks, eg. DFS hdfs. This is the main goal for the `partial log files merging` feature.
-- copying log files to new instant time, for file system not support symlinks, eg. Object Storage S3
-
-#### modifications to support PartialCompaction
-1. HoodieCompactionOperation
-
-Adding new field `symlinkOperations` which save the symlink operations in the compaction operation, 
-then we can query out the symlinkOperations in clean and rollback to track the log file trace.
-```avro schema
-                  {
-                     "name": "symlinkOperations",
-                     "type": ["null", {
-                        "type": "array",
-                        "items": {
-                           "name": "HoodieSymlinkOperation",
-                           "type": "record",
-                           "fields": [
-                              {
-                                 "name": "symlink", // new log file name with new instant
-                                 "type": ["null", "string"]
-                              },
-                              {
-                                 "name": "target",  // old log file name
-                                 "type": ["null", "string"]
-                              }
-                           ]
-                        }
-                     }],
-                     "default": null
-                  },
-```
-
-2. CompactionStrategy
-
-Implement new method `filterLogFiles` which support filter log files to compact and log files to remain.
+### Schedule Compaction Plan
+The `EventTimeBasedCompactionStrategy` strategy is responsible to calculate the event time threshold for compaction plan.
+Implement a method to calculate the event time threshold:
 ```java
-  /**
-   * Filter the log files to be compacted. Default all log files to compact.
-   * @param allLogFiles all log files in the file slice.
-   * @return pair of (logFilesToCompact, logFilesToRemain)
-   */
-  public Pair<List<HoodieLogFile>, List<HoodieLogFile>> filterLogFiles(FileSystem fs, HoodieWriteConfig writeConfig,
-                                                                       List<HoodieLogFile> allLogFiles, String instantTime) {
-    return Pair.of(allLogFiles.stream().sorted(HoodieLogFile.getLogFileComparator()).collect(toList()), new ArrayList<>());
-  }
+    // return the threshold as instant time format
+    public String calcEventTimeThreshold(String compactionInstant, HoodieWriteConfig config)
 ```
 
-3. Compaction plan generation and execution
-
-Generating the compaction plan, we need to generate the planed symlink operations for log files to remain.
-
-Executing the compaction plan, we need to operate the symlink operations in plan. 
-And after the compaction completed, we need to save those operations in the commit metadata for later reading out the relationship of those log files.
+When generating compaction plan, we take the event time threshold as the next base instant time and save it to `CompactionOpertion::nextBaseInstantTime`.
 
 
-4. CleanPlaner
+### Execute Compaction Plan
+Get `nextBaseInstantTime` from `CompactionOpertion`, write base file to the `nextBaseInstantTime`.
 
-For creating symlinks case, the log file to be cleaned may be the target of log file to remain. So we have to check 
-if the log file is target or not. We can only safely clean the log files outdated and not used as target.
+Sample code in HoodieCompactor:
+```java
+    String nextBaseInstantTime = compactionOpertion.getNextBaseInstantTime();
+    result = executionHelper.writeFileAndGetWriteStats(compactionHandler, operation, nextBaseInstantTime, scanner, oldDataFileOpt);
+```
 
-For copying log files case, nothing special needed, just as before.
+Follow up:
 
-5. Rollback
-
-When rolling back compaction, we need to check the symlink operations in compaction plan, and to roll back those operations too.
-That is deleting those symlinks or copied files generated by the compaction.
-
-6. Append new log file
-
-When generating a new log file, for the logVersion calculation, need to consider the planed symlink log files in last compaction plan. 
-Because the scheduled compaction plan may not be executed, so the symlinked log files are not generated, but the next log version should consider the not generated log file names.
-
-7. Query side
-
-As the strategy will generate duplicate log blocks with symlink or copy, so the query side without precombine will meet data duplicate issue.
-
-- Read Optimized Queries: should be ok.
-- Snapshot Queries: should be ok.
-- Incremental Queries: should not read the symlinked or copied files as they are not newly ingested.
-- Time Travel Queries: should not read the symlinked or copied files as they are not newly ingested.
-
-So for Incremental and TimeTravel queries, we need to skip those symlinked or copied files, since they are not ingested at the instant time.
-For the skip, we can get those files from completed commit metadata then do a filter.
+With the `EventTimeBasedCompactionStrategy` above, there can be data with event time after the threshold being compacted.
+For cases users want exact event time split (users don't want any data after threshold exist in RO table),
+we need to perform the log record filter in compaction execution based on the time threshold.
+ 
+To implement exact event time split, we should modify `HoodieMergedLogRecordScanner` adding new methods to get the remained log records, 
+likely naming `getRemainLogsIterator` and `getRemainRecords` corresponding to `HoodieMergedLogRecordScanner::iterator` and `HoodieMergedLogRecordScanner::getRecords`.
+And we have to rewrite those remained log records back to new log file.
 
 
-### 2. write min event time to the header of log block
+### Compute Data Freshness / Completion
+Given the definition below:
 
-when appending logs, we can save the min event time for a data block, then we can add the min event time property to 
-the log block header, then we can query out the min event time without deserializing the log data.
+| Query based table               | Data Completion Time                                   | Data Freshness Time            |
+|---------------------------------|--------------------------------------------------------|--------------------------------|
+| Snapshot table (RT table)       | all data before the time been ingested into hudi       | the latest data been ingested  |
+| Read Optimized table (RO table) | all data before the time been compacted into base file | the latest data been compacted |
 
-Note:
+For RT table, the data completion and freshness can be simply extracted from `HoodieWriteStat::minEventTime` and `HoodieWriteStat::maxEventTime`. Now they are used to report metrics `commitLatencyInMs` and `commitFreshnessInMs`.
 
-For the strategy, we do better tune the `hoodie.logfile.max.size` to proper value. 
-Or there may be cases, all data written to one log file, any time generate a compaction, it will be a full compaction.
+For RO table, the data freshness time is the maxEventTime of last compaction, can be extracted from last commit metadata simply.
+But for the data completion time, we can not simply take the `minEventTime` of last compaction since it may be data after `minEventTime` uncompacted. So it depends on the earliest event time of all un-compacted log files. 
+We define `DataCompletionTimeOfReadOptimizedTable = min { event time of un-compact log files } - 1`, in case of no log file, `DataCompletionTimeOfReadOptimizedTable = DataCompletionTimeOfSnapshotTable`.
 
-### 3. design the EventTimeBasedCompactionStrategy
+To get min event time of one log file, get the `instant` from the log file name, load the .deltacommit metadata from the `instant`,
+get the min event time from the HoodieWriteStat matching the log file id.
 
-For those cases can not guarantee the data latency, the strategy also cannot ensure the accuracy of event time freshness of RO table.
-
-Supposed the data coming roughly in the order of event time, the latest data ingested at most `data_latency` time later, 
-So for compaction instant time `compaction_time`, then we can choose any time before `compaction_time - data_latency` as the event time `threshold`, 
-as the data before `threshold` is expected being ingested to hudi.
-
-And we need a new CompactionTriggerStrategy `EVENT_TIME_TRIGGER`, which will check if no pending compaction plan or clustering plan exists.
-When using the `EventTimeBasedCompactionStrategy`, we can not trigger a new compaction plan if any pending compaction plan or clustering plan exists. 
-Or we will break the event time rule that all data before threshold is compacted. Seeing below image:
-![why-serial-execution-needed-in-event-time-compaction-case.png](why-serial-execution-needed-in-event-time-compaction-case.png)
-Suppose we support generate multi compaction plans, plan1 with threshold1=0:30, plan2 with threshold2=1:00.
-Those plans are executed as the order. Then as defined, when plan2 finished, there should not be no log file with min_event_time <= threshold,
-but there exist file1_t1.log.3 and fileN_t1.log.2 which break the rule. So we can not trigger a new compaction plan if any pending compaction plan or clustering plan exists.
-
-
-With the `EventTimeBasedCompactionStrategy` above, there may be data with event time after threshold being compacted. 
-For cases users want exact event time split (users don't want any data after threshold exist in RO table), 
-we need to perform the log record filter in compaction execution based on the threshold. 
-This can be somehow complicated, just as a follow-up.
-
-
-
-### 4. sync min event time to RO table property
-
-We can get the event time threshold from last completed compaction, then sync the threshold as RO table data freshness to user.
-From the threshold, users know that all data before threshold was ingested and can be queried out from RO table instead of RT table.
-
-### 5. metrics
-to better know the internal state of log files, we need to add more metrics:
-
-- the min event time from all log files
-- remained log files related file slices count
-- remained log files total file size
-- remained log files count
+After both completion / freshness time calculated, we save them in commit metadata and report metrics.
+When syncing table, we can extract data completion / freshness from commit metadata, sync both as table properties for user readability.
 
 
 ## Rollout/Adoption Plan
@@ -230,9 +141,3 @@ Should be compatible as before.
    - no need for migration tools
  - When will we remove the existing behavior?
    - no affect to existing behavior
-
-
-## Test Plan
-
-New test classes to test the features `PartialCompaction` and `EventTimeBasedCompactionStrategy`.
-In those test cases, all RO tables and RT tables can be queried as expected, and the incremental and time travel queries work as expected.
