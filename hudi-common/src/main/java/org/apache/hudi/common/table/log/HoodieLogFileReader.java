@@ -60,6 +60,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -87,7 +88,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private long lastReverseLogFilePosition;
   private final boolean reverseReader;
   private final boolean enableRecordLookups;
-  private boolean closed = false;
+  private AtomicBoolean closed = new AtomicBoolean(false);
   private transient Thread shutdownThread = null;
   private FSDataInputStream inputStream;
 
@@ -150,7 +151,9 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
         // fail silently for any sort of exception
       }
     });
-    Runtime.getRuntime().addShutdownHook(shutdownThread);
+    if (!closed.get()) {
+      Runtime.getRuntime().addShutdownHook(shutdownThread);
+    }
   }
 
   // TODO : convert content and block length to long by using ByteBuffer, raw byte [] allows
@@ -360,13 +363,12 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
   @Override
   public void close() throws IOException {
-    if (!closed) {
+    if (!closed.getAndSet(true)) {
       this.inputStream.close();
       this.inputStream = null;
       if (null != shutdownThread) {
         Runtime.getRuntime().removeShutdownHook(shutdownThread);
       }
-      closed = true;
     }
   }
 
