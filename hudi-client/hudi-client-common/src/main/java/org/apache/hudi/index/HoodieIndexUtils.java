@@ -285,6 +285,9 @@ public class HoodieIndexUtils {
       return Option.empty();
     }
     HoodieRecord<R> result = mergeResult.get().getLeft();
+    if (result.getData().equals(HoodieRecord.SENTINEL)) {
+      return Option.of(result);
+    }
     String partitionPath = keyGenerator.getPartitionPath((GenericRecord) result.getData());
     HoodieRecord<R> withMeta = result.prependMetaFields(writeSchema, writeSchemaWithMetaFields,
             new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(partitionPath), config.getProps());
@@ -376,6 +379,10 @@ public class HoodieIndexUtils {
             return Collections.singletonList(tagRecord(incoming.newInstance(existing.getKey()), existing.getCurrentLocation())).iterator();
           }
           HoodieRecord<R> merged = mergedOpt.get();
+          if (merged.getData().equals(HoodieRecord.SENTINEL)) {
+            //if MIT update and it doesn't match any merge conditions, we omit the record
+            return Collections.emptyIterator();
+          }
           if (Objects.equals(merged.getPartitionPath(), existing.getPartitionPath())) {
             // merged record has the same partition: route the merged result to the current location as an update
             return Collections.singletonList(tagRecord(merged, existing.getCurrentLocation())).iterator();
