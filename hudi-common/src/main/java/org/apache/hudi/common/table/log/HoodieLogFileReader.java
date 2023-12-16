@@ -76,7 +76,6 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
   private final FileSystem fs;
   private final Configuration hadoopConf;
-  private final FSDataInputStream inputStream;
   private final HoodieLogFile logFile;
   private int bufferSize;
   private final byte[] magicBuffer = new byte[6];
@@ -90,6 +89,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private final boolean enableRecordLookups;
   private boolean closed = false;
   private transient Thread shutdownThread = null;
+  private FSDataInputStream inputStream;
 
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
                              boolean readBlockLazily) throws IOException {
@@ -362,6 +362,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   public void close() throws IOException {
     if (!closed) {
       this.inputStream.close();
+      this.inputStream = null;
       if (null != shutdownThread) {
         Runtime.getRuntime().removeShutdownHook(shutdownThread);
       }
