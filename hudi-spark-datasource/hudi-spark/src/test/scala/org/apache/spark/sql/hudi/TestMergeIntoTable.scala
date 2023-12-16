@@ -190,69 +190,70 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
   test("Test HUDI-7131") {
     if (HoodieSparkUtils.gteqSpark3_1) {
       withRecordType()(withTempDir { tmp =>
-        spark.sql("set hoodie.index.type = GLOBAL_BLOOM")
-        val targetTable = generateTableName
-        spark.sql(
-          s"""
-             |create table ${targetTable} (
-             |  id int,
-             |  version int,
-             |  name string,
-             |  inc_day string
-             |) using hudi
-             |tblproperties (
-             |  type = 'cow',
-             |  primaryKey = 'id'
-             | )
-             |partitioned by (inc_day)
-             |location '${tmp.getCanonicalPath}/$targetTable'
-             |""".stripMargin)
-        spark.sql(
-          s"""
-             |merge into ${targetTable} as target
-             |using (
-             |select 1 as id, 1 as version, 'str_1' as name, '2023-10-01' as inc_day
-             |) source
-             |on source.id = target.id
-             |when matched then
-             |update set *
-             |when not matched then
-             |insert *
-             |""".stripMargin)
-        spark.sql(
-          s"""
-             |merge into ${targetTable} as target
-             |using (
-             |select 1 as id, 2 as version, 'str_2' as name, '2023-10-01' as inc_day
-             |) source
-             |on source.id = target.id
-             |when matched then
-             |update set *
-             |when not matched then
-             |insert *
-             |""".stripMargin)
+        withSQLConf("hoodie.index.type" -> "GLOBAL_BLOOM") {
+          val targetTable = generateTableName
+          spark.sql(
+            s"""
+               |create table ${targetTable} (
+               |  id int,
+               |  version int,
+               |  name string,
+               |  inc_day string
+               |) using hudi
+               |tblproperties (
+               |  type = 'cow',
+               |  primaryKey = 'id'
+               | )
+               |partitioned by (inc_day)
+               |location '${tmp.getCanonicalPath}/$targetTable'
+               |""".stripMargin)
+          spark.sql(
+            s"""
+               |merge into ${targetTable} as target
+               |using (
+               |select 1 as id, 1 as version, 'str_1' as name, '2023-10-01' as inc_day
+               |) source
+               |on source.id = target.id
+               |when matched then
+               |update set *
+               |when not matched then
+               |insert *
+               |""".stripMargin)
+          spark.sql(
+            s"""
+               |merge into ${targetTable} as target
+               |using (
+               |select 1 as id, 2 as version, 'str_2' as name, '2023-10-01' as inc_day
+               |) source
+               |on source.id = target.id
+               |when matched then
+               |update set *
+               |when not matched then
+               |insert *
+               |""".stripMargin)
 
-        checkAnswer(s"select id, version, name, inc_day from $targetTable")(
-          Seq(1, 2, "str_2", "2023-10-01")
-        )
-        // migrate the record to a new partition.
+          checkAnswer(s"select id, version, name, inc_day from $targetTable")(
+            Seq(1, 2, "str_2", "2023-10-01")
+          )
+          // migrate the record to a new partition.
 
-        spark.sql(
-          s"""
-             |merge into ${targetTable} as target
-             |using (
-             |select 1 as id, 2 as version, 'str_2' as name, '2023-10-02' as inc_day
-             |) source
-             |on source.id = target.id
-             |when matched then
-             |update set *
-             |when not matched then
-             |insert *
-             |""".stripMargin)
+          spark.sql(
+            s"""
+               |merge into ${targetTable} as target
+               |using (
+               |select 1 as id, 2 as version, 'str_2' as name, '2023-10-02' as inc_day
+               |) source
+               |on source.id = target.id
+               |when matched then
+               |update set *
+               |when not matched then
+               |insert *
+               |""".stripMargin)
 
-        checkAnswer(s"select id, version, name, inc_day from $targetTable")(
-          Seq(1, 2, "str_2", "2023-10-02")
-        )
+          checkAnswer(s"select id, version, name, inc_day from $targetTable")(
+            Seq(1, 2, "str_2", "2023-10-02")
+          )
+        }
       })
     }
   }
@@ -338,60 +339,60 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
 
   test("Test MergeInto with changing partition") {
     withRecordType()(withTempDir { tmp =>
-      val sourceTable = generateTableName
-      val targetTable = generateTableName
-      spark.sql(
-        s"""
-           | create table $sourceTable
-           | using parquet
-           | partitioned by (partition)
-           | location '${tmp.getCanonicalPath}/$sourceTable'
-           | as
-           | select
-           | 1 as id,
-           | 2 as version,
-           | 'yes' as mergeCond,
-           | '2023-10-02' as partition
-        """.stripMargin
-      )
-      spark.sql(s"insert into $sourceTable values(2, 2, 'no', '2023-10-02')")
-      spark.sql(s"insert into $sourceTable values(3, 1, 'insert', '2023-10-01')")
+      withSQLConf("hoodie.index.type" -> "GLOBAL_SIMPLE") {
+        val sourceTable = generateTableName
+        val targetTable = generateTableName
+        spark.sql(
+          s"""
+             | create table $sourceTable
+             | using parquet
+             | partitioned by (partition)
+             | location '${tmp.getCanonicalPath}/$sourceTable'
+             | as
+             | select
+             | 1 as id,
+             | 2 as version,
+             | 'yes' as mergeCond,
+             | '2023-10-02' as partition
+          """.stripMargin
+        )
+        spark.sql(s"insert into $sourceTable values(2, 2, 'no', '2023-10-02')")
+        spark.sql(s"insert into $sourceTable values(3, 1, 'insert', '2023-10-01')")
 
-      spark.sql(
-        s"""
-           | create table $targetTable (
-           |  id int,
-           |  version int,
-           |  mergeCond string,
-           |  partition string
-           | ) using hudi
-           | partitioned by (partition)
-           | tblproperties (
-           |    'primaryKey' = 'id',
-           |    'type' = 'cow'
-           | )
-           | location '${tmp.getCanonicalPath}/$targetTable'
-         """.stripMargin)
+        spark.sql(
+          s"""
+             | create table $targetTable (
+             |  id int,
+             |  version int,
+             |  mergeCond string,
+             |  partition string
+             | ) using hudi
+             | partitioned by (partition)
+             | tblproperties (
+             |    'primaryKey' = 'id',
+             |    'type' = 'cow'
+             | )
+             | location '${tmp.getCanonicalPath}/$targetTable'
+           """.stripMargin)
 
-      spark.sql(s"insert into $targetTable values(1, 1, 'insert', '2023-10-01')")
-      spark.sql(s"insert into $targetTable values(2, 1, 'insert', '2023-10-01')")
+        spark.sql(s"insert into $targetTable values(1, 1, 'insert', '2023-10-01')")
+        spark.sql(s"insert into $targetTable values(2, 1, 'insert', '2023-10-01')")
 
-      spark.sql("set hoodie.simple.index.update.partition.path=true")
-      spark.sql("set hoodie.index.type=GLOBAL_SIMPLE")
+        spark.sql(
+          s"""
+             | merge into $targetTable t using
+             | (select * from $sourceTable) as s
+             | on t.id=s.id
+             | when matched and s.mergeCond = 'yes' then update set *
+             | when not matched then insert *
+           """.stripMargin)
+        checkAnswer(s"select id,version,partition from $targetTable order by id")(
+          Seq(1, 2, "2023-10-02"),
+          Seq(2, 1, "2023-10-01"),
+          Seq(3, 1, "2023-10-01")
+        )
+      }
 
-      spark.sql(
-        s"""
-           | merge into $targetTable t using
-           | (select * from $sourceTable) as s
-           | on t.id=s.id
-           | when matched and s.mergeCond = 'yes' then update set *
-           | when not matched then insert *
-         """.stripMargin)
-      checkAnswer(s"select id,version,partition from $targetTable order by id")(
-        Seq(1, 2, "2023-10-02"),
-        Seq(2, 1, "2023-10-01"),
-        Seq(3, 1, "2023-10-01")
-      )
     })
   }
 
