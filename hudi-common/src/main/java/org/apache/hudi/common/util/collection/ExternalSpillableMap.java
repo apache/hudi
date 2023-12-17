@@ -107,7 +107,10 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   }
 
   private DiskMap<T, R> getDiskBasedMap(boolean forceInitialization) {
-    if (null == diskBasedMap && forceInitialization) {
+    if (null == diskBasedMap) {
+      if (!forceInitialization) {
+        return DiskMap.empty();
+      }
       synchronized (this) {
         if (null == diskBasedMap) {
           try {
@@ -117,16 +120,15 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
                 break;
               case BITCASK:
               default:
-                diskBasedMap =  new BitCaskDiskMap<>(baseFilePath, isCompressionEnabled);
+                diskBasedMap = new BitCaskDiskMap<>(baseFilePath, isCompressionEnabled);
             }
           } catch (IOException e) {
             throw new HoodieIOException(e.getMessage(), e);
           }
         }
       }
-      return diskBasedMap;
     }
-    return DiskMap.empty();
+    return diskBasedMap;
   }
 
   /**
