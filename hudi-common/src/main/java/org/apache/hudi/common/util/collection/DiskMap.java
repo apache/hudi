@@ -20,13 +20,19 @@ package org.apache.hudi.common.util.collection;
 
 import org.apache.hudi.common.util.FileIOUtils;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -58,12 +64,21 @@ public abstract class DiskMap<T extends Serializable, R extends Serializable> im
     addShutDownHook();
   }
 
+  // Only used for the EmptyDiskMap implementation
+  private DiskMap() {
+    this.diskMapPath = null;
+    this.diskMapPathFile = null;
+  }
+
   /**
    * Register shutdown hook to force flush contents of the data written to FileOutputStream from OS page cache
    * (typically 4 KB) to disk.
    */
   private void addShutDownHook() {
-    shutdownThread = new Thread(this::cleanup);
+    shutdownThread = new Thread(() -> {
+      LOG.warn("Failed to properly close DiskMap in application");
+      cleanup();
+    });
     Runtime.getRuntime().addShutdownHook(shutdownThread);
   }
 
@@ -103,6 +118,104 @@ public abstract class DiskMap<T extends Serializable, R extends Serializable> im
     }
     if (!isTriggeredFromShutdownHook && shutdownThread != null) {
       Runtime.getRuntime().removeShutdownHook(shutdownThread);
+    }
+  }
+
+  private static final DiskMap EMPTY = new EmptyDiskMap<>();
+
+  public static <T extends Serializable, R extends Serializable> DiskMap<T, R> empty() {
+    return (DiskMap<T, R>) EMPTY;
+  }
+
+  static class EmptyDiskMap<T extends Serializable, R extends Serializable> extends DiskMap<T, R> {
+
+    public EmptyDiskMap() {
+      super();
+    }
+
+    @Override
+    public Stream<R> valueStream() {
+      return Stream.empty();
+    }
+
+    @Override
+    public long sizeOfFileOnDiskInBytes() {
+      return 0;
+    }
+
+    @Override
+    public int size() {
+      return 0;
+    }
+
+    @Override
+    public boolean isEmpty() {
+      return true;
+    }
+
+    @Override
+    public boolean containsKey(Object key) {
+      return false;
+    }
+
+    @Override
+    public boolean containsValue(Object value) {
+      return false;
+    }
+
+    @Override
+    public R get(Object key) {
+      throw new IllegalStateException("Cannot get from an empty map");
+    }
+
+    @Nullable
+    @Override
+    public R put(T key, R value) {
+      throw new IllegalStateException("Cannot put into an empty map");
+    }
+
+    @Override
+    public R remove(Object key) {
+      throw new IllegalStateException("Cannot remove from an empty map");
+    }
+
+    @Override
+    public void putAll(@NotNull Map<? extends T, ? extends R> m) {
+      throw new IllegalStateException("Cannot putAll on an empty map");
+    }
+
+    @Override
+    public void clear() {
+
+    }
+
+    @NotNull
+    @Override
+    public Set<T> keySet() {
+      return Collections.emptySet();
+    }
+
+    @NotNull
+    @Override
+    public Collection<R> values() {
+      return Collections.emptyList();
+    }
+
+    @NotNull
+    @Override
+    public Set<Entry<T, R>> entrySet() {
+      return Collections.emptySet();
+    }
+
+    @Override
+    public void close() {
+      // Do nothing
+    }
+
+    @NotNull
+    @Override
+    public Iterator<R> iterator() {
+      return Collections.<R>emptyList().iterator();
     }
   }
 }
