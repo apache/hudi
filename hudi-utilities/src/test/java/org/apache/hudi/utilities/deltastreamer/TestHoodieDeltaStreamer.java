@@ -188,7 +188,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     if (type == HoodieRecordType.SPARK) {
       Map<String, String> opts = new HashMap<>();
       opts.put(HoodieWriteConfig.RECORD_MERGER_IMPLS.key(), HoodieSparkRecordMerger.class.getName());
-      opts.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(),"parquet");
+      opts.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet");
       for (Map.Entry<String, String> entry : opts.entrySet()) {
         hoodieConfig.add(String.format("%s=%s", entry.getKey(), entry.getValue()));
       }
@@ -206,7 +206,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   protected HoodieDeltaStreamer initialHoodieDeltaStreamer(String tableBasePath, int totalRecords, String asyncCluster, HoodieRecordType recordType,
-                                                             WriteOperationType writeOperationType, Set<String> customConfigs) throws IOException {
+                                                           WriteOperationType writeOperationType, Set<String> customConfigs) throws IOException {
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, writeOperationType);
     addRecordMerger(recordType, cfg.configs);
     cfg.continuousMode = true;
@@ -465,16 +465,16 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // Initial bulk insert
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
     addRecordMerger(recordType, cfg.configs);
-    syncAndAssertRecordCount(cfg, 1000,  tableBasePath,  "00000",  1);
+    syncAndAssertRecordCount(cfg, 1000, tableBasePath, "00000", 1);
 
     // No new data => no commits.
     cfg.sourceLimit = 0;
-    syncAndAssertRecordCount(cfg, 1000,  tableBasePath,  "00000",  1);
+    syncAndAssertRecordCount(cfg, 1000, tableBasePath, "00000", 1);
 
     // upsert() #1
     cfg.sourceLimit = 2000;
     cfg.operation = WriteOperationType.UPSERT;
-    syncAndAssertRecordCount(cfg,1950, tableBasePath, "00001", 2);
+    syncAndAssertRecordCount(cfg, 1950, tableBasePath, "00001", 2);
     List<Row> counts = countsPerCommit(tableBasePath, sqlContext);
     assertEquals(1950, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
 
@@ -534,7 +534,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.sourceLimit = 2000;
     cfg.operation = WriteOperationType.UPSERT;
     cfg.configs.add(HoodieTableConfig.RECORDKEY_FIELDS.key() + "=differentval");
-    assertThrows(HoodieException.class, () -> syncAndAssertRecordCount(cfg,1000,tableBasePath,"00000",1));
+    assertThrows(HoodieException.class, () -> syncAndAssertRecordCount(cfg, 1000, tableBasePath, "00000", 1));
     List<Row> counts = countsPerCommit(tableBasePath, sqlContext);
     assertEquals(1000, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
 
@@ -647,7 +647,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
   public void testUpsertsCOW_ContinuousModeDisabled(HoodieRecordType recordType) throws Exception {
-    String tableBasePath = basePath  + "/non_continuous_cow";
+    String tableBasePath = basePath + "/non_continuous_cow";
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
     addRecordMerger(recordType, cfg.configs);
     cfg.tableType = HoodieTableType.COPY_ON_WRITE.name();
@@ -678,7 +678,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
   public void testUpsertsMOR_ContinuousModeDisabled(HoodieRecordType recordType) throws Exception {
-    String tableBasePath = basePath  + "/non_continuous_mor";
+    String tableBasePath = basePath + "/non_continuous_mor";
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
     addRecordMerger(recordType, cfg.configs);
     cfg.tableType = HoodieTableType.MERGE_ON_READ.name();
@@ -846,7 +846,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     prepareParquetDFSSource(false, false, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
         PARQUET_SOURCE_ROOT, false, "partition_path", "", extraProps);
     String tableBasePath = basePath + "test_parquet_table" + testNum;
-    HoodieDeltaStreamer.Config deltaCfg =  TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, ParquetDFSSource.class.getName(),
+    HoodieDeltaStreamer.Config deltaCfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, ParquetDFSSource.class.getName(),
         null, PROPS_FILENAME_TEST_PARQUET, false,
         false, 100000, false, null, "MERGE_ON_READ", "timestamp", null);
     deltaCfg.retryLastPendingInlineCompactionJob = false;
@@ -995,7 +995,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   private List<String> getAllMultiWriterConfigs() {
     List<String> configs = new ArrayList<>();
     configs.add(String.format("%s=%s", HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), InProcessLockProvider.class.getCanonicalName()));
-    configs.add(String.format("%s=%s", LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,"3000"));
+    configs.add(String.format("%s=%s", LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000"));
     configs.add(String.format("%s=%s", HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name()));
     configs.add(String.format("%s=%s", HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(), HoodieFailedWritesCleaningPolicy.LAZY.name()));
     return configs;
@@ -1041,7 +1041,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @ParameterizedTest
-  @EnumSource(value = HoodieRecordType.class, names = {"AVRO","SPARK"})
+  @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
   public void testHoodieIndexer(HoodieRecordType recordType) throws Exception {
     String tableBasePath = basePath + "/asyncindexer";
     HoodieDeltaStreamer ds = initialHoodieDeltaStreamer(tableBasePath, 1000, "false", recordType, WriteOperationType.INSERT,
@@ -1429,7 +1429,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         int counter = 2;
         while (counter < 100) { // lets keep going. if the test times out, we will cancel the future within finally. So, safe to generate 100 batches.
           LOG.info("Generating data for batch " + counter);
-          prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT,  Integer.toString(counter) + ".parquet", false, null, null);
+          prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, Integer.toString(counter) + ".parquet", false, null, null);
           counter++;
           Thread.sleep(2000);
         }
@@ -1474,9 +1474,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
    * 1 ===============> HUDI TABLE 2 (incr-pull with transform) (incr-pull) Hudi Table 1 is synced with Hive.
    */
   @ParameterizedTest
-  @EnumSource(value = HoodieRecordType.class, names = {"AVRO","SPARK"})
+  @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
   public void testBulkInsertsAndUpsertsWithSQLBasedTransformerFor2StepPipeline(HoodieRecordType recordType) throws Exception {
-    String tableBasePath = basePath + "/" + recordType.toString() +  "/test_table2";
+    String tableBasePath = basePath + "/" + recordType.toString() + "/test_table2";
     String downstreamTableBasePath = basePath + "/" + recordType.toString() + "/test_downstream_table2";
 
     // Initial bulk insert to ingest to first hudi table
@@ -1599,8 +1599,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   public void testPartialPayloadClass() throws Exception {
     String dataSetBasePath = basePath + "/test_dataset_mor";
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
-          Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, false,
-          true, true, PartialUpdateAvroPayload.class.getName(), "MERGE_ON_READ");
+        Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, false,
+        true, true, PartialUpdateAvroPayload.class.getName(), "MERGE_ON_READ");
     new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()).sync();
     assertRecordCount(1000, dataSetBasePath, sqlContext);
 
@@ -1831,7 +1831,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     prepareJsonKafkaDFSSource(propsFileName, autoResetValue, topicName, null, false);
   }
 
-  private void prepareJsonKafkaDFSSource(String propsFileName, String autoResetValue, String topicName, Map<String,String> extraProps, boolean shouldAddOffsets) throws IOException {
+  private void prepareJsonKafkaDFSSource(String propsFileName, String autoResetValue, String topicName, Map<String, String> extraProps, boolean shouldAddOffsets) throws IOException {
     // Properties used for testing delta-streamer with JsonKafka source
     TypedProperties props = new TypedProperties();
     populateAllCommonProps(props, basePath, testUtils.brokerAddress());
@@ -2032,7 +2032,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     ObjectMapper objectMapper = new ObjectMapper();
     HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
         .fromBytes(metaClient.getCommitsTimeline().getInstantDetails(instants.get(0)).get(), HoodieCommitMetadata.class);
-    Map<String,String>  checkpointVals = objectMapper.readValue(commitMetadata.getExtraMetadata().get(CHECKPOINT_KEY), Map.class);
+    Map<String, String> checkpointVals = objectMapper.readValue(commitMetadata.getExtraMetadata().get(CHECKPOINT_KEY), Map.class);
 
     String parquetFirstcheckpoint = checkpointVals.get("parquet");
     assertNotNull(parquetFirstcheckpoint);
@@ -2048,7 +2048,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     checkpointVals = objectMapper.readValue(commitMetadata.getExtraMetadata().get(CHECKPOINT_KEY), Map.class);
     String parquetSecondCheckpoint = checkpointVals.get("parquet");
     assertNotNull(parquetSecondCheckpoint);
-    assertEquals(kafkaCheckpoint,checkpointVals.get("kafka"));
+    assertEquals(kafkaCheckpoint, checkpointVals.get("kafka"));
     assertTrue(Long.parseLong(parquetSecondCheckpoint) > Long.parseLong(parquetFirstcheckpoint));
     parquetDs.shutdownGracefully();
     kafkaDs.shutdownGracefully();
@@ -2346,7 +2346,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     sqlSourceProps.setProperty("hoodie.embed.timeline.server", "false");
     sqlSourceProps.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
     sqlSourceProps.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
-    sqlSourceProps.setProperty("hoodie.deltastreamer.source.sql.sql.query","select * from test_sql_table");
+    sqlSourceProps.setProperty("hoodie.deltastreamer.source.sql.sql.query", "select * from test_sql_table");
 
     UtilitiesTestBase.Helpers.savePropsToDFS(sqlSourceProps, fs, basePath + "/" + PROPS_FILENAME_TEST_SQL_SOURCE);
 
@@ -2572,8 +2572,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(basePath + "/testFetchPreviousCheckpoint", WriteOperationType.BULK_INSERT);
 
     TypedProperties properties = new TypedProperties();
-    properties.setProperty("hoodie.datasource.write.recordkey.field","key");
-    properties.setProperty("hoodie.datasource.write.partitionpath.field","pp");
+    properties.setProperty("hoodie.datasource.write.recordkey.field", "key");
+    properties.setProperty("hoodie.datasource.write.partitionpath.field", "pp");
     TestStreamSync testDeltaSync = new TestStreamSync(cfg, sparkSession, null, properties,
         jsc, fs, jsc.hadoopConfiguration(), null);
 
@@ -2614,7 +2614,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TestHelpers.assertAtLeastNCommits(1, tableBasePath, fs);
 
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(
-            HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(fs.getConf()).build());
+        HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(fs.getConf()).build());
     // get schema from data file written in the latest commit
     Schema tableSchema = tableSchemaResolver.getTableAvroSchemaFromDataFile();
     assertNotNull(tableSchema);
@@ -2793,7 +2793,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @ParameterizedTest
-  @CsvSource(value = {"COPY_ON_WRITE, AVRO",  "MERGE_ON_READ, AVRO",
+  @CsvSource(value = {"COPY_ON_WRITE, AVRO", "MERGE_ON_READ, AVRO",
       "COPY_ON_WRITE, SPARK", "MERGE_ON_READ, SPARK"})
   public void testConfigurationHotUpdate(HoodieTableType tableType, HoodieRecordType recordType) throws Exception {
     String tableBasePath = basePath + String.format("/configurationHotUpdate_%s_%s", tableType.name(), recordType.name());
@@ -2948,7 +2948,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         arguments(true, Collections.singletonList(TripsWithDistanceTransformer.class.getName()))
     );
   }
-
 
   public static class NullValueSchemaProvider extends SchemaProvider {
 

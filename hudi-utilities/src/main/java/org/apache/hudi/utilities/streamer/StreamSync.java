@@ -1128,7 +1128,7 @@ public class StreamSync implements Serializable, Closeable {
           }
         }
       }
-    return newWriteSchema;
+      return newWriteSchema;
     } catch (Exception e) {
       throw new HoodieSchemaFetchException("Failed to fetch schema from table", e);
     }
