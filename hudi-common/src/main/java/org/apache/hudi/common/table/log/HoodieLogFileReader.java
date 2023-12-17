@@ -60,7 +60,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -88,8 +87,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private long lastReverseLogFilePosition;
   private final boolean reverseReader;
   private final boolean enableRecordLookups;
-  private AtomicBoolean closed = new AtomicBoolean(false);
-  private transient Thread shutdownThread = null;
+  private boolean closed = false;
   private FSDataInputStream inputStream;
 
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
@@ -130,30 +128,11 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     if (this.reverseReader) {
       this.reverseLogFilePosition = this.lastReverseLogFilePosition = this.logFile.getFileSize();
     }
-
-    addShutDownHook();
   }
 
   @Override
   public HoodieLogFile getLogFile() {
     return logFile;
-  }
-
-  /**
-   * Close the inputstream if not closed when the JVM exits.
-   */
-  private void addShutDownHook() {
-    shutdownThread = new Thread(() -> {
-      try {
-        close();
-      } catch (Exception e) {
-        LOG.warn("unable to close input stream for log file " + logFile, e);
-        // fail silently for any sort of exception
-      }
-    });
-    if (!closed.get()) {
-      Runtime.getRuntime().addShutdownHook(shutdownThread);
-    }
   }
 
   // TODO : convert content and block length to long by using ByteBuffer, raw byte [] allows
@@ -363,12 +342,11 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
   @Override
   public void close() throws IOException {
-    if (!closed.getAndSet(true)) {
+    if (!closed) {
+      LOG.info("Closing Log file reader " + logFile.getFileName());
       this.inputStream.close();
       this.inputStream = null;
-      if (null != shutdownThread) {
-        Runtime.getRuntime().removeShutdownHook(shutdownThread);
-      }
+      closed = true;
     }
   }
 
