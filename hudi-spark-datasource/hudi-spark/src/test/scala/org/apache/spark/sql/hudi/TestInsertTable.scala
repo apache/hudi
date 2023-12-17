@@ -504,6 +504,104 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     })
   }
 
+  test("Test insert overwrite for multi partitioned table") {
+    withRecordType()(Seq("cow", "mor").foreach { tableType =>
+      Seq("dynamic", "static").foreach { overwriteMode =>
+        withTable(generateTableName) { tableName =>
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long,
+               |  dt string,
+               |  hh string
+               |) using hudi
+               | tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id'
+               | )
+               | partitioned by (dt, hh)
+          """.stripMargin
+          )
+
+          spark.sql(
+            s"""
+               | insert into table $tableName values
+               | (0, 'a0', 10, 1000, '2023-12-05', '00'),
+               | (1, 'a1', 10, 1000, '2023-12-06', '00'),
+               | (2, 'a2', 10, 1000, '2023-12-06', '01')
+          """.stripMargin)
+          checkAnswer(s"select id, name, price, ts, dt, hh from $tableName")(
+            Seq(0, "a0", 10.0, 1000, "2023-12-05", "00"),
+            Seq(1, "a1", 10.0, 1000, "2023-12-06", "00"),
+            Seq(2, "a2", 10.0, 1000, "2023-12-06", "01")
+          )
+
+          withSQLConf("hoodie.datasource.overwrite.mode" -> overwriteMode) {
+            // test insert overwrite partitions with partial partition values
+            spark.sql(
+              s"""
+                 | insert overwrite table $tableName partition (dt='2023-12-06', hh) values
+                 | (3, 'a3', 10, 1000, '00'),
+                 | (4, 'a4', 10, 1000, '02')
+            """.stripMargin)
+            val expected = if (overwriteMode.equalsIgnoreCase("dynamic")) {
+              Seq(
+                Seq(0, "a0", 10.0, 1000, "2023-12-05", "00"),
+                Seq(3, "a3", 10.0, 1000, "2023-12-06", "00"),
+                Seq(2, "a2", 10.0, 1000, "2023-12-06", "01"),
+                Seq(4, "a4", 10.0, 1000, "2023-12-06", "02")
+              )
+            } else {
+              Seq(
+                Seq(0, "a0", 10.0, 1000, "2023-12-05", "00"),
+                Seq(3, "a3", 10.0, 1000, "2023-12-06", "00"),
+                Seq(4, "a4", 10.0, 1000, "2023-12-06", "02")
+              )
+            }
+            checkAnswer(s"select id, name, price, ts, dt, hh from $tableName")(expected: _*)
+
+            // test insert overwrite without partition values
+            spark.sql(
+              s"""
+                 | insert overwrite table $tableName values
+                 | (5, 'a5', 10, 1000, '2023-12-06', '02')
+            """.stripMargin)
+            val expected2 = if (overwriteMode.equalsIgnoreCase("dynamic")) {
+              // dynamic mode only overwrite the matching partitions
+              Seq(
+                Seq(0, "a0", 10.0, 1000, "2023-12-05", "00"),
+                Seq(3, "a3", 10.0, 1000, "2023-12-06", "00"),
+                Seq(2, "a2", 10.0, 1000, "2023-12-06", "01"),
+                Seq(5, "a5", 10.0, 1000, "2023-12-06", "02")
+              )
+            } else {
+              // static mode will overwrite the table
+              Seq(
+                Seq(5, "a5", 10.0, 1000, "2023-12-06", "02")
+              )
+            }
+            checkAnswer(s"select id, name, price, ts, dt, hh from $tableName")(expected2: _*)
+
+            // test insert overwrite table
+            withSQLConf("hoodie.datasource.write.operation" -> "insert_overwrite_table") {
+              spark.sql(
+                s"""
+                   | insert overwrite table $tableName partition (dt='2023-12-06', hh) values
+                   | (6, 'a6', 10, 1000, '00')
+              """.stripMargin)
+              checkAnswer(s"select id, name, price, ts, dt, hh from $tableName")(
+                Seq(6, "a6", 10.0, 1000, "2023-12-06", "00")
+              )
+            }
+          }
+        }
+      }
+    })
+  }
+
   test("Test Different Type of Partition Column") {
    withRecordType()(withTempDir { tmp =>
      val typeAndValue = Seq(

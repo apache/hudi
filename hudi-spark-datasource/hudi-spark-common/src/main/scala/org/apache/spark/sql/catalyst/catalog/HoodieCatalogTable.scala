@@ -335,7 +335,12 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
           nullableField
         }
       }.partition(f => partitionFields.contains(f.name))
-      StructType(dataFields ++ partFields)
+      // insert_overwrite operation with partial partition values will mix up the order
+      // of partition columns, so we also need reorder partition fields here.
+      val nameToField = partFields.map(field => (field.name, field)).toMap
+      val orderedPartFields = partitionFields.map(nameToField(_)).toSeq
+
+      StructType(dataFields ++ orderedPartFields)
     })
     catch {
       case cause: Throwable =>
