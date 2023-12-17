@@ -275,12 +275,10 @@ public class StreamSync implements Serializable, Closeable {
     this.autoGenerateRecordKeys = KeyGenUtils.enableAutoGenerateRecordKeys(props);
     this.keyGenClassName = getKeyGeneratorClassName(new TypedProperties(props));
     refreshTimeline();
-    // Register User Provided schema first
-    registerAvroSchemas(schemaProvider);
 
-
-    this.metrics = (HoodieIngestionMetrics) ReflectionUtils.loadClass(cfg.ingestionMetricsClass, getHoodieClientConfig(this.schemaProvider));
-    this.hoodieMetrics = new HoodieMetrics(getHoodieClientConfig(this.schemaProvider));
+    HoodieWriteConfig hoodieWriteConfig = getHoodieClientConfig(this.schemaProvider);
+    this.metrics = (HoodieIngestionMetrics) ReflectionUtils.loadClass(cfg.ingestionMetricsClass, hoodieWriteConfig);
+    this.hoodieMetrics = new HoodieMetrics(hoodieWriteConfig);
     this.conf = conf;
     if (props.getBoolean(ERROR_TABLE_ENABLED.key(), ERROR_TABLE_ENABLED.defaultValue())) {
       this.errorTableWriter = ErrorTableUtils.getErrorTableWriter(cfg, sparkSession, props, hoodieSparkContext, fs);
@@ -309,7 +307,7 @@ public class StreamSync implements Serializable, Closeable {
     if (fs.exists(new Path(cfg.targetBasePath))) {
       try {
         HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
-            .setConf(new Configuration(fs.getConf()))
+            .setConf(conf)
             .setBasePath(cfg.targetBasePath)
             .setPayloadClassName(cfg.payloadClassName)
             .setRecordMergerStrategy(props.getProperty(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key(), HoodieWriteConfig.RECORD_MERGER_STRATEGY.defaultValue()))
@@ -337,7 +335,7 @@ public class StreamSync implements Serializable, Closeable {
             LOG.warn("Base path exists, but table is not fully initialized. Re-initializing again");
             initializeEmptyTable();
             // reload the timeline from metaClient and validate that its empty table. If there are any instants found, then we should fail the pipeline, bcoz hoodie.properties got deleted by mistake.
-            HoodieTableMetaClient metaClientToValidate = HoodieTableMetaClient.builder().setConf(new Configuration(fs.getConf())).setBasePath(cfg.targetBasePath).build();
+            HoodieTableMetaClient metaClientToValidate = HoodieTableMetaClient.builder().setConf(conf).setBasePath(cfg.targetBasePath).build();
             if (metaClientToValidate.reloadActiveTimeline().countInstants() > 0) {
               // Deleting the recreated hoodie.properties and throwing exception.
               fs.delete(new Path(String.format("%s%s/%s", basePathWithForwardSlash, HoodieTableMetaClient.METAFOLDER_NAME, HoodieTableConfig.HOODIE_PROPERTIES_FILE)));
@@ -395,7 +393,7 @@ public class StreamSync implements Serializable, Closeable {
     // Refresh Timeline
     refreshTimeline();
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(new Configuration(fs.getConf()))
+        .setConf(conf)
         .setBasePath(cfg.targetBasePath)
         .setRecordMergerStrategy(props.getProperty(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key(), HoodieWriteConfig.RECORD_MERGER_STRATEGY.defaultValue()))
         .setTimeGeneratorConfig(HoodieTimeGeneratorConfig.newBuilder().fromProperties(props).withPath(cfg.targetBasePath).build())
@@ -432,7 +430,7 @@ public class StreamSync implements Serializable, Closeable {
       }
 
       // complete the pending compaction before writing to sink
-      if (cfg.retryLastPendingInlineCompactionJob && getHoodieClientConfig(this.schemaProvider).inlineCompactionEnabled()) {
+      if (cfg.retryLastPendingInlineCompactionJob && writeClient.getConfig().inlineCompactionEnabled()) {
         Option<String> pendingCompactionInstant = getLastPendingCompactionInstant(allCommitsTimelineOpt);
         if (pendingCompactionInstant.isPresent()) {
           HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata = writeClient.compact(pendingCompactionInstant.get());
@@ -440,7 +438,7 @@ public class StreamSync implements Serializable, Closeable {
           refreshTimeline();
           reInitWriteClient(schemaProvider.getSourceSchema(), schemaProvider.getTargetSchema(), null);
         }
-      } else if (cfg.retryLastPendingInlineClusteringJob && getHoodieClientConfig(this.schemaProvider).inlineClusteringEnabled()) {
+      } else if (cfg.retryLastPendingInlineClusteringJob && writeClient.getConfig().inlineClusteringEnabled()) {
         // complete the pending clustering before writing to sink
         Option<String> pendingClusteringInstant = getLastPendingClusteringInstant(allCommitsTimelineOpt);
         if (pendingClusteringInstant.isPresent()) {
@@ -998,9 +996,9 @@ public class StreamSync implements Serializable, Closeable {
    * this constraint.
    */
   private void setupWriteClient(Option<JavaRDD<HoodieRecord>> recordsOpt) throws IOException {
-    if ((null != schemaProvider)) {
+    if (null != schemaProvider) {
       Schema sourceSchema = schemaProvider.getSourceSchema();
-      Schema targetSchema = schemaProvider.getTargetSchema();
+      Schema targetSchema = getSchemaForWriteConfig(schemaProvider.getTargetSchema());
       reInitWriteClient(sourceSchema, targetSchema, recordsOpt);
     }
   }
@@ -1111,28 +1109,26 @@ public class StreamSync implements Serializable, Closeable {
   private Schema getSchemaForWriteConfig(Schema targetSchema) {
     Schema newWriteSchema = targetSchema;
     try {
-      if (targetSchema != null) {
-        // check if targetSchema is equal to NULL schema
-        if (SchemaCompatibility.checkReaderWriterCompatibility(targetSchema, InputBatch.NULL_SCHEMA).getType() == SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE
-            && SchemaCompatibility.checkReaderWriterCompatibility(InputBatch.NULL_SCHEMA, targetSchema).getType() == SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE) {
-          // target schema is null. fetch schema from commit metadata and use it
-          HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(new Configuration(fs.getConf()))
-              .setBasePath(cfg.targetBasePath)
-              .setPayloadClassName(cfg.payloadClassName)
-              .build();
-          int totalCompleted = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants();
-          if (totalCompleted > 0) {
-            TableSchemaResolver schemaResolver = new TableSchemaResolver(meta);
-            Option<Schema> tableSchema = schemaResolver.getTableAvroSchemaIfPresent(false);
-            if (tableSchema.isPresent()) {
-              newWriteSchema = tableSchema.get();
-            } else {
-              LOG.warn("Could not fetch schema from table. Falling back to using target schema from schema provider");
-            }
+      // check if targetSchema is equal to NULL schema
+      if (targetSchema == null || (SchemaCompatibility.checkReaderWriterCompatibility(targetSchema, InputBatch.NULL_SCHEMA).getType() == SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE
+          && SchemaCompatibility.checkReaderWriterCompatibility(InputBatch.NULL_SCHEMA, targetSchema).getType() == SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE)) {
+        // target schema is null. fetch schema from commit metadata and use it
+        HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(conf)
+            .setBasePath(cfg.targetBasePath)
+            .setPayloadClassName(cfg.payloadClassName)
+            .build();
+        int totalCompleted = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants();
+        if (totalCompleted > 0) {
+          TableSchemaResolver schemaResolver = new TableSchemaResolver(meta);
+          Option<Schema> tableSchema = schemaResolver.getTableAvroSchemaIfPresent(false);
+          if (tableSchema.isPresent()) {
+            newWriteSchema = tableSchema.get();
+          } else {
+            LOG.warn("Could not fetch schema from table. Falling back to using target schema from schema provider");
           }
         }
       }
-      return newWriteSchema;
+    return newWriteSchema;
     } catch (Exception e) {
       throw new HoodieSchemaFetchException("Failed to fetch schema from table", e);
     }

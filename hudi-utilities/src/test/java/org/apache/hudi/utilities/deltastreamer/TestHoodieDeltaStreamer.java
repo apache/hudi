@@ -2075,6 +2075,43 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @Test
+  public void testEmptyBatchWithNullSchemaValue() throws Exception {
+    PARQUET_SOURCE_ROOT = basePath + "/parquetFilesDfs" + testNum;
+    int parquetRecordsCount = 10;
+    prepareParquetDFSFiles(parquetRecordsCount, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, false, null, null);
+    prepareParquetDFSSource(false, false, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
+        PARQUET_SOURCE_ROOT, false, "partition_path", "0");
+
+    String tableBasePath = basePath + "/test_parquet_table" + testNum;
+    HoodieDeltaStreamer.Config config = TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
+        null, PROPS_FILENAME_TEST_PARQUET, false,
+        false, 100000, false, null, null, "timestamp", null);
+    HoodieDeltaStreamer deltaStreamer1 = new HoodieDeltaStreamer(config, jsc);
+    deltaStreamer1.sync();
+    assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(jsc.hadoopConfiguration()).build();
+    HoodieInstant firstCommit = metaClient.getActiveTimeline().lastInstant().get();
+    deltaStreamer1.shutdownGracefully();
+
+    prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, "2.parquet", false, null, null);
+    HoodieDeltaStreamer.Config updatedConfig = config;
+    updatedConfig.schemaProviderClassName = NullValueSchemaProvider.class.getName();
+    updatedConfig.sourceClassName = TestParquetDFSSourceEmptyBatch.class.getName();
+    HoodieDeltaStreamer deltaStreamer2 = new HoodieDeltaStreamer(updatedConfig, jsc);
+    deltaStreamer2.sync();
+    // since we mimic'ed empty batch, total records should be same as first sync().
+    assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
+
+    // validate schema is set in commit even if target schema returns null on empty batch
+    TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
+    HoodieInstant secondCommit = metaClient.reloadActiveTimeline().lastInstant().get();
+    Schema lastCommitSchema = tableSchemaResolver.getTableAvroSchema(secondCommit, true);
+    assertNotEquals(firstCommit, secondCommit);
+    assertNotEquals(lastCommitSchema, Schema.create(Schema.Type.NULL));
+    deltaStreamer2.shutdownGracefully();
+  }
+
+  @Test
   public void testDeltaStreamerRestartAfterMissingHoodieProps() throws Exception {
     testDeltaStreamerRestartAfterMissingHoodieProps(true);
   }
@@ -2910,5 +2947,22 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         arguments(false, null),
         arguments(true, Collections.singletonList(TripsWithDistanceTransformer.class.getName()))
     );
+  }
+
+
+  public static class NullValueSchemaProvider extends SchemaProvider {
+
+    public NullValueSchemaProvider(TypedProperties props) {
+      super(props);
+    }
+
+    public NullValueSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
+      super(props, jssc);
+    }
+
+    @Override
+    public Schema getSourceSchema() {
+      return null;
+    }
   }
 }
