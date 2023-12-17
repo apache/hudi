@@ -133,7 +133,7 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
 
     private void addShutdownHook() {
       shutdownThread = new Thread(() -> {
-        LOG.warn("Run lazyfileiter hook");
+        LOG.warn("Failed to properly close LazyFileIterable in application.");
         this.closeHandle();
       });
       Runtime.getRuntime().addShutdownHook(shutdownThread);

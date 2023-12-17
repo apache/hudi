@@ -63,11 +63,7 @@ public abstract class DiskMap<T extends Serializable, R extends Serializable> im
    * (typically 4 KB) to disk.
    */
   private void addShutDownHook() {
-    shutdownThread = new Thread(() -> {
-      LOG.warn("Run diskmap hook");
-      this.cleanup();
-      LOG.warn("finished diskmap hook");
-    });
+    shutdownThread = new Thread(this::cleanup);
     Runtime.getRuntime().addShutdownHook(shutdownThread);
   }
 
