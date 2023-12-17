@@ -20,8 +20,6 @@ package org.apache.hudi.common.util.collection;
 
 import org.apache.hudi.common.util.FileIOUtils;
 
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -168,7 +166,6 @@ public abstract class DiskMap<T extends Serializable, R extends Serializable> im
       throw new IllegalStateException("Cannot get from an empty map");
     }
 
-    @Nullable
     @Override
     public R put(T key, R value) {
       throw new IllegalStateException("Cannot put into an empty map");
@@ -180,7 +177,7 @@ public abstract class DiskMap<T extends Serializable, R extends Serializable> im
     }
 
     @Override
-    public void putAll(@NotNull Map<? extends T, ? extends R> m) {
+    public void putAll(Map<? extends T, ? extends R> m) {
       throw new IllegalStateException("Cannot putAll on an empty map");
     }
 
@@ -189,19 +186,16 @@ public abstract class DiskMap<T extends Serializable, R extends Serializable> im
 
     }
 
-    @NotNull
     @Override
     public Set<T> keySet() {
       return Collections.emptySet();
     }
 
-    @NotNull
     @Override
     public Collection<R> values() {
       return Collections.emptyList();
     }
 
-    @NotNull
     @Override
     public Set<Entry<T, R>> entrySet() {
       return Collections.emptySet();
@@ -212,7 +206,6 @@ public abstract class DiskMap<T extends Serializable, R extends Serializable> im
       // Do nothing
     }
 
-    @NotNull
     @Override
     public Iterator<R> iterator() {
       return Collections.<R>emptyList().iterator();
