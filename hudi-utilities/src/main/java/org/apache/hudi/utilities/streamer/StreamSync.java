@@ -276,7 +276,7 @@ public class StreamSync implements Serializable, Closeable {
     this.keyGenClassName = getKeyGeneratorClassName(new TypedProperties(props));
     refreshTimeline();
 
-    HoodieWriteConfig hoodieWriteConfig = getHoodieClientConfig(this.schemaProvider);
+    HoodieWriteConfig hoodieWriteConfig = getHoodieClientConfig();
     this.metrics = (HoodieIngestionMetrics) ReflectionUtils.loadClass(cfg.ingestionMetricsClass, hoodieWriteConfig);
     this.hoodieMetrics = new HoodieMetrics(hoodieWriteConfig);
     this.conf = conf;
@@ -998,7 +998,7 @@ public class StreamSync implements Serializable, Closeable {
   private void setupWriteClient(Option<JavaRDD<HoodieRecord>> recordsOpt) throws IOException {
     if (null != schemaProvider) {
       Schema sourceSchema = schemaProvider.getSourceSchema();
-      Schema targetSchema = getSchemaForWriteConfig(schemaProvider.getTargetSchema());
+      Schema targetSchema = schemaProvider.getTargetSchema();
       reInitWriteClient(sourceSchema, targetSchema, recordsOpt);
     }
   }
@@ -1008,8 +1008,9 @@ public class StreamSync implements Serializable, Closeable {
     if (HoodieStreamerUtils.isDropPartitionColumns(props)) {
       targetSchema = HoodieAvroUtils.removeFields(targetSchema, HoodieStreamerUtils.getPartitionColumns(props));
     }
-    registerAvroSchemas(sourceSchema, targetSchema);
-    final HoodieWriteConfig initialWriteConfig = getHoodieClientConfig(targetSchema);
+    final Pair<HoodieWriteConfig, Schema> initialWriteConfigAndSchema = getHoodieClientConfigAndWriterSchema(targetSchema, true);
+    final HoodieWriteConfig initialWriteConfig = initialWriteConfigAndSchema.getLeft();
+    registerAvroSchemas(sourceSchema, initialWriteConfigAndSchema.getRight());
     final HoodieWriteConfig writeConfig = SparkSampleWritesUtils
         .getWriteConfigWithRecordSizeEstimate(hoodieSparkContext.jsc(), recordsOpt, initialWriteConfig)
         .orElse(initialWriteConfig);
@@ -1031,20 +1032,21 @@ public class StreamSync implements Serializable, Closeable {
   }
 
   /**
-   * Helper to construct Write Client config.
-   *
-   * @param schemaProvider Schema Provider
+   * Helper to construct Write Client config without a schema.
    */
-  private HoodieWriteConfig getHoodieClientConfig(SchemaProvider schemaProvider) {
-    return getHoodieClientConfig(schemaProvider != null ? schemaProvider.getTargetSchema() : null);
+  private HoodieWriteConfig getHoodieClientConfig() {
+    return getHoodieClientConfigAndWriterSchema(null, false).getLeft();
   }
 
   /**
    * Helper to construct Write Client config.
    *
-   * @param schema Schema
+   * @param schema initial writer schema. If null or Avro Null type, the schema will be fetched from previous commit metadata for the table.
+   * @param requireSchemaInConfig whether the schema should be present in the config. This is an optimization to avoid fetching schema from previous commits if not needed.
+   *
+   * @return Pair of HoodieWriteConfig and writer schema.
    */
-  private HoodieWriteConfig getHoodieClientConfig(Schema schema) {
+  private Pair<HoodieWriteConfig, Schema> getHoodieClientConfigAndWriterSchema(Schema schema, boolean requireSchemaInConfig) {
     final boolean combineBeforeUpsert = true;
     final boolean autoCommit = false;
 
@@ -1070,8 +1072,13 @@ public class StreamSync implements Serializable, Closeable {
             .withAutoCommit(autoCommit)
             .withProps(props);
 
-    if (schema != null) {
-      builder.withSchema(getSchemaForWriteConfig(schema).toString());
+    // If schema is required in the config, we need to handle the case where the target schema is null and should be fetched from previous commits
+    final Schema returnSchema;
+    if (requireSchemaInConfig) {
+      returnSchema = getSchemaForWriteConfig(schema);
+      builder.withSchema(returnSchema.toString());
+    } else {
+      returnSchema = schema;
     }
 
     HoodieWriteConfig config = builder.build();
@@ -1103,7 +1110,7 @@ public class StreamSync implements Serializable, Closeable {
         String.format("%s should be set to %s", COMBINE_BEFORE_INSERT.key(), cfg.filterDupes));
     ValidationUtils.checkArgument(config.shouldCombineBeforeUpsert(),
         String.format("%s should be set to %s", COMBINE_BEFORE_UPSERT.key(), combineBeforeUpsert));
-    return config;
+    return Pair.of(config, returnSchema);
   }
 
   private Schema getSchemaForWriteConfig(Schema targetSchema) {
