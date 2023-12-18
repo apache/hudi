@@ -210,6 +210,22 @@ object DataSourceReadOptions {
 
   val INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT: ConfigProperty[String] = HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT
 
+  val CREATE_TIMELINE_RELATION: ConfigProperty[String] =
+    ConfigProperty.key("hoodie.datasource.read.table.valued.function.timeline.relation")
+      .defaultValue("false")
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("When this is set, the relation created by DefaultSource is for a view representing" +
+        " the result set of the table valued function hudi_query_timeline(...)")
+
+  val TIMELINE_RELATION_ARG_ARCHIVED_TIMELINE:  ConfigProperty[String] =
+    ConfigProperty.key("hoodie.datasource.read.table.valued.function.timeline.relation.archived")
+      .defaultValue("false")
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("When this is set, the result set of the table valued function hudi_query_timeline(...)" +
+        " will include archived timeline")
+
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
   @Deprecated
   val QUERY_TYPE_OPT_KEY = QUERY_TYPE.key()
