@@ -274,7 +274,7 @@ public class TestHoodieHiveCatalog {
   @Test
   public void testCreateHoodieTableWithWrongTableType() {
     HashMap<String,String> properties = new HashMap<>();
-    properties.put(FactoryUtil.CONNECTOR.key(), "hudi-fake");
+    properties.put(FactoryUtil.CONNECTOR.key(), "hudi");
     properties.put("table.type","wrong type");
     CatalogTable table =
             new CatalogTableImpl(schema,  properties, "hudi table");
