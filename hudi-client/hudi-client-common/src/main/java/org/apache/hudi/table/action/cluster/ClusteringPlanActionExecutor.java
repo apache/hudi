@@ -63,10 +63,19 @@ public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseActionExecutor
         .findInstantsAfter(lastClusteringInstant.map(HoodieInstant::getTimestamp).orElse("0"), Integer.MAX_VALUE)
         .countInstants();
 
+    int pendingClusteringPlanNum = table.getActiveTimeline().filterInflightsAndRequested()
+            .filterPendingReplaceTimeline().countInstants();
+
     if (config.inlineClusteringEnabled() && config.getInlineClusterMaxCommits() > commitsSinceLastClustering) {
       LOG.warn("Not scheduling inline clustering as only " + commitsSinceLastClustering
           + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
           + config.getInlineClusterMaxCommits());
+      return Option.empty();
+    }
+
+    if (config.isAsyncClusteringEnabled() && pendingClusteringPlanNum >= config.getAsyncClusterPlanMaxPendingNums()) {
+      LOG.info("Not scheduling async clustering as pendingClusteringPlanNums is greater than or equal to "
+              + config.getAsyncClusterPlanMaxPendingNums());
       return Option.empty();
     }
 

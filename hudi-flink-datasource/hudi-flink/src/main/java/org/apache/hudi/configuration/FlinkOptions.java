@@ -788,6 +788,13 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(4)
       .withDescription("Max delta commits needed to trigger clustering, default 4 commits");
 
+  public static final ConfigOption<Integer> CLUSTERING_MAX_PENDING_NUMS = ConfigOptions
+          .key("clustering.max.pending_nums")
+          .intType()
+          .defaultValue(1)
+          .withDescription("Maximum number of outstanding inflight/requested clustering.  "
+                  + "Clustering Plan will not be scheduled unless outstanding clustering is less than this number");
+
   @AdvancedConfig
   public static final ConfigOption<Integer> CLUSTERING_TASKS = ConfigOptions
       .key("clustering.tasks")

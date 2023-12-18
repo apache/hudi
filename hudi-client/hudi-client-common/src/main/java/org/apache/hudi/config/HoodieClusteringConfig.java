@@ -151,6 +151,12 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .sinceVersion("0.9.0")
       .withDocumentation("Config to control frequency of async clustering");
 
+  public static final ConfigProperty<String> ASYNC_CLUSTERING_PLAN_MAX_PENDING_NUMS = ConfigProperty
+          .key("hoodie.clustering.plan.max.pending.nums")
+          .defaultValue("1")
+          .sinceVersion("0.14.1")
+          .withDocumentation("Config to control max count of async clustering plan");
+
   public static final ConfigProperty<Integer> CLUSTERING_MAX_PARALLELISM = ConfigProperty
       .key("hoodie.clustering.max.parallelism")
       .defaultValue(15)
@@ -601,6 +607,11 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
     public Builder withAsyncClustering(Boolean asyncClustering) {
       clusteringConfig.setValue(ASYNC_CLUSTERING_ENABLE, String.valueOf(asyncClustering));
+      return this;
+    }
+
+    public Builder withAsyncClusteringPlanMaxPendingNums(int pendingNums) {
+      clusteringConfig.setValue(ASYNC_CLUSTERING_PLAN_MAX_PENDING_NUMS, String.valueOf(pendingNums));
       return this;
     }
 

@@ -24,6 +24,7 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
@@ -306,6 +307,75 @@ public class ITTestHoodieFlinkClustering {
 
       assertTrue(scheduled, "2 delta commits, the clustering plan should be scheduled");
     }
+  }
+
+  @Test
+  public void testHoodieFlinkClusteringScheduleMaxPendingPlanNums() throws Exception {
+    // Create hoodie table and insert into data.
+    EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
+    TableEnvironment tableEnv = TableEnvironmentImpl.create(settings);
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+
+    // use append mode
+    options.put(FlinkOptions.OPERATION.key(), WriteOperationType.INSERT.value());
+    options.put(FlinkOptions.INSERT_CLUSTER.key(), "false");
+
+    String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
+    tableEnv.executeSql(hoodieTableDDL);
+    tableEnv.executeSql(TestSQL.INSERT_T1).await();
+
+    // wait for the asynchronous commit to finish
+    TimeUnit.SECONDS.sleep(3);
+
+    // Make configuration and setAvroSchema.
+    StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+    FlinkClusteringConfig cfg = new FlinkClusteringConfig();
+    cfg.path = tempFile.getAbsolutePath();
+    Configuration conf = FlinkClusteringConfig.toFlinkConfig(cfg);
+
+    // create metaClient
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+
+    // set the table name
+    conf.setString(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
+
+    // set record key field
+    conf.setString(FlinkOptions.RECORD_KEY_FIELD, metaClient.getTableConfig().getRecordKeyFieldProp());
+    // set partition field
+    conf.setString(FlinkOptions.PARTITION_PATH_FIELD, metaClient.getTableConfig().getPartitionFieldProp());
+
+    long ckpTimeout = env.getCheckpointConfig().getCheckpointTimeout();
+    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
+    conf.setString(FlinkOptions.PARTITION_PATH_FIELD, "partition");
+    conf.setInteger(FlinkOptions.CLUSTERING_DELTA_COMMITS, 1);
+    conf.setBoolean(FlinkOptions.CLUSTERING_ASYNC_ENABLED, false);
+    conf.setBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, true);
+    conf.setInteger(FlinkOptions.CLUSTERING_MAX_PENDING_NUMS, 1);
+
+    // set table schema
+    CompactionUtil.setAvroSchema(conf, metaClient);
+
+    HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf);
+
+    // To compute the clustering instant time.
+    String clusteringInstantTime = writeClient.createNewInstantTime();
+
+    boolean scheduled = writeClient.scheduleClusteringAtInstant(clusteringInstantTime, Option.empty());
+
+    assertTrue(scheduled, "1 delta commit, the clustering plan should be scheduled");
+
+    tableEnv.executeSql(TestSQL.INSERT_T1).await();
+    // wait for the asynchronous commit to finish
+    TimeUnit.SECONDS.sleep(3);
+
+    clusteringInstantTime = writeClient.createNewInstantTime();
+
+    tableEnv.executeSql(TestSQL.INSERT_T1).await();
+    TimeUnit.SECONDS.sleep(3);
+    scheduled = writeClient.scheduleClusteringAtInstant(clusteringInstantTime, Option.empty());
+
+    assertFalse(scheduled, "2 delta commits, the clustering plan should not be scheduled");
   }
 
   @Test

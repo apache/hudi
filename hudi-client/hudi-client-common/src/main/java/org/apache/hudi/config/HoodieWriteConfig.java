@@ -1685,6 +1685,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMITS);
   }
 
+  public int getAsyncClusterPlanMaxPendingNums() {
+    return getInt(HoodieClusteringConfig.ASYNC_CLUSTERING_PLAN_MAX_PENDING_NUMS);
+  }
+
   public String getPayloadClass() {
     return getString(HoodiePayloadConfig.PAYLOAD_CLASS_NAME);
   }

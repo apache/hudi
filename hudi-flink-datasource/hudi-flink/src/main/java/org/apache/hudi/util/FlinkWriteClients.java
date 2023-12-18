@@ -178,6 +178,7 @@ public class FlinkWriteClients {
                     .withAsyncClusteringMaxCommits(conf.getInteger(FlinkOptions.CLUSTERING_DELTA_COMMITS))
                     .withScheduleInlineClustering(conf.getBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED))
                     .withAsyncClustering(conf.getBoolean(FlinkOptions.CLUSTERING_ASYNC_ENABLED))
+                    .withAsyncClusteringPlanMaxPendingNums(conf.getInteger(FlinkOptions.CLUSTERING_MAX_PENDING_NUMS))
                     .build())
             .withCleanConfig(HoodieCleanConfig.newBuilder()
                 .withAsyncClean(conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED))
