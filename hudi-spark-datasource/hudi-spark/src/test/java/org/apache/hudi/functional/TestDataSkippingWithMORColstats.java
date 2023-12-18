@@ -318,6 +318,7 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
     options.put(HoodieMetadataConfig.ENABLE.key(), "true");
     options.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
     options.put(HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key(), "trip_type");
+    options.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false");
     options.put(DataSourceReadOptions.ENABLE_DATA_SKIPPING().key(), "true");
     options.put(DataSourceWriteOptions.TABLE_TYPE().key(), DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL());
     options.put(HoodieWriteConfig.TBL_NAME.key(), "testTable");

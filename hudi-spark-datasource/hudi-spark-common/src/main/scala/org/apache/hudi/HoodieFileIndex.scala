@@ -101,6 +101,7 @@ case class HoodieFileIndex(spark: SparkSession,
    */
   @transient private lazy val indicesSupport: List[SparkBaseIndexSupport] = List(
     new RecordLevelIndexSupport(spark, metadataConfig, metaClient),
+    new PartitionStatsIndexSupport(spark, schema, metadataConfig, metaClient),
     new FunctionalIndexSupport(spark, metadataConfig, metaClient),
     new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
   )

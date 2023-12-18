@@ -23,6 +23,7 @@ import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -35,6 +36,8 @@ import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+
+import javax.annotation.Nonnull;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -65,6 +68,50 @@ public abstract class BaseFileUtils {
       return new OrcUtils();
     }
     throw new UnsupportedOperationException(fileFormat.name() + " format not supported yet.");
+  }
+
+  /**
+   * Aggregate column range statistics across files in a partition.
+   *
+   * @param fileRanges List of column range statistics for each file in a partition
+   */
+  public static <T extends Comparable<T>> HoodieColumnRangeMetadata<T> getColumnRangeInPartition(@Nonnull List<HoodieColumnRangeMetadata<T>> fileRanges) {
+    if (fileRanges.size() == 1) {
+      // Only one parquet file, we can just return that range.
+      return fileRanges.get(0);
+    }
+    // There are multiple files. Compute min(file_mins) and max(file_maxs)
+    return fileRanges.stream()
+        .sequential()
+        .reduce(BaseFileUtils::mergeRanges).get();
+  }
+
+  private static  <T extends Comparable<T>> HoodieColumnRangeMetadata<T> mergeRanges(HoodieColumnRangeMetadata<T> one,
+                                                                                     HoodieColumnRangeMetadata<T> another) {
+    final T minValue;
+    final T maxValue;
+    if (one.getMinValue() != null && another.getMinValue() != null) {
+      minValue = one.getMinValue().compareTo(another.getMinValue()) < 0 ? one.getMinValue() : another.getMinValue();
+    } else if (one.getMinValue() == null) {
+      minValue = another.getMinValue();
+    } else {
+      minValue = one.getMinValue();
+    }
+
+    if (one.getMaxValue() != null && another.getMaxValue() != null) {
+      maxValue = one.getMaxValue().compareTo(another.getMaxValue()) < 0 ? another.getMaxValue() : one.getMaxValue();
+    } else if (one.getMaxValue() == null) {
+      maxValue = another.getMaxValue();
+    } else {
+      maxValue = one.getMaxValue();
+    }
+
+    return HoodieColumnRangeMetadata.create(
+        null, one.getColumnName(), minValue, maxValue,
+        one.getNullCount() + another.getNullCount(),
+        one.getValueCount() + another.getValueCount(),
+        one.getTotalSize() + another.getTotalSize(),
+        one.getTotalUncompressedSize() + another.getTotalUncompressedSize());
   }
 
   /**

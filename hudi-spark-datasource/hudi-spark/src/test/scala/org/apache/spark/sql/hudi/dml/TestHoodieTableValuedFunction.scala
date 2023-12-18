@@ -608,9 +608,9 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
           assert(result3DF.count() == 3)
 
           val result4DF = spark.sql(
-            s"select type, key, ColumnStatsMetadata from hudi_metadata('$identifier') where type=3"
+            s"select type, key, ColumnStatsMetadata from hudi_metadata('$identifier') where type=3 or type=6"
           )
-          assert(result4DF.count() == 3)
+          assert(result4DF.count() == 6)
 
           val result5DF = spark.sql(
             s"select type, key, recordIndexMetadata from hudi_metadata('$identifier') where type=5"
@@ -621,6 +621,71 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
             s"select type, key, BloomFilterMetadata from hudi_metadata('$identifier') where BloomFilterMetadata is not null"
           )
           assert(result6DF.count() == 0)
+        }
+      }
+    }
+    spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
+  }
+
+  test(s"Test hudi_metadata Table-Valued Function For PARTITION_STATS index") {
+    if (HoodieSparkUtils.gteqSpark3_2) {
+      withTempDir { tmp =>
+        Seq("cow", "mor").foreach { tableType =>
+          val tableName = generateTableName
+          val identifier = tableName
+          spark.sql("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  ts long,
+               |  price int
+               |) using hudi
+               |partitioned by (ts)
+               |tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts',
+               |  hoodie.datasource.write.recordkey.field = 'id',
+               |  hoodie.metadata.index.partition.stats.enable = 'true',
+               |  hoodie.metadata.index.column.stats.column.list = 'price'
+               |)
+               |location '${tmp.getCanonicalPath}/$tableName'
+               |""".stripMargin
+          )
+
+          spark.sql(
+            s"""
+               | insert into $tableName
+               | values (1, 'a1', 1000, 10), (2, 'a2', 2000, 20), (3, 'a3', 3000, 30), (4, 'a4', 2000, 10), (5, 'a5', 3000, 20), (6, 'a6', 4000, 30)
+               | """.stripMargin
+          )
+
+          val result2DF = spark.sql(
+            s"select type, key, filesystemmetadata from hudi_metadata('$identifier') where type=1"
+          )
+          assert(result2DF.count() == 1)
+
+          val result3DF = spark.sql(
+            s"select type, key, filesystemmetadata from hudi_metadata('$identifier') where type=2"
+          )
+          assert(result3DF.count() == 3)
+
+          val result4DF = spark.sql(
+            s"select * from hudi_metadata('$identifier') where type=3"
+          )
+          assert(result4DF.count() == 3)
+          checkAnswer(spark.sql(s"select ColumnStatsMetadata.minValue.member1.value from hudi_metadata('$identifier') where type=3").collect())(
+            Seq(1000),
+            Seq(2000),
+            Seq(3000)
+          )
+          checkAnswer(spark.sql(s"select ColumnStatsMetadata.maxValue.member1.value from hudi_metadata('$identifier') where type=3").collect())(
+            Seq(2000),
+            Seq(3000),
+            Seq(4000)
+          )
         }
       }
     }
