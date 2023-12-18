@@ -61,6 +61,12 @@ public class FileSystemTestUtils {
     return new Path(FILE_SCHEME + fileSuffix);
   }
 
+  public static Path getRandomOuterFSPath(String extension) {
+    String randomFileName = UUID.randomUUID().toString();
+    String fileSuffix = COLON + FORWARD_SLASH + TEMP + FORWARD_SLASH + randomFileName;
+    return new Path(FILE_SCHEME + fileSuffix + "." + extension);
+  }
+
   public static Path getPhantomFile(Path outerPath, long startOffset, long inlineLength) {
     // Generate phantom inline file
     return InLineFSUtils.getInlineFilePath(outerPath, FILE_SCHEME, startOffset, inlineLength);

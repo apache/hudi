@@ -255,7 +255,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
             col("after.name"),
             col("after.price"),
             col("after.ts")
-          ).orderBy("after.id").collect()
+          ).orderBy("after.id").take(10)
           checkAnswer(change1)(
             Seq("i", null, 1, "a1", 10.0, 1000),
             Seq("i", null, 2, "a2", 20.0, 1000),
@@ -296,7 +296,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
             col("after.name"),
             col("after.price"),
             col("after.ts")
-          ).orderBy("after.id").collect()
+          ).orderBy("after.id").take(10)
           checkAnswer(change2)(
             Seq("u", 1, "a1", 10.0, 1000, 1, "a1_1", 10.0, 1100),
             Seq("u", 2, "a2", 20.0, 1000, 2, "a2_2", 20.0, 1100),
@@ -338,7 +338,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
             col("after.name"),
             col("after.price"),
             col("after.ts")
-          ).orderBy("after.id").collect()
+          ).orderBy("after.id").take(10)
           checkAnswer(change3)(
             Seq("u", 1, "a1", 10.0, 1000, 1, "a1_1", 10.0, 1100),
             Seq("u", 2, "a2", 20.0, 1000, 2, "a2_2", 20.0, 1100),

@@ -115,6 +115,7 @@
                   <include>org.rocksdb:rocksdbjni</include>
                   <include>org.antlr:stringtemplate</include>
                   <include>org.apache.parquet:parquet-avro</include>
+                  <include>org.roaringbitmap:RoaringBitmap</include>
                   <!-- Bundle Jackson JSR310 library since it is not present in spark 2.x. For spark 3.x this will
                        bundle the same JSR310 version that is included in spark runtime -->
                   <include>com.fasterxml.jackson.datatype:jackson-datatype-jsr310</include>
@@ -122,6 +123,8 @@
                   <include>com.github.davidmoten:guava-mini</include>
                   <include>com.github.davidmoten:hilbert-curve</include>
                   <include>com.github.ben-manes.caffeine:caffeine</include>
+                  <!-- SPARK-43489 Spark 3.5+ has marked protobuf as provided -->
+                  <include>com.google.protobuf:protobuf-java</include>
                   <include>com.twitter:bijection-avro_${scala.binary.version}</include>
                   <include>com.twitter:bijection-core_${scala.binary.version}</include>
                   <include>io.confluent:kafka-avro-serializer</include>
@@ -224,6 +227,14 @@
                 <relocation>
                   <pattern>org.apache.httpcomponents.</pattern>
                   <shadedPattern>org.apache.hudi.aws.org.apache.httpcomponents.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.google.protobuf.</pattern>
+                  <shadedPattern>org.apache.hudi.com.google.protobuf.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.roaringbitmap.</pattern>
+                  <shadedPattern>org.apache.hudi.org.roaringbitmap.</shadedPattern>
                 </relocation>
               </relocations>
               <filters>

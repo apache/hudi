@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.config;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
 import java.io.Serializable;
@@ -76,6 +77,10 @@ public class TypedProperties extends Properties implements Serializable {
 
   public String getString(String property, String defaultValue) {
     return containsKey(property) ? getProperty(property) : defaultValue;
+  }
+
+  public Option<String> getNonEmptyStringOpt(String property, String defaultValue) {
+    return Option.ofNullable(StringUtils.emptyToNull(getString(property, defaultValue)));
   }
 
   public List<String> getStringList(String property, String delimiter, List<String> defaultVal) {

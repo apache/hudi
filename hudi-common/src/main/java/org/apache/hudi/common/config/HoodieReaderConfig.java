@@ -54,8 +54,15 @@ public class HoodieReaderConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> FILE_GROUP_READER_ENABLED = ConfigProperty
       .key("hoodie.file.group.reader.enabled")
-      .defaultValue(false)
+      .defaultValue(true)
       .markAdvanced()
       .sinceVersion("1.0.0")
       .withDocumentation("Use engine agnostic file group reader if enabled");
+
+  public static final ConfigProperty<Boolean> MERGE_USE_RECORD_POSITIONS = ConfigProperty
+      .key("hoodie.merge.use.record.positions")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Whether to use positions in the block header for data blocks containing updates and delete blocks for merging.");
 }

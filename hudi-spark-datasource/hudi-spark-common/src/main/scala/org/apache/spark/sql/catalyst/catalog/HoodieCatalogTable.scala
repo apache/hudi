@@ -23,6 +23,7 @@ import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, TypedProperties}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING
+import org.apache.hudi.common.table.timeline.TimelineUtils
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
@@ -169,9 +170,14 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   lazy val partitionSchema: StructType = StructType(tableSchema.filter(f => partitionFields.contains(f.name)))
 
   /**
-   * All the partition paths
+   * All the partition paths, excludes lazily deleted partitions.
    */
-  def getPartitionPaths: Seq[String] = getAllPartitionPaths(spark, table)
+  def getPartitionPaths: Seq[String] = {
+    val droppedPartitions = TimelineUtils.getDroppedPartitions(metaClient.getActiveTimeline)
+
+    getAllPartitionPaths(spark, table)
+      .filter(!droppedPartitions.contains(_))
+  }
 
   /**
    * Check if table is a partitioned table
@@ -333,7 +339,12 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
           nullableField
         }
       }.partition(f => partitionFields.contains(f.name))
-      StructType(dataFields ++ partFields)
+      // insert_overwrite operation with partial partition values will mix up the order
+      // of partition columns, so we also need reorder partition fields here.
+      val nameToField = partFields.map(field => (field.name, field)).toMap
+      val orderedPartFields = partitionFields.map(nameToField(_)).toSeq
+
+      StructType(dataFields ++ orderedPartFields)
     })
     catch {
       case cause: Throwable =>

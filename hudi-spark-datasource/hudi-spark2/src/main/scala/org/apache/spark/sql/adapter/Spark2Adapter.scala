@@ -26,11 +26,9 @@ import org.apache.hudi.{AvroConversionUtils, DefaultSource, Spark2HoodieFileScan
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
-import org.apache.spark.sql.catalyst.plans.JoinType
-import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable, Join, LogicalPlan}
+import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable}
 import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark24LegacyHoodieParquetFileFormat}
@@ -91,7 +89,7 @@ class Spark2Adapter extends SparkAdapter {
   override def getAvroSchemaConverters: HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters
 
   override def createSparkRowSerDe(schema: StructType): SparkRowSerDe = {
-    val encoder = RowEncoder(schema).resolveAndBind()
+    val encoder = getCatalystExpressionUtils.getEncoder(schema)
     new Spark2RowSerDe(encoder)
   }
 

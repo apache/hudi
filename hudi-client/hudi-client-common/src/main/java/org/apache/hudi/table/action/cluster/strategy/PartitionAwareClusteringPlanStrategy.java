@@ -82,6 +82,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
 
         // if fileSliceGroups's size reach the max group, stop loop
         if (fileSliceGroups.size() >= writeConfig.getClusteringMaxNumGroups()) {
+          LOG.info("Having generated the maximum number of groups : " + writeConfig.getClusteringMaxNumGroups());
           break;
         }
       }

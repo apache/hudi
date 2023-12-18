@@ -85,7 +85,9 @@ case class HoodieFileIndex(spark: SparkSession,
     configProperties = getConfigProperties(spark, options),
     queryPaths = HoodieFileIndex.getQueryPaths(options),
     specifiedQueryInstant = options.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key).map(HoodieSqlCommonUtils.formatQueryInstant),
-    fileStatusCache = fileStatusCache
+    fileStatusCache = fileStatusCache,
+    beginInstantTime = options.get(DataSourceReadOptions.BEGIN_INSTANTTIME.key),
+    endInstantTime = options.get(DataSourceReadOptions.END_INSTANTTIME.key)
   )
     with FileIndex {
 
@@ -157,19 +159,21 @@ case class HoodieFileIndex(spark: SparkSession,
           val baseFileStatusesAndLogFileOnly: Seq[FileStatus] = fileSlices.map(slice => {
             if (slice.getBaseFile.isPresent) {
               slice.getBaseFile.get().getFileStatus
-            } else if (slice.getLogFiles.findAny().isPresent) {
+            } else if (includeLogFiles && slice.getLogFiles.findAny().isPresent) {
               slice.getLogFiles.findAny().get().getFileStatus
             } else {
               null
             }
           }).filter(slice => slice != null)
-          val c = fileSlices.filter(f => f.getLogFiles.findAny().isPresent
+          val c = fileSlices.filter(f => (includeLogFiles && f.getLogFiles.findAny().isPresent)
             || (f.getBaseFile.isPresent && f.getBaseFile.get().getBootstrapBaseFile.isPresent)).
             foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
           if (c.nonEmpty) {
-            PartitionDirectory(new HoodiePartitionFileSliceMapping(InternalRow.fromSeq(partitionOpt.get.values), c), baseFileStatusesAndLogFileOnly)
+            sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
+              new HoodiePartitionFileSliceMapping(InternalRow.fromSeq(partitionOpt.get.values), c), baseFileStatusesAndLogFileOnly)
           } else {
-            PartitionDirectory(InternalRow.fromSeq(partitionOpt.get.values), baseFileStatusesAndLogFileOnly)
+            sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
+              InternalRow.fromSeq(partitionOpt.get.values), baseFileStatusesAndLogFileOnly)
           }
 
         } else {
@@ -184,7 +188,8 @@ case class HoodieFileIndex(spark: SparkSession,
             baseFileStatusOpt.foreach(f => files.append(f))
             files
           })
-          PartitionDirectory(InternalRow.fromSeq(partitionOpt.get.values), allCandidateFiles)
+          sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
+            InternalRow.fromSeq(partitionOpt.get.values), allCandidateFiles)
         }
     }
 
@@ -497,8 +502,18 @@ object HoodieFileIndex extends Logging {
           partitionFilters.toArray.map {
             _.transformDown {
               case Literal(value, dataType) if dataType.isInstanceOf[StringType] =>
-                val converted = outDateFormat.format(inDateFormat.parse(value.toString))
-                Literal(UTF8String.fromString(converted), StringType)
+                try {
+                  val converted = outDateFormat.format(inDateFormat.parse(value.toString))
+                  Literal(UTF8String.fromString(converted), StringType)
+                } catch {
+                  case _: java.text.ParseException =>
+                    try {
+                      outDateFormat.parse(value.toString)
+                    } catch {
+                      case e: Exception => throw new HoodieException("Partition filter for TimestampKeyGenerator cannot be converted to format " + outDateFormat.toString, e)
+                    }
+                    Literal(UTF8String.fromString(value.toString), StringType)
+                }
             }
           }
         } catch {

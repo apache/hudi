@@ -98,7 +98,7 @@ public abstract class AbstractColumnReader<V extends WritableColumnVector>
    * Input streams:
    * 1.Run length encoder to encode every data, so we have run length stream to get
    *  run length information.
-   * 2.Data maybe is real data, maybe is dictionary ids which need be decode to real
+   * 2.Data maybe is real data, maybe is dictionary ids which need be decoded to real
    *  data from Dictionary.
    *
    * Run length stream ------> Data stream

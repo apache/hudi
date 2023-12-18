@@ -84,9 +84,7 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
 
     SparkRDDWriteClient writeClient;
     if (passInTimelineServer) {
-      EmbeddedTimelineService timelineService =
-          new EmbeddedTimelineService(context(), null, writeConfig);
-      timelineService.startServer();
+      EmbeddedTimelineService timelineService = EmbeddedTimelineService.getOrStartEmbeddedTimelineService(context(), null, writeConfig);
       writeConfig.setViewStorageConfig(timelineService.getRemoteFileSystemViewConfig());
       writeClient = new SparkRDDWriteClient(context(), writeConfig, Option.of(timelineService));
       // Both the write client and the table service client should use the same passed-in
@@ -95,7 +93,7 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
       assertEquals(timelineService, writeClient.getTableServiceClient().getTimelineServer().get());
       // Write config should not be changed
       assertEquals(writeConfig, writeClient.getConfig());
-      timelineService.stop();
+      timelineService.stopForBasePath(writeConfig.getBasePath());
     } else {
       writeClient = new SparkRDDWriteClient(context(), writeConfig);
       // Only one timeline server should be instantiated, and the same timeline server

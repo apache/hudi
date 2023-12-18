@@ -86,9 +86,12 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
   @Override
   public void processNextDataRecord(T record, Map<String, Object> metadata, Object recordKey) throws IOException {
     Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordKey);
-    Option<T> mergedRecord = doProcessNextDataRecord(record, metadata, existingRecordMetadataPair);
-    if (mergedRecord.isPresent()) {
-      records.put(recordKey, Pair.of(Option.ofNullable(readerContext.seal(mergedRecord.get())), metadata));
+    Option<Pair<T, Map<String, Object>>> mergedRecordAndMetadata =
+        doProcessNextDataRecord(record, metadata, existingRecordMetadataPair);
+    if (mergedRecordAndMetadata.isPresent()) {
+      records.put(recordKey, Pair.of(
+          Option.ofNullable(readerContext.seal(mergedRecordAndMetadata.get().getLeft())),
+          mergedRecordAndMetadata.get().getRight()));
     }
   }
 
@@ -118,7 +121,7 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
   }
 
   @Override
-  public boolean hasNext() throws IOException {
+  protected boolean doHasNext() throws IOException {
     ValidationUtils.checkState(baseFileIterator != null, "Base file iterator has not been set yet");
 
     // Handle merging.

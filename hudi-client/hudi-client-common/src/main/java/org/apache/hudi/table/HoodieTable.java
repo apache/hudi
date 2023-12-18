@@ -837,8 +837,12 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
     try {
       TableSchemaResolver schemaResolver = new TableSchemaResolver(getMetaClient());
+      Option<Schema> existingTableSchema = schemaResolver.getTableAvroSchemaIfPresent(false);
+      if (!existingTableSchema.isPresent()) {
+        return;
+      }
       Schema writerSchema = HoodieAvroUtils.createHoodieWriteSchema(config.getSchema());
-      Schema tableSchema = HoodieAvroUtils.createHoodieWriteSchema(schemaResolver.getTableAvroSchema(false));
+      Schema tableSchema = HoodieAvroUtils.createHoodieWriteSchema(existingTableSchema.get());
       AvroSchemaUtils.checkSchemaCompatible(tableSchema, writerSchema, shouldValidate, allowProjection, getDropPartitionColNames());
     } catch (Exception e) {
       throw new HoodieException("Failed to read schema/check compatibility for base path " + metaClient.getBasePath(), e);
@@ -1010,8 +1014,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     // Only execute metadata table deletion when all the following conditions are met
     // (1) This is data table
     // (2) Metadata table is disabled in HoodieWriteConfig for the writer
-    return !HoodieTableMetadata.isMetadataTable(metaClient.getBasePath())
-        && !config.isMetadataTableEnabled();
+    // (3) if mdt is already enabled.
+    return !metaClient.isMetadataTable()
+        && !config.isMetadataTableEnabled()
+        && !metaClient.getTableConfig().getMetadataPartitions().isEmpty();
   }
 
   /**

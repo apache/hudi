@@ -26,9 +26,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
@@ -44,12 +42,8 @@ public class HoodieStreamerDatasetBulkInsertCommitActionExecutor extends BaseDat
 
   @Override
   protected void preExecute() {
-    // no op
-  }
-
-  @Override
-  protected void afterExecute(HoodieWriteMetadata<JavaRDD<WriteStatus>> result) {
-    // no op
+    table.validateInsertSchema();
+    writeClient.preWrite(instantTime, getWriteOperationType(), table.getMetaClient());
   }
 
   @Override

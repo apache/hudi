@@ -33,10 +33,10 @@ import javax.annotation.concurrent.NotThreadSafe;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.Serializable;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.apache.hudi.common.heartbeat.HoodieHeartbeatUtils.getLastHeartbeatTime;
 
@@ -67,7 +67,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
     this.heartbeatFolderPath = HoodieTableMetaClient.getHeartbeatFolderPath(basePath);
     this.heartbeatIntervalInMs = heartbeatIntervalInMs;
     this.maxAllowableHeartbeatIntervalInMs = this.heartbeatIntervalInMs * numTolerableHeartbeatMisses;
-    this.instantToHeartbeatMap = new HashMap<>();
+    this.instantToHeartbeatMap = new ConcurrentHashMap<>();
   }
 
   static class Heartbeat {
@@ -266,6 +266,11 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
       heartbeat.setLastHeartbeatTime(newHeartbeatTime);
       heartbeat.setNumHeartbeats(heartbeat.getNumHeartbeats() + 1);
     } catch (IOException io) {
+      Boolean isHeartbeatStopped = instantToHeartbeatMap.get(instantTime).isHeartbeatStopped;
+      if (isHeartbeatStopped) {
+        LOG.warn(String.format("update heart beat failed, because the instant time %s was stopped ? : %s", instantTime, isHeartbeatStopped));
+        return;
+      }
       throw new HoodieHeartbeatException("Unable to generate heartbeat for instant " + instantTime, io);
     }
   }

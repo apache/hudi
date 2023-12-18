@@ -613,9 +613,16 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     doWriteOperation(testTable, "0000003", INSERT);
 
     HoodieTableMetadata tableMetadata = metadata(writeConfig, context);
-    assertTrue(tableMetadata.getLatestCompactionTime().isPresent());
+    Option<String> metadataCompactionInstant = tableMetadata.getLatestCompactionTime();
+    assertTrue(metadataCompactionInstant.isPresent());
 
     validateMetadata(testTable);
+    // Fetch compaction Commit file and rename to some other file. completed compaction meta file should have some serialized info that table interprets
+    // for future upserts. so, renaming the file here to some temp name and later renaming it back to same name.
+    java.nio.file.Path metaFilePath = Paths.get(HoodieTestUtils.getCompleteInstantPath(metaClient.getFs(),
+            new Path(metadataTableBasePath, METAFOLDER_NAME), metadataCompactionInstant.get(), HoodieTimeline.COMMIT_ACTION)
+        .toUri());
+    java.nio.file.Path tempFilePath = FileCreateUtils.renameFileToTemp(metaFilePath, metadataCompactionInstant.get());
 
     metaClient.reloadActiveTimeline();
     testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
@@ -626,6 +633,9 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     if (simulateFailedCompaction) {
       // this should retry the compaction in metadata table.
       doWriteOperation(testTable, "0000004", INSERT);
+    } else {
+      // let the compaction succeed in metadata and validation should succeed.
+      FileCreateUtils.renameTempToMetaFile(tempFilePath, metaFilePath);
     }
 
     validateMetadata(testTable);
@@ -638,7 +648,14 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     if (simulateFailedCompaction) {
       //trigger another compaction failure.
       tableMetadata = metadata(writeConfig, context);
-      assertTrue(tableMetadata.getLatestCompactionTime().isPresent());
+      metadataCompactionInstant = tableMetadata.getLatestCompactionTime();
+      assertTrue(metadataCompactionInstant.isPresent());
+
+      // Fetch compaction Commit file and rename to some other file. completed compaction meta file should have some serialized info that table interprets
+      // for future upserts. so, renaming the file here to some temp name and later renaming it back to same name.
+      metaFilePath = Paths.get(HoodieTestUtils.getCompleteInstantPath(metaClient.getFs(),
+          new Path(metadataTableBasePath, METAFOLDER_NAME), metadataCompactionInstant.get(), HoodieTimeline.COMMIT_ACTION).toUri());
+      FileCreateUtils.renameFileToTemp(metaFilePath, metadataCompactionInstant.get());
 
       validateMetadata(testTable);
 
@@ -1400,7 +1417,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
               .forEach(partitionWriteStat -> {
                 String partitionStatName = partitionWriteStat.getKey();
                 List<HoodieWriteStat> writeStats = partitionWriteStat.getValue();
-                String partition = HoodieTableMetadataUtil.getPartitionIdentifier(partitionStatName);
+                String partition = HoodieTableMetadataUtil.getColumnStatsIndexPartitionIdentifier(partitionStatName);
                 if (!commitToPartitionsToFiles.get(commitTime).containsKey(partition)) {
                   commitToPartitionsToFiles.get(commitTime).put(partition, new ArrayList<>());
                 }

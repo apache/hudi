@@ -20,9 +20,12 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.utilities.sources.helpers.QueryInfo;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+
+import static org.apache.hudi.utilities.sources.SnapshotLoadQuerySplitter.Config.SNAPSHOT_LOAD_QUERY_SPLITTER_CLASS_NAME;
 
 /**
  * Abstract splitter responsible for managing the snapshot load query operations.
@@ -74,5 +77,11 @@ public abstract class SnapshotLoadQuerySplitter {
     return getNextCheckpoint(df, queryInfo.getStartInstant())
         .map(checkpoint -> queryInfo.withUpdatedEndInstant(checkpoint))
         .orElse(queryInfo);
+  }
+
+  public static Option<SnapshotLoadQuerySplitter> getInstance(TypedProperties props) {
+    return props.getNonEmptyStringOpt(SNAPSHOT_LOAD_QUERY_SPLITTER_CLASS_NAME, null)
+        .map(className -> (SnapshotLoadQuerySplitter) ReflectionUtils.loadClass(className,
+            new Class<?>[] {TypedProperties.class}, props));
   }
 }

@@ -554,6 +554,12 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   }
 
   @Override
+  protected boolean hasReplacedFilesInPartition(String partitionPath) {
+    return rocksDB.<HoodieInstant>prefixSearch(schemaHelper.getColFamilyForReplacedFileGroups(), schemaHelper.getPrefixForReplacedFileGroup(partitionPath))
+        .findAny().isPresent();
+  }
+
+  @Override
   protected Option<HoodieInstant> getReplaceInstant(final HoodieFileGroupId fileGroupId) {
     String lookupKey = schemaHelper.getKeyForReplacedFileGroup(fileGroupId);
     HoodieInstant replacedInstant =

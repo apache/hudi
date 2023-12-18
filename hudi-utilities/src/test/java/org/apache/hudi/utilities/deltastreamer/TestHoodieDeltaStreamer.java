@@ -47,6 +47,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -59,7 +60,6 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieIncrementalPathNotFoundException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncClient;
@@ -104,6 +104,7 @@ import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.AnalysisException;
@@ -114,6 +115,7 @@ import org.apache.spark.sql.api.java.UDF4;
 import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructField;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -230,6 +232,11 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     addRecordMerger(recordType, scheduleClusteringConfig.configs);
     scheduleClusteringConfig.configs.addAll(getAllMultiWriterConfigs());
     return new HoodieClusteringJob(jsc, scheduleClusteringConfig);
+  }
+
+  @AfterEach
+  public void perTestAfterEach() {
+    testNum++;
   }
 
   @Test
@@ -379,7 +386,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @Test
   public void testPropsWithInvalidKeyGenerator() {
-    Exception e = assertThrows(IllegalArgumentException.class, () -> {
+    Exception e = assertThrows(IOException.class, () -> {
       String tableBasePath = basePath + "/test_table_invalid_key_gen";
       HoodieDeltaStreamer deltaStreamer =
           new HoodieDeltaStreamer(TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT,
@@ -387,8 +394,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       deltaStreamer.sync();
     }, "Should error out when setting the key generator class property to an invalid value");
     // expected
-    LOG.debug("Expected error during getting the key generator", e);
-    assertTrue(e.getMessage().contains("No KeyGeneratorType found for class name"));
+    LOG.warn("Expected error during getting the key generator", e);
+    assertTrue(e.getMessage().contains("Could not load key generator class invalid"));
   }
 
   private static Stream<Arguments> provideInferKeyGenArgs() {
@@ -530,7 +537,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertThrows(HoodieException.class, () -> syncAndAssertRecordCount(cfg,1000,tableBasePath,"00000",1));
     List<Row> counts = countsPerCommit(tableBasePath, sqlContext);
     assertEquals(1000, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
-
 
     //perform the upsert and now with the original config, the commit should go through
     HoodieDeltaStreamer.Config newCfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
@@ -1341,7 +1347,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     boolean hasTransformer = transformerClassNames != null && !transformerClassNames.isEmpty();
     prepareParquetDFSFiles(parquetRecordsCount, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, false, null, null);
     prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
-        PARQUET_SOURCE_ROOT, false, "partition_path", testEmptyBatch ? "1" : "");
+        PARQUET_SOURCE_ROOT, false, "partition_path", "");
 
     String tableBasePath = basePath + "/test_parquet_table" + testNum;
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT, testEmptyBatch ? TestParquetDFSSourceEmptyBatch.class.getName()
@@ -1352,33 +1358,43 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
     deltaStreamer.sync();
     assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
+    deltaStreamer.shutdownGracefully();
 
     try {
       if (testEmptyBatch) {
+        prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
+            PARQUET_SOURCE_ROOT, false, "partition_path", "0");
         prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, "2.parquet", false, null, null);
         deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
         deltaStreamer.sync();
         // since we mimic'ed empty batch, total records should be same as first sync().
-        assertRecordCount(200, tableBasePath, sqlContext);
+        assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
         HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(jsc.hadoopConfiguration()).build();
 
         // validate table schema fetches valid schema from last but one commit.
         TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
         assertNotEquals(tableSchemaResolver.getTableAvroSchema(), Schema.create(Schema.Type.NULL).toString());
+        // schema from latest commit and last but one commit should match
+        compareLatestTwoSchemas(metaClient);
+        prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
+            PARQUET_SOURCE_ROOT, false, "partition_path", "");
+        deltaStreamer.shutdownGracefully();
       }
 
-      int recordsSoFar = testEmptyBatch ? 200 : 100;
-
+      int recordsSoFar = 100;
+      deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
       // add 3 more batches and ensure all commits succeed.
       for (int i = 2; i < 5; i++) {
         prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, Integer.toString(i) + ".parquet", false, null, null);
-        deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
         deltaStreamer.sync();
         assertRecordCount(recordsSoFar + (i - 1) * 100, tableBasePath, sqlContext);
         if (i == 2 || i == 4) { // this validation reloads the timeline. So, we are validating only for first and last batch.
           // validate commit metadata for all completed commits to have valid schema in extra metadata.
           HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(jsc.hadoopConfiguration()).build();
-          metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants().forEach(entry -> assertValidSchemaInCommitMetadata(entry, metaClient));
+          metaClient.reloadActiveTimeline().getCommitsTimeline()
+              .filterCompletedInstants().getInstants()
+              .forEach(entry -> assertValidSchemaAndOperationTypeInCommitMetadata(
+                  entry, metaClient, WriteOperationType.BULK_INSERT));
         }
       }
     } finally {
@@ -1460,8 +1476,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO","SPARK"})
   public void testBulkInsertsAndUpsertsWithSQLBasedTransformerFor2StepPipeline(HoodieRecordType recordType) throws Exception {
-    String tableBasePath = basePath + "/test_table2";
-    String downstreamTableBasePath = basePath + "/test_downstream_table2";
+    String tableBasePath = basePath + "/" + recordType.toString() +  "/test_table2";
+    String downstreamTableBasePath = basePath + "/" + recordType.toString() + "/test_downstream_table2";
 
     // Initial bulk insert to ingest to first hudi table
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT,
@@ -1715,20 +1731,25 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     boolean hasTransformer = transformerClassNames != null && !transformerClassNames.isEmpty();
     prepareParquetDFSFiles(parquetRecordsCount, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, false, null, null);
     prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
-        PARQUET_SOURCE_ROOT, false, "partition_path", testEmptyBatch ? "1" : "");
+        PARQUET_SOURCE_ROOT, false, "partition_path", "");
 
     String tableBasePath = basePath + "/test_parquet_table" + testNum;
-    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
+    HoodieDeltaStreamer.Config cfg =
         TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, testEmptyBatch ? TestParquetDFSSourceEmptyBatch.class.getName()
                 : ParquetDFSSource.class.getName(),
             transformerClassNames, PROPS_FILENAME_TEST_PARQUET, false,
-            useSchemaProvider, 100000, false, null, null, "timestamp", null), jsc);
+            useSchemaProvider, 100000, false, null, null, "timestamp", null);
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
     deltaStreamer.sync();
     assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
+    deltaStreamer.shutdownGracefully();
 
     if (testEmptyBatch) {
       prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, "2.parquet", false, null, null);
-      deltaStreamer.sync();
+      prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
+          PARQUET_SOURCE_ROOT, false, "partition_path", "0");
+      HoodieDeltaStreamer deltaStreamer1 = new HoodieDeltaStreamer(cfg, jsc);
+      deltaStreamer1.sync();
       // since we mimic'ed empty batch, total records should be same as first sync().
       assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(jsc.hadoopConfiguration()).build();
@@ -1736,6 +1757,11 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       // validate table schema fetches valid schema from last but one commit.
       TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
       assertNotEquals(tableSchemaResolver.getTableAvroSchema(), Schema.create(Schema.Type.NULL).toString());
+      // schema from latest commit and last but one commit should match
+      compareLatestTwoSchemas(metaClient);
+      prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
+          PARQUET_SOURCE_ROOT, false, "partition_path", "");
+      deltaStreamer1.shutdownGracefully();
     }
 
     // proceed w/ non empty batch.
@@ -1744,18 +1770,33 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertRecordCount(parquetRecordsCount + 100, tableBasePath, sqlContext);
     // validate commit metadata for all completed commits to have valid schema in extra metadata.
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(jsc.hadoopConfiguration()).build();
-    metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants().forEach(entry -> assertValidSchemaInCommitMetadata(entry, metaClient));
+    metaClient.reloadActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants().getInstants()
+        .forEach(entry -> assertValidSchemaAndOperationTypeInCommitMetadata(
+            entry, metaClient, WriteOperationType.INSERT));
     testNum++;
+    deltaStreamer.shutdownGracefully();
   }
 
-  private void assertValidSchemaInCommitMetadata(HoodieInstant instant, HoodieTableMetaClient metaClient) {
+  private void assertValidSchemaAndOperationTypeInCommitMetadata(HoodieInstant instant,
+                                                                 HoodieTableMetaClient metaClient,
+                                                                 WriteOperationType operationType) {
     try {
       HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
           .fromBytes(metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
       assertFalse(StringUtils.isNullOrEmpty(commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY)));
+      assertEquals(operationType, commitMetadata.getOperationType());
     } catch (IOException ioException) {
       throw new HoodieException("Failed to parse commit metadata for " + instant.toString());
     }
+  }
+
+  private void compareLatestTwoSchemas(HoodieTableMetaClient metaClient) throws IOException {
+    // schema from latest commit and last but one commit should match
+    List<HoodieInstant> completedInstants = metaClient.getActiveTimeline().getWriteTimeline().filterCompletedInstants().getInstants();
+    HoodieCommitMetadata commitMetadata1 = TimelineUtils.getCommitMetadata(completedInstants.get(0), metaClient.getActiveTimeline());
+    HoodieCommitMetadata commitMetadata2 = TimelineUtils.getCommitMetadata(completedInstants.get(1), metaClient.getActiveTimeline());
+    assertEquals(commitMetadata1.getMetadata(HoodieCommitMetadata.SCHEMA_KEY), commitMetadata2.getMetadata(HoodieCommitMetadata.SCHEMA_KEY));
   }
 
   private void testORCDFSSource(boolean useSchemaProvider, List<String> transformerClassNames) throws Exception {
@@ -2349,7 +2390,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     insertInTable(tableBasePath, 9, WriteOperationType.UPSERT);
     //No change as this fails with Path not exist error
-    assertThrows(HoodieIncrementalPathNotFoundException.class, () -> new HoodieDeltaStreamer(downstreamCfg, jsc).sync());
+    assertThrows(SparkException.class, () -> new HoodieDeltaStreamer(downstreamCfg, jsc).sync());
     assertRecordCount(1000, downstreamTableBasePath, sqlContext);
 
     if (downstreamCfg.configs == null) {
@@ -2358,7 +2399,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     // Remove source.hoodieincr.num_instants config
     downstreamCfg.configs.remove(downstreamCfg.configs.size() - 1);
-    downstreamCfg.configs.add(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES().key() + "=true");
+    downstreamCfg.configs.add(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key() + "=true");
     //Adding this conf to make testing easier :)
     downstreamCfg.configs.add("hoodie.deltastreamer.source.hoodieincr.num_instants=10");
     downstreamCfg.operation = WriteOperationType.UPSERT;

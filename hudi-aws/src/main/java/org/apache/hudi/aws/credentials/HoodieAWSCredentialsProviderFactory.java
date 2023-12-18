@@ -36,6 +36,9 @@ public class HoodieAWSCredentialsProviderFactory {
 
   private static AwsCredentialsProvider getAwsCredentialsProviderChain(Properties props) {
     List<AwsCredentialsProvider> providers = new ArrayList<>();
+    if (HoodieConfigAWSAssumedRoleCredentialsProvider.validConf(props)) {
+      providers.add(new HoodieConfigAWSAssumedRoleCredentialsProvider(props));
+    }
     HoodieConfigAWSCredentialsProvider hoodieConfigAWSCredentialsProvider = new HoodieConfigAWSCredentialsProvider(props);
     if (hoodieConfigAWSCredentialsProvider.resolveCredentials() != null) {
       providers.add(hoodieConfigAWSCredentialsProvider);

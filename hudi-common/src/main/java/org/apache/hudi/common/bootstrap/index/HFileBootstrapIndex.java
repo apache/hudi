@@ -34,7 +34,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieHFileUtils;
-import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -106,8 +105,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
       FileSystem fs = metaClient.getFs();
       // The metadata table is never bootstrapped, so the bootstrap index is always absent
       // for the metadata table.  The fs.exists calls are avoided for metadata table.
-      isPresent = !HoodieTableMetadata.isMetadataTable(metaClient.getBasePathV2().toString())
-          && fs.exists(indexByPartitionPath) && fs.exists(indexByFilePath);
+      isPresent = !metaClient.isMetadataTable() && fs.exists(indexByPartitionPath) && fs.exists(indexByFilePath);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }

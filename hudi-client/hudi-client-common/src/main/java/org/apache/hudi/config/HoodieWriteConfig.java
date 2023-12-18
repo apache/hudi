@@ -476,8 +476,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.embed.timeline.server.reuse.enabled")
       .defaultValue(false)
       .markAdvanced()
-      .withDocumentation("Controls whether the timeline server instance should be cached and reused across the JVM (across task lifecycles)"
-          + "to avoid startup costs. This should rarely be changed.");
+      .withDocumentation("Controls whether the timeline server instance should be cached and reused across the tables"
+          + "to avoid startup costs and server overhead. This should only be used if you are running multiple writers in the same JVM.");
 
   public static final ConfigProperty<String> EMBEDDED_TIMELINE_SERVER_PORT_NUM = ConfigProperty
       .key("hoodie.embed.timeline.server.port")
@@ -751,7 +751,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> WRITE_RECORD_POSITIONS = ConfigProperty
       .key("hoodie.write.record.positions")
-      .defaultValue(false)
+      .defaultValue(true)
       .markAdvanced()
       .sinceVersion("1.0.0")
       .withDocumentation("Whether to write record positions to the block header for data blocks containing updates and delete blocks. "
@@ -1388,6 +1388,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean shouldAllowMultiWriteOnSameInstant() {
     return getBoolean(ALLOW_MULTI_WRITE_ON_SAME_INSTANT_ENABLE);
+  }
+
+  public boolean shouldDropPartitionColumns() {
+    return getBoolean(HoodieTableConfig.DROP_PARTITION_COLUMNS);
   }
 
   public String getWriteStatusClassName() {

@@ -71,7 +71,6 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       options += (DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> preCombineField)
     }
     if (useFileGroupReader) {
-      options += (DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT.key() -> String.valueOf(useFileGroupReader))
       options += (HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key() -> String.valueOf(useFileGroupReader))
     }
     val dataGen = new HoodieTestDataGenerator(0xDEEF)

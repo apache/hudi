@@ -18,7 +18,7 @@
 
 package org.apache.hudi.functional;
 
-import org.apache.hudi.DataSourceReadOptions;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 
 import org.apache.spark.sql.Dataset;
@@ -103,9 +103,11 @@ public class TestNewHoodieParquetFileFormat extends TestBootstrapReadBase {
 
   protected void testCount(String tableBasePath) {
     Dataset<Row> legacyDf = sparkSession.read().format("hudi")
-        .option(DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT().key(), "false").load(tableBasePath);
+        .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
+        .load(tableBasePath);
     Dataset<Row> fileFormatDf = sparkSession.read().format("hudi")
-        .option(DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT().key(), "true").load(tableBasePath);
+        .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true")
+        .load(tableBasePath);
     assertEquals(legacyDf.count(), fileFormatDf.count());
   }
 
@@ -119,9 +121,11 @@ public class TestNewHoodieParquetFileFormat extends TestBootstrapReadBase {
 
   protected void runIndividualComparison(String tableBasePath, String firstColumn, String... columns) {
     Dataset<Row> legacyDf = sparkSession.read().format("hudi")
-        .option(DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT().key(), "false").load(tableBasePath);
+        .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
+        .load(tableBasePath);
     Dataset<Row> fileFormatDf = sparkSession.read().format("hudi")
-        .option(DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT().key(), "true").load(tableBasePath);
+        .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true")
+        .load(tableBasePath);
     if (firstColumn.isEmpty()) {
       //df.except(df) does not work with map type cols
       legacyDf = legacyDf.drop("city_to_state");

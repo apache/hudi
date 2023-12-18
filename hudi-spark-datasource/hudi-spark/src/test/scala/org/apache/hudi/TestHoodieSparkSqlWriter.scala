@@ -39,7 +39,7 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertNull, assertTrue, fail}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
@@ -365,6 +365,52 @@ class TestHoodieSparkSqlWriter {
     testBulkInsertWithSortMode(BulkInsertSortMode.NONE, populateMetaFields)
   }
 
+@Test
+def testBulkInsertForDropPartitionColumn(): Unit = {
+  //create a new table
+  val tableName = "trips_table"
+  val basePath = "file:///tmp/trips_table"
+  val columns = Seq("ts", "uuid", "rider", "driver", "fare", "city")
+  val data =
+    Seq((1695159649087L, "334e26e9-8355-45cc-97c6-c31daf0df330", "rider-A", "driver-K", 19.10, "san_francisco"),
+      (1695091554788L, "e96c4396-3fad-413a-a942-4cb36106d721", "rider-C", "driver-M", 27.70, "san_francisco"),
+      (1695046462179L, "9909a8b1-2d15-4d3d-8ec9-efc48c536a00", "rider-D", "driver-L", 33.90, "san_francisco"),
+      (1695516137016L, "e3cf430c-889d-4015-bc98-59bdce1e530c", "rider-F", "driver-P", 34.15, "sao_paulo"),
+      (1695115999911L, "c8abbe79-8d89-47ea-b4ce-4d224bae5bfa", "rider-J", "driver-T", 17.85, "chennai"));
+
+  var inserts = spark.createDataFrame(data).toDF(columns: _*)
+  inserts.write.format("hudi").
+    option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), "city").
+    option(HoodieWriteConfig.TABLE_NAME, tableName).
+    option("hoodie.datasource.write.recordkey.field", "uuid").
+    option("hoodie.datasource.write.precombine.field", "rider").
+    option("hoodie.datasource.write.operation", "bulk_insert").
+    option("hoodie.datasource.write.hive_style_partitioning", "true").
+    option("hoodie.populate.meta.fields", "false").
+    option("hoodie.datasource.write.drop.partition.columns", "true").
+    mode(SaveMode.Overwrite).
+    save(basePath)
+
+  // Ensure the partition column (i.e 'city') can be read back
+  val tripsDF = spark.read.format("hudi").load(basePath)
+  tripsDF.show()
+  tripsDF.select("city").foreach(row => {
+    assertNotNull(row)
+  })
+
+  // Peek into the raw parquet file and ensure partition column is not written to the file
+  val partitions = Seq("city=san_francisco", "city=chennai", "city=sao_paulo")
+  val partitionPaths = new Array[String](3)
+  for (i <- partitionPaths.indices) {
+    partitionPaths(i) = String.format("%s/%s/*", basePath, partitions(i))
+  }
+  val rawFileDf = spark.sqlContext.read.parquet(partitionPaths(0), partitionPaths(1), partitionPaths(2))
+  rawFileDf.show()
+  rawFileDf.select("city").foreach(row => {
+    assertNull(row.get(0))
+  })
+}
+
   /**
    * Test case for disable and enable meta fields.
    */
@@ -470,7 +516,7 @@ class TestHoodieSparkSqlWriter {
     val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
 
     // try write to Hudi
-    assertThrows[IllegalArgumentException] {
+    assertThrows[IOException] {
       HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, tableOpts - DataSourceWriteOptions.PARTITIONPATH_FIELD.key, df)
     }
   }

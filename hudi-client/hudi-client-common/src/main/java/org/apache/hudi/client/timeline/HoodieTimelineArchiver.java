@@ -37,6 +37,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.marker.WriteMarkers;
@@ -74,6 +75,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   private final TransactionManager txnManager;
 
   private final LSMTimelineWriter timelineWriter;
+  private final HoodieMetrics metrics;
 
   public HoodieTimelineArchiver(HoodieWriteConfig config, HoodieTable<T, I, K, O> table) {
     this.config = config;
@@ -84,16 +86,17 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     Pair<Integer, Integer> minAndMaxInstants = getMinAndMaxInstantsToKeep(table, metaClient);
     this.minInstantsToKeep = minAndMaxInstants.getLeft();
     this.maxInstantsToKeep = minAndMaxInstants.getRight();
+    this.metrics = new HoodieMetrics(config);
   }
 
-  public boolean archiveIfRequired(HoodieEngineContext context) throws IOException {
+  public int archiveIfRequired(HoodieEngineContext context) throws IOException {
     return archiveIfRequired(context, false);
   }
 
   /**
    * Check if commits need to be archived. If yes, archive commits.
    */
-  public boolean archiveIfRequired(HoodieEngineContext context, boolean acquireLock) throws IOException {
+  public int archiveIfRequired(HoodieEngineContext context, boolean acquireLock) throws IOException {
     try {
       if (acquireLock) {
         // there is no owner or instant time per se for archival.
@@ -101,7 +104,6 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       }
       // Sort again because the cleaning and rollback instants could break the sequence.
       List<ActiveAction> instantsToArchive = getInstantsToArchive().sorted().collect(Collectors.toList());
-      boolean success = true;
       if (!instantsToArchive.isEmpty()) {
         LOG.info("Archiving instants " + instantsToArchive);
         Consumer<Exception> exceptionHandler = e -> {
@@ -111,13 +113,13 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         };
         this.timelineWriter.write(instantsToArchive, Option.of(action -> deleteAnyLeftOverMarkers(context, action)), Option.of(exceptionHandler));
         LOG.info("Deleting archived instants " + instantsToArchive);
-        success = deleteArchivedInstants(instantsToArchive, context);
+        deleteArchivedInstants(instantsToArchive, context);
         // triggers compaction and cleaning only after archiving action
         this.timelineWriter.compactAndClean(context);
       } else {
         LOG.info("No Instants to archive");
       }
-      return success;
+      return instantsToArchive.size();
     } finally {
       if (acquireLock) {
         txnManager.endTransaction(Option.empty());
@@ -293,15 +295,23 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     }
 
     // For archive, we need to include instant's all states.
+    // The re-instantiation of the timeline may result in inconsistencies with the existing meta client active timeline,
+    // When there is no lock guard of the archiving process, the 'raw' timeline could contain less distinct instants
+    // because of the metadata file removing from another archiving process.
     HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
     Map<Pair<String, String>, List<HoodieInstant>> groupByTsAction = rawActiveTimeline.getInstantsAsStream()
         .collect(Collectors.groupingBy(i -> Pair.of(i.getTimestamp(),
             HoodieInstant.getComparableAction(i.getAction()))));
 
-    return instantsToArchive.stream().map(hoodieInstant -> {
+    return instantsToArchive.stream().flatMap(hoodieInstant -> {
       List<HoodieInstant> instantsToStream = groupByTsAction.get(Pair.of(hoodieInstant.getTimestamp(),
           HoodieInstant.getComparableAction(hoodieInstant.getAction())));
-      return ActiveAction.fromInstants(instantsToStream);
+      if (instantsToStream != null) {
+        return Stream.of(ActiveAction.fromInstants(instantsToStream));
+      } else {
+        // if a concurrent writer archived the instant
+        return Stream.empty();
+      }
     });
   }
 
@@ -312,7 +322,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     List<HoodieInstant> completedInstants = new ArrayList<>();
 
     for (ActiveAction activeAction : activeActions) {
-      completedInstants.add(activeAction.getCompleted());
+      completedInstants.addAll(activeAction.getCompletedInstants());
       pendingInstants.addAll(activeAction.getPendingInstants());
     }
 
@@ -332,11 +342,13 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       );
     }
     if (!completedInstants.isEmpty()) {
-      context.foreach(
-          completedInstants,
-          instant -> activeTimeline.deleteInstantFileIfExists(instant),
-          Math.min(completedInstants.size(), config.getArchiveDeleteParallelism())
-      );
+      // Due to the concurrency between deleting completed instants and reading data,
+      // there may be hole in the timeline, which can lead to errors when reading data.
+      // Therefore, the concurrency of deleting completed instants is temporarily disabled,
+      // and instants are deleted in ascending order to prevent the occurrence of such holes.
+      // See HUDI-7207 and #10325.
+      completedInstants.stream()
+          .forEach(instant -> activeTimeline.deleteInstantFileIfExists(instant));
     }
 
     return true;
@@ -345,7 +357,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   private void deleteAnyLeftOverMarkers(HoodieEngineContext context, ActiveAction activeAction) {
     WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, activeAction.getInstantTime());
     if (writeMarkers.deleteMarkerDir(context, config.getMarkersDeleteParallelism())) {
-      LOG.info("Cleaned up left over marker directory for instant :" + activeAction.getCompleted());
+      LOG.info("Cleaned up left over marker directory for instant :" + activeAction);
     }
   }
 }

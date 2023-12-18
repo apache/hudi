@@ -20,10 +20,10 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.read.HoodieFileGroupRecordBuffer;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
@@ -259,9 +259,10 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     }
 
     @Override
-    public Builder<T> withLogFilePaths(List<String> logFilePaths) {
-      this.logFilePaths = logFilePaths.stream()
-          .filter(p -> !p.endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
+    public Builder<T> withLogFiles(List<HoodieLogFile> hoodieLogFiles) {
+      this.logFilePaths = hoodieLogFiles.stream()
+          .filter(l -> !l.isCDC())
+          .map(l -> l.getPath().toString())
           .collect(Collectors.toList());
       return this;
     }

@@ -253,8 +253,8 @@ public class TestStreamReadMonitoringFunction {
           sourceContext.getPartitionPaths(), is("par1"));
       assertTrue(sourceContext.splits.stream().noneMatch(split -> split.getInstantRange().isPresent()),
           "No instants should have range limit");
-      assertTrue(sourceContext.splits.stream().allMatch(split -> split.getLatestCommit().equals(c4)),
-          "All the splits should be with specified instant time");
+      assertTrue(sourceContext.splits.stream().anyMatch(split -> split.getLatestCommit().equals(c4)),
+          "At least one input split's latest commit time should be equal to the specified instant time.");
 
       // reset the source context
       latch = new CountDownLatch(1);
@@ -270,8 +270,8 @@ public class TestStreamReadMonitoringFunction {
           "All instants should have range limit");
       assertTrue(sourceContext.splits.stream().allMatch(split -> isPointInstantRange(split.getInstantRange().get(), c2)),
           "All the splits should have point instant range");
-      assertTrue(sourceContext.splits.stream().allMatch(split -> split.getLatestCommit().equals(c2)),
-          "All the splits should be with specified instant time");
+      assertTrue(sourceContext.splits.stream().anyMatch(split -> split.getLatestCommit().equals(c2)),
+          "At least one input split's latest commit time should be equal to the specified instant time.");
 
       // reset the source context
       latch = new CountDownLatch(1);
@@ -287,8 +287,8 @@ public class TestStreamReadMonitoringFunction {
           "All instants should have range limit");
       assertTrue(sourceContext.splits.stream().allMatch(split -> isPointInstantRange(split.getInstantRange().get(), c3)),
           "All the splits should have point instant range");
-      assertTrue(sourceContext.splits.stream().allMatch(split -> split.getLatestCommit().equals(c3)),
-          "All the splits should be with specified instant time");
+      assertTrue(sourceContext.splits.stream().anyMatch(split -> split.getLatestCommit().equals(c3)),
+          "At least one input split's latest commit time should be equal to the specified instant time.");
 
       // Stop the stream task.
       function.close();

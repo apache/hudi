@@ -19,6 +19,7 @@
 package org.apache.hudi.internal.schema.utils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.InternalSchemaBuilder;
 import org.apache.hudi.internal.schema.Type;
@@ -205,6 +206,20 @@ public class TestAvroSchemaEvolutionUtils {
             Types.RecordType.get(Types.Field.get(108, false, "lat", Types.FloatType.get()), Types.Field.get(109, false, "long", Types.FloatType.get())), false))
     );
     Assertions.assertEquals(newRecord, recordWithNewId);
+  }
+
+  @Test
+  public void testFixNullOrdering() {
+    Schema schema = SchemaTestUtil.getSchemaFromResource(TestAvroSchemaEvolutionUtils.class, "/nullWrong.avsc");
+    Schema expectedSchema = SchemaTestUtil.getSchemaFromResource(TestAvroSchemaEvolutionUtils.class, "/nullRight.avsc");
+    Assertions.assertEquals(expectedSchema, AvroInternalSchemaConverter.fixNullOrdering(schema));
+    Assertions.assertEquals(expectedSchema, AvroInternalSchemaConverter.fixNullOrdering(expectedSchema));
+  }
+
+  @Test
+  public void testFixNullOrderingSameSchemaCheck() {
+    Schema schema = SchemaTestUtil.getSchemaFromResource(TestAvroSchemaEvolutionUtils.class, "/source_evolved.avsc");
+    Assertions.assertEquals(schema, AvroInternalSchemaConverter.fixNullOrdering(schema));
   }
 
   public enum Enum {

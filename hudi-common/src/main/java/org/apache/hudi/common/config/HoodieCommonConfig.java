@@ -58,10 +58,12 @@ public class HoodieCommonConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("The query instant for time travel. Without specified this option, we query the latest snapshot.");
 
+  @Deprecated
   public static final ConfigProperty<Boolean> RECONCILE_SCHEMA = ConfigProperty
       .key("hoodie.datasource.write.reconcile.schema")
       .defaultValue(false)
       .markAdvanced()
+      .deprecatedAfter("0.14.1")
       .withDocumentation("This config controls how writer's schema will be selected based on the incoming batch's "
           + "schema as well as existing table's one. When schema reconciliation is DISABLED, incoming batch's "
           + "schema will be picked as a writer-schema (therefore updating table's schema). When schema reconciliation "
@@ -78,6 +80,17 @@ public class HoodieCommonConfig extends HoodieConfig {
       .withDocumentation("When a non-nullable column is added to datasource during a write operation, the write "
           + " operation will fail schema compatibility check. Set this option to true will make the newly added "
           + " column nullable to successfully complete the write operation.");
+
+  public static final ConfigProperty<String> HANDLE_MISSING_COLUMNS_WITH_LOSSLESS_TYPE_PROMOTIONS = ConfigProperty
+      .key("hoodie.write.handle.missing.cols.with.lossless.type.promotion")
+      .defaultValue("false")
+      .markAdvanced()
+      .withDocumentation("When a nullable column is missing from incoming batch during a write operation, the write "
+          + " operation will fail schema compatibility check. Set this option to true will make the missing "
+          + " column be filled with null values to successfully complete the write operation. Similarly lossless promotion"
+          + " are type promotions that are not back compatible like long to int, double to float etc can be handled "
+          + " by setting this config to true, in which case incoming data will be promoted to the table schema type"
+          + " and written to the table.");
 
   public static final ConfigProperty<ExternalSpillableMap.DiskMapType> SPILLABLE_DISK_MAP_TYPE = ConfigProperty
       .key("hoodie.common.spillable.diskmap.type")

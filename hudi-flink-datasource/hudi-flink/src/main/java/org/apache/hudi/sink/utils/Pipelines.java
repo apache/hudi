@@ -410,10 +410,11 @@ public class Pipelines {
    * @return the compaction pipeline
    */
   public static DataStreamSink<CompactionCommitEvent> compact(Configuration conf, DataStream<Object> dataStream) {
-    return dataStream.transform("compact_plan_generate",
+    DataStreamSink<CompactionCommitEvent> compactionCommitEventDataStream = dataStream.transform("compact_plan_generate",
             TypeInformation.of(CompactionPlanEvent.class),
             new CompactionPlanOperator(conf))
         .setParallelism(1) // plan generate must be singleton
+        .setMaxParallelism(1)
         // make the distribution strategy deterministic to avoid concurrent modifications
         // on the same bucket files
         .keyBy(plan -> plan.getOperation().getFileGroupId().getFileId())
@@ -424,6 +425,8 @@ public class Pipelines {
         .addSink(new CompactionCommitSink(conf))
         .name("compact_commit")
         .setParallelism(1); // compaction commit should be singleton
+    compactionCommitEventDataStream.getTransformation().setMaxParallelism(1);
+    return compactionCommitEventDataStream;
   }
 
   /**
@@ -452,6 +455,7 @@ public class Pipelines {
             TypeInformation.of(ClusteringPlanEvent.class),
             new ClusteringPlanOperator(conf))
         .setParallelism(1) // plan generate must be singleton
+        .setMaxParallelism(1) // plan generate must be singleton
         .keyBy(plan ->
             // make the distribution strategy deterministic to avoid concurrent modifications
             // on the same bucket files
@@ -465,15 +469,19 @@ public class Pipelines {
       ExecNodeUtil.setManagedMemoryWeight(clusteringStream.getTransformation(),
           conf.getInteger(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
     }
-    return clusteringStream.addSink(new ClusteringCommitSink(conf))
+    DataStreamSink<ClusteringCommitEvent> clusteringCommitEventDataStream = clusteringStream.addSink(new ClusteringCommitSink(conf))
         .name("clustering_commit")
         .setParallelism(1); // clustering commit should be singleton
+    clusteringCommitEventDataStream.getTransformation().setMaxParallelism(1);
+    return clusteringCommitEventDataStream;
   }
 
   public static DataStreamSink<Object> clean(Configuration conf, DataStream<Object> dataStream) {
-    return dataStream.addSink(new CleanFunction<>(conf))
+    DataStreamSink<Object> cleanCommitDataStream = dataStream.addSink(new CleanFunction<>(conf))
         .setParallelism(1)
         .name("clean_commits");
+    cleanCommitDataStream.getTransformation().setMaxParallelism(1);
+    return cleanCommitDataStream;
   }
 
   public static DataStreamSink<Object> dummySink(DataStream<Object> dataStream) {

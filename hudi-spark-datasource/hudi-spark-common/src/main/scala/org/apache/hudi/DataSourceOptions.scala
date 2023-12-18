@@ -86,15 +86,6 @@ object DataSourceReadOptions {
       s"payload implementation to merge (${REALTIME_PAYLOAD_COMBINE_OPT_VAL}) or skip merging altogether" +
       s"${REALTIME_SKIP_MERGE_OPT_VAL}")
 
-  val USE_NEW_HUDI_PARQUET_FILE_FORMAT: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.datasource.read.use.new.parquet.file.format")
-    .defaultValue("false")
-    .markAdvanced()
-    .sinceVersion("0.14.0")
-    .withDocumentation("Read using the new Hudi parquet file format. The new Hudi parquet file format is " +
-      "introduced as an experimental feature in 0.14.0. Currently, the new Hudi parquet file format only applies " +
-      "to bootstrap and MOR queries. Schema evolution is also not supported by the new file format.")
-
   val READ_PATHS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.paths")
     .noDefaultValue()
@@ -209,7 +200,7 @@ object DataSourceReadOptions {
         " by carefully analyzing provided partition-column predicates and deducing corresponding partition-path prefix from " +
         " them (if possible).")
 
-  val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES: ConfigProperty[String] = ConfigProperty
+  val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.incr.fallback.fulltablescan.enable")
     .defaultValue("false")
     .markAdvanced()
@@ -536,7 +527,10 @@ object DataSourceWriteOptions {
     .markAdvanced()
     .withDocumentation("Sync tool class name used to sync to metastore. Defaults to Hive.")
 
+  @Deprecated
   val RECONCILE_SCHEMA: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.RECONCILE_SCHEMA
+
+  val HANDLE_MISSING_COLUMNS_WITH_LOSSLESS_TYPE_PROMOTIONS: ConfigProperty[String] = HoodieCommonConfig.HANDLE_MISSING_COLUMNS_WITH_LOSSLESS_TYPE_PROMOTIONS
 
   val MAKE_NEW_COLUMNS_NULLABLE: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.MAKE_NEW_COLUMNS_NULLABLE
 
@@ -555,7 +549,7 @@ object DataSourceWriteOptions {
 
   val ENABLE_MERGE_INTO_PARTIAL_UPDATES: ConfigProperty[Boolean] = ConfigProperty
     .key("hoodie.spark.sql.merge.into.partial.updates")
-    .defaultValue(false)
+    .defaultValue(true)
     .markAdvanced()
     .sinceVersion("1.0.0")
     .withDocumentation("Whether to write partial updates to the data blocks containing updates "

@@ -17,10 +17,10 @@
 
 package org.apache.hudi.sink.utils;
 
-import org.apache.hudi.adapter.StreamingRuntimeContextAdapter;
-
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.state.KeyedStateStore;
+import org.apache.flink.metrics.groups.OperatorMetricGroup;
+import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.memory.MemoryManager;
 import org.apache.flink.runtime.operators.testutils.MockEnvironment;
@@ -37,7 +37,7 @@ import java.util.HashMap;
  *
  * <p>NOTE: Adapted from Apache Flink, the MockStreamOperator is modified to support MapState.
  */
-public class MockStreamingRuntimeContext extends StreamingRuntimeContextAdapter {
+public class MockStreamingRuntimeContext extends StreamingRuntimeContext {
 
   private final boolean isCheckpointingEnabled;
 
@@ -127,5 +127,10 @@ public class MockStreamingRuntimeContext extends StreamingRuntimeContextAdapter 
       }
       return mockOperatorStateStore;
     }
+  }
+
+  @Override
+  public OperatorMetricGroup getMetricGroup() {
+    return UnregisteredMetricsGroup.createOperatorMetricGroup();
   }
 }

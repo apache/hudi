@@ -66,7 +66,9 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
                                 configProperties: TypedProperties,
                                 queryPaths: Seq[Path],
                                 specifiedQueryInstant: Option[String] = None,
-                                @transient fileStatusCache: FileStatusCache = NoopCache)
+                                @transient fileStatusCache: FileStatusCache = NoopCache,
+                                beginInstantTime: Option[String] = None,
+                                endInstantTime: Option[String] = None)
   extends BaseHoodieTableFileIndex(
     new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)),
     metaClient,
@@ -77,7 +79,9 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     false,
     false,
     SparkHoodieTableFileIndex.adapt(fileStatusCache),
-    shouldListLazily(configProperties)
+    shouldListLazily(configProperties),
+    toJavaOption(beginInstantTime),
+    toJavaOption(endInstantTime)
   )
     with SparkAdapterSupport
     with Logging {
@@ -201,7 +205,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    * @param predicates The filter condition.
    * @return The pruned partition paths.
    */
-  protected def listMatchingPartitionPaths(predicates: Seq[Expression]): Seq[PartitionPath] = {
+  def listMatchingPartitionPaths(predicates: Seq[Expression]): Seq[PartitionPath] = {
     val resolve = spark.sessionState.analyzer.resolver
     val partitionColumnNames = getPartitionColumns
     val partitionPruningPredicates = predicates.filter {

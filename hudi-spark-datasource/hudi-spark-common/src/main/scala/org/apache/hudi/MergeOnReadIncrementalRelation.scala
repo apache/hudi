@@ -33,7 +33,6 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
-import org.apache.spark.sql.execution.datasources.PartitionDirectory
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.StructType
 
@@ -131,9 +130,11 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
         val fsView = new HoodieTableFileSystemView(metaClient, timeline, affectedFilesInCommits)
         val modifiedPartitions = getWritePartitionPaths(commitsMetadata)
 
-        modifiedPartitions.asScala.flatMap { relativePartitionPath =>
-          fsView.getLatestMergedFileSlicesBeforeOrOn(relativePartitionPath, latestCommit).iterator().asScala
-        }.toSeq
+        fileIndex.listMatchingPartitionPaths(HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilters))
+          .map(p => p.path).filter(p => modifiedPartitions.contains(p))
+          .flatMap { relativePartitionPath =>
+            fsView.getLatestMergedFileSlicesBeforeOrOn(relativePartitionPath, latestCommit).iterator().asScala
+          }
       }
       filterFileSlices(fileSlices, globPattern)
     }
@@ -148,7 +149,11 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
   }
 
   def getRequiredFilters: Seq[Filter] = {
-    incrementalSpanRecordFilters
+    if (includedCommits.isEmpty) {
+      Seq.empty
+    } else {
+      incrementalSpanRecordFilters
+    }
   }
 
   private def filterFileSlices(fileSlices: Seq[FileSlice], pathGlobPattern: String): Seq[FileSlice] = {
@@ -190,8 +195,8 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   //   2. the end commit is archived
   //   3. there are files in metadata be deleted
   protected lazy val fullTableScan: Boolean = {
-    val fallbackToFullTableScan = optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.key,
-      DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.defaultValue).toBoolean
+    val fallbackToFullTableScan = optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.key,
+      DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.defaultValue).toBoolean
 
     fallbackToFullTableScan && (startInstantArchived || endInstantArchived || affectedFilesInCommits.exists(fileStatus => !metaClient.getFs.exists(fileStatus.getPath)))
   }
