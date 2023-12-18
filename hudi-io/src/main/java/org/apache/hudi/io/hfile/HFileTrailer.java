@@ -136,6 +136,14 @@ public class HFileTrailer {
   public int getDataIndexCount() {
     return dataIndexCount;
   }
+  
+  public int getMetaIndexCount() {
+    return metaIndexCount;
+  }
+
+  public long getNumKeyValueEntries() {
+    return entryCount;
+  }
 
   public CompressionCodec getCompressionCodec() {
     return compressionCodec;

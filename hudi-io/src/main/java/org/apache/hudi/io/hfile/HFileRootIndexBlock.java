@@ -19,6 +19,10 @@
 
 package org.apache.hudi.io.hfile;
 
+import org.apache.hudi.io.util.Option;
+
+import java.util.ArrayList;
+import java.util.List;
 import java.util.TreeMap;
 
 import static org.apache.hudi.io.util.IOUtils.copy;
@@ -38,24 +42,35 @@ public class HFileRootIndexBlock extends HFileBlock {
   }
 
   /**
-   * Reads the data index block and returns the block index entry to an in-memory {@link TreeMap}
+   * Reads the index block and returns the block index entry to an in-memory {@link TreeMap}
    * for searches.
    *
    * @param numEntries The number of entries in the block.
    * @return A {@link TreeMap} of block index entries.
    */
-  public TreeMap<Key, BlockIndexEntry> readDataIndex(int numEntries) {
+  public TreeMap<Key, BlockIndexEntry> readBlockIndex(int numEntries, boolean contentKeyOnly) {
     TreeMap<Key, BlockIndexEntry> blockIndexEntryMap = new TreeMap<>();
     int buffOffset = startOffsetInBuff + HFILEBLOCK_HEADER_SIZE;
+    List<Key> keyList = new ArrayList<>();
+    List<Long> offsetList = new ArrayList<>();
+    List<Integer> sizeList = new ArrayList();
     for (int i = 0; i < numEntries; i++) {
       long offset = readLong(byteBuff, buffOffset);
       int size = readInt(byteBuff, buffOffset + 8);
       int varLongSizeOnDist = decodeVarLongSizeOnDisk(byteBuff, buffOffset + 12);
       int keyLength = (int) readVarLong(byteBuff, buffOffset + 12, varLongSizeOnDist);
-      byte[] firstKeyBytes = copy(byteBuff, buffOffset + 12 + varLongSizeOnDist, keyLength);
-      Key firstKey = new Key(firstKeyBytes, 0, firstKeyBytes.length);
-      blockIndexEntryMap.put(firstKey, new BlockIndexEntry(firstKey, offset, size));
+      byte[] keyBytes = copy(byteBuff, buffOffset + 12 + varLongSizeOnDist, keyLength);
+      Key key = contentKeyOnly ? new UTF8StringKey(keyBytes) : new Key(keyBytes);
+      keyList.add(key);
+      offsetList.add(offset);
+      sizeList.add(size);
       buffOffset += (12 + varLongSizeOnDist + keyLength);
+    }
+    for (int i = 0; i < numEntries; i++) {
+      Key key = keyList.get(i);
+      blockIndexEntryMap.put(key, new BlockIndexEntry(
+          key, i < numEntries - 1 ? Option.of(keyList.get(i + 1)) : Option.empty(),
+          offsetList.get(i), sizeList.get(i)));
     }
     return blockIndexEntryMap;
   }

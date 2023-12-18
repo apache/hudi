@@ -37,9 +37,12 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellComparatorImpl;
+import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
+import org.apache.hadoop.hbase.io.hfile.HFileScanner;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -73,6 +76,7 @@ import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResou
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.io.storage.HoodieAvroHFileReader.SCHEMA_KEY;
+import static org.apache.hudi.io.storage.HoodieAvroHFileReader.copyValueFromCell;
 import static org.apache.hudi.io.storage.HoodieHFileConfig.HFILE_COMPARATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -422,8 +426,10 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
 
     Configuration hadoopConf = fs.getConf();
     HoodieAvroHFileReader hfileReader =
-        new HoodieAvroHFileReader(hadoopConf, new Path(DUMMY_BASE_PATH), new CacheConfig(hadoopConf), fs, content, Option.empty());
-    Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
+        new HoodieAvroHFileReader(hadoopConf, new Path(DUMMY_BASE_PATH),
+            new CacheConfig(hadoopConf), fs, content, Option.empty());
+    Schema avroSchema =
+        getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
     assertEquals(NUM_RECORDS_FIXTURE, hfileReader.getTotalRecords());
     verifySimpleRecords(hfileReader.getRecordIterator(avroSchema));
 
@@ -431,14 +437,39 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     verifyHFileReader(HoodieHFileUtils.createHFileReader(fs, new Path(DUMMY_BASE_PATH), content),
         hfilePrefix, true, HFILE_COMPARATOR.getClass(), NUM_RECORDS_FIXTURE);
     hfileReader =
-        new HoodieAvroHFileReader(hadoopConf, new Path(DUMMY_BASE_PATH), new CacheConfig(hadoopConf), fs, content, Option.empty());
-    avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchemaWithUDT.avsc");
+        new HoodieAvroHFileReader(hadoopConf, new Path(DUMMY_BASE_PATH),
+            new CacheConfig(hadoopConf), fs, content, Option.empty());
+    avroSchema =
+        getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchemaWithUDT.avsc");
     assertEquals(NUM_RECORDS_FIXTURE, hfileReader.getTotalRecords());
     verifySimpleRecords(hfileReader.getRecordIterator(avroSchema));
 
     content = readHFileFromResources(bootstrapIndexFile);
     verifyHFileReader(HoodieHFileUtils.createHFileReader(fs, new Path(DUMMY_BASE_PATH), content),
         hfilePrefix, false, HFileBootstrapIndex.HoodieKVComparator.class, 4);
+  }
+
+  @Test
+  public void testReadHFile() throws IOException {
+    String path = "file:/Users/ethan/Work/tmp/hfile-reader/hfile_keyed.hfile";
+    Configuration conf = new Configuration();
+    FileSystem fs = FSUtils.getFs(path, conf);
+    HFile.Reader reader =
+        HoodieHFileUtils.createHFileReader(fs, new Path(path), new CacheConfig(conf), conf);
+    HFileScanner scanner = HoodieAvroHFileReader.getHFileScanner(reader, true);
+
+    scanner.seekTo();
+
+    String stringNum = "00000536";
+    //String stringNum = "00000001";
+    String key = "key-" + stringNum;
+    KeyValue kv = new KeyValue(getUTF8Bytes(key), null, null, null);
+    assertEquals(0, scanner.reseekTo(kv));
+
+    // key is found and the cursor is left where the key is found
+    Cell c = scanner.getCell();
+    byte[] valueBytes = copyValueFromCell(c);
+    assertEquals("val-" + stringNum, new String(valueBytes));
   }
 
   private Set<String> getRandomKeys(int count, List<String> keys) {

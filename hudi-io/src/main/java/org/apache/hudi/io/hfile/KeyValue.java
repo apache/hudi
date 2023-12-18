@@ -45,6 +45,10 @@ public class KeyValue {
     return bytes;
   }
 
+  public Key getKey() {
+    return key;
+  }
+
   /**
    * @return Row offset
    */

@@ -454,7 +454,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     return Arrays.copyOfRange(cell.getRowArray(), cell.getRowOffset(), cell.getRowOffset() + cell.getRowLength());
   }
 
-  private static byte[] copyValueFromCell(Cell c) {
+  public static byte[] copyValueFromCell(Cell c) {
     return Arrays.copyOfRange(c.getValueArray(), c.getValueOffset(), c.getValueOffset() + c.getValueLength());
   }
 
@@ -492,7 +492,7 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
         .collect(Collectors.toList());
   }
 
-  private static HFileScanner getHFileScanner(HFile.Reader reader, boolean cacheBlocks) {
+  public static HFileScanner getHFileScanner(HFile.Reader reader, boolean cacheBlocks) {
     return getHFileScanner(reader, cacheBlocks, true);
   }
 

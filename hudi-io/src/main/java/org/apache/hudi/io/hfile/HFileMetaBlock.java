@@ -1,4 +1,4 @@
-<!--
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -15,26 +15,27 @@
  * KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations
  * under the License.
--->
+ */
 
-# `hudi-io` Module
+package org.apache.hudi.io.hfile;
 
-This module contains classes that are I/O related, including common abstraction and APIs, readers and writers, etc.
+import java.nio.ByteBuffer;
 
-## HFile Reader
+public class HFileMetaBlock extends HFileBlock {
+  protected HFileMetaBlock(HFileContext context,
+                           byte[] byteBuff,
+                           int startOffsetInBuff) {
+    super(context, HFileBlockType.META, byteBuff, startOffsetInBuff);
+  }
 
-We implement our own HFile reader (`org.apache.hudi.io.hfile.HFileReaderImpl`) that functionally works on reading HFiles
-in the Hudi metadata tables, based on the format described below.
+  public ByteBuffer readContent() {
+    return ByteBuffer.wrap(
+        getByteBuff(),
+        startOffsetInBuff + HFILEBLOCK_HEADER_SIZE, uncompressedSizeWithoutHeader);
+  }
 
-### HFile Format
-
-[HFile format](https://hbase.apache.org/book.html#_hfile_format_2) is originally designed and implemented
-by [HBase](https://hbase.apache.org/). We use HFile as the base file format of the internal metadata table (MDT). Here
-we describe the HFile format that are relevant to Hudi, as not all features of HFile are used.
-
-
-
-
-
-
-
+  @Override
+  public HFileBlock cloneForUnpack() {
+    return new HFileMetaBlock(context, allocateBuffer(), 0);
+  }
+}

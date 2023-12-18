@@ -206,4 +206,18 @@ public class IOUtils {
     }
     return sb.toString();
   }
+
+  /**
+   * @param bytes  byte array to hash.
+   * @param offset offset to start hashing.
+   * @param length length of bytes to hash.
+   * @return the generated hash code.
+   */
+  public static int hashCode(byte[] bytes, int offset, int length) {
+    int hash = 1;
+    for (int i = offset; i < offset + length; i++) {
+      hash = (31 * hash) + bytes[i];
+    }
+    return hash;
+  }
 }

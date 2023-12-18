@@ -22,6 +22,8 @@ package org.apache.hudi.io.hfile;
 import org.apache.hudi.io.util.IOUtils;
 import org.apache.hudi.io.util.Option;
 
+import java.io.IOException;
+
 import static org.apache.hudi.io.hfile.KeyValue.KEY_OFFSET;
 
 /**
@@ -32,10 +34,15 @@ public class HFileDataBlock extends HFileBlock {
   // is always 0, thus the byte length of the version is always 1.
   private static final long ZERO_TS_VERSION_BYTE_LENGTH = 1;
 
+
+  protected final int uncompressContentEndOffset;
+
   protected HFileDataBlock(HFileContext context,
                            byte[] byteBuff,
                            int startOffsetInBuff) {
     super(context, HFileBlockType.DATA, byteBuff, startOffsetInBuff);
+
+    this.uncompressContentEndOffset = this.uncompressedEndOffset - this.sizeCheckSum;
   }
 
   /**
@@ -50,7 +57,7 @@ public class HFileDataBlock extends HFileBlock {
     int endOffset = offset + onDiskSizeWithoutHeader;
     while (offset + HFILEBLOCK_HEADER_SIZE < endOffset) {
       // Full length is not known yet until parsing
-      KeyValue kv = new KeyValue(byteBuff, offset);
+      KeyValue kv = readKeyValue(offset);
       int comp =
           IOUtils.compareTo(kv.getBytes(), kv.getKeyContentOffset(), kv.getKeyContentLength(),
               key.getBytes(), key.getContentOffset(), key.getContentLength());
@@ -65,6 +72,63 @@ public class HFileDataBlock extends HFileBlock {
       offset += increment;
     }
     return Option.empty();
+  }
+
+  /**
+   * Seeks to the key to look up.
+   *
+   * @param key Key to look up.
+   * @return The {@link KeyValue} instance in the block that contains the exact same key as the
+   * lookup key; or empty {@link Option} if the lookup key does not exist.
+   */
+  public int seekTo(HFilePosition position, Key key, int blockStartOffsetInFile) {
+    int offset = position.getOffset() - blockStartOffsetInFile;
+    int endOffset = uncompressContentEndOffset;
+    int lastOffset = offset;
+    Option<KeyValue> lastKeyValue = position.getKeyValue();
+    while (offset < endOffset) {
+      // Full length is not known yet until parsing
+      KeyValue kv = readKeyValue(offset);
+      int comp = kv.getKey().compareTo(key);
+      if (comp == 0) {
+        position.set(offset + blockStartOffsetInFile, kv);
+        return 0;
+      } else if (comp > 0) {
+        if (lastKeyValue.isPresent()) {
+          position.set(lastOffset + blockStartOffsetInFile, lastKeyValue.get());
+        } else {
+          position.setOffset(lastOffset + blockStartOffsetInFile);
+        }
+        return 1;
+      }
+      long increment =
+          (long) KEY_OFFSET + (long) kv.getKeyLength() + (long) kv.getValueLength()
+              + ZERO_TS_VERSION_BYTE_LENGTH;
+      lastOffset = offset;
+      offset += increment;
+      lastKeyValue = Option.of(kv);
+    }
+    if (lastKeyValue.isPresent()) {
+      position.set(lastOffset + blockStartOffsetInFile, lastKeyValue.get());
+    } else {
+      position.setOffset(lastOffset + blockStartOffsetInFile);
+    }
+    return 1;
+  }
+
+  public KeyValue readKeyValue(int offset) {
+    return new KeyValue(byteBuff, offset);
+  }
+
+  public boolean next(HFilePosition position, int blockStartOffsetInFile) throws IOException {
+    int offset = position.getOffset() - blockStartOffsetInFile;
+    Option<KeyValue> keyValue = position.getKeyValue();
+    if (!keyValue.isPresent()) {
+      keyValue = Option.of(readKeyValue(offset));
+    }
+    position.increment((long) KEY_OFFSET + (long) keyValue.get().getKeyLength()
+        + (long) keyValue.get().getValueLength() + ZERO_TS_VERSION_BYTE_LENGTH);
+    return position.getOffset() - blockStartOffsetInFile < uncompressContentEndOffset;
   }
 
   @Override

@@ -19,14 +19,49 @@
 
 package org.apache.hudi.io.hfile;
 
+import org.apache.hudi.io.hfile.protobuf.generated.HFileProtos;
+import org.apache.hudi.io.util.IOUtils;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Represents a {@link HFileBlockType#FILE_INFO} block in the "Load-on-open" section.
  */
 public class HFileFileInfoBlock extends HFileBlock {
+  /**
+   * Magic we put ahead of a serialized protobuf message.
+   * For example, all znode content is protobuf messages with the below magic
+   * for preamble.
+   */
+  public static final byte[] PB_MAGIC = new byte[] {'P', 'B', 'U', 'F'};
+
   public HFileFileInfoBlock(HFileContext context,
                             byte[] byteBuff,
                             int startOffsetInBuff) {
     super(context, HFileBlockType.FILE_INFO, byteBuff, startOffsetInBuff);
+  }
+
+  public HFileInfo readFileInfo() throws IOException {
+    int pbMagicLength = PB_MAGIC.length;
+    if (IOUtils.compareTo(PB_MAGIC, 0, pbMagicLength,
+        byteBuff, startOffsetInBuff + HFILEBLOCK_HEADER_SIZE, pbMagicLength) != 0) {
+      throw new IOException(
+          "Unexpected Protobuf magic at the beginning of the HFileFileInfoBlock: "
+              + new String(byteBuff, startOffsetInBuff + HFILEBLOCK_HEADER_SIZE, pbMagicLength));
+    }
+    ByteArrayInputStream inputStream = new ByteArrayInputStream(
+        byteBuff,
+        startOffsetInBuff + HFILEBLOCK_HEADER_SIZE + pbMagicLength, uncompressedSizeWithoutHeader);
+    Map<UTF8StringKey, byte[]> fileInfoMap = new HashMap<>();
+    HFileProtos.InfoProto infoProto = HFileProtos.InfoProto.parseDelimitedFrom(inputStream);
+    for (HFileProtos.BytesBytesPair pair : infoProto.getMapEntryList()) {
+      fileInfoMap.put(
+          new UTF8StringKey(pair.getFirst().toByteArray()), pair.getSecond().toByteArray());
+    }
+    return new HFileInfo(fileInfoMap);
   }
 
   @Override

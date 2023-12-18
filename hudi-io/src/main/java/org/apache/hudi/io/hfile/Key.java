@@ -64,9 +64,31 @@ public class Key implements Comparable<Key> {
   }
 
   @Override
+  public int hashCode() {
+    // Only consider key content for hash code
+    return IOUtils.hashCode(getBytes(), getContentOffset(), getContentLength());
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (!(o instanceof Key)) {
+      return false;
+    }
+    // Only consider key content for hash code
+    return compareTo((Key) o) == 0;
+  }
+
+  @Override
   public int compareTo(Key o) {
     return IOUtils.compareTo(
         getBytes(), getContentOffset(), getContentLength(),
         o.getBytes(), o.getContentOffset(), o.getContentLength());
+  }
+
+  @Override
+  public String toString() {
+    return "Key{"
+        + new String(getBytes(), getContentOffset(), getContentLength())
+        + "}";
   }
 }

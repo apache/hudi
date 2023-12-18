@@ -21,134 +21,66 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.io.util.Option;
 
-import org.apache.hadoop.fs.FSDataInputStream;
-
-import java.io.ByteArrayInputStream;
-import java.io.DataInputStream;
+import java.io.Closeable;
 import java.io.IOException;
-import java.util.Map;
-import java.util.TreeMap;
+import java.nio.ByteBuffer;
 
-/**
- * A reader reading a HFile.
- */
-public class HFileReader {
-  private final FSDataInputStream stream;
-  private final long fileSize;
-  private boolean isMetadataInitialized = false;
-  private HFileContext context;
-  private TreeMap<Key, BlockIndexEntry> blockIndexEntryMap;
-  private HFileBlock metaIndexBlock;
-  private HFileBlock fileInfoBlock;
+public interface HFileReader extends Closeable {
+  void initializeMetadata() throws IOException;
 
-  public HFileReader(FSDataInputStream stream, long fileSize) {
-    this.stream = stream;
-    this.fileSize = fileSize;
-  }
+  Option<byte[]> getMetaInfo(UTF8StringKey key) throws IOException;
+
+  Option<ByteBuffer> getMetaBlock(String metaBlockName) throws IOException;
+
+  long getNumKeyValueEntries();
 
   /**
-   * Initializes the metadata by reading the "Load-on-open" section.
-   *
-   * @throws IOException upon error.
+   * SeekTo or just before the passed {@link Key}.  Examine the return
+   * code to figure whether we found the key or not.
+   * Consider the cell stream of all the cells in the file,
+   * <code>c[0] .. c[n]</code>, where there are n cells in the file.
+   * <p>
+   * The position only moves forward so the caller has to make sure the
+   * keys are sorted before making multiple calls of this method.
+   * <p>
+   * @param key {@link Key} to seek to.
+   * @return -1, if cell &lt; c[0], no position;
+   * 0, such that c[i] = cell and scanner is left in position i; and
+   * 1, such that c[i] &lt; cell, and scanner is left in position i.
+   * The scanner will position itself between c[i] and c[i+1] where
+   * c[i] &lt; cell &lt;= c[i+1].
+   * If there is no cell c[i+1] greater than or equal to the input cell, then the
+   * scanner will position itself at the end of the file and next() will return
+   * false when it is called.
+   * @throws IOException
    */
-  public void initializeMetadata() throws IOException {
-    assert !this.isMetadataInitialized;
-
-    // Read Trailer (serialized in Proto)
-    HFileTrailer trailer = readTrailer(stream, fileSize);
-    this.context = HFileContext.builder()
-        .compressionCodec(trailer.getCompressionCodec())
-        .build();
-    HFileBlockReader blockReader = new HFileBlockReader(
-        context, stream, trailer.getLoadOnOpenDataOffset(), fileSize - HFileTrailer.getTrailerSize());
-    HFileRootIndexBlock dataIndexBlock =
-        (HFileRootIndexBlock) blockReader.nextBlock(HFileBlockType.ROOT_INDEX);
-    this.blockIndexEntryMap = dataIndexBlock.readDataIndex(trailer.getDataIndexCount());
-    this.metaIndexBlock = blockReader.nextBlock(HFileBlockType.ROOT_INDEX);
-    this.fileInfoBlock = blockReader.nextBlock(HFileBlockType.FILE_INFO);
-
-    this.isMetadataInitialized = true;
-  }
+  int seekTo(Key key) throws IOException;
 
   /**
-   * Seeks to the key to look up.
-   *
-   * @param key Key to look up.
-   * @return The {@link KeyValue} instance in the block that contains the exact same key as the
-   * lookup key; or empty {@link Option} if the lookup key does not exist.
-   * @throws IOException upon error.
+   * Positions this scanner at the start of the file.
+   * @return False if empty file; i.e. a call to next would return false and
+   * the current key and value are undefined.
+   * @throws IOException
    */
-  public Option<KeyValue> seekTo(Key key) throws IOException {
-    // Searches the block that may contain the lookup key based the starting keys of
-    // all blocks (sorted in the TreeMap of block index entries), using binary search.
-    // The result contains the greatest key less than or equal to the given key,
-    // or null if there is no such key.
-    Map.Entry<Key, BlockIndexEntry> floorEntry = blockIndexEntryMap.floorEntry(key);
-    if (floorEntry == null) {
-      // Key smaller than the start key of the first block
-      return Option.empty();
-    }
-    BlockIndexEntry blockToRead = floorEntry.getValue();
-    HFileBlockReader blockReader = new HFileBlockReader(
-        context, stream, blockToRead.getOffset(),
-        blockToRead.getOffset() + (long) blockToRead.getSize());
-    HFileDataBlock dataBlock = (HFileDataBlock) blockReader.nextBlock(HFileBlockType.DATA);
-    return seekToKeyInBlock(dataBlock, key);
-  }
+  boolean seekTo() throws IOException;
 
   /**
-   * Reads the HFile major version from the input.
+   * Scans to the next entry in the file.
    *
-   * @param bytes  Input data.
-   * @param offset Offset to start reading.
-   * @return Major version of the file.
+   * @return Returns false if you are at the end otherwise true if more in file.
+   * @throws IOException
    */
-  public static int readMajorVersion(byte[] bytes, int offset) {
-    int ch1 = bytes[offset] & 0xFF;
-    int ch2 = bytes[offset + 1] & 0xFF;
-    int ch3 = bytes[offset + 2] & 0xFF;
-    return ((ch1 << 16) + (ch2 << 8) + ch3);
-  }
+  boolean next() throws IOException;
 
   /**
-   * Reads and parses the HFile trailer.
-   *
-   * @param stream   HFile input.
-   * @param fileSize HFile size.
-   * @return {@link HFileTrailer} instance.
-   * @throws IOException upon error.
+   * @return The {@link KeyValue} instance at current position.
    */
-  private static HFileTrailer readTrailer(FSDataInputStream stream,
-                                          long fileSize) throws IOException {
-    int bufferSize = HFileTrailer.getTrailerSize();
-    long seekPos = fileSize - bufferSize;
-    if (seekPos < 0) {
-      // It is hard to imagine such a small HFile.
-      seekPos = 0;
-      bufferSize = (int) fileSize;
-    }
-    stream.seek(seekPos);
-
-    byte[] byteBuff = new byte[bufferSize];
-    stream.readFully(byteBuff);
-
-    int majorVersion = readMajorVersion(byteBuff, bufferSize - 3);
-    int minorVersion = byteBuff[bufferSize - 3];
-
-    HFileTrailer trailer = new HFileTrailer(majorVersion, minorVersion);
-    trailer.deserialize(new DataInputStream(new ByteArrayInputStream(byteBuff)));
-    return trailer;
-  }
+  Option<KeyValue> getKeyValue() throws IOException;
 
   /**
-   * Seeks to the lookup key inside a {@link HFileDataBlock}.
-   *
-   * @param dataBlock The data block to seek.
-   * @param key       The key to lookup.
-   * @return The {@link KeyValue} instance in the block that contains the exact same key as the
-   * lookup key; or empty {@link Option} if the lookup key does not exist.
+   * @return True is scanner has had one of the seek calls invoked; i.e.
+   * {@link #seekTo()} or {@link #seekTo(Key)}.
+   * Otherwise returns false.
    */
-  private Option<KeyValue> seekToKeyInBlock(HFileDataBlock dataBlock, Key key) {
-    return dataBlock.seekTo(key);
-  }
+  boolean isSeeked();
 }

@@ -20,6 +20,7 @@
 package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.io.util.IOUtils;
+import org.apache.hudi.io.util.Option;
 
 /**
  * Represents the index entry of a data block in the Data Index stored in the
@@ -31,18 +32,26 @@ import org.apache.hudi.io.util.IOUtils;
  * are compared in lexicographical order.
  */
 public class BlockIndexEntry implements Comparable<BlockIndexEntry> {
-  private final Key firstKey;
+  private final Key key;
+  private final Option<Key> nextBlockKey;
   private final long offset;
   private final int size;
 
-  public BlockIndexEntry(Key firstKey, long offset, int size) {
-    this.firstKey = firstKey;
+  public BlockIndexEntry(Key key, Option<Key> nextBlockFirstKey,
+                         long offset,
+                         int size) {
+    this.key = key;
+    this.nextBlockKey = nextBlockFirstKey;
     this.offset = offset;
     this.size = size;
   }
 
-  public Key getFirstKey() {
-    return firstKey;
+  public Key getKey() {
+    return key;
+  }
+
+  public Option<Key> getNextBlockKey() {
+    return nextBlockKey;
   }
 
   public long getOffset() {
@@ -56,15 +65,15 @@ public class BlockIndexEntry implements Comparable<BlockIndexEntry> {
   @Override
   public int compareTo(BlockIndexEntry o) {
     return IOUtils.compareTo(
-        firstKey.getBytes(), firstKey.getContentOffset(), firstKey.getContentLength(),
-        o.getFirstKey().getBytes(), o.getFirstKey().getContentOffset(),
-        o.getFirstKey().getContentLength());
+        key.getBytes(), key.getContentOffset(), key.getContentLength(),
+        o.getKey().getBytes(), o.getKey().getContentOffset(),
+        o.getKey().getContentLength());
   }
 
   @Override
   public String toString() {
     return "BlockIndexEntry{firstKey="
-        + firstKey.toString()
+        + key.toString()
         + ", offset="
         + offset
         + ", size="

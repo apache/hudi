@@ -72,6 +72,8 @@ public abstract class HFileBlock {
   protected final HFileContext context;
   protected final byte[] byteBuff;
   protected final int startOffsetInBuff;
+  protected final int sizeCheckSum;
+  protected final int uncompressedEndOffset;
   private final HFileBlockType blockType;
   protected int onDiskSizeWithoutHeader;
   protected int uncompressedSizeWithoutHeader;
@@ -86,8 +88,11 @@ public abstract class HFileBlock {
     this.blockType = blockType;
     this.onDiskSizeWithoutHeader = readInt(
         byteBuff, startOffsetInBuff + Header.ON_DISK_SIZE_WITHOUT_HEADER_INDEX);
+    this.sizeCheckSum = numChecksumBytes(onDiskSizeWithoutHeader + HFILEBLOCK_HEADER_SIZE);
     this.uncompressedSizeWithoutHeader = readInt(
         byteBuff, startOffsetInBuff + Header.UNCOMPRESSED_SIZE_WITHOUT_HEADER_INDEX);
+    this.uncompressedEndOffset =
+        startOffsetInBuff + HFILEBLOCK_HEADER_SIZE + uncompressedSizeWithoutHeader;
   }
 
   /**
@@ -109,6 +114,8 @@ public abstract class HFileBlock {
         return new HFileFileInfoBlock(context, byteBuff, startOffsetInBuff);
       case DATA:
         return new HFileDataBlock(context, byteBuff, startOffsetInBuff);
+      case META:
+        return new HFileMetaBlock(context, byteBuff, startOffsetInBuff);
       default:
         throw new IOException(
             "Parsing of the HFile block type " + blockType + " is not supported");

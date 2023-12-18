@@ -129,7 +129,7 @@ public enum HFileBlockType {
       throws IOException {
     for (HFileBlockType blockType : values()) {
       if (IOUtils.compareTo(
-          blockType.magic, 0, MAGIC_LENGTH, buf, offset, offset + MAGIC_LENGTH) == 0) {
+          blockType.magic, 0, MAGIC_LENGTH, buf, offset, MAGIC_LENGTH) == 0) {
         return blockType;
       }
     }

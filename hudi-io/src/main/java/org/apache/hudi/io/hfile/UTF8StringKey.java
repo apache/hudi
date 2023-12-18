@@ -30,6 +30,10 @@ public class UTF8StringKey extends Key {
     super(key.getBytes(StandardCharsets.UTF_8));
   }
 
+  public UTF8StringKey(byte[] key) {
+    super(key);
+  }
+
   @Override
   public int getContentOffset() {
     return getOffset();
@@ -38,5 +42,12 @@ public class UTF8StringKey extends Key {
   @Override
   public int getContentLength() {
     return getLength();
+  }
+
+  @Override
+  public String toString() {
+    return "UTF8StringKey{"
+        + new String(getBytes())
+        + "}";
   }
 }
