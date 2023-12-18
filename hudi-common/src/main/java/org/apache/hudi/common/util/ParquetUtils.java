@@ -477,6 +477,51 @@ public class ParquetUtils extends BaseFileUtils {
     }
   }
 
+  /**
+   * Aggregate column range statistics across files in a partition.
+   *
+   * @param fileRanges List of column range statistics for each file in a partition
+   */
+  public <T extends Comparable<T>> HoodieColumnRangeMetadata<T> getColumnRangeInPartition(@Nonnull List<HoodieColumnRangeMetadata<T>> fileRanges) {
+    if (fileRanges.size() == 1) {
+      // Only one parquet file, we can just return that range.
+      return fileRanges.get(0);
+    }
+    // There are multiple files. Compute min(file_mins) and max(file_maxs)
+    return fileRanges.stream()
+        .sequential()
+        .reduce(this::mergeRanges).get();
+  }
+
+  private <T extends Comparable<T>> HoodieColumnRangeMetadata<T> mergeRanges(HoodieColumnRangeMetadata<T> one,
+                                                                             HoodieColumnRangeMetadata<T> another) {
+    final T minValue;
+    final T maxValue;
+    if (one.getMinValue() != null && another.getMinValue() != null) {
+      minValue = one.getMinValue().toString().compareTo(another.getMinValue().toString()) < 0 ? one.getMinValue() : another.getMinValue();
+    } else if (one.getMinValue() == null) {
+      minValue = another.getMinValue();
+    } else {
+      minValue = one.getMinValue();
+    }
+
+    if (one.getMaxValue() != null && another.getMaxValue() != null) {
+      maxValue = one.getMaxValue().toString().compareTo(another.getMaxValue().toString()) < 0 ? another.getMaxValue() : one.getMaxValue();
+    } else if (one.getMaxValue() == null) {
+      maxValue = another.getMaxValue();
+    } else {
+      maxValue = one.getMaxValue();
+    }
+
+    return HoodieColumnRangeMetadata.create(
+        one.getFilePath(),
+        one.getColumnName(), minValue, maxValue,
+        one.getNullCount() + another.getNullCount(),
+        one.getValueCount() + another.getValueCount(),
+        one.getTotalSize() + another.getTotalSize(),
+        one.getTotalUncompressedSize() + another.getTotalUncompressedSize());
+  }
+
   // -------------------------------------------------------------------------
   //  Inner Class
   // -------------------------------------------------------------------------
