@@ -91,6 +91,7 @@ class TestHoodieSparkSqlWriter {
     cleanupSparkContexts()
     FileUtils.deleteDirectory(tempPath.toFile)
     FileUtils.deleteDirectory(tempBootStrapPath.toFile)
+    System.gc()
   }
 
   /**
