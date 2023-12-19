@@ -62,7 +62,7 @@ public class HFileReaderImpl implements HFileReader {
    * @throws IOException upon error.
    */
   @Override
-  public void initializeMetadata() throws IOException {
+  public synchronized void initializeMetadata() throws IOException {
     if (this.isMetadataInitialized) {
       return;
     }
@@ -171,6 +171,10 @@ public class HFileReaderImpl implements HFileReader {
   @Override
   public boolean seekTo() throws IOException {
     initializeMetadata();
+    if (trailer.getNumKeyValueEntries() == 0) {
+      currentPos.setEof();
+      return false;
+    }
     // Move the current position to the beginning of the first data block
     currentPos.setOffset(dataBlockIndexEntryMap.firstKey().getOffset() + HFILEBLOCK_HEADER_SIZE);
     currentPos.unsetEof();

@@ -140,6 +140,23 @@ public class TestHFileReader {
     }
   }
 
+  @Test
+  public void testReadHFileWithoutKeyValueEntries() throws IOException {
+    int bufSize = 16 * 1024 * 1024;
+    Path path = new Path(
+        "file:/Users/ethan/Work/tmp/20231215-hfile-ci-logs/record-index-0006-0_3-108-262_20231219054341404.hfile");
+    Configuration conf = new Configuration();
+    FileSystem fs = path.getFileSystem(conf);
+    FileStatus fileStatus = fs.getFileStatus(path);
+    try (FSDataInputStream stream = fs.open(path, bufSize)) {
+      HFileReaderImpl reader = new HFileReaderImpl(stream, fileStatus.getLen());
+      reader.initializeMetadata();
+      assertFalse(reader.seekTo());
+      assertEquals(2, reader.seekTo(new UTF8StringKey("xyz")));
+      assertFalse(reader.next());
+    }
+  }
+
   // "/hudi_0_9_hbase_1_2_3_simple.hfile", "/hudi_0_10_hbase_1_2_3_simple.hfile",
   @ParameterizedTest
   @ValueSource(strings = {

@@ -78,7 +78,7 @@ public class HFileTrailer {
    * The number of key/value pairs in the file. This field was int in version 1,
    * but is now long.
    */
-  private long entryCount;
+  private long keyValueEntryCount;
 
   /**
    * The compression codec used for all blocks.
@@ -142,7 +142,7 @@ public class HFileTrailer {
   }
 
   public long getNumKeyValueEntries() {
-    return entryCount;
+    return keyValueEntryCount;
   }
 
   public CompressionCodec getCompressionCodec() {
@@ -178,7 +178,7 @@ public class HFileTrailer {
       metaIndexCount = trailerProto.getMetaIndexCount();
     }
     if (trailerProto.hasEntryCount()) {
-      entryCount = trailerProto.getEntryCount();
+      keyValueEntryCount = trailerProto.getEntryCount();
     }
     if (trailerProto.hasNumDataIndexLevels()) {
       numDataIndexLevels = trailerProto.getNumDataIndexLevels();
@@ -212,7 +212,7 @@ public class HFileTrailer {
         + ", uncompressedDataIndexSize=" + uncompressedDataIndexSize
         + ", metaIndexCount=" + metaIndexCount
         + ", totalUncompressedBytes=" + totalUncompressedBytes
-        + ", entryCount=" + entryCount
+        + ", entryCount=" + keyValueEntryCount
         + ", compressionCodec=" + compressionCodec
         + ", numDataIndexLevels=" + numDataIndexLevels
         + ", firstDataBlockOffset=" + firstDataBlockOffset
