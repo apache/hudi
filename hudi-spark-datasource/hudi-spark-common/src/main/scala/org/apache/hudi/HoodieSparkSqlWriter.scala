@@ -541,10 +541,11 @@ class HoodieSparkSqlWriterInternal {
     val asyncCompactionEnabled = isAsyncCompactionEnabled(writeClient, tableConfig, parameters, configuration)
     val asyncClusteringEnabled = isAsyncClusteringEnabled(writeClient, parameters)
     if (!asyncCompactionEnabled && !asyncClusteringEnabled) {
-      log.warn("Closing write client for " + writeClient.getConfig.getBasePath)
+      val basePath = writeClient.getConfig.getBasePath
+      log.warn("Closing write client for " + basePath)
       val startTime = System.currentTimeMillis()
       writeClient.close()
-      log.warn("Closing write client takes " + (System.currentTimeMillis() - startTime))
+      log.warn("Closing write client for " + basePath + " took " + (System.currentTimeMillis() - startTime))
     }
   }
 
