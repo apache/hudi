@@ -23,7 +23,7 @@ import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.testutils.HoodieClientTestBase
-import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.SparkException
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
@@ -831,6 +831,71 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
       //       HUDI-7045 and PR#10007 in progress to fix the issue
       .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
       .load(tempRecordPath)
+    readDf.printSchema()
+    readDf.show(false)
+    readDf.foreach(_ => {})
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testNestedTypeVectorizedReadWithTypeChange(isCow: Boolean): Unit = {
+    // test to change the value type of a MAP in a column of ARRAY< MAP<k,v> > type
+    val tempRecordPath = basePath + "/record_tbl/"
+    val arrayMapData = Seq(
+      Row(1, 100, List(Map("2022-12-01" -> 120), Map("2022-12-02" -> 130)), "aaa")
+    )
+    val arrayMapSchema = new StructType()
+      .add("id", IntegerType)
+      .add("userid", IntegerType)
+      .add("salesMap", ArrayType(
+        new MapType(StringType, IntegerType, true)))
+      .add("name", StringType)
+    val df1 = spark.createDataFrame(spark.sparkContext.parallelize(arrayMapData), arrayMapSchema)
+    df1.printSchema()
+    df1.show(false)
+
+    // recreate table
+    initialiseTable(df1, tempRecordPath, isCow)
+
+    // read out the table, will not throw any exception
+    readTable(tempRecordPath)
+
+    // change value type from integer to long
+    val newArrayMapData = Seq(
+      Row(2, 200, List(Map("2022-12-01" -> 220L), Map("2022-12-02" -> 230L)), "bbb")
+    )
+    val newArrayMapSchema = new StructType()
+      .add("id", IntegerType)
+      .add("userid", IntegerType)
+      .add("salesMap", ArrayType(
+        new MapType(StringType, LongType, true)))
+      .add("name", StringType)
+    val df2 = spark.createDataFrame(spark.sparkContext.parallelize(newArrayMapData), newArrayMapSchema)
+    df2.printSchema()
+    df2.show(false)
+    // upsert
+    upsertData(df2, tempRecordPath, isCow)
+
+    // after implicit type change, read the table with vectorized read enabled
+    assertThrows(classOf[SparkException]){
+      withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "true") {
+        readTable(tempRecordPath)
+      }
+    }
+
+    withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "false") {
+      readTable(tempRecordPath)
+    }
+  }
+
+
+  private def readTable(path: String): Unit = {
+    // read out the table
+    val readDf = spark.read.format("hudi")
+      // NOTE: type promotion is not supported for the custom file format and the filegroup reader
+      //       HUDI-7045 and PR#10007 in progress to fix the issue
+      .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
+      .load(path)
     readDf.printSchema()
     readDf.show(false)
     readDf.foreach(_ => {})

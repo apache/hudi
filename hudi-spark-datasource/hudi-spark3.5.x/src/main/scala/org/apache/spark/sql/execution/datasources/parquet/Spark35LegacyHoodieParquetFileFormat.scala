@@ -48,6 +48,9 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{AtomicType, DataType, StructField, StructType}
 import org.apache.spark.util.SerializableConfiguration
+
+import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
+
 /**
  * This class is an extension of [[ParquetFileFormat]] overriding Spark-specific behavior
  * that's not possible to customize in any other way
@@ -251,6 +254,13 @@ class Spark35LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
           hadoopAttemptConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, sparkRequestSchema.json)
         }
         implicitTypeChangeInfo
+      }
+
+      if (enableVectorizedReader && shouldUseInternalSchema &&
+        !typeChangeInfos.values().forall(_.getLeft.isInstanceOf[AtomicType])) {
+        throw new IllegalArgumentException(
+          "Nested types with type changes(implicit or explicit) cannot be read in vectorized mode. " +
+            "To workaround this issue, set spark.sql.parquet.enableVectorizedReader=false.")
       }
 
       val hadoopAttemptContext =
