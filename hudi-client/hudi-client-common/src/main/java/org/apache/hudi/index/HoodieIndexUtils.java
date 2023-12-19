@@ -316,7 +316,7 @@ public class HoodieIndexUtils {
     Schema writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField());
     if (keyGeneratorWriteConfigOpt.isPresent()) {
       return mergeIncomingWithExistingRecordWithExpressionPayload(incoming, existing, writeSchema,
-          existingSchema, writeSchemaWithMetaFields, config, recordMerger, keyGeneratorWriteConfigOpt.get().getKey());
+          existingSchema, writeSchemaWithMetaFields, keyGeneratorWriteConfigOpt.get().getRight(), recordMerger, keyGeneratorWriteConfigOpt.get().getKey());
     } else {
       // prepend the hoodie meta fields as the incoming record does not have them
       HoodieRecord incomingPrepended = incoming
