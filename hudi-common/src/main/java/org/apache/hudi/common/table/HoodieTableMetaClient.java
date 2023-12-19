@@ -1269,12 +1269,13 @@ public class HoodieTableMetaClient implements Serializable {
       tableConfig.setValue(HoodieTableConfig.TYPE, tableType.name());
       tableConfig.setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.current().versionCode()));
 
+      if (null != payloadClassName) {
+        tableConfig.setValue(HoodieTableConfig.PAYLOAD_TYPE, RecordPayloadType.fromClassName(payloadClassName).name());
+      } else if (null != payloadType) {
+        tableConfig.setValue(HoodieTableConfig.PAYLOAD_TYPE, payloadType);
+      }
+
       if (tableType == HoodieTableType.MERGE_ON_READ) {
-        if (null != payloadClassName) {
-          tableConfig.setValue(HoodieTableConfig.PAYLOAD_TYPE, RecordPayloadType.fromClassName(payloadClassName).name());
-        } else if (null != payloadType) {
-          tableConfig.setValue(HoodieTableConfig.PAYLOAD_TYPE, payloadType);
-        }
         if (recordMergerStrategy != null) {
           tableConfig.setValue(HoodieTableConfig.RECORD_MERGER_STRATEGY, recordMergerStrategy);
         }
