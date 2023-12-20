@@ -155,9 +155,18 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                   file.length,
                   shouldUseRecordPosition)
                 reader.initRecordIterators()
+
+                val iter = reader.getClosableIterator
+
                 // Append partition values to rows and project to output schema
                 appendPartitionAndProject(
-                  reader.getClosableIterator.asInstanceOf[java.util.Iterator[InternalRow] with Closeable].asScala.asInstanceOf[Iterator[InternalRow] with Closeable],
+                  new Iterator[InternalRow] with Closeable {
+                    override def hasNext: Boolean = iter.hasNext
+
+                    override def next(): InternalRow = iter.next
+
+                    override def close(): Unit = iter.close()
+                  },
                   requiredSchema,
                   partitionSchema,
                   outputSchema,
