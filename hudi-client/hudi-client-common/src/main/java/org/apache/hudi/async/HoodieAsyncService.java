@@ -19,6 +19,7 @@
 package org.apache.hudi.async;
 
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.slf4j.Logger;
@@ -121,12 +122,15 @@ public abstract class HoodieAsyncService implements Serializable {
         if (force) {
           executor.shutdownNow();
         } else {
+          HoodieTimer timer = HoodieTimer.start();
           executor.shutdown();
           try {
             // Wait for some max time after requesting shutdown
-            executor.awaitTermination(24, TimeUnit.HOURS);
+            executor.awaitTermination(3, TimeUnit.MINUTES);
           } catch (InterruptedException ie) {
             LOG.error("Interrupted while waiting for shutdown", ie);
+          } finally {
+            LOG.error("Async Service Shutdown took " + timer.endTimer());
           }
         }
       }

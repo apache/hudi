@@ -746,7 +746,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       awaitDeltaStreamerShutdown(ds);
     } else {
       ds.shutdownGracefully();
+      LOG.error("Wait for streamer to finish sync: " + jobId);
       dsFuture.get();
+      LOG.error("Streamer finished in test runner: " + jobId);
     }
   }
 
