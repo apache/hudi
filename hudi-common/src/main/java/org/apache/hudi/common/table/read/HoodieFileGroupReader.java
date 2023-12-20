@@ -306,7 +306,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   }
 
   public static class HoodieFileGroupReaderIterator<T> implements ClosableIterator<T> {
-    private final HoodieFileGroupReader<T> reader;
+    private HoodieFileGroupReader<T> reader;
 
     public HoodieFileGroupReaderIterator(HoodieFileGroupReader<T> reader) {
       this.reader = reader;
@@ -332,6 +332,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         reader.close();
       } catch (IOException e) {
         throw new HoodieIOException("Failed to close the reader", e);
+      } finally {
+        this.reader = null;
       }
     }
   }
