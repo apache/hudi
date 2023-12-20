@@ -43,6 +43,8 @@ import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.jdk.CollectionConverters.asScalaIteratorConverter
 
+import java.io.Closeable
+
 trait HoodieFormatTrait {
 
   // Used so that the planner only projects once and does not stack overflow
@@ -155,7 +157,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                 reader.initRecordIterators()
                 // Append partition values to rows and project to output schema
                 appendPartitionAndProject(
-                  reader.getClosableIterator.asInstanceOf[java.util.Iterator[InternalRow]].asScala,
+                  reader.getClosableIterator.asInstanceOf[java.util.Iterator[InternalRow] with Closeable].asScala.asInstanceOf[Iterator[InternalRow] with Closeable],
                   requiredSchema,
                   partitionSchema,
                   outputSchema,
@@ -196,7 +198,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
       props)
   }
 
-  private def appendPartitionAndProject(iter: Iterator[InternalRow],
+  private def appendPartitionAndProject(iter: Iterator[InternalRow] with Closeable,
                                         inputSchema: StructType,
                                         partitionSchema: StructType,
                                         to: StructType,
@@ -206,15 +208,15 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     } else {
       val unsafeProjection = generateUnsafeProjection(StructType(inputSchema.fields ++ partitionSchema.fields), to)
       val joinedRow = new JoinedRow()
-      iter.map(d => unsafeProjection(joinedRow(d, partitionValues)))
+      new ClosableMappingIterator[InternalRow](iter, d => unsafeProjection(joinedRow(d, partitionValues)))
     }
   }
 
-  private def projectSchema(iter: Iterator[InternalRow],
+  private def projectSchema(iter: Iterator[InternalRow] with Closeable,
                             from: StructType,
                             to: StructType): Iterator[InternalRow] = {
     val unsafeProjection = generateUnsafeProjection(from, to)
-    iter.map(d => unsafeProjection(d))
+    new ClosableMappingIterator[InternalRow](iter, d => unsafeProjection(d))
   }
 
   private def generateRequiredSchemaWithMandatory(requiredSchema: StructType,
