@@ -111,6 +111,9 @@ case class HoodieFileIndex(spark: SparkSession,
    */
   @transient private lazy val functionalIndex = new FunctionalIndexSupport(spark, metadataConfig, metaClient)
 
+  private val enableHoodieExtension = "org.apache.spark.sql.hudi.HoodieSparkSessionExtension"
+    .equalsIgnoreCase(spark.sessionState.conf.getConfString("spark.sql.extensions", null))
+
   override def rootPaths: Seq[Path] = getQueryPaths.asScala
 
   /**
@@ -408,7 +411,15 @@ case class HoodieFileIndex(spark: SparkSession,
   override def inputFiles: Array[String] =
     getAllFiles().map(_.getPath.toString).toArray
 
-  override def sizeInBytes: Long = getTotalCachedFilesSize
+  override def sizeInBytes: Long = {
+    val size = getTotalCachedFilesSize
+    if (size == 0 && !enableHoodieExtension) {
+      // Avoid always broadcast the hudi table if not enable HoodieExtension
+      Long.MaxValue
+    } else {
+      size
+    }
+  }
 
   def hasPredicatesPushedDown: Boolean =
     hasPushedDownPartitionPredicates
