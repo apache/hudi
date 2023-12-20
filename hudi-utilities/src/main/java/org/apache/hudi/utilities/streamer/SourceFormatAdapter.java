@@ -35,6 +35,7 @@ import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
 import org.apache.hudi.utilities.sources.helpers.SanitizationUtils;
 
 import com.google.protobuf.Message;
+import jdk.internal.util.xml.impl.Input;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
@@ -49,6 +50,7 @@ import org.apache.spark.sql.types.StructType;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
 import java.util.stream.Collectors;
 
 import scala.util.Either;
@@ -158,8 +160,9 @@ public final class SourceFormatAdapter implements Closeable {
       }
       case ROW: {
         //we do the sanitizing here if enabled
-        InputBatch<Dataset<Row>> r = ((Source<Dataset<Row>>) source).fetchNext(lastCkptStr, sourceLimit);
-        return new InputBatch<>(Option.ofNullable(r.getBatch().map(
+        // InputBatch<Dataset<Row>> r = ((Source<Dataset<Row>>) source).fetchNext(lastCkptStr, sourceLimit);
+        List<InputBatch<Dataset<Row>>> rs = ((Source<Dataset<Row>>) source).fetchNextForParitialUpdate(lastCkptStr, sourceLimit);
+        List<InputBatch<JavaRDD<GenericRecord>>> out = rs.stream().map(r -> new InputBatch<>(Option.ofNullable(r.getBatch().map(
             rdd -> {
                 SchemaProvider originalProvider = UtilHelpers.getOriginalSchemaProvider(r.getSchemaProvider());
                 return (originalProvider instanceof FilebasedSchemaProvider || (originalProvider instanceof SchemaRegistryProvider))
@@ -171,7 +174,11 @@ public final class SourceFormatAdapter implements Closeable {
                 ).toJavaRDD() : HoodieSparkUtils.createRdd(rdd,
                     HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, false, Option.empty()).toJavaRDD();
             })
-            .orElse(null)), r.getCheckpointForNextBatch(), r.getSchemaProvider());
+            .orElse(null)), r.getCheckpointForNextBatch(), r.getSchemaProvider())
+        ).collect(Collectors.toList());
+        out.stream().map(
+
+        )
       }
       case PROTO: {
         //TODO([HUDI-5830]) implement field name sanitization

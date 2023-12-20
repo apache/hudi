@@ -30,6 +30,10 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
+
 public abstract class RowSource extends Source<Dataset<Row>> {
 
   public RowSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
@@ -48,5 +52,21 @@ public abstract class RowSource extends Source<Dataset<Row>> {
           UtilHelpers.createRowBasedSchemaProvider(sanitizedRows.schema(), props, sparkContext);
       return new InputBatch<>(Option.of(sanitizedRows), res.getValue(), rowSchemaProvider);
     }).orElseGet(() -> new InputBatch<>(res.getKey(), res.getValue()));
+  }
+
+  @Override
+  protected final List<InputBatch<Dataset<Row>>> fetchNewDataForPartialUpdate(Option<String> lastCkptStr, long sourceLimit) {
+    List<Pair<Option<Dataset<Row>>, String>> res = fetchNextBatchForParitialUpdate(lastCkptStr, sourceLimit);
+    return res.stream().map(p -> p.getKey().map(dsr -> {
+      Dataset<Row> sanitizedRows = SanitizationUtils.sanitizeColumnNamesForAvro(dsr, props);
+      SchemaProvider rowSchemaProvider =
+          UtilHelpers.createRowBasedSchemaProvider(sanitizedRows.schema(), props, sparkContext);
+      return new InputBatch<>(Option.of(sanitizedRows), p.getValue(), rowSchemaProvider);
+    }).orElseGet(() -> new InputBatch<>(p.getKey(), p.getValue()))).collect(Collectors.toList());
+  }
+
+  protected List<Pair<Option<Dataset<Row>>, String>> fetchNextBatchForParitialUpdate(
+      Option<String> lastCkptStr, long sourceLimit) {
+    return Collections.singletonList(fetchNextBatch(lastCkptStr, sourceLimit));
   }
 }

@@ -68,6 +68,8 @@ public class DebeziumConstants {
 
   // Other Constants
   public static final String DELETE_OP = "d";
+  public static final String INSERT_OP = "i";
+  public static final String UPDATE_OP = "u";
 
   // List of meta data columns
   public static List<String> META_COLUMNS = Collections.unmodifiableList(Arrays.asList(

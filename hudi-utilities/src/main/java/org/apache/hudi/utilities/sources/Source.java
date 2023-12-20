@@ -27,9 +27,14 @@ import org.apache.hudi.utilities.callback.SourceCommitCallback;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 
 import java.io.Serializable;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Represents a source from which we can tail data. Assumes a constructor that takes properties.
@@ -65,6 +70,11 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   protected abstract InputBatch<T> fetchNewData(Option<String> lastCkptStr, long sourceLimit);
 
+  protected final List<InputBatch<T>> fetchNewDataForPartialUpdate(
+      Option<String> lastCkptStr, long sourceLimit) {
+    return Collections.singletonList(fetchNewData(lastCkptStr, sourceLimit));
+  }
+
   /**
    * Main API called by Hoodie Streamer to fetch records.
    *
@@ -77,6 +87,14 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
     // If overriddenSchemaProvider is passed in CLI, use it
     return overriddenSchemaProvider == null ? batch
         : new InputBatch<>(batch.getBatch(), batch.getCheckpointForNextBatch(), overriddenSchemaProvider);
+  }
+
+  public final List<InputBatch<T>> fetchNextForParitialUpdate(Option<String> lastCkptStr, long sourceLimit) {
+    List<InputBatch<T>> batchs = fetchNewDataForPartialUpdate(lastCkptStr, sourceLimit);
+    // If overriddenSchemaProvider is passed in CLI, use it
+    return batchs.stream().map(b -> overriddenSchemaProvider == null ? b
+          : new InputBatch<>(b.getBatch(), b.getCheckpointForNextBatch(), overriddenSchemaProvider))
+        .collect(Collectors.toList());
   }
 
   public SourceType getSourceType() {

@@ -53,6 +53,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -133,12 +134,48 @@ public abstract class DebeziumSource extends RowSource {
     }
   }
 
+  @Override
+  protected List<Pair<Option<Dataset<Row>>, String>> fetchNextBatchForParitialUpdate(Option<String> lastCkptStr, long sourceLimit) {
+    String overrideCheckpointStr = props.getString(OVERRIDE_CHECKPOINT_STRING, "");
+
+    OffsetRange[] offsetRanges = offsetGen.getNextOffsetRanges(lastCkptStr, sourceLimit, metrics);
+    long totalNewMsgs = CheckpointUtils.totalNewMessages(offsetRanges);
+    LOG.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
+
+    if (totalNewMsgs == 0) {
+      // If there are no new messages, use empty dataframe with no schema. This is because the schema from schema registry can only be considered
+      // up to date if a change event has occurred.
+      return Collections.singletonList(
+          Pair.of(
+              Option.of(sparkSession.emptyDataFrame()),
+              overrideCheckpointStr.isEmpty() ?
+                  CheckpointUtils.offsetsToStr(offsetRanges) : overrideCheckpointStr));
+    } else {
+      try {
+        String schemaStr = schemaRegistryProvider.fetchSchemaFromRegistry(getStringWithAltKeys(props, HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL));
+        List<Dataset<Row>> datasets = toDatasetForPartialUpdate(offsetRanges, offsetGen, schemaStr);
+        LOG.info(String.format("New checkpoint string: %s", CheckpointUtils.offsetsToStr(offsetRanges)));
+        return datasets.stream().map(d -> Pair.of(
+            Option.of(d), overrideCheckpointStr.isEmpty() ? CheckpointUtils.offsetsToStr(offsetRanges) : overrideCheckpointStr)
+        ).collect(Collectors.toList());
+      } catch (Exception e) {
+        LOG.error("Fatal error reading and parsing incoming debezium event", e);
+        throw new HoodieReadFromSourceException("Fatal error reading and parsing incoming debezium event", e);
+      }
+    }
+  }
+
   /**
    * Debezium Kafka Payload has a nested structure, flatten it specific to the Database type.
    * @param rawKafkaData Dataset of the Debezium CDC event from the kafka
    * @return A flattened dataset.
    */
   protected abstract Dataset<Row> processDataset(Dataset<Row> rawKafkaData);
+
+  protected List<Pair<Dataset<Row>, Schema>> processDatasetForPartialUpdate(Dataset<Row> rawKafkaData, Schema schema) {
+    Dataset<Row> r = processDataset(rawKafkaData);
+    return Collections.singletonList(Pair.of(r, schema));
+  }
 
   /**
    * Converts a Kafka Topic offset into a Spark dataset.
@@ -168,6 +205,32 @@ public abstract class DebeziumSource extends RowSource {
     // Some required transformations to ensure debezium data types are converted to spark supported types.
     return convertArrayColumnsToString(convertColumnToNullable(sparkSession,
         convertDateColumns(debeziumDataset, new Schema.Parser().parse(schemaStr))));
+  }
+
+  private List<Dataset<Row>> toDatasetForPartialUpdate(OffsetRange[] offsetRanges, KafkaOffsetGen offsetGen, String schemaStr) {
+    AvroConvertor convertor = new AvroConvertor(schemaStr);
+    Dataset<Row> kafkaData;
+    if (deserializerClassName.equals(StringDeserializer.class.getName())) {
+      kafkaData = AvroConversionUtils.createDataFrame(
+          KafkaUtils.<String, String>createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges, LocationStrategies.PreferConsistent())
+              .map(obj -> convertor.fromJson(obj.value()))
+              .rdd(), schemaStr, sparkSession);
+    } else {
+      kafkaData = AvroConversionUtils.createDataFrame(
+          KafkaUtils.createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges, LocationStrategies.PreferConsistent())
+              .map(obj -> (GenericRecord) obj.value())
+              .rdd(), schemaStr, sparkSession);
+    }
+
+    // Flatten debezium payload, specific to each DB type (postgres/ mysql/ etc..)
+    List<Pair<Dataset<Row>, Schema>> debeziumDatasets =
+        processDatasetForPartialUpdate(kafkaData, new Schema.Parser().parse(schemaStr));
+
+    // Some required transformations to ensure debezium data types are converted to spark supported types.
+    return debeziumDatasets.stream().map(p ->
+      convertArrayColumnsToString(convertColumnToNullable(sparkSession,
+          convertDateColumns(p.getLeft(), p.getRight())))
+    ).collect(Collectors.toList());
   }
 
   /**
@@ -248,5 +311,7 @@ public abstract class DebeziumSource extends RowSource {
       offsetGen.commitOffsetToKafka(lastCkptStr);
     }
   }
+
+  protected abstract List<Pair<Dataset<Row>, Schema>> processDatasetForPartialUpdates(Dataset<Row> rowDataset, Schema schema);
 }
 
