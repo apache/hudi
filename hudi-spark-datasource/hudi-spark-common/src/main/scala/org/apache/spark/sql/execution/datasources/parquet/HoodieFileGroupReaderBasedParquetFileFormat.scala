@@ -26,11 +26,9 @@ import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
-import org.apache.hudi.common.util.collection.CloseableMappingIterator
-import org.apache.hudi.util.JFunction
-import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, MergeOnReadSnapshotRelation, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
@@ -41,10 +39,10 @@ import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.util.SerializableConfiguration
 
+import java.io.Closeable
 import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.jdk.CollectionConverters.asScalaIteratorConverter
-import java.io.Closeable
 
 trait HoodieFormatTrait {
 
@@ -365,13 +363,12 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
 
   protected def makeMappingIterator(iter: HoodieFileGroupReader.HoodieFileGroupReaderIterator[InternalRow],
                                     f: Function[InternalRow, InternalRow]): Iterator[InternalRow] = {
-    val mapIter = new CloseableMappingIterator[InternalRow, InternalRow](iter, JFunction.toJavaFunction(f))
     new Iterator[InternalRow] with Closeable {
-      override def hasNext: Boolean = mapIter.hasNext()
+      override def hasNext: Boolean = iter.hasNext
 
-      override def next(): InternalRow = mapIter.next()
+      override def next(): InternalRow = f(iter.next())
 
-      override def close(): Unit = mapIter.close()
+      override def close(): Unit = iter.close()
     }
   }
 }
