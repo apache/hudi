@@ -478,8 +478,6 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       if (!ignoreIfExists) {
         throw new TableAlreadyExistException(getName(), tablePath, e);
       }
-    } catch (HoodieValidationException e) {
-      throw e;
     } catch (Exception e) {
       throw new HoodieCatalogException(
           String.format("Failed to create table %s", tablePath.getFullName()), e);

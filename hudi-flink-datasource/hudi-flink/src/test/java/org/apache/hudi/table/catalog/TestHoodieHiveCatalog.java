@@ -29,7 +29,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieCatalogException;
-import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
@@ -278,7 +277,7 @@ public class TestHoodieHiveCatalog {
     properties.put("table.type","wrong type");
     CatalogTable table =
             new CatalogTableImpl(schema,  properties, "hudi table");
-    assertThrows(HoodieValidationException.class, () -> hoodieCatalog.createTable(tablePath, table, false));
+    assertThrows(HoodieCatalogException.class, () -> hoodieCatalog.createTable(tablePath, table, false));
   }
 
   @ParameterizedTest
