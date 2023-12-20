@@ -28,6 +28,8 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
+import org.apache.hudi.common.util.collection.CloseableMappingIterator
+import org.apache.hudi.util.JFunction
 import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, MergeOnReadSnapshotRelation, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
@@ -42,7 +44,6 @@ import org.apache.spark.util.SerializableConfiguration
 import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.jdk.CollectionConverters.asScalaIteratorConverter
-
 import java.io.Closeable
 
 trait HoodieFormatTrait {
@@ -155,18 +156,9 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                   file.length,
                   shouldUseRecordPosition)
                 reader.initRecordIterators()
-
-                val iter = reader.getClosableIterator
-
                 // Append partition values to rows and project to output schema
                 appendPartitionAndProject(
-                  new Iterator[InternalRow] with Closeable {
-                    override def hasNext: Boolean = iter.hasNext
-
-                    override def next(): InternalRow = iter.next
-
-                    override def close(): Unit = iter.close()
-                  },
+                  reader.getClosableIterator,
                   requiredSchema,
                   partitionSchema,
                   outputSchema,
@@ -207,7 +199,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
       props)
   }
 
-  private def appendPartitionAndProject(iter: Iterator[InternalRow] with Closeable,
+  private def appendPartitionAndProject(iter: HoodieFileGroupReader.HoodieFileGroupReaderIterator[InternalRow],
                                         inputSchema: StructType,
                                         partitionSchema: StructType,
                                         to: StructType,
@@ -217,15 +209,15 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     } else {
       val unsafeProjection = generateUnsafeProjection(StructType(inputSchema.fields ++ partitionSchema.fields), to)
       val joinedRow = new JoinedRow()
-      new ClosableMappingIterator[InternalRow](iter, d => unsafeProjection(joinedRow(d, partitionValues)))
+      makeMappingIterator(iter, d => unsafeProjection(joinedRow(d, partitionValues)))
     }
   }
 
-  private def projectSchema(iter: Iterator[InternalRow] with Closeable,
+  private def projectSchema(iter: HoodieFileGroupReader.HoodieFileGroupReaderIterator[InternalRow],
                             from: StructType,
                             to: StructType): Iterator[InternalRow] = {
     val unsafeProjection = generateUnsafeProjection(from, to)
-    new ClosableMappingIterator[InternalRow](iter, d => unsafeProjection(d))
+    makeMappingIterator(iter, d => unsafeProjection(d))
   }
 
   private def generateRequiredSchemaWithMandatory(requiredSchema: StructType,
@@ -369,5 +361,17 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
 
   protected def getLogFilesFromSlice(fileSlice: FileSlice): List[HoodieLogFile] = {
     fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList
+  }
+
+  protected def makeMappingIterator(iter: HoodieFileGroupReader.HoodieFileGroupReaderIterator[InternalRow],
+                                    f: Function[InternalRow, InternalRow]): Iterator[InternalRow] = {
+    val mapIter = new CloseableMappingIterator[InternalRow, InternalRow](iter, JFunction.toJavaFunction(f))
+    new Iterator[InternalRow] with Closeable {
+      override def hasNext: Boolean = mapIter.hasNext()
+
+      override def next(): InternalRow = mapIter.next()
+
+      override def close(): Unit = mapIter.close()
+    }
   }
 }
