@@ -210,6 +210,8 @@ Take a look at this blog for reference - (Apache Hudi vs Delta Lake vs Apache Ic
        For example if the article is https://www.uber.com/blog/cost-efficiency-big-data/ we would use `uber` as the tag here. 
        Another example - for https://robinhood.engineering/author-balaji-varadarajan-e3f496815ebf  we would use 
        `robinhood` as the tag. For blogs directly contributed to hudi repo, we can use `apache hudi` as the tag.
+   4. **TAGS TO AVOID**
+      - Please do not use `index` as a tag. Instead, use `indexing`.
 
 ## Video Guides
 
