@@ -48,7 +48,8 @@ object HoodieConversionUtils {
   }
 
   def fromProperties(props: TypedProperties): Map[String, String] = {
-    props.asScala.toMap
+    props.asScala.map {
+      case (k, v) => (k.toString, v.toString)
+    }.toMap
   }
-
 }
