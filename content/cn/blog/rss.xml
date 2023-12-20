@@ -4,17 +4,9 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/cn/blog</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Thu, 09 Nov 2023 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Wed, 01 Nov 2023 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
-        <item>
-            <title><![CDATA[On Iceberg and Hudi ACID Guarantees]]></title>
-            <link>https://hudi.apache.org/cn/blog/2023/11/09/On-Iceberg-and-Hudi-ACID-Guarantees</link>
-            <guid>/2023/11/09/On-Iceberg-and-Hudi-ACID-Guarantees</guid>
-            <pubDate>Thu, 09 Nov 2023 00:00:00 GMT</pubDate>
-            <description><![CDATA[Redirecting... please wait!!]]></description>
-            <content:encoded><![CDATA[<div url="https://www.onehouse.ai/blog/on-iceberg-and-hudi-acid-guarantees">Redirecting... please wait!! </div>]]></content:encoded>
-        </item>
         <item>
             <title><![CDATA[Record Level Index: Hudi's blazing fast indexing for large-scale datasets]]></title>
             <link>https://hudi.apache.org/cn/blog/2023/11/01/record-level-index</link>
