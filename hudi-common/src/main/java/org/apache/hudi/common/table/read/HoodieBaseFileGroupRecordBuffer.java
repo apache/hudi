@@ -259,7 +259,9 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           readerContext.constructHoodieRecord(older, olderInfoMap), (Schema) olderInfoMap.get(INTERNAL_META_SCHEMA),
           readerContext.constructHoodieRecord(newer, newerInfoMap), (Schema) newerInfoMap.get(INTERNAL_META_SCHEMA), payloadProps);
     }
-    if (mergedRecord.isPresent()) {
+
+    if (mergedRecord.isPresent()
+        && !mergedRecord.get().getLeft().isDelete(mergedRecord.get().getRight(), payloadProps)) {
       return Option.ofNullable((T) mergedRecord.get().getLeft().getData());
     }
     return Option.empty();
