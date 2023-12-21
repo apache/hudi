@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -37,6 +38,7 @@ import org.junit.jupiter.api.AfterAll;
 import java.io.IOException;
 import java.util.List;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultHadoopConf;
 
@@ -64,7 +66,8 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
     properties.setProperty(
         "hoodie.datasource.write.precombine.field", "timestamp");
     hadoopConf = getDefaultHadoopConf();
-    readerContext = new HoodieTestReaderContext(Option.empty());
+    readerContext = new HoodieTestReaderContext(
+        Option.empty(), Option.empty());
   }
 
   @AfterAll
@@ -102,6 +105,8 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
             FILE_ID
         );
 
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    tableConfig.setValue(POPULATE_META_FIELDS, "false");
     HoodieFileGroupReader<IndexedRecord> fileGroupReader =
         HoodieFileGroupReaderTestUtils.createFileGroupReader(
             fileSliceOpt,
@@ -113,7 +118,7 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
             Long.MAX_VALUE,
             properties,
             hadoopConf,
-            metaClient.getTableConfig(),
+            tableConfig,
             readerContext
         );
 
