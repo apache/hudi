@@ -195,7 +195,7 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
       HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(fs.getFileStatus(realtimeSplit.getPath()), bootstrapBaseFile);
       return new FileSlice(fileGroupId, commitTime, hoodieBaseFile, realtimeSplit.getDeltaLogFiles());
     }
-    return null;
+    throw new RuntimeException("Split is " + split.toString());
   }
 
   private static Schema createRequestedSchema(Schema tableSchema, JobConf jobConf) {
