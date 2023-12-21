@@ -112,7 +112,6 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       // overwrite hoodie props
       val expectedOutput ="""
           |[hoodie.archivelog.folder,archived,archive]
-          |[hoodie.compaction.payload.type,OVERWRITE_LATEST_AVRO,null]
           |[hoodie.database.name,default,null]
           |[hoodie.datasource.write.drop.partition.columns,false,false]
           |[hoodie.datasource.write.hive_style_partitioning,true,null]
