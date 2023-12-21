@@ -99,7 +99,7 @@ variables:
   BUILD_PROFILES: '-Dscala-2.12 -Dspark3.2 -Dflink1.18'
   PLUGIN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn'
   MVN_OPTS_INSTALL: '-Phudi-platform-service -DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS) -Dmaven.wagon.httpconnectionManager.ttlSeconds=25 -Dmaven.wagon.http.retryHandler.count=5'
-  MVN_OPTS_TEST: '-fae -Pwarn-log $(BUILD_PROFILES) $(PLUGIN_OPTS)'
+  MVN_OPTS_TEST: '-fae -Pwarn-log $(BUILD_PROFILES) $(PLUGIN_OPTS) -Dtest=TestHoodieDeltaStreamer -DfailIfNoTests=false -DwildcardSuites=abc'
   JOB1_MODULES: ${{ join(',',parameters.job1Modules) }}
   JOB2_MODULES: ${{ join(',',parameters.job2Modules) }}
   JOB3_MODULES: ${{ join(',',parameters.job3UTModules) }}
@@ -126,7 +126,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB4_UT_MODULES) -Dtest=TestHoodieDeltaStreamer -DfailIfNoTests=false -DwildcardSuites="abc"
+              options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB4_UT_MODULES)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
