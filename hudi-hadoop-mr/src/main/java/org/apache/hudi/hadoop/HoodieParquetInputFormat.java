@@ -106,9 +106,6 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
     // ParquetInputFormat.setFilterPredicate(job, predicate);
     // clearOutExistingPredicate(job);
     // }
-    if (split instanceof BootstrapBaseFileSplit) {
-      return createBootstrappingRecordReader(split, job, reporter);
-    }
 
     // adapt schema evolution
     new SchemaEvolutionContext(split, job).doEvolutionForParquetFormat();
@@ -123,14 +120,20 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
 
   private RecordReader<NullWritable, ArrayWritable> getRecordReaderInternal(InputSplit split,
                                                                             JobConf job,
-                                                                            Reporter reporter) throws IOException {
+                                                                            Reporter reporter) {
     try {
       if (supportAvroRead && HoodieColumnProjectionUtils.supportTimestamp(job)) {
-        return new ParquetRecordReaderWrapper(new HoodieTimestampAwareParquetInputFormat(), split, job, reporter);
+        return new HoodieFileGroupReaderRecordReader((s, j, r) -> {
+          try {
+            return new ParquetRecordReaderWrapper(new HoodieTimestampAwareParquetInputFormat(), s, j, r);
+          } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+          }
+        }, split, job, reporter);
       } else {
-        return super.getRecordReader(split, job, reporter);
+        return new HoodieFileGroupReaderRecordReader(super::getRecordReader, split, job, reporter);
       }
-    } catch (final InterruptedException | IOException e) {
+    } catch (final IOException e) {
       throw new RuntimeException("Cannot create a RecordReaderWrapper", e);
     }
   }

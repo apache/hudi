@@ -18,7 +18,6 @@
 
 package org.apache.hudi.hadoop.realtime;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
@@ -76,13 +75,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat {
     LOG.info("Creating record reader with readCols :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR)
         + ", Ids :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
 
-    // for log only split, set the parquet reader as empty.
-    if (FSUtils.isLogFile(realtimeSplit.getPath())) {
-      return new HoodieRealtimeRecordReader(realtimeSplit, jobConf, new HoodieEmptyRecordReader(realtimeSplit, jobConf));
-    }
-
-    return new HoodieRealtimeRecordReader(realtimeSplit, jobConf,
-        super.getRecordReader(split, jobConf, reporter));
+    return super.getRecordReader(realtimeSplit, jobConf, reporter);
   }
 
   void addProjectionToJobConf(final RealtimeSplit realtimeSplit, final JobConf jobConf, HoodieTableConfig tableConfig) {
