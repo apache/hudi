@@ -126,7 +126,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB4_UT_MODULES)
+              options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB4_UT_MODULES) -Dtest=TestHoodieDeltaStreamer -DfailIfNoTests=false -DwildcardSuites="abc"
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'

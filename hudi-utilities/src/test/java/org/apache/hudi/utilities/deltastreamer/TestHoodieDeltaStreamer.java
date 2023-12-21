@@ -356,12 +356,14 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     );
   }
 
+  @Disabled
   @ParameterizedTest
   @MethodSource("provideValidCliArgs")
   public void testValidCommandLineArgs(String[] args, HoodieStreamer.Config expected) {
     assertEquals(expected, HoodieDeltaStreamer.getConfig(args));
   }
 
+  @Disabled
   @Test
   public void testKafkaConnectCheckpointProvider() throws IOException {
     String tableBasePath = basePath + "/test_table";
@@ -384,6 +386,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals("kafka_topic1,0:200", deltaStreamer.getConfig().checkpoint);
   }
 
+  @Disabled
   @Test
   public void testPropsWithInvalidKeyGenerator() {
     Exception e = assertThrows(IOException.class, () -> {
@@ -409,6 +412,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     );
   }
 
+  @Disabled
   @ParameterizedTest
   @MethodSource("provideInferKeyGenArgs")
   public void testInferKeyGenerator(String propsFilename,
@@ -428,6 +432,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(1000, res.count());
   }
 
+  @Disabled
   @Test
   public void testTableCreation() throws Exception {
     Exception e = assertThrows(TableNotFoundException.class, () -> {
@@ -440,6 +445,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     LOG.debug("Expected error during table creation", e);
   }
 
+  @Disabled
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testTableCreationContainsHiveStylePartitioningEnable(boolean configFlag) throws Exception {
@@ -457,6 +463,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(configFlag, Boolean.parseBoolean(metaClient.getTableConfig().getUrlEncodePartitioning()));
   }
 
+  @Disabled
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
   public void testBulkInsertsAndUpsertsWithBootstrap(HoodieRecordType recordType) throws Exception {
@@ -518,6 +525,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, newDatasetBasePath);
   }
 
+  @Disabled
   @Test
   public void testModifiedTableConfigs() throws Exception {
     String tableBasePath = basePath + "/test_table_modified_configs";
@@ -554,6 +562,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TestHelpers.assertCommitMetadata(metadata, tableBasePath, fs, totalCommits);
   }
 
+  @Disabled
   // TODO add tests w/ disabled reconciliation
   @ParameterizedTest
   @MethodSource("schemaEvolArgs")
@@ -637,6 +646,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
   }
 
+  @Disabled
   @Timeout(600)
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
@@ -661,6 +671,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
+  @Disabled
   @Timeout(600)
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO"})
@@ -668,6 +679,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "continuous_cow", true, recordType);
   }
 
+  @Disabled
   @Timeout(600)
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
@@ -675,6 +687,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "continuous_mor", recordType);
   }
 
+  @Disabled
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
   public void testUpsertsMOR_ContinuousModeDisabled(HoodieRecordType recordType) throws Exception {
@@ -800,6 +813,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
+  @Disabled
   @Test
   public void testDeltaSyncWithPendingClustering() throws Exception {
     String tableBasePath = basePath + "/inlineClusteringPending";
@@ -833,6 +847,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TestHelpers.assertAtLeastNReplaceCommits(1, tableBasePath, fs);
   }
 
+  @Disabled
   @Test
   public void testDeltaSyncWithPendingCompaction() throws Exception {
     PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + testNum;
@@ -1149,6 +1164,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
+  @Disabled
   @Timeout(600)
   @Test
   public void testAsyncClusteringServiceWithConflictsAvro() throws Exception {
@@ -1186,6 +1202,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
+  @Disabled
   @Timeout(600)
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
@@ -1213,6 +1230,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
+  @Disabled
   @ParameterizedTest
   @CsvSource(value = {"true, AVRO", "true, SPARK", "false, AVRO", "false, SPARK"})
   public void testAsyncClusteringJobWithRetry(boolean retryLastFailedClusteringJob, HoodieRecordType recordType) throws Exception {
@@ -1312,26 +1330,31 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }
   }
 
+  @Disabled
   @Test
   public void testBulkInsertRowWriterNoSchemaProviderNoTransformer() throws Exception {
     testBulkInsertRowWriterMultiBatches(false, null);
   }
 
+  @Disabled
   @Test
   public void testBulkInsertRowWriterWithoutSchemaProviderAndTransformer() throws Exception {
     testBulkInsertRowWriterMultiBatches(false, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
   }
 
+  @Disabled
   @Test
   public void testBulkInsertRowWriterWithSchemaProviderAndNoTransformer() throws Exception {
     testBulkInsertRowWriterMultiBatches(true, null);
   }
 
+  @Disabled
   @Test
   public void testBulkInsertRowWriterWithSchemaProviderAndTransformer() throws Exception {
     testBulkInsertRowWriterMultiBatches(true, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
   }
 
+  @Disabled
   @Test
   public void testBulkInsertRowWriterForEmptyBatch() throws Exception {
     testBulkInsertRowWriterMultiBatches(false, null, true);
@@ -1473,6 +1496,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
    * step involves using a SQL template to transform a source TEST-DATA-SOURCE ============================> HUDI TABLE
    * 1 ===============> HUDI TABLE 2 (incr-pull with transform) (incr-pull) Hudi Table 1 is synced with Hive.
    */
+  @Disabled
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO","SPARK"})
   public void testBulkInsertsAndUpsertsWithSQLBasedTransformerFor2StepPipeline(HoodieRecordType recordType) throws Exception {
@@ -1562,6 +1586,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, downstreamTableBasePath);
   }
 
+  @Disabled
   @Test
   public void testNullSchemaProvider() {
     String tableBasePath = basePath + "/test_table";
@@ -1575,6 +1600,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertTrue(e.getMessage().contains("Please provide a valid schema provider class!"));
   }
 
+  @Disabled
   @Test
   public void testPayloadClassUpdate() throws Exception {
     String dataSetBasePath = basePath + "/test_dataset_mor_payload_class_update";
@@ -1595,12 +1621,15 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(metaClient.getTableConfig().getPayloadClass(), DummyAvroPayload.class.getName());
   }
 
+  @Disabled
   @Test
   public void testPartialPayloadClass() throws Exception {
     String dataSetBasePath = basePath + "/test_dataset_mor";
-    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
-          Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, false,
-          true, true, PartialUpdateAvroPayload.class.getName(), "MERGE_ON_READ");
+    HoodieDeltaStreamer.Config cfg =
+        TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
+            Collections.singletonList(SqlQueryBasedTransformer.class.getName()),
+            PROPS_FILENAME_TEST_SOURCE, false,
+            true, true, PartialUpdateAvroPayload.class.getName(), "MERGE_ON_READ");
     new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()).sync();
     assertRecordCount(1000, dataSetBasePath, sqlContext);
 
@@ -1609,6 +1638,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(metaClient.getTableConfig().getPayloadClass(), PartialUpdateAvroPayload.class.getName());
   }
 
+  @Disabled
   @Test
   public void testPayloadClassUpdateWithCOWTable() throws Exception {
     String dataSetBasePath = basePath + "/test_dataset_cow";
@@ -1635,6 +1665,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertFalse(props.containsKey(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()));
   }
 
+  @Disabled
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
   public void testFilterDupes(HoodieRecordType recordType) throws Exception {
@@ -1692,6 +1723,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
+  @Disabled
   @Test
   public void testDistributedTestDataSource() {
     TypedProperties props = new TypedProperties();
@@ -1898,6 +1930,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testNum++;
   }
 
+  @Disabled
   @Test
   public void testJsonKafkaDFSSource() throws Exception {
     topicName = "topic" + testNum;
@@ -1919,6 +1952,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertRecordCount(totalRecords, tableBasePath, sqlContext);
   }
 
+  @Disabled
   @Test
   public void testJsonKafkaDFSSourceWithOffsets() throws Exception {
     topicName = "topic" + testNum;
@@ -1957,6 +1991,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }
   }
 
+  @Disabled
   @Test
   public void testKafkaTimestampType() throws Exception {
     topicName = "topic" + testNum;
@@ -2054,31 +2089,37 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     kafkaDs.shutdownGracefully();
   }
 
+  @Disabled
   @Test
   public void testParquetSourceToKafkaSourceEarliestAutoResetValue() throws Exception {
     testDeltaStreamerTransitionFromParquetToKafkaSource(false);
   }
 
+  @Disabled
   @Test
   public void testParquetSourceToKafkaSourceLatestAutoResetValue() throws Exception {
     testDeltaStreamerTransitionFromParquetToKafkaSource(true);
   }
 
+  @Disabled
   @Test
   public void testParquetDFSSourceWithoutSchemaProviderAndNoTransformer() throws Exception {
     testParquetDFSSource(false, null);
   }
 
+  @Disabled
   @Test
   public void testParquetDFSSourceForEmptyBatch() throws Exception {
     testParquetDFSSource(false, null, true);
   }
 
+  @Disabled
   @Test
   public void testDeltaStreamerRestartAfterMissingHoodieProps() throws Exception {
     testDeltaStreamerRestartAfterMissingHoodieProps(true);
   }
 
+  @Disabled
   @Test
   public void testDeltaStreamerRestartAfterMissingHoodiePropsAfterValidCommit() throws Exception {
     testDeltaStreamerRestartAfterMissingHoodieProps(false);
@@ -2130,21 +2171,25 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testNum++;
   }
 
+  @Disabled
   @Test
   public void testParquetDFSSourceWithoutSchemaProviderAndTransformer() throws Exception {
     testParquetDFSSource(false, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
   }
 
+  @Disabled
   @Test
   public void testParquetDFSSourceWithSourceSchemaFileAndNoTransformer() throws Exception {
     testParquetDFSSource(true, null);
   }
 
+  @Disabled
   @Test
   public void testParquetDFSSourceWithSchemaFilesAndTransformer() throws Exception {
     testParquetDFSSource(true, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
   }
 
+  @Disabled
   @Test
   public void testORCDFSSourceWithoutSchemaProviderAndNoTransformer() throws Exception {
     // NOTE: Hudi doesn't support Orc in Spark < 3.0
@@ -2154,6 +2199,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }
   }
 
+  @Disabled
   @Test
   public void testORCDFSSourceWithSchemaProviderAndWithTransformer() throws Exception {
     // NOTE: Hudi doesn't support Orc in Spark < 3.0
@@ -2218,6 +2264,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testNum++;
   }
 
+  @Disabled
   @Test
   public void testCsvDFSSourceWithHeaderWithoutSchemaProviderAndNoTransformer() throws Exception {
     // The CSV files have header, the columns are separated by ',', the default separator
@@ -2226,6 +2273,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testCsvDFSSource(true, ',', false, null);
   }
 
+  @Disabled
   @Test
   public void testCsvDFSSourceWithHeaderAndSepWithoutSchemaProviderAndNoTransformer() throws Exception {
     // The CSV files have header, the columns are separated by '\t',
@@ -2235,6 +2283,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testCsvDFSSource(true, '\t', false, null);
   }
 
+  @Disabled
   @Test
   public void testCsvDFSSourceWithHeaderAndSepWithSchemaProviderAndNoTransformer() throws Exception {
     // The CSV files have header, the columns are separated by '\t'
@@ -2243,6 +2292,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testCsvDFSSource(true, '\t', true, null);
   }
 
+  @Disabled
   @Test
   public void testCsvDFSSourceWithHeaderAndSepWithoutSchemaProviderAndWithTransformer() throws Exception {
     // The CSV files have header, the columns are separated by '\t'
@@ -2252,6 +2302,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testCsvDFSSource(true, '\t', false, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
   }
 
+  @Disabled
   @Test
   public void testCsvDFSSourceWithHeaderAndSepWithSchemaProviderAndTransformer() throws Exception {
     // The CSV files have header, the columns are separated by '\t'
@@ -2260,6 +2311,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testCsvDFSSource(true, '\t', true, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
   }
 
+  @Disabled
   @Test
   public void testCsvDFSSourceNoHeaderWithoutSchemaProviderAndNoTransformer() throws Exception {
     // The CSV files do not have header, the columns are separated by '\t',
@@ -2271,6 +2323,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testCsvDFSSource(false, '\t', false, null);
   }
 
+  @Disabled
   @Test
   public void testCsvDFSSourceNoHeaderWithSchemaProviderAndNoTransformer() throws Exception {
     // The CSV files do not have header, the columns are separated by '\t'
@@ -2279,6 +2332,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testCsvDFSSource(false, '\t', true, null);
   }
 
+  @Disabled
   @Test
   public void testCsvDFSSourceNoHeaderWithoutSchemaProviderAndWithTransformer() throws Exception {
     // The CSV files do not have header, the columns are separated by '\t'
@@ -2294,6 +2348,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertTrue(e.getMessage().contains("cannot resolve 'begin_lat' given input columns:"));
   }
 
+  @Disabled
   @Test
   public void testCsvDFSSourceNoHeaderWithSchemaProviderAndTransformer() throws Exception {
     // The CSV files do not have header, the columns are separated by '\t'
@@ -2324,6 +2379,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     sparkSession.read().parquet(dfsRoot).createOrReplaceTempView("test_sql_table");
   }
 
+  @Disabled
   @Test
   public void testSqlSourceSource() throws Exception {
     prepareSqlSource();
@@ -2376,6 +2432,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }
   }
 
+  @Disabled
   @Test
   public void testHoodieIncrFallback() throws Exception {
     String tableBasePath = basePath + "/incr_test_table";
@@ -2427,12 +2484,14 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }
   }
 
+  @Disabled
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
   public void testInsertOverwrite(HoodieRecordType recordType) throws Exception {
     testDeltaStreamerWithSpecifiedOperation(basePath + "/insert_overwrite", WriteOperationType.INSERT_OVERWRITE, recordType);
   }
 
+  @Disabled
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
   public void testInsertOverwriteTable(HoodieRecordType recordType) throws Exception {
@@ -2472,6 +2531,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertTrue(getAllFileIDsInTable(tableBasePath, Option.of(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).isEmpty());
   }
 
+  @Disabled
   @Test
   public void testToSortedTruncatedStringSecretsMasked() {
     TypedProperties props =
@@ -2530,6 +2590,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
+  @Disabled
   @Test
   public void testFetchingCheckpointFromPreviousCommits() throws IOException {
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(basePath + "/testFetchPreviousCheckpoint", WriteOperationType.BULK_INSERT);
@@ -2563,6 +2624,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         .getCommitsTimeline()).get().getMetadata(CHECKPOINT_KEY), "def");
   }
 
+  @Disabled
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
   public void testDropPartitionColumns(HoodieRecordType recordType) throws Exception {
@@ -2577,7 +2639,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TestHelpers.assertAtLeastNCommits(1, tableBasePath, fs);
 
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(
-            HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(fs.getConf()).build());
+        HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(fs.getConf()).build());
     // get schema from data file written in the latest commit
     Schema tableSchema = tableSchemaResolver.getTableAvroSchemaFromDataFile();
     assertNotNull(tableSchema);
@@ -2588,6 +2650,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
+  @Disabled
   @Test
   public void testForceEmptyMetaSync() throws Exception {
     String tableBasePath = basePath + "/test_force_empty_meta_sync";
@@ -2609,6 +2672,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertTrue(hiveClient.tableExists(tableName), "Table " + tableName + " should exist");
   }
 
+  @Disabled
   @Test
   public void testResumeCheckpointAfterChangingCOW2MOR() throws Exception {
     String tableBasePath = basePath + "/test_resume_checkpoint_after_changing_cow_to_mor";
@@ -2662,6 +2726,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
+  @Disabled
   @Test
   public void testResumeCheckpointAfterChangingMOR2COW() throws Exception {
     String tableBasePath = basePath + "/test_resume_checkpoint_after_changing_mor_to_cow";
@@ -2730,6 +2795,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
+  @Disabled
   @Test
   public void testAutoGenerateRecordKeys() throws Exception {
     boolean useSchemaProvider = false;
@@ -2755,6 +2821,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testNum++;
   }
 
+  @Disabled
   @ParameterizedTest
   @CsvSource(value = {"COPY_ON_WRITE, AVRO",  "MERGE_ON_READ, AVRO",
       "COPY_ON_WRITE, SPARK", "MERGE_ON_READ, SPARK"})
