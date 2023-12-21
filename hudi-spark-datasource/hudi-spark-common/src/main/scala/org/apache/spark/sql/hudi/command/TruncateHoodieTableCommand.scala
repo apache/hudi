@@ -68,13 +68,13 @@ case class TruncateHoodieTableCommand(
 
     // If we have not specified the partition, truncate will delete all the data in the table path
     if (partitionSpec.isEmpty) {
+      val targetPath = new Path(basePath)
+      val engineContext = new HoodieSparkEngineContext(sparkSession.sparkContext)
       val fs = FSUtils.getFs(basePath, sparkSession.sparkContext.hadoopConfiguration)
       val hoodieWriteConfig = HoodieWriteConfig.newBuilder().withPath(basePath).withProps(properties).withEngineType(EngineType.SPARK)
         .build()
       val transactionManager = new TransactionManager(hoodieWriteConfig, fs)
       transactionManager.beginTransaction(org.apache.hudi.common.util.Option.empty(), org.apache.hudi.common.util.Option.empty())
-      val targetPath = new Path(basePath)
-      val engineContext = new HoodieSparkEngineContext(sparkSession.sparkContext)
       FSUtils.deleteDir(engineContext, fs, targetPath, sparkSession.sparkContext.defaultParallelism)
       transactionManager.endTransaction(org.apache.hudi.common.util.Option.empty())
 
