@@ -72,14 +72,14 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
   private final ArrayWritable arrayWritable;
   private final NullWritable nullWritable = NullWritable.get();
 
-  private final RealtimeSplit realtimeSplit;
+  private final InputSplit inputSplit;
   private final JobConf jobConf;
 
   public HoodieFileGroupReaderRecordReader(HiveReaderCreator readerCreator,
                                            final InputSplit split,
                                            final JobConf jobConf,
                                            final Reporter reporter) throws IOException {
-    this.realtimeSplit = (RealtimeSplit) split;
+    this.inputSplit = split;
     this.jobConf = jobConf;
     FileSplit fileSplit = (FileSplit) split;
     String tableBasePath = getTableBasePath(split, jobConf);
@@ -134,7 +134,7 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
   }
 
   public RealtimeSplit getSplit() {
-    return realtimeSplit;
+    return (RealtimeSplit) inputSplit;
   }
 
   public JobConf getJobConf() {
