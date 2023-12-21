@@ -361,14 +361,12 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList
   }
 
-  protected def makeMappingIterator(iter: HoodieFileGroupReader.HoodieFileGroupReaderIterator[InternalRow],
-                                    f: Function[InternalRow, InternalRow]): Iterator[InternalRow] = {
+  protected def makeMappingIterator(closeableFileGroupRecordIterator: HoodieFileGroupReader.HoodieFileGroupReaderIterator[InternalRow],
+                                    mappingFunction: Function[InternalRow, InternalRow]): Iterator[InternalRow] = {
     new Iterator[InternalRow] with Closeable {
-      override def hasNext: Boolean = iter.hasNext
-
-      override def next(): InternalRow = f(iter.next())
-
-      override def close(): Unit = iter.close()
+      override def hasNext: Boolean = closeableFileGroupRecordIterator.hasNext
+      override def next(): InternalRow = mappingFunction(closeableFileGroupRecordIterator.next())
+      override def close(): Unit = closeableFileGroupRecordIterator.close()
     }
   }
 }
