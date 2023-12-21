@@ -38,7 +38,6 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_OPERATION;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_ORDERING_FIELD;
 import static org.apache.hudi.common.model.HoodieAvroIndexedRecord.updateMetadataValuesInternal;
 
@@ -178,10 +177,6 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   public boolean isDelete(Schema recordSchema, Properties props) throws IOException {
     // For delete record.
     if (data == null) {
-      return true;
-    }
-    if (metaData.isPresent()
-        && metaData.get().getOrDefault(INTERNAL_META_OPERATION, null) == HoodieOperation.DELETE) {
       return true;
     }
 

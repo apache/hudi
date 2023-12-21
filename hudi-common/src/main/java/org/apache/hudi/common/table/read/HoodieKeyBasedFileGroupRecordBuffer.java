@@ -89,8 +89,9 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
     Option<Pair<T, Map<String, Object>>> mergedRecordAndMetadata =
         doProcessNextDataRecord(record, metadata, existingRecordMetadataPair);
     if (mergedRecordAndMetadata.isPresent()) {
+      T mergedRecord = mergedRecordAndMetadata.get().getKey();
       records.put(recordKey, Pair.of(
-          Option.ofNullable(readerContext.seal(mergedRecordAndMetadata.get().getLeft())),
+          Option.ofNullable(mergedRecord),
           mergedRecordAndMetadata.get().getRight()));
     }
   }

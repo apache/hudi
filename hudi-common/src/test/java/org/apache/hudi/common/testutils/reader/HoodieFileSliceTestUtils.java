@@ -74,6 +74,7 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.logFileName;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.reader.DataGenerationPlan.OperationType.DELETE;
 import static org.apache.hudi.common.testutils.reader.DataGenerationPlan.OperationType.INSERT;
+import static org.apache.hudi.common.testutils.reader.DataGenerationPlan.OperationType.SKIP;
 
 public class HoodieFileSliceTestUtils {
   public static final String FORWARD_SLASH = "/";
@@ -331,7 +332,8 @@ public class HoodieFileSliceTestUtils {
 
     // Generate a base file with records.
     DataGenerationPlan baseFilePlan = plans.get(0);
-    if (!baseFilePlan.getRecordKeys().isEmpty()) {
+    if (!baseFilePlan.getRecordKeys().isEmpty()
+        && baseFilePlan.getOperationType() != SKIP) {
       Path baseFilePath = generateBaseFilePath(
           basePath, fileId, baseFilePlan.getInstantTime());
       List<IndexedRecord> records = generateRecords(baseFilePlan);
