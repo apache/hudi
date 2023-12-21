@@ -197,7 +197,7 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
     }
     //just regular cow
     HoodieFileGroupId fileGroupId = new HoodieFileGroupId(FSUtils.getFileId(split.getPath().getName()),
-      FSUtils.getPartitionPath(tableBasePath, split.getPath().getParent().toString()).toString());
+        FSUtils.getPartitionPath(tableBasePath, split.getPath().getParent().toString()).toString());
     hosts.put(split.getPath().toString(), split.getLocations());
     return new FileSlice(fileGroupId, FSUtils.getCommitTime(split.getPath().toString()), new HoodieBaseFile(fs.getFileStatus(split.getPath())), null);
   }
