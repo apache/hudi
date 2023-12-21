@@ -93,7 +93,7 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
     this.readerContext = new HiveHoodieReaderContext(readerCreator, split, jobConf, reporter, tableSchema, hosts, metaClient);
     this.arrayWritable = new ArrayWritable(Writable.class, new Writable[requestedSchema.getFields().size()]);
     this.fileGroupReader = new HoodieFileGroupReader<>(readerContext, jobConf, tableBasePath,
-        getLatestCommitTime(split, metaClient), getFileSliceFromSplit(fileSplit, hosts, readerContext.getFs(tableBasePath, jobConf)),
+        getLatestCommitTime(split, metaClient), getFileSliceFromSplit(fileSplit, hosts, readerContext.getFs(tableBasePath, jobConf), tableBasePath),
         tableSchema, requestedSchema, metaClient.getTableConfig().getProps(), metaClient.getTableConfig(), fileSplit.getStart(),
         fileSplit.getLength(), false);
     this.fileGroupReader.initRecordIterators();
@@ -178,7 +178,7 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
     }
   }
 
-  private static FileSlice getFileSliceFromSplit(FileSplit split, Map<String, String[]> hosts, FileSystem fs) throws IOException {
+  private static FileSlice getFileSliceFromSplit(FileSplit split, Map<String, String[]> hosts, FileSystem fs, String tableBasePath) throws IOException {
     if (split instanceof RealtimeSplit) {
       RealtimeSplit realtimeSplit = (RealtimeSplit) split;
       HoodieFileGroupId fileGroupId = new HoodieFileGroupId(FSUtils.getFileId(realtimeSplit.getPath().getName()),
@@ -195,7 +195,11 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
       HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(fs.getFileStatus(realtimeSplit.getPath()), bootstrapBaseFile);
       return new FileSlice(fileGroupId, commitTime, hoodieBaseFile, realtimeSplit.getDeltaLogFiles());
     }
-    throw new RuntimeException("Split is " + split.getClass());
+    //just regular cow
+    HoodieFileGroupId fileGroupId = new HoodieFileGroupId(FSUtils.getFileId(split.getPath().getName()),
+      FSUtils.getPartitionPath(tableBasePath, split.getPath().getParent().toString()).toString());
+    hosts.put(split.getPath().toString(), split.getLocations());
+    return new FileSlice(fileGroupId, FSUtils.getCommitTime(split.getPath().toString()), new HoodieBaseFile(fs.getFileStatus(split.getPath())), null);
   }
 
   private static Schema createRequestedSchema(Schema tableSchema, JobConf jobConf) {
