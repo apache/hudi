@@ -25,8 +25,6 @@ import org.apache.spark.sql.vectorized.ColumnarBatch
 
 import java.io.Closeable
 
-
-
 /**
  * A [[ClosableIterator]] returning [[InternalRow]] by iterating through the entries returned
  * by a Spark reader.
