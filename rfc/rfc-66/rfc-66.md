@@ -13,12 +13,18 @@ JIRA: [Lockless multi writer support](https://issues.apache.org/jira/browse/HUDI
 
 ## Abstract
 
+Apache Hudi community has seen instant time based Optimistic Concurrency Control (OCC) could cause serious write-write conflicts for important
+application scenarios, e.g., multi-writer ingestion. In this RFC, we propose a completion time based Non-Blocking Concurrency Control (NBCC) scheme,
+which not only brings more practical semantics to various Hudi operations, like `FileSlice` ordering, but also much higher performance
+for multi-writer operations, like frequent writes with non-blocked compactions.
+
 ## Background
-As you know, Hudi already supports basic OCC with abundant lock providers.
-However, for multi-writer streaming ingestion, the OCC does not work well because conflicts would happen very frequently.
-For hashing index, all the writers utilize a deterministic hashing algorithm on primary keys to distribute records.
-In normal cases, these keys are evenly distributed into all data buckets. That means, in a single data flushing, one writer could append to
-all the data buckets, and conflicts happen when there multiple such writers.
+Apache Hudi already supports basic OCC with a number of lock providers.
+However, in the scenario of multi-writer streaming ingestion, our OCC does not work well because
+write-write conflicts would happen frequently.
+For hashing index, writers utilize a deterministic hashing algorithm based on primary keys to distribute records.
+In normal cases, these keys are evenly distributed among all data buckets. That means, in a single data flushing,
+one writer could append to all data buckets, and conflicts could happen when there are multiple such writers.
 For bloom filter index, the situation is slightly different. We write into the **small** bucket in higher priority using a small-file-load-rebalancing strategy,
 such that multiple writers is prone to write into the same **small** buckets at the same time, which causes conflicts.
 Therefore, OCC does not work well for multiple streaming writers ingestion. In this RFC, we propose a non-blocking solution for streaming ingestion.
@@ -26,7 +32,7 @@ Therefore, OCC does not work well for multiple streaming writers ingestion. In t
 Streaming jobs are suitable for data ingestion since it does not need complex pipeline orchestration and has a smother write workload.
 Most of the raw data set we are handling today are generated constantly in streaming way.
 
-In multi-writer ingestion, several streaming events with the same schema sink into one Hudi table, such that the Hudi table becomes 
+In multi-writer streaming ingestion, several streaming events with the same schema sink into one Hudi table, such that the table becomes
 a UNION table view for all input data set. This is a common use case in reality since the data could come from various data sources.
 
 Another important use case we want to unlock is the real-time data set join. One of the serious pain points in streaming computation is the dataset join.
