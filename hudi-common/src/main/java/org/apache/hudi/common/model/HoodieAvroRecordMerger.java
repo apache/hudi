@@ -59,6 +59,13 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
       return Option.empty();
     }
 
+    if (newer.isDelete(schema, props)) {
+      // For backward compatibility: we always assume
+      // delete record has the highest ordering value.
+      // TODO: Compare ordering values instead.
+      return Option.empty();
+    }
+
     return ((HoodieAvroRecord) newer).getData().combineAndGetUpdateValue(previousAvroData.get(), schema, props);
   }
 

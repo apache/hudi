@@ -1418,7 +1418,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
     scanner.forEach(s -> {
       try {
-        if (!((HoodieRecordPayload) s.getData()).getInsertValue(schema).isPresent()) {
+        if (s.isDelete(schema, new Properties())) {
           emptyPayloads.add(true);
         }
       } catch (IOException io) {
@@ -1463,7 +1463,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     final List<Boolean> newEmptyPayloads = new ArrayList<>();
     scanner.forEach(s -> {
       try {
-        if (!((HoodieRecordPayload) s.getData()).getInsertValue(schema).isPresent()) {
+        if (s.isDelete(schema, new Properties())) {
           newEmptyPayloads.add(true);
         }
       } catch (IOException io) {
@@ -1576,7 +1576,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     final List<Boolean> newEmptyPayloads = new ArrayList<>();
     scanner.forEach(s -> {
       try {
-        if (!((HoodieRecordPayload) s.getData()).getInsertValue(schema).isPresent()) {
+        if (s.isDelete(schema, new Properties())) {
           newEmptyPayloads.add(true);
         }
       } catch (IOException io) {
@@ -1705,7 +1705,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     scanner.forEach(s -> readKeys.add(s.getRecordKey()));
     scanner.forEach(s -> {
       try {
-        if (!((HoodieRecordPayload) s.getData()).getInsertValue(schema).isPresent()) {
+        if (s.isDelete(schema, new Properties())) {
           emptyPayloadKeys.add(s.getRecordKey());
         }
       } catch (IOException io) {
@@ -2048,7 +2048,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
       scanner.forEach(s -> {
         try {
-          if (!((HoodieRecordPayload) s.getData()).getInsertValue(schema, new Properties()).isPresent()) {
+          if (s.isDelete(schema, new Properties())) {
             emptyPayloads.add(true);
           } else {
             recordKeys.add(s.getKey().getRecordKey());

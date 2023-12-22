@@ -20,7 +20,6 @@ package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.DeleteRecord;
-import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -50,6 +49,7 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -58,7 +58,12 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_OPERATION;
+import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_ORDERING_FIELD;
+import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_PARTITION_PATH;
+import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
+import static org.apache.hudi.common.model.HoodieOperation.DELETE;
 
 /**
  * Scans through all the blocks in a list of HoodieLogFile and builds up a compacted/merged list of records which will
@@ -287,14 +292,24 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
         return;
       }
     }
-    // Put the DELETE record
-    if (recordType == HoodieRecordType.AVRO) {
-      records.put(key, SpillableMapUtils.generateEmptyPayload(key,
-          deleteRecord.getPartitionPath(), deleteRecord.getOrderingValue(), getPayloadClassFQN()));
-    } else {
-      HoodieEmptyRecord record = new HoodieEmptyRecord<>(new HoodieKey(key, deleteRecord.getPartitionPath()), null, deleteRecord.getOrderingValue(), recordType);
-      records.put(key, record);
-    }
+
+    // Create metadata for delete records.
+    Map<String, Object> metadata = new HashMap<>();
+    metadata.put(
+        INTERNAL_META_RECORD_KEY,
+        deleteRecord.getRecordKey());
+    metadata.put(
+        INTERNAL_META_PARTITION_PATH,
+        deleteRecord.getPartitionPath());
+    metadata.put(
+        INTERNAL_META_ORDERING_FIELD,
+        deleteRecord.getOrderingValue());
+    metadata.put(
+        INTERNAL_META_OPERATION,
+        DELETE);
+
+    records.put(key, SpillableMapUtils.generateHoodieDeleteRecord(
+        key, deleteRecord.getPartitionPath(), metadata));
   }
 
   public long getTotalTimeTakenToReadAndMergeBlocks() {

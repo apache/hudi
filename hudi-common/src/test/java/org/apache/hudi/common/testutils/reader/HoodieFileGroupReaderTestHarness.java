@@ -66,8 +66,7 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
     properties.setProperty(
         "hoodie.datasource.write.precombine.field", "timestamp");
     hadoopConf = getDefaultHadoopConf();
-    readerContext = new HoodieTestReaderContext(
-        Option.empty(), Option.empty());
+    readerContext = new HoodieTestReaderContext(Option.empty());
   }
 
   @AfterAll
