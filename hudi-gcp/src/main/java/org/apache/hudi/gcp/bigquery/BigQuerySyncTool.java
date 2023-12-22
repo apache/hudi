@@ -117,7 +117,7 @@ public class BigQuerySyncTool extends HoodieSyncTool {
 
   private boolean tableExists(HoodieBigQuerySyncClient bqSyncClient, String tableName) {
     if (bqSyncClient.tableExists(tableName)) {
-      LOG.info(tableName + " already exists");
+      LOG.info(tableName + " already exists. Skip table creation.");
       return true;
     }
     return false;
