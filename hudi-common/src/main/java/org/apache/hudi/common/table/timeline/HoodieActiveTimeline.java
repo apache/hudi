@@ -696,7 +696,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       } else {
         // Ensures old state exists in timeline
         ValidationUtils.checkArgument(metaClient.getFs().exists(getInstantFileNamePath(fromInstantFileName)),
-            "file " + getInstantFileNamePath(fromInstantFileName) + " does not exist!");
+            "File " + getInstantFileNamePath(fromInstantFileName) + " does not exist!");
         // Use Write Once to create Target File
         if (allowRedundantTransitions) {
           FileIOUtils.createFileInPath(metaClient.getFs(), getInstantFileNamePath(toInstantFileName), data);
