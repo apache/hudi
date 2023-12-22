@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.reader.HoodieFileGroupReaderTestHarness;
 import org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils;
-import org.apache.hudi.common.testutils.reader.HoodieRecordTestPayload;
 import org.apache.hudi.common.testutils.reader.HoodieTestReaderContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -55,9 +54,7 @@ public class TestCustomMerger extends HoodieFileGroupReaderTestHarness {
   @BeforeAll
   public static void setUp() throws IOException {
     // Enable our custom merger.
-    readerContext = new HoodieTestReaderContext(
-        Option.of(new CustomAvroMerger()),
-        Option.of(HoodieRecordTestPayload.class.getName()));
+    readerContext = new HoodieTestReaderContext(Option.of(new CustomAvroMerger()));
 
     // -------------------------------------------------------------
     // The test logic is as follows:

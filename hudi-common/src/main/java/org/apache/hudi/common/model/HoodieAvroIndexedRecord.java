@@ -57,7 +57,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
       HoodieKey key,
       IndexedRecord data,
       HoodieOperation operation,
-      Option<Map<String, String>> metaData) {
+      Option<Map<String, Object>> metaData) {
     super(key, data, operation, metaData);
   }
 

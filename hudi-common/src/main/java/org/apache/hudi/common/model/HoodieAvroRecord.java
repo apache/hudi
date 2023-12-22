@@ -38,6 +38,8 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_OPERATION;
+import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_ORDERING_FIELD;
 import static org.apache.hudi.common.model.HoodieAvroIndexedRecord.updateMetadataValuesInternal;
 
 /**
@@ -68,6 +70,14 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     super(key, data, operation, currentLocation, newLocation);
   }
 
+  public HoodieAvroRecord(
+      HoodieKey key,
+      T data,
+      HoodieOperation operation,
+      Option<Map<String, Object>> metadata) {
+    super(key, data, operation, metadata);
+  }
+
   public HoodieAvroRecord() {
   }
 
@@ -96,7 +106,16 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
 
   @Override
   public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
-    return this.getData().getOrderingValue();
+    // For non-delete record.
+    if (data != null) {
+      return getData().getOrderingValue();
+    }
+
+    // For delete record.
+    // We first check the metadata field.
+    // Then we use the natural order.
+    return (Comparable<?>) metaData.get()
+        .getOrDefault(INTERNAL_META_ORDERING_FIELD, 0L);
   }
 
   @Override
@@ -157,6 +176,16 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
 
   @Override
   public boolean isDelete(Schema recordSchema, Properties props) throws IOException {
+    // For delete record.
+    if (data == null) {
+      return true;
+    }
+    if (metaData.isPresent()
+        && metaData.get().getOrDefault(INTERNAL_META_OPERATION, null) == HoodieOperation.DELETE) {
+      return true;
+    }
+
+    // For non delete record.
     if (this.data instanceof BaseAvroPayload) {
       return ((BaseAvroPayload) this.data).isDeleted(recordSchema, props);
     } else {
