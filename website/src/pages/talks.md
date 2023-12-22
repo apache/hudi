@@ -105,3 +105,29 @@ Data Summit Connect, May, 2021
 45. ["Apache Hudi on Amazon EMR"](https://pages.awscloud.com/rs/112-TZM-766/images/EV_analytics-sprint-week-apache-hundi-amazon-emr_Sep-2020.pdf) - By the AWS team. September 2020
 
 46. ["Building Lakehouse using Hudi | Apache Hudi | Data Lakehouse | Hudi | Apache"](https://www.youtube.com/watch?v=3N4XVil05sM) - By the DataCouch Team. July 2023
+
+47. ["Trino fest: Skip rocks and files: Turbocharge Trino queries with Hudi’s multi-modal indexing subsystem"](https://www.onehouse.ai/blog/exploring-new-frontiers-how-apache-flink-apache-hudi-and-presto-power-new-insights-at-scale) - By Nadine Farah and Sagar Sumit. July 2023
+
+48. ["Prestocon- Exploring New Frontiers: How Apache Flink, Apache Hudi and Presto Power New Insights at Scale"](https://trino.io/blog/2023/07/07/trino-fest-2023-onehouse-recap.html) - By Danny Chan and Sagar Sumit. June 2023
+
+49. ["A Glide, Skip or a Jump: Efficiently Stream Data into Your Medallion Architecture with Apache Hudi"](https://www.confluent.io/events/current/2023/a-glide-skip-or-a-jump-efficiently-stream-data-into-your-medallion/) - By Nadine Farah and Ethan Guo. September 2023
+
+50. ["Lakehouses for Data Engineers: What You Need to Consider to Build Efficient ETL Pipelines"](https://www.databricks.com/dataaisummit/session/lakehouses-data-engineers-what-you-need-consider-build-efficient-etl-pipelines/) - By Nadine Farah. June 2023
+
+51. ["Data Alchemy: Transforming Raw Data to Gold with Apache Hudi and DBT"](https://osacon.io/sessions/2023/data-alchemy-transforming-raw-data-to-gold-with-apache-hudi-and-dbt/) - By Nadine Farah. December 2023
+
+52. ["Panel Discussion on Growing a Healthy Open Source Community"](https://osacon.io/sessions/2023/panel-discussion-on-growing-a-healthy-open-source-community/) - By Nadine Farah, Ali LeClerc, Evan Rusackas. December 2023
+
+53. ["Unveil the Magic Without Hoodini: Transform Your Machine Learning Pipelines with Apache Hudi"](https://www.youtube.com/watch?v=pUZHotLdkjU) - By Nadine Farah. December 2023
+
+54. ["Apache Hudi 1.0 preview: A database experience on the data lake"](https://opensourcedatasummit.com/apache-hudi-1-preview/) - By Bhavani Sudha Saktheeswaran and Sagar Sumit. November 2023
+
+55. ["Incremental Data Processing with Apache Hudi](https://qconsf.com/presentation/oct2023/incremental-data-processing-apache-hudi) - By Bhavani Sudha Saktheeswaran and Saketh Chintapalli. October 2023
+
+56. ["Consistently Hashing it Out: Embracing Fresher, Faster Data with the Hudi-Flink Support for the Bucket Index"](https://www.ververica.academy/app/courses/f352775b-6c43-475b-84e0-d6070c57b1a7) - By Nadine Farah November 2023
+
+57. ["Keynote: The Future is Unified: The Convergence of Data Lakes and Data Warehouses into an Interoperable Data Lakehouse"](https://dewcon.ai/) - By Vinoth Chandar October 2023
+
+58. ["Panel: Is the Modern Data Stack Dead?"](https://dewcon.ai/) - By Vinoth Chandar, Joe Reis, Divyansh Saini, Shuveb Hussain. October 2023
+
+59. ["Session: Maximizing efficiency by templating Glue jobs and serverless architecture in Hudi data lakes"](https://opensourcedatasummit.com/maximizing-efficiency-at-job-target/) - By Soumil Shah. November 2023
