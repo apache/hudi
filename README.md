@@ -157,6 +157,21 @@ Example: When you change any file in `versioned_docs/version-0.7.0/`, it will on
 ## Configs
 Configs can be automatically updated by following these steps documented at ../hudi-utils/README.md
 
+## Talks
+
+When adding a talk, please follow these guidelines.
+
+1. Ensure the entry is of the format 
+   "[Title](Hyperlink to video/resources)" - By <Author 1>, <Author 2>, <Author 3>. <Name of Conference/Meetup/Session>, <Month> <Year>.
+2. Please ensure the talks are in chronological order.
+3. Try to add links to videos and slide decks when possible. If they are not available in same page, feel free to add 
+   [Slides](Slides link) towards the end like for example:
+
+:::note
+   ["Hoodie: An Open Source Incremental Processing Framework From Uber"](http://www.dataengconf.com/hoodie-an-open-source-incremental-processing-framework-from-uber) - By Vinoth Chandar.
+   Apr 2017, DataEngConf, San Francisco, CA [Slides](https://www.slideshare.net/vinothchandar/hoodie-dataengconf-2017) [Video](https://www.youtube.com/watch?v=7Wudjc-v7CA)
+:::
+
 ## Blogs
 
 When adding a new blog, please follow these guidelines.
