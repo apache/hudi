@@ -10,7 +10,7 @@ tags:
 - guide
 - beginner
 - deltastreamer
+- hudi streamer
 - postgres
 - apache hudi
-- rfc 14
 ---

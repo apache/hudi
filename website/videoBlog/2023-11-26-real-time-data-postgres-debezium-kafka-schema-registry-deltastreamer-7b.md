@@ -10,9 +10,11 @@ tags:
 - guide
 - beginner
 - deltastreamer
+- hudi streamer
 - debezium
 - schema registry
 - apache kafka
+- apache hudi
 ---
 
 

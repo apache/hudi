@@ -10,8 +10,9 @@ tags:
 - guide
 - beginner
 - hudi streamer
-- spark
-- parquet
+- apache spark
+- apache parquet
+- apache hudi
 ---
 
 

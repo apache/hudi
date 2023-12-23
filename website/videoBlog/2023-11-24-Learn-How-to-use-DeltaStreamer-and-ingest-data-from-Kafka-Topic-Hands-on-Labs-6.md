@@ -10,6 +10,7 @@ tags:
 - guide
 - beginner
 - deltastreamer
+- hudi streamer
 - apache hudi
 - kafka topic
 - apache kafka

@@ -17,6 +17,5 @@ tags:
 - cdc
 - aws s3
 - aws lambda
-
 ---
 

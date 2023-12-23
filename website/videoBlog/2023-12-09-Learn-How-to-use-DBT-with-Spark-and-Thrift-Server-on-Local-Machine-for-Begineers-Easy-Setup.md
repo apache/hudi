@@ -9,7 +9,8 @@ navigate: "https://www.youtube.com/watch?v=k1HSFPlunlM"
 tags:
 - guide
 - beginner
-- spark
+- apache spark
+- apache thrift
 - dbt
 - apache hudi
 ---

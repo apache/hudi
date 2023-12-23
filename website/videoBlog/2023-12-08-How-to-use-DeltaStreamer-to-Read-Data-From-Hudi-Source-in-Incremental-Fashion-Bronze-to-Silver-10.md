@@ -10,7 +10,8 @@ tags:
 - guide
 - beginner
 - deltastreamer
-- incremental pipeline
+- hudi streamer
+- incremental pipelines
 - apache hudi
 - medallion architecture
 ---

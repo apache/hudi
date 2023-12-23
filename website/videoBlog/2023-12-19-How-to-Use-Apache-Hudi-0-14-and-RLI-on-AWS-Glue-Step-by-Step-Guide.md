@@ -10,6 +10,7 @@ tags:
 - guide
 - beginner
 - record level index
+- indexing
 - aws glue
 - apache hudi
 ---

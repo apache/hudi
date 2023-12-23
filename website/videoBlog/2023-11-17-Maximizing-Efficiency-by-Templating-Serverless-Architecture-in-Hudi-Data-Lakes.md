@@ -8,7 +8,7 @@ image: /assets/images/video_blogs/2023-11-17-Maximizing-Efficiency-by-Templating
 navigate: "https://www.youtube.com/watch?v=EdVfVb9rmo0"
 tags:
 - guide
-- aws
+- aws glue
 - beginner
 - incremental pipelines
 - apache hudi

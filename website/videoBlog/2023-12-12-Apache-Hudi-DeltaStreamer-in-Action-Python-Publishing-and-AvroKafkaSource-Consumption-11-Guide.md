@@ -10,7 +10,9 @@ tags:
 - guide
 - beginner
 - deltastreamer
-- AvroKafkaSource
+- hudi streamer
+- apache kafka
+- apache avro
 - apache hudi
 - python
 ---

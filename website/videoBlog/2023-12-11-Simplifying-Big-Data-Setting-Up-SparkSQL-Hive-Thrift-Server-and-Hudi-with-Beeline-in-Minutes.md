@@ -8,9 +8,9 @@ image: /assets/images/video_blogs/2023-12-11-Simplifying-Big-Data-Setting-Up-Spa
 navigate: "https://www.youtube.com/watch?v=lCorHcx2mvc"
 tags:
 - guide
-- aws
 - beginner
-- hive
+- apache hive
+- apache thrift
 - spark sql
 - apache hudi
 - beeline

@@ -12,5 +12,6 @@ tags:
 - hbase index
 - record level index
 - metadata table
+- indexing
 - apache hudi
 ---

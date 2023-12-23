@@ -10,6 +10,7 @@ tags:
 - guide
 - beginner
 - deltastreamer
+- hudi streamer
 - minio
 - apache hudi
 ---

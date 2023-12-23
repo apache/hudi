@@ -10,5 +10,7 @@ tags:
 - guide
 - beginner
 - deltastreamer
+- hudi streamer
 - multi table
+- apache hudi
 ---

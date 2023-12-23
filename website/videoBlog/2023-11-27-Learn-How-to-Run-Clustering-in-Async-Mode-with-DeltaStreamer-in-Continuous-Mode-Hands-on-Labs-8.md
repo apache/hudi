@@ -10,8 +10,10 @@ tags:
 - guide
 - beginner
 - deltastreamer
+- hudi streamer
 - clustering
 - async mode
+- apache hudi
 ---
 
 

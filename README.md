@@ -240,6 +240,7 @@ tags:
 3. The image must be uploaded in the path /assets/images/video_blogs/<image_file-name> and should be of standard size 
    1200 * 600. Its easy to use the same name as the video guide for the image as well - `<yyyy-mm-dd>-<Video Guide Title>.png`
    If there is no thumbnail or cover image stick to the default image - `/assets/images/hudi-video-page-default.png`
+   (OR) another alternative would be to create a simple cover image with the title of the video as the thumbnail.
 4. The navigate field represents the actual link to video.
 5. The tags should be representative of Hudi component/feature focussed in the guide. The tags can refer to services or 
    techniques used in the guide. Stick to 5 - 7 tags at the max.
@@ -250,7 +251,8 @@ tags:
        Can be the use case or functionality achieved. Example - de-duplication. This can be skipped if the guide is in 
        general talking about ingestion using different sources and sinks.
     3. tag 3
-        - Represent individual Hudi features/components - clustering, compaction, ingestion, meta-sync etc.
+        - Represent individual Hudi features/components - clustering, compaction, ingestion, meta-sync etc. 
+        - If deltastreamer is referred, add both tags - `deltastreamer` and `hudi streamer` since we renamed deltastreamer.
     4. tag 4
         - List of technologies used in the guide. This should be an inclusive list. Qualify names fully here. For example 
           prefer to "amazon athena" instead of "athena". This helps in discoverability of the guides.

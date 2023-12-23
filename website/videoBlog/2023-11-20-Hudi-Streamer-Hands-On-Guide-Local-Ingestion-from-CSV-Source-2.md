@@ -10,8 +10,9 @@ tags:
 - guide
 - beginner
 - hudi streamer
-- spark
+- apache spark
 - csv
+- apache hudi
 ---
 
 

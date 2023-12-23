@@ -8,10 +8,8 @@ image: /assets/images/video_blogs/2023-12-16-Learn-How-to-Setup-Hudi-on-EMR-with
 navigate: "https://www.youtube.com/watch?v=oav6aEldk1o"
 tags:
 - guide
-- aws
 - beginner
-- hive
-- aws
+- apache hive
 - apache hudi
 - aws emr
 - presto
