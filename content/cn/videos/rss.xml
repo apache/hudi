@@ -4,9 +4,123 @@
         <title>Apache Hudi Blog</title>
         <link>https://hudi.apache.org/cn/videos</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Wed, 08 Nov 2023 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Tue, 19 Dec 2023 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[How to Use Apache Hudi 0.14 and RLI (record level index) on AWS Glue Step by Step Guide]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/12/19/How-to-Use-Apache-Hudi-0-14-and-RLI-on-AWS-Glue-Step-by-Step-Guide</link>
+            <guid>/2023/12/19/How-to-Use-Apache-Hudi-0-14-and-RLI-on-AWS-Glue-Step-by-Step-Guide</guid>
+            <pubDate>Tue, 19 Dec 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Learn How to Setup Hudi on EMR with Hive and Query Data using Hue and Presto CLI Hands on Labs]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/12/16/Learn-How-to-Setup-Hudi-on-EMR-with-Hive-and-Query-Data-using-Hue-and-Presto-CLI-Hands-on-Labs</link>
+            <guid>/2023/12/16/Learn-How-to-Setup-Hudi-on-EMR-with-Hive-and-Query-Data-using-Hue-and-Presto-CLI-Hands-on-Labs</guid>
+            <pubDate>Sat, 16 Dec 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Apache Hudi Delta Streamer in Action: Python Publishing and AvroKafkaSource Consumption (#11 Guide)]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/12/12/Apache-Hudi-DeltaStreamer-in-Action-Python-Publishing-and-AvroKafkaSource-Consumption-11-Guide</link>
+            <guid>/2023/12/12/Apache-Hudi-DeltaStreamer-in-Action-Python-Publishing-and-AvroKafkaSource-Consumption-11-Guide</guid>
+            <pubDate>Tue, 12 Dec 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Simplifying Big Data: Setting Up Spark SQL, Hive Thrift Server, and Hudi with Beeline in Minutes]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/12/11/Simplifying-Big-Data-Setting-Up-SparkSQL-Hive-Thrift-Server-and-Hudi-with-Beeline-in-Minutes</link>
+            <guid>/2023/12/11/Simplifying-Big-Data-Setting-Up-SparkSQL-Hive-Thrift-Server-and-Hudi-with-Beeline-in-Minutes</guid>
+            <pubDate>Mon, 11 Dec 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Learn How to use DBT with Spark and Thrift Server on Local Machine for Begineers Easy Setup]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/12/09/Learn-How-to-use-DBT-with-Spark-and-Thrift-Server-on-Local-Machine-for-Begineers-Easy-Setup</link>
+            <guid>/2023/12/09/Learn-How-to-use-DBT-with-Spark-and-Thrift-Server-on-Local-Machine-for-Begineers-Easy-Setup</guid>
+            <pubDate>Sat, 09 Dec 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[How to use DeltaStreamer to Read Data From Hudi Source in Incremental Fashion (Bronze to Silver) #10]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/12/08/How-to-use-DeltaStreamer-to-Read-Data-From-Hudi-Source-in-Incremental-Fashion-Bronze-to-Silver-10</link>
+            <guid>/2023/12/08/How-to-use-DeltaStreamer-to-Read-Data-From-Hudi-Source-in-Incremental-Fashion-Bronze-to-Silver-10</guid>
+            <pubDate>Fri, 08 Dec 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Learn How to use MinIO and Apache Hudi Delta Streamer with Hands on Lab #9]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/11/30/Learn-How-to-use-MinIO-and-Apache-Hudi-DeltaStreamer-with-Hands-on-Lab-9</link>
+            <guid>/2023/11/30/Learn-How-to-use-MinIO-and-Apache-Hudi-DeltaStreamer-with-Hands-on-Lab-9</guid>
+            <pubDate>Thu, 30 Nov 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Hudi Metadata table, Record Level Index, HBase Index]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/11/27/Hudi-Metadata-table-Record-Level-Index-HBase-Index</link>
+            <guid>/2023/11/27/Hudi-Metadata-table-Record-Level-Index-HBase-Index</guid>
+            <pubDate>Mon, 27 Nov 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Learn How to Run Clustering in Async Mode with Delta Streamer in Continuous Mode | Hands on Labs |#8]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/11/27/Learn-How-to-Run-Clustering-in-Async-Mode-with-DeltaStreamer-in-Continuous-Mode-Hands-on-Labs-8</link>
+            <guid>/2023/11/27/Learn-How-to-Run-Clustering-in-Async-Mode-with-DeltaStreamer-in-Continuous-Mode-Hands-on-Labs-8</guid>
+            <pubDate>Mon, 27 Nov 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Real-Time Data: Postgres, Debezium, Kafka, Schema Registry, Delta Streamer #7A]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/11/26/real-time-data-postgres-debezium-kafka-schema-registry-deltastreamer-7a</link>
+            <guid>/2023/11/26/real-time-data-postgres-debezium-kafka-schema-registry-deltastreamer-7a</guid>
+            <pubDate>Sun, 26 Nov 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Real-Time Data: Postgres, Debezium, Kafka, Schema Registry, DeltaStreamer #7B]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/11/26/real-time-data-postgres-debezium-kafka-schema-registry-deltastreamer-7b</link>
+            <guid>/2023/11/26/real-time-data-postgres-debezium-kafka-schema-registry-deltastreamer-7b</guid>
+            <pubDate>Sun, 26 Nov 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Learn How to use DeltaStreamer and ingest data from Kafka Topic Hands on Labs #6]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/11/24/Learn-How-to-use-DeltaStreamer-and-ingest-data-from-Kafka-Topic-Hands-on-Labs-6</link>
+            <guid>/2023/11/24/Learn-How-to-use-DeltaStreamer-and-ingest-data-from-Kafka-Topic-Hands-on-Labs-6</guid>
+            <pubDate>Fri, 24 Nov 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Hudi Table Types]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/11/24/hudi-table-types</link>
+            <guid>/2023/11/24/hudi-table-types</guid>
+            <pubDate>Fri, 24 Nov 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Learn How to Ingest Data Into Hudi Table using Delta Streamer in continous Mode & SQL transformer#5]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/11/23/Learn-How-to-Ingest-Data-Into-Hudi-Table-using-DeltaStreamer-in-continous-Mode-and-SQL-transformer-5</link>
+            <guid>/2023/11/23/Learn-How-to-Ingest-Data-Into-Hudi-Table-using-DeltaStreamer-in-continous-Mode-and-SQL-transformer-5</guid>
+            <pubDate>Thu, 23 Nov 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[RFC-14: Step-by-Step Guide for Incremental Data Pull from Postgres to Hudi using DeltaStreamer (#4)]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/11/21/RFC-14-Step-by-Step-Guide-for-Incremental-Data-Pull-from-Postgres-to-Hudi-using-deltastreamer</link>
+            <guid>/2023/11/21/RFC-14-Step-by-Step-Guide-for-Incremental-Data-Pull-from-Postgres-to-Hudi-using-deltastreamer</guid>
+            <pubDate>Tue, 21 Nov 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Hudi Streamer Delta Streamer Hands On Guide: Local Ingestion from CSV Source #2]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/11/20/Hudi-Streamer-Hands-On-Guide-Local-Ingestion-from-CSV-Source-2</link>
+            <guid>/2023/11/20/Hudi-Streamer-Hands-On-Guide-Local-Ingestion-from-CSV-Source-2</guid>
+            <pubDate>Mon, 20 Nov 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Learn How to Ingest Multiple Tables using Hudi MultiTable Delta Streamer #3]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/11/20/Learn-How-to-Ingest-Multiple-Tables-using-Hudi-MultiTable-Delta-Streamer-3</link>
+            <guid>/2023/11/20/Learn-How-to-Ingest-Multiple-Tables-using-Hudi-MultiTable-Delta-Streamer-3</guid>
+            <pubDate>Mon, 20 Nov 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Hudi Streamer (Delta Streamer) Hands-On Guide: Local Ingestion from Parquet Source #1]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/11/19/Hudi-Streamer-Hands-On-Guide-Local-Ingestion-from-Parquet-Source-1</link>
+            <guid>/2023/11/19/Hudi-Streamer-Hands-On-Guide-Local-Ingestion-from-Parquet-Source-1</guid>
+            <pubDate>Sun, 19 Nov 2023 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Maximizing Efficiency by Templating Serverless Architecture in Hudi Data Lakes]]></title>
+            <link>https://hudi.apache.org/cn/videos/2023/11/17/Maximizing-Efficiency-by-Templating-Serverless-Architecture-in-Hudi-Data-Lakes</link>
+            <guid>/2023/11/17/Maximizing-Efficiency-by-Templating-Serverless-Architecture-in-Hudi-Data-Lakes</guid>
+            <pubDate>Fri, 17 Nov 2023 00:00:00 GMT</pubDate>
+        </item>
         <item>
             <title><![CDATA[A Glide, Skip or a Jump: Efficiently Stream Data into Your Medallion Architecture with Apache Hudi]]></title>
             <link>https://hudi.apache.org/cn/videos/2023/11/08/A-Glide-Skip-or-a-Jump-Efficiently-Stream-Data-into-Your-Medallion-Architecture-with-Apache-Hudi</link>
