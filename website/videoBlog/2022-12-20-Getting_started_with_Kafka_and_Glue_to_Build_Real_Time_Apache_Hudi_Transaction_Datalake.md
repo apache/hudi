@@ -10,7 +10,7 @@ tags:
 - guide
 - streaming ingestion
 - deltastreamer
-- hoodie streamer
+- hudi streamer
 - aws glue
 - amazon athena
 - apache kafka

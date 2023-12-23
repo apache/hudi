@@ -9,7 +9,7 @@ navigate: "https://www.youtube.com/watch?v=jvbHUl9A4tQ"
 tags:
 - guide
 - deltastreamer
-- hoodie streamer
+- hudi streamer
 - amazon emr serverless
 - amazon s3
 - apache hudi
