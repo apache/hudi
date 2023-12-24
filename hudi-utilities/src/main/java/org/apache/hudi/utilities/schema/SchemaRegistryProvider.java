@@ -82,12 +82,6 @@ public class SchemaRegistryProvider extends SchemaProvider {
     public static final String SSL_KEY_PASSWORD_PROP = "schema.registry.ssl.key.password";
   }
 
-  protected Schema cachedSourceSchema;
-  protected Schema cachedTargetSchema;
-
-  private final String srcSchemaRegistryUrl;
-  private final String targetSchemaRegistryUrl;
-
   @FunctionalInterface
   public interface SchemaConverter {
     /**
@@ -166,8 +160,6 @@ public class SchemaRegistryProvider extends SchemaProvider {
   public SchemaRegistryProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
     checkRequiredConfigProperties(props, Collections.singletonList(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL));
-    this.srcSchemaRegistryUrl = getStringWithAltKeys(config, HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL);
-    this.targetSchemaRegistryUrl = getStringWithAltKeys(config, HoodieSchemaProviderConfig.TARGET_SCHEMA_REGISTRY_URL, srcSchemaRegistryUrl);
     if (config.containsKey(Config.SSL_KEYSTORE_LOCATION_PROP)
         || config.containsKey(Config.SSL_TRUSTSTORE_LOCATION_PROP)) {
       setUpSSLStores();
@@ -199,42 +191,30 @@ public class SchemaRegistryProvider extends SchemaProvider {
 
   @Override
   public Schema getSourceSchema() {
+    String registryUrl = getStringWithAltKeys(config, HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL);
     try {
-      if (cachedSourceSchema == null) {
-        cachedSourceSchema = parseSchemaFromRegistry(this.srcSchemaRegistryUrl);
-      }
-      return cachedSourceSchema;
+      return parseSchemaFromRegistry(registryUrl);
     } catch (Exception e) {
       throw new HoodieSchemaFetchException(String.format(
           "Error reading source schema from registry. Please check %s is configured correctly. Truncated URL: %s",
           Config.SRC_SCHEMA_REGISTRY_URL_PROP,
-          StringUtils.truncate(srcSchemaRegistryUrl, 10, 10)), e);
+          StringUtils.truncate(registryUrl, 10, 10)), e);
     }
   }
 
   @Override
   public Schema getTargetSchema() {
+    String registryUrl = getStringWithAltKeys(config, HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL);
+    String targetRegistryUrl =
+        getStringWithAltKeys(config, HoodieSchemaProviderConfig.TARGET_SCHEMA_REGISTRY_URL, registryUrl);
     try {
-      if (cachedTargetSchema == null) {
-        cachedTargetSchema = parseSchemaFromRegistry(this.targetSchemaRegistryUrl);
-      }
-      return cachedTargetSchema;
+      return parseSchemaFromRegistry(targetRegistryUrl);
     } catch (Exception e) {
       throw new HoodieSchemaFetchException(String.format(
           "Error reading target schema from registry. Please check %s is configured correctly. If that is not configured then check %s. Truncated URL: %s",
           Config.SRC_SCHEMA_REGISTRY_URL_PROP,
           Config.TARGET_SCHEMA_REGISTRY_URL_PROP,
-          StringUtils.truncate(targetSchemaRegistryUrl, 10, 10)), e);
+          StringUtils.truncate(targetRegistryUrl, 10, 10)), e);
     }
-  }
-
-  // Per SyncOnce call, the cachedschema for the provider is dropped and SourceSchema re-attained
-  // Subsequent calls to getSourceSchema within the write batch should be cached.
-  @Override
-  public void refresh() {
-    cachedSourceSchema = null;
-    cachedTargetSchema = null;
-    getSourceSchema();
-    getTargetSchema();
   }
 }
