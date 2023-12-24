@@ -7,7 +7,7 @@ image: /assets/images/blog/2020-12-01-t3go-architecture.png
 tags:
 - use-case
 - near real-time analytics 
-- incremental-processing
+- incremental processing
 - caching
 - apache hudi
 ---

@@ -210,8 +210,8 @@ Take a look at this blog for reference - (Apache Hudi vs Delta Lake vs Apache Ic
        For example if the article is https://www.uber.com/blog/cost-efficiency-big-data/ we would use `uber` as the tag here. 
        Another example - for https://robinhood.engineering/author-balaji-varadarajan-e3f496815ebf  we would use 
        `robinhood` as the tag. For blogs directly contributed to hudi repo, we can use `apache hudi` as the tag.
-   4. **TAGS TO AVOID**
-      - Please do not use `index` as a tag. Instead, use `indexing`.
+   4. Please refer to guidelines for tagging  [below](guidelines-to-tag-properly)
+
 
 ## Video Guides
 
@@ -261,8 +261,16 @@ tags:
     5. tag N
         - [beginner, intermediate, advanced]. Use this tag if its clear on what level this guide targets. Else feel 
           free to skip this tag.
+    6. Please refer to guidelines for tagging  [below](guidelines-to-tag-properly)
 6. Ensure that tags are consistent. When adding new tags refer [Blog Tags](https://hudi.apache.org/blog/tags) and 
    [Video Guide Tags](https://hudi.apache.org/videos/tags) to check if there is a tag already and prefer to use that. 
+
+## Guidelines to tag properly
+      - Please do not use `index` as a tag. Instead, use `indexing`.
+      - Please do not use `-` in tags, since it may affect discoverability. 
+      - When referring to a specific type of query like `snapshot query` with query as the suffix use singular.
+      - When referring to write operation types prefer plural. Ex: `inserts` over `insert`. 
+      - Avoid class names
 
 ## Maintainer
 

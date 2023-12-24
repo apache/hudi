@@ -8,7 +8,7 @@ tags:
 - design
 - deltastreamer
 - cdc
-- change-data-capture
+- change data capture
 - apache hudi
 ---
 

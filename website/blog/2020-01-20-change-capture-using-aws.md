@@ -6,7 +6,7 @@ category: blog
 image: /assets/images/blog/change-capture-architecture.png
 tags:
 - how-to
-- change-data-capture
+- change data capture
 - cdc
 - apache hudi
 ---
