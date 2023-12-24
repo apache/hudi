@@ -6,7 +6,7 @@ category: blog
 image: /assets/images/blog/hoodie-cleaner/Initial_timeline.png
 tags:
 - how-to
-- cleaner-service
+- cleaner
 - apache hudi
 ---
 

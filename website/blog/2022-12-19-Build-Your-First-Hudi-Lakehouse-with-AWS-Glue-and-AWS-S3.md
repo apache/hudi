@@ -8,7 +8,8 @@ tags:
 - how-to
 - use-case
 - apache hudi
-- aws
+- aws s3
+- aws glue
 ---
 
 ![/assets/images/blog/DataCouncil.jpg](/assets/images/blog/DataCouncil.jpg)

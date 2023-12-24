@@ -5,7 +5,7 @@ author: rxu
 category: blog
 tags:
 - how-to
-- snapshot-exporter
+- snapshot exporter
 - apache hudi
 ---
 
