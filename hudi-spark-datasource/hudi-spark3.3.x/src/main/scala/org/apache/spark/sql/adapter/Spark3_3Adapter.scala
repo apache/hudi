@@ -132,7 +132,7 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
     Spark33HoodieParquetReader.getReader(file, requiredSchema, filters, sharedConf, extraProps)
   }
 
-  def getExtraProps(vectorized: Boolean, sqlConf: SQLConf, options: Map[String, String]): Map[String, String] = {
+  override def getExtraProps(vectorized: Boolean, sqlConf: SQLConf, options: Map[String, String]): Map[String, String] = {
     Spark33HoodieParquetReader.getExtraProps(vectorized, sqlConf, options)
   }
 }
