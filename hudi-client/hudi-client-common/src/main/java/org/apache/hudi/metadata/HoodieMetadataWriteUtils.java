@@ -34,10 +34,7 @@ import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsPrometheusConfig;
+import org.apache.hudi.config.metrics.*;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
 
@@ -182,6 +179,17 @@ public class HoodieMetadataWriteUtils {
           builder.withProperties(prometheusConfig.getProps());
           break;
         case DATADOG:
+          HoodieMetricsDatadogConfig datadogConfig = HoodieMetricsDatadogConfig.newBuilder()
+                  .withDatadogApiKey(writeConfig.getDatadogApiKey())
+                  .withDatadogApiKeySkipValidation(writeConfig.getDatadogApiKeySkipValidation())
+                  .withDatadogHost(writeConfig.getDatadogMetricHost())
+                  .withDatadogPrefix(writeConfig.getDatadogMetricPrefix())
+                  .withDatadogReportPeriodSeconds(writeConfig.getDatadogReportPeriodSeconds())
+                  .withDatadogTags(String.join(";", writeConfig.getDatadogMetricTags()))
+                  .withDatadogApiTimeoutSeconds(writeConfig.getDatadogApiTimeoutSeconds())
+                  .build();
+          builder.withProperties(datadogConfig.getProps());
+          break;
         case PROMETHEUS:
         case CONSOLE:
         case INMEMORY:
