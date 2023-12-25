@@ -28,7 +28,8 @@ import org.apache.hudi.util.JFunction
 import org.apache.hudi.{DataSourceWriteOptions, SparkDatasetMixin}
 import org.apache.spark.sql._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.function.Executable
+import org.junit.jupiter.api.{AfterEach, Assertions, BeforeEach, Test}
 import org.slf4j.LoggerFactory
 
 import java.util.function.Consumer
@@ -85,9 +86,13 @@ class TestMetricsReporter extends HoodieSparkClientTestBase with SparkDatasetMix
       HoodieMetricsDatadogConfig.API_SITE_VALUE.key -> "US",
       HoodieMetricsDatadogConfig.API_KEY.key -> "dummykey")
 
-    inputDF1.write.format("org.apache.hudi")
-      .options(writeOpts)
-      .mode(SaveMode.Overwrite)
-      .save(basePath)
+    Assertions.assertDoesNotThrow(new Executable {
+      override def execute(): Unit =
+        inputDF1.write.format("org.apache.hudi")
+          .options(writeOpts)
+          .mode(SaveMode.Overwrite)
+          .save(basePath)
+
+    })
   }
 }
