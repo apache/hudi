@@ -19,6 +19,7 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.avro.Schema
+import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.Spark30HoodieFileScanRDD
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer, HoodieSpark3_0AvroDeserializer, HoodieSpark3_0AvroSerializer}
@@ -29,10 +30,11 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical._
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark30LegacyHoodieParquetFileFormat}
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark30HoodieParquetReader, Spark30LegacyHoodieParquetFileFormat}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, HoodieSpark30PartitionedFileUtils, HoodieSparkPartitionedFileUtils, PartitionedFile}
 import org.apache.spark.sql.hudi.SparkAdapter
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark3_0ExtendedSqlParser}
 import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
 import org.apache.spark.sql.vectorized.ColumnarUtils
@@ -118,4 +120,14 @@ class Spark3_0Adapter extends BaseSpark3Adapter {
     case OFF_HEAP => "OFF_HEAP"
     case _ => throw new IllegalArgumentException(s"Invalid StorageLevel: $level")
   }
+
+  override def getParquetReader(file: PartitionedFile, requiredSchema: StructType, filters: Seq[sources.Filter],
+                                sharedConf: Configuration, extraProps: Map[String, String]): Iterator[InternalRow] = {
+    Spark30HoodieParquetReader.getReader(file, requiredSchema, filters, sharedConf, extraProps)
+  }
+
+  override def getExtraProps(vectorized: Boolean, sqlConf: SQLConf, options: Map[String, String]): Map[String, String] = {
+    Spark30HoodieParquetReader.getExtraProps(vectorized, sqlConf, options)
+  }
+
 }
