@@ -34,7 +34,11 @@ import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.config.metrics.*;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsPrometheusConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsDatadogConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
 
