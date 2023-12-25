@@ -23,6 +23,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapreduce._
 import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
+import org.apache.hudi.HoodieSparkUtils
 import org.apache.parquet.filter2.compat.FilterCompat
 import org.apache.parquet.filter2.predicate.FilterApi
 import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS
@@ -102,15 +103,26 @@ object Spark31HoodieParquetReader {
     // Try to push down filters when filter push-down is enabled.
     val pushed = if (enableParquetFilterPushDown) {
       val parquetSchema = footerFileMetaData.getSchema
-      val parquetFilters = new ParquetFilters(
-        parquetSchema,
-        pushDownDate,
-        pushDownTimestamp,
-        pushDownDecimal,
-        pushDownStringStartWith,
-        pushDownInFilterThreshold,
-        isCaseSensitive,
-        datetimeRebaseMode)
+      val parquetFilters = if (HoodieSparkUtils.gteqSpark3_1_3) {
+        createParquetFilters(
+          parquetSchema,
+          pushDownDate,
+          pushDownTimestamp,
+          pushDownDecimal,
+          pushDownStringStartWith,
+          pushDownInFilterThreshold,
+          isCaseSensitive,
+          datetimeRebaseMode)
+      } else {
+        createParquetFilters(
+          parquetSchema,
+          pushDownDate,
+          pushDownTimestamp,
+          pushDownDecimal,
+          pushDownStringStartWith,
+          pushDownInFilterThreshold,
+          isCaseSensitive)
+      }
       filters
         // Collects all converted Parquet filter predicates. Notice that not all predicates can be
         // converted (`ParquetFilters.createFilter` returns an `Option`). That's why a `flatMap`
@@ -191,6 +203,13 @@ object Spark31HoodieParquetReader {
       // There is no partition columns
       iter.map(unsafeProjection)
     }
+  }
+
+  private def createParquetFilters(args: Any*): ParquetFilters = {
+    // ParquetFilters bears a single ctor (in Spark 3.1)
+    val ctor = classOf[ParquetFilters].getConstructors.head
+    ctor.newInstance(args.map(_.asInstanceOf[AnyRef]): _*)
+      .asInstanceOf[ParquetFilters]
   }
 
 }
