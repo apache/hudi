@@ -188,7 +188,7 @@ public class HoodieMetadataWriteUtils {
                   .withDatadogApiKeySkipValidation(writeConfig.getDatadogApiKeySkipValidation())
                   .withDatadogPrefix(writeConfig.getDatadogMetricPrefix())
                   .withDatadogReportPeriodSeconds(writeConfig.getDatadogReportPeriodSeconds())
-                  .withDatadogTags(String.join(";", writeConfig.getDatadogMetricTags()))
+                  .withDatadogTags(String.join(",", writeConfig.getDatadogMetricTags()))
                   .withDatadogApiTimeoutSeconds(writeConfig.getDatadogApiTimeoutSeconds());
           if (writeConfig.getDatadogMetricHost() != null) {
             datadogConfig = datadogConfig.withDatadogHost(writeConfig.getDatadogMetricHost());
