@@ -18,14 +18,14 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
-import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
+import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.metrics.{HoodieMetricsConfig, HoodieMetricsDatadogConfig}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkRecordMerger, SparkDatasetMixin}
+import org.apache.hudi.{DataSourceWriteOptions, SparkDatasetMixin}
 import org.apache.spark.sql._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -38,7 +38,6 @@ import scala.collection.JavaConverters._
  * Tests on Spark DataSource for MOR table.
  */
 class TestMetricsReporter extends HoodieSparkClientTestBase with SparkDatasetMixin {
-
   var spark: SparkSession = null
   private val log = LoggerFactory.getLogger(classOf[TestMORDataSource])
   val commonOpts = Map(
@@ -49,13 +48,6 @@ class TestMetricsReporter extends HoodieSparkClientTestBase with SparkDatasetMix
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
-  val sparkOpts = Map(
-    HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[HoodieSparkRecordMerger].getName,
-    HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet"
-  )
-
-  val verificationCol: String = "driver"
-  val updatedVerificationVal: String = "driver_update"
 
   @BeforeEach override def setUp() {
     setTableName("hoodie_test")
@@ -83,7 +75,6 @@ class TestMetricsReporter extends HoodieSparkClientTestBase with SparkDatasetMix
     val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).asScala
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     val writeOpts: Map[String, String] = commonOpts ++ Map(
-      DataSourceReadOptions.ENABLE_HOODIE_FILE_INDEX.key -> "",
       DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
       HoodieMetadataConfig.ENABLE.key -> "true",
@@ -92,12 +83,11 @@ class TestMetricsReporter extends HoodieSparkClientTestBase with SparkDatasetMix
       HoodieMetricsDatadogConfig.API_KEY_SKIP_VALIDATION.key -> "true",
       HoodieMetricsDatadogConfig.METRIC_PREFIX_VALUE.key -> "hudi",
       HoodieMetricsDatadogConfig.API_SITE_VALUE.key -> "US",
-      HoodieMetricsDatadogConfig.API_KEY.key -> "dummykey",
-    )
+      HoodieMetricsDatadogConfig.API_KEY.key -> "dummykey")
+
     inputDF1.write.format("org.apache.hudi")
       .options(writeOpts)
       .mode(SaveMode.Overwrite)
       .save(basePath)
-
   }
 }
