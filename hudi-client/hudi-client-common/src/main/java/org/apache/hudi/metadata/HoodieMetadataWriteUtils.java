@@ -38,6 +38,7 @@ import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsPrometheusConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsDatadogConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
 
@@ -182,6 +183,22 @@ public class HoodieMetadataWriteUtils {
           builder.withProperties(prometheusConfig.getProps());
           break;
         case DATADOG:
+          HoodieMetricsDatadogConfig.Builder datadogConfig = HoodieMetricsDatadogConfig.newBuilder()
+                  .withDatadogApiKey(writeConfig.getDatadogApiKey())
+                  .withDatadogApiKeySkipValidation(writeConfig.getDatadogApiKeySkipValidation())
+                  .withDatadogPrefix(writeConfig.getDatadogMetricPrefix())
+                  .withDatadogReportPeriodSeconds(writeConfig.getDatadogReportPeriodSeconds())
+                  .withDatadogTags(String.join(",", writeConfig.getDatadogMetricTags()))
+                  .withDatadogApiTimeoutSeconds(writeConfig.getDatadogApiTimeoutSeconds());
+          if (writeConfig.getDatadogMetricHost() != null) {
+            datadogConfig = datadogConfig.withDatadogHost(writeConfig.getDatadogMetricHost());
+          }
+          if (writeConfig.getDatadogApiSite() != null) {
+            datadogConfig = datadogConfig.withDatadogApiSite(writeConfig.getDatadogApiSite().name());
+          }
+
+          builder.withProperties(datadogConfig.build().getProps());
+          break;
         case PROMETHEUS:
         case CONSOLE:
         case INMEMORY:
