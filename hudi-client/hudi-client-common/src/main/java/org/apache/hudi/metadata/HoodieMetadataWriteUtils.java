@@ -179,16 +179,20 @@ public class HoodieMetadataWriteUtils {
           builder.withProperties(prometheusConfig.getProps());
           break;
         case DATADOG:
-          HoodieMetricsDatadogConfig datadogConfig = HoodieMetricsDatadogConfig.newBuilder()
+          HoodieMetricsDatadogConfig.Builder datadogConfig = HoodieMetricsDatadogConfig.newBuilder()
                   .withDatadogApiKey(writeConfig.getDatadogApiKey())
                   .withDatadogApiKeySkipValidation(writeConfig.getDatadogApiKeySkipValidation())
-                  .withDatadogHost(writeConfig.getDatadogMetricHost())
                   .withDatadogPrefix(writeConfig.getDatadogMetricPrefix())
                   .withDatadogReportPeriodSeconds(writeConfig.getDatadogReportPeriodSeconds())
                   .withDatadogTags(String.join(";", writeConfig.getDatadogMetricTags()))
-                  .withDatadogApiTimeoutSeconds(writeConfig.getDatadogApiTimeoutSeconds())
-                  .build();
-          builder.withProperties(datadogConfig.getProps());
+                  .withDatadogApiTimeoutSeconds(writeConfig.getDatadogApiTimeoutSeconds());
+          if (writeConfig.getDatadogMetricHost() != null) {
+            datadogConfig = datadogConfig.withDatadogHost(writeConfig.getDatadogMetricHost());
+          } else if (writeConfig.getDatadogApiSite() != null) {
+            datadogConfig = datadogConfig.withDatadogApiSite(writeConfig.getDatadogApiSite().name());
+          }
+
+          builder.withProperties(datadogConfig.build().getProps());
           break;
         case PROMETHEUS:
         case CONSOLE:
