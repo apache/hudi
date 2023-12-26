@@ -134,7 +134,7 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
     Spark35HoodieParquetReader.getReader(file, requiredSchema, filters, sharedConf, extraProps)
   }
 
-  override def getExtraProps(vectorized: Boolean, sqlConf: SQLConf, options: Map[String, String]): Map[String,String] = {
-    Spark35HoodieParquetReader.getExtraProps(vectorized, sqlConf, options)
+  override def getExtraProps(vectorized: Boolean, sqlConf: SQLConf, options: Map[String, String], hadoopConf: Configuration): Map[String,String] = {
+    Spark35HoodieParquetReader.getExtraProps(vectorized, sqlConf, options, hadoopConf)
   }
 }

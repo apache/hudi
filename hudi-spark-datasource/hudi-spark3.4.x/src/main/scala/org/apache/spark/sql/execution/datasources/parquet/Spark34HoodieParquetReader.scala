@@ -54,7 +54,6 @@ object Spark34HoodieParquetReader {
         SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.defaultValueString).toBoolean
     )
     hadoopConf.setBoolean(SQLConf.PARQUET_INFER_TIMESTAMP_NTZ_ENABLED.key, sqlConf.parquetInferTimestampNTZEnabled)
-    hadoopConf.setBoolean(SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.key, sqlConf.legacyParquetNanosAsLong)
 
     val returningBatch = sqlConf.parquetVectorizedReaderEnabled &&
       options.getOrElse(FileFormat.OPTION_RETURNING_BATCH,

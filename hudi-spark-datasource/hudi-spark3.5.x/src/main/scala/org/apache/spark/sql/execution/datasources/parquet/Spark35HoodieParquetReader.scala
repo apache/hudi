@@ -36,7 +36,26 @@ import org.apache.spark.sql.types.StructType
 
 object Spark35HoodieParquetReader {
 
-  def getExtraProps(vectorized: Boolean, sqlConf: SQLConf, options: Map[String, String]): Map[String,String] = {
+  def getExtraProps(vectorized: Boolean,
+                    sqlConf: SQLConf,
+                    options: Map[String, String],
+                    hadoopConf: Configuration): Map[String,String] = {
+    //set hadoopconf
+    hadoopConf.set(ParquetInputFormat.READ_SUPPORT_CLASS, classOf[ParquetReadSupport].getName)
+    hadoopConf.set(SQLConf.SESSION_LOCAL_TIMEZONE.key, sqlConf.sessionLocalTimeZone)
+    hadoopConf.setBoolean(SQLConf.NESTED_SCHEMA_PRUNING_ENABLED.key, sqlConf.nestedSchemaPruningEnabled)
+    hadoopConf.setBoolean(SQLConf.CASE_SENSITIVE.key, sqlConf.caseSensitiveAnalysis)
+    hadoopConf.setBoolean(SQLConf.PARQUET_BINARY_AS_STRING.key, sqlConf.isParquetBinaryAsString)
+    hadoopConf.setBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP.key, sqlConf.isParquetINT96AsTimestamp)
+    // Using string value of this conf to preserve compatibility across spark versions. See [HUDI-5868]
+    hadoopConf.setBoolean(
+      SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.key,
+      sqlConf.getConfString(
+        SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.key,
+        SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.defaultValueString).toBoolean
+    )
+    hadoopConf.setBoolean(SQLConf.PARQUET_INFER_TIMESTAMP_NTZ_ENABLED.key, sqlConf.parquetInferTimestampNTZEnabled)
+
     val returningBatch = sqlConf.parquetVectorizedReaderEnabled &&
       options.getOrElse(FileFormat.OPTION_RETURNING_BATCH,
         throw new IllegalArgumentException(
@@ -70,6 +89,9 @@ object Spark35HoodieParquetReader {
                 filters: Seq[Filter],
                 sharedConf: Configuration,
                 extraProps: Map[String,String]): Iterator[InternalRow] = {
+    sharedConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, requiredSchema.json)
+    sharedConf.set(ParquetWriteSupport.SPARK_ROW_SCHEMA, requiredSchema.json)
+    ParquetWriteSupport.setSchema(requiredSchema, sharedConf)
     val enableVectorizedReader = extraProps("enableVectorizedReader").toBoolean
     val datetimeRebaseModeInRead = extraProps("datetimeRebaseModeInRead")
     val int96RebaseModeInRead = extraProps("int96RebaseModeInRead")
@@ -85,6 +107,7 @@ object Spark35HoodieParquetReader {
     val capacity = extraProps("capacity").toInt
     val returningBatch = extraProps("returningBatch").toBoolean
     val enableRecordFilter = extraProps("enableRecordFilter").toBoolean
+    val timeZoneId = Option(extraProps("timeZoneId"))
 
 
 
@@ -93,7 +116,7 @@ object Spark35HoodieParquetReader {
     val filePath = file.toPath
     val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
 
-    val schemaEvolutionUtils = new Spark35ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema, extraProps)
+    val schemaEvolutionUtils = new Spark35ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema)
 
     val fileFooter = if (enableVectorizedReader) {
       // When there are vectorized reads, we can avoid reading the footer twice by reading
@@ -151,7 +174,7 @@ object Spark35HoodieParquetReader {
 
     val attemptId = new TaskAttemptID(new TaskID(new JobID(), TaskType.MAP, 0), 0)
     val hadoopAttemptContext =
-      new TaskAttemptContextImpl(schemaEvolutionUtils.getHadoopConfClone(footerFileMetaData), attemptId)
+      new TaskAttemptContextImpl(schemaEvolutionUtils.getHadoopConfClone(footerFileMetaData, enableVectorizedReader), attemptId)
 
     // Try to push down filters when filter push-down is enabled.
     // Notice: This push-down is RowGroups level, not individual records.
@@ -223,7 +246,7 @@ object Spark35HoodieParquetReader {
         readerWithRowIndexes.initialize(split, hadoopAttemptContext)
 
         val fullSchema = toAttributes(requiredSchema)
-        val unsafeProjection = schemaEvolutionUtils.generateUnsafeProjection(fullSchema)
+        val unsafeProjection = schemaEvolutionUtils.generateUnsafeProjection(fullSchema, timeZoneId)
         // There is no partition columns
         iter.map(unsafeProjection)
 
