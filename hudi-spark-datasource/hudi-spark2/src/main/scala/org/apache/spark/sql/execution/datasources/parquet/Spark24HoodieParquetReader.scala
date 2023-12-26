@@ -44,7 +44,16 @@ import java.net.URI
 
 object Spark24HoodieParquetReader {
 
-  def getExtraProps(vectorized: Boolean, sqlConf: SQLConf, options: Map[String, String]): Map[String, String] = {
+  def getExtraProps(vectorized: Boolean,
+                    sqlConf: SQLConf,
+                    options: Map[String, String],
+                    hadoopConf: Configuration): Map[String, String] = {
+    //set hadoopconf
+    hadoopConf.set(ParquetInputFormat.READ_SUPPORT_CLASS, classOf[ParquetReadSupport].getName)
+    hadoopConf.set(SQLConf.SESSION_LOCAL_TIMEZONE.key, sqlConf.sessionLocalTimeZone)
+    hadoopConf.setBoolean(SQLConf.CASE_SENSITIVE.key, sqlConf.caseSensitiveAnalysis)
+    hadoopConf.setBoolean(SQLConf.PARQUET_BINARY_AS_STRING.key, sqlConf.isParquetBinaryAsString)
+    hadoopConf.setBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP.key, sqlConf.isParquetINT96AsTimestamp)
     val returningBatch = sqlConf.parquetVectorizedReaderEnabled &&
       options.getOrElse("returning_batch",
         throw new IllegalArgumentException(
@@ -74,6 +83,9 @@ object Spark24HoodieParquetReader {
                 filters: Seq[Filter],
                 sharedConf: Configuration,
                 extraProps: Map[String, String]): Iterator[InternalRow] = {
+    sharedConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, requiredSchema.json)
+    sharedConf.set(ParquetWriteSupport.SPARK_ROW_SCHEMA, requiredSchema.json)
+    ParquetWriteSupport.setSchema(requiredSchema, sharedConf)
     val enableVectorizedReader = extraProps("enableVectorizedReader").toBoolean
     val enableParquetFilterPushDown = extraProps("enableParquetFilterPushDown").toBoolean
     val pushDownDate = extraProps("pushDownDate").toBoolean
