@@ -32,6 +32,7 @@ import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
 import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Cast, UnsafeProjection}
+import org.apache.spark.sql.execution.datasources.Spark3ParquetSchemaEvolutionUtils.pruneInternalSchema
 import org.apache.spark.sql.execution.datasources.parquet.{HoodieParquetFileFormatHelper, ParquetReadSupport}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{AtomicType, DataType, StructField, StructType}
@@ -40,12 +41,11 @@ import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 
 abstract class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
                                                  filePath: Path,
-                                                 requiredSchema: StructType,
-                                                 extraProps: Map[String,String]) {
+                                                 requiredSchema: StructType) {
   // Fetch internal schema
   private lazy val internalSchemaStr: String = sharedConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA)
-  // Internal schema has to be pruned at this point
-  private lazy val querySchemaOption: util.Option[InternalSchema] = SerDeHelper.fromJson(internalSchemaStr)
+
+  private lazy val querySchemaOption: util.Option[InternalSchema] = pruneInternalSchema(internalSchemaStr, requiredSchema)
 
   var shouldUseInternalSchema: Boolean = !isNullOrEmpty(internalSchemaStr) && querySchemaOption.isPresent
 
@@ -121,8 +121,7 @@ abstract class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
 
   protected var typeChangeInfos: java.util.Map[Integer, Pair[DataType, DataType]] = null
 
-  def getHadoopConfClone(footerFileMetaData: FileMetaData): Configuration = {
-    val enableVectorizedReader = extraProps("enableVectorizedReader").toBoolean
+  def getHadoopConfClone(footerFileMetaData: FileMetaData, enableVectorizedReader: Boolean): Configuration = {
     // Clone new conf
     val hadoopAttemptConf = new Configuration(sharedConf)
     typeChangeInfos = if (shouldUseInternalSchema) {
@@ -151,12 +150,11 @@ abstract class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
     hadoopAttemptConf
   }
 
-  def generateUnsafeProjection(fullSchema: Seq[AttributeReference]): UnsafeProjection = {
+  def generateUnsafeProjection(fullSchema: Seq[AttributeReference], timeZoneId: Option[String]): UnsafeProjection = {
 
     if (typeChangeInfos.isEmpty) {
       GenerateUnsafeProjection.generate(fullSchema, fullSchema)
     } else {
-      val timeZoneId = Option(extraProps("timeZoneId"))
       // find type changed.
       val newSchema = new StructType(requiredSchema.fields.zipWithIndex.map { case (f, i) =>
         if (typeChangeInfos.containsKey(i)) {
@@ -178,4 +176,19 @@ abstract class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
 
   protected def toAttributes(schema: StructType): Seq[AttributeReference]
 
+}
+
+object Spark3ParquetSchemaEvolutionUtils {
+  def pruneInternalSchema(internalSchemaStr: String, requiredSchema: StructType): util.Option[InternalSchema] = {
+    if (!isNullOrEmpty(internalSchemaStr) ) {
+      val querySchemaOption = SerDeHelper.fromJson(internalSchemaStr)
+      if (querySchemaOption.isPresent && requiredSchema.nonEmpty) {
+        util.Option.of(SparkInternalSchemaConverter.convertAndPruneStructTypeToInternalSchema(requiredSchema, querySchemaOption.get()))
+      } else {
+        querySchemaOption
+      }
+    } else {
+      util.Option.empty()
+    }
+  }
 }

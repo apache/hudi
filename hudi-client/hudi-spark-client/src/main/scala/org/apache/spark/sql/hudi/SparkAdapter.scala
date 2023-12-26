@@ -223,5 +223,5 @@ trait SparkAdapter extends Serializable {
                        filters: Seq[Filter],
                        sharedConf: Configuration,
                        extraProps: Map[String, String]): Iterator[InternalRow]
-  def getExtraProps(vectorized: Boolean, sqlConf: SQLConf, options: Map[String, String]): Map[String,String]
+  def getExtraProps(vectorized: Boolean, sqlConf: SQLConf, options: Map[String, String], hadoopConf: Configuration): Map[String,String]
 }

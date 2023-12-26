@@ -236,14 +236,9 @@ object DefaultSource {
       Option(schema)
     }
 
-    //remove after implementing for all versions
-    val schemaEvolutionSupportedNewfgReader = !parameters.getOrDefault(SCHEMA_EVOLUTION_ENABLED.key(),
-      SCHEMA_EVOLUTION_ENABLED.defaultValue().toString).toBoolean || HoodieSparkUtils.gteqSpark3_2
-
     val useNewParquetFileFormat = parameters.getOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(),
       HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue().toString).toBoolean &&
       !metaClient.isMetadataTable && (globPaths == null || globPaths.isEmpty) &&
-      schemaEvolutionSupportedNewfgReader &&
       parameters.getOrElse(REALTIME_MERGE.key(), REALTIME_MERGE.defaultValue()).equalsIgnoreCase(REALTIME_PAYLOAD_COMBINE_OPT_VAL)
     if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
       new EmptyRelation(sqlContext, resolveSchema(metaClient, parameters, Some(schema)))

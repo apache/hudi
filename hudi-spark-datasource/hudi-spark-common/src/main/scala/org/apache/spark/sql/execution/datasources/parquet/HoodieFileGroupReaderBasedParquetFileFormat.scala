@@ -111,7 +111,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
 
     val requestedAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(requiredSchema, sanitizedTableName)
     val dataAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName)
-    val extraProps = spark.sparkContext.broadcast(sparkAdapter.getExtraProps(supportBatchResult, spark.sessionState.conf, options))
+    val extraProps = spark.sparkContext.broadcast(sparkAdapter.getExtraProps(supportBatchResult, spark.sessionState.conf, options, augmentedHadoopConf))
     val broadcastedHadoopConf = spark.sparkContext.broadcast(new SerializableConfiguration(augmentedHadoopConf))
     val broadcastedDataSchema =  spark.sparkContext.broadcast(dataAvroSchema)
     val broadcastedRequestedSchema =  spark.sparkContext.broadcast(requestedAvroSchema)
