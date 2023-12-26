@@ -136,18 +136,6 @@ public class ParquetUtils extends BaseFileUtils {
     return rowKeys;
   }
 
-  /**
-   * Fetch {@link HoodieKey}s from the given parquet file.
-   *
-   * @param filePath      The parquet file path.
-   * @param configuration configuration to build fs object
-   * @return {@link List} of {@link HoodieKey}s fetched from the parquet file
-   */
-  @Override
-  public List<HoodieKey> fetchHoodieKeys(Configuration configuration, Path filePath) {
-    return fetchHoodieKeys(configuration, filePath, Option.empty());
-  }
-
   @Override
   public ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, Path filePath) {
     return getHoodieKeyIterator(configuration, filePath, Option.empty());
@@ -180,23 +168,6 @@ public class ParquetUtils extends BaseFileUtils {
       return HoodieKeyIterator.getInstance(new ParquetReaderIterator<>(reader), keyGeneratorOpt);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read from Parquet file " + filePath, e);
-    }
-  }
-
-  /**
-   * Fetch {@link HoodieKey}s from the given parquet file.
-   *
-   * @param configuration   configuration to build fs object
-   * @param filePath        The parquet file path.
-   * @param keyGeneratorOpt instance of KeyGenerator.
-   * @return {@link List} of {@link HoodieKey}s fetched from the parquet file
-   */
-  @Override
-  public List<HoodieKey> fetchHoodieKeys(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    List<HoodieKey> hoodieKeys = new ArrayList<>();
-    try (ClosableIterator<HoodieKey> iterator = getHoodieKeyIterator(configuration, filePath, keyGeneratorOpt)) {
-      iterator.forEachRemaining(hoodieKeys::add);
-      return hoodieKeys;
     }
   }
 
@@ -443,57 +414,6 @@ public class ParquetUtils extends BaseFileUtils {
       return new BigDecimal(new BigInteger(((Binary) val).getBytesUnsafe()), scale);
     } else {
       throw new UnsupportedOperationException(String.format("Unsupported value type (%s)", val.getClass().getName()));
-    }
-  }
-
-  // -------------------------------------------------------------------------
-  //  Inner Class
-  // -------------------------------------------------------------------------
-
-  /**
-   * An iterator that can apply the given function {@code func} to transform records
-   * from the underneath record iterator to hoodie keys.
-   */
-  private static class HoodieKeyIterator implements ClosableIterator<HoodieKey> {
-    private final ClosableIterator<GenericRecord> nestedItr;
-    private final Function<GenericRecord, HoodieKey> func;
-
-    public static HoodieKeyIterator getInstance(ClosableIterator<GenericRecord> nestedItr, Option<BaseKeyGenerator> keyGenerator) {
-      return new HoodieKeyIterator(nestedItr, keyGenerator);
-    }
-
-    private HoodieKeyIterator(ClosableIterator<GenericRecord> nestedItr, Option<BaseKeyGenerator> keyGenerator) {
-      this.nestedItr = nestedItr;
-      if (keyGenerator.isPresent()) {
-        this.func = retVal -> {
-          String recordKey = keyGenerator.get().getRecordKey(retVal);
-          String partitionPath = keyGenerator.get().getPartitionPath(retVal);
-          return new HoodieKey(recordKey, partitionPath);
-        };
-      } else {
-        this.func = retVal -> {
-          String recordKey = retVal.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-          String partitionPath = retVal.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
-          return new HoodieKey(recordKey, partitionPath);
-        };
-      }
-    }
-
-    @Override
-    public void close() {
-      if (this.nestedItr != null) {
-        this.nestedItr.close();
-      }
-    }
-
-    @Override
-    public boolean hasNext() {
-      return this.nestedItr.hasNext();
-    }
-
-    @Override
-    public HoodieKey next() {
-      return this.func.apply(this.nestedItr.next());
     }
   }
 }

@@ -25,6 +25,7 @@ import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -34,10 +35,12 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 /**
  * Utils for Hudi base file.
@@ -124,6 +127,35 @@ public abstract class BaseFileUtils {
   }
 
   /**
+   * Fetch {@link HoodieKey}s from the given data file.
+   *
+   * @param configuration configuration to build fs object
+   * @param filePath      The data file path
+   * @return {@link List} of {@link HoodieKey}s fetched from the data file
+   */
+  public List<HoodieKey> fetchHoodieKeys(Configuration configuration, Path filePath) {
+    return fetchHoodieKeys(configuration, filePath, Option.empty());
+  }
+
+  /**
+   * Fetch {@link HoodieKey}s from the given data file.
+   *
+   * @param configuration   configuration to build fs object
+   * @param filePath        The data file path
+   * @param keyGeneratorOpt instance of KeyGenerator.
+   * @return {@link List} of {@link HoodieKey}s fetched from the data file
+   */
+  public List<HoodieKey> fetchHoodieKeys(Configuration configuration,
+                                         Path filePath,
+                                         Option<BaseKeyGenerator> keyGeneratorOpt) {
+    List<HoodieKey> hoodieKeys = new ArrayList<>();
+    try (ClosableIterator<HoodieKey> iterator = getHoodieKeyIterator(configuration, filePath, keyGeneratorOpt)) {
+      iterator.forEachRemaining(hoodieKeys::add);
+      return hoodieKeys;
+    }
+  }
+
+  /**
    * Read the data file
    * NOTE: This literally reads the entire file contents, thus should be used with caution.
    * @param configuration Configuration
@@ -170,14 +202,6 @@ public abstract class BaseFileUtils {
   public abstract Set<String> filterRowKeys(Configuration configuration, Path filePath, Set<String> filter);
 
   /**
-   * Fetch {@link HoodieKey}s from the given data file.
-   * @param configuration configuration to build fs object
-   * @param filePath      The data file path
-   * @return {@link List} of {@link HoodieKey}s fetched from the data file
-   */
-  public abstract List<HoodieKey> fetchHoodieKeys(Configuration configuration, Path filePath);
-
-  /**
    * Provides a closable iterator for reading the given data file.
    * @param configuration configuration to build fs object
    * @param filePath      The data file path
@@ -195,15 +219,6 @@ public abstract class BaseFileUtils {
   public abstract ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, Path filePath);
 
   /**
-   * Fetch {@link HoodieKey}s from the given data file.
-   * @param configuration configuration to build fs object
-   * @param filePath      The data file path
-   * @param keyGeneratorOpt instance of KeyGenerator.
-   * @return {@link List} of {@link HoodieKey}s fetched from the data file
-   */
-  public abstract List<HoodieKey> fetchHoodieKeys(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt);
-
-  /**
    * Read the Avro schema of the data file.
    * @param configuration Configuration
    * @param filePath The data file path
@@ -215,4 +230,55 @@ public abstract class BaseFileUtils {
    * @return The subclass's {@link HoodieFileFormat}.
    */
   public abstract HoodieFileFormat getFormat();
+
+  // -------------------------------------------------------------------------
+  //  Inner Class
+  // -------------------------------------------------------------------------
+
+  /**
+   * An iterator that can apply the given function {@code func} to transform records
+   * from the underneath record iterator to hoodie keys.
+   */
+  protected static class HoodieKeyIterator implements ClosableIterator<HoodieKey> {
+    private final ClosableIterator<GenericRecord> nestedItr;
+    private final Function<GenericRecord, HoodieKey> func;
+
+    public static HoodieKeyIterator getInstance(ClosableIterator<GenericRecord> nestedItr, Option<BaseKeyGenerator> keyGenerator) {
+      return new HoodieKeyIterator(nestedItr, keyGenerator);
+    }
+
+    private HoodieKeyIterator(ClosableIterator<GenericRecord> nestedItr, Option<BaseKeyGenerator> keyGenerator) {
+      this.nestedItr = nestedItr;
+      if (keyGenerator.isPresent()) {
+        this.func = retVal -> {
+          String recordKey = keyGenerator.get().getRecordKey(retVal);
+          String partitionPath = keyGenerator.get().getPartitionPath(retVal);
+          return new HoodieKey(recordKey, partitionPath);
+        };
+      } else {
+        this.func = retVal -> {
+          String recordKey = retVal.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+          String partitionPath = retVal.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+          return new HoodieKey(recordKey, partitionPath);
+        };
+      }
+    }
+
+    @Override
+    public void close() {
+      if (this.nestedItr != null) {
+        this.nestedItr.close();
+      }
+    }
+
+    @Override
+    public boolean hasNext() {
+      return this.nestedItr.hasNext();
+    }
+
+    @Override
+    public HoodieKey next() {
+      return this.func.apply(this.nestedItr.next());
+    }
+  }
 }

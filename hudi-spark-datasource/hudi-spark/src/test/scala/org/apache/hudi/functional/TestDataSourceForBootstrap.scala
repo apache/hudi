@@ -19,7 +19,7 @@ package org.apache.hudi.functional
 
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider
-import org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector
+import org.apache.hudi.client.bootstrap.selector.{FullRecordBootstrapModeSelector, MetadataOnlyBootstrapModeSelector}
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
@@ -75,6 +75,8 @@ class TestDataSourceForBootstrap {
   val verificationCol: String = "driver"
   val originalVerificationVal: String = "driver_0"
   val updatedVerificationVal: String = "driver_update"
+  val metadataOnlySelector: String = classOf[MetadataOnlyBootstrapModeSelector].getCanonicalName
+  val fullRecordSelector: String = classOf[FullRecordBootstrapModeSelector].getCanonicalName
 
   /**
    * TODO rebase onto existing test base-class to avoid duplication
@@ -107,7 +109,7 @@ class TestDataSourceForBootstrap {
     val timestamp = Instant.now.toEpochMilli
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
 
-    val sourceDF = TestBootstrap.generateTestRawTripDataset(timestamp, 0, numRecords, Collections.emptyList(), jsc,
+    val sourceDF = TestBootstrapBase.generateTestRawTripDataset(timestamp, 0, numRecords, Collections.emptyList(), jsc,
       spark.sqlContext)
 
     // Write source data non-partitioned
@@ -137,7 +139,7 @@ class TestDataSourceForBootstrap {
 
     // Perform upsert
     val updateTimestamp = Instant.now.toEpochMilli
-    val updateDF = TestBootstrap.generateTestRawTripDataset(updateTimestamp, 0, numRecordsUpdate,
+    val updateDF = TestBootstrapBase.generateTestRawTripDataset(updateTimestamp, 0, numRecordsUpdate,
       Collections.emptyList(), jsc, spark.sqlContext)
 
     updateDF.write
@@ -166,17 +168,17 @@ class TestDataSourceForBootstrap {
 
   @ParameterizedTest
   @CsvSource(value = Array(
-    "METADATA_ONLY,AVRO",
+    "org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector,AVRO",
     // TODO(HUDI-5807) enable for spark native records
-    /* "METADATA_ONLY,SPARK", */
-    "FULL_RECORD,AVRO",
-    "FULL_RECORD,SPARK"
+    /* "org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector,SPARK", */
+    "org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector,AVRO",
+    "org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector,SPARK"
   ))
-  def testMetadataBootstrapCOWHiveStylePartitioned(bootstrapMode: String, recordType: HoodieRecordType): Unit = {
+  def testMetadataBootstrapCOWHiveStylePartitioned(bootstrapSelector: String, recordType: HoodieRecordType): Unit = {
     val timestamp = Instant.now.toEpochMilli
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
 
-    val sourceDF = TestBootstrap.generateTestRawTripDataset(timestamp, 0, numRecords, partitionPaths.asJava, jsc,
+    val sourceDF = TestBootstrapBase.generateTestRawTripDataset(timestamp, 0, numRecords, partitionPaths.asJava, jsc,
       spark.sqlContext)
 
     // Write source data hive style partitioned
@@ -187,9 +189,9 @@ class TestDataSourceForBootstrap {
       .save(srcPath)
 
     val readOpts = commonOpts ++ Map(
-        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "datestr",
-        DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "true",
-        HoodieBootstrapConfig.PARTITION_SELECTOR_REGEX_MODE.key -> bootstrapMode
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "datestr",
+      DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "true",
+      HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME.key -> bootstrapSelector
     )
 
     // Perform bootstrap
@@ -201,10 +203,10 @@ class TestDataSourceForBootstrap {
     // check marked directory clean up
     assert(!fs.exists(new Path(basePath, ".hoodie/.temp/00000000000001")))
 
-    val expectedDF = bootstrapMode match {
-      case "METADATA_ONLY" =>
+    val expectedDF = bootstrapSelector match {
+      case `metadataOnlySelector` =>
         sort(sourceDF)
-      case "FULL_RECORD" =>
+      case `fullRecordSelector` =>
         sort(sourceDF)
     }
 
@@ -218,7 +220,7 @@ class TestDataSourceForBootstrap {
 
     // Perform upsert
     val updateTimestamp = Instant.now.toEpochMilli
-    val updateDF = TestBootstrap.generateTestRawTripDataset(updateTimestamp, 0, numRecordsUpdate, partitionPaths.asJava,
+    val updateDF = TestBootstrapBase.generateTestRawTripDataset(updateTimestamp, 0, numRecordsUpdate, partitionPaths.asJava,
       jsc, spark.sqlContext)
 
     val writeOpts = commonOpts ++ getRecordTypeOpts(recordType)
@@ -257,7 +259,7 @@ class TestDataSourceForBootstrap {
     val timestamp = Instant.now.toEpochMilli
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
 
-    val sourceDF = TestBootstrap.generateTestRawTripDataset(timestamp, 0, numRecords, partitionPaths.asJava, jsc,
+    val sourceDF = TestBootstrapBase.generateTestRawTripDataset(timestamp, 0, numRecords, partitionPaths.asJava, jsc,
       spark.sqlContext)
 
     sourceDF.write.format("parquet")
@@ -302,7 +304,7 @@ class TestDataSourceForBootstrap {
 
     // Perform upsert based on the source data
     val updateTimestamp = Instant.now.toEpochMilli
-    val updateDF2 = TestBootstrap.generateTestRawTripDataset(updateTimestamp, 0, numRecordsUpdate, partitionPaths.asJava,
+    val updateDF2 = TestBootstrapBase.generateTestRawTripDataset(updateTimestamp, 0, numRecordsUpdate, partitionPaths.asJava,
       jsc, spark.sqlContext)
 
     updateDF2.write
@@ -334,7 +336,7 @@ class TestDataSourceForBootstrap {
     val timestamp = Instant.now.toEpochMilli
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
     // Prepare source data
-    val sourceDF = TestBootstrap.generateTestRawTripDataset(timestamp, 0, numRecords, partitionPaths.asJava, jsc, spark.sqlContext)
+    val sourceDF = TestBootstrapBase.generateTestRawTripDataset(timestamp, 0, numRecords, partitionPaths.asJava, jsc, spark.sqlContext)
     sourceDF.write.format("parquet")
       .partitionBy("datestr")
       .mode(SaveMode.Overwrite)
@@ -360,7 +362,7 @@ class TestDataSourceForBootstrap {
 
     // Perform upsert with clustering
     val updateTimestamp = Instant.now.toEpochMilli
-    val updateDF = TestBootstrap.generateTestRawTripDataset(updateTimestamp, 0, numRecordsUpdate, partitionPaths.asJava, jsc, spark.sqlContext)
+    val updateDF = TestBootstrapBase.generateTestRawTripDataset(updateTimestamp, 0, numRecordsUpdate, partitionPaths.asJava, jsc, spark.sqlContext)
 
     updateDF.write
       .format("hudi")
@@ -400,7 +402,7 @@ class TestDataSourceForBootstrap {
     val timestamp = Instant.now.toEpochMilli
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
 
-    val sourceDF = TestBootstrap.generateTestRawTripDataset(timestamp, 0, numRecords, partitionPaths.asJava, jsc,
+    val sourceDF = TestBootstrapBase.generateTestRawTripDataset(timestamp, 0, numRecords, partitionPaths.asJava, jsc,
       spark.sqlContext)
 
     sourceDF.write.format("parquet")
@@ -428,7 +430,7 @@ class TestDataSourceForBootstrap {
 
     // Perform upsert
     val updateTimestamp = Instant.now.toEpochMilli
-    val updateDF = TestBootstrap.generateTestRawTripDataset(updateTimestamp, 0, numRecordsUpdate, partitionPaths.asJava,
+    val updateDF = TestBootstrapBase.generateTestRawTripDataset(updateTimestamp, 0, numRecordsUpdate, partitionPaths.asJava,
       jsc, spark.sqlContext)
 
     updateDF.write
@@ -467,7 +469,7 @@ class TestDataSourceForBootstrap {
     val timestamp = Instant.now.toEpochMilli
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
 
-    val sourceDF = TestBootstrap.generateTestRawTripDataset(timestamp, 0, numRecords, partitionPaths.asJava, jsc,
+    val sourceDF = TestBootstrapBase.generateTestRawTripDataset(timestamp, 0, numRecords, partitionPaths.asJava, jsc,
       spark.sqlContext)
 
     sourceDF.write.format("parquet")
@@ -523,7 +525,7 @@ class TestDataSourceForBootstrap {
 
     // Perform upsert based on the source data
     val updateTimestamp = Instant.now.toEpochMilli
-    val updateDF2 = TestBootstrap.generateTestRawTripDataset(updateTimestamp, 0, numRecordsUpdate,
+    val updateDF2 = TestBootstrapBase.generateTestRawTripDataset(updateTimestamp, 0, numRecordsUpdate,
       partitionPaths.asJava, jsc, spark.sqlContext)
 
     updateDF2.write
@@ -553,7 +555,7 @@ class TestDataSourceForBootstrap {
     val timestamp = Instant.now.toEpochMilli
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
 
-    val sourceDF = TestBootstrap.generateTestRawTripDataset(timestamp, 0, numRecords, partitionPaths.asJava, jsc,
+    val sourceDF = TestBootstrapBase.generateTestRawTripDataset(timestamp, 0, numRecords, partitionPaths.asJava, jsc,
       spark.sqlContext)
 
     sourceDF.write.format("parquet")
@@ -591,7 +593,7 @@ class TestDataSourceForBootstrap {
 
     // Perform upsert
     val updateTimestamp = Instant.now.toEpochMilli
-    val updateDF = TestBootstrap.generateTestRawTripDataset(updateTimestamp, 0, numRecordsUpdate, partitionPaths.asJava,
+    val updateDF = TestBootstrapBase.generateTestRawTripDataset(updateTimestamp, 0, numRecordsUpdate, partitionPaths.asJava,
       jsc, spark.sqlContext)
 
     updateDF.write
@@ -629,7 +631,8 @@ class TestDataSourceForBootstrap {
 
     val commitInstantTime1: String = HoodieDataSourceHelpers.latestCommit(fs, basePath)
     val expectedBootstrapInstant =
-      if ("FULL_RECORD".equals(extraOpts.getOrElse(HoodieBootstrapConfig.PARTITION_SELECTOR_REGEX_MODE.key, HoodieBootstrapConfig.PARTITION_SELECTOR_REGEX_MODE.defaultValue)))
+      if (fullRecordSelector.equals(extraOpts.getOrElse(HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME.key,
+        HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME.defaultValue)))
         HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS
       else HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS
     assertEquals(expectedBootstrapInstant, commitInstantTime1)
