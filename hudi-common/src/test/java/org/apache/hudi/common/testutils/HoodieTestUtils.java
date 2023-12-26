@@ -78,6 +78,28 @@ public class HoodieTestUtils {
     return init(getDefaultHadoopConf(), basePath, tableType, props);
   }
 
+  public static HoodieTableMetaClient init(String basePath,
+                                           HoodieTableType tableType,
+                                           String bootstrapBasePath,
+                                           boolean bootstrapIndexEnable,
+                                           String keyGenerator,
+                                           String partitionFieldConfigValue,
+                                           HoodieFileFormat fileFormat) throws IOException {
+    Properties props = new Properties();
+    props.setProperty(HoodieTableConfig.BOOTSTRAP_BASE_PATH.key(), bootstrapBasePath);
+    props.put(HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE.key(), bootstrapIndexEnable);
+    props.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), fileFormat.name());
+    if (keyGenerator != null) {
+      props.put("hoodie.datasource.write.keygenerator.class", keyGenerator);
+    }
+    if (keyGenerator != null
+        && !keyGenerator.equals("org.apache.hudi.keygen.NonpartitionedKeyGenerator")) {
+      props.put("hoodie.datasource.write.partitionpath.field", partitionFieldConfigValue);
+      props.put(HoodieTableConfig.PARTITION_FIELDS.key(), partitionFieldConfigValue);
+    }
+    return init(getDefaultHadoopConf(), basePath, tableType, props);
+  }
+
   public static HoodieTableMetaClient init(String basePath, HoodieFileFormat baseFileFormat) throws IOException {
     return init(getDefaultHadoopConf(), basePath, HoodieTableType.COPY_ON_WRITE, baseFileFormat);
   }
@@ -140,9 +162,13 @@ public class HoodieTestUtils {
             .setPayloadClass(HoodieAvroPayload.class);
 
     String keyGen = properties.getProperty("hoodie.datasource.write.keygenerator.class");
+    builder.setKeyGeneratorClassProp(keyGen);
     if (!Objects.equals(keyGen, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")) {
-      builder.setPartitionFields("some_nonexistent_field");
+      builder.setPartitionFields(properties.getProperty(
+          "hoodie.datasource.write.partitionpath.field", "some_nonexistent_field"));
     }
+    builder.setRecordKeyFields(properties.getProperty(
+        "hoodie.datasource.write.recordkey.field", "_row_key"));
 
     Properties processedProperties = builder.fromProperties(properties).build();
 
