@@ -43,7 +43,23 @@ import java.net.URI
 
 object Spark33HoodieParquetReader {
 
-  def getExtraProps(vectorized: Boolean, sqlConf: SQLConf, options: Map[String, String]): Map[String, String] = {
+  def getExtraProps(vectorized: Boolean,
+                    sqlConf: SQLConf,
+                    options: Map[String, String],
+                    hadoopConf: Configuration): Map[String, String] = {
+    //set hadoopconf
+    hadoopConf.set(ParquetInputFormat.READ_SUPPORT_CLASS, classOf[ParquetReadSupport].getName)
+    hadoopConf.set(SQLConf.SESSION_LOCAL_TIMEZONE.key, sqlConf.sessionLocalTimeZone)
+    hadoopConf.setBoolean(SQLConf.NESTED_SCHEMA_PRUNING_ENABLED.key, sqlConf.nestedSchemaPruningEnabled)
+    hadoopConf.setBoolean(SQLConf.CASE_SENSITIVE.key, sqlConf.caseSensitiveAnalysis)
+    hadoopConf.setBoolean(SQLConf.PARQUET_BINARY_AS_STRING.key, sqlConf.isParquetBinaryAsString)
+    hadoopConf.setBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP.key, sqlConf.isParquetINT96AsTimestamp)
+    // Using string value of this conf to preserve compatibility across spark versions. See [HUDI-5868]
+    hadoopConf.setBoolean(
+      "spark.sql.legacy.parquet.nanosAsLong",
+      sqlConf.getConfString("spark.sql.legacy.parquet.nanosAsLong", "false").toBoolean
+    )
+
     val returningBatch = sqlConf.parquetVectorizedReaderEnabled &&
       options.getOrElse("returning_batch",
         throw new IllegalArgumentException(
@@ -67,7 +83,8 @@ object Spark33HoodieParquetReader {
       "enableOffHeapColumnVector" -> sqlConf.offHeapColumnVectorEnabled.toString,
       "capacity" -> sqlConf.parquetVectorizedReaderBatchSize.toString,
       "returningBatch" -> returningBatch.toString,
-      "enableRecordFilter" -> sqlConf.parquetRecordFilterEnabled.toString
+      "enableRecordFilter" -> sqlConf.parquetRecordFilterEnabled.toString,
+      "timeZoneId" -> sqlConf.sessionLocalTimeZone
     )
   }
 
@@ -76,6 +93,9 @@ object Spark33HoodieParquetReader {
                 filters: Seq[Filter],
                 sharedConf: Configuration,
                 extraProps: Map[String, String]): Iterator[InternalRow] = {
+    sharedConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, requiredSchema.json)
+    sharedConf.set(ParquetWriteSupport.SPARK_ROW_SCHEMA, requiredSchema.json)
+    ParquetWriteSupport.setSchema(requiredSchema, sharedConf)
     val enableVectorizedReader = extraProps("enableVectorizedReader").toBoolean
     val datetimeRebaseModeInRead = extraProps("datetimeRebaseModeInRead")
     val int96RebaseModeInRead = extraProps("int96RebaseModeInRead")
@@ -91,13 +111,14 @@ object Spark33HoodieParquetReader {
     val capacity = extraProps("capacity").toInt
     val returningBatch = extraProps("returningBatch").toBoolean
     val enableRecordFilter = extraProps("enableRecordFilter").toBoolean
+    val timeZoneId = Option(extraProps("timeZoneId"))
 
     assert(file.partitionValues.numFields == 0)
 
     val filePath = new Path(new URI(file.filePath))
     val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
 
-    val schemaEvolutionUtils = new Spark33ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema, extraProps)
+    val schemaEvolutionUtils = new Spark33ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema)
 
     lazy val footerFileMetaData =
       ParquetFooterReader.readFooter(sharedConf, filePath, SKIP_ROW_GROUPS).getFileMetaData
@@ -147,7 +168,7 @@ object Spark33HoodieParquetReader {
 
     val attemptId = new TaskAttemptID(new TaskID(new JobID(), TaskType.MAP, 0), 0)
     val hadoopAttemptContext =
-      new TaskAttemptContextImpl(schemaEvolutionUtils.getHadoopConfClone(footerFileMetaData), attemptId)
+      new TaskAttemptContextImpl(schemaEvolutionUtils.getHadoopConfClone(footerFileMetaData, enableVectorizedReader), attemptId)
 
     // Try to push down filters when filter push-down is enabled.
     // Notice: This push-down is RowGroups level, not individual records.
@@ -216,7 +237,7 @@ object Spark33HoodieParquetReader {
         reader.initialize(split, hadoopAttemptContext)
 
         val fullSchema = requiredSchema.toAttributes
-        val unsafeProjection = schemaEvolutionUtils.generateUnsafeProjection(fullSchema)
+        val unsafeProjection = schemaEvolutionUtils.generateUnsafeProjection(fullSchema, timeZoneId)
 
         // There is no partition columns
         iter.map(unsafeProjection)
