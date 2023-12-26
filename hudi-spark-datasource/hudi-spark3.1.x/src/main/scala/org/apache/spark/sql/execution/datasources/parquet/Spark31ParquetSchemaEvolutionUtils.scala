@@ -31,9 +31,8 @@ import java.time.ZoneId
 
 class Spark31ParquetSchemaEvolutionUtils(sharedConf: Configuration,
                                          filePath: Path,
-                                         requiredSchema: StructType,
-                                         extraProps: Map[String,String]) extends
-  Spark3ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema, extraProps) {
+                                         requiredSchema: StructType) extends
+  Spark3ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema) {
 
 
   override protected def toAttributes(schema: StructType): Seq[AttributeReference] = {

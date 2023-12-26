@@ -81,6 +81,7 @@ object Spark30HoodieParquetReader {
                 sharedConf: Configuration,
                 extraProps: Map[String, String]): Iterator[InternalRow] = {
     sharedConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, requiredSchema.json)
+    sharedConf.set(ParquetWriteSupport.SPARK_ROW_SCHEMA, requiredSchema.json)
     ParquetWriteSupport.setSchema(requiredSchema, sharedConf)
     val enableVectorizedReader = extraProps("enableVectorizedReader").toBoolean
     val enableParquetFilterPushDown = extraProps("enableParquetFilterPushDown").toBoolean
