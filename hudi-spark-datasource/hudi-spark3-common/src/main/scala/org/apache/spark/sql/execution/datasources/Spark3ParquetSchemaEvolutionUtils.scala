@@ -32,17 +32,16 @@ import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
 import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Cast, UnsafeProjection}
-import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.execution.datasources.parquet.{HoodieParquetFileFormatHelper, ParquetReadSupport}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{AtomicType, DataType, StructField, StructType}
 
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 
-class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
-                                        filePath: Path,
-                                        requiredSchema: StructType,
-                                        extraProps: Map[String,String]) {
+abstract class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
+                                                 filePath: Path,
+                                                 requiredSchema: StructType,
+                                                 extraProps: Map[String,String]) {
   // Fetch internal schema
   private lazy val internalSchemaStr: String = sharedConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA)
   // Internal schema has to be pruned at this point
@@ -164,7 +163,7 @@ class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
           StructField(f.name, typeChangeInfos.get(i).getRight, f.nullable, f.metadata)
         } else f
       })
-      val newFullSchema = DataTypeUtils.toAttributes(newSchema)
+      val newFullSchema = toAttributes(newSchema)
       val castSchema = newFullSchema.zipWithIndex.map { case (attr, i) =>
         if (typeChangeInfos.containsKey(i)) {
           val srcType = typeChangeInfos.get(i).getRight
@@ -176,5 +175,7 @@ class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
       GenerateUnsafeProjection.generate(castSchema, newFullSchema)
     }
   }
+
+  protected def toAttributes(schema: StructType): Seq[AttributeReference]
 
 }

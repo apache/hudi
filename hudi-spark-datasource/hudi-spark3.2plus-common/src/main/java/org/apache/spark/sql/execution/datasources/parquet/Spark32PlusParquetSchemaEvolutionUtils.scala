@@ -27,10 +27,10 @@ import org.apache.spark.sql.types.StructType
 
 import java.time.ZoneId
 
-class Spark32PlusParquetSchemaEvolutionUtils(sharedConf: Configuration,
-                                             filePath: Path,
-                                             requiredSchema: StructType,
-                                             extraProps: Map[String,String]) extends
+abstract class Spark32PlusParquetSchemaEvolutionUtils(sharedConf: Configuration,
+                                                      filePath: Path,
+                                                      requiredSchema: StructType,
+                                                      extraProps: Map[String,String]) extends
   Spark3ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema, extraProps) {
 
   def buildVectorizedReader(convertTz: Option[ZoneId],
