@@ -189,6 +189,15 @@ public class HoodieSyncConfig extends HoodieConfig {
           + "`false`, the meta sync executes a full partition sync operation when partitions are "
           + "lost.");
 
+  public static final ConfigProperty<Boolean> META_SYNC_NO_PARTITION_METADATA = ConfigProperty
+      .key("hoodie.meta.sync.no_partition_metadata")
+      .defaultValue(false)
+      .sinceVersion("1.0.0")
+      .markAdvanced()
+      .withDocumentation("If true, the partition metadata will not be synced to the metastore. "
+          + "This is useful when the partition metadata is large, and the partition info can be "
+          + "obtained from Hudi's internal metadata table. Note, " + HoodieMetadataConfig.ENABLE + " must be set to true.");
+
   private Configuration hadoopConf;
 
   public HoodieSyncConfig(Properties props) {
@@ -220,6 +229,10 @@ public class HoodieSyncConfig extends HoodieConfig {
 
   public String getAbsoluteBasePath() {
     return getString(META_SYNC_BASE_PATH);
+  }
+
+  public Boolean shouldNotSyncPartitionMetadata() {
+    return getBooleanOrDefault(META_SYNC_NO_PARTITION_METADATA);
   }
 
   @Override
@@ -256,6 +269,9 @@ public class HoodieSyncConfig extends HoodieConfig {
             + "lost.")
     public Boolean syncIncremental;
 
+    @Parameter(names = {"--sync-no-partition-metadata"}, description = "do not sync partition metadata info to the catalog")
+    public Boolean shouldNotSyncPartitionMetadata;
+
     @Parameter(names = {"--help", "-h"}, help = true)
     public boolean help = false;
 
@@ -276,6 +292,7 @@ public class HoodieSyncConfig extends HoodieConfig {
       props.setPropertyIfNonNull(META_SYNC_CONDITIONAL_SYNC.key(), isConditionalSync);
       props.setPropertyIfNonNull(META_SYNC_SPARK_VERSION.key(), sparkVersion);
       props.setPropertyIfNonNull(META_SYNC_INCREMENTAL.key(), syncIncremental);
+      props.setPropertyIfNonNull(META_SYNC_NO_PARTITION_METADATA.key(), shouldNotSyncPartitionMetadata);
       return props;
     }
   }

@@ -50,6 +50,8 @@ import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STR
  * {@link #hasNext} method is called.
  */
 public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupRecordBuffer<T> {
+  public static final String ROW_INDEX_COLUMN_NAME = "row_index";
+  public static final String ROW_INDEX_TEMPORARY_COLUMN_NAME = "_tmp_metadata_" + ROW_INDEX_COLUMN_NAME;
   private long nextRecordPosition = 0L;
 
   public HoodiePositionBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
@@ -169,6 +171,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
     // Handle merging.
     while (baseFileIterator.hasNext()) {
       T baseRecord = baseFileIterator.next();
+      nextRecordPosition = readerContext.extractRecordPosition(baseRecord, readerSchema, ROW_INDEX_COLUMN_NAME, nextRecordPosition);
       Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(nextRecordPosition++);
 
       Map<String, Object> metadata = readerContext.generateMetadataForRecord(

@@ -84,13 +84,13 @@ public class SparkMetadataWriterUtils {
       HoodieBaseFile baseFile = fileSlice.getBaseFile().get();
       String filename = baseFile.getFileName();
       long fileSize = baseFile.getFileSize();
-      Path baseFilePath = new Path(basePath, partition + Path.SEPARATOR + filename);
+      Path baseFilePath = filePath(basePath, partition, filename);
       buildColumnRangeMetadata(metaClient, readerSchema, functionalIndex, columnToIndex, sqlContext, columnRangeMetadataList, fileSize, baseFilePath);
     }
     // Handle log files
     fileSlice.getLogFiles().forEach(logFile -> {
       String fileName = logFile.getFileName();
-      Path logFilePath = new Path(basePath, partition + Path.SEPARATOR + fileName);
+      Path logFilePath = filePath(basePath, partition, fileName);
       long fileSize = logFile.getFileSize();
       buildColumnRangeMetadata(metaClient, readerSchema, functionalIndex, columnToIndex, sqlContext, columnRangeMetadataList, fileSize, logFilePath);
     });
@@ -113,7 +113,7 @@ public class SparkMetadataWriterUtils {
     if (fileSlice.getBaseFile().isPresent()) {
       HoodieBaseFile baseFile = fileSlice.getBaseFile().get();
       String filename = baseFile.getFileName();
-      Path baseFilePath = new Path(basePath, partition + Path.SEPARATOR + filename);
+      Path baseFilePath = filePath(basePath, partition, filename);
       buildBloomFilterMetadata(
           metaClient,
           readerSchema,
@@ -129,7 +129,7 @@ public class SparkMetadataWriterUtils {
     // Handle log files
     fileSlice.getLogFiles().forEach(logFile -> {
       String fileName = logFile.getFileName();
-      Path logFilePath = new Path(basePath, partition + Path.SEPARATOR + fileName);
+      Path logFilePath = filePath(basePath, partition, fileName);
       buildBloomFilterMetadata(
           metaClient,
           readerSchema,
@@ -238,5 +238,13 @@ public class SparkMetadataWriterUtils {
         Arrays.stream(df.columns())
             .filter(c -> !HOODIE_META_COLUMNS.contains(c))
             .map(df::col).toArray(Column[]::new));
+  }
+
+  private static Path filePath(String basePath, String partition, String filename) {
+    if (partition.isEmpty()) {
+      return new Path(basePath, filename);
+    } else {
+      return new Path(basePath, partition + Path.SEPARATOR + filename);
+    }
   }
 }

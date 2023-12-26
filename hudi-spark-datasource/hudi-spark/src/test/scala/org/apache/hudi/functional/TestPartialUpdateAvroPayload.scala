@@ -27,7 +27,7 @@ import org.apache.hudi.common.util
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.util.JFunction
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, QuickstartUtils}
+import org.apache.hudi.{DataSourceWriteOptions, QuickstartUtils}
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{lit, typedLit}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
@@ -123,7 +123,6 @@ class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
       .save(basePath)
 
     val finalDF = spark.read.format("hudi")
-      .option(DataSourceReadOptions.USE_NEW_HUDI_PARQUET_FILE_FORMAT.key(), String.valueOf(useFileGroupReader))
       .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), String.valueOf(useFileGroupReader))
       .load(basePath)
     assertEquals(finalDF.select("rider").collectAsList().get(0).getString(0), upsert1DF.select("rider").collectAsList().get(0).getString(0))

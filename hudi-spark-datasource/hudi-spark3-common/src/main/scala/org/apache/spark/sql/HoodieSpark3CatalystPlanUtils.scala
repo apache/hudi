@@ -17,17 +17,15 @@
 
 package org.apache.spark.sql
 
-import org.apache.hudi.{HoodieCDCFileIndex, SparkAdapterSupport, SparkHoodieTableFileIndex}
+import org.apache.hudi.SparkAdapterSupport
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.TableOutputResolver
 import org.apache.spark.sql.catalyst.catalog.CatalogStorageFormat
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression, ProjectionOverSchema}
 import org.apache.spark.sql.catalyst.plans.JoinType
-import org.apache.spark.sql.catalyst.plans.logical._
+import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, Join, JoinHint, LeafNode, LogicalPlan}
 import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
 import org.apache.spark.sql.execution.command.{CreateTableLikeCommand, ExplainCommand}
-import org.apache.spark.sql.execution.datasources.HadoopFsRelation
-import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, ParquetFileFormat}
 import org.apache.spark.sql.execution.{ExtendedMode, SimpleMode}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
@@ -82,24 +80,13 @@ trait HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
   override def createMITJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType, condition: Option[Expression], hint: String): LogicalPlan = {
     Join(left, right, joinType, condition, JoinHint.NONE)
   }
+
+  override def produceSameOutput(a: LogicalPlan, b: LogicalPlan): Boolean = {
+    a.sameOutput(b)
+  }
 }
 
 object HoodieSpark3CatalystPlanUtils extends SparkAdapterSupport {
-
-  def applyNewFileFormatChanges(scanOperation: LogicalPlan, logicalRelation: LogicalPlan, fs: HadoopFsRelation): LogicalPlan = {
-    val ff = fs.fileFormat.asInstanceOf[ParquetFileFormat with HoodieFormatTrait]
-    ff.isProjected = true
-    val tableSchema = fs.location match {
-      case index: HoodieCDCFileIndex => index.cdcRelation.schema
-      case index: SparkHoodieTableFileIndex => index.schema
-    }
-    val resolvedSchema = logicalRelation.resolve(tableSchema, fs.sparkSession.sessionState.analyzer.resolver)
-    if (!fs.partitionSchema.fields.isEmpty && scanOperation.sameOutput(logicalRelation)) {
-      Project(resolvedSchema, scanOperation)
-    } else {
-      scanOperation
-    }
-  }
 
   /**
    * This is an extractor to accommodate for [[ResolvedTable]] signature change in Spark 3.2

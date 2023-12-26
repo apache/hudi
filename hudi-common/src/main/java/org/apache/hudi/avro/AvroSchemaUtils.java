@@ -150,7 +150,7 @@ public class AvroSchemaUtils {
    * Validate whether the {@code targetSchema} is a "compatible" projection of {@code sourceSchema}.
    * Only difference of this method from {@link #isStrictProjectionOf(Schema, Schema)} is
    * the fact that it allows some legitimate type promotions (like {@code int -> long},
-   * {@code decimal(3, 2) -> decimal(5, 2)}, etc) that allows projection to have a "wider"
+   * {@code decimal(3, 2) -> decimal(5, 2)}, etc.) that allows projection to have a "wider"
    * atomic type (whereas strict projection requires atomic type to be identical)
    */
   public static boolean isCompatibleProjectionOf(Schema sourceSchema, Schema targetSchema) {
@@ -312,6 +312,16 @@ public class AvroSchemaUtils {
       fields.addAll(newFields);
     }
 
+    Schema newSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), schema.isError());
+    newSchema.setFields(fields);
+    return newSchema;
+  }
+
+  public static Schema removeFieldsFromSchema(Schema schema, Set<String> fieldNames) {
+    List<Schema.Field> fields = schema.getFields().stream()
+        .filter(field -> !fieldNames.contains(field.name()))
+        .map(field -> new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()))
+        .collect(Collectors.toList());
     Schema newSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), schema.isError());
     newSchema.setFields(fields);
     return newSchema;

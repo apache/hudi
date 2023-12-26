@@ -86,15 +86,6 @@ object DataSourceReadOptions {
       s"payload implementation to merge (${REALTIME_PAYLOAD_COMBINE_OPT_VAL}) or skip merging altogether" +
       s"${REALTIME_SKIP_MERGE_OPT_VAL}")
 
-  val USE_NEW_HUDI_PARQUET_FILE_FORMAT: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.datasource.read.use.new.parquet.file.format")
-    .defaultValue("true")
-    .markAdvanced()
-    .sinceVersion("0.14.0")
-    .withDocumentation("Read using the new Hudi parquet file format. The new Hudi parquet file format is " +
-      "introduced as an experimental feature in 0.14.0. Currently, the new Hudi parquet file format only applies " +
-      "to bootstrap and MOR queries. Schema evolution is also not supported by the new file format.")
-
   val READ_PATHS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.paths")
     .noDefaultValue()

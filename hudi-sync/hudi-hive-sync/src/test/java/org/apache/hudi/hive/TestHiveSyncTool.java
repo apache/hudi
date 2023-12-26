@@ -191,7 +191,7 @@ public class TestHiveSyncTool {
 
   @BeforeEach
   public void setUp() throws Exception {
-    HiveTestUtil.setUp();
+    HiveTestUtil.setUp(Option.empty(), true);
   }
 
   @AfterEach

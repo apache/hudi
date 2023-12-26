@@ -25,17 +25,17 @@ import org.apache.hudi.cdc.{CDCFileGroupIterator, CDCRelation, HoodieCDCFileGrou
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model._
+import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
-import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieTableSchema, HoodieTableState, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types._
 import org.apache.spark.util.SerializableConfiguration
 
 import scala.jdk.CollectionConverters.asScalaIteratorConverter
@@ -44,6 +44,7 @@ trait HoodieFormatTrait {
 
   // Used so that the planner only projects once and does not stack overflow
   var isProjected: Boolean = false
+  def getRequiredFilters: Seq[Filter]
 }
 
 /**
@@ -61,6 +62,8 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                                                   shouldUseRecordPosition: Boolean,
                                                   requiredFilters: Seq[Filter]
                                            ) extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait {
+
+  def getRequiredFilters: Seq[Filter] = requiredFilters
 
   /**
    * Support batch needs to remain consistent, even if one side of a bootstrap merge can support
@@ -89,6 +92,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                                               filters: Seq[Filter],
                                               options: Map[String, String],
                                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
+    val recordKeyColumn = tableState.recordKeyField
     val outputSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
     spark.conf.set("spark.sql.parquet.enableVectorizedReader", supportBatchResult)
     val isCount = requiredSchema.isEmpty && !isMOR && !isIncremental
@@ -129,7 +133,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                 val hoodieBaseFile = fileSlice.getBaseFile.get()
                 baseFileReader(createPartitionedFile(fileSliceMapping.getPartitionValues, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen))
               } else {
-                val readerContext: HoodieReaderContext[InternalRow] = new SparkFileFormatInternalRowReaderContext(extraProps.value, filters)
+                val readerContext: HoodieReaderContext[InternalRow] = new SparkFileFormatInternalRowReaderContext(extraProps.value, recordKeyColumn, filters, shouldUseRecordPosition)
                 val serializedHadoopConf = broadcastedHadoopConf.value.value
                 val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
                   .builder().setConf(serializedHadoopConf).setBasePath(tableState.tablePath).build
@@ -211,11 +215,4 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     iter.map(d => unsafeProjection(d))
   }
 
-  protected def getRecordKeyRelatedFilters(filters: Seq[Filter], recordKeyColumn: String): Seq[Filter] = {
-    filters.filter(f => f.references.exists(c => c.equalsIgnoreCase(recordKeyColumn)))
-  }
-
-  protected def getLogFilesFromSlice(fileSlice: FileSlice): List[HoodieLogFile] = {
-    fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList
-  }
 }
