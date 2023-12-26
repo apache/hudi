@@ -26,9 +26,8 @@ import org.apache.spark.sql.types.StructType
 
 class Spark32ParquetSchemaEvolutionUtils(sharedConf: Configuration,
                                          filePath: Path,
-                                         requiredSchema: StructType,
-                                         extraProps: Map[String,String]) extends
-  Spark32PlusParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema, extraProps){
+                                         requiredSchema: StructType) extends
+  Spark32PlusParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema){
   override protected def toAttributes(schema: StructType): Seq[AttributeReference] = {
     schema.toAttributes
   }

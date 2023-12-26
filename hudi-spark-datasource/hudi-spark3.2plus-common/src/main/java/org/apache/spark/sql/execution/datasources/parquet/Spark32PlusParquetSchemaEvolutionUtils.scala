@@ -29,9 +29,8 @@ import java.time.ZoneId
 
 abstract class Spark32PlusParquetSchemaEvolutionUtils(sharedConf: Configuration,
                                                       filePath: Path,
-                                                      requiredSchema: StructType,
-                                                      extraProps: Map[String,String]) extends
-  Spark3ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema, extraProps) {
+                                                      requiredSchema: StructType) extends
+  Spark3ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema) {
 
   def buildVectorizedReader(convertTz: Option[ZoneId],
                             datetimeRebaseSpec: RebaseDateTime.RebaseSpec,
