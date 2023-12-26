@@ -228,6 +228,6 @@ public abstract class HoodieReaderContext<T> {
    */
   public boolean shouldUseRecordPositionMerging() {
     return false;
-  };
+  }
 
 }
