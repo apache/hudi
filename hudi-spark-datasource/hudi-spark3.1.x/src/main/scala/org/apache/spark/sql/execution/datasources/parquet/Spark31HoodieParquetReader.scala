@@ -30,7 +30,6 @@ import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GRO
 import org.apache.parquet.hadoop._
 import org.apache.spark.TaskContext
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.internal.SQLConf
@@ -95,6 +94,8 @@ object Spark31HoodieParquetReader {
         Array.empty,
         null)
 
+    val schemaEvolutionUtils = new Spark31ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema, extraProps)
+
     lazy val footerFileMetaData =
       ParquetFileReader.readFooter(sharedConf, filePath, SKIP_ROW_GROUPS).getFileMetaData
     val datetimeRebaseMode = DataSourceUtils.datetimeRebaseMode(
@@ -123,7 +124,7 @@ object Spark31HoodieParquetReader {
           pushDownInFilterThreshold,
           isCaseSensitive)
       }
-      filters
+      filters.map(schemaEvolutionUtils.rebuildFilterFromParquet)
         // Collects all converted Parquet filter predicates. Notice that not all predicates can be
         // converted (`ParquetFilters.createFilter` returns an `Option`). That's why a `flatMap`
         // is used here.
@@ -154,7 +155,7 @@ object Spark31HoodieParquetReader {
 
     val attemptId = new TaskAttemptID(new TaskID(new JobID(), TaskType.MAP, 0), 0)
     val hadoopAttemptContext =
-      new TaskAttemptContextImpl(sharedConf, attemptId)
+      new TaskAttemptContextImpl(schemaEvolutionUtils.getHadoopConfClone(footerFileMetaData), attemptId)
 
     // Try to push down filters when filter push-down is enabled.
     // Notice: This push-down is RowGroups level, not individual records.
@@ -163,12 +164,23 @@ object Spark31HoodieParquetReader {
     }
     val taskContext = Option(TaskContext.get())
     if (enableVectorizedReader) {
-      val vectorizedReader = new VectorizedParquetRecordReader(
-        convertTz.orNull,
-        datetimeRebaseMode.toString,
-        int96RebaseMode.toString,
-        enableOffHeapColumnVector && taskContext.isDefined,
-        capacity)
+      val vectorizedReader = if (schemaEvolutionUtils.shouldUseInternalSchema) {
+        schemaEvolutionUtils.buildVectorizedReader(
+          convertTz,
+          datetimeRebaseMode,
+          int96RebaseMode,
+          enableOffHeapColumnVector,
+          taskContext,
+          capacity)
+      } else {
+        new VectorizedParquetRecordReader(
+          convertTz.orNull,
+          datetimeRebaseMode.toString,
+          int96RebaseMode.toString,
+          enableOffHeapColumnVector && taskContext.isDefined,
+          capacity)
+      }
+
       val iter = new RecordReaderIterator(vectorizedReader)
       // SPARK-23457 Register a task completion listener before `initialization`.
       taskContext.foreach(_.addTaskCompletionListener[Unit](_ => iter.close()))
@@ -199,7 +211,7 @@ object Spark31HoodieParquetReader {
       reader.initialize(split, hadoopAttemptContext)
 
       val fullSchema = requiredSchema.toAttributes
-      val unsafeProjection = GenerateUnsafeProjection.generate(fullSchema, fullSchema)
+      val unsafeProjection = schemaEvolutionUtils.generateUnsafeProjection(fullSchema)
       // There is no partition columns
       iter.map(unsafeProjection)
     }
