@@ -162,7 +162,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       val config = HoodieTableMetaClient.builder().setBasePath(tablePath).setConf(new Configuration()).build().getTableConfig
       val props = config.getProps
       assertEquals(prevProps.size(), props.size())
-      props.forEach((k, v) => {
+      props.forEach((k: Object, v: Object) => {
         val value = prevProps.getProperty(k.toString)
         assertEquals(v, value)
       })
