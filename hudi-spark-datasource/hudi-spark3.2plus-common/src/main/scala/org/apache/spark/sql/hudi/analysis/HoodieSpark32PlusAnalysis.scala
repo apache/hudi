@@ -24,7 +24,7 @@ import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer.resolveExpressionBy
 import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, NamedRelation, ResolvedFieldName, UnresolvedAttribute, UnresolvedFieldName, UnresolvedPartitionSpec}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogUtils}
 import org.apache.spark.sql.catalyst.expressions.Expression
-import org.apache.spark.sql.catalyst.plans.logcal.{HoodieQuery, HoodieTableChanges, HoodieTableChangesOptionsParser, HoodieTimelineTableValuedFunction, HoodieTimelineTableValuedFunctionOptionsParser}
+import org.apache.spark.sql.catalyst.plans.logcal.{HoodieFileSystemViewTableValuedFunction, HoodieFileSystemViewTableValuedFunctionOptionsParser, HoodieQuery, HoodieTableChanges, HoodieTableChangesOptionsParser, HoodieTimelineTableValuedFunction, HoodieTimelineTableValuedFunctionOptionsParser}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.trees.Origin
@@ -106,6 +106,21 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
       }
     case HoodieTimelineTableValuedFunction(args) =>
       val (tablePath, opts) = HoodieTimelineTableValuedFunctionOptionsParser.parseOptions(args, HoodieTimelineTableValuedFunction.FUNC_NAME)
+      val hoodieDataSource = new DefaultSource
+      if (tablePath.contains(Path.SEPARATOR)) {
+        // the first param is table path
+        val relation = hoodieDataSource.createRelation(spark.sqlContext, opts ++ Map("path" -> tablePath))
+        LogicalRelation(relation)
+      } else {
+        // the first param is table identifier
+        val tableId = spark.sessionState.sqlParser.parseTableIdentifier(tablePath)
+        val catalogTable = spark.sessionState.catalog.getTableMetadata(tableId)
+        val relation = hoodieDataSource.createRelation(spark.sqlContext, opts ++ Map("path" ->
+          catalogTable.location.toString))
+        LogicalRelation(relation, catalogTable)
+      }
+    case HoodieFileSystemViewTableValuedFunction(args) =>
+      val (tablePath, opts) = HoodieFileSystemViewTableValuedFunctionOptionsParser.parseOptions(args, HoodieFileSystemViewTableValuedFunction.FUNC_NAME)
       val hoodieDataSource = new DefaultSource
       if (tablePath.contains(Path.SEPARATOR)) {
         // the first param is table path

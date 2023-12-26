@@ -224,9 +224,14 @@ object DefaultSource {
       parameters.get(INCREMENTAL_FORMAT.key).contains(INCREMENTAL_FORMAT_CDC_VAL)
     val isMultipleBaseFileFormatsEnabled = metaClient.getTableConfig.isMultipleBaseFileFormatsEnabled
 
+
     val createTimeLineRln = parameters.get(DataSourceReadOptions.CREATE_TIMELINE_RELATION.key())
+    val createFSRln = parameters.get(DataSourceReadOptions.CREATE_FILESYSTEM_RELATION.key())
+
     if (createTimeLineRln.isDefined) {
       new TimelineRelation(sqlContext, parameters, metaClient)
+    } else if (createFSRln.isDefined) {
+      new FileSystemRelation(sqlContext, parameters, metaClient)
     } else {
       log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
 
