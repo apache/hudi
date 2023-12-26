@@ -36,6 +36,7 @@ import java.net.URL
 import java.nio.file.{Files, Paths}
 import java.util.Properties
 import scala.collection.JavaConverters.asScalaIteratorConverter
+import scala.jdk.CollectionConverters.asScalaSetConverter
 
 class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
 
@@ -162,9 +163,9 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       val config = HoodieTableMetaClient.builder().setBasePath(tablePath).setConf(new Configuration()).build().getTableConfig
       val props = config.getProps
       assertEquals(prevProps.size(), props.size())
-      props.forEach((k: Object, v: Object) => {
-        val value = prevProps.getProperty(k.toString)
-        assertEquals(v, value)
+      props.entrySet().asScala.foreach((entry) => {
+        val key = entry.getKey.toString
+        assertEquals(entry.getValue, prevProps.getProperty(key))
       })
     }
   }
