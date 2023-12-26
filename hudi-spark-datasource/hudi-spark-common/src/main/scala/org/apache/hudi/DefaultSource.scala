@@ -238,7 +238,7 @@ object DefaultSource {
 
     //remove after implementing for all versions
     val schemaEvolutionSupportedNewfgReader = !parameters.getOrDefault(SCHEMA_EVOLUTION_ENABLED.key(),
-      SCHEMA_EVOLUTION_ENABLED.defaultValue().toString).toBoolean || HoodieSparkUtils.gteqSpark3_4
+      SCHEMA_EVOLUTION_ENABLED.defaultValue().toString).toBoolean || HoodieSparkUtils.gteqSpark3_3
 
     val useNewParquetFileFormat = parameters.getOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(),
       HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue().toString).toBoolean &&
