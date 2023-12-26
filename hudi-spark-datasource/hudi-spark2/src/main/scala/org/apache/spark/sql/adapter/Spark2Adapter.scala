@@ -19,6 +19,7 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.avro.Schema
+import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.FileStatus
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.utils.SparkRowSerDe
@@ -34,9 +35,10 @@ import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable, Join, LogicalPlan}
 import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark24LegacyHoodieParquetFileFormat}
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark24HoodieParquetReader, Spark24LegacyHoodieParquetFileFormat}
 import org.apache.spark.sql.execution.vectorized.MutableColumnarRow
 import org.apache.spark.sql.hudi.SparkAdapter
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.hudi.parser.HoodieSpark2ExtendedSqlParser
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
@@ -208,4 +210,14 @@ class Spark2Adapter extends SparkAdapter {
     batch.setNumRows(numRows)
     batch
   }
+
+  override def getParquetReader(file: PartitionedFile, requiredSchema: StructType, filters: Seq[sources.Filter],
+                                sharedConf: Configuration, extraProps: Map[String, String]): Iterator[InternalRow] = {
+    Spark24HoodieParquetReader.getReader(file, requiredSchema, filters, sharedConf, extraProps)
+  }
+
+  override def getExtraProps(vectorized: Boolean, sqlConf: SQLConf, options: Map[String, String]): Map[String, String] = {
+    Spark24HoodieParquetReader.getExtraProps(vectorized, sqlConf, options)
+  }
+
 }
