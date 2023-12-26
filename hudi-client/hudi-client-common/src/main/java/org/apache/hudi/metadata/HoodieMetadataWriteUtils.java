@@ -192,7 +192,8 @@ public class HoodieMetadataWriteUtils {
                   .withDatadogApiTimeoutSeconds(writeConfig.getDatadogApiTimeoutSeconds());
           if (writeConfig.getDatadogMetricHost() != null) {
             datadogConfig = datadogConfig.withDatadogHost(writeConfig.getDatadogMetricHost());
-          } else if (writeConfig.getDatadogApiSite() != null) {
+          }
+          if (writeConfig.getDatadogApiSite() != null) {
             datadogConfig = datadogConfig.withDatadogApiSite(writeConfig.getDatadogApiSite().name());
           }
 
