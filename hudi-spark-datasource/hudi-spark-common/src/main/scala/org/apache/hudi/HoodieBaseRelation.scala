@@ -17,12 +17,6 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
-import org.apache.avro.generic.GenericRecord
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FileStatus, Path}
-import org.apache.hadoop.hbase.io.hfile.CacheConfig
-import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.AvroConversionUtils.getAvroSchemaWithDefaults
 import org.apache.hudi.HoodieBaseRelation._
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
@@ -32,25 +26,33 @@ import org.apache.hudi.common.config.{ConfigProperty, HoodieMetadataConfig, Seri
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.{FileSlice, HoodieFileFormat, HoodieRecord}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.table.timeline.TimelineUtils.validateTimestampAsOf
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.CachingPath
+import org.apache.hudi.internal.schema.{HoodieSchemaException, InternalSchema}
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
-import org.apache.hudi.internal.schema.{HoodieSchemaException, InternalSchema}
 import org.apache.hudi.io.storage.HoodieAvroHFileReader
 import org.apache.hudi.metadata.HoodieTableMetadata
+
+import org.apache.avro.Schema
+import org.apache.avro.generic.GenericRecord
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{FileStatus, Path}
+import org.apache.hadoop.hbase.io.hfile.CacheConfig
+import org.apache.hadoop.mapred.JobConf
 import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{Row, SparkSession, SQLContext}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.{convertToCatalystExpression, generateUnsafeProjection}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.Resolver
@@ -62,9 +64,10 @@ import org.apache.spark.sql.execution.datasources.parquet.{LegacyHoodieParquetFi
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{Row, SQLContext, SparkSession}
+import org.apache.spark.sql.vectorized.ColumnarBatch
 
 import java.net.URI
+
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
 
@@ -653,19 +656,33 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
           (parquetReader, readerSchema)
 
-      case HoodieFileFormat.HFILE =>
-        val hfileReader = createHFileReader(
-          spark = spark,
-          dataSchema = dataSchema,
-          requiredDataSchema = requiredDataSchema,
-          filters = filters,
-          options = options,
-          hadoopConf = hadoopConf
-        )
+        case HoodieFileFormat.ORC =>
+          val orcReader = createHoodieOrcReader(
+            sparkSession = spark,
+            dataSchema = dataSchema.structTypeSchema,
+            partitionSchema = partitionSchema,
+            requiredSchema = requiredDataSchema.structTypeSchema,
+            filters = filters,
+            options = options,
+            hadoopConf = hadoopConf
+          )
+          val readerSchema = StructType(requiredDataSchema.structTypeSchema.fields ++ partitionSchema.fields)
 
-        (hfileReader, requiredDataSchema.structTypeSchema)
+          (orcReader, readerSchema)
 
-      case _ => throw new UnsupportedOperationException(s"Base file format is not currently supported ($baseFileFormat)")
+        case HoodieFileFormat.HFILE =>
+          val hfileReader = createHFileReader(
+            spark = spark,
+            dataSchema = dataSchema,
+            requiredDataSchema = requiredDataSchema,
+            filters = filters,
+            options = options,
+            hadoopConf = hadoopConf
+          )
+
+          (hfileReader, requiredDataSchema.structTypeSchema)
+
+        case _ => throw new UnsupportedOperationException(s"Base file format is not currently supported ($baseFileFormat)")
     }
 
     BaseFileReader(
@@ -831,6 +848,33 @@ object HoodieBaseRelation extends SparkAdapterSupport {
         val requiredStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(requiredAvroSchema)
 
         (requiredAvroSchema, requiredStructSchema, InternalSchema.getEmptyInternalSchema)
+    }
+  }
+
+  private def createHoodieOrcReader(sparkSession: SparkSession,
+                                    dataSchema: StructType,
+                                    partitionSchema: StructType,
+                                    requiredSchema: StructType,
+                                    filters: Seq[Filter],
+                                    options: Map[String, String],
+                                    hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
+
+    val readOrcFile: PartitionedFile => Iterator[Any] = new OrcFileFormat().buildReaderWithPartitionValues(
+      sparkSession = sparkSession,
+      dataSchema = dataSchema,
+      partitionSchema = partitionSchema,
+      requiredSchema = requiredSchema,
+      filters = filters,
+      options = options,
+      hadoopConf = hadoopConf
+    )
+
+    file: PartitionedFile => {
+      val iterator = readOrcFile(file)
+      iterator.flatMap {
+        case r: InternalRow => Seq(r)
+        case b: ColumnarBatch => b.rowIterator().asScala
+      }
     }
   }
 
