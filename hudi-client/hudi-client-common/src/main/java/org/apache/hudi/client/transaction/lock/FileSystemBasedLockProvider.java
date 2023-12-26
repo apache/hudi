@@ -94,7 +94,10 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   public void close() {
     synchronized (LOCK_FILE_NAME) {
       try {
-        fs.delete(this.lockFile, true);
+        if (fs.exists(this.lockFile) && checkLockOwner()) {
+          fs.delete(this.lockFile, true);
+          this.lockInfo.setLockCreateTime(null);
+        }
       } catch (IOException e) {
         throw new HoodieLockException(generateLogStatement(LockState.FAILED_TO_RELEASE), e);
       }
@@ -129,7 +132,10 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
     synchronized (LOCK_FILE_NAME) {
       try {
         if (fs.exists(this.lockFile)) {
-          fs.delete(this.lockFile, true);
+          if (checkLockOwner()) {
+            fs.delete(this.lockFile, true);
+            this.lockInfo.setLockCreateTime(null);
+          }
         }
       } catch (IOException io) {
         throw new HoodieIOException(generateLogStatement(LockState.FAILED_TO_RELEASE), io);
@@ -181,6 +187,10 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
     lockInfo.setLockStacksInfo(Thread.currentThread().getStackTrace());
   }
 
+  public LockInfo getLockInfo() {
+    return this.lockInfo;
+  }
+
   public void reloadCurrentOwnerLockInfo() {
     try {
       if (fs.exists(this.lockFile)) {
@@ -225,5 +235,20 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
    */
   private static String defaultLockPath(String tablePath) {
     return tablePath + Path.SEPARATOR + AUXILIARYFOLDER_NAME;
+  }
+
+  private boolean checkLockOwner() {
+    try (FSDataInputStream fis = fs.open(this.lockFile)) {
+      String lockJson = FileIOUtils.readAsUTFString(fis);
+      LockInfo lockInfo = LockInfo.getLockInfoByJson(lockJson);
+      if (lockInfo.getLockCreateTime() == null
+          || (this.lockInfo.getLockCreateTime() != null
+          && lockInfo.getLockCreateTime().equals(this.lockInfo.getLockCreateTime()))) {
+        return true;
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("fail to check lock owner", e);
+    }
+    return false;
   }
 }

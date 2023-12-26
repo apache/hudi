@@ -21,7 +21,9 @@ package org.apache.hudi.client.transaction.lock;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import org.apache.hudi.common.util.JsonUtils;
+import org.apache.hudi.exception.HoodieIOException;
 
+import java.io.IOException;
 import java.util.ArrayList;
 
 public class LockInfo {
@@ -53,6 +55,14 @@ public class LockInfo {
     lockStacksInfo = new ArrayList<>();
     for (StackTraceElement ste : stacks) {
       lockStacksInfo.add(String.format("%s.%s (%s:%s)", ste.getClassName(), ste.getMethodName(), ste.getFileName(), ste.getLineNumber()));
+    }
+  }
+
+  public static LockInfo getLockInfoByJson(String json) throws IOException {
+    try {
+      return JsonUtils.getObjectMapper().readValue(json, LockInfo.class);
+    } catch (JsonProcessingException e) {
+      throw new HoodieIOException("get lock info error", e);
     }
   }
 
