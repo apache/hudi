@@ -21,7 +21,8 @@ package org.apache.hudi
 import org.apache.hudi.common.config.TypedProperties
 
 import java.{util => ju}
-import scala.collection.JavaConverters._
+import scala.collection.JavaConverters
+import scala.jdk.CollectionConverters.dictionaryAsScalaMapConverter
 
 object HoodieConversionUtils {
 
