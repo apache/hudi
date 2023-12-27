@@ -21,8 +21,6 @@ package org.apache.hudi
 import org.apache.hudi.common.config.TypedProperties
 
 import java.{util => ju}
-import scala.collection.JavaConverters
-import scala.jdk.CollectionConverters.dictionaryAsScalaMapConverter
 
 object HoodieConversionUtils {
 
@@ -49,8 +47,10 @@ object HoodieConversionUtils {
   }
 
   def fromProperties(props: TypedProperties): Map[String, String] = {
-    props.asScala.map {
+    // NOTE: We have to use deprecated [[JavaConversions]] to stay compatible w/ Scala 2.11
+    import scala.collection.JavaConversions.mapAsScalaMap
+    props.toMap.map {
       case (k, v) => (k.toString, v.toString)
-    }.toMap
+    }
   }
 }
