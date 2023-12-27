@@ -184,12 +184,12 @@ import org.apache.hudi.config.HoodieWriteConfig._
 
 
 val df =  //generate data frame
-df.write.format("org.apache.hudi").
+df.write.format("hudi").
         options(getQuickstartWriteConfigs).
-        option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-        option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-        option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-        option(TABLE_NAME, "tableName").
+        option(PRECOMBINE_FIELD.key(), "ts").
+        option(RECORDKEY_FIELD.key(), "uuid").
+        option(PARTITIONPATH_FIELD.key(), "partitionpath").
+        option(TBL_NAME.key(), "tableName").
         option("hoodie.parquet.small.file.limit", "0").
         option("hoodie.clustering.inline", "true").
         option("hoodie.clustering.inline.max.commits", "4").
@@ -283,18 +283,18 @@ We can also enable asynchronous clustering with Spark structured streaming sink 
 val commonOpts = Map(
    "hoodie.insert.shuffle.parallelism" -> "4",
    "hoodie.upsert.shuffle.parallelism" -> "4",
-   DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-   DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-   DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-   HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
+   RECORDKEY_FIELD.key() -> "_row_key",
+   PARTITIONPATH_FIELD.key() -> "partition",
+   PRECOMBINE_FIELD.key() -> "timestamp",
+   TBL_NAME.key() -> "hoodie_test"
 )
 
 def getAsyncClusteringOpts(isAsyncClustering: String, 
                            clusteringNumCommit: String, 
                            executionStrategy: String):Map[String, String] = {
-   commonOpts + (DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE.key -> isAsyncClustering,
-           HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMITS.key -> clusteringNumCommit,
-           HoodieClusteringConfig.EXECUTION_STRATEGY_CLASS_NAME.key -> executionStrategy
+   commonOpts + (ASYNC_CLUSTERING_ENABLE.key() -> isAsyncClustering,
+           ASYNC_CLUSTERING_MAX_COMMITS.key() -> clusteringNumCommit,
+           EXECUTION_STRATEGY_CLASS_NAME.key() -> executionStrategy
    )
 }
 
@@ -304,7 +304,7 @@ def initStreamingWriteFuture(hudiOptions: Map[String, String]): Future[Unit] = {
       println("streaming starting")
       streamingInput
               .writeStream
-              .format("org.apache.hudi")
+              .format("hudi")
               .options(hudiOptions)
               .option("checkpointLocation", basePath + "/checkpoint")
               .mode(Append)

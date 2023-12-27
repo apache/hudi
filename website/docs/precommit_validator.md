@@ -30,10 +30,11 @@ Example:
 ```scala
 // In this example, we set up a validator that expects there is no row with `col` column as `null`
 
+import org.apache.hudi.config.HoodieWriteConfig._
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig._
 
 df.write.format("hudi").mode(Overwrite).
-  option(TABLE_NAME, tableName).
+  option(TBL_NAME.key(), tableName).
   option("hoodie.precommit.validators", "org.apache.hudi.client.validator.SqlQuerySingleResultPreCommitValidator").
   option("hoodie.precommit.validators.single.value.sql.queries", "select count(*) from <TABLE_NAME> where col is null#0").
   save(basePath)
@@ -53,10 +54,11 @@ Example:
 ```scala
 // In this example, we set up a validator that expects no change of null rows with the new commit
 
+import org.apache.hudi.config.HoodieWriteConfig._
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig._
 
 df.write.format("hudi").mode(Overwrite).
-  option(TABLE_NAME, tableName).
+  option(TBL_NAME.key(), tableName).
   option("hoodie.precommit.validators", "org.apache.hudi.client.validator.SqlQueryEqualityPreCommitValidator").
   option("hoodie.precommit.validators.equality.sql.queries", "select count(*) from <TABLE_NAME> where col is null").
   save(basePath)
@@ -71,10 +73,11 @@ Example:
 ```scala
 // In this example, we set up a validator that expects a change of null rows with the new commit
 
+import org.apache.hudi.config.HoodieWriteConfig._
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig._
 
 df.write.format("hudi").mode(Overwrite).
-  option(TABLE_NAME, tableName).
+  option(TBL_NAME.key(), tableName).
   option("hoodie.precommit.validators", "org.apache.hudi.client.validator.SqlQueryInequalityPreCommitValidator").
   option("hoodie.precommit.validators.inequality.sql.queries", "select count(*) from <TABLE_NAME> where col is null").
   save(basePath)

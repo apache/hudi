@@ -26,7 +26,7 @@ jsc.hadoopConfiguration().set("parquet.encryption.key.list", "k1:AAECAwQFBgcICQo
 jsc.hadoopConfiguration().set("parquet.encryption.footer.key", "k1")
 jsc.hadoopConfiguration().set("parquet.encryption.column.keys", "k2:rider")
     
-spark.read().format("org.apache.hudi").load("path").show();
+spark.read().format("hudi").load("path").show();
 ```
 
 Here is an example.
@@ -42,7 +42,7 @@ jsc.hadoopConfiguration().set("parquet.encryption.key.list", "k1:AAECAwQFBgcICQo
 QuickstartUtils.DataGenerator dataGen = new QuickstartUtils.DataGenerator();
 List<String> inserts = convertToStringList(dataGen.generateInserts(3));
 Dataset<Row> inputDF1 = spark.read().json(jsc.parallelize(inserts, 1));
-inputDF1.write().format("org.apache.hudi")
+inputDF1.write().format("hudi")
 	.option("hoodie.table.name", "encryption_table")
     .option("hoodie.upsert.shuffle.parallelism","2")
     .option("hoodie.insert.shuffle.parallelism","2")
@@ -51,7 +51,7 @@ inputDF1.write().format("org.apache.hudi")
     .mode(SaveMode.Overwrite)
     .save("path");
 
-spark.read().format("org.apache.hudi").load("path").select("rider").show();
+spark.read().format("hudi").load("path").select("rider").show();
 ```
 
 Reading the table works if configured correctly

@@ -229,12 +229,12 @@ var dfFromData0 = spark.createDataFrame(data0,schema)
 
 dfFromData0.write.format("hudi").
   options(getQuickstartWriteConfigs).
-  option(PRECOMBINE_FIELD_OPT_KEY, "preComb").
-  option(RECORDKEY_FIELD_OPT_KEY, "rowId").
-  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionId").
-  option(TABLE_NAME, tableName).
-  option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL).
-  option(OPERATION_OPT_KEY, "upsert").
+  option(PRECOMBINE_FIELD.key(), "preComb").
+  option(RECORDKEY_FIELD.key(), "rowId").
+  option(PARTITIONPATH_FIELD.key(), "partitionId").
+  option(TBL_NAME.key(), tableName).
+  option(TABLE_TYPE.key(), "COPY_ON_WRITE").
+  option(OPERATION.key(), "upsert").
   option("hoodie.index.type","SIMPLE").
   option("hoodie.datasource.write.hive_style_partitioning","true").
   option("hoodie.datasource.hive_sync.jdbcurl","jdbc:hive2://hiveserver:10000/").

@@ -31,11 +31,13 @@ classpath of drivers and executors using `--jars` option. Alternatively, hudi-sp
 Retrieve the data table at the present point in time.
 
 ```scala
+import org.apache.hudi.DataSourceReadOptions._
+
 val hudiSnapshotQueryDF = spark
-     .read
-     .format("hudi")
-     .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL())
-     .load(tablePath) 
+  .read
+  .format("hudi")
+  .option(QUERY_TYPE.key(), QUERY_TYPE_SNAPSHOT_OPT_VAL)
+  .load(tablePath) 
 ```
 
 ### Incremental query {#spark-incr-query}
@@ -46,11 +48,11 @@ The following snippet shows how to obtain all records changed after `beginInstan
 
 ```java
 Dataset<Row> hudiIncQueryDF = spark.read()
-     .format("org.apache.hudi")
-     .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
-     .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY(), <beginInstantTime>)
-     .option(DataSourceReadOptions.INCR_PATH_GLOB_OPT_KEY(), "/year=2020/month=*/day=*") // Optional, use glob pattern if querying certain partitions
-     .load(tablePath); // For incremental query, pass in the root/base path of table
+    .format("hudi")
+    .option(QUERY_TYPE.key(), QUERY_TYPE_INCREMENTAL_OPT_VAL)
+    .option(BEGIN_INSTANTTIME.key(), <beginInstantTime>)
+    .option(INCR_PATH_GLOB.key(), "/year=2020/month=*/day=*") // Optional, use glob pattern if querying certain partitions
+    .load(tablePath); // For incremental query, pass in the root/base path of table
      
 hudiIncQueryDF.createOrReplaceTempView("hudi_trips_incremental")
 spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_trips_incremental where fare > 20.0").show()

@@ -250,6 +250,12 @@ Since, this is the first write, it will also auto-create the table.
 
 ```scala
 // spark-shell
+import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.config.HoodieWriteConfig._
+import org.apache.spark.sql.SaveMode._
+import org.apache.hudi.common.table.HoodieTableConfig._
+import org.apache.hudi.DataSourceReadOptions._
+
 val columns = Seq("ts","uuid","rider","driver","fare","city")
 val data =
   Seq((1695159649087L,"334e26e9-8355-45cc-97c6-c31daf0df330","rider-A","driver-K",19.10,"san_francisco"),
@@ -260,8 +266,8 @@ val data =
 
 var inserts = spark.createDataFrame(data).toDF(columns:_*)
 inserts.write.format("hudi").
-  option(PARTITIONPATH_FIELD_NAME.key(), "city").
-  option(TABLE_NAME, tableName).
+  option(PARTITIONPATH_FIELD.key(), "city").
+  option(TBL_NAME.key(), tableName).
   mode(Overwrite).
   save(basePath)
 ```
@@ -404,9 +410,9 @@ values={[
 val updatesDf = spark.read.format("hudi").load(basePath).filter($"rider" === "rider-D").withColumn("fare", col("fare") * 10)
 
 updatesDf.write.format("hudi").
-  option(OPERATION_OPT_KEY, "upsert").
-  option(PARTITIONPATH_FIELD_NAME.key(), "city").
-  option(TABLE_NAME, tableName).
+  option(OPERATION.key(), "upsert").
+  option(PARTITIONPATH_FIELD.key(), "city").
+  option(TBL_NAME.key(), tableName).
   mode(Append).
   save(basePath)
 ```
@@ -560,9 +566,9 @@ values={[
 val deletesDF = spark.read.format("hudi").load(basePath).filter($"rider" === "rider-F")
 
 deletesDF.write.format("hudi").
-  option(OPERATION_OPT_KEY, "delete").
-  option(PARTITIONPATH_FIELD_NAME.key(), "city").
-  option(TABLE_NAME, tableName).
+  option(OPERATION.key(), "delete").
+  option(PARTITIONPATH_FIELD.key(), "city").
+  option(TBL_NAME.key(), tableName).
   mode(Append).
   save(basePath)
 
@@ -812,9 +818,9 @@ var df = spark.createDataFrame(data).toDF(columns:_*)
 
 // Insert data
 df.write.format("hudi").
-  option(PARTITIONPATH_FIELD_NAME.key(), "city").
+  option(PARTITIONPATH_FIELD.key(), "city").
   option(CDC_ENABLED.key(), "true").
-  option(TABLE_NAME, tableName).
+  option(TBL_NAME.key(), tableName).
   mode(Overwrite).
   save(basePath)
 
@@ -822,10 +828,10 @@ df.write.format("hudi").
 val updatesDf = spark.read.format("hudi").load(basePath).filter($"rider" === "rider-A" || $"rider" === "rider-B").withColumn("fare", col("fare") * 10)
 
 updatesDf.write.format("hudi").
-  option(OPERATION_OPT_KEY, "upsert").
-  option(PARTITIONPATH_FIELD_NAME.key(), "city").
+  option(OPERATION.key(), "upsert").
+  option(PARTITIONPATH_FIELD.key(), "city").
   option(CDC_ENABLED.key(), "true").
-  option(TABLE_NAME, tableName).
+  option(TBL_NAME.key(), tableName).
   mode(Append).
   save(basePath)
 
@@ -1063,7 +1069,7 @@ values={[
 // spark-shell 
 updatesDf.write.format("hudi").
   ...
-  option(PRECOMBINE_FIELD_NAME.key(), "ts").
+  option(PRECOMBINE_FIELD.key(), "ts").
   ...
 ```
 

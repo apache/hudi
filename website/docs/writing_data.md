@@ -25,47 +25,38 @@ The `hudi-spark` module offers the DataSource API to write (and read) a Spark Da
 
 **`HoodieWriteConfig`**:
 
-**TABLE_NAME** (Required)<br/>
+**TBL_NAME.key()** (Required)<br/>
 
 
 **`DataSourceWriteOptions`**:
 
-**RECORDKEY_FIELD_OPT_KEY** (Required): Primary key field(s). Record keys uniquely identify a record/row within each partition. If one wants to have a global uniqueness, there are two options. You could either make the dataset non-partitioned, or, you can leverage Global indexes to ensure record keys are unique irrespective of the partition path. Record keys can either be a single column or refer to multiple columns. `KEYGENERATOR_CLASS_OPT_KEY` property should be set accordingly based on whether it is a simple or complex key. For eg: `"col1"` for simple field, `"col1,col2,col3,etc"` for complex field. Nested fields can be specified using the dot notation eg: `a.b.c`. <br/>
-Default value: `"uuid"`<br/>
-
-**PARTITIONPATH_FIELD_OPT_KEY** (Required): Columns to be used for partitioning the table. To prevent partitioning, provide empty string as value eg: `""`. Specify partitioning/no partitioning using `KEYGENERATOR_CLASS_OPT_KEY`. If partition path needs to be url encoded, you can set `URL_ENCODE_PARTITIONING_OPT_KEY`. If synchronizing to hive, also specify using `HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY.`<br/>
-Default value: `"partitionpath"`<br/>
-
-**PRECOMBINE_FIELD_OPT_KEY** (Required): When two records within the same batch have the same key value, the record with the largest value from the field specified will be choosen. If you are using default payload of OverwriteWithLatestAvroPayload for HoodieRecordPayload (`WRITE_PAYLOAD_CLASS`), an incoming record will always takes precendence compared to the one in storage ignoring this `PRECOMBINE_FIELD_OPT_KEY`. <br/>
-Default value: `"ts"`<br/>
-
-**OPERATION_OPT_KEY**: The [write operations](/docs/write_operations) to use.<br/>
-Available values:<br/>
-`UPSERT_OPERATION_OPT_VAL` (default), `BULK_INSERT_OPERATION_OPT_VAL`, `INSERT_OPERATION_OPT_VAL`, `DELETE_OPERATION_OPT_VAL`
-
-**TABLE_TYPE_OPT_KEY**: The [type of table](/docs/concepts#table-types) to write to. Note: After the initial creation of a table, this value must stay consistent when writing to (updating) the table using the Spark `SaveMode.Append` mode.<br/>
-Available values:<br/>
-[`COW_TABLE_TYPE_OPT_VAL`](/docs/concepts#copy-on-write-table) (default), [`MOR_TABLE_TYPE_OPT_VAL`](/docs/concepts#merge-on-read-table)
-
-**KEYGENERATOR_CLASS_OPT_KEY**: Refer to [Key Generation](/docs/key_generation) section below.
-
-**HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY**: If using hive, specify if the table should or should not be partitioned.<br/>
-Available values:<br/>
-`classOf[MultiPartKeysValueExtractor].getCanonicalName` (default), `classOf[SlashEncodedDayPartitionValueExtractor].getCanonicalName`, `classOf[TimestampBasedKeyGenerator].getCanonicalName`, `classOf[NonPartitionedExtractor].getCanonicalName`, `classOf[GlobalDeleteKeyGenerator].getCanonicalName` (to be used when `OPERATION_OPT_KEY` is set to `DELETE_OPERATION_OPT_VAL`)
+| Config                         | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Required | Available Values                                                                                                                                                                                                                                                                                                                                                                  |
+|--------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| RECORDKEY_FIELD                | Primary key field(s). Record keys uniquely identify a record/row within each partition. If one wants to have a global uniqueness, there are two options. You could either make the dataset non-partitioned, or, you can leverage Global indexes to ensure record keys are unique irrespective of the partition path. Record keys can either be a single column or refer to multiple columns. `KEYGENERATOR_CLASS_NAME.key()` property should be set accordingly based on whether it is a simple or complex key. For eg: `"col1"` for simple field, `"col1,col2,col3,etc"` for complex field. Nested fields can be specified using the dot notation eg: `a.b.c`. | optional | "uuid" (default)                                                                                                                                                                                                                                                                                                                                                                  |
+| PARTITIONPATH_FIELD            | Columns to be used for partitioning the table. To prevent partitioning, provide empty string as value eg: `""`. Specify partitioning/no partitioning using `KEYGENERATOR_CLASS_NAME.key()`. If partition path needs to be url encoded, you can set `URL_ENCODE_PARTITIONING.key()`. If synchronizing to hive, also specify using `META_SYNC_PARTITION_EXTRACTOR_CLASS.key()`.                                                                                                                                                                                                                                                                                   | optional | "partitionpath" (default)                                                                                                                                                                                                                                                                                                                                                         |
+| PRECOMBINE_FIELD               | When two records within the same batch have the same key value, the record with the largest value from the field specified will be choosen. If you are using default payload of OverwriteWithLatestAvroPayload for HoodieRecordPayload (`WRITE_PAYLOAD_CLASS`), an incoming record will always takes precendence compared to the one in storage ignoring this `PRECOMBINE_FIELD.key()`.                                                                                                                                                                                                                                                                         | optional | "ts" (default)                                                                                                                                                                                                                                                                                                                                                                    |
+| OPERATION                      | The [write operations](/docs/write_operations) to use.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | optional | `UPSERT_OPERATION_OPT_VAL` (default), `BULK_INSERT_OPERATION_OPT_VAL`, `INSERT_OPERATION_OPT_VAL`, `DELETE_OPERATION_OPT_VAL`                                                                                                                                                                                                                                                     |
+| TABLE_TYPE                     | The [type of table](/docs/concepts#table-types) to write to. Note: After the initial creation of a table, this value must stay consistent when writing to (updating) the table using the Spark `SaveMode.Append` mode.                                                                                                                                                                                                                                                                                                                                                                                                                                          | optional | [`COW_TABLE_TYPE_OPT_VAL`](/docs/concepts#copy-on-write-table) (default), [`MOR_TABLE_TYPE_OPT_VAL`](/docs/concepts#merge-on-read-table)                                                                                                                                                                                                                                          |
+| KEYGENERATOR_CLASS             | Refer to [Key Generation](/docs/key_generation) section below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | optional |                                                                                                                                                                                                                                                                                                                                                                                   |
+| HIVE_PARTITION_EXTRACTOR_CLASS | If using hive, specify if the table should or should not be partitioned.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | optional | `classOf[MultiPartKeysValueExtractor].getCanonicalName` (default), `classOf[SlashEncodedDayPartitionValueExtractor].getCanonicalName`, `classOf[TimestampBasedKeyGenerator].getCanonicalName`, `classOf[NonPartitionedExtractor].getCanonicalName`, `classOf[GlobalDeleteKeyGenerator].getCanonicalName` (to be used when `OPERATION.key()` is set to `DELETE_OPERATION_OPT_VAL`) |
 
 
 Example:
 Upsert a DataFrame, specifying the necessary field names for `recordKey => _row_key`, `partitionPath => partition`, and `precombineKey => timestamp`
 
 ```java
+import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.config.HoodieWriteConfig._
+import org.apache.spark.sql.SaveMode._
+
 inputDF.write()
-       .format("org.apache.hudi")
+       .format("hudi")
        .options(clientOpts) //Where clientOpts is of type Map[String, String]. clientOpts can include any other options necessary.
-       .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
-       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
-       .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "timestamp")
-       .option(HoodieWriteConfig.TABLE_NAME, tableName)
-       .mode(SaveMode.Append)
+       .option(RECORDKEY_FIELD.key(), "_row_key")
+       .option(PARTITIONPATH_FIELD.key(), "partition")
+       .option(PRECOMBINE_FIELD.key(), "timestamp")
+       .option(TBL_NAME.key(), tableName)
+       .mode(Append)
        .save(basePath);
 ```
 
@@ -86,10 +77,10 @@ val inserts = convertToStringList(dataGen.generateInserts(10))
 val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
 df.write.format("hudi").
   options(getQuickstartWriteConfigs).
-  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(TABLE_NAME, tableName).
+  option(PRECOMBINE_FIELD.key(), "ts").
+  option(RECORDKEY_FIELD.key(), "uuid").
+  option(PARTITIONPATH_FIELD.key(), "partitionpath").
+  option(TBL_NAME.key(), tableName).
   mode(Overwrite).
   save(basePath)
 ```
@@ -211,11 +202,11 @@ val inserts = convertToStringList(dataGen.generateInserts(10))
 val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
 df.write.format("hudi").
   options(getQuickstartWriteConfigs).
-  option(OPERATION_OPT_KEY,"insert_overwrite_table").
-  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(TABLE_NAME, tableName).
+  option(OPERATION.key(),"insert_overwrite_table").
+  option(PRECOMBINE_FIELD.key(), "ts").
+  option(RECORDKEY_FIELD.key(), "uuid").
+  option(PARTITIONPATH_FIELD.key(), "partitionpath").
+  option(TBL_NAME.key(), tableName).
   mode(Append).
   save(basePath)
 
@@ -269,11 +260,11 @@ val df = spark.
   filter("partitionpath = 'americas/united_states/san_francisco'")
 df.write.format("hudi").
   options(getQuickstartWriteConfigs).
-  option(OPERATION_OPT_KEY,"insert_overwrite").
-  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(TABLE_NAME, tableName).
+  option(OPERATION.key(),"insert_overwrite").
+  option(PRECOMBINE_FIELD.key(), "ts").
+  option(RECORDKEY_FIELD.key(), "uuid").
+  option(PARTITIONPATH_FIELD.key(), "partitionpath").
+  option(TBL_NAME.key(), tableName).
   mode(Append).
   save(basePath)
 
@@ -326,24 +317,24 @@ val softDeleteDf = nullifyColumns.
 // simply upsert the table after setting these fields to null
 softDeleteDf.write.format("hudi").
   options(getQuickstartWriteConfigs).
-  option(OPERATION_OPT_KEY, "upsert").
-  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(TABLE_NAME, tableName).
+  option(OPERATION.key(), "upsert").
+  option(PRECOMBINE_FIELD.key(), "ts").
+  option(RECORDKEY_FIELD.key(), "uuid").
+  option(PARTITIONPATH_FIELD.key(), "partitionpath").
+  option(TBL_NAME.key(), tableName).
   mode(Append).
   save(basePath)
 ```
 
 - **Hard Deletes** : A stronger form of deletion is to physically remove any trace of the record from the table. This can be achieved in 3 different ways. 
 
-1. Using Datasource, set `OPERATION_OPT_KEY` to `DELETE_OPERATION_OPT_VAL`. This will remove all the records in the DataSet being submitted.
+1. Using Datasource, set `OPERATION.key()` to `DELETE_OPERATION_OPT_VAL`. This will remove all the records in the DataSet being submitted.
 
 Example, first read in a dataset:
 ```scala
 val roViewDF = spark.
         read.
-        format("org.apache.hudi").
+        format("hudi").
         load(basePath + "/*/*/*/*")
 roViewDF.createOrReplaceTempView("hudi_ro_table")
 spark.sql("select count(*) from hudi_ro_table").show() // should return 10 (number of records inserted above)
@@ -358,26 +349,26 @@ Lastly, execute the deletion of these records:
 ```scala
 val deletes = dataGen.generateDeletes(df.collectAsList())
 val df = spark.read.json(spark.sparkContext.parallelize(deletes, 2));
-df.write.format("org.apache.hudi").
+df.write.format("hudi").
 options(getQuickstartWriteConfigs).
-option(OPERATION_OPT_KEY,"delete").
-option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-option(TABLE_NAME, tableName).
+option(OPERATION.key(),"delete").
+option(PRECOMBINE_FIELD.key(), "ts").
+option(RECORDKEY_FIELD.key(), "uuid").
+option(PARTITIONPATH_FIELD.key(), "partitionpath").
+option(TBL_NAME.key(), tableName).
 mode(Append).
 save(basePath);
 ```
 
-2. Using DataSource, set `PAYLOAD_CLASS_OPT_KEY` to `"org.apache.hudi.EmptyHoodieRecordPayload"`. This will remove all the records in the DataSet being submitted. 
+2. Using DataSource, set `PAYLOAD_CLASS_NAME.key()` to `"org.apache.hudi.EmptyHoodieRecordPayload"`. This will remove all the records in the DataSet being submitted. 
 
 This example will remove all the records from the table that exist in the DataSet `deleteDF`:
 ```scala
  deleteDF // dataframe containing just records to be deleted
-   .write().format("org.apache.hudi")
+   .write().format("hudi")
    .option(...) // Add HUDI options like record-key, partition-path and others as needed for your setup
    // specify record_key, partition_key, precombine_fieldkey & usual params
-   .option(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY, "org.apache.hudi.EmptyHoodieRecordPayload")
+   .option(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key(), "org.apache.hudi.EmptyHoodieRecordPayload")
 ```
 
 3. Using DataSource or DeltaStreamer, add a column named `_hoodie_is_deleted` to DataSet. The value of this column must be set to `true` for all the records to be deleted and either `false` or left null for any records which are to be upserted.
@@ -441,16 +432,16 @@ Following is an example of how to use optimistic_concurrency_control via spark d
 ```java
 inputDF.write.format("hudi")
        .options(getQuickstartWriteConfigs)
-       .option(PRECOMBINE_FIELD_OPT_KEY, "ts")
+       .option(PRECOMBINE_FIELD.key(), "ts")
        .option("hoodie.cleaner.policy.failed.writes", "LAZY")
        .option("hoodie.write.concurrency.mode", "optimistic_concurrency_control")
        .option("hoodie.write.lock.zookeeper.url", "zookeeper")
        .option("hoodie.write.lock.zookeeper.port", "2181")
        .option("hoodie.write.lock.zookeeper.lock_key", "test_table")
        .option("hoodie.write.lock.zookeeper.base_path", "/test")
-       .option(RECORDKEY_FIELD_OPT_KEY, "uuid")
-       .option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath")
-       .option(TABLE_NAME, tableName)
+       .option(RECORDKEY_FIELD.key(), "uuid")
+       .option(PARTITIONPATH_FIELD.key(), "partitionpath")
+       .option(TBL_NBAME.key(), tableName)
        .mode(Overwrite)
        .save(basePath)
 ```
@@ -470,7 +461,6 @@ You can push a commit notification to an HTTP URL and can specify custom values 
 | CALLBACK_HTTP_TIMEOUT_IN_SECONDS | Callback timeout in seconds | optional | 3 |
 | CALLBACK_CLASS_NAME | Full path of callback class and must be a subclass of HoodieWriteCommitCallback class, org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback by default | optional | org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback |
 | CALLBACK_HTTP_API_KEY_VALUE | Http callback API key | optional | hudi_write_commit_http_callback |
-| | | | |
 
 #### Kafka Endpoints
 You can push a commit notification to a Kafka topic so it can be used by other real time systems.
@@ -482,7 +472,6 @@ You can push a commit notification to a Kafka topic so it can be used by other r
 | RETRIES | Times to retry the produce | optional | 3 |
 | ACKS | kafka acks level, all by default to ensure strong durability | optional | all |
 | BOOTSTRAP_SERVERS | Bootstrap servers of kafka cluster, to be used for publishing commit metadata | required | N/A |
-| | | | |
 
 #### Pulsar Endpoints
 You can push a commit notification to a Pulsar topic so it can be used by other real time systems. 

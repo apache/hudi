@@ -98,14 +98,16 @@ backwards compatibility and not breaking existing pipelines, this config is set 
 Unless Hive sync is enabled, the dataset written by Hudi using one of the methods above can simply be queries via the Spark datasource like any other source.
 
 ```scala
+import org.apache.hudi.DataSourceReadOptions._
+
 val hudiSnapshotQueryDF = spark
      .read()
      .format("hudi")
-     .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL())
+     .option(QUERY_TYPE.key(), QUERY_TYPE_SNAPSHOT_OPT_VAL)
      .load(basePath) 
 val hudiIncQueryDF = spark.read().format("hudi")
-     .option(DataSourceReadOptions.VIEW_TYPE_OPT_KEY(), DataSourceReadOptions.VIEW_TYPE_INCREMENTAL_OPT_VAL())
-     .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY(), <beginInstantTime>)
+     .option(QUERY_TYPE.key(), QUERY_TYPE_INCREMENTAL_OPT_VAL)
+     .option(BEGIN_INSTANTTIME.key(), <beginInstantTime>)
      .load(basePath);
 ```
 
