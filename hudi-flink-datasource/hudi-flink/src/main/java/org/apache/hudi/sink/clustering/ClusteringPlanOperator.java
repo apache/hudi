@@ -22,10 +22,12 @@ import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.common.model.ClusteringGroupInfo;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.metrics.FlinkClusteringMetrics;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.FlinkTables;
@@ -33,10 +35,14 @@ import org.apache.hudi.util.FlinkWriteClients;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Operator that generates the clustering plan with pluggable strategies on finished checkpoints.
@@ -57,6 +63,8 @@ public class ClusteringPlanOperator extends AbstractStreamOperator<ClusteringPla
   @SuppressWarnings("rawtypes")
   private transient HoodieFlinkTable table;
 
+  private transient FlinkClusteringMetrics clusteringMetrics;
+
   public ClusteringPlanOperator(Configuration conf) {
     this.conf = conf;
   }
@@ -65,6 +73,7 @@ public class ClusteringPlanOperator extends AbstractStreamOperator<ClusteringPla
   public void open() throws Exception {
     super.open();
     this.table = FlinkTables.createTable(conf, getRuntimeContext());
+    registerMetrics();
     // when starting up, rolls back all the inflight clustering instants if there exists,
     // these instants are in priority for scheduling task because the clustering instants are
     // scheduled from earliest(FIFO sequence).
@@ -88,10 +97,20 @@ public class ClusteringPlanOperator extends AbstractStreamOperator<ClusteringPla
   }
 
   private void scheduleClustering(HoodieFlinkTable<?> table, long checkpointId) {
+    List<HoodieInstant> pendingClusteringInstantTimes =
+        ClusteringUtils.getPendingClusteringInstantTimes(table.getMetaClient());
     // the first instant takes the highest priority.
     Option<HoodieInstant> firstRequested = Option.fromJavaOptional(
-        ClusteringUtils.getPendingClusteringInstantTimes(table.getMetaClient()).stream()
+        pendingClusteringInstantTimes.stream()
             .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED).findFirst());
+
+    long pendingClusteringCount = pendingClusteringInstantTimes.stream()
+        .filter(instant -> instant.getState() == State.REQUESTED).collect(Collectors.toList()).size();
+
+    // record metrics
+    clusteringMetrics.setFirstPendingClusteringInstant(firstRequested);
+    clusteringMetrics.setPendingClusteringPlanCount(pendingClusteringCount);
+
     if (!firstRequested.isPresent()) {
       // do nothing.
       LOG.info("No clustering plan for checkpoint " + checkpointId);
@@ -135,5 +154,11 @@ public class ClusteringPlanOperator extends AbstractStreamOperator<ClusteringPla
   @VisibleForTesting
   public void setOutput(Output<StreamRecord<ClusteringPlanEvent>> output) {
     this.output = output;
+  }
+
+  private void registerMetrics() {
+    MetricGroup metrics = getRuntimeContext().getMetricGroup();
+    clusteringMetrics = new FlinkClusteringMetrics(metrics);
+    clusteringMetrics.registerMetrics();
   }
 }
