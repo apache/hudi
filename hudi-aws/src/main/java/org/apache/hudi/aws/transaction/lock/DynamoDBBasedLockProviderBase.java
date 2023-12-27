@@ -168,7 +168,7 @@ public abstract class DynamoDBBasedLockProviderBase implements LockProvider<Lock
         ? dynamoDbBasedLockConfig.getString(DYNAMODB_ENDPOINT_URL)
         : DynamoDbClient.serviceMetadata().endpointFor(Region.of(region)).toString();
 
-    if (!endpointURL.startsWith("https://") && !endpointURL.startsWith("http://")) {
+    if (!endpointURL.startsWith("https://") || !endpointURL.startsWith("http://")) {
       endpointURL = "https://" + endpointURL;
     }
 
