@@ -157,6 +157,21 @@ Example: When you change any file in `versioned_docs/version-0.7.0/`, it will on
 ## Configs
 Configs can be automatically updated by following these steps documented at ../hudi-utils/README.md
 
+## Talks
+
+When adding a talk, please follow these guidelines.
+
+1. Ensure the entry is of the format 
+   "[Title](Hyperlink to video/resources)" - By <Author 1>, <Author 2>, <Author 3>. <Name of Conference/Meetup/Session>, <Month> <Year>.
+2. Please ensure the talks are in chronological order.
+3. Try to add links to videos and slide decks when possible. If they are not available in same page, feel free to add 
+   [Slides](Slides link) towards the end like for example:
+
+:::note
+   ["Hoodie: An Open Source Incremental Processing Framework From Uber"](http://www.dataengconf.com/hoodie-an-open-source-incremental-processing-framework-from-uber) - By Vinoth Chandar.
+   Apr 2017, DataEngConf, San Francisco, CA [Slides](https://www.slideshare.net/vinothchandar/hoodie-dataengconf-2017) [Video](https://www.youtube.com/watch?v=7Wudjc-v7CA)
+:::
+
 ## Blogs
 
 When adding a new blog, please follow these guidelines.
@@ -195,6 +210,8 @@ Take a look at this blog for reference - (Apache Hudi vs Delta Lake vs Apache Ic
        For example if the article is https://www.uber.com/blog/cost-efficiency-big-data/ we would use `uber` as the tag here. 
        Another example - for https://robinhood.engineering/author-balaji-varadarajan-e3f496815ebf  we would use 
        `robinhood` as the tag. For blogs directly contributed to hudi repo, we can use `apache hudi` as the tag.
+   4. Please refer to guidelines for tagging  [below](guidelines-to-tag-properly)
+
 
 ## Video Guides
 
@@ -225,6 +242,7 @@ tags:
 3. The image must be uploaded in the path /assets/images/video_blogs/<image_file-name> and should be of standard size 
    1200 * 600. Its easy to use the same name as the video guide for the image as well - `<yyyy-mm-dd>-<Video Guide Title>.png`
    If there is no thumbnail or cover image stick to the default image - `/assets/images/hudi-video-page-default.png`
+   (OR) another alternative would be to create a simple cover image with the title of the video as the thumbnail.
 4. The navigate field represents the actual link to video.
 5. The tags should be representative of Hudi component/feature focussed in the guide. The tags can refer to services or 
    techniques used in the guide. Stick to 5 - 7 tags at the max.
@@ -235,15 +253,24 @@ tags:
        Can be the use case or functionality achieved. Example - de-duplication. This can be skipped if the guide is in 
        general talking about ingestion using different sources and sinks.
     3. tag 3
-        - Represent individual Hudi features/components - clustering, compaction, ingestion, meta-sync etc.
+        - Represent individual Hudi features/components - clustering, compaction, ingestion, meta-sync etc. 
+        - If deltastreamer is referred, add both tags - `deltastreamer` and `hudi streamer` since we renamed deltastreamer.
     4. tag 4
         - List of technologies used in the guide. This should be an inclusive list. Qualify names fully here. For example 
           prefer to "amazon athena" instead of "athena". This helps in discoverability of the guides.
     5. tag N
         - [beginner, intermediate, advanced]. Use this tag if its clear on what level this guide targets. Else feel 
           free to skip this tag.
+    6. Please refer to guidelines for tagging  [below](guidelines-to-tag-properly)
 6. Ensure that tags are consistent. When adding new tags refer [Blog Tags](https://hudi.apache.org/blog/tags) and 
    [Video Guide Tags](https://hudi.apache.org/videos/tags) to check if there is a tag already and prefer to use that. 
+
+## Guidelines to tag properly
+      - Please do not use `index` as a tag. Instead, use `indexing`.
+      - Please do not use `-` in tags, since it may affect discoverability. 
+      - When referring to a specific type of query like `snapshot query` with query as the suffix use singular.
+      - When referring to write operation types prefer plural. Ex: `inserts` over `insert`. 
+      - Avoid class names
 
 ## Maintainer
 

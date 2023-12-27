@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[44831],{20519:s=>{s.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/mino","name":"mino","count":1,"permalink":"/cn/blog/tags/mino"}')}}]);

@@ -7,7 +7,7 @@ image: /assets/images/blog/incr-processing/image7.png
 tags:
 - blog
 - datalake
-- incremental-processing
+- incremental processing
 - apache hudi
 ---
 

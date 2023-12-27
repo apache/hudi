@@ -108,6 +108,11 @@ The following is an inside look on the Hudi write path and the sequence of event
 10. Archive
     1. Lastly, we perform an archival step which moves old [timeline](/docs/next/timeline) items to an archive folder.
 
+Here is a diagramatic representation of the flow.
+
+<figure>
+    <img className="docimage" src={require("/assets/images/hudi_write_path.png").default} alt="hudi_write_path.png" />
+</figure>
 
 ## Related Resources
 <h3>Videos</h3>

@@ -5,7 +5,7 @@ author: vinoth
 category: blog
 image: /assets/images/blog/hudi_streaming.png
 tags:
-- datalake-platform
+- datalake platform
 - blog
 - apache hudi
 ---

@@ -5,7 +5,7 @@ author: shivnarayan
 category: blog
 tags:
 - how-to
-- delete
+- deletes
 - apache hudi
 ---
 

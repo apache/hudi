@@ -19,8 +19,8 @@ Specifically, a given base file needs to merged only against updates for records
 designs without an indexing component (e.g: [Apache Hive ACID](https://cwiki.apache.org/confluence/display/Hive/Hive+Transactions)),
 could end up having to merge all the base files against all incoming updates/delete records:
 
-![Fact table](/assets/images/blog/hudi-indexes/with-and-without-index.png)
-_Figure: Comparison of merge cost for updates (yellow blocks) against base files (white blocks)_
+![Fact table](/assets/images/blog/hudi-indexes/with_without_index.png)
+<p align = "center">Figure: Comparison of merge cost for updates (dark blue blocks) against base files (light blue blocks)</p>
 
 ## Index Types in Hudi
 
@@ -116,8 +116,8 @@ Many companies store large volumes of transactional data in NoSQL data stores. F
 orders in an e-commerce site. These tables are usually ever growing with random updates on most recent data with long tail updates going to older data, either
 due to transactions settling at a later date/data corrections. In other words, most updates go into the latest partitions with few updates going to older ones.
 
-![Fact table](/assets/images/blog/hudi-indexes/Fact20tables.gif)
-_Figure: Typical update pattern for Fact tables_
+![Fact table](/assets/images/blog/hudi-indexes/nosql.png)
+<p align = "center">Figure: Typical update pattern for Fact tables</p>
 
 For such workloads, the `BLOOM` index performs well, since index look-up will prune a lot of data files based on a well-sized bloom filter.
 Additionally, if the keys can be constructed such that they have a certain ordering, the number of files to be compared is further reduced by range pruning.
@@ -134,8 +134,8 @@ Event Streaming is everywhere. Events coming from Apache Kafka or similar messag
 time) as a first class citizen. For eg, IoT event stream, click stream data, ad impressions etc. Inserts and updates only span the last few partitions as these are mostly append only data.
 Given duplicate events can be introduced anywhere in the end-end pipeline, de-duplication before storing on the data lake is a common requirement.
 
-![Event table](/assets/images/blog/hudi-indexes/Event20tables.gif)
-_Figure showing the spread of updates for Event table._
+![Event table](/assets/images/blog/hudi-indexes/event_bus.png)
+<p align = "center">Figure showing the spread of updates for Event table.</p>
 
 In general, this is a very challenging problem to solve at lower cost. Although, we could even employ a key value store to perform this de-duplication with HBASE index, the index storage
 costs would grow linear with number of events and thus can be prohibitively expensive. In fact, `BLOOM` index with range pruning is the optimal solution here. One can leverage the fact
@@ -146,8 +146,8 @@ by pruning large amounts of files even within the latest table partitions.
 These types of tables usually contain high dimensional data and hold reference data e.g user profile, merchant information. These are high fidelity tables where the updates are often small but also spread
 across a lot of partitions and data files ranging across the dataset from old to new. Often times, these tables are also un-partitioned, since there is also not a good way to partition these tables.
 
-![Dimensions table](/assets/images/blog/hudi-indexes/Dimension20tables.gif)
-_Figure showing the spread of updates for Dimensions table._
+![Dimensions table](/assets/images/blog/hudi-indexes/dimension.png)
+<p align = "center">Figure showing the spread of updates for Dimensions table.</p>
 
 As discussed before, the `BLOOM` index may not yield benefits if a good number of files cannot be pruned out by comparing ranges/filters. In such a random write workload, updates end up touching
 most files within in the table and thus bloom filters will typically indicate a true positive for all files based on some incoming update. Consequently, we would end up comparing ranges/filter, only

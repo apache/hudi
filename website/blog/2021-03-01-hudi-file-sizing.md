@@ -6,7 +6,7 @@ category: blog
 image: /assets/images/blog/2021-03-01-hudi-file-sizing.png
 tags:
 - design
-- file-sizing
+- file sizing
 - apache hudi
 ---
 

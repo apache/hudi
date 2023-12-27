@@ -5,7 +5,7 @@ author: pratyakshsharma
 category: blog
 tags:
 - how-to
-- multi-deltastreamer
+- multi deltastreamer
 - apache hudi
 ---
 

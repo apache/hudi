@@ -9,7 +9,7 @@ navigate: "https://www.youtube.com/watch?v=J1xvPIcDIaQ"
 tags:
 - guide
 - deltastreamer
-- hoodie streamer
+- hudi streamer
 - amazon aurora
 - aws dms
 - amazon s3

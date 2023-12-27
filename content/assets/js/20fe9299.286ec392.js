@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[5264],{25724:a=>{a.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/kafka-topic","name":"kafka topic","count":1,"permalink":"/videos/tags/kafka-topic"}')}}]);
