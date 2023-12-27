@@ -28,7 +28,7 @@ class TestHoodieConversionUtils {
     val props:TypedProperties = new TypedProperties()
     props.setProperty("hoodie.record.key", "record.key")
     props.setProperty("hoodie.partition.key", "partition.key")
-    props.put("hoodie.inline.properties", new TypedProperties())
+    props.put("hoodie.datasource.write.payload.class", classOf[org.apache.hudi.common.config.TypedProperties])
 
     val scalaMap: Map[String, String] = HoodieConversionUtils.fromProperties(props)
     assert(scalaMap.size == 3)
