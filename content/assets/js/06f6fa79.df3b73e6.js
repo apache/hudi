@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[52918],{3400:s=>{s.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/aws-glue","name":"aws glue","count":6,"permalink":"/blog/tags/aws-glue"}')}}]);

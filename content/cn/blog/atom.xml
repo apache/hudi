@@ -2,20 +2,97 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/cn/blog</id>
     <title>Apache Hudi: User-Facing Analytics</title>
-    <updated>2023-11-09T00:00:00.000Z</updated>
+    <updated>2023-12-06T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/cn/blog"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/cn/assets/images/favicon.ico</icon>
     <entry>
-        <title type="html"><![CDATA[On Iceberg and Hudi ACID Guarantees]]></title>
-        <id>/2023/11/09/On-Iceberg-and-Hudi-ACID-Guarantees</id>
-        <link href="https://hudi.apache.org/cn/blog/2023/11/09/On-Iceberg-and-Hudi-ACID-Guarantees"/>
-        <updated>2023-11-09T00:00:00.000Z</updated>
+        <title type="html"><![CDATA[Apache Hudi: From Zero To One (7/10)]]></title>
+        <id>/2023/12/06/Apache-Hudi-From-Zero-To-One-blog-7</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/12/06/Apache-Hudi-From-Zero-To-One-blog-7"/>
+        <updated>2023-12-06T00:00:00.000Z</updated>
         <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
-        <content type="html"><![CDATA[<div url="https://www.onehouse.ai/blog/on-iceberg-and-hudi-acid-guarantees">Redirecting... please wait!! </div>]]></content>
+        <content type="html"><![CDATA[<div url="https://blog.datumagic.com/p/apache-hudi-from-zero-to-one-710">Redirecting... please wait!! </div>]]></content>
         <author>
-            <name>Vinoth Chandar</name>
+            <name>Shiyan Xu</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Getting started with Apache Hudi]]></title>
+        <id>/2023/12/01/Getting-started-with-Apache-Hudi</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/12/01/Getting-started-with-Apache-Hudi"/>
+        <updated>2023-12-01T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://datacouch.medium.com/getting-started-with-apache-hudi-711b89c107aa">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>DataCouch</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Mastering Data Lakes: A Deep Dive into MINIO, Hudi, and Delta Streamer]]></title>
+        <id>/2023/11/30/Mastering-Data-Lakes-A-Deep-Dive-into-MINIO-Hudi-and-Delta-Streamer</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/11/30/Mastering-Data-Lakes-A-Deep-Dive-into-MINIO-Hudi-and-Delta-Streamer"/>
+        <updated>2023-11-30T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.linkedin.com/pulse/mastering-data-lakes-deep-dive-minio-hudi-delta-streamer-soumil-shah-wxzsf/?utm_source=share&amp;utm_medium=member_ios&amp;utm_campaign=share_via">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi (Part 1): History, Getting Started]]></title>
+        <id>/2023/11/28/Apache-Hudi-Part-1-History-Getting-Started</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/11/28/Apache-Hudi-Part-1-History-Getting-Started"/>
+        <updated>2023-11-28T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://dipankar-tnt.medium.com/apache-hudi-part-1-history-getting-started-95030b003759">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Dipankar Mazumdar</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Real-Time Data Processing with Postgres, Debezium, Kafka, Schema Registry, and Delta Streamer Guide for Begineers]]></title>
+        <id>/2023/11/26/Real-Time-Data-Processing-with-Postgres-Debezium-Kafka-Schema-Registry-and-DeltaStreamer-Guide-for-Begineers</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/11/26/Real-Time-Data-Processing-with-Postgres-Debezium-Kafka-Schema-Registry-and-DeltaStreamer-Guide-for-Begineers"/>
+        <updated>2023-11-26T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.linkedin.com/pulse/real-time-data-processing-postgres-debezium-kafka-schema-soumil-shah-li19e/?utm_source=share&amp;utm_medium=member_ios&amp;utm_campaign=share_via">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Introducing Apache Hudi support with AWS Glue crawlers]]></title>
+        <id>/2023/11/22/Introducing-Apache-Hudi-support-with-AWS-Glue-crawlers</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/11/22/Introducing-Apache-Hudi-support-with-AWS-Glue-crawlers"/>
+        <updated>2023-11-22T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/introducing-apache-hudi-support-with-aws-glue-crawlers/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Noritaka Sekiyama, Kyle Duong, Sandeep Adwankar</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Hudi Streamer (Delta Streamer) Hands-On Guide: Local Ingestion from Parquet Source]]></title>
+        <id>/2023/11/19/Hudi-Streamer-DeltaStreamer-Hands-On-Guide-Local-Ingestion-from-Parquet-Source</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/11/19/Hudi-Streamer-DeltaStreamer-Hands-On-Guide-Local-Ingestion-from-Parquet-Source"/>
+        <updated>2023-11-19T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.linkedin.com/pulse/hudi-streamer-delta-hands-on-guide-local-ingestion-from-soumil-shah-jssse/?utm_source=share&amp;utm_medium=member_ios&amp;utm_campaign=share_via">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi: From Zero To One (6/10)]]></title>
+        <id>/2023/11/13/Apache-Hudi-From-Zero-To-One-blog-6</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/11/13/Apache-Hudi-From-Zero-To-One-blog-6"/>
+        <updated>2023-11-13T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://blog.datumagic.com/p/apache-hudi-from-zero-to-one-610">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Shiyan Xu</name>
         </author>
     </entry>
     <entry>
@@ -133,6 +210,14 @@ by Hudi metadata tables.</p><hr/><p><sup id="fnref-1"><a href="#fn-1" class="foo
         </author>
     </entry>
     <entry>
+        <title type="html"><![CDATA[Tipico Facilitates Faster Data Access with a Modern Data Strategy on AWS]]></title>
+        <id>/2023/10/22/Tipico-Facilitates-Faster-Data-Access-with-a-Modern-Data-Strategy-on-AWS</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/10/22/Tipico-Facilitates-Faster-Data-Access-with-a-Modern-Data-Strategy-on-AWS"/>
+        <updated>2023-10-22T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!! s]]></summary>
+        <content type="html"><![CDATA[<div url="https://aws.amazon.com/solutions/case-studies/tipico-case-study/">Redirecting... please wait!! </div>s]]></content>
+    </entry>
+    <entry>
         <title type="html"><![CDATA[It's Time for the Universal Data Lakehouse]]></title>
         <id>/2023/10/20/Its-Time-for-the-Universal-Data-Lakehouse</id>
         <link href="https://hudi.apache.org/cn/blog/2023/10/20/Its-Time-for-the-Universal-Data-Lakehouse"/>
@@ -152,6 +237,17 @@ by Hudi metadata tables.</p><hr/><p><sup id="fnref-1"><a href="#fn-1" class="foo
         <content type="html"><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/load-data-incrementally-from-transactional-data-lakes-to-data-warehouses/">Redirecting... please wait!! </div>]]></content>
         <author>
             <name>Noritaka Sekiyama</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi: From Zero To One (5/10)]]></title>
+        <id>/2023/10/18/Apache-Hudi-From-Zero-To-One-blog-5</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/10/18/Apache-Hudi-From-Zero-To-One-blog-5"/>
+        <updated>2023-10-18T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://blog.datumagic.com/p/apache-hudi-from-zero-to-one-510">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Shiyan Xu</name>
         </author>
     </entry>
     <entry>
@@ -191,6 +287,28 @@ by Hudi metadata tables.</p><hr/><p><sup id="fnref-1"><a href="#fn-1" class="foo
         </author>
     </entry>
     <entry>
+        <title type="html"><![CDATA[Apache Hudi: From Zero To One (4/10)]]></title>
+        <id>/2023/09/27/Apache-Hudi-From-Zero-To-One-blog-4</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/09/27/Apache-Hudi-From-Zero-To-One-blog-4"/>
+        <updated>2023-09-27T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://blog.datumagic.com/p/apache-hudi-from-zero-to-one-410">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Shiyan Xu</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Exploring the Architecture of Apache Iceberg, Delta Lake, and Apache Hudi]]></title>
+        <id>/2023/09/22/Exploring-the-Architecture-of-Apache-Iceberg-Delta-Lake-and-Apache-Hudi</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/09/22/Exploring-the-Architecture-of-Apache-Iceberg-Delta-Lake-and-Apache-Hudi"/>
+        <updated>2023-09-22T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.dremio.com/blog/exploring-the-architecture-of-apache-iceberg-delta-lake-and-apache-hudi/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Alex Merced</name>
+        </author>
+    </entry>
+    <entry>
         <title type="html"><![CDATA[A Beginner’s Guide to Apache Hudi with PySpark — Part 1 of 2]]></title>
         <id>/2023/09/19/A-Beginners-Guide-to-Apache-Hudi-with-PySpark-Part-1-of-2</id>
         <link href="https://hudi.apache.org/cn/blog/2023/09/19/A-Beginners-Guide-to-Apache-Hudi-with-PySpark-Part-1-of-2"/>
@@ -199,6 +317,17 @@ by Hudi metadata tables.</p><hr/><p><sup id="fnref-1"><a href="#fn-1" class="foo
         <content type="html"><![CDATA[<div url="https://medium.com/@sagarlakshmipathy/a-beginners-guide-to-apache-hudi-with-pyspark-part-1-of-2-8a4e78f6ad2e">Redirecting... please wait!! </div>]]></content>
         <author>
             <name>Sagar Lakshmipathy</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi: From Zero To One (3/10)]]></title>
+        <id>/2023/09/15/Apache-Hudi-From-Zero-To-One-blog-3</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/09/15/Apache-Hudi-From-Zero-To-One-blog-3"/>
+        <updated>2023-09-15T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://blog.datumagic.com/p/apache-hudi-from-zero-to-one-310">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Shiyan Xu</name>
         </author>
     </entry>
     <entry>
@@ -238,6 +367,17 @@ by Hudi metadata tables.</p><hr/><p><sup id="fnref-1"><a href="#fn-1" class="foo
         </author>
     </entry>
     <entry>
+        <title type="html"><![CDATA[Apache Hudi: From Zero To One (2/10)]]></title>
+        <id>/2023/09/06/Apache-Hudi-From-Zero-To-One-blog-2</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/09/06/Apache-Hudi-From-Zero-To-One-blog-2"/>
+        <updated>2023-09-06T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://blog.datumagic.com/p/apache-hudi-from-zero-to-one-210">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Shiyan Xu</name>
+        </author>
+    </entry>
+    <entry>
         <title type="html"><![CDATA[Lakehouse or Warehouse? Part 1 of 2]]></title>
         <id>/2023/09/06/Lakehouse-or-Warehouse-Part-1-of-2</id>
         <link href="https://hudi.apache.org/cn/blog/2023/09/06/Lakehouse-or-Warehouse-Part-1-of-2"/>
@@ -257,6 +397,17 @@ by Hudi metadata tables.</p><hr/><p><sup id="fnref-1"><a href="#fn-1" class="foo
         <content type="html"><![CDATA[<div url="https://medium.com/@acmilanellosw/incremental-queries-with-apache-hudi-and-apache-flink-5a90d088327">Redirecting... please wait!! </div>]]></content>
         <author>
             <name>nello</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi: From Zero To One (1/10)]]></title>
+        <id>/2023/08/28/Apache-Hudi-From-Zero-To-One</id>
+        <link href="https://hudi.apache.org/cn/blog/2023/08/28/Apache-Hudi-From-Zero-To-One"/>
+        <updated>2023-08-28T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://blog.datumagic.com/p/apache-hudi-from-zero-to-one-110">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Shiyan Xu</name>
         </author>
     </entry>
     <entry>

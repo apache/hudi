@@ -6,6 +6,7 @@ category: blog
 image: /assets/images/blog/Apache-Hudi-2022-Review.png
 tags:
 - apache hudi
+- community
 ---
 
 <img src="/assets/images/blog/Apache-Hudi-2022-Review.png" alt="drawing" style={{width:'80%', display:'block', marginLeft:'auto', marginRight:'auto'}} />

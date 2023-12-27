@@ -7,7 +7,7 @@ image: /assets/images/blog/hudi_dbt_lakehouse.png
 tags:
 - how-to
 - deltastreamer
-- incremental-processing
+- incremental processing
 - apache hudi
 ---
 

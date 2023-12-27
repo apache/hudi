@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[46871],{75924:e=>{e.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/lock-provider","name":"lock provider","count":2,"permalink":"/cn/blog/tags/lock-provider"}')}}]);

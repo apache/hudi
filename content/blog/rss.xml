@@ -4,16 +4,72 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/blog</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Thu, 09 Nov 2023 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Wed, 06 Dec 2023 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
         <item>
-            <title><![CDATA[On Iceberg and Hudi ACID Guarantees]]></title>
-            <link>https://hudi.apache.org/blog/2023/11/09/On-Iceberg-and-Hudi-ACID-Guarantees</link>
-            <guid>/2023/11/09/On-Iceberg-and-Hudi-ACID-Guarantees</guid>
-            <pubDate>Thu, 09 Nov 2023 00:00:00 GMT</pubDate>
+            <title><![CDATA[Apache Hudi: From Zero To One (7/10)]]></title>
+            <link>https://hudi.apache.org/blog/2023/12/06/Apache-Hudi-From-Zero-To-One-blog-7</link>
+            <guid>/2023/12/06/Apache-Hudi-From-Zero-To-One-blog-7</guid>
+            <pubDate>Wed, 06 Dec 2023 00:00:00 GMT</pubDate>
             <description><![CDATA[Redirecting... please wait!!]]></description>
-            <content:encoded><![CDATA[<div url="https://www.onehouse.ai/blog/on-iceberg-and-hudi-acid-guarantees">Redirecting... please wait!! </div>]]></content:encoded>
+            <content:encoded><![CDATA[<div url="https://blog.datumagic.com/p/apache-hudi-from-zero-to-one-710">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Getting started with Apache Hudi]]></title>
+            <link>https://hudi.apache.org/blog/2023/12/01/Getting-started-with-Apache-Hudi</link>
+            <guid>/2023/12/01/Getting-started-with-Apache-Hudi</guid>
+            <pubDate>Fri, 01 Dec 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://datacouch.medium.com/getting-started-with-apache-hudi-711b89c107aa">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Mastering Data Lakes: A Deep Dive into MINIO, Hudi, and Delta Streamer]]></title>
+            <link>https://hudi.apache.org/blog/2023/11/30/Mastering-Data-Lakes-A-Deep-Dive-into-MINIO-Hudi-and-Delta-Streamer</link>
+            <guid>/2023/11/30/Mastering-Data-Lakes-A-Deep-Dive-into-MINIO-Hudi-and-Delta-Streamer</guid>
+            <pubDate>Thu, 30 Nov 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://www.linkedin.com/pulse/mastering-data-lakes-deep-dive-minio-hudi-delta-streamer-soumil-shah-wxzsf/?utm_source=share&amp;utm_medium=member_ios&amp;utm_campaign=share_via">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Apache Hudi (Part 1): History, Getting Started]]></title>
+            <link>https://hudi.apache.org/blog/2023/11/28/Apache-Hudi-Part-1-History-Getting-Started</link>
+            <guid>/2023/11/28/Apache-Hudi-Part-1-History-Getting-Started</guid>
+            <pubDate>Tue, 28 Nov 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://dipankar-tnt.medium.com/apache-hudi-part-1-history-getting-started-95030b003759">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Real-Time Data Processing with Postgres, Debezium, Kafka, Schema Registry, and Delta Streamer Guide for Begineers]]></title>
+            <link>https://hudi.apache.org/blog/2023/11/26/Real-Time-Data-Processing-with-Postgres-Debezium-Kafka-Schema-Registry-and-DeltaStreamer-Guide-for-Begineers</link>
+            <guid>/2023/11/26/Real-Time-Data-Processing-with-Postgres-Debezium-Kafka-Schema-Registry-and-DeltaStreamer-Guide-for-Begineers</guid>
+            <pubDate>Sun, 26 Nov 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://www.linkedin.com/pulse/real-time-data-processing-postgres-debezium-kafka-schema-soumil-shah-li19e/?utm_source=share&amp;utm_medium=member_ios&amp;utm_campaign=share_via">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Introducing Apache Hudi support with AWS Glue crawlers]]></title>
+            <link>https://hudi.apache.org/blog/2023/11/22/Introducing-Apache-Hudi-support-with-AWS-Glue-crawlers</link>
+            <guid>/2023/11/22/Introducing-Apache-Hudi-support-with-AWS-Glue-crawlers</guid>
+            <pubDate>Wed, 22 Nov 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/introducing-apache-hudi-support-with-aws-glue-crawlers/">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Hudi Streamer (Delta Streamer) Hands-On Guide: Local Ingestion from Parquet Source]]></title>
+            <link>https://hudi.apache.org/blog/2023/11/19/Hudi-Streamer-DeltaStreamer-Hands-On-Guide-Local-Ingestion-from-Parquet-Source</link>
+            <guid>/2023/11/19/Hudi-Streamer-DeltaStreamer-Hands-On-Guide-Local-Ingestion-from-Parquet-Source</guid>
+            <pubDate>Sun, 19 Nov 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://www.linkedin.com/pulse/hudi-streamer-delta-hands-on-guide-local-ingestion-from-soumil-shah-jssse/?utm_source=share&amp;utm_medium=member_ios&amp;utm_campaign=share_via">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Apache Hudi: From Zero To One (6/10)]]></title>
+            <link>https://hudi.apache.org/blog/2023/11/13/Apache-Hudi-From-Zero-To-One-blog-6</link>
+            <guid>/2023/11/13/Apache-Hudi-From-Zero-To-One-blog-6</guid>
+            <pubDate>Mon, 13 Nov 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://blog.datumagic.com/p/apache-hudi-from-zero-to-one-610">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
         <item>
             <title><![CDATA[Record Level Index: Hudi's blazing fast indexing for large-scale datasets]]></title>
@@ -124,6 +180,14 @@ by Hudi metadata tables.</p><hr/><p><sup id="fnref-1"><a href="#fn-1" class="foo
             <content:encoded><![CDATA[<div url="https://www.linkedin.com/pulse/upsert-performance-evaluation-hudi-014-spark-341-record-soumil-shah-oupre/?utm_source=share&amp;utm_medium=member_ios&amp;utm_campaign=share_via">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
         <item>
+            <title><![CDATA[Tipico Facilitates Faster Data Access with a Modern Data Strategy on AWS]]></title>
+            <link>https://hudi.apache.org/blog/2023/10/22/Tipico-Facilitates-Faster-Data-Access-with-a-Modern-Data-Strategy-on-AWS</link>
+            <guid>/2023/10/22/Tipico-Facilitates-Faster-Data-Access-with-a-Modern-Data-Strategy-on-AWS</guid>
+            <pubDate>Sun, 22 Oct 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!! s]]></description>
+            <content:encoded><![CDATA[<div url="https://aws.amazon.com/solutions/case-studies/tipico-case-study/">Redirecting... please wait!! </div>s]]></content:encoded>
+        </item>
+        <item>
             <title><![CDATA[It's Time for the Universal Data Lakehouse]]></title>
             <link>https://hudi.apache.org/blog/2023/10/20/Its-Time-for-the-Universal-Data-Lakehouse</link>
             <guid>/2023/10/20/Its-Time-for-the-Universal-Data-Lakehouse</guid>
@@ -138,6 +202,14 @@ by Hudi metadata tables.</p><hr/><p><sup id="fnref-1"><a href="#fn-1" class="foo
             <pubDate>Thu, 19 Oct 2023 00:00:00 GMT</pubDate>
             <description><![CDATA[Redirecting... please wait!!]]></description>
             <content:encoded><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/load-data-incrementally-from-transactional-data-lakes-to-data-warehouses/">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Apache Hudi: From Zero To One (5/10)]]></title>
+            <link>https://hudi.apache.org/blog/2023/10/18/Apache-Hudi-From-Zero-To-One-blog-5</link>
+            <guid>/2023/10/18/Apache-Hudi-From-Zero-To-One-blog-5</guid>
+            <pubDate>Wed, 18 Oct 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://blog.datumagic.com/p/apache-hudi-from-zero-to-one-510">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
         <item>
             <title><![CDATA[Get started with Apache Hudi using AWS Glue by implementing key design concepts – Part 1]]></title>
@@ -164,12 +236,36 @@ by Hudi metadata tables.</p><hr/><p><sup id="fnref-1"><a href="#fn-1" class="foo
             <content:encoded><![CDATA[<div url="https://medium.com/@ranjanankur/apache-hudi-copy-on-write-cow-table-77fb2b849733">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
         <item>
+            <title><![CDATA[Apache Hudi: From Zero To One (4/10)]]></title>
+            <link>https://hudi.apache.org/blog/2023/09/27/Apache-Hudi-From-Zero-To-One-blog-4</link>
+            <guid>/2023/09/27/Apache-Hudi-From-Zero-To-One-blog-4</guid>
+            <pubDate>Wed, 27 Sep 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://blog.datumagic.com/p/apache-hudi-from-zero-to-one-410">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Exploring the Architecture of Apache Iceberg, Delta Lake, and Apache Hudi]]></title>
+            <link>https://hudi.apache.org/blog/2023/09/22/Exploring-the-Architecture-of-Apache-Iceberg-Delta-Lake-and-Apache-Hudi</link>
+            <guid>/2023/09/22/Exploring-the-Architecture-of-Apache-Iceberg-Delta-Lake-and-Apache-Hudi</guid>
+            <pubDate>Fri, 22 Sep 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://www.dremio.com/blog/exploring-the-architecture-of-apache-iceberg-delta-lake-and-apache-hudi/">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
             <title><![CDATA[A Beginner’s Guide to Apache Hudi with PySpark — Part 1 of 2]]></title>
             <link>https://hudi.apache.org/blog/2023/09/19/A-Beginners-Guide-to-Apache-Hudi-with-PySpark-Part-1-of-2</link>
             <guid>/2023/09/19/A-Beginners-Guide-to-Apache-Hudi-with-PySpark-Part-1-of-2</guid>
             <pubDate>Tue, 19 Sep 2023 00:00:00 GMT</pubDate>
             <description><![CDATA[Redirecting... please wait!!]]></description>
             <content:encoded><![CDATA[<div url="https://medium.com/@sagarlakshmipathy/a-beginners-guide-to-apache-hudi-with-pyspark-part-1-of-2-8a4e78f6ad2e">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Apache Hudi: From Zero To One (3/10)]]></title>
+            <link>https://hudi.apache.org/blog/2023/09/15/Apache-Hudi-From-Zero-To-One-blog-3</link>
+            <guid>/2023/09/15/Apache-Hudi-From-Zero-To-One-blog-3</guid>
+            <pubDate>Fri, 15 Sep 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://blog.datumagic.com/p/apache-hudi-from-zero-to-one-310">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
         <item>
             <title><![CDATA[Simplify operational data processing in data lakes using AWS Glue and Apache Hudi]]></title>
@@ -196,6 +292,14 @@ by Hudi metadata tables.</p><hr/><p><sup id="fnref-1"><a href="#fn-1" class="foo
             <content:encoded><![CDATA[<div url="https://medium.com/walmartglobaltech/demystifying-copy-on-write-in-apache-hudi-understanding-read-and-write-operations-3aa274017884">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
         <item>
+            <title><![CDATA[Apache Hudi: From Zero To One (2/10)]]></title>
+            <link>https://hudi.apache.org/blog/2023/09/06/Apache-Hudi-From-Zero-To-One-blog-2</link>
+            <guid>/2023/09/06/Apache-Hudi-From-Zero-To-One-blog-2</guid>
+            <pubDate>Wed, 06 Sep 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://blog.datumagic.com/p/apache-hudi-from-zero-to-one-210">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
             <title><![CDATA[Lakehouse or Warehouse? Part 1 of 2]]></title>
             <link>https://hudi.apache.org/blog/2023/09/06/Lakehouse-or-Warehouse-Part-1-of-2</link>
             <guid>/2023/09/06/Lakehouse-or-Warehouse-Part-1-of-2</guid>
@@ -210,6 +314,14 @@ by Hudi metadata tables.</p><hr/><p><sup id="fnref-1"><a href="#fn-1" class="foo
             <pubDate>Thu, 31 Aug 2023 00:00:00 GMT</pubDate>
             <description><![CDATA[Redirecting... please wait!!]]></description>
             <content:encoded><![CDATA[<div url="https://medium.com/@acmilanellosw/incremental-queries-with-apache-hudi-and-apache-flink-5a90d088327">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Apache Hudi: From Zero To One (1/10)]]></title>
+            <link>https://hudi.apache.org/blog/2023/08/28/Apache-Hudi-From-Zero-To-One</link>
+            <guid>/2023/08/28/Apache-Hudi-From-Zero-To-One</guid>
+            <pubDate>Mon, 28 Aug 2023 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://blog.datumagic.com/p/apache-hudi-from-zero-to-one-110">Redirecting... please wait!! </div>]]></content:encoded>
         </item>
         <item>
             <title><![CDATA[Delta, Hudi, Iceberg — A Benchmark Compilation]]></title>

@@ -9,7 +9,7 @@ navigate: "https://www.youtube.com/watch?v=d9jIvQYTc6k"
 tags:
 - guide
 - deltastreamer
-- hoodie streamer
+- hudi streamer
 - alerting
 - event bridge
 - amazon sns
