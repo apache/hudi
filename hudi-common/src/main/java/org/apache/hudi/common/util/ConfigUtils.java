@@ -45,6 +45,8 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
+
 public class ConfigUtils {
   public static final String STREAMER_CONFIG_PREFIX = "hoodie.streamer.";
   @Deprecated
@@ -565,7 +567,9 @@ public class ConfigUtils {
           props.clear();
           props.load(is);
           found = true;
-          ValidationUtils.checkArgument(HoodieTableConfig.validateChecksum(props));
+          if (props.containsKey(TABLE_CHECKSUM.key())) {
+            ValidationUtils.checkArgument(HoodieTableConfig.validateChecksum(props));
+          }
           return props;
         } catch (IOException e) {
           LOG.warn(String.format("Could not read properties from %s: %s", path, e));
