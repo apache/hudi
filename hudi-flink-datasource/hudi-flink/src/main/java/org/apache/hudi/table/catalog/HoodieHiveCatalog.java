@@ -23,6 +23,7 @@ import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -34,7 +35,12 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieCatalogException;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.Type;
+import org.apache.hudi.internal.schema.action.InternalSchemaChangeApplier;
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.table.HoodieTableFactory;
 import org.apache.hudi.table.format.FilePathUtils;
@@ -57,7 +63,9 @@ import org.apache.flink.table.catalog.CatalogPartitionSpec;
 import org.apache.flink.table.catalog.CatalogPropertiesUtil;
 import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.catalog.CatalogView;
+import org.apache.flink.table.catalog.Column;
 import org.apache.flink.table.catalog.ObjectPath;
+import org.apache.flink.table.catalog.TableChange;
 import org.apache.flink.table.catalog.exceptions.CatalogException;
 import org.apache.flink.table.catalog.exceptions.DatabaseAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.DatabaseNotEmptyException;
@@ -111,6 +119,9 @@ import static org.apache.hudi.adapter.HiveCatalogConstants.DATABASE_OWNER_TYPE;
 import static org.apache.hudi.adapter.HiveCatalogConstants.ROLE_OWNER;
 import static org.apache.hudi.adapter.HiveCatalogConstants.USER_OWNER;
 import static org.apache.hudi.configuration.FlinkOptions.PATH;
+import static org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType.AFTER;
+import static org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType.FIRST;
+import static org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType.NO_OPERATION;
 import static org.apache.hudi.table.catalog.TableOptionProperties.COMMENT;
 import static org.apache.hudi.table.catalog.TableOptionProperties.PK_CONSTRAINT_NAME;
 import static org.apache.hudi.table.catalog.TableOptionProperties.SPARK_SOURCE_PROVIDER;
@@ -733,6 +744,46 @@ public class HoodieHiveCatalog extends AbstractCatalog {
   }
 
   @Override
+  public void alterTable(ObjectPath tablePath, CatalogBaseTable newCatalogTable, List<TableChange> tableChanges,
+      boolean ignoreIfNotExists) throws TableNotExistException, CatalogException {
+    checkNotNull(tablePath, "Table path cannot be null");
+    checkNotNull(newCatalogTable, "New catalog table cannot be null");
+
+    if (!newCatalogTable.getOptions().getOrDefault(CONNECTOR.key(), "").equalsIgnoreCase("hudi")) {
+      throw new HoodieCatalogException(String.format("The %s is not hoodie table", tablePath.getObjectName()));
+    }
+    if (newCatalogTable instanceof CatalogView) {
+      throw new HoodieCatalogException("Hoodie catalog does not support to ALTER VIEW");
+    }
+
+    try {
+      Table hiveTable = getHiveTable(tablePath);
+      if (!sameOptions(hiveTable.getParameters(), newCatalogTable.getOptions(), FlinkOptions.TABLE_TYPE)
+          || !sameOptions(hiveTable.getParameters(), newCatalogTable.getOptions(), FlinkOptions.INDEX_TYPE)) {
+        throw new HoodieCatalogException("Hoodie catalog does not support to alter table type and index type");
+      }
+    } catch (TableNotExistException e) {
+      if (!ignoreIfNotExists) {
+        throw e;
+      }
+      return;
+    }
+    CatalogBaseTable oldTable = getTable(tablePath);
+    HoodieFlinkWriteClient<?> writeClient = createWriteClient(tablePath, oldTable);
+    Pair<InternalSchema, HoodieTableMetaClient> pair = writeClient.getInternalSchemaAndMetaClient();
+    InternalSchema oldSchema = pair.getLeft();
+    InternalSchema newSchema = oldSchema;
+    for (TableChange tableChange : tableChanges) {
+      newSchema = applyTableChange(newSchema, tableChange);
+    }
+    if (!oldSchema.equals(newSchema)) {
+      writeClient.setOperationType(WriteOperationType.ALTER_SCHEMA);
+      writeClient.commitTableChange(newSchema, pair.getRight());
+    }
+    alterHMSTable(tablePath, newCatalogTable);
+  }
+
+  @Override
   public void alterTable(
       ObjectPath tablePath, CatalogBaseTable newCatalogTable, boolean ignoreIfNotExists)
       throws TableNotExistException, CatalogException {
@@ -758,7 +809,10 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       }
       return;
     }
+    alterHMSTable(tablePath, newCatalogTable);
+  }
 
+  private void alterHMSTable(ObjectPath tablePath, CatalogBaseTable newCatalogTable) {
     try {
       boolean isMorTable = OptionsResolver.isMorTable(newCatalogTable.getOptions());
       Table hiveTable = instantiateHiveTable(tablePath, newCatalogTable, inferTablePath(tablePath, newCatalogTable), isMorTable);
@@ -1001,6 +1055,70 @@ public class HoodieHiveCatalog extends AbstractCatalog {
             .set(FlinkOptions.SOURCE_AVRO_SCHEMA,
                 HoodieTableMetaClient.builder().setBasePath(inferTablePath(tablePath, table)).setConf(hiveConf).build()
                     .getTableConfig().getTableCreateSchema().get().toString()));
+  }
+
+  private InternalSchema applyTableChange(InternalSchema oldSchema, TableChange change) {
+    InternalSchemaChangeApplier changeApplier = new InternalSchemaChangeApplier(oldSchema);
+    if (change instanceof TableChange.AddColumn) {
+      if (((TableChange.AddColumn) change).getColumn().isPhysical()) {
+        TableChange.AddColumn add = (TableChange.AddColumn) change;
+        Column column = add.getColumn();
+        String colName = column.getName();
+        Type colType = AvroInternalSchemaConverter.convertToField(AvroSchemaConverter.convertToSchema(column.getDataType().getLogicalType()));
+        String comment = column.getComment().orElse(null);
+        Pair<org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType, String> colPositionPair =
+            parseColumnPosition(add.getPosition());
+        return changeApplier.applyAddChange(
+            colName, colType, comment, colPositionPair.getRight(), colPositionPair.getLeft());
+      } else {
+        LOG.error("{} is either computed column or metadata column. Add non-physical column is not supported yet.",
+            ((TableChange.AddColumn) change).getColumn().getName());
+        throw new HoodieNotSupportedException("Add non-physical column is not supported yet.");
+      }
+    } else if (change instanceof TableChange.DropColumn) {
+      TableChange.DropColumn drop = (TableChange.DropColumn) change;
+      return changeApplier.applyDeleteChange(drop.getColumnName());
+    } else if (change instanceof TableChange.ModifyColumnName) {
+      TableChange.ModifyColumnName modify = (TableChange.ModifyColumnName) change;
+      String oldColName = modify.getOldColumnName();
+      String newColName = modify.getNewColumnName();
+      return changeApplier.applyRenameChange(oldColName, newColName);
+    } else if (change instanceof TableChange.ModifyPhysicalColumnType) {
+      TableChange.ModifyPhysicalColumnType modify = (TableChange.ModifyPhysicalColumnType) change;
+      String colName = modify.getOldColumn().getName();
+      Type newColType = AvroInternalSchemaConverter.convertToField(AvroSchemaConverter.convertToSchema(modify.getNewType().getLogicalType()));
+      return changeApplier.applyColumnTypeChange(colName, newColType);
+    } else if (change instanceof TableChange.ModifyColumnPosition) {
+      TableChange.ModifyColumnPosition modify = (TableChange.ModifyColumnPosition) change;
+      String colName = modify.getOldColumn().getName();
+      Pair<org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType, String> colPositionPair =
+          parseColumnPosition(modify.getNewPosition());
+      return changeApplier.applyReOrderColPositionChange(
+          colName, colPositionPair.getRight(), colPositionPair.getLeft());
+    } else if (change instanceof TableChange.ModifyColumnComment) {
+      TableChange.ModifyColumnComment modify  = (TableChange.ModifyColumnComment) change;
+      String colName = modify.getOldColumn().getName();
+      String comment = modify.getNewComment();
+      return changeApplier.applyColumnCommentChange(colName, comment);
+    } else if (change instanceof TableChange.ResetOption || change instanceof TableChange.SetOption) {
+      return oldSchema;
+    } else {
+      throw new HoodieNotSupportedException(change.getClass().getSimpleName() + " is not supported.");
+    }
+  }
+
+  private Pair<org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType, String> parseColumnPosition(TableChange.ColumnPosition colPosition) {
+    org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType positionType;
+    String position = "";
+    if (colPosition instanceof TableChange.First) {
+      positionType = FIRST;
+    } else if (colPosition instanceof TableChange.After) {
+      positionType = AFTER;
+      position = ((TableChange.After) colPosition).column();
+    } else {
+      positionType = NO_OPERATION;
+    }
+    return Pair.of(positionType, position);
   }
 
   @VisibleForTesting
