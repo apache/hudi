@@ -59,6 +59,10 @@ public class HoodieArrayWritableAvroUtils {
     });
   }
 
+  /**
+   * Projection will keep the size from the "from" schema because it gets recycled
+   * and if the size changes the reader will fail
+   */
   public static UnaryOperator<ArrayWritable> projectRecord(Schema from, Schema to) {
     int[] projection = getProjection(from, to);
     return arrayWritable -> {
@@ -82,6 +86,10 @@ public class HoodieArrayWritableAvroUtils {
     });
   }
 
+  /**
+   * After the reading and merging etc is done, we need to put the records
+   * into the positions of the original schema
+   */
   public static UnaryOperator<ArrayWritable> reverseProject(Schema from, Schema to) {
     int[] projection = getReverseProjection(from, to);
     return arrayWritable -> {

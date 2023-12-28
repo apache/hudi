@@ -68,11 +68,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   protected final Schema writerSchema;
   protected Map<String,String[]> hosts;
   protected final Map<String, TypeInfo> columnTypeMap;
-
   private final ObjectInspectorCache objectInspectorCache;
-
-  private final String tableName;
-
   private RecordReader<NullWritable, ArrayWritable> firstRecordReader = null;
 
   protected HiveHoodieReaderContext(HoodieFileGroupReaderRecordReader.HiveReaderCreator readerCreator,
@@ -88,7 +84,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     this.reporter = reporter;
     this.writerSchema = writerSchema;
     this.hosts = hosts;
-    this.tableName = metaClient.getTableConfig().getTableName();
+    String tableName = metaClient.getTableConfig().getTableName();
     this.objectInspectorCache = HoodieArrayWritableAvroUtils.getCacheForTable(tableName, writerSchema, jobConf);
     this.columnTypeMap = objectInspectorCache.getColumnTypeMap();
   }
@@ -111,6 +107,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     if (dataSchema.equals(requiredSchema)) {
       return  recordIterator;
     }
+    //The record reader puts the required columns in the positions of the data schema and nulls the rest of the columns
     return new CloseableMappingIterator<>(recordIterator, projectRecord(dataSchema, requiredSchema));
   }
 
@@ -119,6 +116,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     List<TypeInfo> dataColumnTypeList = dataColumnNameList.stream().map(columnTypeMap::get).collect(Collectors.toList());
     jobConf.set(serdeConstants.LIST_COLUMNS, String.join(",", dataColumnNameList));
     jobConf.set(serdeConstants.LIST_COLUMN_TYPES, dataColumnTypeList.stream().map(TypeInfo::getQualifiedName).collect(Collectors.joining(",")));
+    //don't replace `f -> f.name()` with lambda reference
     String readColNames = requiredSchema.getFields().stream().map(f -> f.name()).collect(Collectors.joining(","));
     jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, readColNames);
     jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, requiredSchema.getFields()
@@ -128,8 +126,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   @Override
   public ArrayWritable convertAvroRecord(IndexedRecord avroRecord) {
     //should be support timestamp?
-    ArrayWritable convertedRecord = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(avroRecord, avroRecord.getSchema(), false);
-    return convertedRecord;
+    return (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(avroRecord, avroRecord.getSchema(), false);
   }
 
   @Override
@@ -164,7 +161,11 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
 
   @Override
   public ClosableIterator<ArrayWritable> mergeBootstrapReaders(ClosableIterator<ArrayWritable> skeletonFileIterator,
-                                                               ClosableIterator<ArrayWritable> dataFileIterator) {
+                                                            Schema skeletonRequiredSchema,
+                                                            ClosableIterator<ArrayWritable> dataFileIterator,
+                                                            Schema dataRequiredSchema) {
+    int skeletonLen = skeletonRequiredSchema.getFields().size();
+    int dataLen = dataRequiredSchema.getFields().size();
     return new ClosableIterator<ArrayWritable>() {
 
       private final ArrayWritable returnWritable = new ArrayWritable(Writable.class);
@@ -180,9 +181,9 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
       public ArrayWritable next() {
         Writable[] skeletonWritable = skeletonFileIterator.next().get();
         Writable[] dataWritable = dataFileIterator.next().get();
-        Writable[] mergedWritable = new Writable[skeletonWritable.length + dataWritable.length];
-        System.arraycopy(skeletonWritable, 0, mergedWritable, 0, skeletonWritable.length);
-        System.arraycopy(dataWritable, 0, mergedWritable, skeletonWritable.length, dataWritable.length);
+        Writable[] mergedWritable = new Writable[skeletonLen + dataLen];
+        System.arraycopy(skeletonWritable, 0, mergedWritable, 0, skeletonLen);
+        System.arraycopy(dataWritable, 0, mergedWritable, skeletonLen, dataLen);
         returnWritable.set(mergedWritable);
         return returnWritable;
       }

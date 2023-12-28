@@ -72,14 +72,11 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
   }
 
   private final HiveHoodieReaderContext readerContext;
-
   private final HoodieFileGroupReader<ArrayWritable> fileGroupReader;
   private final ArrayWritable arrayWritable;
   private final NullWritable nullWritable = NullWritable.get();
-
   private final InputSplit inputSplit;
   private final JobConf jobConf;
-
   private final UnaryOperator<ArrayWritable> reverseProjection;
 
   public HoodieFileGroupReaderRecordReader(HiveReaderCreator readerCreator,
@@ -193,6 +190,9 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
     }
   }
 
+  /**
+   * Convert FileSplit to FileSlice, but save the locations in 'hosts' because that data is otherwise lost.
+   */
   private static FileSlice getFileSliceFromSplit(FileSplit split, Map<String, String[]> hosts, FileSystem fs, String tableBasePath) throws IOException {
     if (split instanceof RealtimeSplit) {
       RealtimeSplit realtimeSplit = (RealtimeSplit) split;
@@ -218,10 +218,11 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
   }
 
   private static Schema createRequestedSchema(Schema tableSchema, JobConf jobConf) {
+    //hive will handle the partition cols
     String partitionColString = jobConf.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS);
     Set<String> partitionColumns;
     if (partitionColString == null) {
-      partitionColumns = Collections.EMPTY_SET;
+      partitionColumns = Collections.emptySet();
     } else {
       partitionColumns = Arrays.stream(partitionColString.split(",")).collect(Collectors.toSet());
     }
