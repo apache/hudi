@@ -20,11 +20,10 @@ package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.avro.HoodieTimestampAwareParquetInputFormat;
+import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 
-import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.ql.io.parquet.read.ParquetRecordReaderWrapper;
 import org.apache.hadoop.hive.ql.io.sarg.ConvertAstToSearchArg;
 import org.apache.hadoop.hive.ql.plan.TableScanDesc;
@@ -35,9 +34,7 @@ import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
-import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 import org.apache.parquet.hadoop.ParquetInputFormat;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -106,9 +103,6 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
     // ParquetInputFormat.setFilterPredicate(job, predicate);
     // clearOutExistingPredicate(job);
     // }
-    if (split instanceof BootstrapBaseFileSplit) {
-      return createBootstrappingRecordReader(split, job, reporter);
-    }
 
     // adapt schema evolution
     new SchemaEvolutionContext(split, job).doEvolutionForParquetFormat();
@@ -117,20 +111,26 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
       LOG.debug("EMPLOYING DEFAULT RECORD READER - " + split);
     }
 
-    HoodieRealtimeInputFormatUtils.addProjectionField(job, job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "").split("/"));
+    //HoodieRealtimeInputFormatUtils.addProjectionField(job, job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "").split("/"));
     return getRecordReaderInternal(split, job, reporter);
   }
 
   private RecordReader<NullWritable, ArrayWritable> getRecordReaderInternal(InputSplit split,
                                                                             JobConf job,
-                                                                            Reporter reporter) throws IOException {
+                                                                            Reporter reporter) {
     try {
       if (supportAvroRead && HoodieColumnProjectionUtils.supportTimestamp(job)) {
-        return new ParquetRecordReaderWrapper(new HoodieTimestampAwareParquetInputFormat(), split, job, reporter);
+        return new HoodieFileGroupReaderRecordReader((s, j, r) -> {
+          try {
+            return new ParquetRecordReaderWrapper(new HoodieTimestampAwareParquetInputFormat(), s, j, r);
+          } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+          }
+        }, split, job, reporter);
       } else {
-        return super.getRecordReader(split, job, reporter);
+        return new HoodieFileGroupReaderRecordReader(super::getRecordReader, split, job, reporter);
       }
-    } catch (final InterruptedException | IOException e) {
+    } catch (final IOException e) {
       throw new RuntimeException("Cannot create a RecordReaderWrapper", e);
     }
   }
