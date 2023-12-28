@@ -25,7 +25,7 @@ import org.apache.hudi.cdc.{CDCFileGroupIterator, CDCRelation, HoodieCDCFileGrou
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model._
+import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, HoodieRecord}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, MergeOnReadSnapshotRelation, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
@@ -34,9 +34,10 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
+import org.apache.spark.sql.execution.datasources.parquet.HoodieFileGroupReaderBasedParquetFileFormat.{ROW_INDEX, ROW_INDEX_TEMPORARY_COLUMN_NAME, getAppliedFilters, getAppliedRequiredSchema, getLogFilesFromSlice, getRecordKeyRelatedFilters}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.apache.spark.sql.types.{LongType, Metadata, MetadataBuilder, StringType, StructField, StructType}
 import org.apache.spark.util.SerializableConfiguration
 
 import scala.annotation.tailrec
@@ -47,6 +48,7 @@ trait HoodieFormatTrait {
 
   // Used so that the planner only projects once and does not stack overflow
   var isProjected: Boolean = false
+  def getRequiredFilters: Seq[Filter]
 }
 
 /**
@@ -64,6 +66,8 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                                                   shouldUseRecordPosition: Boolean,
                                                   requiredFilters: Seq[Filter]
                                            ) extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait {
+
+  def getRequiredFilters: Seq[Filter] = requiredFilters
 
   /**
    * Support batch needs to remain consistent, even if one side of a bootstrap merge can support
@@ -104,8 +108,8 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     val requiredWithoutMeta = StructType(requiredSchemaSplits._2)
     val augmentedHadoopConf = FSUtils.buildInlineConf(hadoopConf)
     val (baseFileReader, preMergeBaseFileReader, readerMaps, cdcFileReader) = buildFileReaders(
-      spark, dataSchema, partitionSchema, if (isIncremental) requiredSchemaWithMandatory else requiredSchema,
-      filters, options, augmentedHadoopConf, requiredSchemaWithMandatory, requiredWithoutMeta, requiredMeta)
+      spark, dataSchema, partitionSchema, requiredSchema, filters, options, augmentedHadoopConf,
+      requiredSchemaWithMandatory, requiredWithoutMeta, requiredMeta)
 
     val requestedAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(requiredSchema, sanitizedTableName)
     val dataAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName)
@@ -242,25 +246,20 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
       metaFields.find(f => f.name == name)
     }
 
-    // If not MergeOnRead or if projection is compatible
-    if (isIncremental) {
-      StructType(dataSchema.toArray ++ partitionSchema.fields)
-    } else {
-      val added: mutable.Buffer[StructField] = mutable.Buffer[StructField]()
-      for (field <- mandatoryFields) {
-        if (requiredSchema.getFieldIndex(field).isEmpty) {
-          // Support for nested fields
-          val fieldParts = field.split("\\.")
-          val fieldToAdd = findNestedField(dataSchema, fieldParts)
-            .orElse(findNestedField(partitionSchema, fieldParts))
-            .orElse(findMetaField(field))
-            .getOrElse(throw new IllegalArgumentException(s"Field $field does not exist in the table schema"))
-          added.append(fieldToAdd)
-        }
+    val added: mutable.Buffer[StructField] = mutable.Buffer[StructField]()
+    for (field <- mandatoryFields) {
+      if (requiredSchema.getFieldIndex(field).isEmpty) {
+        // Support for nested fields
+        val fieldParts = field.split("\\.")
+        val fieldToAdd = findNestedField(dataSchema, fieldParts)
+          .orElse(findNestedField(partitionSchema, fieldParts))
+          .orElse(findMetaField(field))
+          .getOrElse(throw new IllegalArgumentException(s"Field $field does not exist in the table schema"))
+        added.append(fieldToAdd)
       }
-      val addedFields = StructType(added.toArray)
-      StructType(requiredSchema.toArray ++ addedFields.fields)
     }
+    val addedFields = StructType(added.toArray)
+    StructType(requiredSchema.toArray ++ addedFields.fields)
   }
 
   protected def buildFileReaders(sparkSession: SparkSession, dataSchema: StructType, partitionSchema: StructType,
@@ -279,16 +278,21 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
       filters ++ requiredFilters, options, new Configuration(hadoopConf))
     m.put(generateKey(dataSchema, requiredSchema), baseFileReader)
 
-    //file reader for reading a hudi base file that needs to be merged with log files
-    val preMergeBaseFileReader = if (isMOR) {
-      // Add support for reading files using inline file system.
-      super.buildReaderWithPartitionValues(sparkSession, dataSchema, StructType(Seq.empty), requiredSchemaWithMandatory,
-        if (shouldUseRecordPosition) requiredFilters else recordKeyRelatedFilters ++ requiredFilters,
-        options, new Configuration(hadoopConf))
-    } else {
-      _: PartitionedFile => Iterator.empty
-    }
-    m.put(generateKey(dataSchema, requiredSchemaWithMandatory), preMergeBaseFileReader)
+    // File reader for reading a Hoodie base file that needs to be merged with log files
+    // Add support for reading files using inline file system.
+    val appliedRequiredSchema: StructType = getAppliedRequiredSchema(
+      requiredSchemaWithMandatory, shouldUseRecordPosition, ROW_INDEX_TEMPORARY_COLUMN_NAME)
+    val appliedFilters = getAppliedFilters(
+      requiredFilters, recordKeyRelatedFilters, shouldUseRecordPosition)
+    val preMergeBaseFileReader = super.buildReaderWithPartitionValues(
+      sparkSession,
+      dataSchema,
+      StructType(Nil),
+      appliedRequiredSchema,
+      appliedFilters,
+      options,
+      new Configuration(hadoopConf))
+    m.put(generateKey(dataSchema, appliedRequiredSchema), preMergeBaseFileReader)
 
     val cdcFileReader = super.buildReaderWithPartitionValues(
       sparkSession,
@@ -353,12 +357,61 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
   protected def generateKey(dataSchema: StructType, requestedSchema: StructType): Long = {
     AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName).hashCode() + AvroConversionUtils.convertStructTypeToAvroSchema(requestedSchema, sanitizedTableName).hashCode()
   }
+}
 
-  protected def getRecordKeyRelatedFilters(filters: Seq[Filter], recordKeyColumn: String): Seq[Filter] = {
+object HoodieFileGroupReaderBasedParquetFileFormat {
+  // From "ParquetFileFormat.scala": The names of the field for record position.
+  private val ROW_INDEX = "row_index"
+  private val ROW_INDEX_TEMPORARY_COLUMN_NAME = s"_tmp_metadata_$ROW_INDEX"
+
+  // From "namedExpressions.scala": Used to construct to record position field metadata.
+  private val FILE_SOURCE_GENERATED_METADATA_COL_ATTR_KEY = "__file_source_generated_metadata_col"
+  private val FILE_SOURCE_METADATA_COL_ATTR_KEY = "__file_source_metadata_col"
+  private val METADATA_COL_ATTR_KEY = "__metadata_col"
+
+  def getRecordKeyRelatedFilters(filters: Seq[Filter], recordKeyColumn: String): Seq[Filter] = {
     filters.filter(f => f.references.exists(c => c.equalsIgnoreCase(recordKeyColumn)))
   }
 
-  protected def getLogFilesFromSlice(fileSlice: FileSlice): List[HoodieLogFile] = {
+  def getLogFilesFromSlice(fileSlice: FileSlice): List[HoodieLogFile] = {
     fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala.toList
+  }
+
+  def getFieldMetadata(name: String, internalName: String): Metadata = {
+    new MetadataBuilder()
+      .putString(METADATA_COL_ATTR_KEY, name)
+      .putBoolean(FILE_SOURCE_METADATA_COL_ATTR_KEY, value = true)
+      .putString(FILE_SOURCE_GENERATED_METADATA_COL_ATTR_KEY, internalName)
+      .build()
+  }
+
+  def getAppliedRequiredSchema(requiredSchema: StructType,
+                               shouldUseRecordPosition: Boolean,
+                               recordPositionColumn: String): StructType = {
+    if (shouldAddRecordPositionColumn(shouldUseRecordPosition)) {
+      val metadata = getFieldMetadata(recordPositionColumn, ROW_INDEX_TEMPORARY_COLUMN_NAME)
+      val rowIndexField = StructField(recordPositionColumn, LongType, nullable = false, metadata)
+      StructType(requiredSchema.fields :+ rowIndexField)
+    } else {
+      requiredSchema
+    }
+  }
+
+  def getAppliedFilters(requiredFilters: Seq[Filter],
+                        recordKeyRelatedFilters: Seq[Filter],
+                        shouldUseRecordPosition: Boolean): Seq[Filter] = {
+    if (shouldAddRecordKeyFilters(shouldUseRecordPosition)) {
+      requiredFilters ++ recordKeyRelatedFilters
+    } else {
+      requiredFilters
+    }
+  }
+
+  def shouldAddRecordPositionColumn(shouldUseRecordPosition: Boolean): Boolean = {
+    HoodieSparkUtils.gteqSpark3_5 && shouldUseRecordPosition
+  }
+
+  def shouldAddRecordKeyFilters(shouldUseRecordPosition: Boolean): Boolean = {
+    (!shouldUseRecordPosition) || HoodieSparkUtils.gteqSpark3_5
   }
 }

@@ -270,6 +270,16 @@ public class TestHoodieHiveCatalog {
     }
   }
 
+  @Test
+  public void testCreateHoodieTableWithWrongTableType() {
+    HashMap<String,String> properties = new HashMap<>();
+    properties.put(FactoryUtil.CONNECTOR.key(), "hudi");
+    properties.put("table.type","wrong type");
+    CatalogTable table =
+            new CatalogTableImpl(schema,  properties, "hudi table");
+    assertThrows(HoodieCatalogException.class, () -> hoodieCatalog.createTable(tablePath, table, false));
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testDropTable(boolean external) throws TableAlreadyExistException, DatabaseNotExistException, TableNotExistException, IOException {

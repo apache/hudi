@@ -424,7 +424,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
 
       // all records from old partition should have been migrated to new partition
       totalRecs = sqlContext.read().format("hudi").load(tablePath)
-          .filter(HoodieRecord.PARTITION_PATH_METADATA_FIELD + " == '" + "2016/03/18" + "'").count();
+          .filter(HoodieRecord.PARTITION_PATH_METADATA_FIELD + " == \"" + "2016/03/18" + "\"").count();
       assertEquals(totalRecs, totalRecsInOldPartition);
     }
   }

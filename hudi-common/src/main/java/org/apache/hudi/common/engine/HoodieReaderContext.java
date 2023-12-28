@@ -31,6 +31,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.UnaryOperator;
@@ -78,7 +79,7 @@ public abstract class HoodieReaderContext<T> {
    * @return {@link ClosableIterator<T>} that can return all records through iteration.
    */
   public abstract ClosableIterator<T> getFileRecordIterator(
-      Path filePath, long start, long length, Schema dataSchema, Schema requiredSchema, Configuration conf);
+      Path filePath, long start, long length, Schema dataSchema, Schema requiredSchema, Configuration conf) throws IOException;
 
   /**
    * Converts an Avro record, e.g., serialized in the log files, to an engine-specific record.
@@ -209,4 +210,13 @@ public abstract class HoodieReaderContext<T> {
    * @return a function that takes in a record and returns the record with reordered columns
    */
   public abstract UnaryOperator<T> projectRecord(Schema from, Schema to);
+
+  /**
+   * Extracts the record position value from the record itself.
+   *
+   * @return the record position in the base file.
+   */
+  public long extractRecordPosition(T record, Schema schema, String fieldName, long providedPositionIfNeeded) {
+    return providedPositionIfNeeded;
+  }
 }
