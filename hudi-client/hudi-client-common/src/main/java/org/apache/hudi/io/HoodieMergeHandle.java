@@ -335,9 +335,6 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       newRecord.deflate();
       return true;
     } catch (Exception e) {
-      if (!ignoreWriteFailed) {
-        throw new HoodieInsertException("Error writing record " + newRecord, e);
-      }
       LOG.error("Error writing record  " + newRecord, e);
       writeStatus.markFailure(newRecord, e, recordMetadata);
     }
