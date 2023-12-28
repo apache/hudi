@@ -31,7 +31,6 @@ import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TablePathUtils;
-import org.apache.hudi.hadoop.realtime.HoodieRealtimeBootstrapBaseFileSplit;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
@@ -194,27 +193,32 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
    * Convert FileSplit to FileSlice, but save the locations in 'hosts' because that data is otherwise lost.
    */
   private static FileSlice getFileSliceFromSplit(FileSplit split, Map<String, String[]> hosts, FileSystem fs, String tableBasePath) throws IOException {
+    BaseFile bootstrapBaseFile = createBootstrapBaseFile(split, hosts, fs);
     if (split instanceof RealtimeSplit) {
+      //mor
       RealtimeSplit realtimeSplit = (RealtimeSplit) split;
       HoodieFileGroupId fileGroupId = new HoodieFileGroupId(FSUtils.getFileId(realtimeSplit.getPath().getName()),
           FSUtils.getPartitionPath(realtimeSplit.getBasePath(), realtimeSplit.getPath().getParent().toString()).toString());
       String commitTime = FSUtils.getCommitTime(realtimeSplit.getPath().toString());
-      BaseFile bootstrapBaseFile = null;
-      if (realtimeSplit instanceof HoodieRealtimeBootstrapBaseFileSplit) {
-        HoodieRealtimeBootstrapBaseFileSplit hoodieRealtimeBootstrapBaseFileSplit = (HoodieRealtimeBootstrapBaseFileSplit) realtimeSplit;
-        FileSplit bootstrapBaseFileSplit = hoodieRealtimeBootstrapBaseFileSplit.getBootstrapFileSplit();
-        hosts.put(bootstrapBaseFileSplit.getPath().toString(), bootstrapBaseFileSplit.getLocations());
-        bootstrapBaseFile = new BaseFile(fs.getFileStatus(bootstrapBaseFileSplit.getPath()));
-      }
       hosts.put(realtimeSplit.getPath().toString(), realtimeSplit.getLocations());
       HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(fs.getFileStatus(realtimeSplit.getPath()), bootstrapBaseFile);
       return new FileSlice(fileGroupId, commitTime, hoodieBaseFile, realtimeSplit.getDeltaLogFiles());
     }
-    //just regular cow
+    //cow
     HoodieFileGroupId fileGroupId = new HoodieFileGroupId(FSUtils.getFileId(split.getPath().getName()),
         FSUtils.getPartitionPath(tableBasePath, split.getPath().getParent().toString()).toString());
     hosts.put(split.getPath().toString(), split.getLocations());
-    return new FileSlice(fileGroupId, FSUtils.getCommitTime(split.getPath().toString()), new HoodieBaseFile(fs.getFileStatus(split.getPath())), Collections.emptyList());
+    return new FileSlice(fileGroupId, FSUtils.getCommitTime(split.getPath().toString()), new HoodieBaseFile(fs.getFileStatus(split.getPath()), bootstrapBaseFile), Collections.emptyList());
+  }
+
+  private static BaseFile createBootstrapBaseFile(FileSplit split, Map<String, String[]> hosts, FileSystem fs) throws IOException {
+    if (split instanceof BootstrapBaseFileSplit) {
+      BootstrapBaseFileSplit bootstrapBaseFileSplit = (BootstrapBaseFileSplit) split;
+      FileSplit bootstrapFileSplit = bootstrapBaseFileSplit.getBootstrapFileSplit();
+      hosts.put(bootstrapFileSplit.getPath().toString(), bootstrapFileSplit.getLocations());
+      return new BaseFile(fs.getFileStatus(bootstrapFileSplit.getPath()));
+    }
+    return null;
   }
 
   private static Schema createRequestedSchema(Schema tableSchema, JobConf jobConf) {
