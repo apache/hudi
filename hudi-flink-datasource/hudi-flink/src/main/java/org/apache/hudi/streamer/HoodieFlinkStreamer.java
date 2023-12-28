@@ -103,6 +103,7 @@ public class HoodieFlinkStreamer {
     DataStream<Object> pipeline;
     // Append mode
     if (OptionsResolver.isAppendMode(conf)) {
+      conf.set(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
       pipeline = Pipelines.append(conf, rowType, dataStream);
       if (OptionsResolver.needsAsyncClustering(conf)) {
         Pipelines.cluster(conf, rowType, pipeline);
