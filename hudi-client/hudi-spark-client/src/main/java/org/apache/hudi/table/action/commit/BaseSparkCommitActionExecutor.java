@@ -295,7 +295,11 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   protected void commit(HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
     context.setJobStatus(this.getClass().getSimpleName(), "Commit write status collect: " + config.getTableName());
     if (!config.getBoolean(WRITE_IGNORE_FAILED) && result.getWriteStatuses().filter(status -> status.getErrors().size() > 0).count() > 0) {
-      throw new HoodieException("Error writing record in the job");
+      WriteStatus writeStatus = result.getWriteStatuses().filter(status -> status.getErrors().size() > 0).collectAsList().get(0);
+      HashMap<HoodieKey, Throwable> errors = writeStatus.getErrors();
+      // get first one of error info to show error details
+      HoodieKey key = errors.keySet().iterator().next();
+      throw new HoodieException("Error writing record in the job", errors.get(key));
     }
     HoodieData<WriteStatus> filterResult = result.getWriteStatuses().filter(status -> status.getErrors().size() == 0);
     commit(filterResult, result, result.getWriteStats().isPresent()
