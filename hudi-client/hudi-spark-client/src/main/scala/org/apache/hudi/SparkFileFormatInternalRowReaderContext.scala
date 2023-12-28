@@ -107,7 +107,9 @@ class SparkFileFormatInternalRowReaderContext(readerMaps: mutable.Map[Long, Part
   }
 
   override def mergeBootstrapReaders(skeletonFileIterator: ClosableIterator[InternalRow],
-                                     dataFileIterator: ClosableIterator[InternalRow]): ClosableIterator[InternalRow] = {
+                                     skeletonRequiredSchema: Schema,
+                                     dataFileIterator: ClosableIterator[InternalRow],
+                                     dataRequiredSchema: Schema): ClosableIterator[InternalRow] = {
     doBootstrapMerge(skeletonFileIterator.asInstanceOf[ClosableIterator[Any]],
       dataFileIterator.asInstanceOf[ClosableIterator[Any]])
   }
