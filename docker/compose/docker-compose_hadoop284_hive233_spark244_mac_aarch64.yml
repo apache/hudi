@@ -142,6 +142,7 @@ services:
       - "namenode"
     volumes:
       - ${HUDI_WS}:/var/hoodie/ws
+      - /Users/jon/Desktop/hiveWorkload:/var/hiveWorkload
 
   sparkmaster:
     image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkmaster_2.4.4:linux-arm64-0.10.1
@@ -228,6 +229,7 @@ services:
       - "namenode"
     volumes:
       - ${HUDI_WS}:/var/hoodie/ws
+      - /Users/jon/Desktop/hiveWorkload:/var/hiveWorkload
 
   adhoc-2:
     image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkadhoc_2.4.4:linux-arm64-0.10.1
@@ -250,6 +252,7 @@ services:
       - "namenode"
     volumes:
       - ${HUDI_WS}:/var/hoodie/ws
+      - /Users/jon/Desktop/hiveWorkload:/var/hiveWorkload
 
 volumes:
   namenode:
