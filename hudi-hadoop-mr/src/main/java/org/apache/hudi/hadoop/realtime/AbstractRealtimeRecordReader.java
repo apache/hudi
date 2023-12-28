@@ -103,6 +103,7 @@ public abstract class AbstractRealtimeRecordReader {
       throw new HoodieException("Could not create HoodieRealtimeRecordReader on path " + this.split.getPath(), e);
     }
     prepareHiveAvroSerializer();
+    throw new HoodieException("don't want to use this reader");
   }
 
   private boolean usesCustomPayload(HoodieTableMetaClient metaClient) {

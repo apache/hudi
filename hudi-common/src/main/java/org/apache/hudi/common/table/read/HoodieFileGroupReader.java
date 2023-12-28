@@ -67,6 +67,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
  *            in Spark and {@code RowData} in Flink.
  */
 public final class HoodieFileGroupReader<T> implements Closeable {
+  private boolean schemaInOrder = true;
   private final HoodieReaderContext<T> readerContext;
   private final Option<HoodieBaseFile> hoodieBaseFileOption;
   private final List<HoodieLogFile> logFiles;
@@ -199,6 +200,10 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   }
 
   private Schema maybeReorderForBootstrap(Schema input) {
+    if (schemaInOrder) {
+      return createSchemaFromFields(input.getFields().stream()
+          .sorted((o1, o2) -> Integer.compare(dataSchema.getField(o1.name()).pos(),dataSchema.getField(o2.name()).pos())).collect(Collectors.toList()));
+    }
     if (this.hoodieBaseFileOption.isPresent() && this.hoodieBaseFileOption.get().getBootstrapBaseFile().isPresent()) {
       Pair<List<Schema.Field>, List<Schema.Field>> requiredFields = getDataAndMetaCols(input);
       if (!(requiredFields.getLeft().isEmpty() || requiredFields.getRight().isEmpty())) {
@@ -284,6 +289,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   }
 
   private void scanLogFiles() {
+    System.out.println("Scanning log files");
     String path = readerState.tablePath;
     HoodieMergedLogRecordReader logRecordReader = HoodieMergedLogRecordReader.newBuilder()
         .withHoodieReaderContext(readerContext)

@@ -22,6 +22,7 @@ package org.apache.hudi.common.engine;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.storage.HoodieStorage;
@@ -35,6 +36,8 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.UnaryOperator;
+
+import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 
 /**
  * An abstract reader context class for {@code HoodieFileGroupReader} to use, containing APIs for
@@ -113,7 +116,10 @@ public abstract class HoodieReaderContext<T> {
    * @param schema The Avro schema of the record.
    * @return The record key in String.
    */
-  public abstract String getRecordKey(T record, Schema schema);
+  public String getRecordKey(T record, Schema schema) {
+    Object val = getValue(record, schema, RECORD_KEY_METADATA_FIELD);
+    return val.toString();
+  }
 
   /**
    * Gets the ordering value in particular type.
@@ -124,10 +130,23 @@ public abstract class HoodieReaderContext<T> {
    * @param props        Properties.
    * @return The ordering value.
    */
-  public abstract Comparable getOrderingValue(Option<T> recordOption,
+  public Comparable getOrderingValue(Option<T> recordOption,
                                               Map<String, Object> metadataMap,
                                               Schema schema,
-                                              TypedProperties props);
+                                              TypedProperties props) {
+    if (metadataMap.containsKey(INTERNAL_META_ORDERING_FIELD)) {
+      return (Comparable) metadataMap.get(INTERNAL_META_ORDERING_FIELD);
+    }
+
+    if (!recordOption.isPresent()) {
+      return 0;
+    }
+
+    String orderingFieldName = ConfigUtils.getOrderingField(props);
+    Object value = getValue(recordOption.get(), schema, orderingFieldName);
+    return value != null ? (Comparable) value : 0;
+
+  }
 
   /**
    * Constructs a new {@link HoodieRecord} based on the record of engine-specific type and metadata for merging.
@@ -218,6 +237,10 @@ public abstract class HoodieReaderContext<T> {
    * @return the record position in the base file.
    */
   public long extractRecordPosition(T record, Schema schema, String fieldName, long providedPositionIfNeeded) {
+    Object position = getValue(record, schema, fieldName);
+    if (position != null) {
+      return (long) position;
+    }
     return providedPositionIfNeeded;
   }
 

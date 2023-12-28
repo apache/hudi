@@ -129,10 +129,11 @@ services:
       - ./hadoop.env
     environment:
       SERVICE_PRECONDITION: "hivemetastore:9083"
+      JAVA_TOOL_OPTIONS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
     ports:
       - "10000:10000"
       # JVM debugging port (will be mapped to a random port on host)
-      - "5005"
+      - "5005:64757"
     depends_on:
       - "hivemetastore"
     links:
