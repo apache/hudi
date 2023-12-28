@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
@@ -157,11 +158,16 @@ public class HoodieTestUtils {
   public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
                                            Properties properties, String databaseName)
       throws IOException {
+    String preCombineField = ConfigUtils.getOrderingField(properties);
+    if (preCombineField == null && tableType.equals(HoodieTableType.MERGE_ON_READ)) {
+      preCombineField = "timestamp";
+    }
     HoodieTableMetaClient.PropertyBuilder builder =
         HoodieTableMetaClient.withPropertyBuilder()
             .setDatabaseName(databaseName)
             .setTableName(RAW_TRIPS_TEST_NAME)
             .setTableType(tableType)
+            .setPreCombineField(preCombineField)
             .setPayloadClass(HoodieAvroPayload.class);
 
     String keyGen = properties.getProperty("hoodie.datasource.write.keygenerator.class");

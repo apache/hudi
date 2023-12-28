@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -221,7 +222,7 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
    */
   @ParameterizedTest
   @ValueSource(strings = {"_row_key", "begin_lat"})
-  public void testClusteringColumnSort(String sortColumn) throws IOException {
+  public void testClusteringColumnSort(String sortColumn) throws Exception {
     Map<String, String> options = new HashMap<>();
     // Record key is handled specially
     if (sortColumn.equals("_row_key")) {
@@ -243,9 +244,9 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
     List<String> inputPaths = Arrays.stream(dataGen.getPartitionPaths()).map(p -> Paths.get(basePath, p).toString()).collect(Collectors.toList());
 
     // Get record reader for file groups and check each file group independently
-    List<RecordReader> readers = HoodieMergeOnReadTestUtils.getRecordReadersUsingInputFormat(hadoopConf, inputPaths, basePath, new JobConf(hadoopConf), true, false);
-    Schema rawSchema = new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
-    Schema.Field field = rawSchema.getField(sortColumn);
+    List<RecordReader> readers = HoodieMergeOnReadTestUtils.getRecordReadersUsingInputFormat(hadoopConf, inputPaths, basePath, new JobConf(hadoopConf), true, true);
+    Schema tableSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
+    Schema.Field field = tableSchema.getField(sortColumn);
     Comparator comparator;
     if (field.schema().getType() == Schema.Type.DOUBLE) {
       comparator = Comparator.comparingDouble(o -> ((DoubleWritable) o).get());

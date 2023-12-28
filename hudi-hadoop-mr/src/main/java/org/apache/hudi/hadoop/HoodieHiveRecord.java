@@ -115,6 +115,10 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
 
   @Override
   public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
+    String orderingField = ConfigUtils.getOrderingField(props);
+    if (orderingField == null) {
+      throw new IllegalArgumentException("Ordering Field is not set. Precombine must be set. (If you are using a custom record merger it might be something else)");
+    }
     return (Comparable<?>) getValue(ConfigUtils.getOrderingField(props));
   }
 
