@@ -3,7 +3,7 @@ title: "Apache Hudi 2023: a year in review"
 excerpt: ""
 author: Shiyan Xu
 category: blog
-image: /assets/images/blog/2023-12-28-a-year-in-review-2023/00.hudi2023review_cover.png
+image: /assets/images/blog/2023-12-28-a-year-in-review-2023/00.cover.png
 tags:
 
 - apache hudi
@@ -11,7 +11,7 @@ tags:
 
 ---
 
-<img src="/assets/images/blog/2023-12-28-a-year-in-review-2023/00.hudi2023review_cover.png" alt="drawing" style={{width:'80%', display:'block', marginLeft:'auto', marginRight:'auto'}} />
+<img src="/assets/images/blog/2023-12-28-a-year-in-review-2023/00.cover.png" alt="drawing" style={{width:'80%', display:'block', marginLeft:'auto', marginRight:'auto'}} />
 
 In the warm glow of the holiday season, I am delighted to convey a message of deep appreciation on behalf of the 
 Hudi Project Management Committee (PMC) to all the contributors and users whose invaluable efforts have made 2023 
@@ -120,6 +120,9 @@ visit the [roadmap page](https://hudi.apache.org/roadmap).
 
 ## Content Spotlight
 
+<img src="/assets/images/blog/2023-12-28-a-year-in-review-2023/02.contentspotlight.png" alt="drawing" style={{width:'80%', display:'block', marginLeft:'auto', marginRight:'auto'}} />
+
+
 The vibrant and diverse Hudi community has been a rich source of exceptional content. Below is a 
 curated list highlighting 10 noteworthy pieces of content from this dynamic group.
 
@@ -147,7 +150,7 @@ presence at several events, listed here in no particular order: Re:Invent, Prest
 Trino Fest, Current, the Data & AI Summit, Flink Forward, the Open-source Data Summit, ApacheCon, 
 AI.dev, QCon, OSA Con, and DEWCon.
 
-<img src="/assets/images/blog/2023-12-28-a-year-in-review-2023/02.hudievents.png" alt="drawing" style={{width:'80%', display:'block', marginLeft:'auto', marginRight:'auto'}} />
+<img src="/assets/images/blog/2023-12-28-a-year-in-review-2023/02.events.png" alt="drawing" style={{width:'80%', display:'block', marginLeft:'auto', marginRight:'auto'}} />
 
 As we reflect on an eventful 2023, the Hudi community continues to thrive and welcomes diverse forms 
 of engagement. For those looking to connect, our 
