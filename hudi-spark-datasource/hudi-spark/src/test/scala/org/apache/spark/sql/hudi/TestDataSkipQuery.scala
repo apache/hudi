@@ -39,7 +39,7 @@ class TestDataSkipQuery extends HoodieSparkSqlTestBase {
              |      type = 'cow',
              |      preCombineField = 'ts'
              |)
-             |partitioned by (dt);
+             |partitioned by (dt)
        """.stripMargin)
 
 
