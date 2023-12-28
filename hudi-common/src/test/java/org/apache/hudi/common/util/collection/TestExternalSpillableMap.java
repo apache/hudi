@@ -43,6 +43,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
@@ -437,6 +438,25 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
       records.put(updatedRecord.getRecordKey(), updatedRecord);
 
       assertEquals(records.size(), 101);
+    }
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = ExternalSpillableMap.DiskMapType.class)
+  void assertEmptyMapOperations(ExternalSpillableMap.DiskMapType diskMapType) throws IOException {
+    // validate that operations on an empty map work as expected
+    try (ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
+             new ExternalSpillableMap<>(10, basePath, new DefaultSizeEstimator(),
+                 new DefaultSizeEstimator<>(), diskMapType, false)) {
+      assertTrue(records.isEmpty());
+      assertFalse(records.containsKey("key"));
+      assertFalse(records.containsValue("value"));
+      assertTrue(records.keySet().isEmpty());
+      assertTrue(records.values().isEmpty());
+      assertTrue(records.entrySet().isEmpty());
+      assertEquals(0, records.valueStream().count());
+      assertEquals(0, records.size());
+      assertFalse(records.iterator().hasNext());
     }
   }
 
