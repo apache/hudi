@@ -133,7 +133,7 @@ services:
     ports:
       - "10000:10000"
       # JVM debugging port (will be mapped to a random port on host)
-      - "5005:64757"
+      - "64757:5005"
     depends_on:
       - "hivemetastore"
     links:
