@@ -295,7 +295,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   protected void commit(HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
     context.setJobStatus(this.getClass().getSimpleName(), "Commit write status collect: " + config.getTableName());
     if (!config.getBoolean(IGNORE_ERROR_WRITE) && result.getWriteStatuses().filter(status -> status.getErrors().size() > 0).count() > 0) {
-      throw new HoodieException("Error writing record in all job");
+      throw new HoodieException("Error writing record in the job");
     }
     commit(result.getWriteStatuses(), result, result.getWriteStats().isPresent()
         ? result.getWriteStats().get() : result.getWriteStatuses().map(WriteStatus::getStat).collectAsList());
