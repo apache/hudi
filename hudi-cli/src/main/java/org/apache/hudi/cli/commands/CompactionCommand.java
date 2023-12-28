@@ -48,10 +48,10 @@ import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -77,9 +77,13 @@ import static org.apache.hudi.cli.utils.CommitUtil.getTimeDaysAgo;
 @ShellComponent
 public class CompactionCommand {
 
-  private static final Logger LOG = LogManager.getLogger(CompactionCommand.class);
+  private static final Logger LOG = LoggerFactory.getLogger(CompactionCommand.class);
 
   private static final String TMP_DIR = "/tmp/";
+
+  public static final String COMPACTION_SCH_SUCCESSFUL = "Attempted to schedule compaction for ";
+  public static final String COMPACTION_EXE_SUCCESSFUL = "Compaction successfully completed for ";
+  public static final String COMPACTION_SCH_EXE_SUCCESSFUL = "Schedule and execute compaction successfully completed";
 
   private HoodieTableMetaClient checkAndGetMetaClient() {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
@@ -174,8 +178,8 @@ public class CompactionCommand {
         HoodieTimeline.COMPACTION_ACTION, compactionInstantTime);
     try {
       archivedTimeline.loadCompactionDetailsInMemory(compactionInstantTime);
-      HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeAvroRecordMetadata(
-          archivedTimeline.getInstantDetails(instant).get(), HoodieCompactionPlan.getClassSchema());
+      HoodieCompactionPlan compactionPlan =
+              TimelineMetadataUtils.deserializeCompactionPlan(archivedTimeline.getInstantDetails(instant).get());
       return printCompaction(compactionPlan, sortByField, descending, limit, headerOnly, partition);
     } finally {
       archivedTimeline.clearInstantDetailsFromMemory(compactionInstantTime);
@@ -197,7 +201,7 @@ public class CompactionCommand {
     HoodieCLI.initFS(initialized);
 
     // First get a compaction instant time and pass it to spark launcher for scheduling compaction
-    String compactionInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    String compactionInstantTime = client.createNewInstantTime();
 
     String sparkPropertiesPath =
         Utils.getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
@@ -212,7 +216,7 @@ public class CompactionCommand {
     if (exitCode != 0) {
       return "Failed to run compaction for " + compactionInstantTime;
     }
-    return "Attempted to schedule compaction for " + compactionInstantTime;
+    return COMPACTION_SCH_SUCCESSFUL + compactionInstantTime;
   }
 
   @ShellMethod(key = "compaction run", value = "Run Compaction for given instant time")
@@ -261,7 +265,7 @@ public class CompactionCommand {
     if (exitCode != 0) {
       return "Failed to run compaction for " + compactionInstantTime;
     }
-    return "Compaction successfully completed for " + compactionInstantTime;
+    return COMPACTION_EXE_SUCCESSFUL + compactionInstantTime;
   }
 
   @ShellMethod(key = "compaction scheduleAndExecute", value = "Schedule compaction plan and execute this plan")
@@ -296,7 +300,7 @@ public class CompactionCommand {
     if (exitCode != 0) {
       return "Failed to schedule and execute compaction ";
     }
-    return "Schedule and execute compaction successfully completed";
+    return COMPACTION_SCH_EXE_SUCCESSFUL;
   }
 
   /**
@@ -365,17 +369,10 @@ public class CompactionCommand {
 
   private HoodieCompactionPlan readCompactionPlanForArchivedTimeline(HoodieArchivedTimeline archivedTimeline,
                                                                      HoodieInstant instant) {
-    // filter inflight compaction
-    if (HoodieTimeline.COMPACTION_ACTION.equals(instant.getAction())
-        && HoodieInstant.State.INFLIGHT.equals(instant.getState())) {
-      try {
-        return TimelineMetadataUtils.deserializeAvroRecordMetadata(archivedTimeline.getInstantDetails(instant).get(),
-            HoodieCompactionPlan.getClassSchema());
-      } catch (Exception e) {
-        throw new HoodieException(e.getMessage(), e);
-      }
-    } else {
-      return null;
+    try {
+      return TimelineMetadataUtils.deserializeCompactionPlan(archivedTimeline.getInstantDetails(instant).get());
+    } catch (Exception e) {
+      throw new HoodieException(e.getMessage(), e);
     }
   }
 

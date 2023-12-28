@@ -256,7 +256,7 @@ public class AvroSchemaConverter {
           throw new IllegalArgumentException(
               "Avro does not support TIMESTAMP type with precision: "
                   + precision
-                  + ", it only supports precision less than 6.");
+                  + ", it only support precisions <= 6.");
         }
         Schema timestamp = timestampLogicalType.addToSchema(SchemaBuilder.builder().longType());
         return nullable ? nullableSchema(timestamp) : timestamp;
@@ -273,7 +273,7 @@ public class AvroSchemaConverter {
           throw new IllegalArgumentException(
               "Avro does not support LOCAL TIMESTAMP type with precision: "
                   + precision
-                  + ", it only supports precision less than 6.");
+                  + ", it only support precisions <= 6.");
         }
         Schema localZonedTimestamp = localZonedTimestampLogicalType.addToSchema(SchemaBuilder.builder().longType());
         return nullable ? nullableSchema(localZonedTimestamp) : localZonedTimestamp;
@@ -301,7 +301,7 @@ public class AvroSchemaConverter {
             LogicalTypes.decimal(decimalType.getPrecision(), decimalType.getScale())
                 .addToSchema(SchemaBuilder
                     .fixed(String.format("%s.fixed", rowName))
-                    .size(computeMinBytesForDecimlPrecision(decimalType.getPrecision())));
+                    .size(computeMinBytesForDecimalPrecision(decimalType.getPrecision())));
         return nullable ? nullableSchema(decimal) : decimal;
       case ROW:
         RowType rowType = (RowType) logicalType;
@@ -377,7 +377,7 @@ public class AvroSchemaConverter {
         : Schema.createUnion(SchemaBuilder.builder().nullType(), schema);
   }
 
-  private static int computeMinBytesForDecimlPrecision(int precision) {
+  private static int computeMinBytesForDecimalPrecision(int precision) {
     int numBytes = 1;
     while (Math.pow(2.0, 8 * numBytes - 1) < Math.pow(10.0, precision)) {
       numBytes += 1;

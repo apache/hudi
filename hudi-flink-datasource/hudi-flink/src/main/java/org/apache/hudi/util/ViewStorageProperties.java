@@ -20,6 +20,8 @@ package org.apache.hudi.util;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -43,7 +45,7 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.AUXILIARYFOLDER
 public class ViewStorageProperties {
   private static final Logger LOG = LoggerFactory.getLogger(ViewStorageProperties.class);
 
-  private static final String FILE_NAME = "view_storage_conf.properties";
+  private static final String FILE_NAME = "view_storage_conf";
 
   /**
    * Initialize the {@link #FILE_NAME} meta file.
@@ -52,7 +54,7 @@ public class ViewStorageProperties {
       String basePath,
       FileSystemViewStorageConfig config,
       Configuration flinkConf) throws IOException {
-    Path propertyPath = getPropertiesFilePath(basePath);
+    Path propertyPath = getPropertiesFilePath(basePath, flinkConf.getString(FlinkOptions.WRITE_CLIENT_ID));
     FileSystem fs = FSUtils.getFs(basePath, HadoopConfigurations.getHadoopConf(flinkConf));
     fs.delete(propertyPath, false);
     try (FSDataOutputStream outputStream = fs.create(propertyPath)) {
@@ -65,7 +67,7 @@ public class ViewStorageProperties {
    * Read the {@link FileSystemViewStorageConfig} with given table base path.
    */
   public static FileSystemViewStorageConfig loadFromProperties(String basePath, Configuration conf) {
-    Path propertyPath = getPropertiesFilePath(basePath);
+    Path propertyPath = getPropertiesFilePath(basePath, conf.getString(FlinkOptions.WRITE_CLIENT_ID));
     LOG.info("Loading filesystem view storage properties from " + propertyPath);
     FileSystem fs = FSUtils.getFs(basePath, HadoopConfigurations.getHadoopConf(conf));
     Properties props = new Properties();
@@ -79,8 +81,9 @@ public class ViewStorageProperties {
     }
   }
 
-  private static Path getPropertiesFilePath(String basePath) {
+  private static Path getPropertiesFilePath(String basePath, String uniqueId) {
     String auxPath = basePath + Path.SEPARATOR + AUXILIARYFOLDER_NAME;
-    return new Path(auxPath, FILE_NAME);
+    String fileName = StringUtils.isNullOrEmpty(uniqueId) ? FILE_NAME : FILE_NAME + "_" + uniqueId;
+    return new Path(auxPath, fileName);
   }
 }

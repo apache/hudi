@@ -77,7 +77,11 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
 
   @Test
   public void testNullRecordKeyFields() {
-    Assertions.assertThrows(IllegalArgumentException.class, () -> new ComplexKeyGenerator(getPropertiesWithoutRecordKeyProp()));
+    GenericRecord record = getRecord();
+    Assertions.assertThrows(StringIndexOutOfBoundsException.class, () ->   {
+      ComplexKeyGenerator keyGenerator = new ComplexKeyGenerator(getPropertiesWithoutRecordKeyProp());
+      keyGenerator.getRecordKey(record);
+    });
   }
 
   @Test
@@ -114,7 +118,7 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
     String rowKey = record.get("_row_key").toString();
     String partitionPath = record.get("timestamp").toString();
     HoodieKey hoodieKey = compositeKeyGenerator.getKey(record);
-    assertEquals("_row_key:" + rowKey, hoodieKey.getRecordKey());
+    assertEquals(rowKey, hoodieKey.getRecordKey());
     assertEquals(partitionPath, hoodieKey.getPartitionPath());
 
     Row row = KeyGeneratorTestUtilities.getRow(record, HoodieTestDataGenerator.AVRO_SCHEMA,

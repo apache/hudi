@@ -51,8 +51,17 @@ public class HoodieCommonTestHarness {
    * Initializes basePath.
    */
   protected void initPath() {
+    initPath("dataset");
+  }
+
+  /**
+   * Initializes basePath with folder name.
+   *
+   * @param folderName Folder name.
+   */
+  protected void initPath(String folderName) {
     try {
-      java.nio.file.Path basePath = tempDir.resolve("dataset");
+      java.nio.file.Path basePath = tempDir.resolve(folderName);
       java.nio.file.Files.createDirectories(basePath);
       this.basePath = basePath.toAbsolutePath().toString();
       this.baseUri = basePath.toUri();
@@ -62,7 +71,7 @@ public class HoodieCommonTestHarness {
   }
 
   /**
-   * Initializes a test data generator which used to generate test datas.
+   * Initializes a test data generator which used to generate test data.
    */
   protected void initTestDataGenerator() {
     dataGen = new HoodieTestDataGenerator();

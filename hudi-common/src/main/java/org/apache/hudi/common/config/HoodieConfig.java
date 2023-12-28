@@ -23,8 +23,8 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.lang.reflect.Modifier;
@@ -32,14 +32,20 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 
+import static org.apache.hudi.common.util.ConfigUtils.getRawValueWithAltKeys;
+
 /**
  * This class deals with {@link ConfigProperty} and provides get/set functionalities.
  */
 public class HoodieConfig implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieConfig.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieConfig.class);
 
   protected static final String CONFIG_VALUES_DELIMITER = ",";
+  // Number of retries while reading the properties file to deal with parallel updates
+  protected static final int MAX_READ_RETRIES = 5;
+  // Delay between retries while reading the properties file
+  protected static final int READ_RETRY_DELAY_MSEC = 1000;
 
   protected TypedProperties props;
 
@@ -49,6 +55,10 @@ public class HoodieConfig implements Serializable {
 
   public HoodieConfig(Properties props) {
     this.props = new TypedProperties(props);
+  }
+
+  public HoodieConfig(TypedProperties props) {
+    this.props = props;
   }
 
   public <T> void setValue(ConfigProperty<T> cfg, String val) {
@@ -64,13 +74,30 @@ public class HoodieConfig implements Serializable {
     props.putAll(properties);
   }
 
+  /**
+   * Sets the default value of a config if user does not set it already.
+   * The default value can only be set if the config property has a built-in
+   * default value or an infer function.  When the infer function is present,
+   * the infer function is used first to derive the config value based on other
+   * configs.  If the config value cannot be inferred, the built-in default value
+   * is used if present.
+   *
+   * @param configProperty Config to set a default value.
+   * @param <T>            Data type of the config.
+   */
   public <T> void setDefaultValue(ConfigProperty<T> configProperty) {
     if (!contains(configProperty)) {
       Option<T> inferValue = Option.empty();
-      if (configProperty.getInferFunc().isPresent()) {
-        inferValue = configProperty.getInferFunc().get().apply(this);
+      if (configProperty.hasInferFunction()) {
+        inferValue = configProperty.getInferFunction().get().apply(this);
       }
-      props.setProperty(configProperty.key(), inferValue.isPresent() ? inferValue.get().toString() : configProperty.defaultValue().toString());
+      if (inferValue.isPresent() || configProperty.hasDefaultValue()) {
+        props.setProperty(
+            configProperty.key(),
+            inferValue.isPresent()
+                ? inferValue.get().toString()
+                : configProperty.defaultValue().toString());
+      }
     }
   }
 
@@ -92,18 +119,7 @@ public class HoodieConfig implements Serializable {
   }
 
   private <T> Option<Object> getRawValue(ConfigProperty<T> configProperty) {
-    if (props.containsKey(configProperty.key())) {
-      return Option.ofNullable(props.get(configProperty.key()));
-    }
-    for (String alternative : configProperty.getAlternatives()) {
-      if (props.containsKey(alternative)) {
-        LOG.warn(String.format("The configuration key '%s' has been deprecated "
-                + "and may be removed in the future. Please use the new key '%s' instead.",
-            alternative, configProperty.key()));
-        return Option.ofNullable(props.get(alternative));
-      }
-    }
-    return Option.empty();
+    return getRawValueWithAltKeys(props, configProperty);
   }
 
   protected void setDefaults(String configClassName) {
@@ -114,7 +130,7 @@ public class HoodieConfig implements Serializable {
         .forEach(f -> {
           try {
             ConfigProperty<?> cfgProp = (ConfigProperty<?>) f.get("null");
-            if (cfgProp.hasDefaultValue()) {
+            if (cfgProp.hasDefaultValue() || cfgProp.hasInferFunction()) {
               setDefaultValue(cfgProp);
             }
           } catch (IllegalAccessException e) {
@@ -148,7 +164,7 @@ public class HoodieConfig implements Serializable {
   public <T> Integer getIntOrDefault(ConfigProperty<T> configProperty) {
     Option<Object> rawValue = getRawValue(configProperty);
     return rawValue.map(v -> Integer.parseInt(v.toString()))
-        .orElse((Integer) configProperty.defaultValue());
+        .orElse(Integer.parseInt(configProperty.defaultValue().toString()));
   }
 
   public <T> Boolean getBoolean(ConfigProperty<T> configProperty) {
@@ -179,14 +195,32 @@ public class HoodieConfig implements Serializable {
     return rawValue.map(v -> Long.parseLong(v.toString())).orElse(null);
   }
 
+  public <T> Long getLongOrDefault(ConfigProperty<T> configProperty) {
+    Option<Object> rawValue = getRawValue(configProperty);
+    return rawValue.map(v -> Long.parseLong(v.toString()))
+            .orElseGet(() -> Long.parseLong(configProperty.defaultValue().toString()));
+  }
+
   public <T> Float getFloat(ConfigProperty<T> configProperty) {
     Option<Object> rawValue = getRawValue(configProperty);
     return rawValue.map(v -> Float.parseFloat(v.toString())).orElse(null);
   }
 
+  public <T> Float getFloatOrDefault(ConfigProperty<T> configProperty) {
+    Option<Object> rawValue = getRawValue(configProperty);
+    return rawValue.map(v -> Float.parseFloat(v.toString()))
+            .orElseGet(() -> Float.parseFloat(configProperty.defaultValue().toString()));
+  }
+
   public <T> Double getDouble(ConfigProperty<T> configProperty) {
     Option<Object> rawValue = getRawValue(configProperty);
     return rawValue.map(v -> Double.parseDouble(v.toString())).orElse(null);
+  }
+
+  public <T> Double getDoubleOrDefault(ConfigProperty<T> configProperty) {
+    Option<Object> rawValue = getRawValue(configProperty);
+    return rawValue.map(v -> Double.parseDouble(v.toString()))
+            .orElseGet(() -> Double.parseDouble(configProperty.defaultValue().toString()));
   }
 
   public <T> String getStringOrDefault(ConfigProperty<T> configProperty) {
@@ -199,7 +233,7 @@ public class HoodieConfig implements Serializable {
   }
 
   public TypedProperties getProps() {
-    return getProps(false);
+    return props;
   }
 
   public TypedProperties getProps(boolean includeGlobalProps) {

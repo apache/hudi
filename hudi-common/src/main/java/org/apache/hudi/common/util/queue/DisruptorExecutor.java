@@ -32,23 +32,33 @@ import java.util.function.Function;
  */
 public class DisruptorExecutor<I, O, E> extends BaseHoodieQueueBasedExecutor<I, O, E> {
 
-  public DisruptorExecutor(final Option<Integer> bufferSize, final Iterator<I> inputItr,
-                           HoodieConsumer<O, E> consumer, Function<I, O> transformFunction, Option<String> waitStrategy, Runnable preExecuteRunnable) {
-    this(bufferSize, Collections.singletonList(new IteratorBasedQueueProducer<>(inputItr)), Option.of(consumer),
+  public DisruptorExecutor(Integer bufferSize,
+                           Iterator<I> inputItr,
+                           HoodieConsumer<O, E> consumer,
+                           Function<I, O> transformFunction,
+                           String waitStrategy,
+                           Runnable preExecuteRunnable) {
+    this(bufferSize, Collections.singletonList(new IteratorBasedQueueProducer<>(inputItr)), consumer,
         transformFunction, waitStrategy, preExecuteRunnable);
   }
 
-  public DisruptorExecutor(final Option<Integer> bufferSize, List<HoodieProducer<I>> producers,
-                           Option<HoodieConsumer<O, E>> consumer, final Function<I, O> transformFunction,
-                           final Option<String> waitStrategy, Runnable preExecuteRunnable) {
-    super(producers, consumer, new DisruptorMessageQueue<>(bufferSize, transformFunction, waitStrategy, producers.size(), preExecuteRunnable), preExecuteRunnable);
+  public DisruptorExecutor(int bufferSize,
+                           List<HoodieProducer<I>> producers,
+                           HoodieConsumer<O, E> consumer,
+                           Function<I, O> transformFunction,
+                           String waitStrategyId,
+                           Runnable preExecuteRunnable) {
+    super(producers, Option.of(consumer), new DisruptorMessageQueue<>(bufferSize, transformFunction, waitStrategyId, producers.size(), preExecuteRunnable), preExecuteRunnable);
   }
 
   @Override
-  protected void doConsume(HoodieMessageQueue<I, O> queue, HoodieConsumer<O, E> consumer) {
+  protected void setUp() {
     DisruptorMessageQueue<I, O> disruptorQueue = (DisruptorMessageQueue<I, O>) queue;
     // Before we start producing, we need to set up Disruptor's queue
-    disruptorQueue.setHandlers(consumer);
+    disruptorQueue.setHandlers(consumer.get());
     disruptorQueue.start();
   }
+
+  @Override
+  protected void doConsume(HoodieMessageQueue<I, O> queue, HoodieConsumer<O, E> consumer) {}
 }

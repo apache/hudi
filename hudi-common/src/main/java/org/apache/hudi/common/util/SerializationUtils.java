@@ -22,6 +22,8 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.Serializer;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import org.apache.avro.generic.GenericData;
+import org.apache.hudi.avro.GenericAvroSerializer;
 import org.apache.avro.util.Utf8;
 import org.objenesis.strategy.StdInstantiatorStrategy;
 
@@ -117,8 +119,12 @@ public class SerializationUtils {
       // for hadoop
       kryo.setClassLoader(Thread.currentThread().getContextClassLoader());
 
+      // Register Hudi's classes
+      new HoodieCommonKryoRegistrar().registerClasses(kryo);
+
       // Register serializers
       kryo.register(Utf8.class, new AvroUtf8Serializer());
+      kryo.register(GenericData.Fixed.class, new GenericAvroSerializer<>());
 
       return kryo;
     }
@@ -129,7 +135,7 @@ public class SerializationUtils {
    * NOTE: This {@link Serializer} could deserialize instance of {@link Utf8} serialized
    *       by implicitly generated Kryo serializer (based on {@link com.esotericsoftware.kryo.serializers.FieldSerializer}
    */
-  private static class AvroUtf8Serializer extends Serializer<Utf8> {
+  public static class AvroUtf8Serializer extends Serializer<Utf8> {
 
     @SuppressWarnings("unchecked")
     @Override

@@ -23,8 +23,8 @@ import org.apache.hudi.common.model.{HoodieBaseFile, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.exception.HoodieException
-import org.apache.log4j.Logger
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
+import org.slf4j.LoggerFactory
 
 import java.util.stream.Collectors
 import scala.collection.JavaConversions._
@@ -41,7 +41,7 @@ class DedupeSparkJob(basePath: String,
                      dedupeType: DeDupeType.Value) {
 
   val sparkHelper = new SparkHelper(sqlContext, fs)
-  val LOG = Logger.getLogger(this.getClass)
+  val LOG = LoggerFactory.getLogger(this.getClass)
 
   /**
     *
@@ -74,7 +74,7 @@ class DedupeSparkJob(basePath: String,
     val metadata = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(basePath).build()
 
     val allFiles = fs.listStatus(new org.apache.hadoop.fs.Path(s"$basePath/$duplicatedPartitionPath"))
-    val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitTimeline.filterCompletedInstants(), allFiles)
+    val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitsTimeline.filterCompletedInstants(), allFiles)
     val latestFiles: java.util.List[HoodieBaseFile] = fsView.getLatestBaseFiles().collect(Collectors.toList[HoodieBaseFile]())
     val filteredStatuses = latestFiles.map(f => f.getPath)
     LOG.info(s" List of files under partition: ${} =>  ${filteredStatuses.mkString(" ")}")
@@ -183,7 +183,7 @@ class DedupeSparkJob(basePath: String,
     val metadata = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(basePath).build()
 
     val allFiles = fs.listStatus(new Path(s"$basePath/$duplicatedPartitionPath"))
-    val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitTimeline.filterCompletedInstants(), allFiles)
+    val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitsTimeline.filterCompletedInstants(), allFiles)
 
     val latestFiles: java.util.List[HoodieBaseFile] = fsView.getLatestBaseFiles().collect(Collectors.toList[HoodieBaseFile]())
 

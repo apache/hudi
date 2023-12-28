@@ -36,7 +36,7 @@ import org.apache.spark.sql.{AnalysisException, SparkSession}
 import java.util.Locale
 
 class HoodieSpark3_2ExtendedSqlParser(session: SparkSession, delegate: ParserInterface)
-  extends ParserInterface with Logging {
+  extends HoodieExtendedParserInterface with Logging {
 
   private lazy val conf = session.sqlContext.conf
   private lazy val builder = new HoodieSpark3_2ExtendedSqlAstBuilder(conf, delegate)
@@ -121,7 +121,11 @@ class HoodieSpark3_2ExtendedSqlParser(session: SparkSession, delegate: ParserInt
     normalized.contains("system_time as of") ||
       normalized.contains("timestamp as of") ||
       normalized.contains("system_version as of") ||
-      normalized.contains("version as of")
+      normalized.contains("version as of") ||
+      normalized.contains("create index") ||
+      normalized.contains("drop index") ||
+      normalized.contains("show indexes") ||
+      normalized.contains("refresh index")
   }
 }
 

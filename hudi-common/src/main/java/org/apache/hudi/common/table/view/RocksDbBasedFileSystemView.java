@@ -36,8 +36,8 @@ import org.apache.hudi.common.util.collection.RocksDBDAO;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.HashMap;
@@ -61,7 +61,7 @@ import java.util.stream.Stream;
  */
 public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSystemView {
 
-  private static final Logger LOG = LogManager.getLogger(RocksDbBasedFileSystemView.class);
+  private static final Logger LOG = LoggerFactory.getLogger(RocksDbBasedFileSystemView.class);
 
   private final FileSystemViewStorageConfig config;
 
@@ -310,10 +310,11 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
     rocksDB.writeBatch(batch ->
         deltaFileGroups.forEach(fg ->
             fg.getAllRawFileSlices().map(fs -> {
-              FileSlice oldSlice = getFileSlice(partition, fs.getFileId(), fs.getBaseInstantTime());
-              if (null == oldSlice) {
+              Option<FileSlice> oldSliceOption = fetchLatestFileSliceBeforeOrOn(partition, fs.getFileId(), fs.getBaseInstantTime());
+              if (!oldSliceOption.isPresent() || !shouldMergeFileSlice(oldSliceOption.get(), fs)) {
                 return fs;
               } else {
+                FileSlice oldSlice = oldSliceOption.get();
                 // First remove the file-slice
                 LOG.info("Removing old Slice in DB. FS=" + oldSlice);
                 rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForSliceView(fg, oldSlice));
@@ -469,6 +470,23 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
             ) ? x : y)));
   }
 
+  public Option<FileSlice> fetchLatestFileSliceBeforeOrOn(String partitionPath, String fileId, String instantTime) {
+    Option<String> completionTime = getCompletionTime(instantTime);
+    if (!completionTime.isPresent()) {
+      return fetchLatestFileSlice(partitionPath, fileId);
+    }
+    // Retries only file-slices of the file and filters for the latest
+    return Option.ofNullable(rocksDB
+        .<FileSlice>prefixSearch(schemaHelper.getColFamilyForView(),
+            schemaHelper.getPrefixForSliceViewByPartitionFile(partitionPath, fileId))
+        .map(Pair::getValue)
+        .filter(fileSlice -> fileSlice != null && HoodieTimeline.compareTimestamps(fileSlice.getBaseInstantTime(), HoodieTimeline.LESSER_THAN_OR_EQUALS, completionTime.get()))
+        .reduce(null,
+            (x, y) -> x == null ? y
+                : HoodieTimeline.compareTimestamps(x.getBaseInstantTime(), HoodieTimeline.GREATER_THAN, y.getBaseInstantTime()
+            ) ? x : y));
+  }
+
   @Override
   protected Option<HoodieBaseFile> fetchLatestBaseFile(String partitionPath, String fileId) {
     // Retries only file-slices of the file and filters for the latest
@@ -536,6 +554,12 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   }
 
   @Override
+  protected boolean hasReplacedFilesInPartition(String partitionPath) {
+    return rocksDB.<HoodieInstant>prefixSearch(schemaHelper.getColFamilyForReplacedFileGroups(), schemaHelper.getPrefixForReplacedFileGroup(partitionPath))
+        .findAny().isPresent();
+  }
+
+  @Override
   protected Option<HoodieInstant> getReplaceInstant(final HoodieFileGroupId fileGroupId) {
     String lookupKey = schemaHelper.getKeyForReplacedFileGroup(fileGroupId);
     HoodieInstant replacedInstant =
@@ -553,9 +577,16 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
         });
   }
 
-  private FileSlice getFileSlice(String partitionPath, String fileId, String instantTime) {
-    String key = schemaHelper.getKeyForSliceView(partitionPath, fileId, instantTime);
-    return rocksDB.get(schemaHelper.getColFamilyForView(), key);
+  private static boolean shouldMergeFileSlice(FileSlice oldSlice, FileSlice newSlice) {
+    // 1. the new file slice has no compaction been scheduled, it should always be merged into the latest file slice;
+    // 2. the old file slice has no compaction scheduled, while the new file slice does,
+    //    if they have different base instant time, should not merge;
+    // 3. the new file slice has compaction been scheduled, should not merge if old and new base instant time is different.
+    return isFileSliceWithoutCompactionBarrier(newSlice) || newSlice.getBaseInstantTime().equals(oldSlice.getBaseInstantTime());
+  }
+
+  private static boolean isFileSliceWithoutCompactionBarrier(FileSlice fileSlice) {
+    return fileSlice.getLogFiles().anyMatch(logFile -> logFile.getDeltaCommitTime().equals(fileSlice.getBaseInstantTime()));
   }
 
   @Override

@@ -32,8 +32,9 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -47,7 +48,7 @@ import java.util.Map;
 public class LogCompactionExecutionHelper<T extends HoodieRecordPayload, I, K, O>
     extends CompactionExecutionHelper<T, I, K, O> {
 
-  private static final Logger LOG = LogManager.getLogger(LogCompactionExecutionHelper.class);
+  private static final Logger LOG = LoggerFactory.getLogger(LogCompactionExecutionHelper.class);
 
   @Override
   protected void transitionRequestedToInflight(HoodieTable table, String logCompactionInstantTime) {
@@ -80,7 +81,7 @@ public class LogCompactionExecutionHelper<T extends HoodieRecordPayload, I, K, O
   }
 
   @Override
-  protected boolean useScanV2(HoodieWriteConfig writeConfig) {
+  protected boolean enableOptimizedLogBlockScan(HoodieWriteConfig writeConfig) {
     return true;
   }
 }

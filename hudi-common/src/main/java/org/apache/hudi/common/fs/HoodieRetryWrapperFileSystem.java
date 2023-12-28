@@ -66,12 +66,12 @@ public class HoodieRetryWrapperFileSystem extends FileSystem {
 
   @Override
   public FSDataInputStream open(Path f, int bufferSize) throws IOException {
-    return (FSDataInputStream) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.open(f, bufferSize)).start();
+    return new RetryHelper<FSDataInputStream, IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.open(f, bufferSize)).start();
   }
 
   @Override
   public FSDataInputStream open(Path f) throws IOException {
-    return (FSDataInputStream) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.open(f)).start();
+    return new RetryHelper<FSDataInputStream, IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.open(f)).start();
   }
 
   @Override
@@ -82,66 +82,67 @@ public class HoodieRetryWrapperFileSystem extends FileSystem {
                                    short replication,
                                    long blockSize,
                                    Progressable progress) throws IOException {
-    return (FSDataOutputStream) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList)
+    return new RetryHelper<FSDataOutputStream, IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList)
         .tryWith(() -> fileSystem.create(f, permission, overwrite, bufferSize, replication, blockSize, progress)).start();
   }
 
   @Override
   public FSDataOutputStream create(Path f, boolean overwrite) throws IOException {
-    return (FSDataOutputStream) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.create(f, overwrite)).start();
+    return new RetryHelper<FSDataOutputStream, IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.create(f, overwrite)).start();
   }
 
   @Override
   public FSDataOutputStream create(Path f) throws IOException {
-    return (FSDataOutputStream) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.create(f)).start();
+    return new RetryHelper<FSDataOutputStream, IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.create(f)).start();
   }
 
   @Override
   public FSDataOutputStream create(Path f, Progressable progress) throws IOException {
-    return (FSDataOutputStream) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.create(f, progress)).start();
+    return new RetryHelper<FSDataOutputStream, IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.create(f, progress)).start();
   }
 
   @Override
   public FSDataOutputStream create(Path f, short replication) throws IOException {
-    return (FSDataOutputStream) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.create(f, replication)).start();
+    return new RetryHelper<FSDataOutputStream, IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.create(f, replication)).start();
   }
 
   @Override
   public FSDataOutputStream create(Path f, short replication, Progressable progress) throws IOException {
-    return (FSDataOutputStream) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.create(f, replication, progress)).start();
+    return new RetryHelper<FSDataOutputStream, IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList)
+        .tryWith(() -> fileSystem.create(f, replication, progress)).start();
   }
 
   @Override
   public FSDataOutputStream create(Path f, boolean overwrite, int bufferSize) throws IOException {
-    return (FSDataOutputStream) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList)
+    return new RetryHelper<FSDataOutputStream, IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList)
         .tryWith(() -> fileSystem.create(f, overwrite, bufferSize)).start();
   }
 
   @Override
   public FSDataOutputStream create(Path f, boolean overwrite, int bufferSize, Progressable progress)
       throws IOException {
-    return (FSDataOutputStream) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList)
+    return new RetryHelper<FSDataOutputStream, IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList)
         .tryWith(() -> fileSystem.create(f, overwrite, bufferSize, progress)).start();
   }
 
   @Override
   public FSDataOutputStream create(Path f, boolean overwrite, int bufferSize, short replication, long blockSize,
                                    Progressable progress) throws IOException {
-    return (FSDataOutputStream) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList)
+    return new RetryHelper<FSDataOutputStream, IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList)
         .tryWith(() -> fileSystem.create(f, overwrite, bufferSize, replication, blockSize, progress)).start();
   }
 
   @Override
   public FSDataOutputStream create(Path f, FsPermission permission, EnumSet<CreateFlag> flags, int bufferSize,
                                    short replication, long blockSize, Progressable progress) throws IOException {
-    return (FSDataOutputStream) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList)
+    return new RetryHelper<FSDataOutputStream, IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList)
         .tryWith(() -> fileSystem.create(f, permission, flags, bufferSize, replication, blockSize, progress)).start();
   }
 
   @Override
   public FSDataOutputStream create(Path f, FsPermission permission, EnumSet<CreateFlag> flags, int bufferSize,
                                    short replication, long blockSize, Progressable progress, Options.ChecksumOpt checksumOpt) throws IOException {
-    return (FSDataOutputStream) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList)
+    return new RetryHelper<FSDataOutputStream, IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList)
         .tryWith(() -> fileSystem.create(f, permission, flags, bufferSize, replication,
             blockSize, progress, checksumOpt)).start();
   }
@@ -149,83 +150,88 @@ public class HoodieRetryWrapperFileSystem extends FileSystem {
   @Override
   public FSDataOutputStream create(Path f, boolean overwrite, int bufferSize, short replication, long blockSize)
       throws IOException {
-    return (FSDataOutputStream) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList)
+    return new RetryHelper<FSDataOutputStream, IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList)
         .tryWith(() -> fileSystem.create(f, overwrite, bufferSize, replication, blockSize)).start();
   }
 
   @Override
   public boolean createNewFile(Path f) throws IOException {
-    return (boolean) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.createNewFile(f)).start();
+    return new RetryHelper<Boolean, IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.createNewFile(f)).start().booleanValue();
   }
 
   @Override
   public FSDataOutputStream append(Path f, int bufferSize, Progressable progress) throws IOException {
-    return (FSDataOutputStream) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.append(f, bufferSize, progress)).start();
+    return new RetryHelper<FSDataOutputStream, IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList)
+        .tryWith(() -> fileSystem.append(f, bufferSize, progress)).start();
   }
 
   @Override
   public FSDataOutputStream append(Path f) throws IOException {
-    return (FSDataOutputStream) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.append(f)).start();
+    return new RetryHelper<FSDataOutputStream, IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.append(f)).start();
   }
 
   @Override
   public FSDataOutputStream append(Path f, int bufferSize) throws IOException {
-    return (FSDataOutputStream) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.append(f, bufferSize)).start();
+    return new RetryHelper<FSDataOutputStream, IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.append(f, bufferSize)).start();
   }
 
   @Override
   public boolean rename(Path src, Path dst) throws IOException {
-    return (boolean) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.rename(src, dst)).start();
+    return new RetryHelper<Boolean, IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList)
+        .tryWith(() -> fileSystem.rename(src, dst)).start().booleanValue();
   }
 
   @Override
   public boolean delete(Path f, boolean recursive) throws IOException {
-    return (boolean) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.delete(f, recursive)).start();
+    return new RetryHelper<Boolean, IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList)
+        .tryWith(() -> fileSystem.delete(f, recursive)).start().booleanValue();
   }
 
   @Override
   public boolean delete(Path f) throws IOException {
-    return (boolean) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.delete(f, true)).start();
+    return new RetryHelper<Boolean, IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.delete(f, true)).start().booleanValue();
   }
 
   @Override
   public FileStatus[] listStatus(Path f) throws FileNotFoundException, IOException {
-    return (FileStatus[]) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.listStatus(f)).start();
+    return new RetryHelper<FileStatus[], IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.listStatus(f)).start();
   }
 
   @Override
   public FileStatus[] listStatus(Path f, PathFilter filter) throws IOException {
-    return (FileStatus[]) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.listStatus(f, filter)).start();
+    return new RetryHelper<FileStatus[], IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.listStatus(f, filter)).start();
   }
 
   @Override
   public FileStatus[] listStatus(Path[] files) throws IOException {
-    return (FileStatus[]) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.listStatus(files)).start();
+    return new RetryHelper<FileStatus[], IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.listStatus(files)).start();
   }
 
   @Override
   public FileStatus[] listStatus(Path[] files, PathFilter filter) throws IOException {
-    return (FileStatus[]) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.listStatus(files, filter)).start();
+    return new RetryHelper<FileStatus[], IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.listStatus(files, filter)).start();
   }
 
   @Override
   public FileStatus[] globStatus(Path pathPattern) throws IOException {
-    return (FileStatus[]) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.globStatus(pathPattern)).start();
+    return new RetryHelper<FileStatus[], IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.globStatus(pathPattern)).start();
   }
 
   @Override
   public FileStatus[] globStatus(Path pathPattern, PathFilter filter) throws IOException {
-    return (FileStatus[]) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.globStatus(pathPattern, filter)).start();
+    return new RetryHelper<FileStatus[], IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList)
+        .tryWith(() -> fileSystem.globStatus(pathPattern, filter)).start();
   }
 
   @Override
   public RemoteIterator<LocatedFileStatus> listLocatedStatus(Path f) throws IOException {
-    return (RemoteIterator<LocatedFileStatus>) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.listLocatedStatus(f)).start();
+    return new RetryHelper<RemoteIterator<LocatedFileStatus>, IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList)
+        .tryWith(() -> fileSystem.listLocatedStatus(f)).start();
   }
 
   @Override
   public RemoteIterator<LocatedFileStatus> listFiles(Path f, boolean recursive) throws IOException {
-    return (RemoteIterator<LocatedFileStatus>) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList)
+    return new RetryHelper<RemoteIterator<LocatedFileStatus>, IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList)
         .tryWith(() -> fileSystem.listFiles(f, recursive)).start();
   }
 
@@ -241,17 +247,18 @@ public class HoodieRetryWrapperFileSystem extends FileSystem {
 
   @Override
   public boolean mkdirs(Path f, FsPermission permission) throws IOException {
-    return (boolean) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.mkdirs(f, permission)).start();
+    return new RetryHelper<Boolean, IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList)
+        .tryWith(() -> fileSystem.mkdirs(f, permission)).start().booleanValue();
   }
 
   @Override
   public FileStatus getFileStatus(Path f) throws IOException {
-    return (FileStatus) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.getFileStatus(f)).start();
+    return new RetryHelper<FileStatus, IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.getFileStatus(f)).start();
   }
 
   @Override
   public boolean exists(Path f) throws IOException {
-    return (boolean) new RetryHelper(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.exists(f)).start();
+    return new RetryHelper<Boolean, IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.exists(f)).start().booleanValue();
   }
 
   @Override
@@ -263,4 +270,15 @@ public class HoodieRetryWrapperFileSystem extends FileSystem {
   public String getScheme() {
     return fileSystem.getScheme();
   }
+
+  @Override
+  public short getDefaultReplication() {
+    return fileSystem.getDefaultReplication();
+  }
+
+  @Override
+  public short getDefaultReplication(Path path) {
+    return fileSystem.getDefaultReplication(path);
+  }
+
 }

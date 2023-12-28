@@ -19,11 +19,9 @@
 package org.apache.hudi.common.util.queue;
 
 /**
- * HoodieExecutor which orchestrates concurrent producers and consumers communicating through a bounded in message queue.
- *
- * TODO cleanup unused generics
+ * HoodieExecutor which orchestrates concurrent producers and consumers communicating.
  */
-public interface HoodieExecutor<I, O, E>  {
+public interface HoodieExecutor<E>  {
 
   /**
    * Main API to

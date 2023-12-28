@@ -34,7 +34,7 @@ import static org.apache.hudi.internal.schema.utils.InternalSchemaUtils.createFu
  * Schema visitor to produce name -> id map for internalSchema.
  */
 public class NameToIDVisitor extends InternalSchemaVisitor<Map<String, Integer>> {
-  private final Deque fieldNames = new LinkedList<>();
+  private final Deque<String> fieldNames = new LinkedList<>();
   private final Map<String, Integer> nameToId = new HashMap<>();
 
   @Override

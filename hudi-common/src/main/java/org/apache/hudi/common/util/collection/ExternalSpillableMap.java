@@ -21,8 +21,10 @@ package org.apache.hudi.common.util.collection;
 import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.exception.HoodieIOException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -51,11 +53,12 @@ import java.util.stream.Stream;
  * map may occupy more memory than is available, resulting in OOM. However, if the spill threshold is too low, we spill
  * frequently and incur unnecessary disk writes.
  */
+@NotThreadSafe
 public class ExternalSpillableMap<T extends Serializable, R extends Serializable> implements Map<T, R>, Serializable {
 
   // Find the actual estimated payload size after inserting N records
   private static final int NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE = 100;
-  private static final Logger LOG = LogManager.getLogger(ExternalSpillableMap.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ExternalSpillableMap.class);
   // maximum space allowed in-memory for this map
   private final long maxInMemorySizeInBytes;
   // Map to store key-values in memory until it hits maxInMemorySizeInBytes
@@ -199,25 +202,24 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
 
   @Override
   public R put(T key, R value) {
-    if (this.currentInMemoryMapSize >= maxInMemorySizeInBytes || inMemoryMap.size() % NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 0) {
-      this.estimatedPayloadSize = (long) (this.estimatedPayloadSize * 0.9 
-        + (keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value)) * 0.1);
+    if (this.estimatedPayloadSize == 0) {
+      // At first, use the sizeEstimate of a record being inserted into the spillable map.
+      // Note, the converter may over-estimate the size of a record in the JVM
+      this.estimatedPayloadSize = keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value);
+    } else if (this.inMemoryMap.size() % NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 0) {
+      this.estimatedPayloadSize = (long) (this.estimatedPayloadSize * 0.9 + (keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value)) * 0.1);
       this.currentInMemoryMapSize = this.inMemoryMap.size() * this.estimatedPayloadSize;
-      LOG.info("Update Estimated Payload size to => " + this.estimatedPayloadSize);
     }
 
-    if (this.currentInMemoryMapSize < maxInMemorySizeInBytes || inMemoryMap.containsKey(key)) {
-      if (estimatedPayloadSize == 0) {
-        // At first, use the sizeEstimate of a record being inserted into the spillable map.
-        // Note, the converter may over estimate the size of a record in the JVM
-        this.estimatedPayloadSize = keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value);
-        LOG.info("Estimated Payload size => " + estimatedPayloadSize);
+    if (this.inMemoryMap.containsKey(key)) {
+      this.inMemoryMap.put(key, value);
+    } else if (this.currentInMemoryMapSize < this.maxInMemorySizeInBytes) {
+      this.currentInMemoryMapSize += this.estimatedPayloadSize;
+      // Remove the old version of the record from disk first to avoid data duplication.
+      if (inDiskContainsKey(key)) {
+        getDiskBasedMap().remove(key);
       }
-      if (!inMemoryMap.containsKey(key)) {
-        // TODO : Add support for adjusting payloadSize for updates to the same key
-        currentInMemoryMapSize += this.estimatedPayloadSize;
-      }
-      inMemoryMap.put(key, value);
+      this.inMemoryMap.put(key, value);
     } else {
       getDiskBasedMap().put(key, value);
     }

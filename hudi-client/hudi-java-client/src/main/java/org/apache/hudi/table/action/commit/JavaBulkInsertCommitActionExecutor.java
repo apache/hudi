@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -33,7 +32,7 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import java.util.List;
 import java.util.Map;
 
-public class JavaBulkInsertCommitActionExecutor<T extends HoodieRecordPayload<T>> extends BaseJavaCommitActionExecutor<T> {
+public class JavaBulkInsertCommitActionExecutor<T> extends BaseJavaCommitActionExecutor<T> {
 
   private final List<HoodieRecord<T>> inputRecords;
   private final Option<BulkInsertPartitioner> bulkInsertPartitioner;

@@ -20,6 +20,7 @@ package org.apache.hudi.client.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -28,7 +29,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -40,7 +40,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.testutils.GenericRecordValidationTestUtils;
@@ -166,7 +165,8 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
       }
       curr++;
     }
-
+    mainTable.client.close();
+    experimentTable.client.close();
   }
 
   private void verifyRecords(TestTableContents mainTable, TestTableContents experimentTable) {
@@ -197,7 +197,7 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
   }
 
   private boolean writeOnMainTable(TestTableContents mainTable, int curr) throws IOException {
-    String commitTime = HoodieActiveTimeline.createNewInstantTime();
+    String commitTime = mainTable.client.createNewInstantTime();
     mainTable.client.startCommitWithTime(commitTime);
 
     int actionType = pickAWriteAction();
@@ -377,7 +377,7 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
     // Create logcompaction client.
     HoodieWriteConfig logCompactionConfig = HoodieWriteConfig.newBuilder().withProps(config2.getProps())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .withLogCompactionBlocksThreshold("2").build())
+            .withLogCompactionBlocksThreshold(2).build())
         .build();
     SparkRDDWriteClient logCompactionClient = new SparkRDDWriteClient(context, logCompactionConfig);
 

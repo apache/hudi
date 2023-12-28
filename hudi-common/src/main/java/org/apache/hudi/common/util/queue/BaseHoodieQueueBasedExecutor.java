@@ -21,9 +21,11 @@ package org.apache.hudi.common.util.queue;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -49,11 +51,11 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * is ingested from multiple sources (ie producers) into a singular sink (ie consumer), using
  * an internal queue to stage the records ingested from producers before these are consumed
  */
-public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExecutor<I, O, E> {
+public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExecutor<E> {
 
   private static final long TERMINATE_WAITING_TIME_SECS = 60L;
 
-  private final Logger logger = LogManager.getLogger(getClass());
+  private final Logger logger = LoggerFactory.getLogger(getClass());
 
   // Executor service used for launching write thread.
   private final ExecutorService producerExecutorService;
@@ -65,6 +67,9 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
   private final List<HoodieProducer<I>> producers;
   // Consumer
   protected final Option<HoodieConsumer<O, E>> consumer;
+  // Futures corresponding to producing/consuming processes
+  private CompletableFuture<Void> consumingFuture;
+  private CompletableFuture<Void> producingFuture;
 
   public BaseHoodieQueueBasedExecutor(List<HoodieProducer<I>> producers,
                                       Option<HoodieConsumer<O, E>> consumer,
@@ -74,7 +79,7 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
     this.producers = producers;
     this.consumer = consumer;
     // Ensure fixed thread for each producer thread
-    this.producerExecutorService = Executors.newFixedThreadPool(producers.size(), new CustomizedThreadFactory("executor-queue-producer", preExecuteRunnable));
+    this.producerExecutorService = Executors.newFixedThreadPool(Math.max(1, producers.size()), new CustomizedThreadFactory("executor-queue-producer", preExecuteRunnable));
     // Ensure single thread for consumer
     this.consumerExecutorService = Executors.newSingleThreadExecutor(new CustomizedThreadFactory("executor-queue-consumer", preExecuteRunnable));
   }
@@ -92,6 +97,8 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
   }
 
   protected abstract void doConsume(HoodieMessageQueue<I, O> queue, HoodieConsumer<O, E> consumer);
+
+  protected void setUp() {}
 
   /**
    * Start producing
@@ -149,7 +156,28 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
   }
 
   @Override
-  public void shutdownNow() {
+  public final void shutdownNow() {
+    // NOTE: PLEASE READ CAREFULLY
+    //       Graceful shutdown sequence have been a source of multiple issues in the
+    //       past (for ex HUDI-2875, HUDI-5238). To handle it appropriately in a graceful
+    //       fashion we're consolidating shutdown sequence w/in the Executor itself (in
+    //       this method) shutting down in following order
+    //
+    //          1. We shut down producing/consuming pipeline (by interrupting
+    //             corresponding futures), then
+    //          2. We shut down producer and consumer (if present), and after that
+    //          3. We shut down the executors
+    //
+    if (producingFuture != null) {
+      producingFuture.cancel(true);
+    }
+    if (consumingFuture != null) {
+      consumingFuture.cancel(true);
+    }
+    // Clean up resources associated w/ producers/consumers
+    producers.forEach(HoodieProducer::close);
+    consumer.ifPresent(HoodieConsumer::finish);
+    // Shutdown executor-services
     producerExecutorService.shutdownNow();
     consumerExecutorService.shutdownNow();
   }
@@ -165,13 +193,14 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
   public E execute() {
     try {
       checkState(this.consumer.isPresent());
+      setUp();
       // Start consuming/producing asynchronously
-      CompletableFuture<Void> consuming = startConsumingAsync();
-      CompletableFuture<Void> producing = startProducingAsync();
+      this.consumingFuture = startConsumingAsync();
+      this.producingFuture = startProducingAsync();
 
       // NOTE: To properly support mode when there's no consumer, we have to fall back
       //       to producing future as the trigger for us to shut down the queue
-      return producing.thenCombine(consuming, (aVoid, anotherVoid) -> null)
+      return allOf(Arrays.asList(producingFuture, consumingFuture))
           .whenComplete((ignored, throwable) -> {
             // Close the queue to release the resources
             queue.close();
@@ -185,6 +214,11 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
         // of the thread, we reset it (to true) again to permit subsequent handlers
         // to be interrupted as well
         Thread.currentThread().interrupt();
+      }
+      // throw if we have any other exception seen already. There is a chance that cancellation/closing of producers with CompeletableFuture wins before the actual exception
+      // is thrown.
+      if (this.queue.getThrowable() != null) {
+        throw new HoodieException(queue.getThrowable());
       }
 
       throw new HoodieException(e);

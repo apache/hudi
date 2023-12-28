@@ -29,11 +29,12 @@ import org.apache.spark.sql.catalyst.parser.{ParseErrorListener, ParseException,
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.trees.Origin
 import org.apache.spark.sql.catalyst.{FunctionIdentifier, TableIdentifier}
+import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 
 class HoodieSpark2ExtendedSqlParser(session: SparkSession, delegate: ParserInterface)
-  extends ParserInterface with Logging {
+  extends HoodieExtendedParserInterface with Logging {
 
   private lazy val conf = session.sqlContext.conf
   private lazy val builder = new HoodieSpark2ExtendedSqlAstBuilder(conf, delegate)

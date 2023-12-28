@@ -18,15 +18,23 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
 
 import com.codahale.metrics.MetricRegistry;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -34,93 +42,108 @@ import java.util.Map;
  */
 public class Metrics {
 
-  private static final Logger LOG = LogManager.getLogger(Metrics.class);
+  private static final Logger LOG = LoggerFactory.getLogger(Metrics.class);
 
-  private static volatile boolean initialized = false;
-  private static Metrics instance = null;
+  private static final Map<String, Metrics> METRICS_INSTANCE_PER_BASEPATH = new HashMap<>();
 
   private final MetricRegistry registry;
-  private MetricsReporter reporter;
+  private final List<MetricsReporter> reporters;
   private final String commonMetricPrefix;
+  private boolean initialized = false;
 
-  private Metrics(HoodieWriteConfig metricConfig) {
+  public Metrics(HoodieWriteConfig metricConfig) {
     registry = new MetricRegistry();
     commonMetricPrefix = metricConfig.getMetricReporterMetricsNamePrefix();
-    reporter = MetricsReporterFactory.createReporter(metricConfig, registry);
-    if (reporter == null) {
-      throw new RuntimeException("Cannot initialize Reporter.");
+    reporters = new ArrayList<>();
+    Option<MetricsReporter> defaultReporter = MetricsReporterFactory.createReporter(metricConfig, registry);
+    defaultReporter.ifPresent(reporters::add);
+    if (StringUtils.nonEmpty(metricConfig.getMetricReporterFileBasedConfigs())) {
+      reporters.addAll(addAdditionalMetricsExporters(metricConfig));
     }
-    reporter.start();
-
-    Runtime.getRuntime().addShutdownHook(new Thread(Metrics::shutdown));
-  }
-
-  private void reportAndStopReporter() {
-    try {
-      registerHoodieCommonMetrics();
-      reporter.report();
-      LOG.info("Stopping the metrics reporter...");
-      reporter.stop();
-    } catch (Exception e) {
-      LOG.warn("Error while closing reporter", e);
+    if (reporters.size() == 0) {
+      throw new RuntimeException("Cannot initialize Reporters.");
     }
-  }
+    reporters.forEach(MetricsReporter::start);
 
-  private void reportAndFlushMetrics() {
-    try {
-      LOG.info("Reporting and flushing all metrics");
-      this.registerHoodieCommonMetrics();
-      this.reporter.report();
-      this.registry.getNames().forEach(this.registry::remove);
-    } catch (Exception e) {
-      LOG.error("Error while reporting and flushing metrics", e);
-    }
+    Runtime.getRuntime().addShutdownHook(new Thread(this::shutdown));
+    this.initialized = true;
   }
 
   private void registerHoodieCommonMetrics() {
     registerGauges(Registry.getAllMetrics(true, true), Option.of(commonMetricPrefix));
   }
 
-  public static Metrics getInstance() {
-    assert initialized;
-    return instance;
+  public static synchronized Metrics getInstance(HoodieWriteConfig metricConfig) {
+    String basePath = metricConfig.getBasePath();
+    if (METRICS_INSTANCE_PER_BASEPATH.containsKey(basePath)) {
+      return METRICS_INSTANCE_PER_BASEPATH.get(basePath);
+    }
+
+    Metrics metrics = new Metrics(metricConfig);
+    METRICS_INSTANCE_PER_BASEPATH.put(basePath, metrics);
+    return metrics;
   }
 
-  public static synchronized void init(HoodieWriteConfig metricConfig) {
-    if (initialized) {
-      return;
+  public static synchronized void shutdownAllMetrics() {
+    METRICS_INSTANCE_PER_BASEPATH.values().forEach(Metrics::shutdown);
+    // to avoid reusing already stopped metrics
+    METRICS_INSTANCE_PER_BASEPATH.clear();
+  }
+
+  private List<MetricsReporter> addAdditionalMetricsExporters(HoodieWriteConfig metricConfig) {
+    List<MetricsReporter> reporterList = new ArrayList<>();
+    List<String> propPathList = StringUtils.split(metricConfig.getMetricReporterFileBasedConfigs(), ",");
+    try (FileSystem fs = FSUtils.getFs(propPathList.get(0), new Configuration())) {
+      for (String propPath : propPathList) {
+        HoodieWriteConfig secondarySourceConfig = HoodieWriteConfig.newBuilder().fromInputStream(
+            fs.open(new Path(propPath))).withPath(metricConfig.getBasePath()).build();
+        Option<MetricsReporter> reporter = MetricsReporterFactory.createReporter(secondarySourceConfig, registry);
+        if (reporter.isPresent()) {
+          reporterList.add(reporter.get());
+        } else {
+          LOG.error(String.format("Could not create reporter using properties path %s base path %s",
+              propPath, metricConfig.getBasePath()));
+        }
+      }
+    } catch (IOException e) {
+      LOG.error("Failed to add MetricsExporters", e);
     }
+    LOG.info("total additional metrics reporters added =" + reporterList.size());
+    return reporterList;
+  }
+
+  public synchronized void shutdown() {
     try {
-      instance = new Metrics(metricConfig);
+      registerHoodieCommonMetrics();
+      reporters.forEach(MetricsReporter::report);
+      LOG.info("Stopping the metrics reporter...");
+      reporters.forEach(MetricsReporter::stop);
     } catch (Exception e) {
-      throw new HoodieException(e);
+      LOG.warn("Error while closing reporter", e);
+    } finally {
+      initialized = false;
     }
-    initialized = true;
   }
 
-  public static synchronized void shutdown() {
-    if (!initialized) {
-      return;
+  public synchronized void flush() {
+    try {
+      LOG.info("Reporting and flushing all metrics");
+      registerHoodieCommonMetrics();
+      reporters.forEach(MetricsReporter::report);
+      registry.getNames().forEach(this.registry::remove);
+      registerHoodieCommonMetrics();
+    } catch (Exception e) {
+      LOG.error("Error while reporting and flushing metrics", e);
     }
-    instance.reportAndStopReporter();
-    initialized = false;
   }
 
-  public static synchronized void flush() {
-    if (!Metrics.initialized) {
-      return;
-    }
-    instance.reportAndFlushMetrics();
-  }
-
-  public static void registerGauges(Map<String, Long> metricsMap, Option<String> prefix) {
+  public void registerGauges(Map<String, Long> metricsMap, Option<String> prefix) {
     String metricPrefix = prefix.isPresent() ? prefix.get() + "." : "";
     metricsMap.forEach((k, v) -> registerGauge(metricPrefix + k, v));
   }
 
-  public static void registerGauge(String metricName, final long value) {
+  public void registerGauge(String metricName, final long value) {
     try {
-      MetricRegistry registry = Metrics.getInstance().getRegistry();
       HoodieGauge guage = (HoodieGauge) registry.gauge(metricName, () -> new HoodieGauge<>(value));
       guage.setValue(value);
     } catch (Exception e) {
@@ -134,7 +157,10 @@ public class Metrics {
     return registry;
   }
 
-  public static boolean isInitialized() {
-    return initialized;
+  public static boolean isInitialized(String basePath) {
+    if (METRICS_INSTANCE_PER_BASEPATH.containsKey(basePath)) {
+      return METRICS_INSTANCE_PER_BASEPATH.get(basePath).initialized;
+    }
+    return false;
   }
 }

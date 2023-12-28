@@ -50,6 +50,7 @@ import static org.apache.hudi.common.testutils.FileSystemTestUtils.FILE_SCHEME;
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.getPhantomFile;
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.getRandomOuterInMemPath;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -160,7 +161,7 @@ public class TestInLineFileSystemHFileInLining {
   }
 
   private byte[] getSomeKey(int rowId) {
-    KeyValue kv = new KeyValue(String.format(LOCAL_FORMATTER, rowId).getBytes(),
+    KeyValue kv = new KeyValue(getUTF8Bytes(String.format(LOCAL_FORMATTER, rowId)),
         Bytes.toBytes("family"), Bytes.toBytes("qual"), HConstants.LATEST_TIMESTAMP, KeyValue.Type.Put);
     return kv.getKey();
   }

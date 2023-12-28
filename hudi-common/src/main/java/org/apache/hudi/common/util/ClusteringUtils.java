@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieClusteringStrategy;
@@ -30,6 +31,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -37,8 +39,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.AbstractMap;
@@ -54,7 +56,7 @@ import java.util.stream.Stream;
  */
 public class ClusteringUtils {
 
-  private static final Logger LOG = LogManager.getLogger(ClusteringUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ClusteringUtils.class);
 
   public static final String TOTAL_IO_READ_MB = "TOTAL_IO_READ_MB";
   public static final String TOTAL_LOG_FILE_SIZE = "TOTAL_LOG_FILES_SIZE";
@@ -69,6 +71,13 @@ public class ClusteringUtils {
         metaClient.getActiveTimeline().filterPendingReplaceTimeline().getInstants();
     return pendingReplaceInstants.stream().map(instant -> getClusteringPlan(metaClient, instant))
         .filter(Option::isPresent).map(Option::get);
+  }
+
+  /**
+   * Checks if the replacecommit is clustering commit.
+   */
+  public static boolean isClusteringCommit(HoodieTableMetaClient metaClient, HoodieInstant pendingReplaceInstant) {
+    return getClusteringPlan(metaClient, pendingReplaceInstant).isPresent();
   }
 
   /**
@@ -131,7 +140,7 @@ public class ClusteringUtils {
     } catch (Exception e) {
       if (e instanceof IllegalStateException && e.getMessage().contains("Duplicate key")) {
         throw new HoodieException("Found duplicate file groups pending clustering. If you're running deltastreamer in continuous mode, consider adding delay using --min-sync-interval-seconds. "
-            + "Or consider setting write concurrency mode to optimistic_concurrency_control.", e);
+            + "Or consider setting write concurrency mode to OPTIMISTIC_CONCURRENCY_CONTROL.", e);
       }
       throw new HoodieException("Error getting all file groups in pending clustering", e);
     }
@@ -180,6 +189,7 @@ public class ClusteringUtils {
         .setInputGroups(clusteringGroups)
         .setExtraMetadata(extraMetadata)
         .setStrategy(strategy)
+        .setPreserveHoodieMetadata(true)
         .build();
   }
 
@@ -223,5 +233,55 @@ public class ClusteringUtils {
 
   public static boolean isPendingClusteringInstant(HoodieTableMetaClient metaClient, HoodieInstant instant) {
     return getClusteringPlan(metaClient, instant).isPresent();
+  }
+
+  /**
+   * Returns the earliest instant to retain.
+   * Make sure the clustering instant won't be archived before cleaned, and the earliest inflight clustering instant has a previous commit.
+   *
+   * @param activeTimeline The active timeline
+   * @param metaClient     The meta client
+   * @return the earliest instant to retain for clustering
+   */
+  public static Option<HoodieInstant> getEarliestInstantToRetainForClustering(
+      HoodieActiveTimeline activeTimeline, HoodieTableMetaClient metaClient) throws IOException {
+    Option<HoodieInstant> oldestInstantToRetain = Option.empty();
+    HoodieTimeline replaceTimeline = activeTimeline.getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.REPLACE_COMMIT_ACTION));
+    if (!replaceTimeline.empty()) {
+      Option<HoodieInstant> cleanInstantOpt =
+          activeTimeline.getCleanerTimeline().filterCompletedInstants().lastInstant();
+      if (cleanInstantOpt.isPresent()) {
+        // The first clustering instant of which timestamp is greater than or equal to the earliest commit to retain of
+        // the clean metadata.
+        HoodieInstant cleanInstant = cleanInstantOpt.get();
+        HoodieActionInstant earliestInstantToRetain = CleanerUtils.getCleanerPlan(metaClient, cleanInstant.isRequested()
+                ? cleanInstant
+                : HoodieTimeline.getCleanRequestedInstant(cleanInstant.getTimestamp()))
+            .getEarliestInstantToRetain();
+        String retainLowerBound;
+        if (earliestInstantToRetain != null && !StringUtils.isNullOrEmpty(earliestInstantToRetain.getTimestamp())) {
+          retainLowerBound = earliestInstantToRetain.getTimestamp();
+        } else {
+          // no earliestInstantToRetain, indicate KEEP_LATEST_FILE_VERSIONS clean policy,
+          // retain first instant after clean instant.
+          // For KEEP_LATEST_FILE_VERSIONS cleaner policy, file versions are only maintained for active file groups
+          // not for replaced file groups. So, last clean instant can be considered as a lower bound, since
+          // the cleaner would have removed all the file groups until then. But there is a catch to this logic,
+          // while cleaner is running if there is a pending replacecommit then those files are not cleaned.
+          // TODO: This case has to be handled. HUDI-6352
+          retainLowerBound = cleanInstant.getTimestamp();
+        }
+
+        oldestInstantToRetain = replaceTimeline.filter(instant ->
+                HoodieTimeline.compareTimestamps(
+                    instant.getTimestamp(),
+                    HoodieTimeline.GREATER_THAN_OR_EQUALS,
+                    retainLowerBound))
+            .firstInstant();
+      } else {
+        oldestInstantToRetain = replaceTimeline.firstInstant();
+      }
+    }
+    return oldestInstantToRetain;
   }
 }

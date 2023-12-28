@@ -56,7 +56,7 @@ public class TestHoodieIndexConfigs {
   }
 
   @ParameterizedTest
-  @EnumSource(value = IndexType.class, names = {"BLOOM", "GLOBAL_BLOOM", "SIMPLE", "GLOBAL_SIMPLE", "HBASE", "BUCKET"})
+  @EnumSource(value = IndexType.class, names = {"BLOOM", "GLOBAL_BLOOM", "SIMPLE", "GLOBAL_SIMPLE", "HBASE", "BUCKET", "RECORD_INDEX"})
   public void testCreateIndex(IndexType indexType) {
     HoodieWriteConfig config;
     HoodieWriteConfig.Builder clientConfigBuilder = HoodieWriteConfig.newBuilder();
@@ -99,9 +99,15 @@ public class TestHoodieIndexConfigs {
 
         config = HoodieWriteConfig.newBuilder().withPath(basePath)
             .withIndexConfig(indexConfigBuilder.fromProperties(props).withIndexType(IndexType.BUCKET)
-              .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING).build())
+                .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING).build())
             .build();
         assertTrue(SparkHoodieIndexFactory.createIndex(config) instanceof HoodieSparkConsistentBucketIndex);
+        break;
+      case RECORD_INDEX:
+        config = clientConfigBuilder.withPath(basePath)
+            .withIndexConfig(indexConfigBuilder.withIndexType(HoodieIndex.IndexType.RECORD_INDEX).build())
+            .build();
+        assertTrue(SparkHoodieIndexFactory.createIndex(config) instanceof SparkMetadataTableRecordIndex);
         break;
       default:
         // no -op. just for checkstyle errors

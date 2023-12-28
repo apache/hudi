@@ -45,8 +45,10 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.Logger;
 import org.apache.logging.log4j.core.appender.AbstractAppender;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.SQLContext;
@@ -57,8 +59,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.shell.Shell;
-import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.core.Logger;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -285,7 +285,11 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
 
     metaClient.getActiveTimeline().getInstantsAsStream().filter(hoodieInstant -> Integer.parseInt(hoodieInstant.getTimestamp()) % 4 == 0).forEach(hoodieInstant -> {
       metaClient.getActiveTimeline().deleteInstantFileIfExists(hoodieInstant);
-      metaClient.getActiveTimeline().createNewInstant(hoodieInstant);
+      if (hoodieInstant.isCompleted()) {
+        metaClient.getActiveTimeline().createCompleteInstant(hoodieInstant);
+      } else {
+        metaClient.getActiveTimeline().createNewInstant(hoodieInstant);
+      }
     });
 
     final TestLogAppender appender = new TestLogAppender();
@@ -420,7 +424,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
 
       // all records from old partition should have been migrated to new partition
       totalRecs = sqlContext.read().format("hudi").load(tablePath)
-          .filter(HoodieRecord.PARTITION_PATH_METADATA_FIELD + " == '" + "2016/03/18" + "'").count();
+          .filter(HoodieRecord.PARTITION_PATH_METADATA_FIELD + " == \"" + "2016/03/18" + "\"").count();
       assertEquals(totalRecs, totalRecsInOldPartition);
     }
   }

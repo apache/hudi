@@ -46,6 +46,7 @@ public class TestCustomizedThreadFactory {
       Boolean result = resultFuture.get();
       Assertions.assertTrue(result);
     }
+    executorService.shutdown();
   }
 
   @Test
@@ -62,6 +63,7 @@ public class TestCustomizedThreadFactory {
       Boolean result = resultFuture.get();
       Assertions.assertTrue(result);
     }
+    executorService.shutdown();
   }
 
   @Test
@@ -79,5 +81,6 @@ public class TestCustomizedThreadFactory {
       Boolean result = resultFuture.get();
       Assertions.assertTrue(result);
     }
+    executorService.shutdown();
   }
 }

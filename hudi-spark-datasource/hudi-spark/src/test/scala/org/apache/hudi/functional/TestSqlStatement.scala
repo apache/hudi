@@ -40,7 +40,9 @@ class TestSqlStatement extends HoodieSparkSqlTestBase {
       withTempDir { tmp =>
         val params = Map(
           "tableType" -> tableType,
-          "tmpDir" -> tmp.getCanonicalPath
+          "tmpDir" -> {
+            tmp.getCanonicalPath.replace('\\', '/')
+          }
         )
         execSqlFile("/sql-statements.sql", params)
       }

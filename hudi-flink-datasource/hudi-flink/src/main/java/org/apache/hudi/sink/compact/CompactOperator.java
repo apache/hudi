@@ -18,12 +18,14 @@
 
 package org.apache.hudi.sink.compact;
 
+import org.apache.hudi.adapter.MaskingOutputAdapter;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.table.HoodieFlinkCopyOnWriteTable;
 import org.apache.hudi.table.action.compact.HoodieFlinkMergeOnReadTableCompactor;
@@ -32,9 +34,12 @@ import org.apache.hudi.util.FlinkWriteClients;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.streaming.api.graph.StreamConfig;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
-import org.apache.flink.streaming.api.watermark.Watermark;
+import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.apache.flink.streaming.runtime.tasks.StreamTask;
 import org.apache.flink.table.runtime.operators.TableStreamOperator;
 import org.apache.flink.table.runtime.util.StreamRecordCollector;
 import org.apache.flink.util.Collector;
@@ -82,9 +87,19 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
    */
   private transient StreamRecordCollector<CompactionCommitEvent> collector;
 
+  /**
+   * Compaction metrics.
+   */
+  private transient FlinkCompactionMetrics compactionMetrics;
+
   public CompactOperator(Configuration conf) {
     this.conf = conf;
     this.asyncCompaction = OptionsResolver.needsAsyncCompaction(conf);
+  }
+
+  @Override
+  public void setup(StreamTask<?, ?> containingTask, StreamConfig config, Output<StreamRecord<CompactionCommitEvent>> output) {
+    super.setup(containingTask, config, new MaskingOutputAdapter<>(output));
   }
 
   @Override
@@ -95,11 +110,7 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
       this.executor = NonThrownExecutor.builder(LOG).build();
     }
     this.collector = new StreamRecordCollector<>(output);
-  }
-
-  @Override
-  public void processWatermark(Watermark mark) {
-    // no need to propagate the watermark
+    registerMetrics();
   }
 
   @Override
@@ -124,6 +135,7 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
                             CompactionOperation compactionOperation,
                             Collector<CompactionCommitEvent> collector,
                             HoodieWriteConfig writeConfig) throws IOException {
+    compactionMetrics.startCompaction();
     HoodieFlinkMergeOnReadTableCompactor<?> compactor = new HoodieFlinkMergeOnReadTableCompactor<>();
     HoodieTableMetaClient metaClient = writeClient.getHoodieTable().getMetaClient();
     String maxInstantTime = compactor.getMaxInstantTime(metaClient);
@@ -137,6 +149,7 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
         compactionOperation,
         instantTime, maxInstantTime,
         writeClient.getHoodieTable().getTaskContextSupplier());
+    compactionMetrics.endCompaction();
     collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), writeStatuses, taskID));
   }
 
@@ -157,9 +170,14 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
       this.executor.close();
     }
     if (null != this.writeClient) {
-      this.writeClient.cleanHandlesGracefully();
       this.writeClient.close();
       this.writeClient = null;
     }
+  }
+
+  private void registerMetrics() {
+    MetricGroup metrics = getRuntimeContext().getMetricGroup();
+    compactionMetrics = new FlinkCompactionMetrics(metrics);
+    compactionMetrics.registerMetrics();
   }
 }

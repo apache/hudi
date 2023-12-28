@@ -21,26 +21,23 @@ import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceWriteOptions, HoodieDataSourceHelpers}
-
-import org.apache.log4j.LogManager
-
 import org.apache.spark.sql._
-
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConversions._
 
 /**
  * Tests on HoodieActionTimeLine using the real hudi table.
  */
-class TestHoodieActiveTimeline extends HoodieClientTestBase {
+class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
 
   var spark: SparkSession = null
 
-  private val log = LogManager.getLogger(classOf[TestHoodieActiveTimeline])
+  private val log = LoggerFactory.getLogger(classOf[TestHoodieActiveTimeline])
 
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
@@ -185,8 +182,8 @@ class TestHoodieActiveTimeline extends HoodieClientTestBase {
     val (instant2, commitMetadata2) = (ret2.get().getLeft, ret2.get().getRight)
     assertEquals(instant2.getTimestamp, commit2Time)
     val relativePath2 = commitMetadata2.getFileIdAndRelativePaths.values().stream().findAny().get()
-    // deltacommit: .log file should contain the timestamp from base parquet file.
-    assert(relativePath2.contains(commit1Time))
+    // deltacommit: .log file should contain the timestamp of it's instant time.
+    assert(relativePath2.contains(commit2Time))
     assert(relativePath2.contains(HoodieFileFormat.HOODIE_LOG.getFileExtension))
 
     // Third Operation:
@@ -226,8 +223,8 @@ class TestHoodieActiveTimeline extends HoodieClientTestBase {
     val (instant4, commitMetadata4) = (ret4.get().getLeft, ret4.get().getRight)
     assertEquals(instant4.getTimestamp, commit4Time)
     val relativePath4 = commitMetadata4.getFileIdAndRelativePaths.values().stream().findAny().get()
-    // deltacommit: .log file should contain the timestamp from base parquet file.
-    assert(relativePath4.contains(commit3Time))
+    // deltacommit: .log file should contain the timestamp of it's instant time.
+    assert(relativePath4.contains(commit4Time))
     assert(relativePath4.contains(HoodieFileFormat.HOODIE_LOG.getFileExtension))
   }
 }

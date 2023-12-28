@@ -18,7 +18,7 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.hudi.cli.DeDupeType;
+import org.apache.spark.sql.hudi.DeDupeType;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
@@ -39,10 +39,10 @@ import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.AvroRuntimeException;
 import org.apache.hadoop.fs.Path;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -65,7 +65,7 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME
 @ShellComponent
 public class RepairsCommand {
 
-  private static final Logger LOG = LogManager.getLogger(RepairsCommand.class);
+  private static final Logger LOG = LoggerFactory.getLogger(RepairsCommand.class);
   public static final String DEDUPLICATE_RETURN_PREFIX = "Deduplicated files placed in:  ";
 
   @ShellMethod(key = "repair deduplicate",
@@ -159,7 +159,9 @@ public class RepairsCommand {
 
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     Properties newProps = new Properties();
-    newProps.load(new FileInputStream(overwriteFilePath));
+    try (FileInputStream fileInputStream = new FileInputStream(overwriteFilePath)) {
+      newProps.load(fileInputStream);
+    }
     Map<String, String> oldProps = client.getTableConfig().propsMap();
     Path metaPathDir = new Path(client.getBasePath(), METAFOLDER_NAME);
     HoodieTableConfig.create(client.getFs(), metaPathDir, newProps);
@@ -223,7 +225,7 @@ public class RepairsCommand {
 
     HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(HoodieCLI.conf);
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
-    List<String> partitionPaths = FSUtils.getAllPartitionPaths(engineContext, client.getBasePath(), false, false);
+    List<String> partitionPaths = FSUtils.getAllPartitionPaths(engineContext, client.getBasePath(), false);
     Path basePath = new Path(client.getBasePath());
 
     String[][] rows = new String[partitionPaths.size()][];

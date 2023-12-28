@@ -106,6 +106,36 @@
         <created>2022-10-18</created>
         <revision>0.12.1</revision>
       </Version>
+      <Version>
+        <name>Apache Hudi 0.12.2</name>
+        <created>2022-12-28</created>
+        <revision>0.12.2</revision>
+      </Version>
+      <Version>
+        <name>Apache Hudi 0.13.0</name>
+        <created>2023-02-25</created>
+        <revision>0.13.0</revision>
+      </Version>
+      <Version>
+        <name>Apache Hudi 0.12.3</name>
+        <created>2023-04-23</created>
+        <revision>0.12.3</revision>
+      </Version>
+      <Version>
+        <name>Apache Hudi 0.13.1</name>
+        <created>2023-05-25</created>
+        <revision>0.13.1</revision>
+      </Version>
+      <Version>
+        <name>Apache Hudi 0.14.0</name>
+        <created>2023-09-28</created>
+        <revision>0.14.0</revision>
+      </Version>
+      <Version>
+        <name>Apache Hudi 1.0.0-beta1</name>
+        <created>2023-11-14</created>
+        <revision>1.0.0-beta1</revision>
+      </Version>
     </release>
     <repository>
       <GitRepository>

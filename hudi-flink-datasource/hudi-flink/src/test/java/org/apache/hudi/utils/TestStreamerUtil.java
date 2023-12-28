@@ -18,13 +18,18 @@
 
 package org.apache.hudi.utils;
 
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -100,6 +105,22 @@ public class TestStreamerUtil {
     String lower = "20210705125806";
     long diff = StreamerUtil.instantTimeDiffSeconds(higher, lower);
     assertThat(diff, is(75L));
+  }
+
+  @Test
+  void testTableExist() throws IOException {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    String basePath = tempFile.getAbsolutePath();
+
+    assertFalse(StreamerUtil.tableExists(basePath, HadoopConfigurations.getHadoopConf(conf)));
+
+    try (FileSystem fs = FSUtils.getFs(basePath, HadoopConfigurations.getHadoopConf(conf))) {
+      fs.mkdirs(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME));
+      assertFalse(StreamerUtil.tableExists(basePath, HadoopConfigurations.getHadoopConf(conf)));
+
+      fs.create(new Path(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME), HoodieTableConfig.HOODIE_PROPERTIES_FILE));
+      assertTrue(StreamerUtil.tableExists(basePath, HadoopConfigurations.getHadoopConf(conf)));
+    }
   }
 }
 

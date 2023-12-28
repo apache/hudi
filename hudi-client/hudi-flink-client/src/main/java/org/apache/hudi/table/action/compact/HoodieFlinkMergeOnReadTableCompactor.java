@@ -20,9 +20,9 @@ package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -39,16 +39,15 @@ import java.util.List;
  * <p>Note: the compaction logic is invoked through the flink pipeline.
  */
 @SuppressWarnings("checkstyle:LineLength")
-public class HoodieFlinkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
+public class HoodieFlinkMergeOnReadTableCompactor<T>
     extends HoodieCompactor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
 
   @Override
   public void preCompact(
       HoodieTable table, HoodieTimeline pendingCompactionTimeline, WriteOperationType operationType, String instantTime) {
-    if (WriteOperationType.LOG_COMPACT.equals(operationType)) {
-      throw new UnsupportedOperationException("Log compaction is not supported for this execution engine.");
-    }
-    HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(instantTime);
+    HoodieInstant inflightInstant = WriteOperationType.COMPACT.equals(operationType)
+        ? HoodieTimeline.getCompactionInflightInstant(instantTime)
+        : HoodieTimeline.getLogCompactionInflightInstant(instantTime);
     if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
       table.rollbackInflightCompaction(inflightInstant);
       table.getMetaClient().reloadActiveTimeline();
@@ -56,7 +55,7 @@ public class HoodieFlinkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
   }
 
   @Override
-  public void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieWriteConfig config) {
+  public void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieEngineContext context, HoodieWriteConfig config, String instantTime) {
     // No OP
   }
 }

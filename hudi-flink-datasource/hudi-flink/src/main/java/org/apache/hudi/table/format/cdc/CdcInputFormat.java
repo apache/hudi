@@ -28,7 +28,7 @@ import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.log.HoodieCDCLogRecordIterator;
-import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
@@ -38,6 +38,7 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
@@ -88,9 +89,10 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
       MergeOnReadTableState tableState,
       List<DataType> fieldTypes,
       String defaultPartName,
+      List<Predicate> predicates,
       long limit,
       boolean emitDelete) {
-    super(conf, tableState, fieldTypes, defaultPartName, limit, emitDelete, InternalSchemaManager.DISABLED);
+    super(conf, tableState, fieldTypes, defaultPartName, predicates, limit, emitDelete, InternalSchemaManager.DISABLED);
   }
 
   @Override
@@ -173,11 +175,11 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         Schema dataSchema = HoodieAvroUtils.removeMetadataFields(new Schema.Parser().parse(tableState.getAvroSchema()));
         Schema cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(mode, dataSchema);
         switch (mode) {
-          case WITH_BEFORE_AFTER:
+          case DATA_BEFORE_AFTER:
             return new BeforeAfterImageIterator(tablePath, tableState, hadoopConf, cdcSchema, fileSplit);
-          case WITH_BEFORE:
+          case DATA_BEFORE:
             return new BeforeImageIterator(conf, hadoopConf, tablePath, tableState, cdcSchema, fileSplit, imageManager);
-          case OP_KEY:
+          case OP_KEY_ONLY:
             return new RecordKeyImageIterator(conf, hadoopConf, tablePath, tableState, cdcSchema, fileSplit, imageManager);
           default:
             throw new AssertionError("Unexpected mode" + mode);
@@ -701,6 +703,11 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
       return this;
     }
 
+    public Builder predicates(List<Predicate> predicates) {
+      this.predicates = predicates;
+      return this;
+    }
+
     public Builder limit(long limit) {
       this.limit = limit;
       return this;
@@ -713,7 +720,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
 
     public CdcInputFormat build() {
       return new CdcInputFormat(conf, tableState, fieldTypes,
-          defaultPartName, limit, emitDelete);
+          defaultPartName, predicates, limit, emitDelete);
     }
   }
 

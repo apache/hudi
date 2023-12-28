@@ -22,8 +22,9 @@ import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.Iterator;
@@ -37,7 +38,7 @@ import java.util.function.Function;
  */
 public class BoundedInMemoryExecutor<I, O, E> extends BaseHoodieQueueBasedExecutor<I, O, E> {
 
-  private static final Logger LOG = LogManager.getLogger(BoundedInMemoryExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BoundedInMemoryExecutor.class);
 
   public BoundedInMemoryExecutor(final long bufferLimitInBytes, final Iterator<I> inputItr,
                                  HoodieConsumer<O, E> consumer, Function<I, O> transformFunction, Runnable preExecuteRunnable) {
@@ -61,7 +62,7 @@ public class BoundedInMemoryExecutor<I, O, E> extends BaseHoodieQueueBasedExecut
       }
       LOG.info("All records from the queue have been consumed");
     } catch (Exception e) {
-      LOG.error("Error consuming records", e);
+      LOG.error("Failed consuming records", e);
       queue.markAsFailed(e);
       throw new HoodieException(e);
     }

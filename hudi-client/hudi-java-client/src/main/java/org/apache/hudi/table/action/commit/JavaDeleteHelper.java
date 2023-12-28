@@ -47,6 +47,7 @@ public class JavaDeleteHelper<R> extends
     BaseDeleteHelper<EmptyHoodieRecordPayload, List<HoodieRecord<EmptyHoodieRecordPayload>>, List<HoodieKey>, List<WriteStatus>, R> {
 
   private JavaDeleteHelper() {
+    super(ignored -> -1);
   }
 
   private static class DeleteHelperHolder {
@@ -122,5 +123,4 @@ public class JavaDeleteHelper<R> extends
       throw new HoodieUpsertException("Failed to delete for commit time " + instantTime, e);
     }
   }
-
 }

@@ -24,11 +24,11 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.testutils.sources.AbstractBaseTestSource;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -38,7 +38,7 @@ import java.util.stream.Collectors;
  */
 public class TestDataSource extends AbstractBaseTestSource {
 
-  private static final Logger LOG = LogManager.getLogger(TestDataSource.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestDataSource.class);
   public static boolean returnEmptyBatch = false;
   private static int counter = 0;
 

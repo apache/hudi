@@ -21,7 +21,8 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
+import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
+import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.testutils.sources.AbstractCloudObjectsSourceTestBase;
 
 import org.apache.avro.generic.GenericRecord;
@@ -34,9 +35,9 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.List;
 
-import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.S3_SOURCE_QUEUE_REGION;
-import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.S3_SOURCE_QUEUE_URL;
-import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.S3_SOURCE_QUEUE_FS;
+import static org.apache.hudi.utilities.config.S3SourceConfig.S3_SOURCE_QUEUE_FS;
+import static org.apache.hudi.utilities.config.S3SourceConfig.S3_SOURCE_QUEUE_REGION;
+import static org.apache.hudi.utilities.config.S3SourceConfig.S3_SOURCE_QUEUE_URL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -50,6 +51,7 @@ public class TestS3EventsSource extends AbstractCloudObjectsSourceTestBase {
     this.dfsRoot = basePath + "/parquetFiles";
     this.fileSuffix = ".parquet";
     fs.mkdirs(new Path(dfsRoot));
+    schemaProvider = new FilebasedSchemaProvider(Helpers.setupSchemaOnDFS("streamer-config", "s3-metadata.avsc"), jsc);
   }
 
   @AfterEach
@@ -97,10 +99,10 @@ public class TestS3EventsSource extends AbstractCloudObjectsSourceTestBase {
   @Override
   public Source prepareCloudObjectSource() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(S3_SOURCE_QUEUE_URL, sqsUrl);
-    props.setProperty(S3_SOURCE_QUEUE_REGION, regionName);
-    props.setProperty(S3_SOURCE_QUEUE_FS, "hdfs");
-    S3EventsSource dfsSource = new S3EventsSource(props, jsc, sparkSession, null);
+    props.setProperty(S3_SOURCE_QUEUE_URL.key(), sqsUrl);
+    props.setProperty(S3_SOURCE_QUEUE_REGION.key(), regionName);
+    props.setProperty(S3_SOURCE_QUEUE_FS.key(), "hdfs");
+    S3EventsSource dfsSource = new S3EventsSource(props, jsc, sparkSession, schemaProvider);
     dfsSource.sqs = this.sqs;
     return dfsSource;
   }

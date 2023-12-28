@@ -24,8 +24,8 @@ import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -39,7 +39,7 @@ public class HoodieRealtimeRecordReader implements RecordReader<NullWritable, Ar
   public static final String REALTIME_SKIP_MERGE_PROP = "hoodie.realtime.merge.skip";
   // By default, we do merged-reading
   public static final String DEFAULT_REALTIME_SKIP_MERGE = "false";
-  private static final Logger LOG = LogManager.getLogger(HoodieRealtimeRecordReader.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieRealtimeRecordReader.class);
   private final RecordReader<NullWritable, ArrayWritable> reader;
 
   public HoodieRealtimeRecordReader(RealtimeSplit split, JobConf job,
@@ -68,9 +68,16 @@ public class HoodieRealtimeRecordReader implements RecordReader<NullWritable, Ar
       }
       LOG.info("Enabling merged reading of realtime records for split " + split);
       return new RealtimeCompactedRecordReader(split, jobConf, realReader);
-    } catch (IOException ex) {
-      LOG.error("Got exception when constructing record reader", ex);
-      throw new HoodieException(ex);
+    } catch (Exception e) {
+      LOG.error("Got exception when constructing record reader", e);
+      try {
+        if (null != realReader) {
+          realReader.close();
+        }
+      } catch (IOException ioe) {
+        LOG.error("Unable to close real reader", ioe);
+      }
+      throw new HoodieException("Exception when constructing record reader ", e);
     }
   }
 

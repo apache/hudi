@@ -118,7 +118,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
           |[hoodie.datasource.write.partitionpath.urlencode,false,null]
           |[hoodie.table.checksum,,]
           |[hoodie.table.create.schema,,]
-          |[hoodie.table.keygenerator.class,org.apache.hudi.keygen.NonpartitionedKeyGenerator,null]
+          |[hoodie.table.keygenerator.type,NON_PARTITION,null]
           |[hoodie.table.name,,]
           |[hoodie.table.precombine.field,ts,null]
           |[hoodie.table.recordkey.fields,id,null]
@@ -488,8 +488,9 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
     val schema: Schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema)
     val testTable: HoodieSparkWriteableTestTable = HoodieSparkWriteableTestTable.of(metaClient, schema)
 
-    val hoodieRecords1 = SchemaTestUtil.generateHoodieTestRecords(0, 100, schema)
-    val hoodieRecords2 = SchemaTestUtil.generateHoodieTestRecords(100, 100, schema)
+    val testUtil = new SchemaTestUtil
+    val hoodieRecords1 = testUtil.generateHoodieTestRecords(0, 100, schema)
+    val hoodieRecords2 = testUtil.generateHoodieTestRecords(100, 100, schema)
     testTable.addCommit("20160401010101")
       .withInserts(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "1", hoodieRecords1)
     testTable.withInserts(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "2", hoodieRecords2)

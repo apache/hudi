@@ -28,7 +28,8 @@ import java.util.stream.Collectors
 
 class ShowSavepointsProcedure extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None)
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -43,8 +44,9 @@ class ShowSavepointsProcedure extends BaseProcedure with ProcedureBuilder {
     super.checkArgs(PARAMETERS, args)
 
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
+    val tablePath = getArgValueOrDefault(args, PARAMETERS(1))
 
-    val basePath: String = getBasePath(tableName)
+    val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
 
     val activeTimeline: HoodieActiveTimeline = metaClient.getActiveTimeline
@@ -66,4 +68,3 @@ object ShowSavepointsProcedure {
     override def get(): ShowSavepointsProcedure = new ShowSavepointsProcedure()
   }
 }
-

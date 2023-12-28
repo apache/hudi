@@ -18,13 +18,13 @@
 
 package org.apache.hudi.aws.transaction.integ;
 
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.BasicAWSCredentials;
-import com.amazonaws.client.builder.AwsClientBuilder;
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
-import com.amazonaws.services.dynamodbv2.model.BillingMode;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
+import software.amazon.awssdk.services.dynamodb.model.BillingMode;
+
 import org.apache.hudi.aws.transaction.lock.DynamoDBBasedLockProvider;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.config.DynamoDbBasedLockConfig;
@@ -33,6 +33,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.net.URI;
 import java.util.UUID;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
@@ -46,7 +47,7 @@ import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_WAIT_
 public class ITTestDynamoDBBasedLockProvider {
 
   private static LockConfiguration lockConfiguration;
-  private static AmazonDynamoDB dynamoDb;
+  private static DynamoDbClient dynamoDb;
 
   private static final String TABLE_NAME_PREFIX = "testDDBTable-";
   private static final String REGION = "us-east-2";
@@ -103,18 +104,19 @@ public class ITTestDynamoDBBasedLockProvider {
     dynamoDbBasedLockProvider.unlock();
   }
 
-  private static AmazonDynamoDB getDynamoClientWithLocalEndpoint() {
+  private static DynamoDbClient getDynamoClientWithLocalEndpoint() {
     String endpoint = System.getProperty("dynamodb-local.endpoint");
     if (endpoint == null || endpoint.isEmpty()) {
       throw new IllegalStateException("dynamodb-local.endpoint system property not set");
     }
-    return AmazonDynamoDBClientBuilder.standard()
-            .withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(endpoint, REGION))
-            .withCredentials(getCredentials())
+    return DynamoDbClient.builder()
+            .region(Region.of(REGION))
+            .endpointOverride(URI.create(endpoint))
+            .credentialsProvider(getCredentials())
             .build();
   }
 
-  private static AWSCredentialsProvider getCredentials() {
-    return new AWSStaticCredentialsProvider(new BasicAWSCredentials("random-access-key", "random-secret-key"));
+  private static AwsCredentialsProvider getCredentials() {
+    return StaticCredentialsProvider.create(AwsBasicCredentials.create("random-access-key", "random-secret-key"));
   }
 }

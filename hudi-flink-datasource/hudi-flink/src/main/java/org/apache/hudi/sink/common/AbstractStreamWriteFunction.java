@@ -21,12 +21,14 @@ package org.apache.hudi.sink.common;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
+import org.apache.hudi.sink.meta.CkpMetadataFactory;
 import org.apache.hudi.sink.utils.TimeWait;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
@@ -46,7 +48,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 /**
  * Base infrastructures for streaming writer function.
@@ -148,7 +149,7 @@ public abstract class AbstractStreamWriteFunction<I>
             TypeInformation.of(WriteMetadataEvent.class)
         ));
 
-    this.ckpMetadata = CkpMetadata.getInstance(this.metaClient.getFs(), this.metaClient.getBasePath());
+    this.ckpMetadata = CkpMetadataFactory.getCkpMetadata(writeClient.getConfig(), config);
     this.currentInstant = lastPendingInstant();
     if (context.isRestored()) {
       restoreWriteMetadata();
@@ -194,8 +195,11 @@ public abstract class AbstractStreamWriteFunction<I>
 
   private void restoreWriteMetadata() throws Exception {
     boolean eventSent = false;
+    HoodieTimeline pendingTimeline = this.metaClient.getActiveTimeline().filterPendingExcludingCompaction();
     for (WriteMetadataEvent event : this.writeMetadataState.get()) {
-      if (Objects.equals(this.currentInstant, event.getInstantTime())) {
+      // Must filter out the completed instants in case it is a partial failover,
+      // the write status should not be accumulated in such case.
+      if (pendingTimeline.containsInstant(event.getInstantTime())) {
         // Reset taskID for event
         event.setTaskID(taskID);
         // The checkpoint succeed but the meta does not commit,
@@ -210,16 +214,7 @@ public abstract class AbstractStreamWriteFunction<I>
     }
   }
 
-  private void sendBootstrapEvent() {
-    int attemptId = getRuntimeContext().getAttemptNumber();
-    if (attemptId > 0) {
-      // either a partial or global failover, reuses the current inflight instant
-      if (this.currentInstant != null) {
-        LOG.info("Recover task[{}] for instant [{}] with attemptId [{}]", taskID, this.currentInstant, attemptId);
-        this.currentInstant = null;
-      }
-      return;
-    }
+  protected void sendBootstrapEvent() {
     this.eventGateway.sendEventToCoordinator(WriteMetadataEvent.emptyBootstrap(taskID));
     LOG.info("Send bootstrap write metadata event to coordinator, task[{}].", taskID);
   }

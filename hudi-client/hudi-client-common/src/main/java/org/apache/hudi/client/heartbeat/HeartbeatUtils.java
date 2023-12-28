@@ -18,24 +18,27 @@
 
 package org.apache.hudi.client.heartbeat;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+
+import static org.apache.hudi.common.heartbeat.HoodieHeartbeatUtils.getLastHeartbeatTime;
 
 /**
  * Helper class to delete heartbeat for completed or failed instants with expired heartbeats.
  */
 public class HeartbeatUtils {
 
-  private static final Logger LOG = LogManager.getLogger(HeartbeatUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HeartbeatUtils.class);
 
   /**
    * Deletes the heartbeat file for the specified instant.
@@ -89,7 +92,7 @@ public class HeartbeatUtils {
     try {
       if (config.getFailedWritesCleanPolicy().isLazy() && heartbeatClient.isHeartbeatExpired(instantTime)) {
         throw new HoodieException("Heartbeat for instant " + instantTime + " has expired, last heartbeat "
-            + HoodieHeartbeatClient.getLastHeartbeatTime(table.getMetaClient().getFs(), config.getBasePath(), instantTime));
+            + getLastHeartbeatTime(table.getMetaClient().getFs(), config.getBasePath(), instantTime));
       }
     } catch (IOException io) {
       throw new HoodieException("Unable to read heartbeat", io);

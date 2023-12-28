@@ -20,7 +20,7 @@
 package org.apache.hudi.utilities.transform;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.utilities.exception.HoodieTransformException;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.spark.sql.Dataset;
@@ -52,22 +52,22 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
   public static void initClass() throws Exception {
     UtilitiesTestBase.initTestServices();
     UtilitiesTestBase.Helpers.copyToDFS(
-        "delta-streamer-config/sql-file-transformer.sql",
+        "streamer-config/sql-file-transformer.sql",
         UtilitiesTestBase.fs,
         UtilitiesTestBase.basePath + "/sql-file-transformer.sql");
     UtilitiesTestBase.Helpers.copyToDFS(
-        "delta-streamer-config/sql-file-transformer-invalid.sql",
+        "streamer-config/sql-file-transformer-invalid.sql",
         UtilitiesTestBase.fs,
         UtilitiesTestBase.basePath + "/sql-file-transformer-invalid.sql");
     UtilitiesTestBase.Helpers.copyToDFS(
-        "delta-streamer-config/sql-file-transformer-empty.sql",
+        "streamer-config/sql-file-transformer-empty.sql",
         UtilitiesTestBase.fs,
         UtilitiesTestBase.basePath + "/sql-file-transformer-empty.sql");
   }
 
   @AfterAll
   public static void cleanupClass() {
-    UtilitiesTestBase.cleanupClass();
+    UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
   @Override
@@ -101,7 +101,7 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
         "hoodie.deltastreamer.transformer.sql.file",
         UtilitiesTestBase.basePath + "/non-exist-sql-file.sql");
     assertThrows(
-        HoodieIOException.class,
+        HoodieTransformException.class,
         () -> sqlFileTransformer.apply(jsc, sparkSession, inputDatasetRows, props));
   }
 
@@ -138,7 +138,7 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
         sqlFileTransformer.apply(jsc, sparkSession, inputDatasetRows, props);
 
     // Called distinct() and sort() to match the transformation in this file:
-    // hudi-utilities/src/test/resources/delta-streamer-config/sql-file-transformer.sql
+    // hudi-utilities/src/test/resources/streamer-config/sql-file-transformer.sql
     String[] expectedRows =
         inputDatasetRows
             .distinct()

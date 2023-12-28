@@ -20,6 +20,7 @@ package org.apache.hudi.cli;
 
 import org.apache.hudi.cli.utils.SparkTempViewProvider;
 import org.apache.hudi.cli.utils.TempViewProvider;
+import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -85,7 +86,10 @@ public class HoodieCLI {
   }
 
   public static void refreshTableMetadata() {
-    setTableMetaClient(HoodieTableMetaClient.builder().setConf(HoodieCLI.conf).setBasePath(basePath).setLoadActiveTimelineOnLoad(false).setConsistencyGuardConfig(HoodieCLI.consistencyGuardConfig)
+    setTableMetaClient(HoodieTableMetaClient.builder().setConf(HoodieCLI.conf).setBasePath(basePath).setLoadActiveTimelineOnLoad(false)
+        .setConsistencyGuardConfig(HoodieCLI.consistencyGuardConfig)
+        // TODO [HUDI-6884] Generate HoodieTimeGeneratorConfig from props user set
+        .setTimeGeneratorConfig(HoodieTimeGeneratorConfig.defaultConfig(basePath))
         .setLayoutVersion(Option.of(layoutVersion)).build());
   }
 

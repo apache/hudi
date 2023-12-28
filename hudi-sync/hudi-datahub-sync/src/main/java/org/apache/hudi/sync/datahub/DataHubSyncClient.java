@@ -19,7 +19,6 @@
 
 package org.apache.hudi.sync.datahub;
 
-import com.linkedin.common.Status;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
@@ -27,6 +26,7 @@ import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.HoodieSyncException;
 import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
 
+import com.linkedin.common.Status;
 import com.linkedin.common.urn.DatasetUrn;
 import com.linkedin.data.template.SetMode;
 import com.linkedin.data.template.StringMap;
@@ -52,6 +52,7 @@ import datahub.event.MetadataChangeProposalWrapper;
 import org.apache.avro.AvroTypeException;
 import org.apache.avro.Schema;
 import org.apache.parquet.schema.MessageType;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -80,7 +81,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
   }
 
   @Override
-  public void updateTableProperties(String tableName, Map<String, String> tableProperties) {
+  public boolean updateTableProperties(String tableName, Map<String, String> tableProperties) {
     MetadataChangeProposalWrapper propertiesChangeProposal = MetadataChangeProposalWrapper.builder()
             .entityType("dataset")
             .entityUrn(datasetUrn)
@@ -92,6 +93,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
 
     try (RestEmitter emitter = config.getRestEmitter()) {
       emitter.emit(propertiesChangeProposal, responseLogger).get();
+      return true;
     } catch (Exception e) {
       throw new HoodieDataHubSyncException("Fail to change properties for Dataset " + datasetUrn + ": "
               + tableProperties, e);
@@ -105,7 +107,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
       MetadataChangeProposalWrapper schemaChange = createSchemaMetadataUpdate(tableName);
       emitter.emit(schemaChange, responseLogger).get();
 
-      // When updating an entity, it is ncessary to set its soft-delete status to false, or else the update won't get
+      // When updating an entity, it is necessary to set its soft-delete status to false, or else the update won't get
       // reflected in the UI.
       MetadataChangeProposalWrapper softDeleteUndoProposal = createUndoSoftDelete();
       emitter.emit(softDeleteUndoProposal, responseLogger).get();

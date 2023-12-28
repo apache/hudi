@@ -114,6 +114,54 @@
                         "name":"fileSizeInBytes",
                         "type":["null","long"],
                         "default" : null
+                     },
+                     {
+                        "name": "logVersion",
+                        "type": [
+                           "null",
+                           "int"
+                        ],
+                        "default": null
+                     },
+                     {
+                        "name": "logOffset",
+                        "type": [
+                           "null",
+                           "long"
+                        ],
+                        "default": null
+                     },
+                     {
+                        "name": "baseFile",
+                        "type": [
+                           "null",
+                           "string"
+                        ],
+                        "default": null
+                     },
+                     {
+                        "name": "logFiles",
+                        "type": [
+                           "null",
+                           {
+                              "type": "array",
+                              "items": "string",
+                              "default": null
+                           }
+                        ],
+                        "default": null
+                     },
+                     {
+                        "name": "cdcStats",
+                        "type": [
+                           "null",
+                           {
+                              "type": "map",
+                              "values": "long",
+                              "default": null
+                           }
+                        ],
+                        "default": null
                      }
                   ]
                }

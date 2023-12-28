@@ -22,6 +22,7 @@ import org.apache.hudi.table.format.cow.vector.ParquetDecimalVector;
 
 import org.apache.flink.formats.parquet.vector.reader.ColumnReader;
 import org.apache.flink.table.data.ColumnarRowData;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.vector.ColumnVector;
 import org.apache.flink.table.data.vector.VectorizedColumnBatch;
 import org.apache.flink.table.data.vector.writable.WritableColumnVector;
@@ -32,7 +33,9 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.column.page.PageReadStore;
+import org.apache.parquet.filter.UnboundRecordFilter;
 import org.apache.parquet.filter2.compat.FilterCompat;
+import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
@@ -52,10 +55,10 @@ import java.util.stream.IntStream;
 
 import static org.apache.hudi.table.format.cow.ParquetSplitReaderUtil.createColumnReader;
 import static org.apache.hudi.table.format.cow.ParquetSplitReaderUtil.createWritableColumnVector;
+import static org.apache.parquet.filter2.compat.FilterCompat.get;
 import static org.apache.parquet.filter2.compat.RowGroupFilter.filterRowGroups;
 import static org.apache.parquet.format.converter.ParquetMetadataConverter.range;
 import static org.apache.parquet.hadoop.ParquetFileReader.readFooter;
-import static org.apache.parquet.hadoop.ParquetInputFormat.getFilter;
 
 /**
  * This reader is used to read a {@link VectorizedColumnBatch} from input split.
@@ -122,13 +125,15 @@ public class ParquetColumnarRowSplitReader implements Closeable {
       int batchSize,
       Path path,
       long splitStart,
-      long splitLength) throws IOException {
+      long splitLength,
+      FilterPredicate filterPredicate,
+      UnboundRecordFilter recordFilter) throws IOException {
     this.utcTimestamp = utcTimestamp;
     this.batchSize = batchSize;
     // then we need to apply the predicate push down filter
     ParquetMetadata footer = readFooter(conf, path, range(splitStart, splitStart + splitLength));
     MessageType fileSchema = footer.getFileMetaData().getSchema();
-    FilterCompat.Filter filter = getFilter(conf);
+    FilterCompat.Filter filter = get(filterPredicate, recordFilter);
     List<BlockMetaData> blocks = filterRowGroups(filter, footer.getBlocks(), fileSchema);
 
     this.fileSchema = footer.getFileMetaData().getSchema();
@@ -266,7 +271,7 @@ public class ParquetColumnarRowSplitReader implements Closeable {
     return !ensureBatch();
   }
 
-  public ColumnarRowData nextRecord() {
+  public RowData nextRecord() {
     // return the next row
     row.setRowId(this.nextRow++);
     return row;

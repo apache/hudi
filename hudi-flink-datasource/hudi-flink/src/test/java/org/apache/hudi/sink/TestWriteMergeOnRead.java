@@ -20,6 +20,8 @@ package org.apache.hudi.sink;
 
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.utils.TestData;
 
@@ -141,9 +143,62 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
         .end();
   }
 
+  @Test
+  public void testPartialFailover() {
+    // partial failover is only valid for append mode.
+  }
+
+  @Test
+  public void testInsertAppendMode() {
+    // append mode is only valid for cow table.
+  }
+
   @Override
   public void testInsertClustering() {
     // insert clustering is only valid for cow table.
+  }
+
+  @Test
+  public void testInsertAsyncClustering() {
+    // insert async clustering is only valid for cow table.
+  }
+
+  @Test
+  public void testConsistentBucketIndex() throws Exception {
+    conf.setString(FlinkOptions.INDEX_TYPE, "BUCKET");
+    conf.setString(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE, "CONSISTENT_HASHING");
+    conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 4);
+    conf.setString(HoodieIndexConfig.BUCKET_INDEX_MAX_NUM_BUCKETS.key(), "8");
+    // Enable inline resize scheduling
+    conf.setBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, true);
+    // Manually set the max commits to trigger clustering quickly
+    conf.setString(HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMITS.key(), "1");
+    // Manually set the split threshold to trigger split in the clustering
+    conf.set(FlinkOptions.WRITE_PARQUET_MAX_FILE_SIZE, 1);
+    conf.setString(HoodieIndexConfig.BUCKET_SPLIT_THRESHOLD.key(), String.valueOf(1 / 1024.0 / 1024.0));
+    conf.set(FlinkOptions.PRE_COMBINE, true);
+    HashMap<String, String> mergedExpected = new HashMap<>(EXPECTED1);
+    mergedExpected.put("par1", "[id1,par1,id1,Danny,22,4,par1, id2,par1,id2,Stephen,33,2,par1]");
+    TestHarness.instance().preparePipeline(tempFile, conf)
+        .consume(TestData.DATA_SET_INSERT)
+        .emptyEventBuffer()
+        .checkpoint(1)
+        .assertNextEvent()
+        .checkpointComplete(1)
+        .checkWrittenData(EXPECTED1, 4)
+        .consume(TestData.DATA_SET_DISORDER_INSERT)
+        .emptyEventBuffer()
+        .checkpoint(2)
+        .assertNextEvent()
+        .checkpointComplete(2)
+        .checkWrittenData(mergedExpected, 4)
+        .consume(TestData.DATA_SET_SINGLE_INSERT)
+        .emptyEventBuffer()
+        .checkpoint(3)
+        .assertNextEvent()
+        .checkpointComplete(3)
+        .checkWrittenData(mergedExpected, 4)
+        .end();
   }
 
   @Override

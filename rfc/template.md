@@ -16,8 +16,6 @@
 -->
 # RFC-[number]: [Title]
 
-
-
 ## Proposers
 
 - @<proposer1 github username>

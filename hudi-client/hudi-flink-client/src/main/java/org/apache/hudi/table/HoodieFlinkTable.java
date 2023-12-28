@@ -22,9 +22,9 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -39,14 +39,12 @@ import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import org.apache.avro.specific.SpecificRecordBase;
-
 import java.util.List;
 
 /**
  * Impl of a flink hoodie table.
  */
-public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
+public abstract class HoodieFlinkTable<T>
     extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>>
     implements ExplicitWriteHandleTable<T> {
 
@@ -54,21 +52,22 @@ public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
     super(config, context, metaClient);
   }
 
-  public static <T extends HoodieRecordPayload> HoodieFlinkTable<T> create(HoodieWriteConfig config, HoodieFlinkEngineContext context) {
+  public static <T> HoodieFlinkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
             .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
+            .setTimeGeneratorConfig(config.getTimeGeneratorConfig())
             .setFileSystemRetryConfig(config.getFileSystemRetryConfig()).build();
-    if (config.getSchemaEvolutionEnable()) {
-      setLatestInternalSchema(config, metaClient);
-    }
     return HoodieFlinkTable.create(config, context, metaClient);
   }
 
-  public static <T extends HoodieRecordPayload> HoodieFlinkTable<T> create(HoodieWriteConfig config,
-                                                                           HoodieFlinkEngineContext context,
-                                                                           HoodieTableMetaClient metaClient) {
+  public static <T> HoodieFlinkTable<T> create(HoodieWriteConfig config,
+                                               HoodieEngineContext context,
+                                               HoodieTableMetaClient metaClient) {
+    if (config.getSchemaEvolutionEnable()) {
+      setLatestInternalSchema(config, metaClient);
+    }
     final HoodieFlinkTable<T> hoodieFlinkTable;
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:
@@ -99,11 +98,13 @@ public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
    * @return instance of {@link HoodieTableMetadataWriter}
    */
   @Override
-  public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp,
-                                                                                            Option<T> actionMetadata) {
-    if (config.isMetadataTableEnabled()) {
-      return Option.of(FlinkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config,
-          context, actionMetadata, Option.of(triggeringInstantTimestamp)));
+  protected Option<HoodieTableMetadataWriter> getMetadataWriter(
+      String triggeringInstantTimestamp,
+      HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
+    if (config.isMetadataTableEnabled() || getMetaClient().getTableConfig().isMetadataTableAvailable()) {
+      return Option.of(FlinkHoodieBackedTableMetadataWriter.create(
+          context.getHadoopConf().get(), config, failedWritesCleaningPolicy, context,
+          Option.of(triggeringInstantTimestamp)));
     } else {
       return Option.empty();
     }

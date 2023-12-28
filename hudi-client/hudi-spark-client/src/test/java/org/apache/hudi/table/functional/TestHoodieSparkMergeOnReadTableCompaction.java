@@ -22,6 +22,7 @@ package org.apache.hudi.table.functional;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -29,13 +30,11 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLayoutConfig;
-import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
@@ -44,6 +43,7 @@ import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -90,6 +90,13 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     dataGen = new HoodieTestDataGenerator();
   }
 
+  @AfterEach
+  public void teardown() throws IOException {
+    if (client != null) {
+      client.close();
+    }
+  }
+
   @ParameterizedTest
   @MethodSource("writePayloadTest")
   public void testWriteDuringCompaction(String payloadClass) throws IOException {
@@ -116,18 +123,19 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     client = getHoodieWriteClient(config);
 
     // write data and commit
-    writeData(HoodieActiveTimeline.createNewInstantTime(), 100, true);
+    writeData(client.createNewInstantTime(), 100, true);
     // write data again, and in the case of bucket index, all records will go into log files (we use a small max_file_size)
-    writeData(HoodieActiveTimeline.createNewInstantTime(), 100, true);
+    writeData(client.createNewInstantTime(), 100, true);
     Assertions.assertEquals(200, readTableTotalRecordsNum());
     // schedule compaction
     String compactionTime = (String) client.scheduleCompaction(Option.empty()).get();
     // write data, and do not commit. those records should not visible to reader
-    String insertTime = HoodieActiveTimeline.createNewInstantTime();
+    String insertTime = client.createNewInstantTime();
     List<WriteStatus> writeStatuses = writeData(insertTime, 100, false);
     Assertions.assertEquals(200, readTableTotalRecordsNum());
     // commit the write. The records should be visible now even though the compaction does not complete.
-    client.commitStats(insertTime, writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
+    client.commitStats(insertTime, context().parallelize(writeStatuses, 1), writeStatuses.stream().map(WriteStatus::getStat)
+        .collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
     Assertions.assertEquals(300, readTableTotalRecordsNum());
     // after the compaction, total records should remain the same
     config.setValue(AUTO_COMMIT_ENABLE, "true");
@@ -191,7 +199,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatuses);
     if (doCommit) {
       List<HoodieWriteStat> writeStats = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
-      boolean committed = client.commitStats(instant, writeStats, Option.empty(), metaClient.getCommitActionType());
+      boolean committed = client.commitStats(instant, context().parallelize(writeStatuses, 1), writeStats, Option.empty(), metaClient.getCommitActionType());
       Assertions.assertTrue(committed);
     }
     metaClient = HoodieTableMetaClient.reload(metaClient);

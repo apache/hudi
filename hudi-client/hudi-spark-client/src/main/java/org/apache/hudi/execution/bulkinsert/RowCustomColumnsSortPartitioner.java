@@ -18,34 +18,40 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
+
+import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
 import java.util.Arrays;
 
+import static org.apache.hudi.table.BulkInsertPartitioner.tryPrependPartitionPathColumns;
+
 /**
- * A partitioner that does sorting based on specified column values for each spark partitions.
+ * A partitioner that globally sorts a {@link Dataset<Row>} based on partition path column and custom columns.
+ *
+ * @see GlobalSortPartitionerWithRows
+ * @see BulkInsertSortMode#GLOBAL_SORT
  */
 public class RowCustomColumnsSortPartitioner implements BulkInsertPartitioner<Dataset<Row>> {
 
   private final String[] sortColumnNames;
 
   public RowCustomColumnsSortPartitioner(HoodieWriteConfig config) {
-    this.sortColumnNames = getSortColumnName(config);
+    this.sortColumnNames = tryPrependPartitionPathColumns(getSortColumnName(config), config);
   }
 
-  public RowCustomColumnsSortPartitioner(String[] columnNames) {
-    this.sortColumnNames = columnNames;
+  public RowCustomColumnsSortPartitioner(String[] columnNames, HoodieWriteConfig config) {
+    this.sortColumnNames = tryPrependPartitionPathColumns(columnNames, config);
   }
 
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> records, int outputSparkPartitions) {
-    final String[] sortColumns = this.sortColumnNames;
-    return records.coalesce(outputSparkPartitions)
-        .sortWithinPartitions(HoodieRecord.PARTITION_PATH_METADATA_FIELD, sortColumns);
+    return records
+        .sort(Arrays.stream(sortColumnNames).map(Column::new).toArray(Column[]::new))
+        .coalesce(outputSparkPartitions);
   }
 
   @Override

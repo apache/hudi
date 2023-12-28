@@ -32,14 +32,14 @@ import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, Tim
 import org.apache.hudi.exception.HoodieException
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.io.File
 import java.util
 import java.util.Collections
 import java.util.function.Supplier
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+
 import scala.collection.JavaConverters._
 import scala.util.control.Breaks.break
 
@@ -49,8 +49,8 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
   val defaultActions = "clean,commit,deltacommit,rollback,savepoint,restore"
 
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "local_folder", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
+    ProcedureParameter.required(1, "local_folder", DataTypes.StringType),
     ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, -1),
     ProcedureParameter.optional(3, "actions", DataTypes.StringType, defaultActions),
     ProcedureParameter.optional(4, "desc", DataTypes.BooleanType, false)
@@ -124,7 +124,7 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
       }) {
         val blk = reader.next.asInstanceOf[HoodieAvroDataBlock]
         try {
-          val recordItr = blk.getRecordIterator
+          val recordItr = blk.getRecordIterator(HoodieRecordType.AVRO)
           try while ( {
             recordItr.hasNext
           }) {
@@ -236,5 +236,3 @@ object ExportInstantsProcedure {
     override def get() = new ExportInstantsProcedure()
   }
 }
-
-

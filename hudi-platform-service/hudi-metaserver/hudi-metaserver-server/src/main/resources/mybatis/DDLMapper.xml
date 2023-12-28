@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Licensed to the Apache Software Foundation (ASF) under one or more
+ contributor license agreements.  See the NOTICE file distributed with
+ this work for additional information regarding copyright ownership.
+ The ASF licenses this file to You under the Apache License, Version 2.0
+ (the "License"); you may not use this file except in compliance with
+ the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="DDLMapper">
+    <update id="createDBs">
+        CREATE TABLE IF NOT EXISTS dbs
+        (
+            db_id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT COMMENT 'uuid',
+            description VARCHAR(512) COMMENT 'database description',
+            location_uri VARCHAR(512) COMMENT 'database storage path',
+            name VARCHAR(512) UNIQUE COMMENT 'database name',
+            owner_name VARCHAR(512) COMMENT 'database owner',
+            owner_type VARCHAR(512) COMMENT 'database type',
+            create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'db created time',
+            update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'update time'
+        ) COMMENT 'databases';
+    </update>
+
+    <update id="createTables">
+        CREATE TABLE IF NOT EXISTS tbls
+        (
+            tbl_id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT COMMENT 'uuid',
+            db_id BIGINT COMMENT 'database id',
+            name VARCHAR(512) COMMENT 'table name',
+            create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'table created time',
+            update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'update time',
+            owner_name VARCHAR(512) COMMENT 'table owner',
+            location VARCHAR(512) COMMENT 'table location',
+            UNIQUE KEY uniq_tb (db_id, name)
+        ) COMMENT 'tables';
+    </update>
+
+    <update id="createTableParams">
+        CREATE TABLE IF NOT EXISTS tbl_params
+        (
+            tbl_id BIGINT UNSIGNED COMMENT 'tbl id',
+            param_key VARCHAR(256) COMMENT 'param_key',
+            param_value VARCHAR(2048) COMMENT 'param_value',
+            create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'parameter created time',
+            update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'update time',
+            PRIMARY KEY (tbl_id, param_key)
+        ) COMMENT 'tbl params';
+    </update>
+
+    <update id="createPartitions">
+        CREATE TABLE IF NOT EXISTS partitions
+        (
+            part_id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT COMMENT 'uuid',
+            tbl_id BIGINT COMMENT 'table id',
+            part_name VARCHAR(256) COMMENT 'partition path',
+            create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'create time',
+            update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP  COMMENT 'update time',
+            is_deleted BOOL DEFAULT FALSE COMMENT 'whether the partition is deleted',
+            UNIQUE uniq_partition_version (tbl_id, part_name)
+        ) COMMENT 'partitions';
+    </update>
+
+    <update id="createTableTimestamp">
+        CREATE TABLE IF NOT EXISTS tbl_timestamp
+        (
+            tbl_id BIGINT UNSIGNED PRIMARY KEY COMMENT 'uuid',
+            ts VARCHAR(17) COMMENT 'instant timestamp'
+        ) COMMENT 'generate the unique timestamp for a table';
+    </update>
+
+    <update id="createInstant">
+        CREATE TABLE IF NOT EXISTS instant
+        (
+            instant_id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT COMMENT 'uuid',
+            tbl_id BIGINT COMMENT 'table id',
+            ts  VARCHAR(17) COMMENT 'instant timestamp',
+            action TINYINT COMMENT 'commit, deltacommit, compaction, replace etc',
+            state    TINYINT COMMENT 'completed, requested, inflight, invalid etc',
+            duration INT  DEFAULT 0 COMMENT 'for heartbeat (s)',
+            start_ts INT  DEFAULT 0 COMMENT 'for heartbeat (s)',
+            UNIQUE KEY uniq_inst1 (tbl_id, state, ts, action),
+            UNIQUE KEY uniq_inst2 (tbl_id, ts)
+        ) COMMENT 'timeline';
+    </update>
+
+    <update id="createInstantMetadata">
+        CREATE TABLE IF NOT EXISTS instant_meta_data
+        (
+            commit_id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT COMMENT 'uuid',
+            tbl_id BIGINT COMMENT 'table id',
+            ts VARCHAR(17) COMMENT 'instant timestamp',
+            action TINYINT COMMENT 'commit, deltacommit, compaction, replace etc',
+            state TINYINT COMMENT 'completed, requested, inflight, invalid etc',
+            data LONGBLOB COMMENT 'instant metadata',
+            create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'instant meta created time',
+            UNIQUE KEY uniq_inst3 (tbl_id, state, ts, action)
+        ) COMMENT 'instant meta data';
+    </update>
+
+    <update id="createFiles">
+        CREATE TABLE IF NOT EXISTS files
+        (
+            id          BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT COMMENT 'uuid',
+            tbl_id      BIGINT COMMENT 'table id',
+            part_id     BIGINT COMMENT 'partition id',
+            name        VARCHAR(256) COMMENT 'file name',
+            size        BIGINT COMMENT 'file size',
+            is_deleted  BOOL COMMENT 'whether the file has been deleted',
+            create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'create time',
+            update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'update time',
+            UNIQUE KEY uniq_name (part_id, name)
+        ) COMMENT 'snapshot files';
+    </update>
+</mapper>

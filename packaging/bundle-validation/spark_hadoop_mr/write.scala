@@ -42,7 +42,6 @@ df.write.format("hudi").
   option("hoodie.datasource.hive_sync.table", tableName).
   option("hoodie.datasource.hive_sync.partition_extractor_class", "org.apache.hudi.hive.SinglePartPartitionValueExtractor").
   option("hoodie.datasource.hive_sync.mode", "hms").
-  option("hoodie.datasource.hive_sync.metastore.uris", "thrift://localhost:9083/").
   mode(Overwrite).
   save(basePath)
 

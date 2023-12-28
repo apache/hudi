@@ -19,9 +19,7 @@
 package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -37,24 +35,25 @@ import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
-
 import org.apache.hudi.table.action.compact.plan.generators.BaseHoodieCompactionPlanGenerator;
 import org.apache.hudi.table.action.compact.plan.generators.HoodieCompactionPlanGenerator;
 import org.apache.hudi.table.action.compact.plan.generators.HoodieLogCompactionPlanGenerator;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.text.ParseException;
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.CollectionUtils.nonEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
-public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCompactionPlan>> {
+public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCompactionPlan>> {
 
-  private static final Logger LOG = LogManager.getLogger(ScheduleCompactionActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ScheduleCompactionActionExecutor.class);
   private WriteOperationType operationType;
   private final Option<Map<String, String>> extraMetadata;
   private BaseHoodieCompactionPlanGenerator planGenerator;
@@ -86,30 +85,10 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
     ValidationUtils.checkArgument(this.table.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ,
         "Can only compact table of type " + HoodieTableType.MERGE_ON_READ + " and not "
             + this.table.getMetaClient().getTableType().name());
-    if (!config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()
-        && !config.getFailedWritesCleanPolicy().isLazy()) {
-      // TODO(yihua): this validation is removed for Java client used by kafka-connect.  Need to revisit this.
-      if (config.getEngineType() == EngineType.SPARK) {
-        // if there are inflight writes, their instantTime must not be less than that of compaction instant time
-        table.getActiveTimeline().getCommitsTimeline().filterPendingExcludingMajorAndMinorCompaction().firstInstant()
-            .ifPresent(earliestInflight -> ValidationUtils.checkArgument(
-                HoodieTimeline.compareTimestamps(earliestInflight.getTimestamp(), HoodieTimeline.GREATER_THAN, instantTime),
-                "Earliest write inflight instant time must be later than compaction time. Earliest :" + earliestInflight
-                    + ", Compaction scheduled at " + instantTime));
-      }
-      // Committed and pending compaction instants should have strictly lower timestamps
-      List<HoodieInstant> conflictingInstants = table.getActiveTimeline()
-          .getWriteTimeline().filterCompletedAndCompactionInstants().getInstantsAsStream()
-          .filter(instant -> HoodieTimeline.compareTimestamps(
-              instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS, instantTime))
-          .collect(Collectors.toList());
-      ValidationUtils.checkArgument(conflictingInstants.isEmpty(),
-          "Following instants have timestamps >= compactionInstant (" + instantTime + ") Instants :"
-              + conflictingInstants);
-    }
 
     HoodieCompactionPlan plan = scheduleCompaction();
-    if (plan != null && (plan.getOperations() != null) && (!plan.getOperations().isEmpty())) {
+    Option<HoodieCompactionPlan> option = Option.empty();
+    if (plan != null && nonEmpty(plan.getOperations())) {
       extraMetadata.ifPresent(plan::setExtraMetadata);
       try {
         if (operationType.equals(WriteOperationType.COMPACT)) {
@@ -126,11 +105,13 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
       } catch (IOException ioe) {
         throw new HoodieIOException("Exception scheduling compaction", ioe);
       }
-      return Option.of(plan);
+      option = Option.of(plan);
     }
-    return Option.empty();
+
+    return option;
   }
 
+  @Nullable
   private HoodieCompactionPlan scheduleCompaction() {
     LOG.info("Checking if compaction needs to be run on " + config.getBasePath());
     // judge if we need to compact according to num delta commits and time elapsed
@@ -139,7 +120,7 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
       LOG.info("Generating compaction plan for merge on read table " + config.getBasePath());
       try {
         context.setJobStatus(this.getClass().getSimpleName(), "Compaction: generating compaction plan");
-        return planGenerator.generateCompactionPlan();
+        return planGenerator.generateCompactionPlan(instantTime);
       } catch (IOException e) {
         throw new HoodieCompactionException("Could not schedule compaction " + config.getBasePath(), e);
       }

@@ -46,8 +46,6 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Column;
@@ -56,6 +54,8 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SaveMode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -65,6 +65,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import scala.collection.JavaConversions;
+
+import static org.apache.hudi.utilities.UtilHelpers.buildSparkConf;
 
 /**
  * Export the latest records of Hudi dataset to a set of external files (e.g., plain parquet files).
@@ -78,7 +80,7 @@ public class HoodieSnapshotExporter {
 
   }
 
-  private static final Logger LOG = LogManager.getLogger(HoodieSnapshotExporter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieSnapshotExporter.class);
 
   public static class OutputFormatValidator implements IValueValidator<String> {
 
@@ -153,7 +155,7 @@ public class HoodieSnapshotExporter {
   }
 
   private List<String> getPartitions(HoodieEngineContext engineContext, Config cfg) {
-    return FSUtils.getAllPartitionPaths(engineContext, cfg.sourceBasePath, true, false);
+    return FSUtils.getAllPartitionPaths(engineContext, cfg.sourceBasePath, true);
   }
 
   private void createSuccessTag(FileSystem fs, Config cfg) throws IOException {
@@ -240,15 +242,19 @@ public class HoodieSnapshotExporter {
     // Also copy the .commit files
     LOG.info(String.format("Copying .commit files which are no-late-than %s.", latestCommitTimestamp));
     FileStatus[] commitFilesToCopy =
-        sourceFs.listStatus(new Path(cfg.sourceBasePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME), commitFilePath -> {
-          if (commitFilePath.getName().equals(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
-            return true;
-          } else {
-            String instantTime = FSUtils.getCommitFromCommitFile(commitFilePath.getName());
-            return HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.LESSER_THAN_OR_EQUALS, latestCommitTimestamp
-            );
-          }
-        });
+        Arrays.stream(sourceFs.listStatus(new Path(cfg.sourceBasePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME)))
+            .filter(fileStatus -> {
+              Path path = fileStatus.getPath();
+              if (path.getName().equals(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
+                return true;
+              } else {
+                if (fileStatus.isDirectory()) {
+                  return false;
+                }
+                String instantTime = FSUtils.getCommitFromCommitFile(path.getName());
+                return HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.LESSER_THAN_OR_EQUALS, latestCommitTimestamp);
+              }
+            }).toArray(FileStatus[]::new);
     context.foreach(Arrays.asList(commitFilesToCopy), commitFile -> {
       Path targetFilePath =
           new Path(cfg.targetOutputPath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitFile.getPath().getName());
@@ -282,8 +288,7 @@ public class HoodieSnapshotExporter {
     final Config cfg = new Config();
     new JCommander(cfg, null, args);
 
-    SparkConf sparkConf = new SparkConf().setAppName("Hoodie-snapshot-exporter");
-    sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
+    SparkConf sparkConf = buildSparkConf("Hoodie-snapshot-exporter", "local[*]");
     JavaSparkContext jsc = new JavaSparkContext(sparkConf);
     LOG.info("Initializing spark job.");
 

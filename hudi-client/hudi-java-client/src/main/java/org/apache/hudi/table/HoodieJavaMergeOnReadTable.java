@@ -19,14 +19,15 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieRestoreMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -34,19 +35,22 @@ import org.apache.hudi.table.action.commit.JavaBulkInsertPreppedCommitActionExec
 import org.apache.hudi.table.action.compact.HoodieJavaMergeOnReadTableCompactor;
 import org.apache.hudi.table.action.compact.RunCompactionActionExecutor;
 import org.apache.hudi.table.action.compact.ScheduleCompactionActionExecutor;
+import org.apache.hudi.table.action.deltacommit.JavaUpsertDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.JavaUpsertPreppedDeltaCommitActionExecutor;
+import org.apache.hudi.table.action.restore.MergeOnReadRestoreActionExecutor;
+import org.apache.hudi.table.action.rollback.MergeOnReadRollbackActionExecutor;
 
 import java.util.List;
 import java.util.Map;
 
-public class HoodieJavaMergeOnReadTable<T extends HoodieRecordPayload> extends HoodieJavaCopyOnWriteTable<T> {
+public class HoodieJavaMergeOnReadTable<T> extends HoodieJavaCopyOnWriteTable<T> {
   protected HoodieJavaMergeOnReadTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
   }
 
   @Override
-  public boolean isTableServiceAction(String actionType) {
-    return !actionType.equals(HoodieTimeline.DELTA_COMMIT_ACTION);
+  public HoodieWriteMetadata<List<WriteStatus>> upsert(HoodieEngineContext context, String instantTime, List<HoodieRecord<T>> hoodieRecords) {
+    return new JavaUpsertDeltaCommitActionExecutor<>((HoodieJavaEngineContext) context, config, this, instantTime, hoodieRecords).execute();
   }
 
   @Override
@@ -81,5 +85,31 @@ public class HoodieJavaMergeOnReadTable<T extends HoodieRecordPayload> extends H
         context, config, this, compactionInstantTime, new HoodieJavaMergeOnReadTableCompactor(),
         new HoodieJavaCopyOnWriteTable(config, context, getMetaClient()), WriteOperationType.COMPACT);
     return convertMetadata(compactionExecutor.execute());
+  }
+
+  @Override
+  public Option<HoodieCompactionPlan> scheduleLogCompaction(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
+    ScheduleCompactionActionExecutor scheduleLogCompactionExecutor = new ScheduleCompactionActionExecutor(
+        context, config, this, instantTime, extraMetadata, WriteOperationType.LOG_COMPACT);
+    return scheduleLogCompactionExecutor.execute();
+  }
+
+  @Override
+  public HoodieWriteMetadata<List<WriteStatus>> logCompact(HoodieEngineContext context, String logCompactionInstantTime) {
+    RunCompactionActionExecutor logCompactionExecutor = new RunCompactionActionExecutor(context, config, this,
+        logCompactionInstantTime, new HoodieJavaMergeOnReadTableCompactor<>(), this, WriteOperationType.LOG_COMPACT);
+    return logCompactionExecutor.execute();
+  }
+
+  @Override
+  public HoodieRollbackMetadata rollback(HoodieEngineContext context, String rollbackInstantTime, HoodieInstant commitInstant, boolean deleteInstants, boolean skipLocking) {
+    return new MergeOnReadRollbackActionExecutor<>(
+        context, config, this, rollbackInstantTime, commitInstant, deleteInstants, skipLocking).execute();
+  }
+
+  @Override
+  public HoodieRestoreMetadata restore(HoodieEngineContext context, String restoreInstantTimestamp, String savepointToRestoreTimestamp) {
+    return new MergeOnReadRestoreActionExecutor<>(
+        context, config, this, restoreInstantTimestamp, savepointToRestoreTimestamp).execute();
   }
 }

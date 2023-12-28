@@ -22,7 +22,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -32,8 +31,8 @@ import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
@@ -48,10 +47,10 @@ import java.util.List;
  *
  * @see FlinkMergeAndReplaceHandle
  */
-public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
+public class FlinkCreateHandle<T, I, K, O>
     extends HoodieCreateHandle<T, I, K, O> implements MiniBatchHandle {
 
-  private static final Logger LOG = LogManager.getLogger(FlinkCreateHandle.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FlinkCreateHandle.class);
 
   private boolean isClosed = false;
 

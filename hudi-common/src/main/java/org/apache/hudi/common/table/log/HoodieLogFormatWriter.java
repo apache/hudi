@@ -18,23 +18,19 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.HoodieLogFormat.WriterBuilder;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
-import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileAlreadyExistsException;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.protocol.AlreadyBeingCreatedException;
-import org.apache.hadoop.hdfs.protocol.RecoveryInProgressException;
 import org.apache.hadoop.ipc.RemoteException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -45,7 +41,7 @@ import java.util.List;
  */
 public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieLogFormatWriter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieLogFormatWriter.class);
 
   private HoodieLogFile logFile;
   private FSDataOutputStream output;
@@ -55,18 +51,25 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   private final Integer bufferSize;
   private final Short replication;
   private final String rolloverLogWriteToken;
+  private final LogFileCreationCallback fileCreationHook;
   private boolean closed = false;
   private transient Thread shutdownThread = null;
 
-  private static final String APPEND_UNAVAILABLE_EXCEPTION_MESSAGE = "not sufficiently replicated yet";
-
-  HoodieLogFormatWriter(FileSystem fs, HoodieLogFile logFile, Integer bufferSize, Short replication, Long sizeThreshold, String rolloverLogWriteToken) {
+  HoodieLogFormatWriter(
+      FileSystem fs,
+      HoodieLogFile logFile,
+      Integer bufferSize,
+      Short replication,
+      Long sizeThreshold,
+      String rolloverLogWriteToken,
+      LogFileCreationCallback fileCreationHook) {
     this.fs = fs;
     this.logFile = logFile;
     this.sizeThreshold = sizeThreshold;
     this.bufferSize = bufferSize;
     this.replication = replication;
     this.rolloverLogWriteToken = rolloverLogWriteToken;
+    this.fileCreationHook = fileCreationHook;
     addShutDownHook();
   }
 
@@ -84,47 +87,39 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   }
 
   /**
+   * Overrides the output stream, only for test purpose.
+   */
+  @VisibleForTesting
+  public void withOutputStream(FSDataOutputStream output) {
+    this.output = output;
+  }
+
+  /**
    * Lazily opens the output stream if needed for writing.
    * @return OutputStream for writing to current log file.
    * @throws IOException
-   * @throws InterruptedException
    */
-  private FSDataOutputStream getOutputStream() throws IOException, InterruptedException {
+  private FSDataOutputStream getOutputStream() throws IOException {
     if (this.output == null) {
-      Path path = logFile.getPath();
-      if (fs.exists(path)) {
-        boolean isAppendSupported = StorageSchemes.isAppendSupported(fs.getScheme());
-        if (isAppendSupported) {
-          LOG.info(logFile + " exists. Appending to existing file");
-          try {
-            // open the path for append and record the offset
-            this.output = fs.append(path, bufferSize);
-          } catch (RemoteException e) {
-            LOG.warn("Remote Exception, attempting to handle or recover lease", e);
-            handleAppendExceptionOrRecoverLease(path, e);
-          } catch (IOException ioe) {
-            if (ioe.getMessage().toLowerCase().contains("not supported")) {
-              // may still happen if scheme is viewfs.
-              isAppendSupported = false;
-            } else {
-              /*
-               * Before throwing an exception, close the outputstream,
-               * to ensure that the lease on the log file is released.
-               */
-              close();
-              throw ioe;
-            }
+      boolean created = false;
+      while (!created) {
+        try {
+          // Block size does not matter as we will always manually auto-flush
+          createNewFile();
+          LOG.info("Created a new log file: {}", logFile);
+          created = true;
+        } catch (FileAlreadyExistsException ignored) {
+          LOG.info("File {} already exists, rolling over", logFile.getPath());
+          rollOver();
+        } catch (RemoteException re) {
+          if (re.getClassName().contentEquals(AlreadyBeingCreatedException.class.getName())) {
+            LOG.warn("Another task executor writing to the same log file(" + logFile + ", rolling over");
+            // Rollover the current log file (since cannot get a stream handle) and create new one
+            rollOver();
+          } else {
+            throw re;
           }
         }
-        if (!isAppendSupported) {
-          rollOver();
-          createNewFile();
-          LOG.info("Append not supported.. Rolling over to " + logFile);
-        }
-      } else {
-        LOG.info(logFile + " does not exist. Create a new file");
-        // Block size does not matter as we will always manually autoflush
-        createNewFile();
       }
     }
     return output;
@@ -136,7 +131,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   }
 
   @Override
-  public AppendResult appendBlocks(List<HoodieLogBlock> blocks) throws IOException, InterruptedException {
+  public AppendResult appendBlocks(List<HoodieLogBlock> blocks) throws IOException {
     // Find current version
     HoodieLogFormat.LogFormatVersion currentLogFormatVersion =
         new HoodieLogFormatVersion(HoodieLogFormat.CURRENT_VERSION);
@@ -230,6 +225,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   }
 
   private void createNewFile() throws IOException {
+    fileCreationHook.preFileCreation(this.logFile);
     this.output =
         fs.create(this.logFile.getPath(), false, bufferSize, replication, WriterBuilder.DEFAULT_SIZE_THRESHOLD, null);
   }
@@ -290,60 +286,5 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       }
     };
     Runtime.getRuntime().addShutdownHook(shutdownThread);
-  }
-
-  private void handleAppendExceptionOrRecoverLease(Path path, RemoteException e)
-      throws IOException, InterruptedException {
-    if (e.getMessage().contains(APPEND_UNAVAILABLE_EXCEPTION_MESSAGE)) {
-      // This issue happens when all replicas for a file are down and/or being decommissioned.
-      // The fs.append() API could append to the last block for a file. If the last block is full, a new block is
-      // appended to. In a scenario when a lot of DN's are decommissioned, it can happen that DN's holding all
-      // replicas for a block/file are decommissioned together. During this process, all these blocks will start to
-      // get replicated to other active DataNodes but this process might take time (can be of the order of few
-      // hours). During this time, if a fs.append() API is invoked for a file whose last block is eligible to be
-      // appended to, then the NN will throw an exception saying that it couldn't find any active replica with the
-      // last block. Find more information here : https://issues.apache.org/jira/browse/HDFS-6325
-      LOG.warn("Failed to open an append stream to the log file. Opening a new log file..", e);
-      rollOver();
-      createNewFile();
-    } else if (e.getClassName().contentEquals(AlreadyBeingCreatedException.class.getName())) {
-      LOG.warn("Another task executor writing to the same log file(" + logFile + ". Rolling over");
-      // Rollover the current log file (since cannot get a stream handle) and create new one
-      rollOver();
-      createNewFile();
-    } else if (e.getClassName().contentEquals(RecoveryInProgressException.class.getName())
-        && (fs instanceof DistributedFileSystem)) {
-      // this happens when either another task executor writing to this file died or
-      // data node is going down. Note that we can only try to recover lease for a DistributedFileSystem.
-      // ViewFileSystem unfortunately does not support this operation
-      LOG.warn("Trying to recover log on path " + path);
-      if (FSUtils.recoverDFSFileLease((DistributedFileSystem) fs, path)) {
-        LOG.warn("Recovered lease on path " + path);
-        // try again
-        this.output = fs.append(path, bufferSize);
-      } else {
-        final String msg = "Failed to recover lease on path " + path;
-        LOG.warn(msg);
-        throw new HoodieException(msg, e);
-      }
-    } else {
-      // When fs.append() has failed and an exception is thrown, by closing the output stream
-      // we shall force hdfs to release the lease on the log file. When Spark retries this task (with
-      // new attemptId, say taskId.1) it will be able to acquire lease on the log file (as output stream was
-      // closed properly by taskId.0).
-      //
-      // If closeStream() call were to fail throwing an exception, our best bet is to rollover to a new log file.
-      try {
-        closeStream();
-        // output stream has been successfully closed and lease on the log file has been released,
-        // before throwing an exception for the append failure.
-        throw new HoodieIOException("Failed to append to the output stream ", e);
-      } catch (Exception ce) {
-        LOG.warn("Failed to close the output stream for " + fs.getClass().getName() + " on path " + path
-            + ". Rolling over to a new log file.");
-        rollOver();
-        createNewFile();
-      }
-    }
   }
 }

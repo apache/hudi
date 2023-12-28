@@ -39,12 +39,12 @@ import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.ql.exec.SerializationUtilities;
 import org.apache.hadoop.hive.ql.plan.ExprNodeColumnDesc;
 import org.apache.hadoop.hive.ql.plan.ExprNodeDesc;
 import org.apache.hadoop.hive.ql.plan.ExprNodeGenericFuncDesc;
 import org.apache.hadoop.hive.ql.plan.TableScanDesc;
-import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.hive.serde2.typeinfo.ListTypeInfo;
@@ -56,10 +56,10 @@ import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoUtils;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-import java.io.IOException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
@@ -74,7 +74,7 @@ import java.util.stream.Collectors;
  */
 public class SchemaEvolutionContext {
 
-  private static final Logger LOG = LogManager.getLogger(SchemaEvolutionContext.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SchemaEvolutionContext.class);
 
   private static final String HIVE_TMP_READ_COLUMN_NAMES_CONF_STR = "hive.tmp.io.file.readcolumn.ids";
   private static final String HIVE_TMP_COLUMNS = "hive.tmp.columns";
@@ -82,7 +82,7 @@ public class SchemaEvolutionContext {
 
   private final InputSplit split;
   private final JobConf job;
-  private HoodieTableMetaClient metaClient;
+  private final HoodieTableMetaClient metaClient;
   public Option<InternalSchema> internalSchemaOption;
 
   public SchemaEvolutionContext(InputSplit split, JobConf job) throws IOException {
@@ -149,6 +149,7 @@ public class SchemaEvolutionContext {
       realtimeRecordReader.setWriterSchema(writerSchema);
       realtimeRecordReader.setReaderSchema(readerSchema);
       realtimeRecordReader.setHiveSchema(hiveSchema);
+      internalSchemaOption = Option.of(prunedInternalSchema);
       RealtimeSplit realtimeSplit = (RealtimeSplit) split;
       LOG.info(String.format("About to read compacted logs %s for base split %s, projecting cols %s",
           realtimeSplit.getDeltaLogPaths(), realtimeSplit.getPath(), requiredColumns));
@@ -171,7 +172,7 @@ public class SchemaEvolutionContext {
       if (!disableSchemaEvolution) {
         prunedSchema = InternalSchemaUtils.pruneInternalSchema(internalSchemaOption.get(), requiredColumns);
         InternalSchema querySchema = prunedSchema;
-        Long commitTime = Long.valueOf(FSUtils.getCommitTime(finalPath.getName()));
+        long commitTime = Long.parseLong(FSUtils.getCommitTime(finalPath.getName()));
         InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(commitTime, metaClient, false);
         InternalSchema mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchema, true,
             true).mergeSchema();
@@ -258,10 +259,10 @@ public class SchemaEvolutionContext {
       case DECIMAL:
         return typeInfo;
       case TIME:
-        throw new UnsupportedOperationException(String.format("cannot convert %s type to hive", new Object[] { type }));
+        throw new UnsupportedOperationException(String.format("cannot convert %s type to hive", type));
       default:
-        LOG.error(String.format("cannot convert unknown type: %s to Hive", new Object[] { type }));
-        throw new UnsupportedOperationException(String.format("cannot convert unknown type: %s to Hive", new Object[] { type }));
+        LOG.error(String.format("cannot convert unknown type: %s to Hive", type));
+        throw new UnsupportedOperationException(String.format("cannot convert unknown type: %s to Hive", type));
     }
   }
 

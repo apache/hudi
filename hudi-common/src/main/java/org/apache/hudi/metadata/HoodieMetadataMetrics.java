@@ -25,8 +25,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.exception.HoodieIOException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -34,6 +34,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -46,6 +47,12 @@ public class HoodieMetadataMetrics implements Serializable {
   public static final String LOOKUP_FILES_STR = "lookup_files";
   public static final String LOOKUP_BLOOM_FILTERS_METADATA_STR = "lookup_meta_index_bloom_filters";
   public static final String LOOKUP_COLUMN_STATS_METADATA_STR = "lookup_meta_index_column_ranges";
+  // Time for lookup from record index
+  public static final String LOOKUP_RECORD_INDEX_TIME_STR = "lookup_record_index_time";
+  // Number of keys looked up in a call
+  public static final String LOOKUP_RECORD_INDEX_KEYS_COUNT_STR = "lookup_record_index_key_count";
+  // Number of keys found in record index
+  public static final String LOOKUP_RECORD_INDEX_KEYS_HITS_COUNT_STR = "lookup_record_index_key_count";
   public static final String SCAN_STR = "scan";
   public static final String BASEFILE_READ_STR = "basefile_read";
   public static final String INITIALIZE_STR = "initialize";
@@ -59,8 +66,12 @@ public class HoodieMetadataMetrics implements Serializable {
   public static final String STAT_COUNT_LOG_FILES = "logFileCount";
   public static final String STAT_COUNT_PARTITION = "partitionCount";
   public static final String STAT_LAST_COMPACTION_TIMESTAMP = "lastCompactionTimestamp";
+  public static final String SKIP_TABLE_SERVICES = "skip_table_services";
+  public static final String TABLE_SERVICE_EXECUTION_STATUS = "table_service_execution_status";
+  public static final String TABLE_SERVICE_EXECUTION_DURATION = "table_service_execution_duration";
+  public static final String ASYNC_INDEXER_CATCHUP_TIME = "async_indexer_catchup_time";
 
-  private static final Logger LOG = LogManager.getLogger(HoodieMetadataMetrics.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataMetrics.class);
 
   private final Registry metricsRegistry;
 
@@ -68,21 +79,21 @@ public class HoodieMetadataMetrics implements Serializable {
     this.metricsRegistry = metricsRegistry;
   }
 
-  public Map<String, String> getStats(boolean detailed, HoodieTableMetaClient metaClient, HoodieTableMetadata metadata) {
+  public Map<String, String> getStats(boolean detailed, HoodieTableMetaClient metaClient, HoodieTableMetadata metadata, Set<String> metadataPartitions) {
     try {
-      metaClient.reloadActiveTimeline();
       HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline());
-      return getStats(fsView, detailed, metadata);
+      return getStats(fsView, detailed, metadata, metadataPartitions);
     } catch (IOException ioe) {
       throw new HoodieIOException("Unable to get metadata stats.", ioe);
     }
   }
 
-  private Map<String, String> getStats(HoodieTableFileSystemView fsView, boolean detailed, HoodieTableMetadata tableMetadata) throws IOException {
+  private Map<String, String> getStats(HoodieTableFileSystemView fsView, boolean detailed, HoodieTableMetadata tableMetadata, Set<String> metadataPartitions)
+      throws IOException {
     Map<String, String> stats = new HashMap<>();
 
-    // Total size of the metadata and count of base/log files
-    for (String metadataPartition : MetadataPartitionType.allPaths()) {
+    // Total size of the metadata and count of base/log files for enabled partitions
+    for (String metadataPartition : metadataPartitions) {
       List<FileSlice> latestSlices = fsView.getLatestFileSlices(metadataPartition).collect(Collectors.toList());
 
       // Total size of the metadata and count of base/log files
@@ -116,7 +127,7 @@ public class HoodieMetadataMetrics implements Serializable {
     return stats;
   }
 
-  protected void updateMetrics(String action, long durationInMs) {
+  public void updateMetrics(String action, long durationInMs) {
     if (metricsRegistry == null) {
       return;
     }
@@ -128,16 +139,20 @@ public class HoodieMetadataMetrics implements Serializable {
     incrementMetric(durationKey, durationInMs);
   }
 
-  public void updateSizeMetrics(HoodieTableMetaClient metaClient, HoodieBackedTableMetadata metadata) {
-    Map<String, String> stats = getStats(false, metaClient, metadata);
+  public void updateSizeMetrics(HoodieTableMetaClient metaClient, HoodieBackedTableMetadata metadata, Set<String> metadataPartitions) {
+    Map<String, String> stats = getStats(false, metaClient, metadata, metadataPartitions);
     for (Map.Entry<String, String> e : stats.entrySet()) {
-      incrementMetric(e.getKey(), Long.parseLong(e.getValue()));
+      setMetric(e.getKey(), Long.parseLong(e.getValue()));
     }
   }
 
   protected void incrementMetric(String action, long value) {
     LOG.info(String.format("Updating metadata metrics (%s=%d) in %s", action, value, metricsRegistry));
     metricsRegistry.add(action, value);
+  }
+
+  protected void setMetric(String action, long value) {
+    metricsRegistry.set(action, value);
   }
 
   public Registry registry() {

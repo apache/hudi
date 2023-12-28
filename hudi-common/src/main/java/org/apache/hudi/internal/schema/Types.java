@@ -23,7 +23,6 @@ import org.apache.hudi.internal.schema.Type.PrimitiveType;
 
 import java.io.Serializable;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -511,6 +510,7 @@ public class Types {
     private final Field[] fields;
 
     private transient Map<String, Field> nameToFields = null;
+    private transient Map<String, Field> lowercaseNameToFields = null;
     private transient Map<Integer, Field> idToFields = null;
 
     private RecordType(List<Field> fields, String name) {
@@ -523,30 +523,43 @@ public class Types {
       return Arrays.asList(fields);
     }
 
-    public Field field(String name) {
+    /**
+     * Case-sensitive get field by name
+     */
+    public Field fieldByName(String name) {
       if (nameToFields == null) {
-        nameToFields = new HashMap<>();
-        for (Field field : fields) {
-          nameToFields.put(field.name().toLowerCase(Locale.ROOT), field);
-        }
+        nameToFields = Arrays.stream(fields)
+            .collect(Collectors.toMap(
+                Field::name,
+                field -> field));
       }
-      return nameToFields.get(name.toLowerCase(Locale.ROOT));
+      return nameToFields.get(name);
+    }
+
+    public Field fieldByNameCaseInsensitive(String name) {
+      if (lowercaseNameToFields == null) {
+        lowercaseNameToFields = Arrays.stream(fields)
+            .collect(Collectors.toMap(
+                field -> field.name.toLowerCase(Locale.ROOT),
+                field -> field));
+      }
+      return lowercaseNameToFields.get(name.toLowerCase(Locale.ROOT));
     }
 
     @Override
     public Field field(int id) {
       if (idToFields == null) {
-        idToFields = new HashMap<>();
-        for (Field field : fields) {
-          idToFields.put(field.fieldId(), field);
-        }
+        idToFields = Arrays.stream(fields)
+            .collect(Collectors.toMap(
+                Field::fieldId,
+                field -> field));
       }
       return idToFields.get(id);
     }
 
     @Override
     public Type fieldType(String name) {
-      Field field = field(name);
+      Field field = fieldByNameCaseInsensitive(name);
       if (field != null) {
         return field.type();
       }

@@ -19,76 +19,80 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodiePayloadConfig;
-import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.io.storage.HoodieFileReader;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
 import java.util.Iterator;
-import java.util.stream.StreamSupport;
+import java.util.Map;
+import java.util.Properties;
 
-/**
- * Reads records from base file and merges any updates from log files and provides iterable over all records in the file slice.
- */
-public class HoodieFileSliceReader<T extends HoodieRecordPayload> implements Iterator<HoodieRecord<T>> {
-  private final Iterator<HoodieRecord<T>> recordsIterator;
+public class HoodieFileSliceReader<T> extends LogFileIterator<T> {
+  private Option<Iterator<HoodieRecord>> baseFileIterator;
+  private HoodieMergedLogRecordScanner scanner;
+  private Schema schema;
+  private Properties props;
 
-  public static HoodieFileSliceReader getFileSliceReader(
-      Option<HoodieFileReader> baseFileReader, HoodieMergedLogRecordScanner scanner, Schema schema, String payloadClass,
-      String preCombineField, Option<Pair<String, String>> simpleKeyGenFieldsOpt) throws IOException {
+  private TypedProperties payloadProps = new TypedProperties();
+  private Option<Pair<String, String>> simpleKeyGenFieldsOpt;
+  Map<String, HoodieRecord> records;
+  HoodieRecordMerger merger;
+
+  public HoodieFileSliceReader(Option<HoodieFileReader> baseFileReader,
+                                   HoodieMergedLogRecordScanner scanner, Schema schema, String preCombineField, HoodieRecordMerger merger,
+                               Properties props, Option<Pair<String, String>> simpleKeyGenFieldsOpt) throws IOException {
+    super(scanner);
     if (baseFileReader.isPresent()) {
-      Iterator baseIterator = baseFileReader.get().getRecordIterator(schema);
-      while (baseIterator.hasNext()) {
-        GenericRecord record = (GenericRecord) baseIterator.next();
-        HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = transform(
-            record, scanner, payloadClass, preCombineField, simpleKeyGenFieldsOpt);
-        scanner.processNextRecord(hoodieRecord);
-      }
-      return new HoodieFileSliceReader(scanner.iterator());
+      this.baseFileIterator = Option.of(baseFileReader.get().getRecordIterator(schema));
     } else {
-      Iterable<HoodieRecord<? extends HoodieRecordPayload>> iterable = () -> scanner.iterator();
-      HoodiePayloadConfig payloadConfig = HoodiePayloadConfig.newBuilder().withPayloadOrderingField(preCombineField).build();
-      return new HoodieFileSliceReader(StreamSupport.stream(iterable.spliterator(), false)
-          .map(e -> {
-            try {
-              GenericRecord record = (GenericRecord) e.getData().getInsertValue(schema, payloadConfig.getProps()).get();
-              return transform(record, scanner, payloadClass, preCombineField, simpleKeyGenFieldsOpt);
-            } catch (IOException io) {
-              throw new HoodieIOException("Error while creating reader for file slice with no base file.", io);
-            }
-          }).iterator());
+      this.baseFileIterator = Option.empty();
     }
+    this.scanner = scanner;
+    this.schema = schema;
+    this.merger = merger;
+    if (preCombineField != null) {
+      payloadProps.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, preCombineField);
+    }
+    this.props = props;
+    this.simpleKeyGenFieldsOpt = simpleKeyGenFieldsOpt;
+    this.records = scanner.getRecords();
   }
 
-  private static HoodieRecord<? extends HoodieRecordPayload> transform(
-      GenericRecord record, HoodieMergedLogRecordScanner scanner, String payloadClass,
-      String preCombineField, Option<Pair<String, String>> simpleKeyGenFieldsOpt) {
-    return simpleKeyGenFieldsOpt.isPresent()
-        ? SpillableMapUtils.convertToHoodieRecordPayload(record,
-        payloadClass, preCombineField, simpleKeyGenFieldsOpt.get(), scanner.isWithOperationField(), Option.empty())
-        : SpillableMapUtils.convertToHoodieRecordPayload(record,
-        payloadClass, preCombineField, scanner.isWithOperationField(), scanner.getPartitionName());
-  }
-
-  private HoodieFileSliceReader(Iterator<HoodieRecord<T>> recordsItr) {
-    this.recordsIterator = recordsItr;
+  private boolean hasNextInternal() {
+    while (baseFileIterator.isPresent() && baseFileIterator.get().hasNext()) {
+      try {
+        HoodieRecord currentRecord = baseFileIterator.get().next().wrapIntoHoodieRecordPayloadWithParams(schema, props,
+            simpleKeyGenFieldsOpt, scanner.isWithOperationField(), scanner.getPartitionNameOverride(), false, Option.empty());
+        Option<HoodieRecord> logRecord = removeLogRecord(currentRecord.getRecordKey());
+        if (!logRecord.isPresent()) {
+          nextRecord = currentRecord;
+          return true;
+        }
+        Option<Pair<HoodieRecord, Schema>> mergedRecordOpt =  merger.merge(currentRecord, schema, logRecord.get(), schema, payloadProps);
+        if (mergedRecordOpt.isPresent()) {
+          HoodieRecord<T> mergedRecord = (HoodieRecord<T>) mergedRecordOpt.get().getLeft();
+          nextRecord = mergedRecord.wrapIntoHoodieRecordPayloadWithParams(schema, props, simpleKeyGenFieldsOpt, scanner.isWithOperationField(),
+              scanner.getPartitionNameOverride(), false, Option.empty());
+          return true;
+        }
+      } catch (IOException e) {
+        throw new HoodieClusteringException("Failed to wrapIntoHoodieRecordPayloadWithParams: " + e.getMessage());
+      }
+    }
+    return super.doHasNext();
   }
 
   @Override
-  public boolean hasNext() {
-    return recordsIterator.hasNext();
+  protected boolean doHasNext() {
+    return hasNextInternal();
   }
 
-  @Override
-  public HoodieRecord<T> next() {
-    return recordsIterator.next();
-  }
 }

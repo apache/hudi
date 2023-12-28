@@ -18,7 +18,7 @@
 
 package org.apache.hudi.table.format;
 
-import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.util.RowDataProjection;
 
 import org.apache.flink.table.data.RowData;

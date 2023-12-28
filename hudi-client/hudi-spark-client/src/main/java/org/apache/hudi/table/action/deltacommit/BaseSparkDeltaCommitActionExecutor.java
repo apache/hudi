@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.deltacommit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -33,9 +32,9 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.action.commit.BaseSparkCommitActionExecutor;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -43,9 +42,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-public abstract class BaseSparkDeltaCommitActionExecutor<T extends HoodieRecordPayload<T>>
+public abstract class BaseSparkDeltaCommitActionExecutor<T>
     extends BaseSparkCommitActionExecutor<T> {
-  private static final Logger LOG = LogManager.getLogger(BaseSparkDeltaCommitActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BaseSparkDeltaCommitActionExecutor.class);
 
   // UpsertPartitioner for MergeOnRead table type
   private SparkUpsertDeltaCommitPartitioner<T> mergeOnReadUpsertPartitioner;

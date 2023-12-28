@@ -24,6 +24,7 @@ import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.data.HoodieListPairData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -186,11 +187,14 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
           partitionRecordKeyMap.put(t.getLeft(), recordKeyList);
         });
 
-    List<Pair<String, HoodieKey>> comparisonKeyList = index.explodeRecordsWithFileComparisons(partitionToFileIndexInfo, HoodieListPairData.lazy(partitionRecordKeyMap)).collectAsList();
+    List<Pair<HoodieFileGroupId, String>> comparisonKeyList =
+        index.explodeRecordsWithFileComparisons(partitionToFileIndexInfo, HoodieListPairData.lazy(partitionRecordKeyMap)).collectAsList();
 
     assertEquals(10, comparisonKeyList.size());
     java.util.Map<String, List<String>> recordKeyToFileComps = comparisonKeyList.stream()
-        .collect(java.util.stream.Collectors.groupingBy(t -> t.getRight().getRecordKey(), java.util.stream.Collectors.mapping(t -> t.getLeft(), java.util.stream.Collectors.toList())));
+        .collect(
+            java.util.stream.Collectors.groupingBy(t -> t.getRight(),
+              java.util.stream.Collectors.mapping(t -> t.getLeft().getFileId(), java.util.stream.Collectors.toList())));
 
     assertEquals(4, recordKeyToFileComps.size());
     assertEquals(new java.util.HashSet<>(asList("f1", "f3", "f4")), new java.util.HashSet<>(recordKeyToFileComps.get("002")));
@@ -242,14 +246,13 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     List<String> uuids = asList(record1.getRecordKey(), record2.getRecordKey(), record3.getRecordKey(), record4.getRecordKey());
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
-    HoodieFlinkTable table = HoodieFlinkTable.create(config, context, metaClient);
-    List<String> results = HoodieIndexUtils.filterKeysFromFile(
+    List<Pair<String, Long>> results = HoodieIndexUtils.filterKeysFromFile(
         new Path(java.nio.file.Paths.get(basePath, partition, filename).toString()), uuids, hadoopConf);
     assertEquals(results.size(), 2);
-    assertTrue(results.get(0).equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")
-        || results.get(1).equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0"));
-    assertTrue(results.get(0).equals("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0")
-        || results.get(1).equals("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0"));
+    assertTrue(results.get(0).getLeft().equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")
+        || results.get(1).getLeft().equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0"));
+    assertTrue(results.get(0).getLeft().equals("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0")
+        || results.get(1).getLeft().equals("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0"));
     // TODO(vc): Need more coverage on actual filenames
     // assertTrue(results.get(0)._2().equals(filename));
     // assertTrue(results.get(1)._2().equals(filename));

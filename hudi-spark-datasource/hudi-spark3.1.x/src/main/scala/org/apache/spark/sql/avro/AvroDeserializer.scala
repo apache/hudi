@@ -57,7 +57,8 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
     this(
       rootAvroType,
       rootCatalystType,
-      LegacyBehaviorPolicy.withName(SQLConf.get.getConf(SQLConf.LEGACY_AVRO_REBASE_MODE_IN_READ)),
+      LegacyBehaviorPolicy.withName(SQLConf.get.getConf(SQLConf.LEGACY_AVRO_REBASE_MODE_IN_READ,
+        LegacyBehaviorPolicy.CORRECTED.toString)),
       new NoopFilters)
   }
 
@@ -153,6 +154,7 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
             val bytes = new Array[Byte](s.getByteLength)
             System.arraycopy(s.getBytes, 0, bytes, 0, s.getByteLength)
             UTF8String.fromBytes(bytes)
+          case s: GenericData.EnumSymbol => UTF8String.fromString(s.toString)
         }
         updater.set(ordinal, str)
 

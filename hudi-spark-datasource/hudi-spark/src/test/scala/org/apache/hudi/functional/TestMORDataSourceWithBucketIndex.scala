@@ -24,7 +24,7 @@ import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner
 import org.apache.hudi.table.storage.HoodieStorageLayout
-import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.spark.sql._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
@@ -35,7 +35,7 @@ import scala.collection.JavaConversions._
 /**
  *
  */
-class TestMORDataSourceWithBucketIndex extends HoodieClientTestBase {
+class TestMORDataSourceWithBucketIndex extends HoodieSparkClientTestBase {
 
   var spark: SparkSession = null
   val commonOpts = Map(
@@ -147,5 +147,34 @@ class TestMORDataSourceWithBucketIndex extends HoodieClientTestBase {
     assertEquals(200, hudiSnapshotDF4.count())
     assertEquals(100,
         hudiSnapshotDF1.join(hudiSnapshotDF4, Seq("_hoodie_record_key"), "inner").count())
+  }
+
+  @Test def testInsertOverwrite(): Unit = {
+    val partitionPaths = new Array[String](1)
+    partitionPaths.update(0, "2020/01/10")
+    val newDataGen = new HoodieTestDataGenerator(partitionPaths)
+    val records1 = recordsToStrings(newDataGen.generateInserts("001", 100)).toList
+    val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+    val records2 = recordsToStrings(newDataGen.generateInserts("002", 20)).toList
+    val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
+    inputDF2.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .option("hoodie.compact.inline", "false")
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OVERWRITE_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+      .load(basePath + "/*/*/*/*")
+    assertEquals(20, hudiSnapshotDF1.count())
   }
 }

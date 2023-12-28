@@ -56,11 +56,11 @@ public interface HoodieTimeline extends Serializable {
   String COMPACTION_ACTION = "compaction";
   String LOG_COMPACTION_ACTION = "logcompaction";
   String REQUESTED_EXTENSION = ".requested";
+  String COMPLETED_EXTENSION = ".completed";
   String RESTORE_ACTION = "restore";
   String INDEXING_ACTION = "indexing";
   // only for schema save
   String SCHEMA_COMMIT_ACTION = "schemacommit";
-
   String[] VALID_ACTIONS_IN_TIMELINE = {COMMIT_ACTION, DELTA_COMMIT_ACTION,
       CLEAN_ACTION, SAVEPOINT_ACTION, RESTORE_ACTION, ROLLBACK_ACTION,
       COMPACTION_ACTION, REPLACE_COMMIT_ACTION, INDEXING_ACTION};
@@ -81,6 +81,7 @@ public interface HoodieTimeline extends Serializable {
   String REQUESTED_ROLLBACK_EXTENSION = "." + ROLLBACK_ACTION + REQUESTED_EXTENSION;
   String INFLIGHT_SAVEPOINT_EXTENSION = "." + SAVEPOINT_ACTION + INFLIGHT_EXTENSION;
   String REQUESTED_COMPACTION_SUFFIX = StringUtils.join(COMPACTION_ACTION, REQUESTED_EXTENSION);
+  String COMPLETED_COMPACTION_SUFFIX = StringUtils.join(COMPACTION_ACTION, COMPLETED_EXTENSION);
   String REQUESTED_COMPACTION_EXTENSION = StringUtils.join(".", REQUESTED_COMPACTION_SUFFIX);
   String INFLIGHT_COMPACTION_EXTENSION = StringUtils.join(".", COMPACTION_ACTION, INFLIGHT_EXTENSION);
   String REQUESTED_RESTORE_EXTENSION = "." + RESTORE_ACTION + REQUESTED_EXTENSION;
@@ -140,7 +141,7 @@ public interface HoodieTimeline extends Serializable {
   /**
    * Filter this timeline to just include the in-flights excluding major and minor compaction instants.
    *
-   * @return New instance of HoodieTimeline with just in-flights excluding majoe and minor compaction instants
+   * @return New instance of HoodieTimeline with just in-flights excluding major and minor compaction instants
    */
   HoodieTimeline filterPendingExcludingMajorAndMinorCompaction();
 
@@ -226,6 +227,11 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline filterPendingRollbackTimeline();
 
   /**
+   * Filter this timeline for requested rollbacks.
+   */
+  HoodieTimeline filterRequestedRollbackTimeline();
+
+  /**
    * Create a new Timeline with all the instants after startTs.
    */
   HoodieTimeline findInstantsAfterOrEquals(String commitTime, int numCommits);
@@ -234,6 +240,22 @@ public interface HoodieTimeline extends Serializable {
    * Create a new Timeline with instants after startTs and before or on endTs.
    */
   HoodieTimeline findInstantsInRange(String startTs, String endTs);
+
+  /**
+   * Create a new Timeline with instants after or equals startTs and before or on endTs.
+   */
+  HoodieTimeline findInstantsInClosedRange(String startTs, String endTs);
+
+  /**`
+   * Create a new Timeline with instants after startTs and before or on endTs
+   * by state transition timestamp of actions.
+   */
+  HoodieTimeline findInstantsInRangeByCompletionTime(String startTs, String endTs);
+
+  /**
+   * Create new timeline with all instants that were modified after specified time.
+   */
+  HoodieTimeline findInstantsModifiedAfterByCompletionTime(String instantTime);
 
   /**
    * Create a new Timeline with all the instants after startTs.
@@ -249,6 +271,11 @@ public interface HoodieTimeline extends Serializable {
    * Create a new Timeline with all instants before specified time.
    */
   HoodieTimeline findInstantsBefore(String instantTime);
+
+  /**
+   * Finds the instant before specified time.
+   */
+  Option<HoodieInstant> findInstantBefore(String instantTime);
 
   /**
    * Create new timeline with all instants before or equals specified time.
@@ -350,6 +377,11 @@ public interface HoodieTimeline extends Serializable {
   Stream<HoodieInstant> getReverseOrderedInstants();
 
   /**
+   * Get the stream of instants in order by state transition timestamp of actions.
+   */
+  Stream<HoodieInstant> getInstantsOrderedByCompletionTime();
+
+  /**
    * @return true if the passed in instant is before the first completed instant in the timeline
    */
   boolean isBeforeTimelineStarts(String ts);
@@ -384,6 +416,20 @@ public interface HoodieTimeline extends Serializable {
   }
 
   /**
+   * Returns the smaller of the given two instants.
+   */
+  static String minInstant(String instant1, String instant2) {
+    return compareTimestamps(instant1, LESSER_THAN, instant2) ? instant1 : instant2;
+  }
+
+  /**
+   * Returns the greater of the given two instants.
+   */
+  static String maxInstant(String instant1, String instant2) {
+    return compareTimestamps(instant1, GREATER_THAN, instant2) ? instant1 : instant2;
+  }
+
+  /**
    * Return true if specified timestamp is in range (startTs, endTs].
    */
   static boolean isInRange(String timestamp, String startTs, String endTs) {
@@ -391,8 +437,20 @@ public interface HoodieTimeline extends Serializable {
             && HoodieTimeline.compareTimestamps(timestamp, LESSER_THAN_OR_EQUALS, endTs);
   }
 
-  static HoodieInstant getCompletedInstant(final HoodieInstant instant) {
-    return new HoodieInstant(State.COMPLETED, instant.getAction(), instant.getTimestamp());
+  /**
+   * Return true if specified timestamp is in range [startTs, endTs).
+   */
+  static boolean isInClosedOpenRange(String timestamp, String startTs, String endTs) {
+    return HoodieTimeline.compareTimestamps(timestamp, GREATER_THAN_OR_EQUALS, startTs)
+        && HoodieTimeline.compareTimestamps(timestamp, LESSER_THAN, endTs);
+  }
+
+  /**
+   * Return true if specified timestamp is in range [startTs, endTs].
+   */
+  static boolean isInClosedRange(String timestamp, String startTs, String endTs) {
+    return HoodieTimeline.compareTimestamps(timestamp, GREATER_THAN_OR_EQUALS, startTs)
+        && HoodieTimeline.compareTimestamps(timestamp, LESSER_THAN_OR_EQUALS, endTs);
   }
 
   static HoodieInstant getRequestedInstant(final HoodieInstant instant) {
@@ -434,6 +492,10 @@ public interface HoodieTimeline extends Serializable {
   }
 
   static HoodieInstant getRollbackRequestedInstant(HoodieInstant instant) {
+    return instant.isRequested() ? instant : HoodieTimeline.getRequestedInstant(instant);
+  }
+
+  static HoodieInstant getRestoreRequestedInstant(HoodieInstant instant) {
     return instant.isRequested() ? instant : HoodieTimeline.getRequestedInstant(instant);
   }
 
@@ -535,7 +597,7 @@ public interface HoodieTimeline extends Serializable {
     return StringUtils.join(instantTime, HoodieTimeline.REQUESTED_COMPACTION_EXTENSION);
   }
 
-  // Log comaction action
+  // Log compaction action
   static String makeInflightLogCompactionFileName(String instantTime) {
     return StringUtils.join(instantTime, HoodieTimeline.INFLIGHT_LOG_COMPACTION_EXTENSION);
   }

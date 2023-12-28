@@ -56,11 +56,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.cdc.HoodieCDCInferCase.AS_IS;
-import static org.apache.hudi.common.table.cdc.HoodieCDCInferCase.BASE_FILE_DELETE;
-import static org.apache.hudi.common.table.cdc.HoodieCDCInferCase.BASE_FILE_INSERT;
-import static org.apache.hudi.common.table.cdc.HoodieCDCInferCase.LOG_FILE;
-import static org.apache.hudi.common.table.cdc.HoodieCDCInferCase.REPLACE_COMMIT;
+import static org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase.AS_IS;
+import static org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase.BASE_FILE_DELETE;
+import static org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase.BASE_FILE_INSERT;
+import static org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase.LOG_FILE;
+import static org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase.REPLACE_COMMIT;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
@@ -103,7 +103,7 @@ public class HoodieCDCExtractor {
   }
 
   private void init() {
-    initInstantAndCommitMetadatas();
+    initInstantAndCommitMetadata();
   }
 
   /**
@@ -209,7 +209,7 @@ public class HoodieCDCExtractor {
    *
    *  And, we need to recognize which is a 'replacecommit', that help to find the list of file group replaced.
    */
-  private void initInstantAndCommitMetadatas() {
+  private void initInstantAndCommitMetadata() {
     try {
       Set<String> requiredActions = new HashSet<>(Arrays.asList(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION));
       HoodieActiveTimeline activeTimeLine = metaClient.getActiveTimeline();
@@ -253,7 +253,7 @@ public class HoodieCDCExtractor {
       String path = writeStat.getPath();
       if (FSUtils.isBaseFile(new Path(path))) {
         // this is a base file
-        if (operation == WriteOperationType.DELETE && writeStat.getNumWrites() == 0L
+        if (WriteOperationType.isDelete(operation) && writeStat.getNumWrites() == 0L
             && writeStat.getNumDeletes() != 0) {
           // This is a delete operation wherein all the records in this file group are deleted
           // and no records have been written out a new file.
@@ -265,9 +265,8 @@ public class HoodieCDCExtractor {
               new HoodieIOException("Can not get the previous version of the base file")
           );
           FileSlice beforeFileSlice = new FileSlice(fileGroupId, writeStat.getPrevCommit(), beforeBaseFile, Collections.emptyList());
-          cdcFileSplit = new HoodieCDCFileSplit(instantTs, BASE_FILE_DELETE, new ArrayList<>(), Option.empty(), Option.of(beforeFileSlice));
-        } else if (writeStat.getNumUpdateWrites() == 0L && writeStat.getNumDeletes() == 0
-            && writeStat.getNumWrites() == writeStat.getNumInserts()) {
+          cdcFileSplit = new HoodieCDCFileSplit(instantTs, BASE_FILE_DELETE, new ArrayList<>(), Option.of(beforeFileSlice), Option.empty());
+        } else if ((writeStat.getNumUpdateWrites() == 0L && writeStat.getNumWrites() == writeStat.getNumInserts())) {
           // all the records in this file are new.
           cdcFileSplit = new HoodieCDCFileSplit(instantTs, BASE_FILE_INSERT, path);
         } else {
@@ -280,7 +279,7 @@ public class HoodieCDCExtractor {
       }
     } else {
       // this is a cdc log
-      if (supplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.WITH_BEFORE_AFTER)) {
+      if (supplementalLoggingMode == HoodieCDCSupplementalLoggingMode.DATA_BEFORE_AFTER) {
         cdcFileSplit = new HoodieCDCFileSplit(instantTs, AS_IS, writeStat.getCdcStats().keySet());
       } else {
         try {
@@ -292,7 +291,7 @@ public class HoodieCDCExtractor {
           FileSlice beforeFileSlice = null;
           FileSlice currentFileSlice = new FileSlice(fileGroupId, instant.getTimestamp(),
               new HoodieBaseFile(fs.getFileStatus(new Path(basePath, writeStat.getPath()))), new ArrayList<>());
-          if (supplementalLoggingMode.equals(HoodieCDCSupplementalLoggingMode.OP_KEY)) {
+          if (supplementalLoggingMode == HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY) {
             beforeFileSlice = new FileSlice(fileGroupId, writeStat.getPrevCommit(), beforeBaseFile, new ArrayList<>());
           }
           cdcFileSplit = new HoodieCDCFileSplit(instantTs, AS_IS, writeStat.getCdcStats().keySet(),

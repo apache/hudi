@@ -27,6 +27,7 @@ import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.DataSourceTestUtils
+import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
 import org.apache.spark.SparkContext
 import org.apache.spark.sql._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
@@ -80,10 +81,7 @@ class TestTableSchemaResolverWithSparkSQL {
    */
   def initSparkContext(): Unit = {
     spark = SparkSession.builder()
-      .appName(hoodieFooTableName)
-      .master("local[2]")
-      .withExtensions(new HoodieSparkSessionExtension)
-      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+      .config(getSparkConfForTest(hoodieFooTableName))
       .getOrCreate()
     sc = spark.sparkContext
     sc.setLogLevel("ERROR")

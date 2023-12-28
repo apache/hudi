@@ -31,10 +31,10 @@ import scala.collection.JavaConversions._
 
 class ShowCommitExtraMetadataProcedure() extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 100),
-    ProcedureParameter.optional(2, "instant_time", DataTypes.StringType, None),
-    ProcedureParameter.optional(3, "metadata_key", DataTypes.StringType, None)
+    ProcedureParameter.optional(2, "instant_time", DataTypes.StringType),
+    ProcedureParameter.optional(3, "metadata_key", DataTypes.StringType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](

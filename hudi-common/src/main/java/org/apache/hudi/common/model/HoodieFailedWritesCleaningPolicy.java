@@ -18,15 +18,27 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.config.EnumDescription;
+import org.apache.hudi.common.config.EnumFieldDescription;
+
 /**
  * Policy controlling how to perform cleaning for failed writes.
  */
+@EnumDescription("Policy that controls how to clean up failed writes. Hudi will delete any files "
+    + "written by failed writes to re-claim space.")
 public enum HoodieFailedWritesCleaningPolicy {
+
   // performs cleaning of failed writes inline every write operation
+  @EnumFieldDescription("Clean failed writes inline after every write operation.")
   EAGER,
+
   // performs cleaning of failed writes lazily during clean
+  @EnumFieldDescription("Clean failed writes lazily after heartbeat timeout when the cleaning "
+      + "service runs. This policy is required when multi-writers are enabled.")
   LAZY,
+
   // Does not clean failed writes
+  @EnumFieldDescription("Never clean failed writes.")
   NEVER;
 
   public boolean isEager() {

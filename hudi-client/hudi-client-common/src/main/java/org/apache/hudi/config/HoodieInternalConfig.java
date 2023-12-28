@@ -20,6 +20,7 @@ package org.apache.hudi.config;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.model.WriteOperationType;
 
 /**
  * Configs/params used for internal purposes.
@@ -34,7 +35,22 @@ public class HoodieInternalConfig extends HoodieConfig {
   public static final ConfigProperty<String> BULKINSERT_INPUT_DATA_SCHEMA_DDL = ConfigProperty
       .key("hoodie.bulkinsert.schema.ddl")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Schema set for row writer/bulk insert.");
+
+  public static final ConfigProperty<String> BULKINSERT_OVERWRITE_OPERATION_TYPE = ConfigProperty
+      .key("hoodie.bulkinsert.overwrite.operation.type")
+      .noDefaultValue()
+      .markAdvanced()
+      .withValidValues(WriteOperationType.INSERT_OVERWRITE_TABLE.value(), WriteOperationType.INSERT_OVERWRITE.value())
+      .withDocumentation("For SQL operations, if enables bulk_insert operation, "
+          + "this configure will take effect to decide overwrite whole table or partitions specified");
+
+  public static final ConfigProperty<String> STATIC_OVERWRITE_PARTITION_PATHS = ConfigProperty
+      .key("hoodie.static.overwrite.partition.paths")
+      .defaultValue("")
+      .markAdvanced()
+      .withDocumentation("Inner configure to pass static partition paths to executors for SQL operations.");
 
   /**
    * Returns if partition records are sorted or not.

@@ -18,20 +18,23 @@
 
 package org.apache.hudi.timeline.service.handlers;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-
+import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.table.timeline.dto.ClusteringOpDTO;
 import org.apache.hudi.common.table.timeline.dto.CompactionOpDTO;
+import org.apache.hudi.common.table.timeline.dto.DTOUtils;
 import org.apache.hudi.common.table.timeline.dto.FileGroupDTO;
 import org.apache.hudi.common.table.timeline.dto.FileSliceDTO;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.timeline.service.TimelineService;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -67,6 +70,16 @@ public class FileSliceHandler extends Handler {
         .map(FileSliceDTO::fromFileSlice).collect(Collectors.toList());
   }
 
+  public Map<String, List<FileSliceDTO>> getAllLatestFileSlicesBeforeOrOn(String basePath, String maxInstantTime) {
+    return viewManager.getFileSystemView(basePath)
+        .getAllLatestFileSlicesBeforeOrOn(maxInstantTime)
+        .entrySet().stream()
+        .collect(Collectors.toMap(
+            Map.Entry::getKey,
+            entry -> entry.getValue().map(FileSliceDTO::fromFileSlice).collect(Collectors.toList())
+        ));
+  }
+
   public List<FileSliceDTO> getLatestUnCompactedFileSlices(String basePath, String partitionPath) {
     return viewManager.getFileSystemView(basePath).getLatestUnCompactedFileSlices(partitionPath)
         .map(FileSliceDTO::fromFileSlice).collect(Collectors.toList());
@@ -74,6 +87,11 @@ public class FileSliceHandler extends Handler {
 
   public List<FileSliceDTO> getLatestFileSlices(String basePath, String partitionPath) {
     return viewManager.getFileSystemView(basePath).getLatestFileSlices(partitionPath).map(FileSliceDTO::fromFileSlice)
+        .collect(Collectors.toList());
+  }
+
+  public List<FileSliceDTO> getLatestFileSlicesStateless(String basePath, String partitionPath) {
+    return viewManager.getFileSystemView(basePath).getLatestFileSlicesStateless(partitionPath).map(FileSliceDTO::fromFileSlice)
         .collect(Collectors.toList());
   }
 
@@ -95,23 +113,39 @@ public class FileSliceHandler extends Handler {
   }
 
   public List<FileGroupDTO> getAllFileGroups(String basePath, String partitionPath) {
-    return viewManager.getFileSystemView(basePath).getAllFileGroups(partitionPath).map(FileGroupDTO::fromFileGroup)
+    List<HoodieFileGroup> fileGroups =  viewManager.getFileSystemView(basePath).getAllFileGroups(partitionPath)
         .collect(Collectors.toList());
+    return DTOUtils.fileGroupDTOsfromFileGroups(fileGroups);
+  }
+
+  public List<FileGroupDTO> getAllFileGroupsStateless(String basePath, String partitionPath) {
+    List<HoodieFileGroup> fileGroups =  viewManager.getFileSystemView(basePath).getAllFileGroupsStateless(partitionPath)
+        .collect(Collectors.toList());
+    return DTOUtils.fileGroupDTOsfromFileGroups(fileGroups);
   }
 
   public List<FileGroupDTO> getReplacedFileGroupsBeforeOrOn(String basePath, String maxCommitTime, String partitionPath) {
-    return viewManager.getFileSystemView(basePath).getReplacedFileGroupsBeforeOrOn(maxCommitTime, partitionPath).map(FileGroupDTO::fromFileGroup)
+    List<HoodieFileGroup> fileGroups =  viewManager.getFileSystemView(basePath).getReplacedFileGroupsBeforeOrOn(maxCommitTime, partitionPath)
         .collect(Collectors.toList());
+    return DTOUtils.fileGroupDTOsfromFileGroups(fileGroups);
   }
 
   public List<FileGroupDTO> getReplacedFileGroupsBefore(String basePath, String maxCommitTime, String partitionPath) {
-    return viewManager.getFileSystemView(basePath).getReplacedFileGroupsBefore(maxCommitTime, partitionPath).map(FileGroupDTO::fromFileGroup)
+    List<HoodieFileGroup> fileGroups = viewManager.getFileSystemView(basePath).getReplacedFileGroupsBefore(maxCommitTime, partitionPath)
         .collect(Collectors.toList());
+    return DTOUtils.fileGroupDTOsfromFileGroups(fileGroups);
+  }
+
+  public List<FileGroupDTO> getReplacedFileGroupsAfterOrOn(String basePath, String minCommitTime, String partitionPath) {
+    List<HoodieFileGroup> fileGroups =  viewManager.getFileSystemView(basePath).getReplacedFileGroupsAfterOrOn(minCommitTime, partitionPath)
+        .collect(Collectors.toList());
+    return DTOUtils.fileGroupDTOsfromFileGroups(fileGroups);
   }
   
   public List<FileGroupDTO> getAllReplacedFileGroups(String basePath, String partitionPath) {
-    return viewManager.getFileSystemView(basePath).getAllReplacedFileGroups(partitionPath).map(FileGroupDTO::fromFileGroup)
+    List<HoodieFileGroup> fileGroups =  viewManager.getFileSystemView(basePath).getAllReplacedFileGroups(partitionPath)
         .collect(Collectors.toList());
+    return DTOUtils.fileGroupDTOsfromFileGroups(fileGroups);
   }
 
   public List<ClusteringOpDTO> getFileGroupsInPendingClustering(String basePath) {
@@ -122,6 +156,11 @@ public class FileSliceHandler extends Handler {
 
   public boolean refreshTable(String basePath) {
     viewManager.clearFileSystemView(basePath);
+    return true;
+  }
+
+  public boolean loadAllPartitions(String basePath) {
+    viewManager.getFileSystemView(basePath).loadAllPartitions();
     return true;
   }
 }

@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.13.0-SNAPSHOT</version>
+    <version>1.0.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -115,11 +115,16 @@
                   <include>org.rocksdb:rocksdbjni</include>
                   <include>org.antlr:stringtemplate</include>
                   <include>org.apache.parquet:parquet-avro</include>
-
+                  <include>org.roaringbitmap:RoaringBitmap</include>
+                  <!-- Bundle Jackson JSR310 library since it is not present in spark 2.x. For spark 3.x this will
+                       bundle the same JSR310 version that is included in spark runtime -->
+                  <include>com.fasterxml.jackson.datatype:jackson-datatype-jsr310</include>
                   <include>com.lmax:disruptor</include>
                   <include>com.github.davidmoten:guava-mini</include>
                   <include>com.github.davidmoten:hilbert-curve</include>
                   <include>com.github.ben-manes.caffeine:caffeine</include>
+                  <!-- SPARK-43489 Spark 3.5+ has marked protobuf as provided -->
+                  <include>com.google.protobuf:protobuf-java</include>
                   <include>com.twitter:bijection-avro_${scala.binary.version}</include>
                   <include>com.twitter:bijection-core_${scala.binary.version}</include>
                   <include>io.confluent:kafka-avro-serializer</include>
@@ -147,19 +152,6 @@
                   <include>org.apache.hive:hive-metastore</include>
                   <include>org.apache.hive:hive-jdbc</include>
 
-                  <include>org.apache.hbase:hbase-client</include>
-                  <include>org.apache.hbase:hbase-common</include>
-                  <include>org.apache.hbase:hbase-hadoop-compat</include>
-                  <include>org.apache.hbase:hbase-hadoop2-compat</include>
-                  <include>org.apache.hbase:hbase-metrics</include>
-                  <include>org.apache.hbase:hbase-metrics-api</include>
-                  <include>org.apache.hbase:hbase-protocol</include>
-                  <include>org.apache.hbase:hbase-protocol-shaded</include>
-                  <include>org.apache.hbase:hbase-server</include>
-                  <include>org.apache.hbase.thirdparty:hbase-shaded-miscellaneous</include>
-                  <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
-                  <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
-                  <include>org.apache.htrace:htrace-core4</include>
                   <include>org.apache.curator:curator-framework</include>
                   <include>org.apache.curator:curator-client</include>
                   <include>org.apache.curator:curator-recipes</include>
@@ -191,21 +183,6 @@
                 <relocation>
                   <pattern>org.apache.commons.io.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.commons.io.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.hbase.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.hbase.</shadedPattern>
-                  <excludes>
-                    <exclude>org.apache.hadoop.hbase.KeyValue$KeyComparator</exclude>
-                  </excludes>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hbase.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hbase.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.htrace.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hadoop.hive.metastore.</pattern>
@@ -247,73 +224,17 @@
                   <pattern>org.openjdk.jol.</pattern>
                   <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
                 </relocation>
-                <!-- The classes below in org.apache.hadoop.metrics2 package come from
-                hbase-hadoop-compat and hbase-hadoop2-compat, which have to be shaded one by one,
-                instead of shading all classes under org.apache.hadoop.metrics2 including ones
-                from hadoop. -->
                 <relocation>
-                  <pattern>org.apache.hadoop.metrics2.MetricHistogram</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.MetricHistogram
-                  </shadedPattern>
+                  <pattern>org.apache.httpcomponents.</pattern>
+                  <shadedPattern>org.apache.hudi.aws.org.apache.httpcomponents.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.apache.hadoop.metrics2.MetricsExecutor</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.MetricsExecutor
-                  </shadedPattern>
+                  <pattern>com.google.protobuf.</pattern>
+                  <shadedPattern>org.apache.hudi.com.google.protobuf.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.apache.hadoop.metrics2.impl.JmxCacheBuster</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.impl.JmxCacheBuster</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.lib.DefaultMetricsSystemHelper</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.DefaultMetricsSystemHelper
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.lib.DynamicMetricsRegistry</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.DynamicMetricsRegistry
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.lib.MetricsExecutorImpl</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MetricsExecutorImpl
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.lib.MutableFastCounter</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableFastCounter
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.lib.MutableHistogram</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableHistogram
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.lib.MutableRangeHistogram</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableRangeHistogram
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.lib.MutableSizeHistogram</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableSizeHistogram
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.lib.MutableTimeHistogram</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableTimeHistogram
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.util.MetricQuantile</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.util.MetricQuantile
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.util.MetricSampleQuantiles</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.util.MetricSampleQuantiles
-                  </shadedPattern>
+                  <pattern>org.roaringbitmap.</pattern>
+                  <shadedPattern>org.apache.hudi.org.roaringbitmap.</shadedPattern>
                 </relocation>
               </relocations>
               <filters>

@@ -35,13 +35,13 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
            | tblproperties (
            |  primaryKey = 'id',
            |  preCombineField = 'ts',
-           |  hoodie.keep.max.commits = 3,
-           |  hoodie.keep.min.commits = 2,
+           |  hoodie.keep.max.commits = 5,
+           |  hoodie.keep.min.commits = 4,
            |  hoodie.cleaner.commits.retained = 1
            | )
        """.stripMargin)
 
-      // insert data to table, will generate 3 active commits and 4 archived commits
+      // insert data to table, will generate 5 active commits and 2 archived commits
       spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
       spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
@@ -56,12 +56,16 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
 
       // collect active commits for table
       val commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
-      assertResult(3){commits.length}
+      assertResult(4) {
+        commits.length
+      }
 
       // collect archived commits for table
       val endTs = commits(0).get(0).toString
       val archivedCommits = spark.sql(s"""call show_archived_commits(table => '$tableName', end_ts => '$endTs')""").collect()
-      assertResult(4){archivedCommits.length}
+      assertResult(3) {
+        archivedCommits.length
+      }
     }
   }
 
@@ -81,13 +85,13 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
            | tblproperties (
            |  primaryKey = 'id',
            |  preCombineField = 'ts',
-           |  hoodie.keep.max.commits = 3,
-           |  hoodie.keep.min.commits = 2,
+           |  hoodie.keep.max.commits = 5,
+           |  hoodie.keep.min.commits = 4,
            |  hoodie.cleaner.commits.retained = 1
            | )
        """.stripMargin)
 
-      // insert data to table, will generate 3 active commits and 4 archived commits
+      // insert data to table, will generate 5 active commits and 2 archived commits
       spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
       spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
@@ -102,12 +106,16 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
 
       // collect active commits for table
       val commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
-      assertResult(3){commits.length}
+      assertResult(4) {
+        commits.length
+      }
 
       // collect archived commits for table
       val endTs = commits(0).get(0).toString
       val archivedCommits = spark.sql(s"""call show_archived_commits_metadata(table => '$tableName', end_ts => '$endTs')""").collect()
-      assertResult(4){archivedCommits.length}
+      assertResult(3) {
+        archivedCommits.length
+      }
     }
   }
 

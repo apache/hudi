@@ -69,12 +69,10 @@ public class HoodieFlinkCompactor {
   }
 
   public static void main(String[] args) throws Exception {
-    StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-
     FlinkCompactionConfig cfg = getFlinkCompactionConfig(args);
     Configuration conf = FlinkCompactionConfig.toFlinkConfig(cfg);
 
-    AsyncCompactionService service = new AsyncCompactionService(cfg, conf, env);
+    AsyncCompactionService service = new AsyncCompactionService(cfg, conf);
 
     new HoodieFlinkCompactor(service).start(cfg.serviceMode);
   }
@@ -158,19 +156,13 @@ public class HoodieFlinkCompactor {
     private final HoodieFlinkTable<?> table;
 
     /**
-     * Flink Execution Environment.
-     */
-    private final StreamExecutionEnvironment env;
-
-    /**
      * Executor Service.
      */
     private final ExecutorService executor;
 
-    public AsyncCompactionService(FlinkCompactionConfig cfg, Configuration conf, StreamExecutionEnvironment env) throws Exception {
+    public AsyncCompactionService(FlinkCompactionConfig cfg, Configuration conf) throws Exception {
       this.cfg = cfg;
       this.conf = conf;
-      this.env = env;
       this.executor = Executors.newFixedThreadPool(1);
 
       // create metaClient
@@ -186,6 +178,9 @@ public class HoodieFlinkCompactor {
 
       // infer changelog mode
       CompactionUtil.inferChangelogMode(conf, metaClient);
+
+      // infer metadata config
+      CompactionUtil.inferMetadataConf(conf, metaClient);
 
       this.writeClient = FlinkWriteClients.createWriteClientV2(conf);
       this.writeConfig = writeClient.getConfig();
@@ -226,16 +221,13 @@ public class HoodieFlinkCompactor {
 
       // checks the compaction plan and do compaction.
       if (cfg.schedule) {
-        Option<String> compactionInstantTimeOption = CompactionUtil.getCompactionInstantTime(metaClient);
-        if (compactionInstantTimeOption.isPresent()) {
-          boolean scheduled = writeClient.scheduleCompactionAtInstant(compactionInstantTimeOption.get(), Option.empty());
-          if (!scheduled) {
-            // do nothing.
-            LOG.info("No compaction plan for this job ");
-            return;
-          }
-          table.getMetaClient().reloadActiveTimeline();
+        boolean scheduled = writeClient.scheduleCompaction(Option.empty()).isPresent();
+        if (!scheduled) {
+          // do nothing.
+          LOG.info("No compaction plan for this job ");
+          return;
         }
+        table.getMetaClient().reloadActiveTimeline();
       }
 
       // fetch the instant based on the configured execution sequence
@@ -278,23 +270,13 @@ public class HoodieFlinkCompactor {
       }
 
       List<HoodieInstant> instants = compactionInstantTimes.stream().map(HoodieTimeline::getCompactionRequestedInstant).collect(Collectors.toList());
-      for (HoodieInstant instant : instants) {
-        if (!pendingCompactionTimeline.containsInstant(instant)) {
-          // this means that the compaction plan was written to auxiliary path(.tmp)
-          // but not the meta path(.hoodie), this usually happens when the job crush
-          // exceptionally.
-          // clean the compaction plan in auxiliary path and cancels the compaction.
-          LOG.warn("The compaction plan was fetched through the auxiliary path(.tmp) but not the meta path(.hoodie).\n"
-              + "Clean the compaction plan in auxiliary path and cancels the compaction");
-          CompactionUtil.cleanInstant(table.getMetaClient(), instant);
-          return;
-        }
-      }
+
+      int totalOperations = Math.toIntExact(compactionPlans.stream().mapToLong(pair -> pair.getRight().getOperations().size()).sum());
 
       // get compactionParallelism.
       int compactionParallelism = conf.getInteger(FlinkOptions.COMPACTION_TASKS) == -1
-          ? Math.toIntExact(compactionPlans.stream().mapToLong(pair -> pair.getRight().getOperations().size()).sum())
-          : conf.getInteger(FlinkOptions.COMPACTION_TASKS);
+          ? totalOperations
+          : Math.min(conf.getInteger(FlinkOptions.COMPACTION_TASKS), totalOperations);
 
       LOG.info("Start to compaction for instant " + compactionInstantTimes);
 
@@ -304,7 +286,8 @@ public class HoodieFlinkCompactor {
       }
       table.getMetaClient().reloadActiveTimeline();
 
-      env.addSource(new CompactionPlanSourceFunction(compactionPlans))
+      StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+      env.addSource(new CompactionPlanSourceFunction(compactionPlans, conf))
           .name("compaction_source")
           .uid("uid_compaction_source")
           .rebalance()
@@ -315,7 +298,9 @@ public class HoodieFlinkCompactor {
           .addSink(new CompactionCommitSink(conf))
           .name("compaction_commit")
           .uid("uid_compaction_commit")
-          .setParallelism(1);
+          .setParallelism(1)
+          .getTransformation()
+          .setMaxParallelism(1);
 
       env.execute("flink_hudi_compaction_" + String.join(",", compactionInstantTimes));
     }

@@ -21,7 +21,9 @@ package org.apache.hudi.common.util.collection;
 import java.util.Iterator;
 import java.util.function.Function;
 
-// TODO java-docs
+/**
+ * Iterator mapping elements of the provided source {@link Iterator} from {@code I} to {@code O}
+ */
 public class MappingIterator<I, O> implements Iterator<O> {
 
   protected final Iterator<I> source;

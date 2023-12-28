@@ -33,9 +33,9 @@ import scala.collection.JavaConversions._
 
 class ShowCommitWriteStatsProcedure() extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10),
-    ProcedureParameter.required(2, "instant_time", DataTypes.StringType, None)
+    ProcedureParameter.required(2, "instant_time", DataTypes.StringType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](

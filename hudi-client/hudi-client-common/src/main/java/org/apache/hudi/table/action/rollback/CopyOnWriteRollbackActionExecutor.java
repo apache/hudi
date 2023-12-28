@@ -21,22 +21,21 @@ package org.apache.hudi.table.action.rollback;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class CopyOnWriteRollbackActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseRollbackActionExecutor<T, I, K, O> {
+public class CopyOnWriteRollbackActionExecutor<T, I, K, O> extends BaseRollbackActionExecutor<T, I, K, O> {
 
-  private static final Logger LOG = LogManager.getLogger(CopyOnWriteRollbackActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(CopyOnWriteRollbackActionExecutor.class);
 
   public CopyOnWriteRollbackActionExecutor(HoodieEngineContext context,
                                            HoodieWriteConfig config,
@@ -45,7 +44,7 @@ public class CopyOnWriteRollbackActionExecutor<T extends HoodieRecordPayload, I,
                                            HoodieInstant commitInstant,
                                            boolean deleteInstants,
                                            boolean skipLocking) {
-    super(context, config, table, instantTime, commitInstant, deleteInstants, skipLocking);
+    super(context, config, table, instantTime, commitInstant, deleteInstants, skipLocking, false);
   }
 
   public CopyOnWriteRollbackActionExecutor(HoodieEngineContext context,
@@ -56,7 +55,7 @@ public class CopyOnWriteRollbackActionExecutor<T extends HoodieRecordPayload, I,
                                            boolean deleteInstants,
                                            boolean skipTimelinePublish,
                                            boolean skipLocking) {
-    super(context, config, table, instantTime, commitInstant, deleteInstants, skipTimelinePublish, skipLocking);
+    super(context, config, table, instantTime, commitInstant, deleteInstants, skipTimelinePublish, skipLocking, false);
   }
 
   @Override

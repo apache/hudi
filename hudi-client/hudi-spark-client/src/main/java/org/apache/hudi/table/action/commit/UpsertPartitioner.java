@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -38,11 +37,11 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.PairFunction;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -61,9 +60,9 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION
 /**
  * Packs incoming records to be upserted, into buckets (1 bucket = 1 RDD partition).
  */
-public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHoodiePartitioner<T> {
+public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
 
-  private static final Logger LOG = LogManager.getLogger(UpsertPartitioner.class);
+  private static final Logger LOG = LoggerFactory.getLogger(UpsertPartitioner.class);
 
   /**
    * List of all small files to be corrected.
@@ -98,9 +97,12 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
     assignUpdates(profile);
     assignInserts(profile, context);
 
-    LOG.info("Total Buckets :" + totalBuckets + ", buckets info => " + bucketInfoMap + ", \n"
-        + "Partition to insert buckets => " + partitionPathToInsertBucketInfos + ", \n"
-        + "UpdateLocations mapped to buckets =>" + updateLocationToBucket);
+    LOG.info("Total Buckets: " + totalBuckets);
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Buckets info => " + bucketInfoMap + ", \n"
+              + "Partition to insert buckets => " + partitionPathToInsertBucketInfos + ", \n"
+              + "UpdateLocations mapped to buckets =>" + updateLocationToBucket);
+    }
   }
 
   private void assignUpdates(WorkloadProfile profile) {
@@ -187,7 +189,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
 
         this.smallFiles.addAll(smallFiles);
 
-        LOG.info("For partitionPath : " + partitionPath + " Small Files => " + smallFiles);
+        LOG.debug("For partitionPath : " + partitionPath + " Small Files => " + smallFiles);
 
         long totalUnassignedInserts = pStat.getNumInserts();
         List<Integer> bucketNumbers = new ArrayList<>();
@@ -202,10 +204,10 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
             int bucket;
             if (updateLocationToBucket.containsKey(smallFile.location.getFileId())) {
               bucket = updateLocationToBucket.get(smallFile.location.getFileId());
-              LOG.info("Assigning " + recordsToAppend + " inserts to existing update bucket " + bucket);
+              LOG.debug("Assigning " + recordsToAppend + " inserts to existing update bucket " + bucket);
             } else {
               bucket = addUpdateBucket(partitionPath, smallFile.location.getFileId());
-              LOG.info("Assigning " + recordsToAppend + " inserts to new update bucket " + bucket);
+              LOG.debug("Assigning " + recordsToAppend + " inserts to new update bucket " + bucket);
             }
             if (profile.hasOutputWorkLoadStats()) {
               outputWorkloadStats.addInserts(smallFile.location, recordsToAppend);
@@ -228,7 +230,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
           }
 
           int insertBuckets = (int) Math.ceil((1.0 * totalUnassignedInserts) / insertRecordsPerBucket);
-          LOG.info("After small file assignment: unassignedInserts => " + totalUnassignedInserts
+          LOG.debug("After small file assignment: unassignedInserts => " + totalUnassignedInserts
               + ", totalInsertBuckets => " + insertBuckets + ", recordsPerBucket => " + insertRecordsPerBucket);
           for (int b = 0; b < insertBuckets; b++) {
             bucketNumbers.add(totalBuckets);
@@ -256,7 +258,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
           currentCumulativeWeight += bkt.weight;
           insertBuckets.add(new InsertBucketCumulativeWeightPair(bkt, currentCumulativeWeight));
         }
-        LOG.info("Total insert buckets for partition path " + partitionPath + " => " + insertBuckets);
+        LOG.debug("Total insert buckets for partition path " + partitionPath + " => " + insertBuckets);
         partitionPathToInsertBucketInfos.put(partitionPath, insertBuckets);
       }
       if (profile.hasOutputWorkLoadStats()) {
@@ -300,9 +302,8 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
 
       for (HoodieBaseFile file : allFiles) {
         if (file.getFileSize() < config.getParquetSmallFileLimit()) {
-          String filename = file.getFileName();
           SmallFile sf = new SmallFile();
-          sf.location = new HoodieRecordLocation(FSUtils.getCommitTime(filename), FSUtils.getFileId(filename));
+          sf.location = new HoodieRecordLocation(file.getCommitTime(), file.getFileId());
           sf.sizeBytes = file.getFileSize();
           smallFileLocations.add(sf);
         }

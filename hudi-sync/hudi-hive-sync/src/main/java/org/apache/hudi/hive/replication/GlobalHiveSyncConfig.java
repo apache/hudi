@@ -18,6 +18,8 @@
 
 package org.apache.hudi.hive.replication;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.hive.HiveSyncConfig;
@@ -26,13 +28,20 @@ import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParametersDelegate;
 import org.apache.hadoop.conf.Configuration;
 
+import javax.annotation.concurrent.Immutable;
+
 import java.util.Properties;
 
+@Immutable
+@ConfigClassProperty(name = "Global Hive Sync Configs",
+    groupName = ConfigGroups.Names.META_SYNC,
+    description = "Global replication configurations used by the Hudi to sync metadata to Hive Metastore.")
 public class GlobalHiveSyncConfig extends HiveSyncConfig {
 
   public static final ConfigProperty<String> META_SYNC_GLOBAL_REPLICATE_TIMESTAMP = ConfigProperty
       .key("hoodie.meta_sync.global.replicate.timestamp")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("");
 
   public GlobalHiveSyncConfig(Properties props, Configuration hadoopConf) {

@@ -50,6 +50,7 @@ public class FlinkDeleteHelper<R> extends
     BaseDeleteHelper<EmptyHoodieRecordPayload, List<HoodieRecord<EmptyHoodieRecordPayload>>, List<HoodieKey>, List<WriteStatus>, R> {
 
   private FlinkDeleteHelper() {
+    super(ignored -> -1);
   }
 
   private static class DeleteHelperHolder {
@@ -123,5 +124,4 @@ public class FlinkDeleteHelper<R> extends
       throw new HoodieUpsertException("Failed to delete for commit time " + instantTime, e);
     }
   }
-
 }

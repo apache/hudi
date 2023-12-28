@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.data;
 
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.collection.Pair;
@@ -26,6 +27,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import java.io.Serializable;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * An interface abstracting a container holding a collection of objects of type {@code T}
@@ -51,9 +53,23 @@ import java.util.List;
 public interface HoodieData<T> extends Serializable {
 
   /**
-   * Persists the data w/ provided {@code level} (if applicable)
+   * Get the {@link HoodieData}'s unique non-negative identifier. -1 indicates invalid id.
+   */
+  int getId();
+
+  /**
+   * Persists the data w/ provided {@code level} (if applicable).
+   *
+   * Use this method only when you call {@link #unpersist()} at some later point for the same {@link HoodieData}.
+   * Otherwise, use {@link #persist(String, HoodieEngineContext, HoodieDataCacheKey)} instead for auto-unpersist
+   * at the end of a client write operation.
    */
   void persist(String level);
+
+  /**
+   * Persists the data w/ provided {@code level} (if applicable), and cache the data's ids within the {@code engineContext}.
+   */
+  void persist(String level, HoodieEngineContext engineContext, HoodieDataCacheKey cacheKey);
 
   /**
    * Un-persists the data (if previously persisted)
@@ -105,9 +121,9 @@ public interface HoodieData<T> extends Serializable {
       Iterator<O>> func, boolean preservesPartitioning);
 
   /**
-   * Maps every element in the collection into a collection of the new elements (provided by
-   * {@link Iterator}) using provided mapping {@code func}, subsequently flattening the result
-   * (by concatenating) into a single collection
+   * Maps every element in the collection into a collection of the new elements using provided
+   * mapping {@code func}, subsequently flattening the result (by concatenating) into a single
+   * collection
    *
    * This is an intermediate operation
    *
@@ -116,6 +132,17 @@ public interface HoodieData<T> extends Serializable {
    * @return {@link HoodieData<O>} holding mapped elements
    */
   <O> HoodieData<O> flatMap(SerializableFunction<T, Iterator<O>> func);
+
+  /**
+   * Maps every element in the collection into a collection of the {@link Pair}s of new elements
+   * using provided mapping {@code func}, subsequently flattening the result (by concatenating) into
+   * a single collection
+   *
+   * NOTE: That this operation will convert container from {@link HoodieData} to {@link HoodiePairData}
+   *
+   * This is an intermediate operation
+   */
+  <K, V> HoodiePairData<K, V> flatMapToPair(SerializableFunction<T, Iterator<? extends Pair<K, V>>> func);
 
   /**
    * Maps every element in the collection using provided mapping {@code func} into a {@link Pair<K, V>}
@@ -184,5 +211,43 @@ public interface HoodieData<T> extends Serializable {
     return mapToPair(i -> Pair.of(keyGetter.apply(i), i))
         .reduceByKey((value1, value2) -> value1, parallelism)
         .values();
+  }
+
+  /**
+   * The key used in a caching map to identify a {@link HoodieData}.
+   *
+   * At the end of a write operation, we manually unpersist the {@link HoodieData} associated with that writer.
+   * Therefore, in multi-writer scenario, we need to use both {@code basePath} and {@code instantTime} to identify {@link HoodieData}s.
+   */
+  class HoodieDataCacheKey implements Serializable {
+
+    public static HoodieDataCacheKey of(String basePath, String instantTime) {
+      return new HoodieDataCacheKey(basePath, instantTime);
+    }
+
+    private final String basePath;
+    private final String instantTime;
+
+    private HoodieDataCacheKey(String basePath, String instantTime) {
+      this.basePath = basePath;
+      this.instantTime = instantTime;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      HoodieDataCacheKey that = (HoodieDataCacheKey) o;
+      return basePath.equals(that.basePath) && instantTime.equals(that.instantTime);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(basePath, instantTime);
+    }
   }
 }

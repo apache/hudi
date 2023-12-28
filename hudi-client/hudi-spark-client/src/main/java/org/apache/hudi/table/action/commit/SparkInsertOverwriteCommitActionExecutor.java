@@ -23,10 +23,11 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieInternalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.table.HoodieTable;
@@ -35,11 +36,13 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.apache.spark.Partitioner;
 
+import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class SparkInsertOverwriteCommitActionExecutor<T extends HoodieRecordPayload<T>>
+public class SparkInsertOverwriteCommitActionExecutor<T>
     extends BaseSparkCommitActionExecutor<T> {
 
   private final HoodieData<HoodieRecord<T>> inputRecordsRDD;
@@ -78,12 +81,35 @@ public class SparkInsertOverwriteCommitActionExecutor<T extends HoodieRecordPayl
 
   @Override
   protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata) {
-    return HoodieJavaPairRDD.getJavaPairRDD(writeMetadata.getWriteStatuses().map(status -> status.getStat().getPartitionPath()).distinct().mapToPair(partitionPath ->
-        Pair.of(partitionPath, getAllExistingFileIds(partitionPath)))).collectAsMap();
+    String staticOverwritePartition = config.getStringOrDefault(HoodieInternalConfig.STATIC_OVERWRITE_PARTITION_PATHS);
+    if (StringUtils.nonEmpty(staticOverwritePartition)) {
+      // static insert overwrite partitions
+      List<String> partitionPaths = Arrays.asList(staticOverwritePartition.split(","));
+      context.setJobStatus(this.getClass().getSimpleName(), "Getting ExistingFileIds of matching static partitions");
+      return HoodieJavaPairRDD.getJavaPairRDD(context.parallelize(partitionPaths, partitionPaths.size()).mapToPair(
+          partitionPath -> Pair.of(partitionPath, getAllExistingFileIds(partitionPath)))).collectAsMap();
+    } else {
+      // dynamic insert overwrite partitions
+      return HoodieJavaPairRDD.getJavaPairRDD(writeMetadata.getWriteStatuses().map(status -> status.getStat().getPartitionPath()).distinct().mapToPair(partitionPath ->
+          Pair.of(partitionPath, getAllExistingFileIds(partitionPath)))).collectAsMap();
+    }
   }
 
   protected List<String> getAllExistingFileIds(String partitionPath) {
     // because new commit is not complete. it is safe to mark all existing file Ids as old files
     return table.getSliceView().getLatestFileSlices(partitionPath).map(FileSlice::getFileId).distinct().collect(Collectors.toList());
+  }
+
+  @Override
+  protected Iterator<List<WriteStatus>> handleInsertPartition(String instantTime, Integer partition, Iterator recordItr, Partitioner partitioner) {
+    SparkHoodiePartitioner upsertPartitioner = (SparkHoodiePartitioner) partitioner;
+    BucketInfo binfo = upsertPartitioner.getBucketInfo(partition);
+    BucketType btype = binfo.bucketType;
+    switch (btype) {
+      case INSERT:
+        return handleInsert(binfo.fileIdPrefix, recordItr);
+      default:
+        throw new AssertionError("Expect INSERT bucketType for insert overwrite, please correct the logical of " + partitioner.getClass().getName());
+    }
   }
 }

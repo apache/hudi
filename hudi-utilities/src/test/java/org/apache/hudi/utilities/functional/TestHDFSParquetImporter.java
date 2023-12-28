@@ -55,6 +55,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -272,7 +273,7 @@ public class TestHDFSParquetImporter extends FunctionalTestHarness implements Se
 
   private void createSchemaFile(String schemaFile) throws IOException {
     FSDataOutputStream schemaFileOS = dfs().create(new Path(schemaFile));
-    schemaFileOS.write(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA.getBytes());
+    schemaFileOS.write(getUTF8Bytes(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA));
     schemaFileOS.close();
   }
 
@@ -291,7 +292,7 @@ public class TestHDFSParquetImporter extends FunctionalTestHarness implements Se
     // Should fail - return : -1.
     assertEquals(-1, dataImporter.dataImport(jsc(), 0));
 
-    dfs().create(schemaFile).write("Random invalid schema data".getBytes());
+    dfs().create(schemaFile).write(getUTF8Bytes("Random invalid schema data"));
     // Should fail - return : -1.
     assertEquals(-1, dataImporter.dataImport(jsc(), 0));
   }

@@ -22,7 +22,6 @@ import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -39,6 +38,8 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -82,7 +83,7 @@ public class TestCompactionUtil {
     // initialize the metadata table path
     if (conf.getBoolean(FlinkOptions.METADATA_ENABLED)) {
       FlinkHoodieBackedTableMetadataWriter.create(table.getHadoopConf(), table.getConfig(),
-          table.getContext(), Option.empty(), Option.empty());
+          table.getContext(), Option.empty());
     }
   }
 
@@ -138,20 +139,32 @@ public class TestCompactionUtil {
     // write a commit with data first
     TestData.writeDataAsBatch(TestData.DATA_SET_SINGLE_INSERT, conf);
 
-    HoodieFlinkWriteClient<?> writeClient = FlinkWriteClients.createWriteClient(conf);
-    CompactionUtil.scheduleCompaction(metaClient, writeClient, true, true);
+    try (HoodieFlinkWriteClient<?> writeClient = FlinkWriteClients.createWriteClient(conf)) {
+      CompactionUtil.scheduleCompaction(writeClient, true, true);
 
-    Option<HoodieInstant> pendingCompactionInstant = metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().lastInstant();
-    assertTrue(pendingCompactionInstant.isPresent(), "A compaction plan expects to be scheduled");
+      Option<HoodieInstant> pendingCompactionInstant = metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().lastInstant();
+      assertTrue(pendingCompactionInstant.isPresent(), "A compaction plan expects to be scheduled");
 
-    // write another commit with data and start a new instant
-    TestData.writeDataAsBatch(TestData.DATA_SET_INSERT, conf);
-    TimeUnit.SECONDS.sleep(3); // in case the instant time interval is too close
-    writeClient.startCommit();
+      // write another commit with data and start a new instant
+      TestData.writeDataAsBatch(TestData.DATA_SET_INSERT, conf);
+      TimeUnit.SECONDS.sleep(3); // in case the instant time interval is too close
+      writeClient.startCommit();
 
-    CompactionUtil.scheduleCompaction(metaClient, writeClient, true, false);
-    int numCompactionCommits = metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().countInstants();
-    assertThat("Two compaction plan expects to be scheduled", numCompactionCommits, is(2));
+      CompactionUtil.scheduleCompaction(writeClient, true, false);
+      int numCompactionCommits = metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().countInstants();
+      assertThat("Two compaction plan expects to be scheduled", numCompactionCommits, is(2));
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testInferMetadataConf(boolean metadataEnabled) throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.METADATA_ENABLED.key(), metadataEnabled + "");
+    beforeEach(options);
+    CompactionUtil.inferMetadataConf(this.conf, this.metaClient);
+    assertThat("Metadata table should be disabled after inference",
+        this.conf.getBoolean(FlinkOptions.METADATA_ENABLED), is(metadataEnabled));
   }
 
   /**
@@ -160,7 +173,7 @@ public class TestCompactionUtil {
   private String generateCompactionPlan() {
     HoodieCompactionOperation operation = new HoodieCompactionOperation();
     HoodieCompactionPlan plan = new HoodieCompactionPlan(Collections.singletonList(operation), Collections.emptyMap(), 1, null, null);
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    String instantTime = table.getMetaClient().createNewInstantTime();
     HoodieInstant compactionInstant =
         new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);
     try {

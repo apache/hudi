@@ -25,7 +25,6 @@ import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.CleanFileInfo;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -40,10 +39,13 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -52,9 +54,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCleanerPlan>> {
+import static org.apache.hudi.common.util.MapUtils.nonEmpty;
 
-  private static final Logger LOG = LogManager.getLogger(CleanPlanner.class);
+public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCleanerPlan>> {
+
+  private static final Logger LOG = LoggerFactory.getLogger(CleanPlanActionExecutor.class);
 
   private final Option<Map<String, String>> extraMetadata;
 
@@ -141,29 +145,35 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
         cleanOps = CollectionUtils.createImmutableMap();
         partitionsToDelete = CollectionUtils.createImmutableList();
       } else {
-        LOG.info("Total Partitions to clean : " + partitionsToClean.size() + ", with policy " + config.getCleanerPolicy());
+        LOG.info("Earliest commit to retain for clean : " + (earliestInstant.isPresent() ? earliestInstant.get().getTimestamp() : "null"));
+        LOG.info("Total partitions to clean : " + partitionsToClean.size() + ", with policy " + config.getCleanerPolicy());
         int cleanerParallelism = Math.min(partitionsToClean.size(), config.getCleanerParallelism());
         LOG.info("Using cleanerParallelism: " + cleanerParallelism);
 
         context.setJobStatus(this.getClass().getSimpleName(), "Generating list of file slices to be cleaned: " + config.getTableName());
 
-        Map<String, Pair<Boolean, List<CleanFileInfo>>> cleanOpsWithPartitionMeta = context
-            .map(partitionsToClean, partitionPathToClean -> Pair.of(partitionPathToClean, planner.getDeletePaths(partitionPathToClean)), cleanerParallelism)
-            .stream()
-            .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+        cleanOps = new HashMap<>();
+        partitionsToDelete = new ArrayList<>();
+        for (int i = 0; i < partitionsToClean.size(); i += cleanerParallelism) {
+          // Handles at most 'cleanerParallelism' number of partitions once at a time to avoid overlarge memory pressure to the timeline server
+          // (remote or local embedded), thus to reduce the risk of an OOM exception.
+          List<String> subPartitionsToClean = partitionsToClean.subList(i, Math.min(i + cleanerParallelism, partitionsToClean.size()));
+          Map<String, Pair<Boolean, List<CleanFileInfo>>> cleanOpsWithPartitionMeta = context
+              .map(subPartitionsToClean, partitionPathToClean -> Pair.of(partitionPathToClean, planner.getDeletePaths(partitionPathToClean, earliestInstant)), cleanerParallelism)
+              .stream()
+              .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
-        cleanOps = cleanOpsWithPartitionMeta.entrySet().stream()
-            .collect(Collectors.toMap(Map.Entry::getKey,
-                e -> CleanerUtils.convertToHoodieCleanFileInfoList(e.getValue().getValue())));
+          cleanOps.putAll(cleanOpsWithPartitionMeta.entrySet().stream()
+              .collect(Collectors.toMap(Map.Entry::getKey, e -> CleanerUtils.convertToHoodieCleanFileInfoList(e.getValue().getValue()))));
 
-        partitionsToDelete = cleanOpsWithPartitionMeta.entrySet().stream().filter(entry -> entry.getValue().getKey()).map(Map.Entry::getKey)
-            .collect(Collectors.toList());
+          partitionsToDelete.addAll(cleanOpsWithPartitionMeta.entrySet().stream().filter(entry -> entry.getValue().getKey()).map(Map.Entry::getKey)
+              .collect(Collectors.toList()));
+        }
       }
-
       return new HoodieCleanerPlan(earliestInstant
           .map(x -> new HoodieActionInstant(x.getTimestamp(), x.getAction(), x.getState().name())).orElse(null),
           planner.getLastCompletedCommitTimestamp(),
-          config.getCleanerPolicy().name(), CollectionUtils.createImmutableMap(),
+          config.getCleanerPolicy().name(), Collections.emptyMap(),
           CleanPlanner.LATEST_CLEAN_PLAN_VERSION, cleanOps, partitionsToDelete);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to schedule clean operation", e);
@@ -182,8 +192,9 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
     // Create a clean request contains the cleaner plan if:
     // - ALLOW_EMPTY_CLEAN_COMMITS is true
     // - or the list of the file paths to be deleted is not empty
-    if (config.allowEmptyCleanCommits() || (cleanerPlan.getFilePathsToBeDeletedPerPartition() != null
-        && !cleanerPlan.getFilePathsToBeDeletedPerPartition().isEmpty()
+    Option<HoodieCleanerPlan> option = Option.empty();
+    if (config.allowEmptyCleanCommits() || (
+        nonEmpty(cleanerPlan.getFilePathsToBeDeletedPerPartition())
         && cleanerPlan.getFilePathsToBeDeletedPerPartition().values().stream().mapToInt(List::size).sum() > 0)) {
       final HoodieInstant cleanInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, startCleanTime);
       // Save to both aux and timeline folder
@@ -194,9 +205,10 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
         LOG.error("Got exception when saving cleaner requested file", e);
         throw new HoodieIOException(e.getMessage(), e);
       }
-      return Option.of(cleanerPlan);
+      option = Option.of(cleanerPlan);
     }
-    return Option.empty();
+
+    return option;
   }
 
   @Override

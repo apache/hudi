@@ -19,7 +19,6 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.util.FlinkWriteClients;
@@ -51,7 +50,7 @@ public class CleanFunction<T> extends AbstractRichFunction
 
   private NonThrownExecutor executor;
 
-  private volatile boolean isCleaning;
+  protected volatile boolean isCleaning;
 
   public CleanFunction(Configuration conf) {
     this.conf = conf;
@@ -62,9 +61,18 @@ public class CleanFunction<T> extends AbstractRichFunction
     super.open(parameters);
     this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
     this.executor = NonThrownExecutor.builder(LOG).waitForTasksFinish(true).build();
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    String instantTime = writeClient.createNewInstantTime();
     LOG.info(String.format("exec clean with instant time %s...", instantTime));
-    executor.execute(() -> writeClient.clean(instantTime), "wait for cleaning finish");
+    if (conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
+      executor.execute(() -> {
+        this.isCleaning = true;
+        try {
+          this.writeClient.clean(instantTime);
+        } finally {
+          this.isCleaning = false;
+        }
+      }, "wait for cleaning finish");
+    }
   }
 
   @Override

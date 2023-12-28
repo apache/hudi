@@ -18,8 +18,6 @@
 
 package org.apache.hudi.table.action.rollback;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -35,8 +33,11 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -55,7 +56,7 @@ import java.util.stream.Stream;
  */
 public class BaseRollbackHelper implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(BaseRollbackHelper.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BaseRollbackHelper.class);
   protected static final String EMPTY_STRING = "";
 
   protected final HoodieTableMetaClient metaClient;
@@ -83,7 +84,7 @@ public class BaseRollbackHelper implements Serializable {
   }
 
   /**
-   * Collect all file info that needs to be rollbacked.
+   * Collect all file info that needs to be rolled back.
    */
   public List<HoodieRollbackStat> collectRollbackStats(HoodieEngineContext context, HoodieInstant instantToRollback,
                                                        List<HoodieRollbackRequest> rollbackRequests) {
@@ -123,12 +124,11 @@ public class BaseRollbackHelper implements Serializable {
         final Path filePath;
         try {
           String fileId = rollbackRequest.getFileId();
-          String latestBaseInstant = rollbackRequest.getLatestBaseInstant();
 
           writer = HoodieLogFormat.newWriterBuilder()
               .onParentPath(FSUtils.getPartitionPath(metaClient.getBasePath(), rollbackRequest.getPartitionPath()))
               .withFileId(fileId)
-              .overBaseCommit(latestBaseInstant)
+              .withDeltaCommit(instantToRollback.getTimestamp())
               .withFs(metaClient.getFs())
               .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
 

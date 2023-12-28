@@ -21,30 +21,31 @@ package org.apache.hudi.client.utils;
 import org.apache.hudi.client.transaction.ConcurrentOperation;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Set;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class TransactionUtils {
 
-  private static final Logger LOG = LogManager.getLogger(TransactionUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TransactionUtils.class);
 
   /**
    * Resolve any write conflicts when committing data.
@@ -67,14 +68,19 @@ public class TransactionUtils {
       Option<HoodieInstant> lastCompletedTxnOwnerInstant,
       boolean reloadActiveTimeline,
       Set<String> pendingInstants) throws HoodieWriteConflictException {
-    if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
+    WriteOperationType operationType = thisCommitMetadata.map(HoodieCommitMetadata::getOperationType).orElse(null);
+    if (config.needResolveWriteConflict(operationType)) {
       // deal with pendingInstants
       Stream<HoodieInstant> completedInstantsDuringCurrentWriteOperation = getCompletedInstantsDuringCurrentWriteOperation(table.getMetaClient(), pendingInstants);
 
       ConflictResolutionStrategy resolutionStrategy = config.getWriteConflictResolutionStrategy();
-      Stream<HoodieInstant> instantStream = Stream.concat(resolutionStrategy.getCandidateInstants(reloadActiveTimeline
-          ? table.getMetaClient().reloadActiveTimeline() : table.getActiveTimeline(), currentTxnOwnerInstant.get(), lastCompletedTxnOwnerInstant),
+      if (reloadActiveTimeline) {
+        table.getMetaClient().reloadActiveTimeline();
+      }
+      Stream<HoodieInstant> instantStream = Stream.concat(resolutionStrategy.getCandidateInstants(
+          table.getMetaClient(), currentTxnOwnerInstant.get(), lastCompletedTxnOwnerInstant),
               completedInstantsDuringCurrentWriteOperation);
+
       final ConcurrentOperation thisOperation = new ConcurrentOperation(currentTxnOwnerInstant.get(), thisCommitMetadata.orElse(new HoodieCommitMetadata()));
       instantStream.forEach(instant -> {
         try {
@@ -105,6 +111,10 @@ public class TransactionUtils {
       HoodieTableMetaClient metaClient) {
     Option<HoodieInstant> hoodieInstantOption = metaClient.getActiveTimeline().getCommitsTimeline()
         .filterCompletedInstants().lastInstant();
+    return getHoodieInstantAndMetaDataPair(metaClient, hoodieInstantOption);
+  }
+
+  private static Option<Pair<HoodieInstant, Map<String, String>>> getHoodieInstantAndMetaDataPair(HoodieTableMetaClient metaClient, Option<HoodieInstant> hoodieInstantOption) {
     try {
       if (hoodieInstantOption.isPresent()) {
         HoodieCommitMetadata commitMetadata = TimelineUtils.getCommitMetadata(hoodieInstantOption.get(), metaClient.getActiveTimeline());

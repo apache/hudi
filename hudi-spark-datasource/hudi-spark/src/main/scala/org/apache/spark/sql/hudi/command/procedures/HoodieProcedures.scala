@@ -66,6 +66,8 @@ object HoodieProcedures {
       ,(ShowBootstrapPartitionsProcedure.NAME, ShowBootstrapPartitionsProcedure.builder)
       ,(UpgradeTableProcedure.NAME, UpgradeTableProcedure.builder)
       ,(DowngradeTableProcedure.NAME, DowngradeTableProcedure.builder)
+      ,(ShowMetadataTableColumnStatsProcedure.NAME, ShowMetadataTableColumnStatsProcedure.builder)
+      ,(ShowColumnStatsOverlapProcedure.NAME, ShowColumnStatsOverlapProcedure.builder)
       ,(ShowMetadataTableFilesProcedure.NAME, ShowMetadataTableFilesProcedure.builder)
       ,(ShowMetadataTablePartitionsProcedure.NAME, ShowMetadataTablePartitionsProcedure.builder)
       ,(CreateMetadataTableProcedure.NAME, CreateMetadataTableProcedure.builder)
@@ -84,10 +86,11 @@ object HoodieProcedures {
       ,(ValidateHoodieSyncProcedure.NAME, ValidateHoodieSyncProcedure.builder)
       ,(ShowInvalidParquetProcedure.NAME, ShowInvalidParquetProcedure.builder)
       ,(HiveSyncProcedure.NAME, HiveSyncProcedure.builder)
-      ,(CopyToTempView.NAME, CopyToTempView.builder)
+      ,(CopyToTempViewProcedure.NAME, CopyToTempViewProcedure.builder)
       ,(ShowCommitExtraMetadataProcedure.NAME, ShowCommitExtraMetadataProcedure.builder)
       ,(ShowTablePropertiesProcedure.NAME, ShowTablePropertiesProcedure.builder)
       ,(HelpProcedure.NAME, HelpProcedure.builder)
+      ,(ArchiveCommitsProcedure.NAME, ArchiveCommitsProcedure.builder)
     )
   }
 }

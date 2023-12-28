@@ -18,11 +18,11 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceReadOptions._
+import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
 import org.apache.hudi.common.table.HoodieTableMetaClient
-
+import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.{DATA_BEFORE, DATA_BEFORE_AFTER, OP_KEY_ONLY}
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.functions._
-
 import org.junit.jupiter.api.Assertions.assertEquals
 
 class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
@@ -45,6 +45,51 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
     assertEquals(expectedDeletedCnt, cdcData.where("op = 'd'").count())
   }
 
+  test("Test delete all records in filegroup") {
+    withTempDir { tmp =>
+      val databaseName = "hudi_database"
+      spark.sql(s"create database if not exists $databaseName")
+      spark.sql(s"use $databaseName")
+      val tableName = generateTableName
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+      spark.sql(
+        s"""
+           | create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           | ) using hudi
+           | partitioned by (name)
+           | tblproperties (
+           |   'primaryKey' = 'id',
+           |   'preCombineField' = 'ts',
+           |   'hoodie.table.cdc.enabled' = 'true',
+           |   'hoodie.table.cdc.supplemental.logging.mode' = '$DATA_BEFORE_AFTER',
+           |   type = 'cow'
+           | )
+           | location '$basePath'
+      """.stripMargin)
+      val metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(basePath)
+        .setConf(spark.sessionState.newHadoopConf())
+        .build()
+      spark.sql(s"insert into $tableName values (1, 11, 1000, 'a1'), (2, 12, 1000, 'a2')")
+      assert(spark.sql(s"select _hoodie_file_name from $tableName").distinct().count() == 2)
+      val fgForID1 = spark.sql(s"select _hoodie_file_name from $tableName where id=1").head().get(0)
+      val commitTime1 = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
+      val cdcDataOnly1 = cdcDataFrame(basePath, commitTime1.toLong - 1)
+      cdcDataOnly1.show(false)
+      assertCDCOpCnt(cdcDataOnly1, 2, 0, 0)
+
+      spark.sql(s"delete from $tableName where id = 1")
+      val cdcDataOnly2 = cdcDataFrame(basePath, commitTime1.toLong)
+      assertCDCOpCnt(cdcDataOnly2, 0, 0, 1)
+      assert(spark.sql(s"select _hoodie_file_name from $tableName").distinct().count() == 1)
+      assert(!spark.sql(s"select _hoodie_file_name from $tableName").head().get(0).equals(fgForID1))
+    }
+  }
+
   /**
    * Test CDC in cases that it's a COW/MOR non--partitioned table and `cdcSupplementalLoggingMode` is true or not.
    */
@@ -54,10 +99,16 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
     spark.sql(s"use $databaseName")
 
     Seq("cow", "mor").foreach { tableType =>
-      Seq("cdc_op_key", "cdc_data_before").foreach { cdcSupplementalLoggingMode =>
+      Seq(OP_KEY_ONLY, DATA_BEFORE, DATA_BEFORE_AFTER).foreach { loggingMode =>
         withTempDir { tmp =>
           val tableName = generateTableName
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
+          spark.sql("set " + SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
+          val otherTableProperties = if (tableType == "mor") {
+            "'hoodie.compact.inline'='true', 'hoodie.compact.inline.max.delta.commits'='2',"
+          } else {
+            ""
+          }
           spark.sql(
             s"""
                | create table $tableName (
@@ -70,7 +121,8 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
                |   'primaryKey' = 'id',
                |   'preCombineField' = 'ts',
                |   'hoodie.table.cdc.enabled' = 'true',
-               |   'hoodie.table.cdc.supplemental.logging.mode' = '$cdcSupplementalLoggingMode',
+               |   'hoodie.table.cdc.supplemental.logging.mode' = '${loggingMode.name()}',
+               |   $otherTableProperties
                |   type = '$tableType'
                | )
                | location '$basePath'
@@ -89,7 +141,9 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
 
           spark.sql(s"insert into $tableName values (1, 'a1_v2', 11, 1100)")
           val commitTime2 = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
-          val cdcDataOnly2 = cdcDataFrame(basePath, commitTime2.toLong - 1)
+          // here we use `commitTime1` to query the change data in commit 2.
+          // because `commitTime2` is maybe the ts of the compaction operation, not the write operation.
+          val cdcDataOnly2 = cdcDataFrame(basePath, commitTime1.toLong)
           cdcDataOnly2.show(false)
           assertCDCOpCnt(cdcDataOnly2, 0, 1, 0)
 
@@ -111,13 +165,13 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
 
           spark.sql(s"update $tableName set name = 'a2_v2', ts = 1200 where id = 2")
           val commitTime3 = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
-          val cdcDataOnly3 = cdcDataFrame(basePath, commitTime3.toLong - 1)
+          val cdcDataOnly3 = cdcDataFrame(basePath, commitTime2.toLong)
           cdcDataOnly3.show(false)
           assertCDCOpCnt(cdcDataOnly3, 0, 1, 0)
 
           spark.sql(s"delete from $tableName where id = 3")
           val commitTime4 = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
-          val cdcDataOnly4 = cdcDataFrame(basePath, commitTime4.toLong - 1)
+          val cdcDataOnly4 = cdcDataFrame(basePath, commitTime3.toLong)
           cdcDataOnly4.show(false)
           assertCDCOpCnt(cdcDataOnly4, 0, 0, 1)
 
@@ -136,7 +190,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
                | when not matched then insert *
         """.stripMargin)
           val commitTime5 = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
-          val cdcDataOnly5 = cdcDataFrame(basePath, commitTime5.toLong - 1)
+          val cdcDataOnly5 = cdcDataFrame(basePath, commitTime4.toLong)
           cdcDataOnly5.show(false)
           assertCDCOpCnt(cdcDataOnly5, 1, 1, 0)
 
@@ -163,6 +217,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
         }
       }
     }
+    spark.sessionState.conf.unsetConf(SPARK_SQL_INSERT_INTO_OPERATION.key)
   }
 
   /**
@@ -174,7 +229,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
     spark.sql(s"use $databaseName")
 
     Seq("cow", "mor").foreach { tableType =>
-      Seq("cdc_op_key", "cdc_data_before").foreach { cdcSupplementalLoggingMode =>
+      Seq(OP_KEY_ONLY, DATA_BEFORE).foreach { loggingMode =>
         withTempDir { tmp =>
           val tableName = generateTableName
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
@@ -192,7 +247,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
                |   'primaryKey' = 'id',
                |   'preCombineField' = 'ts',
                |   'hoodie.table.cdc.enabled' = 'true',
-               |   'hoodie.table.cdc.supplemental.logging.mode' = '$cdcSupplementalLoggingMode',
+               |   'hoodie.table.cdc.supplemental.logging.mode' = '${loggingMode.name()}',
                |   'type' = '$tableType'
                | )
                | location '$basePath'

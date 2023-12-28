@@ -24,7 +24,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
-import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.spark.sql._
 import org.apache.spark.sql.types._
@@ -37,7 +37,7 @@ import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 import scala.collection.JavaConversions._
 
 @Tag("functional")
-class TestLayoutOptimization extends HoodieClientTestBase {
+class TestLayoutOptimization extends HoodieSparkClientTestBase {
   var spark: SparkSession = _
 
   val sourceTableSchema =
@@ -111,8 +111,7 @@ class TestLayoutOptimization extends HoodieClientTestBase {
       .option("hoodie.clustering.inline.max.commits", "1")
       .option("hoodie.clustering.plan.strategy.target.file.max.bytes", "1073741824")
       .option("hoodie.clustering.plan.strategy.small.file.limit", "629145600")
-      .option("hoodie.clustering.plan.strategy.max.bytes.per.group", Long.MaxValue.toString)
-      .option("hoodie.clustering.plan.strategy.target.file.max.bytes", String.valueOf(64 * 1024 * 1024L))
+      .option("hoodie.clustering.plan.strategy.max.bytes.per.group", "2147483648")
       .option(DataSourceWriteOptions.ENABLE_ROW_WRITER.key(), clusteringAsRow)
       .option(HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY.key(), layoutOptimizationStrategy)
       .option(HoodieClusteringConfig.LAYOUT_OPTIMIZE_SPATIAL_CURVE_BUILD_METHOD.key(), curveCompositionStrategy)

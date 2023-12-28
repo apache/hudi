@@ -20,6 +20,7 @@
 package org.apache.hudi.integ.testsuite.dag.nodes;
 
 import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -40,10 +41,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer$;
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder;
-import org.apache.spark.sql.catalyst.encoders.RowEncoder;
-import org.apache.spark.sql.catalyst.expressions.Attribute;
 import org.apache.spark.sql.types.StructType;
 import org.slf4j.Logger;
 
@@ -51,11 +49,8 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import scala.Tuple2;
-import scala.collection.JavaConversions;
-import scala.collection.JavaConverters;
 
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
 
@@ -92,7 +87,7 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
         || (itrCountToExecute == -1 && ((curItrCount % validateOnceEveryItr) == 0))) {
       FileSystem fs = new Path(context.getHoodieTestSuiteWriter().getCfg().inputBasePath)
           .getFileSystem(context.getHoodieTestSuiteWriter().getConfiguration());
-      if (context.getHoodieTestSuiteWriter().getCfg().testContinousMode) {
+      if (context.getHoodieTestSuiteWriter().getCfg().testContinuousMode) {
         awaitUntilDeltaStreamerCaughtUp(context, context.getHoodieTestSuiteWriter().getCfg().targetBasePath, fs,
             context.getHoodieTestSuiteWriter().getCfg().inputBasePath);
       }
@@ -192,7 +187,7 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
       waitedSoFar += 20000;
       if (waitedSoFar >= maxWaitTime) {
         throw new AssertionError("DeltaStreamer has not caught up after 5 mins of wait time. Last known checkpoint "
-            + (latestCheckpoint.isPresent() ? latestCheckpoint.get() : "none") + ", expected checkpoint to have caugth up " + latestSubDir);
+            + (latestCheckpoint.isPresent() ? latestCheckpoint.get() : "none") + ", expected checkpoint to have caught up " + latestSubDir);
       }
       log.info("Latest sub directory in input path " + latestSubDir + ", latest checkpoint from deltastreamer "
           + (latestCheckpoint.isPresent() ? latestCheckpoint.get() : "none"));
@@ -222,8 +217,8 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
     // read input and resolve insert, updates, etc.
     Dataset<Row> inputDf = session.read().format("avro").load(inputPath);
     Dataset<Row> trimmedDf = inputDf;
-    if (!config.inputPartitonsToSkipWithValidate().isEmpty()) {
-      trimmedDf = inputDf.filter("instr(" + partitionPathField + ", \'" + config.inputPartitonsToSkipWithValidate() + "\') != 1");
+    if (!config.inputPartitionsToSkipWithValidate().isEmpty()) {
+      trimmedDf = inputDf.filter("instr(" + partitionPathField + ", \'" + config.inputPartitionsToSkipWithValidate() + "\') != 1");
     }
 
     ExpressionEncoder encoder = getEncoder(inputDf.schema());
@@ -244,10 +239,6 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
   }
 
   private ExpressionEncoder getEncoder(StructType schema) {
-    List<Attribute> attributes = JavaConversions.asJavaCollection(schema.toAttributes()).stream()
-        .map(Attribute::toAttribute).collect(Collectors.toList());
-    return RowEncoder.apply(schema)
-        .resolveAndBind(JavaConverters.asScalaBufferConverter(attributes).asScala().toSeq(),
-            SimpleAnalyzer$.MODULE$);
+    return SparkAdapterSupport$.MODULE$.sparkAdapter().getCatalystExpressionUtils().getEncoder(schema);
   }
 }

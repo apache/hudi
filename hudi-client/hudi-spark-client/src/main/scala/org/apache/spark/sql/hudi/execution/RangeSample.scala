@@ -316,6 +316,8 @@ object RangeSampleSort {
         HoodieClusteringConfig.LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE.defaultValue.toString).toInt
       val sample = new RangeSample(zOrderBounds, sampleRdd)
       val rangeBounds = sample.getRangeBounds()
+      if (rangeBounds.size <= 1)
+        return df
       val sampleBounds = {
         val candidateColNumber = rangeBounds.head._1.length
         (0 to candidateColNumber - 1).map { i =>
@@ -340,7 +342,7 @@ object RangeSampleSort {
           val longBound = bound.asInstanceOf[Array[Long]]
           for (i <- 0 to bound.length - 1) {
             for (j <- 0 to fillFactor - 1) {
-              // sample factor shoud not be too large, so it's ok to use 1 / fillfactor as slice
+              // sample factor should not be too large, so it's ok to use 1 / fillfactor as slice
               newBound(j + i*(fillFactor)) = longBound(i) + (j + 1) * (1 / fillFactor.toDouble)
             }
           }
@@ -479,6 +481,8 @@ object RangeSampleSort {
       val sample = new RangeSample(zOrderBounds, sampleRdd)
 
       val rangeBounds = sample.getRangeBounds()
+      if(rangeBounds.size <= 1)
+        return df
 
       implicit val ordering1 = lazyGeneratedOrderings(0)
 
@@ -536,4 +540,3 @@ object RangeSampleSort {
     }
   }
 }
-

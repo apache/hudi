@@ -37,6 +37,7 @@ public enum WriteOperationType {
   BULK_INSERT_PREPPED("bulk_insert_prepped"),
   // delete
   DELETE("delete"),
+  DELETE_PREPPED("delete_prepped"),
   BOOTSTRAP("bootstrap"),
   // insert overwrite with static partitioning
   INSERT_OVERWRITE("insert_overwrite"),
@@ -83,6 +84,8 @@ public enum WriteOperationType {
         return BULK_INSERT_PREPPED;
       case "delete":
         return DELETE;
+      case "delete_prepped":
+        return DELETE_PREPPED;
       case "insert_overwrite":
         return INSERT_OVERWRITE;
       case "delete_partition":
@@ -113,7 +116,7 @@ public enum WriteOperationType {
   }
 
   public static boolean isChangingRecords(WriteOperationType operationType) {
-    return operationType == UPSERT || operationType == UPSERT_PREPPED || operationType == DELETE;
+    return operationType == UPSERT || operationType == UPSERT_PREPPED || operationType == DELETE || operationType == DELETE_PREPPED;
   }
 
   public static boolean isOverwrite(WriteOperationType operationType) {
@@ -126,11 +129,39 @@ public enum WriteOperationType {
   public static boolean isDataChange(WriteOperationType operation) {
     return operation == WriteOperationType.INSERT
         || operation == WriteOperationType.UPSERT
+        || operation == WriteOperationType.UPSERT_PREPPED
         || operation == WriteOperationType.DELETE
+        || operation == WriteOperationType.DELETE_PREPPED
         || operation == WriteOperationType.BULK_INSERT
         || operation == WriteOperationType.DELETE_PARTITION
         || operation == WriteOperationType.INSERT_OVERWRITE
         || operation == WriteOperationType.INSERT_OVERWRITE_TABLE
         || operation == WriteOperationType.BOOTSTRAP;
+  }
+
+  public static boolean canUpdateSchema(WriteOperationType operation) {
+    return !(operation == WriteOperationType.CLUSTER
+        || operation == WriteOperationType.COMPACT
+        || operation == WriteOperationType.INDEX
+        || operation == WriteOperationType.LOG_COMPACT);
+  }
+
+  public static boolean isInsert(WriteOperationType operation) {
+    return operation == WriteOperationType.INSERT
+        || operation == WriteOperationType.INSERT_PREPPED
+        || operation == WriteOperationType.BULK_INSERT
+        || operation == WriteOperationType.BULK_INSERT_PREPPED
+        || operation == WriteOperationType.INSERT_OVERWRITE
+        || operation == WriteOperationType.INSERT_OVERWRITE_TABLE;
+
+  }
+
+  public static boolean isUpsert(WriteOperationType operation) {
+    return operation == WriteOperationType.UPSERT
+        || operation == WriteOperationType.UPSERT_PREPPED;
+  }
+
+  public static boolean isDelete(WriteOperationType operation) {
+    return operation == DELETE || operation == DELETE_PREPPED;
   }
 }

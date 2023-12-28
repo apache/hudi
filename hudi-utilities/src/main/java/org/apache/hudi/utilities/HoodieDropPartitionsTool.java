@@ -24,7 +24,10 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimeGenerator;
+import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -43,10 +46,10 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -103,7 +106,7 @@ import scala.Tuple2;
  */
 public class HoodieDropPartitionsTool implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieDropPartitionsTool.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieDropPartitionsTool.class);
   // Spark context
   private final transient JavaSparkContext jsc;
   // config
@@ -289,7 +292,9 @@ public class HoodieDropPartitionsTool implements Serializable {
   public void run() {
     try {
       if (StringUtils.isNullOrEmpty(cfg.instantTime)) {
-        cfg.instantTime = HoodieActiveTimeline.createNewInstantTime();
+        TimeGenerator timeGenerator = TimeGenerators
+            .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(cfg.basePath), jsc.hadoopConfiguration());
+        cfg.instantTime = HoodieActiveTimeline.createNewInstantTime(true, timeGenerator);
       }
       LOG.info(cfg.toString());
 
@@ -382,8 +387,9 @@ public class HoodieDropPartitionsTool implements Serializable {
     }
     hiveConf.addResource(fs.getConf());
     LOG.info("Hive Conf => " + hiveConf.getAllProperties().toString());
-    HiveSyncTool hiveSyncTool = new HiveSyncTool(hiveSyncConfig.getProps(), hiveConf);
-    hiveSyncTool.syncHoodieTable();
+    try (HiveSyncTool hiveSyncTool = new HiveSyncTool(hiveSyncConfig.getProps(), hiveConf)) {
+      hiveSyncTool.syncHoodieTable();
+    }
   }
 
   /**

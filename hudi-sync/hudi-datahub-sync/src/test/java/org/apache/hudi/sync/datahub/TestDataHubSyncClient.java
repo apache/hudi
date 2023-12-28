@@ -19,13 +19,14 @@
 
 package org.apache.hudi.sync.datahub;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
+
 import datahub.client.MetadataWriteResponse;
 import datahub.client.rest.RestEmitter;
 import datahub.event.MetadataChangeProposalWrapper;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,10 +35,12 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
+
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
 import static org.mockito.ArgumentMatchers.any;
@@ -80,7 +83,7 @@ public class TestDataHubSyncClient {
   }
 
   @Test
-  public void testUpdateTableSchemaInvokesRestEmiiter() throws IOException {
+  public void testUpdateTableSchemaInvokesRestEmitter() throws IOException {
     Properties props = new Properties();
     props.put(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), DummyPartitionValueExtractor.class.getName());
     props.put(META_SYNC_BASE_PATH.key(), tableBasePath);

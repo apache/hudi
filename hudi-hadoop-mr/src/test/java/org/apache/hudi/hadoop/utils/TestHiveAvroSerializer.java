@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hadoop.utils;
 
+import org.apache.avro.generic.GenericArray;
 import org.apache.hudi.avro.HoodieAvroUtils;
 
 import org.apache.avro.LogicalTypes;
@@ -57,11 +58,17 @@ public class TestHiveAvroSerializer {
       + "{\"name\":\"col8\",\"type\":[\"null\",\"boolean\"],\"default\":null},"
       + "{\"name\":\"col9\",\"type\":[\"null\",\"bytes\"],\"default\":null},"
       + "{\"name\":\"par\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null}]}";
-  private static final String NESTED_CHEMA = "{\"name\":\"MyClass\",\"type\":\"record\",\"namespace\":\"com.acme.avro\",\"fields\":["
+  private static final String NESTED_SCHEMA = "{\"name\":\"MyClass\",\"type\":\"record\",\"namespace\":\"com.acme.avro\",\"fields\":["
       + "{\"name\":\"firstname\",\"type\":\"string\"},"
       + "{\"name\":\"lastname\",\"type\":\"string\"},"
+      + "{\"name\":\"scores\",\"type\": {\"type\": \"array\", \"items\": [\"null\", \"int\"]}},"
       + "{\"name\":\"student\",\"type\":{\"name\":\"student\",\"type\":\"record\",\"fields\":["
-      + "{\"name\":\"firstname\",\"type\":[\"null\" ,\"string\"],\"default\": null},{\"name\":\"lastname\",\"type\":[\"null\" ,\"string\"],\"default\": null}]}}]}";
+      + "{\"name\":\"firstname\",\"type\":[\"null\" ,\"string\"],\"default\": null},"
+      + "{\"name\":\"lastname\",\"type\":[\"null\" ,\"string\"],\"default\": null}]}},"
+      + "{\"name\":\"teachers\",\"type\":{\"type\":\"array\",\"items\":{\"name\":\"teachers\",\"type\":\"record\","
+      + "\"fields\":[{\"name\":\"firstname\",\"type\":[\"null\",\"string\"],\"default\":null},"
+      + "{\"name\":\"lastname\",\"type\":[\"null\",\"string\"],\"default\":null}]}}}"
+      + "]}";
 
   @Test
   public void testSerialize() {
@@ -77,12 +84,12 @@ public class TestHiveAvroSerializer {
     avroRecord.put("col4", HoodieAvroUtils.DECIMAL_CONVERSION.toFixed(bd, currentDecimalType, currentDecimalType.getLogicalType()));
     avroRecord.put("col5", "2011-01-01");
     avroRecord.put("col6", 18987);
-    avroRecord.put("col7", 1640491505000000L);
+    avroRecord.put("col7", 1640491505111222L);
     avroRecord.put("col8", false);
     ByteBuffer bb = ByteBuffer.wrap(new byte[]{97, 48, 53});
     avroRecord.put("col9", bb);
     assertTrue(GenericData.get().validate(avroSchema, avroRecord));
-    ArrayWritable writable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(avroRecord, avroSchema);
+    ArrayWritable writable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(avroRecord, avroSchema, true);
 
     List<Writable> writableList = Arrays.stream(writable.get()).collect(Collectors.toList());
     writableList.remove(writableList.size() - 1);
@@ -99,25 +106,29 @@ public class TestHiveAvroSerializer {
     StructTypeInfo rowTypeInfoClip = (StructTypeInfo) TypeInfoFactory.getStructTypeInfo(columnNameListClip, columnTypeListClip);
     GenericRecord testRecordClip = new HiveAvroSerializer(new ArrayWritableObjectInspector(rowTypeInfoClip), columnNameListClip, columnTypeListClip).serialize(clipWritable, avroSchema);
     assertTrue(GenericData.get().validate(avroSchema, testRecordClip));
-
   }
 
   @Test
   public void testNestedValueSerialize() {
-    Schema nestedSchema = new Schema.Parser().parse(NESTED_CHEMA);
+    Schema nestedSchema = new Schema.Parser().parse(NESTED_SCHEMA);
     GenericRecord avroRecord = new GenericData.Record(nestedSchema);
     avroRecord.put("firstname", "person1");
     avroRecord.put("lastname", "person2");
+    GenericArray scores = new GenericData.Array<>(avroRecord.getSchema().getField("scores").schema(), Arrays.asList(1,2));
+    avroRecord.put("scores", scores);
     GenericRecord studentRecord = new GenericData.Record(avroRecord.getSchema().getField("student").schema());
     studentRecord.put("firstname", "person1");
     studentRecord.put("lastname", "person2");
     avroRecord.put("student", studentRecord);
 
-    assertTrue(GenericData.get().validate(nestedSchema, avroRecord));
-    ArrayWritable writable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(avroRecord, nestedSchema);
+    GenericArray teachers = new GenericData.Array<>(avroRecord.getSchema().getField("teachers").schema(), Arrays.asList(studentRecord));
+    avroRecord.put("teachers", teachers);
 
-    List<TypeInfo> columnTypeList = createHiveTypeInfoFrom("string,string,struct<firstname:string,lastname:string>");
-    List<String> columnNameList = createHiveColumnsFrom("firstname,lastname,student");
+    assertTrue(GenericData.get().validate(nestedSchema, avroRecord));
+    ArrayWritable writable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(avroRecord, nestedSchema, true);
+
+    List<TypeInfo> columnTypeList = createHiveTypeInfoFrom("string,string,array<int>,struct<firstname:string,lastname:string>,array<struct<firstname:string,lastname:string>>");
+    List<String> columnNameList = createHiveColumnsFrom("firstname,lastname,arrayRecord,student,teachers");
     StructTypeInfo rowTypeInfo = (StructTypeInfo) TypeInfoFactory.getStructTypeInfo(columnNameList, columnTypeList);
     GenericRecord testRecord = new HiveAvroSerializer(new ArrayWritableObjectInspector(rowTypeInfo), columnNameList, columnTypeList).serialize(writable, nestedSchema);
     assertTrue(GenericData.get().validate(nestedSchema, testRecord));

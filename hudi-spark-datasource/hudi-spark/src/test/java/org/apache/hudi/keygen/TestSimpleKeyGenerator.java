@@ -96,7 +96,11 @@ public class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
 
   @Test
   public void testNullRecordKeyFields() {
-    assertThrows(IllegalArgumentException.class, () -> new SimpleKeyGenerator(getPropertiesWithoutRecordKeyProp()));
+    GenericRecord record = getRecord();
+    Assertions.assertThrows(IndexOutOfBoundsException.class, () ->  {
+      BaseKeyGenerator keyGenerator = new SimpleKeyGenerator(getPropertiesWithoutRecordKeyProp());
+      keyGenerator.getRecordKey(record);
+    });
   }
 
   @Test

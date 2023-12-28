@@ -18,32 +18,27 @@
 
 package org.apache.hudi.common.util.queue;
 
-import org.apache.hudi.keygen.constant.KeyGeneratorType;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import org.apache.hudi.common.config.EnumDescription;
+import org.apache.hudi.common.config.EnumFieldDescription;
 
 /**
  * Types of {@link org.apache.hudi.common.util.queue.HoodieExecutor}.
  */
+@EnumDescription("Types of executor that implements org.apache.hudi.common.util.queue.HoodieExecutor. The executor orchestrates concurrent "
+    + "producers and consumers communicating through a message queue.")
 public enum ExecutorType {
 
-  /**
-   * Executor which orchestrates concurrent producers and consumers communicating through a bounded in-memory message queue using LinkedBlockingQueue.
-   */
+  @EnumFieldDescription("Executor which orchestrates concurrent producers and consumers communicating through a bounded in-memory message queue "
+      + "using LinkedBlockingQueue. This queue will use extra lock to balance producers and consumers.")
   BOUNDED_IN_MEMORY,
 
-  /**
-   * Executor which orchestrates concurrent producers and consumers communicating through disruptor as a lock free message queue
-   * to gain better writing performance. Although DisruptorExecutor is still an experimental feature.
-   */
-  DISRUPTOR;
+  @EnumFieldDescription("Executor which orchestrates concurrent producers and consumers communicating through disruptor as a lock free message queue "
+    + "to gain better writing performance. Although DisruptorExecutor is still an experimental feature.")
+  DISRUPTOR,
 
-  public static List<String> getNames() {
-    List<String> names = new ArrayList<>(ExecutorType.values().length);
-    Arrays.stream(KeyGeneratorType.values())
-        .forEach(x -> names.add(x.name()));
-    return names;
-  }
+  @EnumFieldDescription("Executor with no inner message queue and no inner lock. Consuming and writing records from iterator directly. "
+    + "The advantage is that there is no need for additional memory and cpu resources due to lock or multithreading. "
+    + "The disadvantage is that the executor is a single-write-single-read model, cannot support functions such as speed limit "
+    + "and can not de-couple the network read (shuffle read) and network write (writing objects/files to storage) anymore.")
+  SIMPLE
 }

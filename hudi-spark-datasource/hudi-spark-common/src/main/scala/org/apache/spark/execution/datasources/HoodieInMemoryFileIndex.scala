@@ -24,8 +24,8 @@ import org.apache.hudi.SparkAdapterSupport
 import org.apache.spark.HoodieHadoopFSUtils
 import org.apache.spark.metrics.source.HiveCatalogMetrics
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, Expression}
 import org.apache.spark.sql.catalyst.{InternalRow, expressions}
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.types.StructType
 
@@ -41,7 +41,7 @@ class HoodieInMemoryFileIndex(sparkSession: SparkSession,
   with SparkAdapterSupport {
 
   /**
-   * Returns all valid files grouped into partitions when the data is partitioned. If the data is unpartitioned,
+   * Returns all valid files grouped into partitions when the data is partitioned. If the data is non-partitioned,
    * this will return a single partition with no partition values
    *
    * NOTE: This method replicates the one it overrides, however it uses custom method
@@ -49,7 +49,8 @@ class HoodieInMemoryFileIndex(sparkSession: SparkSession,
    */
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
     val selectedPartitions = if (partitionSpec().partitionColumns.isEmpty) {
-      PartitionDirectory(InternalRow.empty, allFiles().filter(f => isDataPath(f.getPath))) :: Nil
+      sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
+        InternalRow.empty, allFiles().filter(f => isDataPath(f.getPath))) :: Nil
     } else {
       prunePartitions(partitionFilters, partitionSpec()).map {
         case PartitionPath(values, path) =>
@@ -62,7 +63,7 @@ class HoodieInMemoryFileIndex(sparkSession: SparkSession,
               // Directory does not exist, or has no children files
               Nil
           }
-          PartitionDirectory(values, files)
+          sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(values, files)
       }
     }
     logTrace("Selected files after partition pruning:\n\t" + selectedPartitions.mkString("\n\t"))

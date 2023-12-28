@@ -90,11 +90,18 @@ public class TestConfigurations {
           DataTypes.FIELD("gender", DataTypes.CHAR(1)), // removed field
           DataTypes.FIELD("age", DataTypes.INT()),
           DataTypes.FIELD("ts", DataTypes.TIMESTAMP(6)),
+          DataTypes.FIELD("f_struct", DataTypes.ROW(
+              DataTypes.FIELD("f0", DataTypes.INT()),
+              DataTypes.FIELD("f1", DataTypes.STRING()),
+              DataTypes.FIELD("drop_add", DataTypes.STRING()),
+              DataTypes.FIELD("change_type", DataTypes.INT()))),
+          DataTypes.FIELD("f_map", DataTypes.MAP(DataTypes.STRING(), DataTypes.INT())),
+          DataTypes.FIELD("f_array", DataTypes.ARRAY(DataTypes.INT())),
           DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
       .notNull();
 
   public static final RowType ROW_TYPE_EVOLUTION_BEFORE = (RowType) ROW_DATA_TYPE_EVOLUTION_BEFORE.getLogicalType();
-
+  // f0 int, f2 int, f1 string, renamed_change_type bigint, f3 string, drop_add string
   public static final DataType ROW_DATA_TYPE_EVOLUTION_AFTER = DataTypes.ROW(
           DataTypes.FIELD("uuid", DataTypes.VARCHAR(20)),
           DataTypes.FIELD("age", DataTypes.VARCHAR(10)), // changed type, reordered
@@ -102,10 +109,42 @@ public class TestConfigurations {
           DataTypes.FIELD("last_name", DataTypes.VARCHAR(10)), // new field
           DataTypes.FIELD("salary", DataTypes.DOUBLE()), // new field
           DataTypes.FIELD("ts", DataTypes.TIMESTAMP(6)),
+          DataTypes.FIELD("f_struct", DataTypes.ROW(
+              DataTypes.FIELD("f2", DataTypes.INT()), // new field added in the middle of struct
+              DataTypes.FIELD("f1", DataTypes.STRING()),
+              DataTypes.FIELD("renamed_change_type", DataTypes.BIGINT()),
+              DataTypes.FIELD("f3", DataTypes.STRING()),
+              DataTypes.FIELD("drop_add", DataTypes.STRING()),
+              DataTypes.FIELD("f0", DataTypes.DECIMAL(20, 0)))),
+          DataTypes.FIELD("f_map", DataTypes.MAP(DataTypes.STRING(), DataTypes.DOUBLE())),
+          DataTypes.FIELD("f_array", DataTypes.ARRAY(DataTypes.DOUBLE())),
+          DataTypes.FIELD("new_row_col", DataTypes.ROW(
+              DataTypes.FIELD("f0", DataTypes.BIGINT()),
+              DataTypes.FIELD("f1", DataTypes.STRING()))),
+          DataTypes.FIELD("new_array_col", DataTypes.ARRAY(DataTypes.STRING())),
+          DataTypes.FIELD("new_map_col", DataTypes.MAP(DataTypes.STRING(), DataTypes.STRING())),
           DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
       .notNull();
 
+  public static final DataType ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE = DataTypes.ROW(
+          DataTypes.FIELD("f_timestamp", DataTypes.TIMESTAMP(3)),
+          DataTypes.FIELD("f_date", DataTypes.DATE()),
+          DataTypes.FIELD("f_decimal", DataTypes.DECIMAL(3, 2)))
+      .notNull();
+
+  public static final RowType ROW_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE = (RowType) ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE.getLogicalType();
+
   public static final RowType ROW_TYPE_EVOLUTION_AFTER = (RowType) ROW_DATA_TYPE_EVOLUTION_AFTER.getLogicalType();
+
+  public static final DataType ROW_DATA_TYPE_BIGINT = DataTypes.ROW(
+          DataTypes.FIELD("uuid", DataTypes.BIGINT()),
+          DataTypes.FIELD("name", DataTypes.VARCHAR(10)),
+          DataTypes.FIELD("age", DataTypes.INT()),
+          DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)),
+          DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
+      .notNull();
+
+  public static final RowType ROW_TYPE_BIGINT = (RowType) ROW_DATA_TYPE_BIGINT.getLogicalType();
 
   public static String getCreateHoodieTableDDL(String tableName, Map<String, String> options) {
     return getCreateHoodieTableDDL(tableName, options, true, "partition");

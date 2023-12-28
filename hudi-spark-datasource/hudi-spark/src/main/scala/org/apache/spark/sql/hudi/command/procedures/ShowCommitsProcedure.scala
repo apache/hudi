@@ -33,12 +33,13 @@ class ShowCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure 
   var sortByFieldParameter: ProcedureParameter = _
 
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
     StructField("commit_time", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("state_transition_time", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("action", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("total_bytes_written", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("total_files_added", DataTypes.LongType, nullable = true, Metadata.empty),
@@ -51,6 +52,7 @@ class ShowCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure 
 
   private val METADATA_OUTPUT_TYPE = new StructType(Array[StructField](
     StructField("commit_time", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("state_transition_time", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("action", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("partition", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("file_id", DataTypes.StringType, nullable = true, Metadata.empty),
@@ -104,7 +106,7 @@ class ShowCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure 
       for (partitionWriteStat <- commitMetadata.getPartitionToWriteStats.entrySet) {
         for (hoodieWriteStat <- partitionWriteStat.getValue) {
           rows.add(Row(
-            commit.getTimestamp, commit.getAction, hoodieWriteStat.getPartitionPath,
+            commit.getTimestamp, commit.getCompletionTime, commit.getAction, hoodieWriteStat.getPartitionPath,
             hoodieWriteStat.getFileId, hoodieWriteStat.getPrevCommit, hoodieWriteStat.getNumWrites,
             hoodieWriteStat.getNumInserts, hoodieWriteStat.getNumDeletes, hoodieWriteStat.getNumUpdateWrites,
             hoodieWriteStat.getTotalWriteErrors, hoodieWriteStat.getTotalLogBlocks, hoodieWriteStat.getTotalCorruptLogBlock,
@@ -134,7 +136,7 @@ class ShowCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure 
     for (i <- 0 until newCommits.size) {
       val commit = newCommits.get(i)
       val commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(commit).get, classOf[HoodieCommitMetadata])
-      rows.add(Row(commit.getTimestamp, commit.getAction, commitMetadata.fetchTotalBytesWritten, commitMetadata.fetchTotalFilesInsert,
+      rows.add(Row(commit.getTimestamp, commit.getCompletionTime, commit.getAction, commitMetadata.fetchTotalBytesWritten, commitMetadata.fetchTotalFilesInsert,
         commitMetadata.fetchTotalFilesUpdated, commitMetadata.fetchTotalPartitionsWritten,
         commitMetadata.fetchTotalRecordsWritten, commitMetadata.fetchTotalUpdateRecordsWritten,
         commitMetadata.fetchTotalWriteErrors))

@@ -81,4 +81,30 @@ class TestHelpProcedure extends HoodieSparkProcedureTestBase {
     })
   }
 
+  test("Test whether the result of Call help Procedure are in order") {
+    val help: util.List[Row] = spark.sql("call help").collectAsList()
+    assert(help.size() == 1)
+
+    var helpStr: String = help.get(0).toString()
+    val line = "\n"
+    val tab = "\t"
+    val result = new StringBuilder
+    result.append("synopsis").append(line)
+      .append(tab).append("call [command]([key1]=>[value1],[key2]=>[value2])").append(line)
+    result.append("commands and description").append(line)
+    // get ordered result from help result
+    helpStr = helpStr.replace(result.toString(), "")
+    result.clear()
+    result.append("You can use 'call help(cmd=>[command])' to view the detailed parameters of the command").append(line)
+    helpStr = helpStr.replace(result.toString(), "")
+
+    val orderedResult = helpStr.split(line).toList
+    val procedures: Map[String, Supplier[ProcedureBuilder]] = HoodieProcedures.procedures()
+
+    // check all procedures
+    procedures.keySet.toList.sortWith(_ < _).zipWithIndex.foreach { case (name, index) =>
+      // check whether name is ordering
+      assert(orderedResult(index).contains(name))
+    }
+  }
 }

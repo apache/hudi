@@ -27,7 +27,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-
 /**
  * Timeline Layout responsible for applying specific filters when generating timeline instants.
  */

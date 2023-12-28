@@ -18,19 +18,23 @@
 
 package org.apache.hudi.utilities.checkpointing;
 
-import java.io.IOException;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.utilities.config.HoodieStreamerConfig;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+
+import java.io.IOException;
+
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
 /**
- * Provide the initial checkpoint for delta streamer.
+ * Provide the initial checkpoint for Hudi Streamer.
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public abstract class InitialCheckPointProvider {
@@ -38,17 +42,15 @@ public abstract class InitialCheckPointProvider {
   protected transient FileSystem fs;
   protected transient TypedProperties props;
 
-  static class Config {
-    private static String CHECKPOINT_PROVIDER_PATH_PROP = "hoodie.deltastreamer.checkpoint.provider.path";
-  }
-
   /**
    * Construct InitialCheckPointProvider.
-   * @param props All properties passed to Delta Streamer
+   *
+   * @param props All properties passed to Hudi Streamer
    */
   public InitialCheckPointProvider(TypedProperties props) {
     this.props = props;
-    this.path = new Path(props.getString(Config.CHECKPOINT_PROVIDER_PATH_PROP));
+    this.path = new Path(
+        getStringWithAltKeys(props, HoodieStreamerConfig.CHECKPOINT_PROVIDER_PATH));
   }
 
   /**
@@ -65,7 +67,7 @@ public abstract class InitialCheckPointProvider {
   }
 
   /**
-   * Get checkpoint string recognizable for delta streamer.
+   * Get checkpoint string recognizable for Hudi Streamer.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract String getCheckpoint() throws HoodieException;

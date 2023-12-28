@@ -22,7 +22,6 @@ package org.apache.hudi.client.clustering.plan.strategy;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -36,7 +35,7 @@ import java.util.stream.Stream;
  * In this strategy, clustering group for each partition is built in the same way as {@link SparkSizeBasedClusteringPlanStrategy}.
  * The difference is that the output groups is 1 and file group id remains the same.
  */
-public class SparkSingleFileSortPlanStrategy<T extends HoodieRecordPayload<T>>
+public class SparkSingleFileSortPlanStrategy<T>
     extends SparkSizeBasedClusteringPlanStrategy<T> {
 
   public SparkSingleFileSortPlanStrategy(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {

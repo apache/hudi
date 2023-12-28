@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 
 import java.io.Serializable;
@@ -123,9 +124,15 @@ public class FileSlice implements Serializable {
   }
 
   /**
-   * Returns true if there is no data file and no log files. Happens as part of pending compaction
-   * 
-   * @return
+   * Returns the latest instant time of the file slice.
+   */
+  public String getLatestInstantTime() {
+    Option<String> latestDeltaCommitTime = getLatestLogFile().map(HoodieLogFile::getDeltaCommitTime);
+    return latestDeltaCommitTime.isPresent() ? HoodieTimeline.maxInstant(latestDeltaCommitTime.get(), getBaseInstantTime()) : getBaseInstantTime();
+  }
+
+  /**
+   * Returns true if there is no data file and no log files. Happens as part of pending compaction.
    */
   public boolean isEmpty() {
     return (baseFile == null) && (logFiles.isEmpty());

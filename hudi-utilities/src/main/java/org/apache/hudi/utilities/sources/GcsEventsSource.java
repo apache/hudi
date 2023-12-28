@@ -18,33 +18,41 @@
 
 package org.apache.hudi.utilities.sources;
 
-import com.google.pubsub.v1.ReceivedMessage;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.utilities.UtilHelpers;
+import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.hudi.utilities.sources.helpers.gcs.PubsubMessagesFetcher;
 import org.apache.hudi.utilities.sources.helpers.gcs.MessageBatch;
 import org.apache.hudi.utilities.sources.helpers.gcs.MessageValidity;
 import org.apache.hudi.utilities.sources.helpers.gcs.MetadataMessage;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.hudi.utilities.sources.helpers.gcs.PubsubMessagesFetcher;
+
+import com.google.pubsub.v1.ReceivedMessage;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.types.StructType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.apache.hudi.utilities.sources.helpers.CloudStoreIngestionConfig.ACK_MESSAGES;
-import static org.apache.hudi.utilities.sources.helpers.CloudStoreIngestionConfig.ACK_MESSAGES_DEFAULT_VALUE;
-import static org.apache.hudi.utilities.sources.helpers.CloudStoreIngestionConfig.BATCH_SIZE_CONF;
-import static org.apache.hudi.utilities.sources.helpers.CloudStoreIngestionConfig.DEFAULT_BATCH_SIZE;
-import static org.apache.hudi.utilities.sources.helpers.gcs.GcsIngestionConfig.GOOGLE_PROJECT_ID;
-import static org.apache.hudi.utilities.sources.helpers.gcs.GcsIngestionConfig.PUBSUB_SUBSCRIPTION_ID;
+import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.ACK_MESSAGES;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.BATCH_SIZE_CONF;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.MAX_FETCH_TIME_PER_SYNC_SECS;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.MAX_NUM_MESSAGES_PER_SYNC;
+import static org.apache.hudi.utilities.config.GCSEventsSourceConfig.GOOGLE_PROJECT_ID;
+import static org.apache.hudi.utilities.config.GCSEventsSourceConfig.PUBSUB_SUBSCRIPTION_ID;
 import static org.apache.hudi.utilities.sources.helpers.gcs.MessageValidity.ProcessingDecision.DO_SKIP;
 
 /*
@@ -64,7 +72,7 @@ $ bin/spark-submit \
 --driver-memory 4g \
 --executor-memory 4g \
 --packages com.google.cloud:google-cloud-pubsub:1.120.0 \
---class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer \
+--class org.apache.hudi.utilities.streamer.HoodieStreamer \
 absolute_path_to/hudi-utilities-bundle_2.12-0.13.0-SNAPSHOT.jar \
 --source-class org.apache.hudi.utilities.sources.GcsEventsSource \
 --op INSERT \
@@ -75,11 +83,10 @@ absolute_path_to/hudi-utilities-bundle_2.12-0.13.0-SNAPSHOT.jar \
 --allow-commit-on-no-checkpoint-change \
 --hoodie-conf hoodie.datasource.write.insert.drop.duplicates=true \
 --hoodie-conf hoodie.combine.before.insert=true \
---hoodie-conf hoodie.datasource.write.keygenerator.class=org.apache.hudi.keygen.ComplexKeyGenerator \
 --hoodie-conf hoodie.datasource.write.partitionpath.field=bucket \
---hoodie-conf hoodie.deltastreamer.source.gcs.project.id=infra-dev-358110 \
---hoodie-conf hoodie.deltastreamer.source.gcs.subscription.id=gcs-obj-8-sub-1 \
---hoodie-conf hoodie.deltastreamer.source.cloud.meta.ack=true \
+--hoodie-conf hoodie.streamer.source.gcs.project.id=infra-dev-358110 \
+--hoodie-conf hoodie.streamer.source.gcs.subscription.id=gcs-obj-8-sub-1 \
+--hoodie-conf hoodie.streamer.source.cloud.meta.ack=true \
 --table-type COPY_ON_WRITE \
 --target-base-path file:\/\/\/absolute_path_to/meta-gcs \
 --target-table gcs_meta \
@@ -96,22 +103,25 @@ absolute_path_to/hudi-utilities-bundle_2.12-0.13.0-SNAPSHOT.jar \
 public class GcsEventsSource extends RowSource {
 
   private final PubsubMessagesFetcher pubsubMessagesFetcher;
+  private final SchemaProvider schemaProvider;
   private final boolean ackMessages;
 
   private final List<String> messagesToAck = new ArrayList<>();
 
   private static final String CHECKPOINT_VALUE_ZERO = "0";
 
-  private static final Logger LOG = LogManager.getLogger(GcsEventsSource.class);
+  private static final Logger LOG = LoggerFactory.getLogger(GcsEventsSource.class);
 
   public GcsEventsSource(TypedProperties props, JavaSparkContext jsc, SparkSession spark,
                          SchemaProvider schemaProvider) {
     this(
             props, jsc, spark, schemaProvider,
             new PubsubMessagesFetcher(
-                    props.getString(GOOGLE_PROJECT_ID), props.getString(PUBSUB_SUBSCRIPTION_ID),
-                    props.getInteger(BATCH_SIZE_CONF, DEFAULT_BATCH_SIZE)
-            )
+                getStringWithAltKeys(props, GOOGLE_PROJECT_ID),
+                getStringWithAltKeys(props, PUBSUB_SUBSCRIPTION_ID),
+                getIntWithAltKeys(props, BATCH_SIZE_CONF),
+                getIntWithAltKeys(props, MAX_NUM_MESSAGES_PER_SYNC),
+                getIntWithAltKeys(props, MAX_FETCH_TIME_PER_SYNC_SECS))
     );
   }
 
@@ -120,7 +130,8 @@ public class GcsEventsSource extends RowSource {
     super(props, jsc, spark, schemaProvider);
 
     this.pubsubMessagesFetcher = pubsubMessagesFetcher;
-    this.ackMessages = props.getBoolean(ACK_MESSAGES, ACK_MESSAGES_DEFAULT_VALUE);
+    this.ackMessages = getBooleanWithAltKeys(props, ACK_MESSAGES);
+    this.schemaProvider = schemaProvider;
 
     LOG.info("Created GcsEventsSource");
   }
@@ -128,8 +139,14 @@ public class GcsEventsSource extends RowSource {
   @Override
   protected Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
     LOG.info("fetchNextBatch(): Input checkpoint: " + lastCkptStr);
-
-    MessageBatch messageBatch = fetchFileMetadata();
+    MessageBatch messageBatch;
+    try {
+      messageBatch = fetchFileMetadata();
+    } catch (HoodieException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new HoodieReadFromSourceException("Failed to fetch file metadata from GCS events source", e);
+    }
 
     if (messageBatch.isEmpty()) {
       LOG.info("No new data. Returning empty batch with checkpoint value: " + CHECKPOINT_VALUE_ZERO);
@@ -140,7 +157,12 @@ public class GcsEventsSource extends RowSource {
 
     LOG.info("Returning checkpoint value: " + CHECKPOINT_VALUE_ZERO);
 
-    return Pair.of(Option.of(sparkSession.read().json(eventRecords)), CHECKPOINT_VALUE_ZERO);
+    StructType sourceSchema = UtilHelpers.getSourceSchema(schemaProvider);
+    if (sourceSchema != null) {
+      return Pair.of(Option.of(sparkSession.read().schema(sourceSchema).json(eventRecords)), CHECKPOINT_VALUE_ZERO);
+    } else {
+      return Pair.of(Option.of(sparkSession.read().json(eventRecords)), CHECKPOINT_VALUE_ZERO);
+    }
   }
 
   @Override
@@ -198,7 +220,7 @@ public class GcsEventsSource extends RowSource {
       pubsubMessagesFetcher.sendAcks(messagesToAck);
       messagesToAck.clear();
     } catch (IOException e) {
-      throw new HoodieException("Error when acknowledging messages from Pubsub", e);
+      throw new HoodieReadFromSourceException("Error when acknowledging messages from Pubsub", e);
     }
   }
 

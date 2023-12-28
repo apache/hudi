@@ -94,7 +94,7 @@ public class DeltaGenerator implements Serializable {
         FileSystem fs = FSUtils.getFs(oldInputDir.toString(), deltaOutputConfig.getConfiguration());
         fs.delete(oldInputDir, true);
       } catch (IOException e) {
-        log.error("Failed to delete older input data direcory " + oldInputDir, e);
+        log.error("Failed to delete older input data directory " + oldInputDir, e);
       }
     }
 

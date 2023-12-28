@@ -18,15 +18,14 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.client.utils.SparkRowSerDe;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieKeyException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils$;
 import org.apache.spark.sql.Row;
@@ -36,9 +35,11 @@ import org.apache.spark.sql.types.DateType;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.types.TimestampType;
 import org.apache.spark.unsafe.types.UTF8String;
-import scala.Function1;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.ThreadSafe;
+
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -47,7 +48,10 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
+import scala.Function1;
+
 import static org.apache.hudi.common.util.CollectionUtils.tail;
+import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_COMPOSITE_KEY_FILED_VALUE;
 import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_RECORD_KEY_PARTS_SEPARATOR;
 import static org.apache.hudi.keygen.KeyGenUtils.EMPTY_RECORDKEY_PLACEHOLDER;
 import static org.apache.hudi.keygen.KeyGenUtils.NULL_RECORDKEY_PLACEHOLDER;
@@ -65,7 +69,7 @@ import static org.apache.hudi.keygen.KeyGenUtils.NULL_RECORDKEY_PLACEHOLDER;
 @ThreadSafe
 public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements SparkKeyGeneratorInterface {
 
-  private static final Logger LOG = LogManager.getLogger(BuiltinKeyGenerator.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BuiltinKeyGenerator.class);
 
   private static final String COMPOSITE_KEY_FIELD_VALUE_INFIX = ":";
 
@@ -151,11 +155,12 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    * NOTE: This method has to stay final (so that it's easier for JIT compiler to apply certain
    *       optimizations, like inlining)
    */
-  protected final String combineRecordKey(Object... recordKeyParts) {
+  protected final String combineRecordKey(List<String> fieldNames, List<Object> recordKeyParts) {
     return combineRecordKeyInternal(
         StringPartitionPathFormatter.JavaStringBuilder::new,
         BuiltinKeyGenerator::toString,
         BuiltinKeyGenerator::handleNullRecordKey,
+        fieldNames,
         recordKeyParts
     );
   }
@@ -164,11 +169,12 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    * NOTE: This method has to stay final (so that it's easier for JIT compiler to apply certain
    *       optimizations, like inlining)
    */
-  protected final UTF8String combineRecordKeyUnsafe(Object... recordKeyParts) {
+  protected final UTF8String combineRecordKeyUnsafe(List<String> fieldNames, List<Object> recordKeyParts) {
     return combineRecordKeyInternal(
         UTF8StringPartitionPathFormatter.UTF8StringBuilder::new,
         BuiltinKeyGenerator::toUTF8String,
         BuiltinKeyGenerator::handleNullRecordKey,
+        fieldNames,
         recordKeyParts
     );
   }
@@ -205,18 +211,20 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
       Supplier<PartitionPathFormatterBase.StringBuilder<S>> builderFactory,
       Function<Object, S> converter,
       Function<S, S> emptyKeyPartHandler,
-      Object... recordKeyParts
+      List<String> fieldNames,
+      List<Object> recordKeyParts
   ) {
-    if (recordKeyParts.length == 1) {
-      return emptyKeyPartHandler.apply(converter.apply(recordKeyParts[0]));
+    if (recordKeyParts.size() == 1) {
+      return emptyKeyPartHandler.apply(converter.apply(recordKeyParts.get(0)));
     }
 
     PartitionPathFormatterBase.StringBuilder<S> sb = builderFactory.get();
-    for (int i = 0; i < recordKeyParts.length; ++i) {
+    for (int i = 0; i < recordKeyParts.size(); ++i) {
+      sb.appendJava(fieldNames.get(i)).appendJava(DEFAULT_COMPOSITE_KEY_FILED_VALUE);
       // NOTE: If record-key part has already been a string [[toString]] will be a no-op
-      sb.append(emptyKeyPartHandler.apply(converter.apply(recordKeyParts[i])));
+      sb.append(emptyKeyPartHandler.apply(converter.apply(recordKeyParts.get(i))));
 
-      if (i < recordKeyParts.length - 1) {
+      if (i < recordKeyParts.size() - 1) {
         sb.appendJava(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
       }
     }
@@ -238,8 +246,10 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
       // NOTE: If record-key part has already been a string [[toString]] will be a no-op
       S convertedKeyPart = emptyKeyPartHandler.apply(converter.apply(recordKeyParts[i]));
 
-      sb.appendJava(recordKeyFields.get(i));
-      sb.appendJava(COMPOSITE_KEY_FIELD_VALUE_INFIX);
+      if (recordKeyParts.length > 1) {
+        sb.appendJava(recordKeyFields.get(i));
+        sb.appendJava(COMPOSITE_KEY_FIELD_VALUE_INFIX);
+      }
       sb.append(convertedKeyPart);
       // This check is to validate that overall composite-key has at least one non-null, non-empty
       // segment
@@ -423,8 +433,11 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     private final HoodieUnsafeRowUtils.NestedFieldPath[] partitionPathFieldsPaths;
 
     SparkRowAccessor(StructType schema) {
-      this.recordKeyFieldsPaths = resolveNestedFieldPaths(getRecordKeyFieldNames(), schema);
-      this.partitionPathFieldsPaths = resolveNestedFieldPaths(getPartitionPathFields(), schema);
+      this.recordKeyFieldsPaths = resolveNestedFieldPaths(getRecordKeyFieldNames(), schema, false);
+      // Sometimes, we need to extract the recordKey from the partition-dropped data
+      // To be consistent with avro key generator
+      // ParquetBootstrapMetadataHandler
+      this.partitionPathFieldsPaths = resolveNestedFieldPaths(getPartitionPathFields(), schema, true);
     }
 
     public Object[] getRecordKeyParts(Row row) {
@@ -432,6 +445,9 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     }
 
     public Object[] getRecordPartitionPathValues(Row row) {
+      if (partitionPathFieldsPaths == null) {
+        throw new HoodieException("Failed to resolve nested partition field");
+      }
       return getNestedFieldValues(row, partitionPathFieldsPaths);
     }
 
@@ -440,6 +456,9 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
     }
 
     public Object[] getRecordPartitionPathValues(InternalRow row) {
+      if (partitionPathFieldsPaths == null) {
+        throw new HoodieException("Failed to resolve nested partition field");
+      }
       return getNestedFieldValues(row, partitionPathFieldsPaths);
     }
 
@@ -463,12 +482,15 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
       return nestedFieldValues;
     }
 
-    private HoodieUnsafeRowUtils.NestedFieldPath[] resolveNestedFieldPaths(List<String> fieldPaths, StructType schema) {
+    private HoodieUnsafeRowUtils.NestedFieldPath[] resolveNestedFieldPaths(List<String> fieldPaths, StructType schema, boolean returnNull) {
       try {
         return fieldPaths.stream()
-            .map(fieldPath -> HoodieUnsafeRowUtils$.MODULE$.composeNestedFieldPath(schema, fieldPath))
+            .map(fieldPath -> HoodieUnsafeRowUtils$.MODULE$.composeNestedFieldPath(schema, fieldPath).get())
             .toArray(HoodieUnsafeRowUtils.NestedFieldPath[]::new);
       } catch (Exception e) {
+        if (returnNull) {
+          return null;
+        }
         LOG.error(String.format("Failed to resolve nested field-paths (%s) in schema (%s)", fieldPaths, schema), e);
         throw new HoodieException("Failed to resolve nested field-paths", e);
       }

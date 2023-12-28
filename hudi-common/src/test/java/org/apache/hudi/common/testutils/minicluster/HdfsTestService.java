@@ -23,8 +23,8 @@ import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.BindException;
@@ -36,7 +36,7 @@ import java.util.Objects;
  */
 public class HdfsTestService {
 
-  private static final Logger LOG = LogManager.getLogger(HdfsTestService.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HdfsTestService.class);
 
   /**
    * Configuration settings.

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 
 import java.io.IOException;
@@ -27,7 +26,7 @@ import java.io.Serializable;
 /**
  * Run one round of compaction.
  */
-public abstract class BaseCompactor<T extends HoodieRecordPayload, I, K, O> implements Serializable {
+public abstract class BaseCompactor<T, I, K, O> implements Serializable {
 
   private static final long serialVersionUID = 1L;
 

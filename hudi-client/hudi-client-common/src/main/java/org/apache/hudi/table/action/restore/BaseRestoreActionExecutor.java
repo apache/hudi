@@ -24,7 +24,6 @@ import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -38,8 +37,8 @@ import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -49,20 +48,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public abstract class BaseRestoreActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieRestoreMetadata> {
+public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieRestoreMetadata> {
 
-  private static final Logger LOG = LogManager.getLogger(BaseRestoreActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BaseRestoreActionExecutor.class);
 
-  private final String restoreInstantTime;
+  private final String savepointToRestoreTimestamp;
   private final TransactionManager txnManager;
 
   public BaseRestoreActionExecutor(HoodieEngineContext context,
                                    HoodieWriteConfig config,
                                    HoodieTable<T, I, K, O> table,
                                    String instantTime,
-                                   String restoreInstantTime) {
+                                   String savepointToRestoreTimestamp) {
     super(context, config, table, instantTime);
-    this.restoreInstantTime = restoreInstantTime;
+    this.savepointToRestoreTimestamp = savepointToRestoreTimestamp;
     this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
   }
 
@@ -104,7 +103,7 @@ public abstract class BaseRestoreActionExecutor<T extends HoodieRecordPayload, I
     List<HoodieInstant> instantsToRollback = new ArrayList<>();
     HoodieRestorePlan restorePlan = RestoreUtils.getRestorePlan(table.getMetaClient(), restoreInstant);
     for (HoodieInstantInfo instantInfo : restorePlan.getInstantsToRollback()) {
-      // If restore crashed mid-way, there are chances that some commits are already rolled back,
+      // If restore crashed midway, there are chances that some commits are already rolled back,
       // but some are not. so, we can ignore those commits which are fully rolledback in previous attempt if any.
       Option<HoodieInstant> rollbackInstantOpt = table.getActiveTimeline().getWriteTimeline()
           .filter(instant -> instant.getTimestamp().equals(instantInfo.getCommitTime()) && instant.getAction().equals(instantInfo.getAction())).firstInstant();
@@ -132,7 +131,7 @@ public abstract class BaseRestoreActionExecutor<T extends HoodieRecordPayload, I
     // if not, rollbacks will be considered not completed and might hinder metadata table compaction.
     List<HoodieInstant> instantsToRollback = table.getActiveTimeline().getRollbackTimeline()
         .getReverseOrderedInstants()
-        .filter(instant -> HoodieActiveTimeline.GREATER_THAN.test(instant.getTimestamp(), restoreInstantTime))
+        .filter(instant -> HoodieActiveTimeline.GREATER_THAN.test(instant.getTimestamp(), savepointToRestoreTimestamp))
         .collect(Collectors.toList());
     instantsToRollback.forEach(entry -> {
       if (entry.isCompleted()) {
@@ -141,7 +140,7 @@ public abstract class BaseRestoreActionExecutor<T extends HoodieRecordPayload, I
       table.getActiveTimeline().deletePending(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.ROLLBACK_ACTION, entry.getTimestamp()));
       table.getActiveTimeline().deletePending(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, entry.getTimestamp()));
     });
-    LOG.info("Commits " + instantsRolledBack + " rollback is complete. Restored table to " + restoreInstantTime);
+    LOG.info("Commits " + instantsRolledBack + " rollback is complete. Restored table to " + savepointToRestoreTimestamp);
     return restoreMetadata;
   }
 

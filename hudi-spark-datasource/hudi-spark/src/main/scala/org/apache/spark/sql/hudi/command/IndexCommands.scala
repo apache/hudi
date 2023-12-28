@@ -19,38 +19,42 @@
 
 package org.apache.spark.sql.hudi.command
 
-import com.fasterxml.jackson.annotation.{JsonAutoDetect, PropertyAccessor}
-import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
+import org.apache.hudi.HoodieSparkFunctionalIndexClient
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.secondary.index.SecondaryIndexManager
+import org.apache.hudi.common.util.JsonUtils
+import org.apache.hudi.index.secondary.SecondaryIndexManager
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.catalyst.{QualifiedTableName, TableIdentifier}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.getTableLocation
 import org.apache.spark.sql.{Row, SparkSession}
 
 import java.util
-
 import scala.collection.JavaConverters.{collectionAsScalaIterableConverter, mapAsJavaMapConverter}
 
-case class CreateIndexCommand(
-    tableId: TableIdentifier,
-    indexName: String,
-    indexType: String,
-    ignoreIfExists: Boolean,
-    columns: Seq[(Attribute, Map[String, String])],
-    options: Map[String, String],
-    override val output: Seq[Attribute]) extends IndexBaseCommand {
+case class CreateIndexCommand(table: CatalogTable,
+                              indexName: String,
+                              indexType: String,
+                              ignoreIfExists: Boolean,
+                              columns: Seq[(Seq[String], Map[String, String])],
+                              options: Map[String, String]) extends IndexBaseCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
+    val tableId = table.identifier
     val metaClient = createHoodieTableMetaClient(tableId, sparkSession)
     val columnsMap: java.util.LinkedHashMap[String, java.util.Map[String, String]] =
       new util.LinkedHashMap[String, java.util.Map[String, String]]()
-    columns.map(c => columnsMap.put(c._1.name, c._2.asJava))
+    columns.map(c => columnsMap.put(c._1.mkString("."), c._2.asJava))
 
-    SecondaryIndexManager.getInstance().create(
-      metaClient, indexName, indexType, ignoreIfExists, columnsMap, options.asJava)
+    if (options.contains("func")) {
+      HoodieSparkFunctionalIndexClient.getInstance(sparkSession).create(
+        metaClient, indexName, indexType, columnsMap, options.asJava)
+    } else {
+      SecondaryIndexManager.getInstance().create(
+        metaClient, indexName, indexType, ignoreIfExists, columnsMap, options.asJava)
+    }
 
     // Invalidate cached table for queries do not access related table
     // through {@code DefaultSource}
@@ -62,13 +66,12 @@ case class CreateIndexCommand(
   }
 }
 
-case class DropIndexCommand(
-    tableId: TableIdentifier,
-    indexName: String,
-    ignoreIfNotExists: Boolean,
-    override val output: Seq[Attribute]) extends IndexBaseCommand {
+case class DropIndexCommand(table: CatalogTable,
+                            indexName: String,
+                            ignoreIfNotExists: Boolean) extends IndexBaseCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
+    val tableId = table.identifier
     val metaClient = createHoodieTableMetaClient(tableId, sparkSession)
     SecondaryIndexManager.getInstance().drop(metaClient, indexName, ignoreIfNotExists)
 
@@ -82,15 +85,14 @@ case class DropIndexCommand(
   }
 }
 
-case class ShowIndexesCommand(
-    tableId: TableIdentifier,
-    override val output: Seq[Attribute]) extends IndexBaseCommand {
+case class ShowIndexesCommand(table: CatalogTable,
+                              override val output: Seq[Attribute]) extends IndexBaseCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
-    val metaClient = createHoodieTableMetaClient(tableId, sparkSession)
+    val metaClient = createHoodieTableMetaClient(table.identifier, sparkSession)
     val secondaryIndexes = SecondaryIndexManager.getInstance().show(metaClient)
 
-    val mapper = getObjectMapper
+    val mapper = JsonUtils.getObjectMapper
     toScalaOption(secondaryIndexes).map(x =>
       x.asScala.map(i => {
         val colOptions =
@@ -100,22 +102,13 @@ case class ShowIndexesCommand(
           i.getIndexType.name().toLowerCase, colOptions, options)
       }).toSeq).getOrElse(Seq.empty[Row])
   }
-
-  protected def getObjectMapper: ObjectMapper = {
-    val mapper = new ObjectMapper
-    mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-    mapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY)
-    mapper
-  }
 }
 
-case class RefreshIndexCommand(
-    tableId: TableIdentifier,
-    indexName: String,
-    override val output: Seq[Attribute]) extends IndexBaseCommand {
+case class RefreshIndexCommand(table: CatalogTable,
+                               indexName: String) extends IndexBaseCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
-    val metaClient = createHoodieTableMetaClient(tableId, sparkSession)
+    val metaClient = createHoodieTableMetaClient(table.identifier, sparkSession)
     SecondaryIndexManager.getInstance().refresh(metaClient, indexName)
     Seq.empty
   }

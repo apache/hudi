@@ -36,7 +36,7 @@ public class DFSDeltaConfig extends DeltaConfig {
   private final Long maxFileSize;
   // The current batch id
   private Integer batchId;
-  // Paralleism to use when generating input data
+  // Parallelism to use when generating input data
   private int inputParallelism;
   // Whether to delete older input data once it has been ingested
   private boolean deleteOldInputData;

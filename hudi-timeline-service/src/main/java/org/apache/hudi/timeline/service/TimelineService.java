@@ -18,8 +18,6 @@
 
 package org.apache.hudi.timeline.service;
 
-import io.javalin.core.JavalinConfig;
-import io.javalin.jetty.JettyServer;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
@@ -35,10 +33,11 @@ import com.beust.jcommander.Parameter;
 import io.javalin.Javalin;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
+import org.eclipse.jetty.util.thread.ScheduledExecutorScheduler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -48,13 +47,13 @@ import java.io.Serializable;
  */
 public class TimelineService {
 
-  private static final Logger LOG = LogManager.getLogger(TimelineService.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TimelineService.class);
   private static final int START_SERVICE_MAX_RETRIES = 16;
-  private static final int DEFAULT_NUM_THREADS = -1;
+  private static final int DEFAULT_NUM_THREADS = 250;
 
   private int serverPort;
-  private Config timelineServerConf;
-  private Configuration conf;
+  private final Config timelineServerConf;
+  private final Configuration conf;
   private transient HoodieEngineContext context;
   private transient FileSystem fs;
   private transient Javalin app = null;
@@ -103,10 +102,10 @@ public class TimelineService {
     @Parameter(names = {"--rocksdb-path", "-rp"}, description = "Root directory for RocksDB")
     public String rocksDBPath = FileSystemViewStorageConfig.ROCKSDB_BASE_PATH.defaultValue();
 
-    @Parameter(names = {"--threads", "-t"}, description = "Number of threads to use for serving requests")
+    @Parameter(names = {"--threads", "-t"}, description = "Number of threads to use for serving requests. The default number is 250")
     public int numThreads = DEFAULT_NUM_THREADS;
 
-    @Parameter(names = {"--async"}, description = "Use asyncronous request processing")
+    @Parameter(names = {"--async"}, description = "Use asynchronous request processing")
     public boolean async = false;
 
     @Parameter(names = {"--compress"}, description = "Compress output using gzip")
@@ -114,6 +113,9 @@ public class TimelineService {
 
     @Parameter(names = {"--enable-marker-requests", "-em"}, description = "Enable handling of marker-related requests")
     public boolean enableMarkerRequests = false;
+
+    @Parameter(names = {"--enable-instant-state-requests"}, description = "Enable handling of instant state requests")
+    public boolean enableInstantStateRequests = false;
 
     @Parameter(names = {"--marker-batch-threads", "-mbt"}, description = "Number of threads to use for batch processing marker creation requests")
     public int markerBatchNumThreads = 20;
@@ -123,6 +125,45 @@ public class TimelineService {
 
     @Parameter(names = {"--marker-parallelism", "-mdp"}, description = "Parallelism to use for reading and deleting marker files")
     public int markerParallelism = 100;
+
+    @Parameter(names = {"--early-conflict-detection-strategy"}, description =
+        "The class name of the early conflict detection strategy to use. "
+            + "This should be subclass of "
+            + "`org.apache.hudi.common.conflict.detection.EarlyConflictDetectionStrategy`")
+    public String earlyConflictDetectionStrategy = "org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineServerBasedDetectionStrategy";
+
+    @Parameter(names = {"--early-conflict-detection-check-commit-conflict"}, description =
+        "Whether to enable commit conflict checking or not during early "
+            + "conflict detection.")
+    public Boolean checkCommitConflict = false;
+
+    @Parameter(names = {"--early-conflict-detection-enable"}, description =
+        "Whether to enable early conflict detection based on markers. "
+            + "It eagerly detects writing conflict before create markers and fails fast if a "
+            + "conflict is detected, to release cluster compute resources as soon as possible.")
+    public Boolean earlyConflictDetectionEnable = false;
+
+    @Parameter(names = {"--async-conflict-detector-initial-delay-ms"}, description =
+        "Used for timeline-server-based markers with "
+            + "`AsyncTimelineServerBasedDetectionStrategy`. "
+            + "The time in milliseconds to delay the first execution of async marker-based conflict detection.")
+    public Long asyncConflictDetectorInitialDelayMs = 0L;
+
+    @Parameter(names = {"--async-conflict-detector-period-ms"}, description =
+        "Used for timeline-server-based markers with "
+            + "`AsyncTimelineServerBasedDetectionStrategy`. "
+            + "The period in milliseconds between successive executions of async marker-based conflict detection.")
+    public Long asyncConflictDetectorPeriodMs = 30000L;
+
+    @Parameter(names = {"--early-conflict-detection-max-heartbeat-interval-ms"}, description =
+        "Used for timeline-server-based markers with "
+            + "`AsyncTimelineServerBasedDetectionStrategy`. "
+            + "Instants whose heartbeat is greater than the current value will not be used in early conflict detection.")
+    public Long maxAllowableHeartbeatIntervalInMs = 120000L;
+
+    @Parameter(names = {"--instant-state-force-refresh-request-number"}, description =
+        "Used for timeline-server-based instant state requests, every N read requests will trigger instant state refreshing")
+    public Integer instantStateForceRefreshRequestNumber = 100;
 
     @Parameter(names = {"--help", "-h"})
     public Boolean help = false;
@@ -145,9 +186,18 @@ public class TimelineService {
       private boolean async = false;
       private boolean compress = true;
       private boolean enableMarkerRequests = false;
+      private boolean enableInstantStateRequests = false;
       private int markerBatchNumThreads = 20;
       private long markerBatchIntervalMs = 50L;
       private int markerParallelism = 100;
+      private String earlyConflictDetectionStrategy = "org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineServerBasedDetectionStrategy";
+      private Boolean checkCommitConflict = false;
+      private Boolean earlyConflictDetectionEnable = false;
+      private Long asyncConflictDetectorInitialDelayMs = 0L;
+      private Long asyncConflictDetectorPeriodMs = 30000L;
+      private Long maxAllowableHeartbeatIntervalInMs = 120000L;
+
+      private int instantStateForceRefreshRequestNumber = 100;
 
       public Builder() {
       }
@@ -217,6 +267,46 @@ public class TimelineService {
         return this;
       }
 
+      public Builder earlyConflictDetectionStrategy(String earlyConflictDetectionStrategy) {
+        this.earlyConflictDetectionStrategy = earlyConflictDetectionStrategy;
+        return this;
+      }
+
+      public Builder earlyConflictDetectionCheckCommitConflict(Boolean checkCommitConflict) {
+        this.checkCommitConflict = checkCommitConflict;
+        return this;
+      }
+
+      public Builder earlyConflictDetectionEnable(Boolean earlyConflictDetectionEnable) {
+        this.earlyConflictDetectionEnable = earlyConflictDetectionEnable;
+        return this;
+      }
+
+      public Builder asyncConflictDetectorInitialDelayMs(Long asyncConflictDetectorInitialDelayMs) {
+        this.asyncConflictDetectorInitialDelayMs = asyncConflictDetectorInitialDelayMs;
+        return this;
+      }
+
+      public Builder asyncConflictDetectorPeriodMs(Long asyncConflictDetectorPeriodMs) {
+        this.asyncConflictDetectorPeriodMs = asyncConflictDetectorPeriodMs;
+        return this;
+      }
+
+      public Builder earlyConflictDetectionMaxAllowableHeartbeatIntervalInMs(Long maxAllowableHeartbeatIntervalInMs) {
+        this.maxAllowableHeartbeatIntervalInMs = maxAllowableHeartbeatIntervalInMs;
+        return this;
+      }
+
+      public Builder enableInstantStateRequests(boolean enableCkpInstantStateRequests) {
+        this.enableInstantStateRequests = enableCkpInstantStateRequests;
+        return this;
+      }
+
+      public Builder instantStateForceRefreshRequestNumber(int instantStateForceRefreshRequestNumber) {
+        this.instantStateForceRefreshRequestNumber = instantStateForceRefreshRequestNumber;
+        return this;
+      }
+
       public Config build() {
         Config config = new Config();
         config.serverPort = this.serverPort;
@@ -232,6 +322,14 @@ public class TimelineService {
         config.markerBatchNumThreads = this.markerBatchNumThreads;
         config.markerBatchIntervalMs = this.markerBatchIntervalMs;
         config.markerParallelism = this.markerParallelism;
+        config.earlyConflictDetectionStrategy = this.earlyConflictDetectionStrategy;
+        config.checkCommitConflict = this.checkCommitConflict;
+        config.earlyConflictDetectionEnable = this.earlyConflictDetectionEnable;
+        config.asyncConflictDetectorInitialDelayMs = this.asyncConflictDetectorInitialDelayMs;
+        config.asyncConflictDetectorPeriodMs = this.asyncConflictDetectorPeriodMs;
+        config.maxAllowableHeartbeatIntervalInMs = this.maxAllowableHeartbeatIntervalInMs;
+        config.enableInstantStateRequests = this.enableInstantStateRequests;
+        config.instantStateForceRefreshRequestNumber = this.instantStateForceRefreshRequestNumber;
         return config;
       }
     }
@@ -265,8 +363,13 @@ public class TimelineService {
   }
 
   public int startService() throws IOException {
-    final Server server = timelineServerConf.numThreads == DEFAULT_NUM_THREADS ? new JettyServer(new JavalinConfig()).server() :
-            new Server(new QueuedThreadPool(timelineServerConf.numThreads));
+    int maxThreads = timelineServerConf.numThreads > 0 ? timelineServerConf.numThreads : DEFAULT_NUM_THREADS;
+    QueuedThreadPool pool = new QueuedThreadPool(maxThreads, 8, 60_000);
+    pool.setDaemon(true);
+    final Server server = new Server(pool);
+    ScheduledExecutorScheduler scheduler = new ScheduledExecutorScheduler("TimelineService-JettyScheduler", true, 8);
+    server.addBean(scheduler);
+
     app = Javalin.create(c -> {
       if (!timelineServerConf.compress) {
         c.compressionStrategy(io.javalin.core.compression.CompressionStrategy.NONE);
@@ -329,6 +432,10 @@ public class TimelineService {
     }
     this.fsViewsManager.close();
     LOG.info("Closed Timeline Service");
+  }
+
+  public void unregisterBasePath(String basePath) {
+    fsViewsManager.clearFileSystemView(basePath);
   }
 
   public Configuration getConf() {

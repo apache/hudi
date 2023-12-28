@@ -25,7 +25,7 @@ import org.apache.hudi.common.util
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.functional.TestBasicSchemaEvolution.{dropColumn, injectColumnAt}
-import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, ScalaAssertionSupport}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
@@ -40,7 +40,7 @@ import java.util.function.Consumer
 import scala.collection.JavaConversions.asScalaBuffer
 import scala.collection.JavaConverters._
 
-class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionSupport {
+class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAssertionSupport {
 
   var spark: SparkSession = null
   val commonOpts = Map(
@@ -107,11 +107,11 @@ class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionS
         DataSourceWriteOptions.OPERATION.key -> opType
       )
 
-    def appendData(schema: StructType, batch: Seq[Row]): Unit = {
+    def appendData(schema: StructType, batch: Seq[Row], shouldAllowDroppedColumns: Boolean = false): Unit = {
       HoodieUnsafeUtils.createDataFrameFromRows(spark, batch, schema)
         .write
         .format("org.apache.hudi")
-        .options(opts)
+        .options(opts ++ Map(HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> shouldAllowDroppedColumns.toString))
         .mode(SaveMode.Append)
         .save(basePath)
     }
@@ -202,7 +202,8 @@ class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionS
     }
 
     //
-    // 3. Write 3d batch with another schema (w/ omitted a _nullable_ column `second_name`, expected to succeed)
+    // 3. Write 3d batch with another schema (w/ omitted a _nullable_ column `second_name`, expected to succeed if
+    // col drop is enabled)
     //
 
     val thirdSchema = StructType(
@@ -217,7 +218,14 @@ class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionS
       Row("8", "Ron", "14", 1, 1),
       Row("9", "Germiona", "16", 1, 1))
 
-    appendData(thirdSchema, thirdBatch)
+    if (shouldReconcileSchema) {
+      appendData(thirdSchema, thirdBatch)
+    } else {
+      assertThrows(classOf[SchemaCompatibilityException]) {
+        appendData(thirdSchema, thirdBatch)
+      }
+      appendData(thirdSchema, thirdBatch, shouldAllowDroppedColumns = true)
+    }
     val (tableSchemaAfterThirdBatch, rowsAfterThirdBatch) = loadTable()
 
     // NOTE: In case schema reconciliation is ENABLED, Hudi would prefer the table's schema over the new batch
@@ -270,7 +278,10 @@ class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionS
         appendData(fourthSchema, fourthBatch)
       }
     } else {
-      appendData(fourthSchema, fourthBatch)
+      assertThrows(classOf[SchemaCompatibilityException]) {
+        appendData(fourthSchema, fourthBatch)
+      }
+      appendData(fourthSchema, fourthBatch, shouldAllowDroppedColumns = true)
       val (latestTableSchema, rows) = loadTable()
 
       assertEquals(fourthSchema, latestTableSchema)
@@ -327,10 +338,15 @@ class TestBasicSchemaEvolution extends HoodieClientTestBase with ScalaAssertionS
       Row("11", "14", "1", 1),
       Row("12", "16", "1", 1))
 
-    // NOTE: Expected to fail in both cases, as such transformation is not permitted
-    assertThrows(classOf[SchemaCompatibilityException]) {
+    // Now, only fails for reconcile
+    if (shouldReconcileSchema) {
+      assertThrows(classOf[SchemaCompatibilityException]) {
+        appendData(sixthSchema, sixthBatch)
+      }
+    } else {
       appendData(sixthSchema, sixthBatch)
     }
+
 
     // TODO add test w/ overlapping updates
   }

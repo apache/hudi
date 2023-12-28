@@ -28,7 +28,6 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig
 import org.apache.hudi.common.util.BinaryUtil.toBytes
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection
@@ -59,7 +58,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
 
   @transient private lazy val engineCtx = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
   @transient private lazy val metadataTable: HoodieTableMetadata =
-    HoodieTableMetadata.create(engineCtx, metadataConfig, metaClient.getBasePathV2.toString, FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue)
+    HoodieTableMetadata.create(engineCtx, metadataConfig, metaClient.getBasePathV2.toString)
 
   @transient private lazy val cachedColumnStatsIndexViews: ParHashMap[Seq[String], DataFrame] = ParHashMap()
 
@@ -209,11 +208,15 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     // NOTE: We're sorting the columns to make sure final index schema matches layout
     //       of the transposed table
     val sortedTargetColumnsSet = TreeSet(queryColumns:_*)
-    val sortedTargetColumns = sortedTargetColumnsSet.toSeq
 
     // NOTE: This is a trick to avoid pulling all of [[ColumnStatsIndexSupport]] object into the lambdas'
     //       closures below
     val indexedColumns = this.indexedColumns
+
+    // NOTE: It's crucial to maintain appropriate ordering of the columns
+    //       matching table layout: hence, we cherry-pick individual columns
+    //       instead of simply filtering in the ones we're interested in the schema
+    val (indexSchema, targetIndexedColumns) = composeIndexSchema(sortedTargetColumnsSet.toSeq, indexedColumns, tableSchema)
 
     // Here we perform complex transformation which requires us to modify the layout of the rows
     // of the dataset, and therefore we rely on low-level RDD API to avoid incurring encoding/decoding
@@ -257,7 +260,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
         // to align existing column-stats for individual file with the list of expected ones for the
         // whole transposed projection (a superset of all files)
         val columnRecordsMap = columnRecordsSeq.map(r => (r.getColumnName, r)).toMap
-        val alignedColStatRecordsSeq = sortedTargetColumns.map(columnRecordsMap.get)
+        val alignedColStatRecordsSeq = targetIndexedColumns.map(columnRecordsMap.get)
 
         val coalescedRowValuesSeq =
           alignedColStatRecordsSeq.foldLeft(ListBuffer[Any](fileName, valueCount)) {
@@ -267,31 +270,19 @@ class ColumnStatsIndexSupport(spark: SparkSession,
                   acc ++= Seq(colStatRecord.getMinValue, colStatRecord.getMaxValue, colStatRecord.getNullCount)
                 case None =>
                   // NOTE: This could occur in either of the following cases:
-                  //    1. Column is not indexed in Column Stats Index: in this case we won't be returning
-                  //       any statistics for such column (ie all stats will be null)
-                  //    2. Particular file does not have this particular column (which is indexed by Column Stats Index):
+                  //    1. Particular file does not have this particular column (which is indexed by Column Stats Index):
                   //       in this case we're assuming missing column to essentially contain exclusively
                   //       null values, we set min/max values as null and null-count to be equal to value-count (this
                   //       behavior is consistent with reading non-existent columns from Parquet)
                   //
                   // This is a way to determine current column's index without explicit iteration (we're adding 3 stats / column)
-                  val idx = acc.length / 3
-                  val colName = sortedTargetColumns(idx)
-                  val indexed = indexedColumns.contains(colName)
-
-                  val nullCount = if (indexed) valueCount else null
-
-                  acc ++= Seq(null, null, nullCount)
+                  acc ++= Seq(null, null, valueCount)
               }
           }
 
         Row(coalescedRowValuesSeq:_*)
       }))
 
-    // NOTE: It's crucial to maintain appropriate ordering of the columns
-    //       matching table layout: hence, we cherry-pick individual columns
-    //       instead of simply filtering in the ones we're interested in the schema
-    val indexSchema = composeIndexSchema(sortedTargetColumns, tableSchema)
     (transposedRows, indexSchema)
   }
 
@@ -318,7 +309,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     colStatsDF.select(targetColumnStatsIndexColumns.map(col): _*)
   }
 
-  private def loadColumnStatsIndexRecords(targetColumns: Seq[String], shouldReadInMemory: Boolean): HoodieData[HoodieMetadataColumnStats] = {
+  def loadColumnStatsIndexRecords(targetColumns: Seq[String], shouldReadInMemory: Boolean): HoodieData[HoodieMetadataColumnStats] = {
     // Read Metadata Table's Column Stats Index records into [[HoodieData]] container by
     //    - Fetching the records from CSI by key-prefixes (encoded column names)
     //    - Extracting [[HoodieMetadataColumnStats]] records
@@ -365,7 +356,7 @@ object ColumnStatsIndexSupport {
     "BytesWrapper", "StringWrapper", "DateWrapper", "DecimalWrapper", "TimeMicrosWrapper", "TimestampMicrosWrapper")
 
   /**
-   * Target Column Stats Index columns which internally are mapped onto fields of the correspoding
+   * Target Column Stats Index columns which internally are mapped onto fields of the corresponding
    * Column Stats record payload ([[HoodieMetadataColumnStats]]) persisted w/in Metadata Table
    */
   private val targetColumnStatsIndexColumns = Seq(
@@ -382,21 +373,22 @@ object ColumnStatsIndexSupport {
   /**
    * @VisibleForTesting
    */
-  def composeIndexSchema(targetColumnNames: Seq[String], tableSchema: StructType): StructType = {
+  def composeIndexSchema(targetColumnNames: Seq[String], indexedColumns: Set[String], tableSchema: StructType): (StructType, Seq[String]) = {
     val fileNameField = StructField(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME, StringType, nullable = true, Metadata.empty)
     val valueCountField = StructField(HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_COUNT, LongType, nullable = true, Metadata.empty)
 
-    val targetFields = targetColumnNames.map(colName => tableSchema.fields.find(f => f.name == colName).get)
+    val targetIndexedColumns = targetColumnNames.filter(indexedColumns.contains(_))
+    val targetIndexedFields = targetIndexedColumns.map(colName => tableSchema.fields.find(f => f.name == colName).get)
 
-    StructType(
-      targetFields.foldLeft(Seq(fileNameField, valueCountField)) {
+    (StructType(
+      targetIndexedFields.foldLeft(Seq(fileNameField, valueCountField)) {
         case (acc, field) =>
           acc ++ Seq(
             composeColumnStatStructType(field.name, HoodieMetadataPayload.COLUMN_STATS_FIELD_MIN_VALUE, field.dataType),
             composeColumnStatStructType(field.name, HoodieMetadataPayload.COLUMN_STATS_FIELD_MAX_VALUE, field.dataType),
             composeColumnStatStructType(field.name, HoodieMetadataPayload.COLUMN_STATS_FIELD_NULL_COUNT, LongType))
       }
-    )
+    ), targetIndexedColumns)
   }
 
   @inline def getMinColumnNameFor(colName: String): String =

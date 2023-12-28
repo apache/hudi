@@ -18,12 +18,12 @@
 
 package org.apache.hudi.common.table;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Reader;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
@@ -31,7 +31,6 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.Functions.Function1;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -42,25 +41,24 @@ import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
-import org.apache.hudi.io.storage.HoodieHFileReader;
-import org.apache.hudi.io.storage.HoodieOrcReader;
+import org.apache.hudi.io.storage.HoodieAvroHFileReader;
+import org.apache.hudi.io.storage.HoodieAvroOrcReader;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.schema.MessageType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -70,6 +68,7 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.containsFieldInSchema;
@@ -81,7 +80,7 @@ import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 @ThreadSafe
 public class TableSchemaResolver {
 
-  private static final Logger LOG = LogManager.getLogger(TableSchemaResolver.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TableSchemaResolver.class);
 
   private final HoodieTableMetaClient metaClient;
 
@@ -115,8 +114,12 @@ public class TableSchemaResolver {
     this.hasOperationField = Lazy.lazily(this::hasOperationField);
   }
 
-  public Schema getTableAvroSchemaFromDataFile() {
-    return convertParquetSchemaToAvro(getTableParquetSchemaFromDataFile());
+  public Schema getTableAvroSchemaFromDataFile() throws Exception {
+    return getTableAvroSchemaFromDataFileInternal().orElseThrow(schemaNotFoundError());
+  }
+
+  private Option<Schema> getTableAvroSchemaFromDataFileInternal() {
+    return getTableParquetSchemaFromDataFile().map(this::convertParquetSchemaToAvro);
   }
 
   /**
@@ -137,7 +140,7 @@ public class TableSchemaResolver {
    * @throws Exception
    */
   public Schema getTableAvroSchema(boolean includeMetadataFields) throws Exception {
-    return getTableAvroSchemaInternal(includeMetadataFields, Option.empty());
+    return getTableAvroSchemaInternal(includeMetadataFields, Option.empty()).orElseThrow(schemaNotFoundError());
   }
 
   /**
@@ -150,7 +153,8 @@ public class TableSchemaResolver {
         .filterCompletedInstants()
         .findInstantsBeforeOrEquals(timestamp)
         .lastInstant();
-    return getTableAvroSchemaInternal(metaClient.getTableConfig().populateMetaFields(), instant);
+    return getTableAvroSchemaInternal(metaClient.getTableConfig().populateMetaFields(), instant)
+        .orElseThrow(schemaNotFoundError());
   }
 
   /**
@@ -159,7 +163,7 @@ public class TableSchemaResolver {
    * @param instant as of which table's schema will be fetched
    */
   public Schema getTableAvroSchema(HoodieInstant instant, boolean includeMetadataFields) throws Exception {
-    return getTableAvroSchemaInternal(includeMetadataFields, Option.of(instant));
+    return getTableAvroSchemaInternal(includeMetadataFields, Option.of(instant)).orElseThrow(schemaNotFoundError());
   }
 
   /**
@@ -190,11 +194,15 @@ public class TableSchemaResolver {
    */
   @Deprecated
   public Schema getTableAvroSchemaWithoutMetadataFields() throws Exception {
-    return getTableAvroSchema(false);
+    return getTableAvroSchemaInternal(false, Option.empty()).orElseThrow(schemaNotFoundError());
   }
 
-  private Schema getTableAvroSchemaInternal(boolean includeMetadataFields, Option<HoodieInstant> instantOpt) {
-    Schema schema =
+  public Option<Schema> getTableAvroSchemaIfPresent(boolean includeMetadataFields) {
+    return getTableAvroSchemaInternal(includeMetadataFields, Option.empty());
+  }
+
+  private Option<Schema> getTableAvroSchemaInternal(boolean includeMetadataFields, Option<HoodieInstant> instantOpt) {
+    Option<Schema> schema =
         (instantOpt.isPresent()
             ? getTableSchemaFromCommitMetadata(instantOpt.get(), includeMetadataFields)
             : getTableSchemaFromLatestCommitMetadata(includeMetadataFields))
@@ -205,18 +213,18 @@ public class TableSchemaResolver {
                             ? HoodieAvroUtils.addMetadataFields(tableSchema, hasOperationField.get())
                             : tableSchema)
             )
-            .orElseGet(() -> {
-              Schema schemaFromDataFile = getTableAvroSchemaFromDataFile();
+            .or(() -> {
+              Option<Schema> schemaFromDataFile = getTableAvroSchemaFromDataFileInternal();
               return includeMetadataFields
                   ? schemaFromDataFile
-                  : HoodieAvroUtils.removeMetadataFields(schemaFromDataFile);
+                  : schemaFromDataFile.map(HoodieAvroUtils::removeMetadataFields);
             });
 
     // TODO partition columns have to be appended in all read-paths
-    if (metaClient.getTableConfig().shouldDropPartitionColumns()) {
+    if (metaClient.getTableConfig().shouldDropPartitionColumns() && schema.isPresent()) {
       return metaClient.getTableConfig().getPartitionFields()
-          .map(partitionFields -> appendPartitionColumns(schema, Option.ofNullable(partitionFields)))
-          .orElse(schema);
+          .map(partitionFields -> appendPartitionColumns(schema.get(), Option.ofNullable(partitionFields)))
+          .or(() -> schema);
     }
 
     return schema;
@@ -259,7 +267,7 @@ public class TableSchemaResolver {
   /**
    * Fetches the schema for a table from any the table's data files
    */
-  private MessageType getTableParquetSchemaFromDataFile() {
+  private Option<MessageType> getTableParquetSchemaFromDataFile() {
     Option<Pair<HoodieInstant, HoodieCommitMetadata>> instantAndCommitMetadata = getLatestCommitMetadataWithValidData();
     try {
       switch (metaClient.getTableType()) {
@@ -272,10 +280,11 @@ public class TableSchemaResolver {
           if (instantAndCommitMetadata.isPresent()) {
             HoodieCommitMetadata commitMetadata = instantAndCommitMetadata.get().getRight();
             Iterator<String> filePaths = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePathV2()).values().iterator();
-            return fetchSchemaFromFiles(filePaths);
+            return Option.of(fetchSchemaFromFiles(filePaths));
           } else {
-            throw new IllegalArgumentException("Could not find any data file written for commit, "
+            LOG.warn("Could not find any data file written for commit, "
                 + "so could not get schema for table " + metaClient.getBasePath());
+            return Option.empty();
           }
         default:
           LOG.error("Unknown table type " + metaClient.getTableType());
@@ -310,44 +319,10 @@ public class TableSchemaResolver {
    */
   public Option<Schema> getTableAvroSchemaFromLatestCommit(boolean includeMetadataFields) throws Exception {
     if (metaClient.isTimelineNonEmpty()) {
-      return Option.of(getTableAvroSchemaInternal(includeMetadataFields, Option.empty()));
+      return getTableAvroSchemaInternal(includeMetadataFields, Option.empty());
     }
 
     return Option.empty();
-  }
-
-  /**
-   * Get latest schema either from incoming schema or table schema.
-   * @param writeSchema incoming batch's write schema.
-   * @param convertTableSchemaToAddNamespace {@code true} if table schema needs to be converted. {@code false} otherwise.
-   * @param converterFn converter function to be called over table schema (to add namespace may be). Each caller can decide if any conversion is required.
-   * @return the latest schema.
-   *
-   * @deprecated will be removed (HUDI-4472)
-   */
-  @Deprecated
-  public Schema getLatestSchema(Schema writeSchema, boolean convertTableSchemaToAddNamespace,
-      Function1<Schema, Schema> converterFn) {
-    Schema latestSchema = writeSchema;
-    try {
-      if (metaClient.isTimelineNonEmpty()) {
-        Schema tableSchema = getTableAvroSchemaWithoutMetadataFields();
-        if (convertTableSchemaToAddNamespace && converterFn != null) {
-          tableSchema = converterFn.apply(tableSchema);
-        }
-        if (writeSchema.getFields().size() < tableSchema.getFields().size() && AvroSchemaUtils.isSchemaCompatible(writeSchema, tableSchema)) {
-          // if incoming schema is a subset (old schema) compared to table schema. For eg, one of the
-          // ingestion pipeline is still producing events in old schema
-          latestSchema = tableSchema;
-          LOG.debug("Using latest table schema to rewrite incoming records " + tableSchema.toString());
-        }
-      }
-    } catch (IllegalArgumentException | InvalidTableException e) {
-      LOG.warn("Could not find any commits, falling back to using incoming batch's write schema");
-    } catch (Exception e) {
-      LOG.warn("Unknown exception thrown " + e.getMessage() + ", Falling back to using incoming batch's write schema");
-    }
-    return latestSchema;
   }
 
   private MessageType readSchemaFromParquetBaseFile(Path parquetFilePath) throws IOException {
@@ -364,15 +339,16 @@ public class TableSchemaResolver {
 
     FileSystem fs = metaClient.getRawFs();
     CacheConfig cacheConfig = new CacheConfig(fs.getConf());
-    HoodieHFileReader<IndexedRecord> hFileReader = new HoodieHFileReader<>(fs.getConf(), hFilePath, cacheConfig);
-    return convertAvroSchemaToParquet(hFileReader.getSchema());
+    try (HoodieAvroHFileReader hFileReader = new HoodieAvroHFileReader(fs.getConf(), hFilePath, cacheConfig)) {
+      return convertAvroSchemaToParquet(hFileReader.getSchema());
+    }
   }
 
   private MessageType readSchemaFromORCBaseFile(Path orcFilePath) throws IOException {
     LOG.info("Reading schema from " + orcFilePath);
 
     FileSystem fs = metaClient.getRawFs();
-    HoodieOrcReader<IndexedRecord> orcReader = new HoodieOrcReader<>(fs.getConf(), orcFilePath);
+    HoodieAvroOrcReader orcReader = new HoodieAvroOrcReader(fs.getConf(), orcFilePath);
     return convertAvroSchemaToParquet(orcReader.getSchema());
   }
 
@@ -424,7 +400,17 @@ public class TableSchemaResolver {
    * @return InternalSchema for this table
    */
   public Option<InternalSchema> getTableInternalSchemaFromCommitMetadata() {
-    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    HoodieTimeline completedInstants = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    HoodieTimeline timeline = completedInstants
+        .filter(instant -> { // consider only instants that can update/change schema.
+          try {
+            HoodieCommitMetadata commitMetadata =
+                HoodieCommitMetadata.fromBytes(completedInstants.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+            return WriteOperationType.canUpdateSchema(commitMetadata.getOperationType());
+          } catch (IOException e) {
+            throw new HoodieIOException(String.format("Failed to fetch HoodieCommitMetadata for instant (%s)", instant), e);
+          }
+        });
     return timeline.lastInstant().flatMap(this::getTableInternalSchemaFromCommitMetadata);
   }
 
@@ -593,5 +579,9 @@ public class TableSchemaResolver {
     }
 
     return dataSchema;
+  }
+
+  private Supplier<Exception> schemaNotFoundError() {
+    return () -> new IllegalArgumentException("No schema found for table at " + metaClient.getBasePathV2().toString());
   }
 }

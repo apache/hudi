@@ -23,7 +23,7 @@ import org.apache.hudi.internal.schema.Types.Field;
 import org.apache.hudi.internal.schema.Types.RecordType;
 
 import java.io.Serializable;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -118,7 +118,7 @@ public class InternalSchema implements Serializable {
     if (nameToId == null) {
       nameToId = InternalSchemaBuilder.getBuilder().buildNameToId(record);
     }
-    return Arrays.asList(nameToId.keySet().toArray(new String[0]));
+    return new ArrayList<>(nameToId.keySet());
   }
 
   /**
@@ -158,12 +158,12 @@ public class InternalSchema implements Serializable {
   }
 
   /**
-   * Returns the {@link Type} of a sub-field identified by the field name.
+   * Returns the fully qualified name of the field corresponding to the given id.
    *
    * @param id a field id
-   * @return fullName of field of
+   * @return full name of field corresponding to id
    */
-  public String findfullName(int id) {
+  public String findFullName(int id) {
     if (idToName == null) {
       buildIdToName();
     }
@@ -241,15 +241,24 @@ public class InternalSchema implements Serializable {
   }
 
   /**
-   * Whether colName exists in current Schema.
-   * Case insensitive.
+   * Whether {@code colName} exists in the current Schema
    *
-   * @param colName a colName
-   * @return Whether colName exists in current Schema
+   * @param colName a column name
+   * @param caseSensitive whether columns names should be treated as case-sensitive
+   * @return whether schema contains column identified by {@code colName}
    */
-  public boolean findDuplicateCol(String colName) {
-    return idToName.entrySet().stream().map(e -> e.getValue().toLowerCase(Locale.ROOT))
-        .collect(Collectors.toSet()).contains(colName);
+  public boolean hasColumn(String colName, boolean caseSensitive) {
+    if (caseSensitive) {
+      // In case we do a case-sensitive check we just need to validate whether
+      // schema contains field-name as it is
+      return idToName.containsValue(colName);
+    } else {
+      return idToName.values()
+          .stream()
+          .map(fieldName -> fieldName.toLowerCase(Locale.ROOT))
+          .collect(Collectors.toSet())
+          .contains(colName.toLowerCase(Locale.ROOT));
+    }
   }
 
   public int findIdByName(String name) {
@@ -263,8 +272,7 @@ public class InternalSchema implements Serializable {
   public String toString() {
     return String.format("table {\n%s\n}",
         StringUtils.join(record.fields().stream()
-            .map(f -> " " + f)
-            .collect(Collectors.toList()).toArray(new String[0]), "\n"));
+            .map(f -> " " + f).toArray(String[]::new), "\n"));
   }
 
   @Override

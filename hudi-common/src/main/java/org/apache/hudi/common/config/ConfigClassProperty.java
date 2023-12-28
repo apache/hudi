@@ -26,7 +26,7 @@ import java.lang.annotation.Target;
 /**
  * Annotation for superclasses of {@link HoodieConfig} that includes the
  * human-readable name of the config class, the config group ({@link ConfigGroups})
- * it belongs to (e.g., spark/ flink/ write)
+ * it belongs to (e.g., spark/ flink/ write), optional sub-group ({@link ConfigGroups}),
  * and the description of the config class.
  */
 @Retention(RetentionPolicy.RUNTIME)
@@ -35,6 +35,10 @@ public @interface ConfigClassProperty {
   String name();
 
   ConfigGroups.Names groupName();
+
+  ConfigGroups.SubGroupNames subGroupName() default ConfigGroups.SubGroupNames.NONE;
+
+  boolean areCommonConfigs() default false;
 
   String description();
 }

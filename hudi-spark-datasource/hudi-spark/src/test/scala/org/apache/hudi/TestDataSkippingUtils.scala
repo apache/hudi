@@ -18,7 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
-import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.resolveExpr
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.encoders.DummyExpressionHolder
@@ -62,7 +62,7 @@ case class IndexRow(fileName: String,
   def toRow: Row = Row(productIterator.toSeq: _*)
 }
 
-class TestDataSkippingUtils extends HoodieClientTestBase with SparkAdapterSupport {
+class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterSupport {
 
   var spark: SparkSession = _
 
@@ -83,7 +83,7 @@ class TestDataSkippingUtils extends HoodieClientTestBase with SparkAdapterSuppor
       )
     )
 
-  val indexSchema: StructType = composeIndexSchema(indexedCols, sourceTableSchema)
+  val (indexSchema: StructType, targetIndexedColumns:  Seq[String]) = composeIndexSchema(indexedCols, indexedCols.toSet, sourceTableSchema)
 
   @ParameterizedTest
   @MethodSource(Array(

@@ -26,14 +26,23 @@ import java.util.Objects;
  * <p>
  * - recordKey : a recordKey that acts as primary key for a record.
  * - partitionPath : the partition path of a record.
+ *
+ * NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
+ *
+ *       This class is serialized (using Kryo) as part of {@code HoodieDeleteBlock} to make
+ *       sure this stays backwards-compatible we can't MAKE ANY CHANGES TO THIS CLASS (add,
+ *       delete, reorder or change types of the fields in this class, make class final, etc)
+ *       as this would break its compatibility with already persisted blocks.
+ *
+ *       Check out HUDI-5760 for more details
  */
 public class HoodieKey implements Serializable {
 
   private String recordKey;
   private String partitionPath;
 
-  public HoodieKey() {
-  }
+  // Required for serializer
+  public HoodieKey() {}
 
   public HoodieKey(String recordKey, String partitionPath) {
     this.recordKey = recordKey;

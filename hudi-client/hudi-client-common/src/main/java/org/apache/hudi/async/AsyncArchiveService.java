@@ -24,8 +24,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -36,7 +36,7 @@ import java.util.concurrent.Executors;
  */
 public class AsyncArchiveService extends HoodieAsyncTableService {
 
-  private static final Logger LOG = LogManager.getLogger(AsyncArchiveService.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AsyncArchiveService.class);
 
   private final BaseHoodieWriteClient writeClient;
   private final transient ExecutorService executor = Executors.newSingleThreadExecutor();

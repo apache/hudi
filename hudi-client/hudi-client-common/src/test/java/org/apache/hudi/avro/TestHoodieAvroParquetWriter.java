@@ -42,6 +42,7 @@ import java.io.IOException;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -63,7 +64,7 @@ public class TestHoodieAvroParquetWriter {
     BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, 10000,
         BloomFilterTypeCode.DYNAMIC_V0.name());
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema),
-        schema, Option.of(filter));
+        schema, Option.of(filter), new Properties());
 
     HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig =
         new HoodieParquetConfig(writeSupport, CompressionCodecName.GZIP, ParquetWriter.DEFAULT_BLOCK_SIZE,
@@ -71,8 +72,8 @@ public class TestHoodieAvroParquetWriter {
 
     Path filePath = new Path(tmpDir.resolve("test.parquet").toAbsolutePath().toString());
 
-    try (HoodieAvroParquetWriter<GenericRecord> writer =
-        new HoodieAvroParquetWriter<>(filePath, parquetConfig, "001", new DummyTaskContextSupplier(), true)) {
+    try (HoodieAvroParquetWriter writer =
+        new HoodieAvroParquetWriter(filePath, parquetConfig, "001", new DummyTaskContextSupplier(), true)) {
       for (GenericRecord record : records) {
         writer.writeAvro((String) record.get("_row_key"), record);
       }

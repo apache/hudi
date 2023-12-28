@@ -46,24 +46,28 @@ public class HoodieMetricsDatadogConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> REPORT_PERIOD_IN_SECONDS = ConfigProperty
       .key(DATADOG_PREFIX + ".report.period.seconds")
       .defaultValue(30)
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Datadog reporting period in seconds. Default to 30.");
 
   public static final ConfigProperty<String> API_SITE_VALUE = ConfigProperty
       .key(DATADOG_PREFIX + ".api.site")
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Datadog API site: EU or US");
 
   public static final ConfigProperty<String> API_KEY = ConfigProperty
       .key(DATADOG_PREFIX + ".api.key")
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Datadog API key");
 
   public static final ConfigProperty<Boolean> API_KEY_SKIP_VALIDATION = ConfigProperty
       .key(DATADOG_PREFIX + ".api.key.skip.validation")
       .defaultValue(false)
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Before sending metrics via Datadog API, whether to skip validating Datadog API key or not. "
           + "Default to false.");
@@ -71,6 +75,7 @@ public class HoodieMetricsDatadogConfig extends HoodieConfig {
   public static final ConfigProperty<String> API_KEY_SUPPLIER = ConfigProperty
       .key(DATADOG_PREFIX + ".api.key.supplier")
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Datadog API key supplier to supply the API key at runtime. "
           + "This will take effect if hoodie.metrics.datadog.api.key is not set.");
@@ -78,12 +83,14 @@ public class HoodieMetricsDatadogConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> API_TIMEOUT_IN_SECONDS = ConfigProperty
       .key(DATADOG_PREFIX + ".api.timeout.seconds")
       .defaultValue(3)
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Datadog API timeout in seconds. Default to 3.");
 
   public static final ConfigProperty<String> METRIC_PREFIX_VALUE = ConfigProperty
       .key(DATADOG_PREFIX + ".metric.prefix")
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Datadog metric prefix to be prepended to each metric name with a dot as delimiter. "
           + "For example, if it is set to foo, foo. will be prepended.");
@@ -91,12 +98,14 @@ public class HoodieMetricsDatadogConfig extends HoodieConfig {
   public static final ConfigProperty<String> METRIC_HOST_NAME = ConfigProperty
       .key(DATADOG_PREFIX + ".metric.host")
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Datadog metric host to be sent along with metrics data.");
 
   public static final ConfigProperty<String> METRIC_TAG_VALUES = ConfigProperty
       .key(DATADOG_PREFIX + ".metric.tags")
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Datadog metric tags (comma-delimited) to be sent along with metrics data.");
 

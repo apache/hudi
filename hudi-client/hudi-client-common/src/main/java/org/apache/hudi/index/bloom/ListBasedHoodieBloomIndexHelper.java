@@ -19,20 +19,20 @@
 
 package org.apache.hudi.index.bloom;
 
-import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.HoodieKeyLookupResult;
 import org.apache.hudi.table.HoodieTable;
 
-import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -56,30 +56,31 @@ public class ListBasedHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper 
   public HoodiePairData<HoodieKey, HoodieRecordLocation> findMatchingFilesForRecordKeys(
       HoodieWriteConfig config, HoodieEngineContext context, HoodieTable hoodieTable,
       HoodiePairData<String, String> partitionRecordKeyPairs,
-      HoodieData<Pair<String, HoodieKey>> fileComparisonPairs,
+      HoodiePairData<HoodieFileGroupId, String> fileComparisonPairs,
       Map<String, List<BloomIndexFileInfo>> partitionToFileInfo, Map<String, Long> recordsPerPartition) {
-    List<Pair<String, HoodieKey>> fileComparisonPairList =
+    List<Pair<HoodieFileGroupId, String>> fileComparisonPairList =
         fileComparisonPairs.collectAsList().stream()
             .sorted(Comparator.comparing(Pair::getLeft)).collect(toList());
 
-    List<HoodieKeyLookupResult> keyLookupResults = new ArrayList<>();
-    Iterator<List<HoodieKeyLookupResult>> iterator = new HoodieBaseBloomIndexCheckFunction(
-        hoodieTable, config).apply(fileComparisonPairList.iterator());
-    while (iterator.hasNext()) {
-      keyLookupResults.addAll(iterator.next());
-    }
+    List<HoodieKeyLookupResult> keyLookupResults =
+        CollectionUtils.toStream(
+            new HoodieBloomIndexCheckFunction<Pair<HoodieFileGroupId, String>>(hoodieTable, config, Pair::getLeft, Pair::getRight)
+                .apply(fileComparisonPairList.iterator())
+            )
+            .flatMap(Collection::stream)
+            .filter(lr -> lr.getMatchingRecordKeysAndPositions().size() > 0)
+            .collect(toList());
 
-    keyLookupResults = keyLookupResults.stream().filter(
-        lr -> lr.getMatchingRecordKeys().size() > 0).collect(toList());
     return context.parallelize(keyLookupResults).flatMap(lookupResult ->
-        lookupResult.getMatchingRecordKeys().stream()
+        lookupResult.getMatchingRecordKeysAndPositions().stream()
             .map(recordKey -> new ImmutablePair<>(lookupResult, recordKey)).iterator()
     ).mapToPair(pair -> {
       HoodieKeyLookupResult lookupResult = pair.getLeft();
-      String recordKey = pair.getRight();
+      String recordKey = pair.getRight().getLeft();
+      long recordPosition = pair.getRight().getRight();
       return new ImmutablePair<>(
           new HoodieKey(recordKey, lookupResult.getPartitionPath()),
-          new HoodieRecordLocation(lookupResult.getBaseInstantTime(), lookupResult.getFileId()));
+          new HoodieRecordLocation(lookupResult.getBaseInstantTime(), lookupResult.getFileId(), recordPosition));
     });
   }
 }

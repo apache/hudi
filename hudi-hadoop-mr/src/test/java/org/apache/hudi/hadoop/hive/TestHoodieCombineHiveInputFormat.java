@@ -53,6 +53,7 @@ import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
@@ -84,13 +85,23 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
   }
 
   @AfterAll
-  public static void tearDownClass() {
+  public static void tearDownClass() throws IOException {
     hdfsTestService.stop();
+    if (fs != null) {
+      fs.close();
+    }
   }
 
   @BeforeEach
   public void setUp() throws IOException, InterruptedException {
     assertTrue(fs.mkdirs(new Path(tempDir.toAbsolutePath().toString())));
+  }
+
+  @AfterEach
+  public void tearDown() throws IOException {
+    if (fs != null) {
+      fs.delete(new Path(tempDir.toAbsolutePath().toString()), true);
+    }
   }
 
   @Test
@@ -154,8 +165,8 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     ArrayWritable arrayWritable = recordReader.createValue();
     int counter = 0;
 
-    HoodieCombineRealtimeHiveSplit hiveSplit = (HoodieCombineRealtimeHiveSplit)splits[0];
-    HoodieCombineRealtimeFileSplit fileSplit = (HoodieCombineRealtimeFileSplit)hiveSplit.getInputSplitShim();
+    HoodieCombineRealtimeHiveSplit hiveSplit = (HoodieCombineRealtimeHiveSplit) splits[0];
+    HoodieCombineRealtimeFileSplit fileSplit = (HoodieCombineRealtimeFileSplit) hiveSplit.getInputSplitShim();
     List<FileSplit> realtimeFileSplits = fileSplit.getRealtimeFileSplits();
 
     while (recordReader.next(nullWritable, arrayWritable)) {
@@ -268,8 +279,8 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     // insert 1000 update records to log file 2
     // now fileid0, fileid1 has no log files, fileid2 has log file
     HoodieLogFormat.Writer writer =
-            InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, "fileid2", commitTime, newCommitTime,
-                    numRecords, numRecords, 0);
+        InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, "fileid2", commitTime, newCommitTime,
+            numRecords, numRecords, 0);
     writer.close();
 
     TableDesc tblDesc = Utilities.defaultTd;
@@ -304,7 +315,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     // Since the SPLIT_SIZE is 3, we should create only 1 split with all 3 file groups
     assertEquals(1, splits.length);
     RecordReader<NullWritable, ArrayWritable> recordReader =
-            combineHiveInputFormat.getRecordReader(splits[0], jobConf, null);
+        combineHiveInputFormat.getRecordReader(splits[0], jobConf, null);
     NullWritable nullWritable = recordReader.createKey();
     ArrayWritable arrayWritable = recordReader.createValue();
     int counter = 0;

@@ -50,7 +50,8 @@ public class TestRocksDbBasedMap extends HoodieCommonTestHarness {
   @Test
   public void testSimple() throws IOException, URISyntaxException {
     RocksDbDiskMap records = new RocksDbDiskMap(basePath);
-    List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
+    SchemaTestUtil testUtil = new SchemaTestUtil();
+    List<IndexedRecord> iRecords = testUtil.generateHoodieTestRecords(0, 100);
     ((GenericRecord) iRecords.get(0)).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
 

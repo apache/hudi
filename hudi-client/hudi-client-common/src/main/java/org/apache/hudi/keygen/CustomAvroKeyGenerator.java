@@ -18,14 +18,18 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
+import org.apache.avro.generic.GenericRecord;
+
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.stream.Collectors;
 
 /**
@@ -43,8 +47,10 @@ import java.util.stream.Collectors;
  */
 public class CustomAvroKeyGenerator extends BaseKeyGenerator {
 
-  private static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
+  public static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
   public static final String SPLIT_REGEX = ":";
+  private final List<BaseKeyGenerator> partitionKeyGenerators;
+  private final BaseKeyGenerator recordKeyGenerator;
 
   /**
    * Used as a part of config in CustomKeyGenerator.java.
@@ -55,8 +61,41 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
 
   public CustomAvroKeyGenerator(TypedProperties props) {
     super(props);
-    this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(",")).map(String::trim).collect(Collectors.toList());
+    this.recordKeyFields = Option.ofNullable(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), null))
+        .map(recordKeyConfigValue ->
+            Arrays.stream(recordKeyConfigValue.split(","))
+                .map(String::trim).collect(Collectors.toList())
+        ).orElse(Collections.emptyList());
     this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(",")).map(String::trim).collect(Collectors.toList());
+    this.recordKeyGenerator = getRecordKeyFieldNames().size() == 1 ? new SimpleAvroKeyGenerator(config) : new ComplexAvroKeyGenerator(config);
+    this.partitionKeyGenerators = getPartitionKeyGenerators(this.partitionPathFields, config);
+  }
+
+  private static List<BaseKeyGenerator> getPartitionKeyGenerators(List<String> partitionPathFields, TypedProperties config) {
+    if (partitionPathFields.size() == 1 && partitionPathFields.get(0).isEmpty()) {
+      return Collections.emptyList(); // Corresponds to no partition case
+    } else {
+      return partitionPathFields.stream().map(field -> {
+        String[] fieldWithType = field.split(SPLIT_REGEX);
+        if (fieldWithType.length != 2) {
+          throw new HoodieKeyException("Unable to find field names for partition path in proper format");
+        }
+        String partitionPathField = fieldWithType[0];
+        PartitionKeyType keyType = PartitionKeyType.valueOf(fieldWithType[1].toUpperCase());
+        switch (keyType) {
+          case SIMPLE:
+            return new SimpleAvroKeyGenerator(config, partitionPathField);
+          case TIMESTAMP:
+            try {
+              return new TimestampBasedAvroKeyGenerator(config, partitionPathField);
+            } catch (IOException e) {
+              throw new HoodieKeyGeneratorException("Unable to initialise TimestampBasedKeyGenerator class", e);
+            }
+          default:
+            throw new HoodieKeyGeneratorException("Please provide valid PartitionKeyType with fields! You provided: " + keyType);
+        }
+      }).collect(Collectors.toList());
+    }
   }
 
   @Override
@@ -64,48 +103,25 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
     if (getPartitionPathFields() == null) {
       throw new HoodieKeyException("Unable to find field names for partition path in cfg");
     }
-
-    String partitionPathField;
-    StringBuilder partitionPath = new StringBuilder();
-
-    //Corresponds to no partition case
-    if (getPartitionPathFields().size() == 1 && getPartitionPathFields().get(0).isEmpty()) {
+    // Corresponds to no partition case
+    if (partitionKeyGenerators.isEmpty()) {
       return "";
     }
-    for (String field : getPartitionPathFields()) {
-      String[] fieldWithType = field.split(SPLIT_REGEX);
-      if (fieldWithType.length != 2) {
-        throw new HoodieKeyException("Unable to find field names for partition path in proper format");
+    StringBuilder partitionPath = new StringBuilder();
+    for (int i = 0; i < partitionKeyGenerators.size(); i++) {
+      BaseKeyGenerator partitionKeyGenerator = partitionKeyGenerators.get(i);
+      partitionPath.append(partitionKeyGenerator.getPartitionPath(record));
+      if (i != partitionKeyGenerators.size() - 1) {
+        partitionPath.append(DEFAULT_PARTITION_PATH_SEPARATOR);
       }
-
-      partitionPathField = fieldWithType[0];
-      PartitionKeyType keyType = PartitionKeyType.valueOf(fieldWithType[1].toUpperCase());
-      switch (keyType) {
-        case SIMPLE:
-          partitionPath.append(new SimpleAvroKeyGenerator(config, partitionPathField).getPartitionPath(record));
-          break;
-        case TIMESTAMP:
-          try {
-            partitionPath.append(new TimestampBasedAvroKeyGenerator(config, partitionPathField).getPartitionPath(record));
-          } catch (IOException e) {
-            throw new HoodieKeyGeneratorException("Unable to initialise TimestampBasedKeyGenerator class", e);
-          }
-          break;
-        default:
-          throw new HoodieKeyGeneratorException("Please provide valid PartitionKeyType with fields! You provided: " + keyType);
-      }
-      partitionPath.append(DEFAULT_PARTITION_PATH_SEPARATOR);
     }
-    partitionPath.deleteCharAt(partitionPath.length() - 1);
     return partitionPath.toString();
   }
 
   @Override
   public String getRecordKey(GenericRecord record) {
     validateRecordKeyFields();
-    return getRecordKeyFieldNames().size() == 1
-        ? new SimpleAvroKeyGenerator(config).getRecordKey(record)
-        : new ComplexAvroKeyGenerator(config).getRecordKey(record);
+    return recordKeyGenerator.getRecordKey(record);
   }
 
   private void validateRecordKeyFields() {

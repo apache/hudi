@@ -83,7 +83,7 @@ public class TestDatadogReporter {
     when(appender.isStarted()).thenReturn(true);
     when(appender.isStopped()).thenReturn(false);
     ((Logger) LogManager.getLogger(DatadogReporter.class)).addAppender(appender);
-    
+
     doThrow(IOException.class).when(client).close();
 
     new DatadogReporter(registry, client, "foo", Option.empty(), Option.empty(),

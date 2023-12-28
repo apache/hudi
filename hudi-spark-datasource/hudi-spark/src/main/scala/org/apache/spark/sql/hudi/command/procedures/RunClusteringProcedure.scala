@@ -19,12 +19,11 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
-import org.apache.hudi.common.util.{ClusteringUtils, StringUtils, Option => HOption}
-import org.apache.hudi.config.HoodieClusteringConfig
-import org.apache.hudi.config.HoodieClusteringConfig.{ClusteringOperator, LayoutOptimizationStrategy}
+import org.apache.hudi.common.util.{ClusteringUtils, HoodieTimer, Option => HOption}
+import org.apache.hudi.config.{HoodieClusteringConfig, HoodieLockConfig}
 import org.apache.hudi.exception.HoodieClusteringException
 import org.apache.hudi.{AvroConversionUtils, HoodieCLIUtils, HoodieFileIndex}
 import org.apache.spark.internal.Logging
@@ -34,7 +33,6 @@ import org.apache.spark.sql.catalyst.expressions.PredicateHelper
 import org.apache.spark.sql.execution.datasources.FileStatusCache
 import org.apache.spark.sql.types._
 
-import java.util.Locale
 import java.util.function.Supplier
 import scala.collection.JavaConverters._
 
@@ -48,16 +46,18 @@ class RunClusteringProcedure extends BaseProcedure
    * [ORDER BY (col_name1 [, ...] ) ]
    */
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.optional(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.optional(1, "path", DataTypes.StringType, None),
-    ProcedureParameter.optional(2, "predicate", DataTypes.StringType, None),
-    ProcedureParameter.optional(3, "order", DataTypes.StringType, None),
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
+    ProcedureParameter.optional(2, "predicate", DataTypes.StringType),
+    ProcedureParameter.optional(3, "order", DataTypes.StringType),
     ProcedureParameter.optional(4, "show_involved_partition", DataTypes.BooleanType, false),
-    ProcedureParameter.optional(5, "op", DataTypes.StringType, None),
-    ProcedureParameter.optional(6, "order_strategy", DataTypes.StringType, None),
+    ProcedureParameter.optional(5, "op", DataTypes.StringType),
+    ProcedureParameter.optional(6, "order_strategy", DataTypes.StringType),
     // params => key=value, key2=value2
-    ProcedureParameter.optional(7, "options", DataTypes.StringType, None),
-    ProcedureParameter.optional(8, "instants", DataTypes.StringType, None)
+    ProcedureParameter.optional(7, "options", DataTypes.StringType),
+    ProcedureParameter.optional(8, "instants", DataTypes.StringType),
+    ProcedureParameter.optional(9, "selected_partitions", DataTypes.StringType),
+    ProcedureParameter.optional(10, "limit", DataTypes.IntegerType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -82,28 +82,40 @@ class RunClusteringProcedure extends BaseProcedure
     val op = getArgValueOrDefault(args, PARAMETERS(5))
     val orderStrategy = getArgValueOrDefault(args, PARAMETERS(6))
     val options = getArgValueOrDefault(args, PARAMETERS(7))
-    val instantsStr = getArgValueOrDefault(args, PARAMETERS(8))
+    val specificInstants = getArgValueOrDefault(args, PARAMETERS(8))
+    val parts = getArgValueOrDefault(args, PARAMETERS(9))
+    val limit = getArgValueOrDefault(args, PARAMETERS(10))
 
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
-    var conf: Map[String, String] = Map.empty
-    predicate match {
-      case Some(p) =>
-        val prunedPartitions = prunePartition(metaClient, p.asInstanceOf[String])
-        conf = conf ++ Map(
-          HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME.key() -> "SELECTED_PARTITIONS",
-          HoodieClusteringConfig.PARTITION_SELECTED.key() -> prunedPartitions
-        )
-        logInfo(s"Partition predicates: $p, partition selected: $prunedPartitions")
-      case _ =>
-        logInfo("No partition predicates")
+    var confs: Map[String, String] = Map.empty
+
+    val selectedPartitions: String = (parts, predicate) match {
+      case (_, Some(p)) => prunePartition(metaClient, p.asInstanceOf[String])
+      case (Some(o), _) => o.asInstanceOf[String]
+      case _ => null
+    }
+
+    if (selectedPartitions == null) {
+      logInfo("No partition selected")
+    } else if (selectedPartitions.isEmpty) {
+      logInfo("No partition matched")
+      // scalastyle:off return
+      return Seq()
+      // scalastyle:on return
+    } else {
+      confs = confs ++ Map(
+        HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME.key() -> "SELECTED_PARTITIONS",
+        HoodieClusteringConfig.PARTITION_SELECTED.key() -> selectedPartitions
+      )
+      logInfo(s"Partition selected: $selectedPartitions")
     }
 
     // Construct sort column info
     orderColumns match {
       case Some(o) =>
         validateOrderColumns(o.asInstanceOf[String], metaClient)
-        conf = conf ++ Map(
+        confs = confs ++ Map(
           HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key() -> o.asInstanceOf[String]
         )
         logInfo(s"Order columns: $o")
@@ -113,9 +125,9 @@ class RunClusteringProcedure extends BaseProcedure
 
     orderStrategy match {
       case Some(o) =>
-        val strategy = LayoutOptimizationStrategy.fromValue(o.asInstanceOf[String])
-        conf = conf ++ Map(
-          HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY.key() -> strategy.getValue
+        val strategy = HoodieClusteringConfig.resolveLayoutOptimizationStrategy(o.asInstanceOf[String])
+        confs = confs ++ Map(
+          HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY.key() -> strategy.name()
         )
       case _ =>
         logInfo("No order strategy")
@@ -123,65 +135,46 @@ class RunClusteringProcedure extends BaseProcedure
 
     options match {
       case Some(p) =>
-        val paramPairs = StringUtils.split(p.asInstanceOf[String], ",").asScala
-        paramPairs.foreach{ pair =>
-          val values = StringUtils.split(pair, "=")
-          conf = conf ++ Map(values.get(0) -> values.get(1))
-        }
+        confs = confs ++ HoodieCLIUtils.extractOptions(p.asInstanceOf[String])
       case _ =>
         logInfo("No options")
     }
 
-    // Get all pending clustering instants
-    var pendingClustering = ClusteringUtils.getAllPendingClusteringPlans(metaClient)
-      .iterator().asScala.map(_.getLeft.getTimestamp).toSeq.sortBy(f => f)
-
-    var operator: ClusteringOperator = ClusteringOperator.SCHEDULE_AND_EXECUTE
-    pendingClustering = instantsStr match {
-      case Some(inst) =>
-        op match {
-          case Some(o) =>
-            if (!ClusteringOperator.EXECUTE.name().equalsIgnoreCase(o.asInstanceOf[String])) {
-              throw new HoodieClusteringException("specific instants only can be used in 'execute' op or not specific op")
-            }
-          case _ =>
-            logInfo("No op and set it to EXECUTE with instants specified.")
-        }
-        operator = ClusteringOperator.EXECUTE
-        checkAndFilterPendingInstants(pendingClustering, inst.asInstanceOf[String])
-      case _ =>
-        logInfo("No specific instants")
-        op match {
-          case Some(o) =>
-            operator = ClusteringOperator.fromValue(o.asInstanceOf[String].toLowerCase(Locale.ROOT))
-          case _ =>
-            logInfo("No op, use default scheduleAndExecute")
-        }
-        pendingClustering
+    if (metaClient.getTableConfig.isMetadataTableAvailable) {
+      if (!confs.contains(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key)) {
+        confs = confs ++ HoodieCLIUtils.getLockOptions(basePath)
+        logInfo("Auto config filesystem lock provider for metadata table")
+      }
     }
 
-    logInfo(s"Pending clustering instants: ${pendingClustering.mkString(",")}")
+    val pendingClusteringInstants = ClusteringUtils.getAllPendingClusteringPlans(metaClient)
+      .iterator().asScala.map(_.getLeft.getTimestamp).toSeq.sortBy(f => f)
+
+    var (filteredPendingClusteringInstants, operation) = HoodieProcedureUtils.filterPendingInstantsAndGetOperation(
+      pendingClusteringInstants, specificInstants.asInstanceOf[Option[String]], op.asInstanceOf[Option[String]], limit.asInstanceOf[Option[Int]])
 
     var client: SparkRDDWriteClient[_] = null
     try {
-      client = HoodieCLIUtils.createHoodieClientFromPath(sparkSession, basePath, conf)
-      if (operator.isSchedule) {
-        val instantTime = HoodieActiveTimeline.createNewInstantTime
+      client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, confs,
+        tableName.asInstanceOf[Option[String]])
+
+      if (operation.isSchedule) {
+        val instantTime = client.createNewInstantTime()
         if (client.scheduleClusteringAtInstant(instantTime, HOption.empty())) {
-          pendingClustering ++= Seq(instantTime)
+          filteredPendingClusteringInstants = Seq(instantTime)
         }
       }
-      logInfo(s"Clustering instants to run: ${pendingClustering.mkString(",")}.")
+      logInfo(s"Clustering instants to run: ${filteredPendingClusteringInstants.mkString(",")}.")
 
-      if (operator.isExecute) {
-        val startTs = System.currentTimeMillis()
-        pendingClustering.foreach(client.cluster(_, true))
-        logInfo(s"Finish clustering all the instants: ${pendingClustering.mkString(",")}," +
-          s" time cost: ${System.currentTimeMillis() - startTs}ms.")
+      if (operation.isExecute) {
+        val timer = HoodieTimer.start
+        filteredPendingClusteringInstants.foreach(client.cluster(_, true))
+        logInfo(s"Finish clustering at instants: ${filteredPendingClusteringInstants.mkString(",")}," +
+          s" spend: ${timer.endTimer()}ms.")
       }
 
       val clusteringInstants = metaClient.reloadActiveTimeline().getInstants.iterator().asScala
-        .filter(p => p.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION && pendingClustering.contains(p.getTimestamp))
+        .filter(p => p.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION && filteredPendingClusteringInstants.contains(p.getTimestamp))
         .toSeq
         .sortBy(f => f.getTimestamp)
         .reverse
@@ -242,17 +235,6 @@ class RunClusteringProcedure extends BaseProcedure
       }
     })
   }
-
-  private def checkAndFilterPendingInstants(pendingInstants: Seq[String], instantStr: String): Seq[String] = {
-    val instants = StringUtils.split(instantStr, ",").asScala
-    val pendingSet = pendingInstants.toSet
-    val noneInstants = instants.filter(ins => !pendingSet.contains(ins))
-    if (noneInstants.nonEmpty) {
-      throw new HoodieClusteringException(s"specific ${noneInstants.mkString(",")} instants is not exist")
-    }
-    instants.sortBy(f => f)
-  }
-
 }
 
 object RunClusteringProcedure {

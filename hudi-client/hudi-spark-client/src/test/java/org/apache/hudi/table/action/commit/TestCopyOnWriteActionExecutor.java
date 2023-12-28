@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -40,7 +41,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLayoutConfig;
-import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
@@ -61,8 +61,6 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.JobConf;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.spark.TaskContext;
@@ -72,6 +70,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.Serializable;
@@ -98,7 +98,7 @@ import static org.mockito.Mockito.when;
 
 public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(TestCopyOnWriteActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestCopyOnWriteActionExecutor.class);
   private static final Schema SCHEMA = getSchemaFromResource(TestCopyOnWriteActionExecutor.class, "/exampleSchema.avsc");
   private static final Stream<Arguments> indexType() {
     HoodieIndex.IndexType[] data = new HoodieIndex.IndexType[] {
@@ -124,7 +124,9 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
       String writeToken = FSUtils.makeWriteToken(TaskContext.getPartitionId(), TaskContext.get().stageId(),
           TaskContext.get().taskAttemptId());
       HoodieCreateHandle io = new HoodieCreateHandle(config, instantTime, table, partitionPath, fileName, supplier);
-      return Pair.of(io.makeNewPath(record.getPartitionPath()), writeToken);
+      Pair<Path, String> result = Pair.of(io.makeNewPath(record.getPartitionPath()), writeToken);
+      io.close();
+      return result;
     }).collect().get(0);
 
     assertEquals(newPathWithWriteToken.getKey().toString(), Paths.get(this.basePath, partitionPath,
@@ -242,8 +244,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
 
     // Check whether the record has been updated
     Path updatedFilePath = allFiles[0].getPath();
-    BloomFilter updatedFilter =
-        BaseFileUtils.getInstance(metaClient).readBloomFilterFromMetadata(hadoopConf, updatedFilePath);
+    BloomFilter updatedFilter = getFileUtilsInstance(metaClient).readBloomFilterFromMetadata(hadoopConf, updatedFilePath);
     for (HoodieRecord record : records) {
       // No change to the _row_key
       assertTrue(updatedFilter.mightContain(record.getRecordKey()));
@@ -450,8 +451,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
 
   @Test
   public void testInsertUpsertWithHoodieAvroPayload() throws Exception {
-    Schema schema = getSchemaFromResource(TestCopyOnWriteActionExecutor.class, "/testDataGeneratorSchema.txt");
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schema.toString())
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA)
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder()
@@ -541,7 +541,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     Option<Path> metafilePath = HoodiePartitionMetadata.getPartitionMetafilePath(fs, partitionPath);
     if (partitionMetafileUseBaseFormat) {
       // Extension should be the same as the data file format of the table
-      assertTrue(metafilePath.get().toString().endsWith(table.getBaseFileFormat().getFileExtension()));
+      assertTrue(metafilePath.get().toString().endsWith(table.getBaseFileExtension()));
     } else {
       // No extension as it is in properties file format
       assertTrue(metafilePath.get().toString().endsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX));

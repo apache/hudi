@@ -18,16 +18,6 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.io.ArrayWritable;
-import org.apache.hadoop.io.NullWritable;
-import org.apache.hadoop.mapred.FileInputFormat;
-import org.apache.hadoop.mapred.InputSplit;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.RecordReader;
-import org.apache.hadoop.mapreduce.Job;
-
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.fs.FSUtils;
@@ -40,6 +30,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -50,6 +41,22 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.ql.io.IOConstants;
+import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.mapred.FileInputFormat;
+import org.apache.hadoop.mapred.InputSplit;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapred.RecordReader;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hive.common.util.HiveVersionInfo;
+import org.apache.parquet.avro.AvroParquetWriter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -58,13 +65,19 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
+import static org.apache.hudi.hadoop.HoodieColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -479,10 +492,11 @@ public class TestHoodieParquetInputFormat {
     List<HoodieWriteStat> writeStats = HoodieTestUtils.generateFakeHoodieWriteStat(1);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     writeStats.forEach(stat -> commitMetadata.addWriteStat(partitionPath, stat));
-    File file = basePath.resolve(".hoodie").resolve(commitNumber + ".commit").toFile();
+    File file = basePath.resolve(".hoodie")
+        .resolve(commitNumber + "_" + InProcessTimeGenerator.createNewInstantTime() + ".commit").toFile();
     file.createNewFile();
     FileOutputStream fileOutputStream = new FileOutputStream(file);
-    fileOutputStream.write(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8));
+    fileOutputStream.write(serializeCommitMetadata(commitMetadata).get());
     fileOutputStream.flush();
     fileOutputStream.close();
   }
@@ -681,6 +695,58 @@ public class TestHoodieParquetInputFormat {
     ensureFilesInCommit("Pulling 1 commit from 100, should get us the 10 files committed at 100", files, "100", 10);
   }
 
+  /**
+   * Test scenario where inflight commit is between completed commits.
+   */
+  @Test
+  public void testSnapshotPreCommitValidateWithInflights() throws IOException {
+    // Create commit and data files with commit 000
+    File partitionDir = InputFormatTestUtil.prepareTable(basePath, baseFileFormat, 5, "000");
+    createCommitFile(basePath, "000", "2016/05/01");
+
+    // create inflight commit add more files with same file_id.
+    InputFormatTestUtil.simulateInserts(partitionDir, baseFileExtension, "fileId1", 5, "100");
+    FileCreateUtils.createInflightCommit(basePath.toString(), "100");
+
+    // Create another commit without datafiles.
+    createCommitFile(basePath, "200", "2016/05/01");
+
+    // Add the paths
+    FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
+
+    // Now, the original data files with commit time 000 should be returned.
+    FileStatus[] files = inputFormat.listStatus(jobConf);
+    assertEquals(5, files.length, "Snapshot read must return all files in partition");
+    ensureFilesInCommit("Should return base files from commit 000, inflight data files with "
+        + "greater timestamp should be filtered", files, "000", 5);
+
+    // Create data files with same file_id for commit 200.
+    InputFormatTestUtil.simulateInserts(partitionDir, baseFileExtension, "fileId1", 5, "200");
+
+    // This time data files from commit time 200 will be returned.
+    files = inputFormat.listStatus(jobConf);
+    assertEquals(5, files.length, "Snapshot read must return all files in partition");
+    ensureFilesInCommit("Only completed commits files should be returned.",
+        files, "200", 5);
+  }
+
+  @Test
+  public void testInputFormatLoadForEmptyPartitionedTable() throws IOException {
+    // initial commit
+    File partitionDir = InputFormatTestUtil.prepareTable(basePath, baseFileFormat, 10, "100");
+    InputFormatTestUtil.commit(basePath, "100");
+
+    // Add the empty paths
+    String emptyPath = ClassLoader.getSystemResource("emptyFile").getPath();
+    FileInputFormat.setInputPaths(jobConf, emptyPath);
+
+    InputSplit[] inputSplits = inputFormat.getSplits(jobConf, 10);
+    assertEquals(1, inputSplits.length);
+
+    FileStatus[] files = inputFormat.listStatus(jobConf);
+    assertEquals(1, files.length);
+  }
+
   private void ensureRecordsInCommit(String msg, String commit, int expectedNumberOfRecordsInCommit,
       int totalExpected) throws IOException {
     int actualCount = 0;
@@ -703,5 +769,58 @@ public class TestHoodieParquetInputFormat {
     }
     assertEquals(expectedNumberOfRecordsInCommit, actualCount, msg);
     assertEquals(totalExpected, totalCount, msg);
+  }
+
+  @Test
+  public void testHoodieParquetInputFormatReadTimeType() throws IOException {
+    long testTimestampLong = System.currentTimeMillis();
+    int testDate = 19116;// 2022-05-04
+
+    Schema schema = SchemaTestUtil.getSchemaFromResource(getClass(), "/test_timetype.avsc");
+    String commit = "20160628071126";
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(),
+        HoodieTableType.COPY_ON_WRITE, HoodieFileFormat.PARQUET);
+    java.nio.file.Path partitionPath = basePath.resolve(Paths.get("2016", "06", "28"));
+    String fileId = FSUtils.makeBaseFileName(commit, "1-0-1", "fileid1",
+        HoodieFileFormat.PARQUET.getFileExtension());
+    try (AvroParquetWriter parquetWriter = new AvroParquetWriter(
+        new Path(partitionPath.resolve(fileId).toString()), schema)) {
+      GenericData.Record record = new GenericData.Record(schema);
+      record.put("test_timestamp", testTimestampLong * 1000);
+      record.put("test_long", testTimestampLong * 1000);
+      record.put("test_date", testDate);
+      record.put("_hoodie_commit_time", commit);
+      record.put("_hoodie_commit_seqno", commit + 1);
+      parquetWriter.write(record);
+    }
+
+    jobConf.set(IOConstants.COLUMNS, "test_timestamp,test_long,test_date,_hoodie_commit_time,_hoodie_commit_seqno");
+    jobConf.set(IOConstants.COLUMNS_TYPES, "timestamp,bigint,date,string,string");
+    jobConf.set(READ_COLUMN_NAMES_CONF_STR, "test_timestamp,test_long,test_date,_hoodie_commit_time,_hoodie_commit_seqno");
+    InputFormatTestUtil.setupPartition(basePath, partitionPath);
+    InputFormatTestUtil.commit(basePath, commit);
+    FileInputFormat.setInputPaths(jobConf, partitionPath.toFile().getPath());
+
+    InputSplit[] splits = inputFormat.getSplits(jobConf, 1);
+    for (InputSplit split : splits) {
+      RecordReader<NullWritable, ArrayWritable> recordReader = inputFormat
+          .getRecordReader(split, jobConf, null);
+      NullWritable key = recordReader.createKey();
+      ArrayWritable writable = recordReader.createValue();
+      while (recordReader.next(key, writable)) {
+        // test timestamp
+        if (HiveVersionInfo.getShortVersion().startsWith("3")) {
+          LocalDateTime localDateTime = LocalDateTime.ofInstant(
+              Instant.ofEpochMilli(testTimestampLong), ZoneOffset.UTC);
+          assertEquals(Timestamp.valueOf(localDateTime).toString(), String.valueOf(writable.get()[0]));
+        } else {
+          assertEquals(new Timestamp(testTimestampLong).toString(), String.valueOf(writable.get()[0]));
+        }
+        // test long
+        assertEquals(testTimestampLong * 1000, ((LongWritable) writable.get()[1]).get());
+        // test date
+        assertEquals(LocalDate.ofEpochDay(testDate).toString(), String.valueOf(writable.get()[2]));
+      }
+    }
   }
 }

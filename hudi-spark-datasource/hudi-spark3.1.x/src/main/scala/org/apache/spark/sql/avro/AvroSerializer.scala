@@ -54,7 +54,7 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
   def this(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean) = {
     this(rootCatalystType, rootAvroType, nullable,
       LegacyBehaviorPolicy.withName(SQLConf.get.getConf(
-        SQLConf.LEGACY_AVRO_REBASE_MODE_IN_WRITE)))
+        SQLConf.LEGACY_AVRO_REBASE_MODE_IN_WRITE, LegacyBehaviorPolicy.CORRECTED.toString)))
   }
 
   def serialize(catalystData: Any): Any = {

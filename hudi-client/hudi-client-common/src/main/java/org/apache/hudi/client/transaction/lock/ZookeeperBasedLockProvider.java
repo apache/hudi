@@ -31,8 +31,8 @@ import org.apache.curator.framework.imps.CuratorFrameworkState;
 import org.apache.curator.framework.recipes.locks.InterProcessMutex;
 import org.apache.curator.retry.BoundedExponentialBackoffRetry;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -57,7 +57,7 @@ import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT
 @NotThreadSafe
 public class ZookeeperBasedLockProvider implements LockProvider<InterProcessMutex>, Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(ZookeeperBasedLockProvider.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ZookeeperBasedLockProvider.class);
 
   private final transient CuratorFramework curatorFrameworkClient;
   private volatile InterProcessMutex lock = null;
@@ -155,8 +155,6 @@ public class ZookeeperBasedLockProvider implements LockProvider<InterProcessMute
   private void checkRequiredProps(final LockConfiguration config) {
     ValidationUtils.checkArgument(config.getConfig().getString(ZK_CONNECT_URL_PROP_KEY) != null);
     ValidationUtils.checkArgument(config.getConfig().getString(ZK_BASE_PATH_PROP_KEY) != null);
-    ValidationUtils.checkArgument(config.getConfig().getString(ZK_SESSION_TIMEOUT_MS_PROP_KEY) != null);
-    ValidationUtils.checkArgument(config.getConfig().getString(ZK_CONNECTION_TIMEOUT_MS_PROP_KEY) != null);
     ValidationUtils.checkArgument(config.getConfig().getString(ZK_LOCK_KEY_PROP_KEY) != null);
   }
 

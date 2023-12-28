@@ -20,9 +20,10 @@ package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -37,7 +38,7 @@ import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVE
  * a normal commit
  */
 @SuppressWarnings("checkstyle:LineLength")
-public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
+public class HoodieSparkMergeOnReadTableCompactor<T>
     extends HoodieCompactor<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
 
   @Override
@@ -53,7 +54,7 @@ public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
   }
 
   @Override
-  public void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieWriteConfig config) {
-    writeStatus.persist(config.getString(WRITE_STATUS_STORAGE_LEVEL_VALUE));
+  public void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieEngineContext context, HoodieWriteConfig config, String instantTime) {
+    writeStatus.persist(config.getString(WRITE_STATUS_STORAGE_LEVEL_VALUE), context, HoodieDataCacheKey.of(config.getBasePath(), instantTime));
   }
 }

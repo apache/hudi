@@ -27,12 +27,12 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
@@ -49,8 +49,8 @@ import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -65,9 +65,9 @@ import static java.util.stream.Collectors.toList;
 /**
  * A HoodieCompactor runs compaction on a hoodie table.
  */
-public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> implements Serializable {
+public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieCompactor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieCompactor.class);
 
   /**
    * Handles the compaction timeline based on the compaction instant before actual compaction.
@@ -84,7 +84,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
    *
    * @param writeStatus {@link HoodieData} of {@link WriteStatus}.
    */
-  public abstract void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieWriteConfig config);
+  public abstract void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieEngineContext context, HoodieWriteConfig config, String instantTime);
 
   /**
    * Execute compaction operations and report back status.
@@ -127,8 +127,10 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
 
     context.setJobStatus(this.getClass().getSimpleName(), "Compacting file slices: " + config.getTableName());
     TaskContextSupplier taskContextSupplier = table.getTaskContextSupplier();
+    // if this is a MDT, set up the instant range of log reader just like regular MDT snapshot reader.
+    Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
     return context.parallelize(operations).map(operation -> compact(
-        compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime, taskContextSupplier, executionHelper))
+        compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime, instantRange, taskContextSupplier, executionHelper))
         .flatMap(List::iterator);
   }
 
@@ -142,7 +144,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
                                    String instantTime,
                                    String maxInstantTime,
                                    TaskContextSupplier taskContextSupplier) throws IOException {
-    return compact(compactionHandler, metaClient, config, operation, instantTime, maxInstantTime,
+    return compact(compactionHandler, metaClient, config, operation, instantTime, maxInstantTime, Option.empty(),
         taskContextSupplier, new CompactionExecutionHelper());
   }
 
@@ -155,6 +157,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
                                    CompactionOperation operation,
                                    String instantTime,
                                    String maxInstantTime,
+                                   Option<InstantRange> instantRange,
                                    TaskContextSupplier taskContextSupplier,
                                    CompactionExecutionHelper executionHelper) throws IOException {
     FileSystem fs = metaClient.getFs();
@@ -163,7 +166,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
     if (!StringUtils.isNullOrEmpty(config.getInternalSchema())) {
       readerSchema = new Schema.Parser().parse(config.getSchema());
       internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
-      // its safe to modify config here, since we running in task side.
+      // its safe to modify config here, since we are running in task side.
       ((HoodieTable) compactionHandler).getConfig().setDefault(config);
     } else {
       readerSchema = HoodieAvroUtils.addMetadataFields(
@@ -190,6 +193,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
         .withLogFilePaths(logFiles)
         .withReaderSchema(readerSchema)
         .withLatestInstantTime(executionHelper.instantTimeToUseForScanning(instantTime, maxInstantTime))
+        .withInstantRange(instantRange)
         .withInternalSchema(internalSchemaOption.orElse(InternalSchema.getEmptyInternalSchema()))
         .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
         .withReadBlocksLazily(config.getCompactionLazyBlockReadEnabled())
@@ -200,7 +204,9 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
         .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
         .withOperationField(config.allowOperationMetadataField())
         .withPartition(operation.getPartitionPath())
-        .withUseScanV2(executionHelper.useScanV2(config))
+        .withOptimizedLogBlocksScan(executionHelper.enableOptimizedLogBlockScan(config))
+        .withRecordMerger(config.getRecordMerger())
+        .withInstantRange(instantRange)
         .build();
 
     Option<HoodieBaseFile> oldDataFileOpt =

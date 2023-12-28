@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.integ.testsuite.HoodieTestSuiteJob;
+import org.apache.hudi.utilities.config.DFSPathSelectorConfig;
 import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
 
 import org.apache.hadoop.conf.Configuration;
@@ -39,6 +40,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * A custom dfs path selector used only for the hudi test suite. To be used only if workload is not run inline.
@@ -69,7 +72,7 @@ public class DFSTestSuitePathSelector extends DFSPathSelector {
       // obtain all eligible files for the batch
       List<FileStatus> eligibleFiles = new ArrayList<>();
       FileStatus[] fileStatuses = fs.globStatus(
-          new Path(props.getString(Config.ROOT_INPUT_PATH_PROP), "*"));
+          new Path(getStringWithAltKeys(props, DFSPathSelectorConfig.ROOT_INPUT_PATH), "*"));
       // Say input data is as follow input/1, input/2, input/5 since 3,4 was rolled back and 5 is new generated data
       // checkpoint from the latest commit metadata will be 2 since 3,4 has been rolled back. We need to set the
       // next batch id correctly as 5 instead of 3

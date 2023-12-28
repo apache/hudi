@@ -48,13 +48,6 @@
  statement
     : compactionStatement                                                       #compactionCommand
     | CALL multipartIdentifier   callArgumentList?    #call
-    | CREATE INDEX (IF NOT EXISTS)? identifier ON TABLE?
-          tableIdentifier (USING indexType=identifier)?
-          LEFT_PAREN columns=multipartIdentifierPropertyList RIGHT_PAREN
-          (OPTIONS indexOptions=propertyList)?                                  #createIndex
-    | DROP INDEX (IF EXISTS)? identifier ON TABLE? tableIdentifier              #dropIndex
-    | SHOW INDEXES (FROM | IN) TABLE? tableIdentifier                           #showIndexes
-    | REFRESH INDEX identifier ON TABLE? tableIdentifier                        #refreshIndex
     | .*?                                                                       #passThrough
     ;
 
@@ -110,17 +103,39 @@
     | MINUS? BIGDECIMAL_LITERAL       #bigDecimalLiteral
     ;
 
- multipartIdentifierPropertyList
-     : multipartIdentifierProperty (COMMA multipartIdentifierProperty)*
-     ;
-
- multipartIdentifierProperty
-     : multipartIdentifier (OPTIONS options=propertyList)?
-     ;
-
  multipartIdentifier
     : parts+=identifier ('.' parts+=identifier)*
     ;
+
+ indexItem
+     :   indexExpressionItem                // For expressions
+     ;
+
+ indexExpressionItem
+     :   indexExpression (OPTIONS options=propertyList)?
+     ;
+
+ indexExpression
+     :   functionCall                     // Function calls like from_unixtime(ts, 'yyyy-MM-dd')
+     // Add more expressions as needed
+     ;
+
+ functionCall
+     :   functionName LEFT_PAREN functionArgs RIGHT_PAREN
+     ;
+
+ functionName
+     :   IDENTIFIER                       // Matches function names like "from_unixtime"
+     ;
+
+ functionArgs
+     :   functionArg (COMMA functionArg)* // A list of arguments separated by commas
+     ;
+
+ functionArg
+     :   STRING                           // Matches string literals like 'yyyy-MM-dd'
+     // Add more types of arguments as needed
+     ;
 
  identifier
     : IDENTIFIER              #unquotedIdentifier
@@ -135,24 +150,11 @@
  nonReserved
      : CALL
      | COMPACTION
-     | CREATE
-     | DROP
-     | EXISTS
-     | FROM
-     | IN
-     | INDEX
-     | INDEXES
-     | IF
      | LIMIT
-     | NOT
      | ON
-     | OPTIONS
-     | REFRESH
      | RUN
      | SCHEDULE
      | SHOW
-     | TABLE
-     | USING
      ;
 
  propertyList
@@ -195,21 +197,6 @@
  FALSE: 'FALSE';
  INTERVAL: 'INTERVAL';
  TO: 'TO';
- CREATE: 'CREATE';
- INDEX: 'INDEX';
- INDEXES: 'INDEXES';
- IF: 'IF';
- NOT: 'NOT';
- EXISTS: 'EXISTS';
- TABLE: 'TABLE';
- USING: 'USING';
- OPTIONS: 'OPTIONS';
- DROP: 'DROP';
- FROM: 'FROM';
- IN: 'IN';
- REFRESH: 'REFRESH';
-
- EQ: '=' | '==';
 
  PLUS: '+';
  MINUS: '-';

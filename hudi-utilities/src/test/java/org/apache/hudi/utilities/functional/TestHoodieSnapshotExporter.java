@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex.IndexType;
@@ -41,8 +42,6 @@ import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.DataFrameWriter;
@@ -55,6 +54,8 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Paths;
@@ -69,7 +70,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("functional")
 public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness {
 
-  static final Logger LOG = LogManager.getLogger(TestHoodieSnapshotExporter.class);
+  static final Logger LOG = LoggerFactory.getLogger(TestHoodieSnapshotExporter.class);
   static final int NUM_RECORDS = 100;
   static final String COMMIT_TIME = "20200101000000";
   static final String PARTITION_PATH = "2020";
@@ -93,13 +94,13 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
 
     // Prepare data as source Hudi dataset
     HoodieWriteConfig cfg = getHoodieWriteConfig(sourcePath);
-    SparkRDDWriteClient writeClient = getHoodieWriteClient(cfg);
-    writeClient.startCommitWithTime(COMMIT_TIME);
-    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(new String[] {PARTITION_PATH});
-    List<HoodieRecord> records = dataGen.generateInserts(COMMIT_TIME, NUM_RECORDS);
-    JavaRDD<HoodieRecord> recordsRDD = jsc().parallelize(records, 1);
-    writeClient.bulkInsert(recordsRDD, COMMIT_TIME);
-    writeClient.close();
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(cfg)) {
+      writeClient.startCommitWithTime(COMMIT_TIME);
+      HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(new String[] {PARTITION_PATH});
+      List<HoodieRecord> records = dataGen.generateInserts(COMMIT_TIME, NUM_RECORDS);
+      JavaRDD<HoodieRecord> recordsRDD = jsc().parallelize(records, 1);
+      writeClient.bulkInsert(recordsRDD, COMMIT_TIME);
+    }
     RemoteIterator<LocatedFileStatus> itr = lfs.listFiles(new Path(sourcePath), true);
     while (itr.hasNext()) {
       LOG.info(">>> Prepared test file: " + itr.next().getPath());
@@ -141,8 +142,10 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     public void testExportAsHudi() throws IOException {
       new HoodieSnapshotExporter().export(jsc(), cfg);
 
+      Path completeInstantPath = HoodieTestUtils
+          .getCompleteInstantPath(lfs, new Path(targetPath, ".hoodie"), COMMIT_TIME, "commit");
       // Check results
-      assertTrue(lfs.exists(new Path(targetPath + "/.hoodie/" + COMMIT_TIME + ".commit")));
+      assertTrue(lfs.exists(completeInstantPath));
       assertTrue(lfs.exists(new Path(targetPath + "/.hoodie/" + COMMIT_TIME + ".commit.requested")));
       assertTrue(lfs.exists(new Path(targetPath + "/.hoodie/" + COMMIT_TIME + ".inflight")));
       assertTrue(lfs.exists(new Path(targetPath + "/.hoodie/hoodie.properties")));

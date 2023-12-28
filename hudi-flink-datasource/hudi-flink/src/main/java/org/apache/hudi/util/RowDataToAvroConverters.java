@@ -37,7 +37,6 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -176,7 +175,8 @@ public class RowDataToAvroConverters {
 
                 @Override
                 public Object convert(Schema schema, Object object) {
-                  return ChronoUnit.MICROS.between(Instant.EPOCH, ((TimestampData) object).toInstant());
+                  Instant instant = ((TimestampData) object).toInstant();
+                  return  Math.addExact(Math.multiplyExact(instant.getEpochSecond(), 1000_000), instant.getNano() / 1000);
                 }
               };
         } else {

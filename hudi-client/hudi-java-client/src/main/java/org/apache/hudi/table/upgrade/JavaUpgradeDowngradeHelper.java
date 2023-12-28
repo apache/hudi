@@ -19,6 +19,8 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.client.BaseHoodieWriteClient;
+import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -47,5 +49,10 @@ public class JavaUpgradeDowngradeHelper implements SupportsUpgradeDowngrade {
   @Override
   public String getPartitionColumns(HoodieWriteConfig config) {
     return config.getProps().getProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
+  }
+
+  @Override
+  public BaseHoodieWriteClient getWriteClient(HoodieWriteConfig config, HoodieEngineContext context) {
+    return new HoodieJavaWriteClient(context, config);
   }
 }

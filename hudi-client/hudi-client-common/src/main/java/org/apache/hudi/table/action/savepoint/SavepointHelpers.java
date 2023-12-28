@@ -24,12 +24,13 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class SavepointHelpers {
 
-  private static final Logger LOG = LogManager.getLogger(SavepointHelpers.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SavepointHelpers.class);
 
   public static void deleteSavepoint(HoodieTable table, String savepointTime) {
     HoodieInstant savePoint = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, savepointTime);

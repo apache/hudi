@@ -33,7 +33,7 @@ import scala.collection.JavaConverters.asScalaIteratorConverter
 
 class ShowMetadataTablePartitionsProcedure() extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None)
+    ProcedureParameter.required(0, "table", DataTypes.StringType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -51,8 +51,7 @@ class ShowMetadataTablePartitionsProcedure() extends BaseProcedure with Procedur
 
     val basePath = getBasePath(table)
     val config = HoodieMetadataConfig.newBuilder.enable(true).build
-    val metadata = new HoodieBackedTableMetadata(new HoodieSparkEngineContext(jsc),
-      config, basePath, "/tmp")
+    val metadata = new HoodieBackedTableMetadata(new HoodieSparkEngineContext(jsc), config, basePath)
     if (!metadata.enabled){
       throw new HoodieException(s"Metadata Table not enabled/initialized.")
     }

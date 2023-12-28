@@ -66,8 +66,8 @@ public abstract class Source<T> implements SourceCommitCallback, Serializable {
   protected abstract InputBatch<T> fetchNewData(Option<String> lastCkptStr, long sourceLimit);
 
   /**
-   * Main API called by Hoodie Delta Streamer to fetch records.
-   * 
+   * Main API called by Hoodie Streamer to fetch records.
+   *
    * @param lastCkptStr Last Checkpoint
    * @param sourceLimit Source Limit
    * @return

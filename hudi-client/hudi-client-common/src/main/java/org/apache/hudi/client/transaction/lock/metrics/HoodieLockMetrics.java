@@ -47,13 +47,15 @@ public class HoodieLockMetrics {
   private transient Timer lockDuration;
   private transient Timer lockApiRequestDuration;
   private static final Object REGISTRY_LOCK = new Object();
+  private Metrics metrics;
 
   public HoodieLockMetrics(HoodieWriteConfig writeConfig) {
     this.isMetricsEnabled = writeConfig.isLockingMetricsEnabled();
     this.writeConfig = writeConfig;
 
     if (isMetricsEnabled) {
-      MetricRegistry registry = Metrics.getInstance().getRegistry();
+      metrics = Metrics.getInstance(writeConfig);
+      MetricRegistry registry = metrics.getRegistry();
 
       lockAttempts = registry.counter(getMetricsName(LOCK_ACQUIRE_ATTEMPTS_COUNTER_NAME));
       successfulLockAttempts = registry.counter(getMetricsName(LOCK_ACQUIRE_SUCCESS_COUNTER_NAME));
@@ -70,11 +72,13 @@ public class HoodieLockMetrics {
 
   private Timer createTimerForMetrics(MetricRegistry registry, String metric) {
     String metricName = getMetricsName(metric);
-    synchronized (REGISTRY_LOCK) {
-      if (registry.getMetrics().get(metricName) == null) {
-        lockDuration = new Timer(new SlidingWindowReservoir(keepLastNtimes));
-        registry.register(metricName, lockDuration);
-        return lockDuration;
+    if (registry.getMetrics().get(metricName) == null) {
+      synchronized (REGISTRY_LOCK) {
+        if (registry.getMetrics().get(metricName) == null) {
+          lockDuration = new Timer(new SlidingWindowReservoir(keepLastNtimes));
+          registry.register(metricName, lockDuration);
+          return lockDuration;
+        }
       }
     }
     return (Timer) registry.getMetrics().get(metricName);

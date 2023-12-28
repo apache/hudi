@@ -24,8 +24,8 @@ import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -60,7 +60,7 @@ public class BoundedInMemoryQueue<I, O> implements HoodieMessageQueue<I, O>, Ite
   /** Maximum records that will be cached. **/
   private static final int RECORD_CACHING_LIMIT = 128 * 1024;
 
-  private static final Logger LOG = LogManager.getLogger(BoundedInMemoryQueue.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BoundedInMemoryQueue.class);
 
   /**
    * It indicates number of records to cache. We will be using sampled record's average size to
@@ -268,6 +268,11 @@ public class BoundedInMemoryQueue<I, O> implements HoodieMessageQueue<I, O>, Ite
     // release the permits so that if the queueing thread is waiting for permits then it will
     // get it.
     this.rateLimiter.release(RECORD_CACHING_LIMIT + 1);
+  }
+
+  @Override
+  public Throwable getThrowable() {
+    return this.hasFailed.get();
   }
 
   @Override
