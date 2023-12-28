@@ -78,7 +78,7 @@ import java.util.stream.Collectors;
 import scala.Tuple2;
 
 import static org.apache.hudi.common.util.ClusteringUtils.getAllFileGroupsInPendingClusteringPlans;
-import static org.apache.hudi.config.HoodieWriteConfig.IGNORE_ERROR_WRITE;
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_IGNORE_FAILED;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE;
 
 public abstract class BaseSparkCommitActionExecutor<T> extends
@@ -294,7 +294,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   @Override
   protected void commit(HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
     context.setJobStatus(this.getClass().getSimpleName(), "Commit write status collect: " + config.getTableName());
-    if (!config.getBoolean(IGNORE_ERROR_WRITE) && result.getWriteStatuses().filter(status -> status.getErrors().size() > 0).count() > 0) {
+    if (!config.getBoolean(WRITE_IGNORE_FAILED) && result.getWriteStatuses().filter(status -> status.getErrors().size() > 0).count() > 0) {
       throw new HoodieException("Error writing record in the job");
     }
     commit(result.getWriteStatuses(), result, result.getWriteStats().isPresent()
