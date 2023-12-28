@@ -23,7 +23,9 @@ import org.apache.hudi.client.bootstrap.selector.BootstrapRegexModeSelector;
 import org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector;
 import org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector;
 import org.apache.hudi.client.bootstrap.translator.DecodedBootstrapPartitionPathTranslator;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -55,6 +57,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("functional")
 public abstract class TestBootstrapReadBase extends HoodieSparkClientTestBase {
+  protected static final String BOOTSTRAP_TYPE_FULL = "full";
 
   @TempDir
   public java.nio.file.Path tmpFolder;
@@ -66,6 +69,7 @@ public abstract class TestBootstrapReadBase extends HoodieSparkClientTestBase {
   protected static int nUpdates = 20;
   protected static String[] dashPartitionPaths = {"2016-03-14","2016-03-15", "2015-03-16", "2015-03-17"};
   protected static String[] slashPartitionPaths = {"2016/03/15", "2015/03/16", "2015/03/17"};
+  protected static String fileFormat;
   protected String bootstrapType;
   protected Boolean dashPartitions;
   protected HoodieTableType tableType;
@@ -91,6 +95,12 @@ public abstract class TestBootstrapReadBase extends HoodieSparkClientTestBase {
 
   protected Map<String, String> basicOptions() {
     Map<String, String> options = new HashMap<>();
+    options.put(HoodieTableConfig.BASE_FILE_FORMAT.key(), fileFormat);
+    options.put(HoodieWriteConfig.BASE_FILE_FORMAT.key(), fileFormat);
+    if (HoodieFileFormat.ORC.name().equals(fileFormat) && BOOTSTRAP_TYPE_FULL.equals(bootstrapType)) {
+      options.put(HoodieBootstrapConfig.FULL_BOOTSTRAP_INPUT_PROVIDER_CLASS_NAME.key(),
+          "org.apache.hudi.bootstrap.SparkOrcBootstrapDataProvider");
+    }
     options.put(DataSourceWriteOptions.TABLE_TYPE().key(), tableType.name());
     options.put(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING().key(), "true");
     options.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
@@ -221,9 +231,9 @@ public abstract class TestBootstrapReadBase extends HoodieSparkClientTestBase {
       for (int i = 1; i < partitionCols.length; i++) {
         partitionCols[i] = "partpath" + (i + 1);
       }
-      inserts.write().partitionBy(partitionCols).save(bootstrapBasePath);
+      inserts.write().format(fileFormat).partitionBy(partitionCols).save(bootstrapBasePath);
     } else {
-      inserts.write().save(bootstrapBasePath);
+      inserts.write().format(fileFormat).save(bootstrapBasePath);
     }
 
     inserts.write().format("hudi")

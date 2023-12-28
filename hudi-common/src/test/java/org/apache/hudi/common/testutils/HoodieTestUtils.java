@@ -72,27 +72,38 @@ public class HoodieTestUtils {
     return init(basePath, HoodieTableType.COPY_ON_WRITE);
   }
 
-  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType) throws IOException {
+  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType)
+      throws IOException {
     return init(getDefaultHadoopConf(), basePath, tableType);
   }
 
-  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, Properties properties) throws IOException {
+  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType,
+                                           Properties properties) throws IOException {
     return init(getDefaultHadoopConf(), basePath, tableType, properties);
   }
 
-  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, boolean bootstrapIndexEnable, String keyGenerator) throws IOException {
-    return init(basePath, tableType, bootstrapBasePath, bootstrapIndexEnable, keyGenerator, "datestr");
+  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType,
+                                           String bootstrapBasePath, boolean bootstrapIndexEnable,
+                                           String keyGenerator) throws IOException {
+    return init(
+        basePath, tableType, bootstrapBasePath, bootstrapIndexEnable, keyGenerator, "datestr",
+        HoodieFileFormat.PARQUET);
   }
 
-  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, boolean bootstrapIndexEnable, String keyGenerator,
-                                             String partitionFieldConfigValue) throws IOException {
+  public static HoodieTableMetaClient init(String basePath,
+                                           HoodieTableType tableType, String bootstrapBasePath,
+                                           boolean bootstrapIndexEnable, String keyGenerator,
+                                           String partitionFieldConfigValue,
+                                           HoodieFileFormat fileFormat) throws IOException {
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.BOOTSTRAP_BASE_PATH.key(), bootstrapBasePath);
     props.put(HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE.key(), bootstrapIndexEnable);
+    props.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), fileFormat.name());
     if (keyGenerator != null) {
       props.put("hoodie.datasource.write.keygenerator.class", keyGenerator);
     }
-    if (keyGenerator != null && !keyGenerator.equals("org.apache.hudi.keygen.NonpartitionedKeyGenerator")) {
+    if (keyGenerator != null
+        && !keyGenerator.equals("org.apache.hudi.keygen.NonpartitionedKeyGenerator")) {
       props.put("hoodie.datasource.write.partitionpath.field", partitionFieldConfigValue);
       props.put(HoodieTableConfig.PARTITION_FIELDS.key(), partitionFieldConfigValue);
     }
@@ -165,25 +176,17 @@ public class HoodieTestUtils {
             .setPayloadClass(HoodieAvroPayload.class);
 
     String keyGen = properties.getProperty("hoodie.datasource.write.keygenerator.class");
-    if (!Objects.equals(keyGen, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
-        && !properties.containsKey("hoodie.datasource.write.partitionpath.field")) {
-      builder.setPartitionFields("some_nonexistent_field");
+    builder.setKeyGeneratorClassProp(keyGen);
+    if (!Objects.equals(keyGen, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")) {
+      builder.setPartitionFields(properties.getProperty(
+          "hoodie.datasource.write.partitionpath.field", "some_nonexistent_field"));
     }
+    builder.setRecordKeyFields(properties.getProperty(
+        "hoodie.datasource.write.recordkey.field", "_row_key"));
 
     Properties processedProperties = builder.fromProperties(properties).build();
 
     return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, processedProperties);
-  }
-
-  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, HoodieFileFormat baseFileFormat, String keyGenerator) throws IOException {
-    Properties props = new Properties();
-    props.setProperty(HoodieTableConfig.BOOTSTRAP_BASE_PATH.key(), bootstrapBasePath);
-    props.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), baseFileFormat.name());
-    if (keyGenerator != null) {
-      props.put("hoodie.datasource.write.keygenerator.class", keyGenerator);
-      props.put("hoodie.datasource.write.partitionpath.field", "datestr");
-    }
-    return init(getDefaultHadoopConf(), basePath, tableType, props);
   }
 
   public static <T extends Serializable> T serializeDeserialize(T object, Class<T> clazz) {

@@ -46,7 +46,6 @@ import org.apache.orc.TypeDescription;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -70,71 +69,50 @@ public class OrcUtils extends BaseFileUtils {
    */
   @Override
   public ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, Path filePath) {
+    return getHoodieKeyIterator(configuration, filePath, Option.empty());
+  }
+
+  @Override
+  public ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
     try {
       Configuration conf = new Configuration(configuration);
       conf.addResource(FSUtils.getFs(filePath.toString(), conf).getConf());
       Reader reader = OrcFile.createReader(filePath, OrcFile.readerOptions(conf));
 
-      Schema readSchema = HoodieAvroUtils.getRecordKeyPartitionPathSchema();
+      Schema readSchema = keyGeneratorOpt
+          .map(keyGenerator -> {
+            List<String> fields = new ArrayList<>();
+            fields.addAll(keyGenerator.getRecordKeyFieldNames());
+            fields.addAll(keyGenerator.getPartitionPathFields());
+            return HoodieAvroUtils.getSchemaForFields(readAvroSchema(conf, filePath), fields);
+          })
+          .orElse(HoodieAvroUtils.getRecordKeyPartitionPathSchema());
       TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(readSchema);
       RecordReader recordReader = reader.rows(new Options(conf).schema(orcSchema));
       List<String> fieldNames = orcSchema.getFieldNames();
 
-      // column indices for the RECORD_KEY_METADATA_FIELD, PARTITION_PATH_METADATA_FIELD fields
-      int keyCol = -1;
-      int partitionCol = -1;
-      for (int i = 0; i < fieldNames.size(); i++) {
-        if (fieldNames.get(i).equals(HoodieRecord.RECORD_KEY_METADATA_FIELD)) {
-          keyCol = i;
+      if (!keyGeneratorOpt.isPresent()) {
+        // column indices for the RECORD_KEY_METADATA_FIELD, PARTITION_PATH_METADATA_FIELD fields
+        int keyCol = -1;
+        int partitionCol = -1;
+        for (int i = 0; i < fieldNames.size(); i++) {
+          if (fieldNames.get(i).equals(HoodieRecord.RECORD_KEY_METADATA_FIELD)) {
+            keyCol = i;
+          }
+          if (fieldNames.get(i).equals(HoodieRecord.PARTITION_PATH_METADATA_FIELD)) {
+            partitionCol = i;
+          }
         }
-        if (fieldNames.get(i).equals(HoodieRecord.PARTITION_PATH_METADATA_FIELD)) {
-          partitionCol = i;
+        if (keyCol == -1 || partitionCol == -1) {
+          throw new HoodieException(
+              String.format("Couldn't find row keys or partition path in %s.", filePath));
         }
       }
-      if (keyCol == -1 || partitionCol == -1) {
-        throw new HoodieException(String.format("Couldn't find row keys or partition path in %s.", filePath));
-      }
-      return new OrcReaderIterator<>(recordReader, readSchema, orcSchema);
+      return HoodieKeyIterator.getInstance(
+          new OrcReaderIterator<>(recordReader, readSchema, orcSchema), keyGeneratorOpt);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to open reader from ORC file:" + filePath, e);
     }
-  }
-
-  /**
-   * Fetch {@link HoodieKey}s from the given ORC file.
-   *
-   * @param filePath      The ORC file path.
-   * @param configuration configuration to build fs object
-   * @return {@link List} of {@link HoodieKey}s fetched from the ORC file
-   */
-  @Override
-  public List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(Configuration configuration, Path filePath) {
-    try {
-      if (!filePath.getFileSystem(configuration).exists(filePath)) {
-        return Collections.emptyList();
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to read from ORC file:" + filePath, e);
-    }
-    List<Pair<HoodieKey, Long>> hoodieKeysAndPositions = new ArrayList<>();
-    long position = 0;
-    try (ClosableIterator<HoodieKey> iterator = getHoodieKeyIterator(configuration, filePath, Option.empty())) {
-      while (iterator.hasNext()) {
-        hoodieKeysAndPositions.add(Pair.of(iterator.next(), position));
-        position++;
-      }
-    }
-    return hoodieKeysAndPositions;
-  }
-
-  @Override
-  public List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    throw new UnsupportedOperationException("Custom key generator is not supported yet");
-  }
-
-  @Override
-  public ClosableIterator<HoodieKey> getHoodieKeyIterator(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    throw new UnsupportedOperationException("Custom key generator is not supported yet");
   }
 
   /**
