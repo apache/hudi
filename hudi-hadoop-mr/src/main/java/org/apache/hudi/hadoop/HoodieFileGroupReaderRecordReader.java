@@ -56,12 +56,14 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWritable, ArrayWritable>  {
 
@@ -86,6 +88,7 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
                                            final JobConf jobConf,
                                            final Reporter reporter) throws IOException {
     HoodieRealtimeInputFormatUtils.cleanProjectionColumnIds(jobConf);
+    Set<String> partitionColumns = new HashSet<>(getPartitionFieldNames(jobConf));
     this.inputSplit = split;
     this.jobConf = jobConf;
     FileSplit fileSplit = (FileSplit) split;
@@ -104,7 +107,10 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
         tableSchema, requestedSchema, metaClient.getTableConfig().getProps(), metaClient.getTableConfig(), fileSplit.getStart(),
         fileSplit.getLength(), false);
     this.fileGroupReader.initRecordIterators();
-    this.reverseProjection = readerContext.reverseProjectRecord(requestedSchema, tableSchema);
+    Schema outputSchema = HoodieAvroUtils.generateProjectionSchema(tableSchema,
+        Stream.concat(tableSchema.getFields().stream().map(f -> f.name().toLowerCase(Locale.ROOT)).filter(partitionColumns::contains),
+            partitionColumns.stream()).collect(Collectors.toList()));
+    this.reverseProjection = readerContext.reverseProjectRecord(requestedSchema, outputSchema);
   }
 
   @Override
@@ -150,17 +156,19 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
     return jobConf;
   }
 
+  private static List<String> getPartitionFieldNames(JobConf jobConf) {
+    String partitionFields = jobConf.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "");
+    return partitionFields.length() > 0 ? Arrays.stream(partitionFields.split("/")).collect(Collectors.toList())
+        : new ArrayList<>();
+  }
+
   private static Schema getLatestTableSchema(HoodieTableMetaClient metaClient, JobConf jobConf) {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
     try {
       Option<Schema> schemaOpt = tableSchemaResolver.getTableAvroSchemaFromLatestCommit(true);
       if (schemaOpt.isPresent()) {
         // Add partitioning fields to writer schema for resulting row to contain null values for these fields
-        String partitionFields = jobConf.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "");
-        List<String> partitioningFields =
-            partitionFields.length() > 0 ? Arrays.stream(partitionFields.split("/")).collect(Collectors.toList())
-                : new ArrayList<>();
-        return HoodieRealtimeRecordReaderUtils.addPartitionFields(schemaOpt.get(), partitioningFields);
+        return HoodieRealtimeRecordReaderUtils.addPartitionFields(schemaOpt.get(), getPartitionFieldNames(jobConf));
       }
       throw new RuntimeException("Unable to get table schema");
     } catch (Exception e) {
@@ -233,7 +241,7 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
     } else {
       partitionColumns = Arrays.stream(partitionColString.split(",")).collect(Collectors.toSet());
     }
-
+    //if they are actually written to the file, then it is ok to read them from the file
     tableSchema.getFields().forEach(f -> partitionColumns.remove(f.name().toLowerCase(Locale.ROOT)));
     return HoodieAvroUtils.generateProjectionSchema(tableSchema,
         Arrays.stream(jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR).split(",")).filter(c -> !partitionColumns.contains(c)).collect(Collectors.toList()));
