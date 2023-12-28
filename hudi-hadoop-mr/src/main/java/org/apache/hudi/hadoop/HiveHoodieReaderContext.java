@@ -113,7 +113,13 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
 
   private void setSchemas(JobConf jobConf, Schema dataSchema, Schema requiredSchema) {
     List<String> dataColumnNameList = dataSchema.getFields().stream().map(Schema.Field::name).collect(Collectors.toList());
-    List<TypeInfo> dataColumnTypeList = dataColumnNameList.stream().map(columnTypeMap::get).collect(Collectors.toList());
+    List<TypeInfo> dataColumnTypeList = dataColumnNameList.stream().map(fieldName -> {
+      TypeInfo type = columnTypeMap.get(fieldName);
+      if (type == null) {
+        throw new IllegalArgumentException("Field: " + fieldName + ", does not have a defined type");
+      }
+      return type;
+    }).collect(Collectors.toList());
     jobConf.set(serdeConstants.LIST_COLUMNS, String.join(",", dataColumnNameList));
     jobConf.set(serdeConstants.LIST_COLUMN_TYPES, dataColumnTypeList.stream().map(TypeInfo::getQualifiedName).collect(Collectors.joining(",")));
     //don't replace `f -> f.name()` with lambda reference

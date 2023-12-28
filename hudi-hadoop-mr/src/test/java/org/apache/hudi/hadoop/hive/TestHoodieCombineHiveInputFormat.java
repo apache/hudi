@@ -45,6 +45,7 @@ import org.apache.hadoop.hive.ql.io.IOContextMap;
 import org.apache.hadoop.hive.ql.plan.MapredWork;
 import org.apache.hadoop.hive.ql.plan.PartitionDesc;
 import org.apache.hadoop.hive.ql.plan.TableDesc;
+import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapred.FileInputFormat;
@@ -237,7 +238,18 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
 
     HoodieCombineHiveInputFormat combineHiveInputFormat = new HoodieCombineHiveInputFormat();
     String tripsHiveColumnTypes = "double,string,string,string,double,double,double,double,double";
-    InputFormatTestUtil.setPropsForInputFormat(jobConf, schema, tripsHiveColumnTypes);
+    List<Schema.Field> fields = schema.getFields();
+    String names = fields.stream().map(f -> f.name().toString()).collect(Collectors.joining(","));
+    String positions = fields.stream().map(f -> String.valueOf(f.pos())).collect(Collectors.joining(","));
+
+    String hiveColumnNames = fields.stream().map(Schema.Field::name).collect(Collectors.joining(","));
+    hiveColumnNames = hiveColumnNames + ",year,month,day";
+    String modifiedHiveColumnTypes = HoodieAvroUtils.addMetadataColumnTypes(tripsHiveColumnTypes);
+    modifiedHiveColumnTypes = modifiedHiveColumnTypes + ",string,string,string";
+    jobConf.set(hive_metastoreConstants.META_TABLE_COLUMNS, hiveColumnNames);
+    jobConf.set(hive_metastoreConstants.META_TABLE_COLUMN_TYPES, modifiedHiveColumnTypes);
+    jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, names);
+    jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, positions);
     // unset META_TABLE_PARTITION_COLUMNS to trigger HUDI-1718
     jobConf.set(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "");
     InputSplit[] splits = combineHiveInputFormat.getSplits(jobConf, 1);

@@ -20,6 +20,7 @@ package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -87,6 +88,7 @@ public class TestHoodieMergeOnReadSnapshotReader {
     baseJobConf.set(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.key(), String.valueOf(1024 * 1024));
     baseJobConf.set(serdeConstants.LIST_COLUMNS, COLUMNS);
     baseJobConf.set(serdeConstants.LIST_COLUMN_TYPES, COLUMN_TYPES);
+    baseJobConf.set(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false");
     fs = getFs(basePath.toUri().toString(), baseJobConf);
   }
 
