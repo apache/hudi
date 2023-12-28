@@ -23,7 +23,9 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.avro.HoodieTimestampAwareParquetInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
+import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 
+import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.ql.io.parquet.read.ParquetRecordReaderWrapper;
 import org.apache.hadoop.hive.ql.io.sarg.ConvertAstToSearchArg;
 import org.apache.hadoop.hive.ql.plan.TableScanDesc;
@@ -91,6 +93,24 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
   @Override
   public RecordReader<NullWritable, ArrayWritable> getRecordReader(final InputSplit split, final JobConf job,
                                                                    final Reporter reporter) throws IOException {
+
+    if (HoodieFileGroupReaderRecordReader.useFilegroupReader(job)) {
+      try {
+        if (supportAvroRead && HoodieColumnProjectionUtils.supportTimestamp(job)) {
+          return new HoodieFileGroupReaderRecordReader((s, j, r) -> {
+            try {
+              return new ParquetRecordReaderWrapper(new HoodieTimestampAwareParquetInputFormat(), s, j, r);
+            } catch (InterruptedException e) {
+              throw new RuntimeException(e);
+            }
+          }, split, job, reporter);
+        } else {
+          return new HoodieFileGroupReaderRecordReader(super::getRecordReader, split, job, reporter);
+        }
+      } catch (final IOException e) {
+        throw new RuntimeException("Cannot create a RecordReaderWrapper", e);
+      }
+    }
     // TODO enable automatic predicate pushdown after fixing issues
     // FileSplit fileSplit = (FileSplit) split;
     // HoodieTableMetadata metadata = getTableMetadata(fileSplit.getPath().getParent());
@@ -103,6 +123,9 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
     // ParquetInputFormat.setFilterPredicate(job, predicate);
     // clearOutExistingPredicate(job);
     // }
+    if (split instanceof BootstrapBaseFileSplit) {
+      return createBootstrappingRecordReader(split, job, reporter);
+    }
 
     // adapt schema evolution
     new SchemaEvolutionContext(split, job).doEvolutionForParquetFormat();
@@ -111,26 +134,20 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
       LOG.debug("EMPLOYING DEFAULT RECORD READER - " + split);
     }
 
-    //HoodieRealtimeInputFormatUtils.addProjectionField(job, job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "").split("/"));
+    HoodieRealtimeInputFormatUtils.addProjectionField(job, job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "").split("/"));
     return getRecordReaderInternal(split, job, reporter);
   }
 
   private RecordReader<NullWritable, ArrayWritable> getRecordReaderInternal(InputSplit split,
                                                                             JobConf job,
-                                                                            Reporter reporter) {
+                                                                            Reporter reporter) throws IOException {
     try {
       if (supportAvroRead && HoodieColumnProjectionUtils.supportTimestamp(job)) {
-        return new HoodieFileGroupReaderRecordReader((s, j, r) -> {
-          try {
-            return new ParquetRecordReaderWrapper(new HoodieTimestampAwareParquetInputFormat(), s, j, r);
-          } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-          }
-        }, split, job, reporter);
+        return new ParquetRecordReaderWrapper(new HoodieTimestampAwareParquetInputFormat(), split, job, reporter);
       } else {
-        return new HoodieFileGroupReaderRecordReader(super::getRecordReader, split, job, reporter);
+        return super.getRecordReader(split, job, reporter);
       }
-    } catch (final IOException e) {
+    } catch (final InterruptedException | IOException e) {
       throw new RuntimeException("Cannot create a RecordReaderWrapper", e);
     }
   }
