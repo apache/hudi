@@ -54,6 +54,7 @@ import org.apache.hadoop.mapred.Reporter;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
@@ -112,7 +113,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   private void setSchemas(JobConf jobConf, Schema dataSchema, Schema requiredSchema) {
-    List<String> dataColumnNameList = dataSchema.getFields().stream().map(Schema.Field::name).collect(Collectors.toList());
+    List<String> dataColumnNameList = dataSchema.getFields().stream().map(f -> f.name().toLowerCase(Locale.ROOT)).collect(Collectors.toList());
     List<TypeInfo> dataColumnTypeList = dataColumnNameList.stream().map(fieldName -> {
       TypeInfo type = columnTypeMap.get(fieldName);
       if (type == null) {
