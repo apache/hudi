@@ -11,7 +11,7 @@ tags:
 
 ---
 
-<img src="/assets/images/blog/2023-12-28-a-year-in-review-2023/00.cover.png" alt="drawing" style={{width:'80%', display:'block', marginLeft:'auto', marginRight:'auto'}} />
+<img src="/assets/images/blog/2023-12-28-a-year-in-review-2023/00.cover.png" alt="drawing" style={{width:'80%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
 
 In the warm glow of the holiday season, I am delighted to convey a message of deep appreciation on behalf of the 
 Hudi Project Management Committee (PMC) to all the contributors and users whose invaluable efforts have made 2023 
@@ -27,7 +27,7 @@ garnering 2274 followers, and our newly established [LinkedIn page](https://www.
 rapidly gaining 2245 followers in just three months. Let’s take a moment to reflect on and celebrate the myriad of 
 exciting developments and accomplishments that have defined the year 2023 for the Hudi community.
 
-<img src="/assets/images/blog/2023-12-28-a-year-in-review-2023/01.PR_histogram.png" alt="drawing" style={{width:'80%', display:'block', marginLeft:'auto', marginRight:'auto'}} />
+<img src="/assets/images/blog/2023-12-28-a-year-in-review-2023/01.PR_histogram.png" alt="drawing" style={{width:'80%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
 
 ## Development Highlights
 
@@ -120,7 +120,7 @@ visit the [roadmap page](https://hudi.apache.org/roadmap).
 
 ## Content Spotlight
 
-<img src="/assets/images/blog/2023-12-28-a-year-in-review-2023/02.contentspotlight.png" alt="drawing" style={{width:'80%', display:'block', marginLeft:'auto', marginRight:'auto'}} />
+<img src="/assets/images/blog/2023-12-28-a-year-in-review-2023/02.contentspotlight.png" alt="drawing" style={{width:'80%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
 
 
 The vibrant and diverse Hudi community has been a rich source of exceptional content. Below is a 
@@ -150,7 +150,7 @@ presence at several events, listed here in no particular order: Re:Invent, Prest
 Trino Fest, Current, the Data & AI Summit, Flink Forward, the Open-source Data Summit, ApacheCon, 
 AI.dev, QCon, OSA Con, and DEWCon.
 
-<img src="/assets/images/blog/2023-12-28-a-year-in-review-2023/02.events.png" alt="drawing" style={{width:'80%', display:'block', marginLeft:'auto', marginRight:'auto'}} />
+<img src="/assets/images/blog/2023-12-28-a-year-in-review-2023/03.events.png" alt="drawing" style={{width:'80%', display:'block', marginLeft:'auto', marginRight:'auto', marginTop:'18pt', marginBottom:'18pt'}} />
 
 As we reflect on an eventful 2023, the Hudi community continues to thrive and welcomes diverse forms 
 of engagement. For those looking to connect, our 
