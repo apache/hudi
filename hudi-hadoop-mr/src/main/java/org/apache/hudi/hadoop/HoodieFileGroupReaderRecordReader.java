@@ -57,6 +57,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.UnaryOperator;
@@ -232,6 +233,8 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
     } else {
       partitionColumns = Arrays.stream(partitionColString.split(",")).collect(Collectors.toSet());
     }
+
+    tableSchema.getFields().forEach(f -> partitionColumns.remove(f.name().toLowerCase(Locale.ROOT)));
     return HoodieAvroUtils.generateProjectionSchema(tableSchema,
         Arrays.stream(jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR).split(",")).filter(c -> !partitionColumns.contains(c)).collect(Collectors.toList()));
   }
