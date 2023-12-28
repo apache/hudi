@@ -784,8 +784,8 @@ public class HoodieWriteConfig extends HoodieConfig {
           .defaultValue(true)
           .markAdvanced()
           .sinceVersion("1.0.0")
-          .withDocumentation("Whether ignore error and not throw exception when write occur errors."
-              + "if set false job would error out, default is true");
+          .withDocumentation("Whether to ignore the errors instead of throwing exception when the commit metadata encounters errors. "
+              + "if set as false job would error out, default is true");
 
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL

@@ -297,8 +297,9 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     if (!config.getBoolean(WRITE_IGNORE_FAILED) && result.getWriteStatuses().filter(status -> status.getErrors().size() > 0).count() > 0) {
       throw new HoodieException("Error writing record in the job");
     }
-    commit(result.getWriteStatuses(), result, result.getWriteStats().isPresent()
-        ? result.getWriteStats().get() : result.getWriteStatuses().map(WriteStatus::getStat).collectAsList());
+    HoodieData<WriteStatus> filterResult = result.getWriteStatuses().filter(status -> status.getErrors().size() == 0);
+    commit(filterResult, result, result.getWriteStats().isPresent()
+        ? result.getWriteStats().get() : filterResult.map(WriteStatus::getStat).collectAsList());
   }
 
   protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<HoodieData<WriteStatus>> writeStatuses) {
