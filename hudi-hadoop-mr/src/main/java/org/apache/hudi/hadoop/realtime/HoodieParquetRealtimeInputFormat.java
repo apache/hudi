@@ -18,10 +18,13 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.hadoop.HoodieFileGroupReaderRecordReader;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.UseFileSplitsFromInputFormat;
 import org.apache.hudi.hadoop.UseRecordReaderFromInputFormat;
@@ -67,14 +70,25 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat {
     ValidationUtils.checkArgument(split instanceof RealtimeSplit,
         "HoodieRealtimeRecordReader can only work on RealtimeSplit and not with " + split);
     RealtimeSplit realtimeSplit = (RealtimeSplit) split;
+
+    if (HoodieFileGroupReaderRecordReader.useFilegroupReader(jobConf)) {
+      return super.getRecordReader(realtimeSplit, jobConf, reporter);
+    }
+
     // add preCombineKey
-    //HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jobConf).setBasePath(realtimeSplit.getBasePath()).build();
-    //HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    //addProjectionToJobConf(realtimeSplit, jobConf, tableConfig);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jobConf).setBasePath(realtimeSplit.getBasePath()).build();
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    addProjectionToJobConf(realtimeSplit, jobConf, tableConfig);
     LOG.info("Creating record reader with readCols :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR)
         + ", Ids :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
 
-    return super.getRecordReader(realtimeSplit, jobConf, reporter);
+    // for log only split, set the parquet reader as empty.
+    if (FSUtils.isLogFile(realtimeSplit.getPath())) {
+      return new HoodieRealtimeRecordReader(realtimeSplit, jobConf, new HoodieEmptyRecordReader(realtimeSplit, jobConf));
+    }
+
+    return new HoodieRealtimeRecordReader(realtimeSplit, jobConf,
+        super.getRecordReader(split, jobConf, reporter));
   }
 
   void addProjectionToJobConf(final RealtimeSplit realtimeSplit, final JobConf jobConf, HoodieTableConfig tableConfig) {

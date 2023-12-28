@@ -19,6 +19,7 @@
 package org.apache.hudi.functional;
 
 import org.apache.hudi.HoodieSparkUtils;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 
@@ -105,6 +106,7 @@ public class TestHiveTableSchemaEvolution {
       spark.sql(String.format("alter table %s rename column col2 to col2_new", tableName));
 
       JobConf jobConf = new JobConf();
+      jobConf.set(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), "true");
       jobConf.set(ColumnProjectionUtils.READ_ALL_COLUMNS, "false");
       jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, "col1,col2_new");
       jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, "6,7");

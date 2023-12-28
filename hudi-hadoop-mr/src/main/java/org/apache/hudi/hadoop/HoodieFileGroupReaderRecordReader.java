@@ -20,6 +20,8 @@
 package org.apache.hudi.hadoop;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
@@ -165,7 +167,7 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
     }
   }
 
-  private static String getTableBasePath(InputSplit split, JobConf jobConf) throws IOException {
+  public static String getTableBasePath(InputSplit split, JobConf jobConf) throws IOException {
     if (split instanceof RealtimeSplit) {
       RealtimeSplit realtimeSplit = (RealtimeSplit) split;
       return realtimeSplit.getBasePath();
@@ -232,5 +234,10 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
     }
     return HoodieAvroUtils.generateProjectionSchema(tableSchema,
         Arrays.stream(jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR).split(",")).filter(c -> !partitionColumns.contains(c)).collect(Collectors.toList()));
+  }
+
+  public static boolean useFilegroupReader(final JobConf jobConf) {
+    return jobConf.getBoolean(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue())
+        && !jobConf.getBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue());
   }
 }
