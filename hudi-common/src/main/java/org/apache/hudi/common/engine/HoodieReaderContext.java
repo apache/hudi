@@ -219,7 +219,10 @@ public abstract class HoodieReaderContext<T> {
    * @param dataFileIterator iterator over data files that were bootstrapped into the hudi table
    * @return iterator that concatenates the skeletonFileIterator and dataFileIterator
    */
-  public abstract ClosableIterator<T> mergeBootstrapReaders(ClosableIterator<T> skeletonFileIterator, ClosableIterator<T> dataFileIterator);
+  public abstract ClosableIterator<T> mergeBootstrapReaders(ClosableIterator<T> skeletonFileIterator,
+                                                            Schema skeletonRequiredSchema,
+                                                            ClosableIterator<T> dataFileIterator,
+                                                            Schema dataRequiredSchema);
 
   /**
    * Creates a function that will reorder records of schema "from" to schema of "to"

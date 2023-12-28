@@ -67,7 +67,6 @@ import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
  *            in Spark and {@code RowData} in Flink.
  */
 public final class HoodieFileGroupReader<T> implements Closeable {
-  private boolean schemaInOrder = true;
   private final HoodieReaderContext<T> readerContext;
   private final Option<HoodieBaseFile> hoodieBaseFileOption;
   private final List<HoodieLogFile> logFiles;
@@ -175,6 +174,10 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   }
 
   private Schema generateRequiredSchema() {
+    return maybeReorderForBootstrap(generateRequiredSchemaHelper());
+  }
+
+  private Schema generateRequiredSchemaHelper() {
     //might need to change this if other queries than mor have mandatory fields
     if (logFiles.isEmpty()) {
       return requestedSchema;
@@ -193,17 +196,13 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
 
     if (addedFields.isEmpty()) {
-      return maybeReorderForBootstrap(requestedSchema);
+      return requestedSchema;
     }
 
-    return maybeReorderForBootstrap(appendFieldsToSchema(requestedSchema, addedFields));
+    return appendFieldsToSchema(requestedSchema, addedFields);
   }
 
   private Schema maybeReorderForBootstrap(Schema input) {
-    if (schemaInOrder) {
-      return createSchemaFromFields(input.getFields().stream()
-          .sorted((o1, o2) -> Integer.compare(dataSchema.getField(o1.name()).pos(),dataSchema.getField(o2.name()).pos())).collect(Collectors.toList()));
-    }
     if (this.hoodieBaseFileOption.isPresent() && this.hoodieBaseFileOption.get().getBootstrapBaseFile().isPresent()) {
       Pair<List<Schema.Field>, List<Schema.Field>> requiredFields = getDataAndMetaCols(input);
       if (!(requiredFields.getLeft().isEmpty() || requiredFields.getRight().isEmpty())) {
@@ -234,35 +233,36 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
   private ClosableIterator<T> makeBootstrapBaseFileIterator(HoodieBaseFile baseFile) throws IOException {
     BaseFile dataFile = baseFile.getBootstrapBaseFile().get();
-    Pair<List<Schema.Field>, List<Schema.Field>> requiredFields =
-        getDataAndMetaCols(requiredSchema);
-    Pair<List<Schema.Field>, List<Schema.Field>> allFields = getDataAndMetaCols(dataSchema);
-
-    Option<ClosableIterator<T>> dataFileIterator =
-        requiredFields.getRight().isEmpty() ? Option.empty() :
-            Option.of(readerContext.getFileRecordIterator(
-                dataFile.getStoragePath(), 0,
-                dataFile.getFileLen(),
-                createSchemaFromFields(allFields.getRight()),
-                createSchemaFromFields(requiredFields.getRight()), storage));
-
-    Option<ClosableIterator<T>> skeletonFileIterator =
-        requiredFields.getLeft().isEmpty() ? Option.empty() :
-            Option.of(readerContext.getFileRecordIterator(
-                baseFile.getStoragePath(), 0,
-                baseFile.getFileLen(),
-                createSchemaFromFields(allFields.getLeft()),
-                createSchemaFromFields(requiredFields.getLeft()), storage));
+    Pair<List<Schema.Field>,List<Schema.Field>> requiredFields = getDataAndMetaCols(requiredSchema);
+    Pair<List<Schema.Field>,List<Schema.Field>> allFields = getDataAndMetaCols(dataSchema);
+    Option<Pair<ClosableIterator<T>,Schema>> dataFileIterator =
+        makeBootstrapBaseFileIteratorHelper(requiredFields.getRight(), allFields.getRight(), dataFile);
+    Option<Pair<ClosableIterator<T>,Schema>> skeletonFileIterator =
+        makeBootstrapBaseFileIteratorHelper(requiredFields.getLeft(), allFields.getLeft(), baseFile);
     if (!dataFileIterator.isPresent() && !skeletonFileIterator.isPresent()) {
       throw new IllegalStateException("should not be here if only partition cols are required");
     } else if (!dataFileIterator.isPresent()) {
-      return skeletonFileIterator.get();
+      return skeletonFileIterator.get().getLeft();
     } else if (!skeletonFileIterator.isPresent()) {
-      return dataFileIterator.get();
+      return  dataFileIterator.get().getLeft();
     } else {
-      return readerContext.mergeBootstrapReaders(skeletonFileIterator.get(),
-          dataFileIterator.get());
+      return readerContext.mergeBootstrapReaders(skeletonFileIterator.get().getLeft(), skeletonFileIterator.get().getRight(),
+          dataFileIterator.get().getLeft(), dataFileIterator.get().getRight());
     }
+  }
+
+  private Option<Pair<ClosableIterator<T>,Schema>> makeBootstrapBaseFileIteratorHelper(List<Schema.Field> requiredFields,
+                                                                                       List<Schema.Field> allFields,
+                                                                                       BaseFile file) throws IOException {
+    if (requiredFields.isEmpty()) {
+      return Option.empty();
+    }
+    Schema requiredSchema = createSchemaFromFields(requiredFields);
+    return Option.of(Pair.of(readerContext.getFileRecordIterator(
+        file.getStoragePath(), 0,
+        file.getFileLen(),
+        createSchemaFromFields(allFields),
+        createSchemaFromFields(requiredFields), storage), requiredSchema));
   }
 
   /**
@@ -289,8 +289,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   }
 
   private void scanLogFiles() {
-    System.out.println("Scanning log files");
-    String path = readerState.tablePath;
     HoodieMergedLogRecordReader logRecordReader = HoodieMergedLogRecordReader.newBuilder()
         .withHoodieReaderContext(readerContext)
         .withStorage(storage)
