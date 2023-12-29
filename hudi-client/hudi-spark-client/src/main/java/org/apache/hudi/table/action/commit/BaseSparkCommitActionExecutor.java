@@ -294,16 +294,8 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   @Override
   protected void commit(HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
     context.setJobStatus(this.getClass().getSimpleName(), "Commit write status collect: " + config.getTableName());
-    if (!config.getBoolean(WRITE_IGNORE_FAILED) && result.getWriteStatuses().filter(status -> status.getErrors().size() > 0).count() > 0) {
-      WriteStatus writeStatus = result.getWriteStatuses().filter(status -> status.getErrors().size() > 0).collectAsList().get(0);
-      HashMap<HoodieKey, Throwable> errors = writeStatus.getErrors();
-      // get first one of error info to show error details
-      HoodieKey key = errors.keySet().iterator().next();
-      throw new HoodieException("Error writing record in the job", errors.get(key));
-    }
-    HoodieData<WriteStatus> filterResult = result.getWriteStatuses().filter(status -> status.getErrors().size() == 0);
-    commit(filterResult, result, result.getWriteStats().isPresent()
-        ? result.getWriteStats().get() : filterResult.map(WriteStatus::getStat).collectAsList());
+    commit(result.getWriteStatuses(), result, result.getWriteStats().isPresent()
+        ? result.getWriteStats().get() : result.getWriteStatuses().map(WriteStatus::getStat).collectAsList());
   }
 
   protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<HoodieData<WriteStatus>> writeStatuses) {
