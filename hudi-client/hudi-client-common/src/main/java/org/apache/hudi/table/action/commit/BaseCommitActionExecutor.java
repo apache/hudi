@@ -245,6 +245,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
           LOG.error("Error writing record, record key is {}, writing path is {}", entry.getKey().getRecordKey(), entry.getKey().getPartitionPath(), entry.getValue());
           count++;
         }
+        // throw first one error info in exception
         HoodieKey key = errors.keySet().iterator().next();
         throw new HoodieException("Error writing record in the job", errors.get(key));
       }
