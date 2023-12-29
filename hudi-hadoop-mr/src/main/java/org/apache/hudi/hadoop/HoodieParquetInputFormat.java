@@ -19,6 +19,7 @@
 package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.TablePathUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.avro.HoodieTimestampAwareParquetInputFormat;
@@ -96,6 +97,9 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
 
     if (HoodieFileGroupReaderRecordReader.useFilegroupReader(job)) {
       try {
+        if (!(split instanceof FileSplit) || !TablePathUtils.isHoodieTablePath(((FileSplit) split).getPath(), job)) {
+          return super.getRecordReader(split, job, reporter);
+        }
         if (supportAvroRead && HoodieColumnProjectionUtils.supportTimestamp(job)) {
           return new HoodieFileGroupReaderRecordReader((s, j, r) -> {
             try {
