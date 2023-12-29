@@ -48,7 +48,7 @@ public class DatadogHttpClient implements Closeable {
 
   private static final Logger LOG = LoggerFactory.getLogger(DatadogHttpClient.class);
 
-  private static final String DEFAULT_HOST = "app.us.datadoghq";
+  private static final String DEFAULT_HOST = "api.datadoghq";
   private static final String SERIES_URL_FORMAT = "https://%s.%s/api/v1/series";
   private static final String VALIDATE_URL_FORMAT = "https://%s.%s/api/v1/validate";
   private static final String HEADER_KEY_API_KEY = "DD-API-KEY";
