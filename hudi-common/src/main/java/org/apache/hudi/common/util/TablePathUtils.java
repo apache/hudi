@@ -57,6 +57,10 @@ public class TablePathUtils {
     return hasTableMetadataFolder(fs, path);
   }
 
+  public static Option<Path> getTablePath(Path path, Configuration conf) throws HoodieException, IOException {
+    return getTablePath(path.getFileSystem(conf), path);
+  }
+
   public static Option<Path> getTablePath(FileSystem fs, Path path) throws HoodieException, IOException {
     LOG.info("Getting table path from path : " + path);
 
