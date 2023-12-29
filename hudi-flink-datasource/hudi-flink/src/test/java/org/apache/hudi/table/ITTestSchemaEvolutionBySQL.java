@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.adapter.TestHoodieCatalogs;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.table.catalog.HoodieCatalogTestUtils;
 import org.apache.hudi.table.catalog.HoodieHiveCatalog;
@@ -34,6 +35,7 @@ import org.apache.flink.types.Row;
 import org.apache.flink.util.CollectionUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIf;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.List;
@@ -48,6 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * IT cases for schema evolution by alter table SQL using {@link HoodieHiveCatalog}.
  */
+@EnabledIf("supportAdvancedAlterTableSyntax")
 @ExtendWith(FlinkMiniCluster.class)
 public class ITTestSchemaEvolutionBySQL {
   private TableEnvironment tableEnv;
@@ -223,6 +226,10 @@ public class ITTestSchemaEvolutionBySQL {
         "Should throw exception because AddWatermark is not supported.");
     assertTrue(e.getCause() instanceof HoodieNotSupportedException);
     assertTrue(e.getCause().getMessage().contains("AddWatermark is not supported."));
+  }
+
+  static boolean supportAdvancedAlterTableSyntax() {
+    return TestHoodieCatalogs.supportAdvancedAlterTableSyntax();
   }
 
   private void execInsertSql(TableEnvironment tEnv, String insert) {
