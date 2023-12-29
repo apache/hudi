@@ -63,9 +63,7 @@ public class DatadogHttpClient implements Closeable {
     this.seriesUrl = String.format(SERIES_URL_FORMAT, host.orElse(DEFAULT_HOST), apiSite.getDomain());
     this.validateUrl = String.format(VALIDATE_URL_FORMAT, host.orElse(DEFAULT_HOST), apiSite.getDomain());
     this.client = client;
-    if (!skipValidation) {
-      validateApiKey();
-    }
+    validateApiKey(skipValidation);
   }
 
   public DatadogHttpClient(ApiSite apiSite, String apiKey, boolean skipValidation, CloseableHttpClient client) {
@@ -81,7 +79,8 @@ public class DatadogHttpClient implements Closeable {
         .build(), host);
   }
 
-  private void validateApiKey() {
+  private void validateApiKey(boolean skipValidation) {
+    try {
     ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(apiKey),
         "API key is null or empty.");
 
@@ -92,6 +91,14 @@ public class DatadogHttpClient implements Closeable {
       ValidationUtils.checkState(statusCode == HttpStatus.SC_OK, "API key is invalid.");
     } catch (IOException e) {
       throw new IllegalStateException("Failed to connect to Datadog to validate API key.", e);
+    }
+    } catch (Exception e) {
+      if (skipValidation) {
+        LOG.warn("Failed to connect to Datadog", e);
+      } else {
+        throw e;
+      }
+
     }
   }
 
