@@ -239,9 +239,11 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
         LOG.warn("Error writing record, show top 10 errors info as follow");
         int count = 0;
         for (Map.Entry<HoodieKey,Throwable> entry : errors.entrySet()) {
-          if (count >= 10) break;
+          if (count >= 10) {
+            break;
+          }
           LOG.error("Error writing record, record key is {}, writing path is {}", entry.getKey().getRecordKey(), entry.getKey().getPartitionPath(), entry.getValue());
-          count ++;
+          count++;
         }
         HoodieKey key = errors.keySet().iterator().next();
         throw new HoodieException("Error writing record in the job", errors.get(key));
