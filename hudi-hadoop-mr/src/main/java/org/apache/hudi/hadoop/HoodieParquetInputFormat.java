@@ -97,7 +97,7 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
 
     if (HoodieFileGroupReaderRecordReader.useFilegroupReader(job)) {
       try {
-        if (!(split instanceof FileSplit) || !TablePathUtils.isHoodieTablePath(((FileSplit) split).getPath(), job)) {
+        if (!(split instanceof FileSplit) || !TablePathUtils.getTablePath(((FileSplit) split).getPath(), job).isPresent()) {
           return super.getRecordReader(split, job, reporter);
         }
         if (supportAvroRead && HoodieColumnProjectionUtils.supportTimestamp(job)) {
