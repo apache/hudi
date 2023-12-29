@@ -208,9 +208,21 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
     if (split instanceof RealtimeSplit) {
       //mor
       RealtimeSplit realtimeSplit = (RealtimeSplit) split;
-      HoodieFileGroupId fileGroupId = new HoodieFileGroupId(FSUtils.getFileId(realtimeSplit.getPath().getName()),
-          FSUtils.getPartitionPath(realtimeSplit.getBasePath(), realtimeSplit.getPath().getParent().toString()).toString());
-      String commitTime = FSUtils.getCommitTime(realtimeSplit.getPath().toString());
+      boolean isLogFile = FSUtils.isLogFile(realtimeSplit.getPath());
+      String fileID;
+      String commitTime;
+      if (isLogFile) {
+        fileID = FSUtils.getFileIdFromLogPath(realtimeSplit.getPath());
+        commitTime = FSUtils.getDeltaCommitTimeFromLogPath(realtimeSplit.getPath());
+      } else {
+        fileID = FSUtils.getFileId(realtimeSplit.getPath().getName());
+        commitTime = FSUtils.getCommitTime(realtimeSplit.getPath().toString());
+      }
+      HoodieFileGroupId fileGroupId = new HoodieFileGroupId(FSUtils.getPartitionPath(realtimeSplit.getBasePath(),
+          realtimeSplit.getPath().getParent().toString()).toString(), fileID);
+      if (isLogFile) {
+        return new FileSlice(fileGroupId, commitTime, null, realtimeSplit.getDeltaLogFiles());
+      }
       hosts.put(realtimeSplit.getPath().toString(), realtimeSplit.getLocations());
       HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(fs.getFileStatus(realtimeSplit.getPath()), bootstrapBaseFile);
       return new FileSlice(fileGroupId, commitTime, hoodieBaseFile, realtimeSplit.getDeltaLogFiles());

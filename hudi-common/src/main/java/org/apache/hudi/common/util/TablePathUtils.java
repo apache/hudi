@@ -21,6 +21,7 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.HoodieException;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -48,6 +49,10 @@ public class TablePathUtils {
     }
   }
 
+  public static boolean isHoodieTablePath(Path path, Configuration conf) throws IOException {
+    return isHoodieTablePath(path.getFileSystem(conf), path);
+  }
+  
   public static boolean isHoodieTablePath(FileSystem fs, Path path) {
     return hasTableMetadataFolder(fs, path);
   }
