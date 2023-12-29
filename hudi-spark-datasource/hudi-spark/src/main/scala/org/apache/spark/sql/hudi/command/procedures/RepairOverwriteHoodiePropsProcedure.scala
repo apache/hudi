@@ -54,7 +54,6 @@ class RepairOverwriteHoodiePropsProcedure extends BaseProcedure with ProcedureBu
     val fis = fs.open(new Path(filePath))
     props.load(fis)
     fis.close()
-    fs.close()
   }
 
   override def call(args: ProcedureArgs): Seq[Row] = {
