@@ -53,6 +53,7 @@ class RepairOverwriteHoodiePropsProcedure extends BaseProcedure with ProcedureBu
     val fs = FSUtils.getFs(filePath, new Configuration())
     val fis = fs.open(new Path(filePath))
     props.load(fis)
+
     fis.close()
   }
 
