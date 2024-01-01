@@ -107,23 +107,19 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
     //       injecting [[SQLConf]], which by default isn't propagated by Spark to the executor(s).
     //       [[SQLConf]] is required by [[AvroSerializer]]
     injectSQLConf(df.queryExecution.toRdd.mapPartitions { rows =>
-      if (rows.isEmpty) {
-        Iterator.empty
-      } else {
-        val readerAvroSchema = new Schema.Parser().parse(readerAvroSchemaStr)
-        val transform: GenericRecord => GenericRecord =
-          if (sameSchema) identity
-          else {
-            HoodieAvroUtils.rewriteRecordDeep(_, readerAvroSchema)
-          }
+      val readerAvroSchema = new Schema.Parser().parse(readerAvroSchemaStr)
+      val transform: GenericRecord => GenericRecord =
+        if (sameSchema) identity
+        else {
+          HoodieAvroUtils.rewriteRecordDeep(_, readerAvroSchema)
+        }
 
-        // Since caller might request to get records in a different ("evolved") schema, we will be rewriting from
-        // existing Writer's schema into Reader's (avro) schema
-        val writerAvroSchema = new Schema.Parser().parse(writerAvroSchemaStr)
-        val convert = AvroConversionUtils.createInternalRowToAvroConverter(writerSchema, writerAvroSchema, nullable = nullable)
+      // Since caller might request to get records in a different ("evolved") schema, we will be rewriting from
+      // existing Writer's schema into Reader's (avro) schema
+      val writerAvroSchema = new Schema.Parser().parse(writerAvroSchemaStr)
+      val convert = AvroConversionUtils.createInternalRowToAvroConverter(writerSchema, writerAvroSchema, nullable = nullable)
 
-        rows.map { ir => transform(convert(ir)) }
-      }
+      rows.map { ir => transform(convert(ir)) }
     }, SQLConf.get)
   }
 

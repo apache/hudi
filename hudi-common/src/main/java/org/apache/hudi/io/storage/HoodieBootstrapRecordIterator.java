@@ -50,7 +50,7 @@ public abstract class HoodieBootstrapRecordIterator<T> implements ClosableIterat
 
   @Override
   public void close() {
-
+    // close these iterators?
   }
 
   @Override
