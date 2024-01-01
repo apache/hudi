@@ -745,7 +745,7 @@ public class HoodieHiveCatalog extends AbstractCatalog implements HoodieHiveCata
     checkNotNull(tablePath, "Table path cannot be null");
     checkNotNull(newCatalogTable, "New catalog table cannot be null");
 
-    if (!isUpdateAllow(tablePath, newCatalogTable, ignoreIfNotExists)) {
+    if (!isUpdatePermissible(tablePath, newCatalogTable, ignoreIfNotExists)) {
       return;
     }
     refreshHMSTable(tablePath, newCatalogTable);
@@ -952,7 +952,7 @@ public class HoodieHiveCatalog extends AbstractCatalog implements HoodieHiveCata
     throw new HoodieCatalogException("Not supported.");
   }
 
-  public boolean isUpdateAllow(ObjectPath tablePath, CatalogBaseTable newCatalogTable, boolean ignoreIfNotExists) throws TableNotExistException {
+  public boolean isUpdatePermissible(ObjectPath tablePath, CatalogBaseTable newCatalogTable, boolean ignoreIfNotExists) throws TableNotExistException {
     if (!newCatalogTable.getOptions().getOrDefault(CONNECTOR.key(), "").equalsIgnoreCase("hudi")) {
       throw new HoodieCatalogException(String.format("The %s is not hoodie table", tablePath.getObjectName()));
     }
@@ -997,11 +997,11 @@ public class HoodieHiveCatalog extends AbstractCatalog implements HoodieHiveCata
     CatalogBaseTable oldTable = getTable(tablePath);
     HoodieFlinkWriteClient<?> writeClient = createWriteClient(tablePath, oldTable);
     writeClient.setOperationType(WriteOperationType.ALTER_SCHEMA);
-    HoodieTableMetaClient metaClient = writeClient.getInternalSchemaAndMetaClient().getRight();
+    HoodieTableMetaClient metaClient = createMetaClient(tablePath, oldTable);
     writeClient.commitTableChange(newSchema, metaClient);
   }
 
-  public Type convertToInternalType(LogicalType logicalType) {
+  public Type convert(LogicalType logicalType) {
     return AvroInternalSchemaConverter.convertToField(AvroSchemaConverter.convertToSchema(logicalType));
   }
 
@@ -1033,8 +1033,14 @@ public class HoodieHiveCatalog extends AbstractCatalog implements HoodieHiveCata
         Configuration.fromMap(options)
             .set(FlinkOptions.TABLE_NAME, tablePath.getObjectName())
             .set(FlinkOptions.SOURCE_AVRO_SCHEMA,
-                HoodieTableMetaClient.builder().setBasePath(inferTablePath(tablePath, table)).setConf(hiveConf).build()
+                createMetaClient(tablePath, table)
                     .getTableConfig().getTableCreateSchema().get().toString()));
+  }
+
+  private HoodieTableMetaClient createMetaClient(
+      ObjectPath tablePath,
+      CatalogBaseTable table) {
+    return StreamerUtil.createMetaClient(inferTablePath(tablePath, table), hiveConf);
   }
 
   @VisibleForTesting
