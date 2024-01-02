@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.exception.HoodieException;
@@ -72,6 +73,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   private final ObjectInspectorCache objectInspectorCache;
   private RecordReader<NullWritable, ArrayWritable> firstRecordReader = null;
 
+  private final String recordKeyField;
   protected HiveHoodieReaderContext(HoodieFileGroupReaderRecordReader.HiveReaderCreator readerCreator,
                                     InputSplit split,
                                     JobConf jobConf,
@@ -86,8 +88,17 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     this.writerSchema = writerSchema;
     this.hosts = hosts;
     String tableName = metaClient.getTableConfig().getTableName();
+    recordKeyField = metaClient.getTableConfig().populateMetaFields()
+        ? HoodieRecord.RECORD_KEY_METADATA_FIELD
+        : assertSingleKey(metaClient.getTableConfig().getRecordKeyFields());
     this.objectInspectorCache = HoodieArrayWritableAvroUtils.getCacheForTable(tableName, writerSchema, jobConf);
     this.columnTypeMap = objectInspectorCache.getColumnTypeMap();
+  }
+
+  private static String assertSingleKey(Option<String[]> recordKeyFieldsOpt) {
+    ValidationUtils.checkArgument(recordKeyFieldsOpt.isPresent(), "no record key field");
+    ValidationUtils.checkArgument(recordKeyFieldsOpt.get().length == 1, "more than 1 record key, and not meta fields");
+    return recordKeyFieldsOpt.get()[0];
   }
 
   @Override
@@ -144,6 +155,11 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
       default:
         throw new HoodieException("The merger strategy UUID is not supported: " + mergerStrategy);
     }
+  }
+
+  @Override
+  public String getRecordKey(ArrayWritable record, Schema schema) {
+    return getValue(record, schema, recordKeyField).toString();
   }
 
   @Override

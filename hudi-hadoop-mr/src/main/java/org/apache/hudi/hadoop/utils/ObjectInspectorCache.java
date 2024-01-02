@@ -88,7 +88,12 @@ public class ObjectInspectorCache {
   }
 
   public Object getValue(ArrayWritable record, Schema schema, String fieldName) {
-    ArrayWritableObjectInspector objectInspector = getObjectInspector(schema);
-    return objectInspector.getStructFieldData(record, objectInspector.getStructFieldRef(fieldName));
+    try {
+      ArrayWritableObjectInspector objectInspector = getObjectInspector(schema);
+      return objectInspector.getStructFieldData(record, objectInspector.getStructFieldRef(fieldName));
+    } catch (Exception e) {
+      throw e;
+    }
+
   }
 }
