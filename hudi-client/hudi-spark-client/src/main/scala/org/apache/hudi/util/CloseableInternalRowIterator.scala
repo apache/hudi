@@ -41,8 +41,8 @@ class CloseableInternalRowIterator(iterator: Iterator[_]) extends ClosableIterat
   override def close(): Unit = {
     iterator match {
       case iterator: Iterator[_] with Closeable => iterator.close()
+      case _ =>
     }
-    // No op
   }
 
   override def hasNext: Boolean = {
