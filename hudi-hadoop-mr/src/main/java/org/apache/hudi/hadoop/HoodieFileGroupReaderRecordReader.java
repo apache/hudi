@@ -247,8 +247,10 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
   private static Schema createRequestedSchema(Schema tableSchema, JobConf jobConf) {
     String readCols = jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR);
     if (StringUtils.isNullOrEmpty(readCols)) {
-      return Schema.createRecord(tableSchema.getName(), tableSchema.getDoc(),
+      Schema emptySchema = Schema.createRecord(tableSchema.getName(), tableSchema.getDoc(),
           tableSchema.getNamespace(), tableSchema.isError());
+      emptySchema.setFields(Collections.emptyList());
+      return emptySchema;
     }
     //hive will handle the partition cols
     String partitionColString = jobConf.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS);
