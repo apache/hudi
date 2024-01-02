@@ -100,7 +100,7 @@ public class SparkRDDWriteClient<T> extends
                         String commitActionType, Map<String, List<String>> partitionToReplacedFileIds,
                         Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
     context.setJobStatus(this.getClass().getSimpleName(), "Committing stats: " + config.getTableName());
-    List<HoodieWriteStat> writeStats = writeStatuses.map(WriteStatus::getStat).collect(); // just collect rdd here?
+    List<HoodieWriteStat> writeStats = writeStatuses.map(WriteStatus::getStat).collect();
     return commitStats(instantTime, HoodieJavaRDD.of(writeStatuses), writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc);
   }
 
