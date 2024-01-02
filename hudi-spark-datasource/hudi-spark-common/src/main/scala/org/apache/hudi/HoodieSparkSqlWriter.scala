@@ -33,7 +33,7 @@ import org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.embedded.EmbeddedTimelineService
-import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
+import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient, WriteStatus}
 import org.apache.hudi.commit.{DatasetBulkInsertCommitActionExecutor, DatasetBulkInsertOverwriteCommitActionExecutor, DatasetBulkInsertOverwriteTableCommitActionExecutor}
 import org.apache.hudi.common.config._
 import org.apache.hudi.common.engine.HoodieEngineContext
@@ -47,7 +47,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, T
 import org.apache.hudi.common.util.ConfigUtils.getAllConfigKeys
 import org.apache.hudi.common.util.{CommitUtils, StringUtils, Option => HOption}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME}
-import org.apache.hudi.config.HoodieWriteConfig.SPARK_SQL_MERGE_INTO_PREPPED_KEY
+import org.apache.hudi.config.HoodieWriteConfig.{SPARK_SQL_MERGE_INTO_PREPPED_KEY, WRITE_IGNORE_FAILED}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieException, HoodieWriteConflictException}
 import org.apache.hudi.hive.{HiveSyncConfigHolder, HiveSyncTool}
@@ -992,17 +992,21 @@ class HoodieSparkSqlWriterInternal {
       (commitSuccess && metaSyncSuccess, compactionInstant, clusteringInstant)
     } else {
       log.error(s"${tableInstantInfo.operation} failed with errors")
-      if (log.isTraceEnabled) {
-        log.trace("Printing out the top 100 errors")
-        writeResult.getWriteStatuses.rdd.filter(ws => ws.hasErrors)
+      val config = client.getConfig
+      if (!config.getBoolean(WRITE_IGNORE_FAILED)) {
+        log.warn("Printing out the top 100 errors")
+        val statuses: Array[WriteStatus] = writeResult.getWriteStatuses.rdd.filter(ws => ws.hasErrors)
           .take(100)
-          .foreach(ws => {
-            log.trace("Global error :", ws.getGlobalError)
+        statuses.foreach(ws => {
+            log.error("Global error :", ws.getGlobalError)
             if (ws.getErrors.size() > 0) {
               ws.getErrors.foreach(kt =>
-                log.trace(s"Error for key: ${kt._1}", kt._2))
+                log.error(s"Error for key: ${kt._1}", kt._2))
             }
           })
+        val errors = statuses.apply(0).getErrors
+        val key = errors.keySet().iterator().next()
+        throw new HoodieException("Error writing record in the job", errors.get(key))
       }
       (false, common.util.Option.empty(), common.util.Option.empty())
     }

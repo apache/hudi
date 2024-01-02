@@ -47,7 +47,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCommitException;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
@@ -64,7 +63,6 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -73,7 +71,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
-import static org.apache.hudi.config.HoodieWriteConfig.WRITE_IGNORE_FAILED;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE;
 
 public abstract class BaseCommitActionExecutor<T, I, K, O, R>
@@ -231,24 +228,6 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
           serializeCommitMetadata(metadata));
       LOG.info("Committed " + instantTime);
       result.setCommitMetadata(Option.of(metadata));
-
-      if (!config.getBoolean(WRITE_IGNORE_FAILED) && writeStatuses.filter(status -> status.getErrors().size() > 0).count() > 0) {
-        WriteStatus writeStatus = writeStatuses.filter(status -> status.getErrors().size() > 0).collectAsList().get(0);
-        HashMap<HoodieKey, Throwable> errors = writeStatus.getErrors();
-        // get first top 10 of errors info to show error details
-        LOG.warn("Error writing record, show top 10 errors info as follow");
-        int count = 0;
-        for (Map.Entry<HoodieKey,Throwable> entry : errors.entrySet()) {
-          if (count >= 10) {
-            break;
-          }
-          LOG.error("Error writing record, record key is {}, writing path is {}", entry.getKey().getRecordKey(), entry.getKey().getPartitionPath(), entry.getValue());
-          count++;
-        }
-        // throw first one error info in exception
-        HoodieKey key = errors.keySet().iterator().next();
-        throw new HoodieException("Error writing record in the job", errors.get(key));
-      }
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
           e);
