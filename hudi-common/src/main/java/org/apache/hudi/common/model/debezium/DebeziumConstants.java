@@ -35,6 +35,7 @@ public class DebeziumConstants {
   public static final String INCOMING_TS_MS_FIELD = "ts_ms";
 
   public static final String INCOMING_SOURCE_NAME_FIELD = "source.name";
+  public static final String INCOMING_SOURCE_SCHEMA_FIELD = "source.schema";
   public static final String INCOMING_SOURCE_TS_MS_FIELD = "source.ts_ms";
   public static final String INCOMING_SOURCE_TXID_FIELD = "source.txId";
 
@@ -51,6 +52,7 @@ public class DebeziumConstants {
   public static final String FLATTENED_OP_COL_NAME = "_change_operation_type";
   public static final String UPSTREAM_PROCESSING_TS_COL_NAME = "_upstream_event_processed_ts_ms";
   public static final String FLATTENED_SHARD_NAME = "db_shard_source_partition";
+  public static final String FLATTENED_SCHEMA_NAME = "db_schema_source_partition";
   public static final String FLATTENED_TS_COL_NAME = "_event_origin_ts_ms";
   public static final String FLATTENED_TX_ID_COL_NAME = "_event_tx_id";
 

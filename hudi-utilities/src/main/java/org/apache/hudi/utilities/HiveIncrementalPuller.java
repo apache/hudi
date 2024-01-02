@@ -33,8 +33,8 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.stringtemplate.v4.ST;
 
 import java.io.File;
@@ -62,7 +62,7 @@ import java.util.stream.Collectors;
  */
 public class HiveIncrementalPuller {
 
-  private static final Logger LOG = LogManager.getLogger(HiveIncrementalPuller.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HiveIncrementalPuller.class);
 
   public static class Config implements Serializable {
 
@@ -315,13 +315,13 @@ public class HiveIncrementalPuller {
   private String getLastCommitTimePulled(FileSystem fs, String sourceTableLocation) {
     HoodieTableMetaClient metadata = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(sourceTableLocation).build();
     List<String> commitsToSync = metadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()
-        .findInstantsAfter(config.fromCommitTime, config.maxCommits).getInstants().map(HoodieInstant::getTimestamp)
+        .findInstantsAfter(config.fromCommitTime, config.maxCommits).getInstantsAsStream().map(HoodieInstant::getTimestamp)
         .collect(Collectors.toList());
     if (commitsToSync.isEmpty()) {
       LOG.warn(
           "Nothing to sync. All commits in "
               + config.sourceTable + " are " + metadata.getActiveTimeline().getCommitsTimeline()
-                  .filterCompletedInstants().getInstants().collect(Collectors.toList())
+                  .filterCompletedInstants().getInstants()
               + " and from commit time is " + config.fromCommitTime);
       return null;
     }

@@ -18,16 +18,26 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
+import org.apache.hudi.common.util.collection.Pair;
+
 import org.apache.avro.util.Utf8;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -52,12 +62,35 @@ public class TestSerializationUtils {
     verifyObject(new LinkedList<>(Arrays.asList(2, 3, 5)));
   }
 
+  @Test
+  public void testAvroUtf8SerDe() throws IOException {
+    byte[] firstBytes = SerializationUtils.serialize(new Utf8("test"));
+    // 4 byte string + 3 bytes length (Kryo uses variable-length encoding)
+    assertEquals(7, firstBytes.length);
+  }
+
+  @Test
+  public void testClassFullyQualifiedNameSerialization() throws IOException {
+    DeleteRecord deleteRecord = DeleteRecord.create(new HoodieKey("key", "partition"));
+    List<Pair<DeleteRecord, Long>> deleteRecordList = new ArrayList<>();
+    deleteRecordList.add(Pair.of(deleteRecord, -1L));
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deleteRecordList, false, Collections.emptyMap());
+
+    byte[] firstBytes = SerializationUtils.serialize(deleteBlock);
+    byte[] secondBytes = SerializationUtils.serialize(deleteBlock);
+
+    assertNotSame(firstBytes, secondBytes);
+    // NOTE: Here we assert that Kryo doesn't optimize out the fully-qualified class-name
+    //       and always writes it out
+    assertEquals(ByteBuffer.wrap(firstBytes), ByteBuffer.wrap(secondBytes));
+  }
+
   private <T> void verifyObject(T expectedValue) throws IOException {
     byte[] serializedObject = SerializationUtils.serialize(expectedValue);
     assertNotNull(serializedObject);
     assertTrue(serializedObject.length > 0);
 
-    final T deserializedValue = SerializationUtils.<T>deserialize(serializedObject);
+    final T deserializedValue = SerializationUtils.deserialize(serializedObject);
     if (expectedValue == null) {
       assertNull(deserializedValue);
     } else {
@@ -65,6 +98,9 @@ public class TestSerializationUtils {
     }
   }
 
+  /**
+   * A class for non-serializable.
+   */
   private static class NonSerializableClass {
     private String id;
     private String name;

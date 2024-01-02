@@ -76,9 +76,7 @@ public abstract class HoodieTestSuiteWriter implements Serializable {
     this.deltaStreamerWrapper = new HoodieDeltaStreamerWrapper(cfg, jsc);
     this.hoodieReadClient = new HoodieReadClient(context, cfg.targetBasePath);
     this.writeConfig = getHoodieClientConfig(cfg, props, schema);
-    if (!cfg.useDeltaStreamer) {
-      this.writeClient = new SparkRDDWriteClient(context, writeConfig);
-    }
+    this.writeClient = new SparkRDDWriteClient(context, writeConfig);
     this.cfg = cfg;
     this.configuration = jsc.hadoopConfiguration();
     this.sparkContext = jsc;
@@ -91,6 +89,7 @@ public abstract class HoodieTestSuiteWriter implements Serializable {
   }
 
   private HoodieWriteConfig getHoodieClientConfig(HoodieTestSuiteJob.HoodieTestSuiteConfig cfg, Properties props, String schema) {
+
     HoodieWriteConfig.Builder builder =
         HoodieWriteConfig.newBuilder().combineInput(true, true).withPath(cfg.targetBasePath)
             .withAutoCommit(false)
@@ -99,7 +98,7 @@ public abstract class HoodieTestSuiteWriter implements Serializable {
                 .withPayloadClass(cfg.payloadClassName)
                 .build())
             .forTable(cfg.targetTableName)
-            .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
+            .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.valueOf(cfg.indexType)).build())
             .withProps(props);
     builder = builder.withSchema(schema);
     return builder.build();
@@ -116,7 +115,7 @@ public abstract class HoodieTestSuiteWriter implements Serializable {
 
   public abstract RDD<GenericRecord> getNextBatch() throws Exception;
 
-  public abstract Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchSource() throws Exception ;
+  public abstract Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchSource() throws Exception;
 
   public abstract Option<String> startCommit();
 
@@ -132,7 +131,7 @@ public abstract class HoodieTestSuiteWriter implements Serializable {
 
   public abstract JavaRDD<WriteStatus> compact(Option<String> instantTime) throws Exception;
 
-  public abstract void inlineClustering() throws Exception ;
+  public abstract void inlineClustering() throws Exception;
 
   public abstract Option<String> scheduleCompaction(Option<Map<String, String>> previousCommitExtraMetadata) throws Exception;
 

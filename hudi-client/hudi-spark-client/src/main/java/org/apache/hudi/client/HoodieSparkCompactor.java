@@ -21,22 +21,21 @@ package org.apache.hudi.client;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
-public class HoodieSparkCompactor<T extends HoodieRecordPayload> extends BaseCompactor<T,
+public class HoodieSparkCompactor<T> extends BaseCompactor<T,
     JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
-  private static final Logger LOG = LogManager.getLogger(HoodieSparkCompactor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkCompactor.class);
   private transient HoodieEngineContext context;
 
   public HoodieSparkCompactor(BaseHoodieWriteClient<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> compactionClient,

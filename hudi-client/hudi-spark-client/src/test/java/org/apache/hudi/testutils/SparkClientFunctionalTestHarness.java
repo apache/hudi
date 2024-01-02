@@ -19,17 +19,13 @@
 
 package org.apache.hudi.testutils;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.AvroConversionUtils;
-import org.apache.hudi.client.HoodieReadClient;
+import org.apache.hudi.HoodieSparkUtils;
+import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -47,18 +43,24 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.providers.HoodieMetaClientProvider;
 import org.apache.hudi.testutils.providers.HoodieWriteClientProvider;
 import org.apache.hudi.testutils.providers.SparkProvider;
 import org.apache.hudi.timeline.service.TimelineService;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.spark.HoodieSparkKryoRegistrar$;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -105,6 +107,17 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   protected boolean initialized = false;
   @TempDir
   protected java.nio.file.Path tempDir;
+
+  public static Map<String, String> getSparkSqlConf() {
+    Map<String, String> sqlConf = new HashMap<>();
+    sqlConf.put("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension");
+
+    if (HoodieSparkUtils.gteqSpark3_2()) {
+      sqlConf.put("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.hudi.catalog.HoodieCatalog");
+    }
+
+    return sqlConf;
+  }
 
   public String basePath() {
     return tempDir.toAbsolutePath().toUri().toString();
@@ -160,7 +173,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   }
 
   public HoodieTableMetaClient getHoodieMetaClient(Configuration hadoopConf, String basePath) throws IOException {
-    return getHoodieMetaClient(hadoopConf, basePath, new Properties());
+    return getHoodieMetaClient(hadoopConf, basePath, getPropertiesForKeyGen(true));
   }
 
   @Override
@@ -184,8 +197,8 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     initialized = spark != null;
     if (!initialized) {
       SparkConf sparkConf = conf();
-      SparkRDDWriteClient.registerClasses(sparkConf);
-      HoodieReadClient.addHoodieSupport(sparkConf);
+      HoodieSparkKryoRegistrar$.MODULE$.register(sparkConf);
+      SparkRDDReadClient.addHoodieSupport(sparkConf);
       spark = SparkSession.builder().config(sparkConf).getOrCreate();
       sqlContext = spark.sqlContext();
       jsc = new JavaSparkContext(spark.sparkContext());
@@ -310,20 +323,23 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   }
 
   protected Properties getPropertiesForKeyGen() {
+    return getPropertiesForKeyGen(false);
+  }
+
+  protected Properties getPropertiesForKeyGen(boolean populateMetaFields) {
     Properties properties = new Properties();
-    properties.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+    properties.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), String.valueOf(populateMetaFields));
     properties.put("hoodie.datasource.write.recordkey.field", "_row_key");
     properties.put("hoodie.datasource.write.partitionpath.field", "partition_path");
     properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
     properties.put(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
-    properties.put(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), SimpleKeyGenerator.class.getName());
     return properties;
   }
 
   protected void addConfigsForPopulateMetaFields(HoodieWriteConfig.Builder configBuilder, boolean populateMetaFields) {
+    configBuilder.withProperties(getPropertiesForKeyGen(populateMetaFields));
     if (!populateMetaFields) {
-      configBuilder.withProperties(getPropertiesForKeyGen())
-          .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.SIMPLE).build());
+      configBuilder.withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.SIMPLE).build());
     }
   }
 
@@ -344,20 +360,20 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   }
 
   protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit, long compactionSmallFileSize, HoodieClusteringConfig clusteringConfig) {
-    return getConfigBuilder(autoCommit, false, HoodieIndex.IndexType.BLOOM, compactionSmallFileSize, clusteringConfig, false);
+    return getConfigBuilder(autoCommit, false, HoodieIndex.IndexType.BLOOM, compactionSmallFileSize, clusteringConfig);
   }
 
   protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit, Boolean rollbackUsingMarkers, HoodieIndex.IndexType indexType) {
-    return getConfigBuilder(autoCommit, rollbackUsingMarkers, indexType, 1024 * 1024 * 1024L, HoodieClusteringConfig.newBuilder().build(), false);
+    return getConfigBuilder(autoCommit, rollbackUsingMarkers, indexType, 1024 * 1024 * 1024L, HoodieClusteringConfig.newBuilder().build());
   }
 
   protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit, Boolean rollbackUsingMarkers, HoodieIndex.IndexType indexType,
-      long compactionSmallFileSize, HoodieClusteringConfig clusteringConfig, boolean preserveCommitMetaForCompaction) {
+      long compactionSmallFileSize, HoodieClusteringConfig clusteringConfig) {
     return HoodieWriteConfig.newBuilder().withPath(basePath()).withSchema(TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withDeleteParallelism(2)
         .withAutoCommit(autoCommit)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(compactionSmallFileSize)
-            .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).withPreserveCommitMetadata(preserveCommitMetaForCompaction).build())
+            .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024 * 1024).parquetMaxFileSize(1024 * 1024 * 1024).build())
         .withEmbeddedTimelineServerEnabled(true).forTable("test-trip-table")
         .withFileSystemViewConfig(new FileSystemViewStorageConfig.Builder()

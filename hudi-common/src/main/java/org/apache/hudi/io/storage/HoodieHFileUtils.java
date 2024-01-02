@@ -19,6 +19,8 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.exception.HoodieIOException;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -52,8 +54,12 @@ public class HoodieHFileUtils {
    * @throws IOException Upon error.
    */
   public static HFile.Reader createHFileReader(
-      FileSystem fs, Path path, CacheConfig cacheConfig, Configuration configuration) throws IOException {
-    return HFile.createReader(fs, path, cacheConfig, USE_PRIMARY_REPLICA_READER, configuration);
+      FileSystem fs, Path path, CacheConfig cacheConfig, Configuration configuration) {
+    try {
+      return HFile.createReader(fs, path, cacheConfig, USE_PRIMARY_REPLICA_READER, configuration);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to initialize HFile reader for  " + path, e);
+    }
   }
 
   /**
@@ -66,9 +72,11 @@ public class HoodieHFileUtils {
    * @throws IOException Upon error.
    */
   public static HFile.Reader createHFileReader(
-      FileSystem fs, Path dummyPath, byte[] content) throws IOException {
-    Configuration conf = new Configuration();
-    HoodieHFileReader.SeekableByteArrayInputStream bis = new HoodieHFileReader.SeekableByteArrayInputStream(content);
+      FileSystem fs, Path dummyPath, byte[] content) {
+    // Avoid loading default configs, from the FS, since this configuration is mostly
+    // used as a stub to initialize HFile reader
+    Configuration conf = new Configuration(false);
+    HoodieAvroHFileReader.SeekableByteArrayInputStream bis = new HoodieAvroHFileReader.SeekableByteArrayInputStream(content);
     FSDataInputStream fsdis = new FSDataInputStream(bis);
     FSDataInputStreamWrapper stream = new FSDataInputStreamWrapper(fsdis);
     ReaderContext context = new ReaderContextBuilder()
@@ -79,9 +87,13 @@ public class HoodieHFileUtils {
         .withPrimaryReplicaReader(USE_PRIMARY_REPLICA_READER)
         .withReaderType(ReaderContext.ReaderType.STREAM)
         .build();
-    HFileInfo fileInfo = new HFileInfo(context, conf);
-    HFile.Reader reader = HFile.createReader(context, fileInfo, new CacheConfig(conf), conf);
-    fileInfo.initMetaAndIndex(reader);
-    return reader;
+    try {
+      HFileInfo fileInfo = new HFileInfo(context, conf);
+      HFile.Reader reader = HFile.createReader(context, fileInfo, new CacheConfig(conf), conf);
+      fileInfo.initMetaAndIndex(reader);
+      return reader;
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to initialize HFile reader for  " + dummyPath, e);
+    }
   }
 }

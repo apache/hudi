@@ -31,6 +31,9 @@ import org.apache.hadoop.fs.Path;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * Migration handler for clean metadata in version 1.
+ */
 public class CleanMetadataV1MigrationHandler extends AbstractMigratorBase<HoodieCleanMetadata> {
 
   public static final Integer VERSION = 1;
@@ -83,6 +86,7 @@ public class CleanMetadataV1MigrationHandler extends AbstractMigratorBase<Hoodie
 
     return HoodieCleanMetadata.newBuilder()
         .setEarliestCommitToRetain(input.getEarliestCommitToRetain())
+        .setLastCompletedCommitTimestamp(input.getLastCompletedCommitTimestamp())
         .setStartCleanTime(input.getStartCleanTime())
         .setTimeTakenInMillis(input.getTimeTakenInMillis())
         .setTotalFilesDeleted(input.getTotalFilesDeleted())

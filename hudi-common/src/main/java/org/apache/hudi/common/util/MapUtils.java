@@ -22,6 +22,9 @@ package org.apache.hudi.common.util;
 import java.util.Map;
 import java.util.Objects;
 
+/**
+ * Utils for Java Map.
+ */
 public class MapUtils {
 
   public static boolean isNullOrEmpty(Map<?, ?> m) {
@@ -30,5 +33,9 @@ public class MapUtils {
 
   public static boolean nonEmpty(Map<?, ?> m) {
     return !isNullOrEmpty(m);
+  }
+
+  public static boolean containsAll(Map<?, ?> m1, Map<?, ?> m2) {
+    return m1.entrySet().containsAll(m2.entrySet());
   }
 }

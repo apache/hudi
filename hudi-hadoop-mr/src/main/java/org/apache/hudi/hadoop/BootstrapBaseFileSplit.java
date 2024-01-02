@@ -24,7 +24,6 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 
-
 /**
  * Sub-type of File Split which encapsulates both skeleton and bootstrap base file splits.
  */

@@ -42,16 +42,60 @@ import java.util.stream.StreamSupport;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
+/**
+ * Utils for Java Collection.
+ */
 public class CollectionUtils {
 
-  public static final Properties EMPTY_PROPERTIES = new Properties();
+  private static final Properties EMPTY_PROPERTIES = new Properties();
+
+  /**
+   * Returns an empty {@code Properties} instance. The props instance is a singleton,
+   * it should not be modified in any case.
+   */
+  public static Properties emptyProps() {
+    return EMPTY_PROPERTIES;
+  }
 
   public static boolean isNullOrEmpty(Collection<?> c) {
     return Objects.isNull(c) || c.isEmpty();
   }
 
+  public static boolean isNullOrEmpty(Map<?, ?> m) {
+    return Objects.isNull(m) || m.isEmpty();
+  }
+
   public static boolean nonEmpty(Collection<?> c) {
     return !isNullOrEmpty(c);
+  }
+
+  /**
+   * Reduces provided {@link Collection} using provided {@code reducer} applied to
+   * every element of the collection like following
+   *
+   * {@code reduce(reduce(reduce(identity, e1), e2), ...)}
+   *
+   * @param c target collection to be reduced
+   * @param identity element for reducing to start from
+   * @param reducer actual reducing operator
+   *
+   * @return result of the reduction of the collection using reducing operator
+   */
+  public static <T, U> U reduce(Collection<T> c, U identity, BiFunction<U, T, U> reducer) {
+    return c.stream()
+        .sequential()
+        .reduce(identity, reducer, (a, b) -> {
+          throw new UnsupportedOperationException();
+        });
+  }
+
+  /**
+   * Makes a copy of provided {@link Properties} object
+   */
+  public static Properties copy(Properties props) {
+    Properties copy = new Properties();
+    copy.putAll(props);
+    return copy;
   }
 
   /**
@@ -94,7 +138,6 @@ public class CollectionUtils {
     return combined;
   }
 
-
   /**
    * Combines provided {@link List}s into one, returning new instance of {@link ArrayList}
    */
@@ -132,9 +175,19 @@ public class CollectionUtils {
   }
 
   /**
-   * Returns difference b/w {@code one} {@link Set} of elements and {@code another}
+   * Zip two lists into a Map. Will throw Exception if the size is different between these two lists.
    */
-  public static <E> Set<E> diff(Set<E> one, Set<E> another) {
+  public static <K, V> Map<K, V> zipToMap(List<K> keys, List<V> values) {
+    checkArgument(keys.size() == values.size(),
+        "keys' size must be equal with the values' size");
+    return IntStream.range(0, keys.size()).boxed().collect(Collectors.toMap(keys::get, values::get));
+  }
+
+  /**
+   * Returns difference b/w {@code one} {@link Collection} of elements and {@code another}
+   * The elements in collection {@code one} are also duplicated and returned as a {@link Set}.
+   */
+  public static <E> Set<E> diffSet(Collection<E> one, Set<E> another) {
     Set<E> diff = new HashSet<>(one);
     diff.removeAll(another);
     return diff;
@@ -143,10 +196,10 @@ public class CollectionUtils {
   /**
    * Returns difference b/w {@code one} {@link List} of elements and {@code another}
    *
-   * NOTE: This is less optimal counterpart to {@link #diff(Set, Set)}, accepting {@link List}
+   * NOTE: This is less optimal counterpart to {@link #diff(Collection, Collection)}, accepting {@link List}
    *       as a holding collection to support duplicate elements use-cases
    */
-  public static <E> List<E> diff(List<E> one, List<E> another) {
+  public static <E> List<E> diff(Collection<E> one, Collection<E> another) {
     List<E> diff = new ArrayList<>(one);
     diff.removeAll(another);
     return diff;
@@ -191,30 +244,30 @@ public class CollectionUtils {
   }
 
   @SafeVarargs
-  public static <T> Set<T> createSet(final T... elements) {
-    return Stream.of(elements).collect(Collectors.toSet());
-  }
-
-  public static <K,V> Map<K, V> createImmutableMap(final K key, final V value) {
-    return Collections.unmodifiableMap(Collections.singletonMap(key, value));
-  }
-
-  @SafeVarargs
   public static <T> List<T> createImmutableList(final T... elements) {
     return Collections.unmodifiableList(Stream.of(elements).collect(Collectors.toList()));
   }
 
-  public static <K,V> Map<K,V> createImmutableMap(final Map<K,V> map) {
+  public static <T> List<T> createImmutableList(final List<T> list) {
+    return Collections.unmodifiableList(list);
+  }
+
+  @SafeVarargs
+  public static <K, V> Map<K, V> createImmutableMap(final Pair<K, V>... elements) {
+    Map<K, V> map = new HashMap<>();
+    for (Pair<K, V> pair : elements) {
+      map.put(pair.getLeft(), pair.getRight());
+    }
+    return Collections.unmodifiableMap(map);
+  }
+
+  public static <K, V> Map<K, V> createImmutableMap(final Map<K, V> map) {
     return Collections.unmodifiableMap(map);
   }
 
   @SafeVarargs
-  public static <K,V> Map<K,V> createImmutableMap(final Pair<K,V>... elements) {
-    Map<K,V> map = new HashMap<>();
-    for (Pair<K,V> pair: elements) {
-      map.put(pair.getLeft(), pair.getRight());
-    }
-    return Collections.unmodifiableMap(map);
+  public static <T> Set<T> createSet(final T... elements) {
+    return Stream.of(elements).collect(Collectors.toSet());
   }
 
   @SafeVarargs
@@ -224,10 +277,6 @@ public class CollectionUtils {
 
   public static <T> Set<T> createImmutableSet(final Set<T> set) {
     return Collections.unmodifiableSet(set);
-  }
-
-  public static <T> List<T> createImmutableList(final List<T> list) {
-    return Collections.unmodifiableList(list);
   }
 
   private static Object[] checkElementsNotNull(Object... array) {
@@ -244,4 +293,5 @@ public class CollectionUtils {
   private static Object checkElementNotNull(Object element, int index) {
     return Objects.requireNonNull(element, "Element is null at index " + index);
   }
+
 }

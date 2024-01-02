@@ -18,24 +18,21 @@
 
 package org.apache.hudi.table.action.savepoint;
 
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class SavepointHelpers {
 
-  private static final Logger LOG = LogManager.getLogger(SavepointHelpers.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SavepointHelpers.class);
 
   public static void deleteSavepoint(HoodieTable table, String savepointTime) {
-    if (table.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
-      throw new UnsupportedOperationException("Savepointing is not supported or MergeOnRead table types");
-    }
     HoodieInstant savePoint = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, savepointTime);
     boolean isSavepointPresent = table.getCompletedSavepointTimeline().containsInstant(savePoint);
     if (!isSavepointPresent) {

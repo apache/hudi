@@ -24,9 +24,10 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.utilities.config.DFSPathSelectorConfig;
 
-import com.amazonaws.services.sqs.AmazonSQS;
-import com.amazonaws.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.Message;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -38,6 +39,8 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * S3 events metadata selector class. This class provides methods to process the
@@ -59,10 +62,8 @@ public class S3EventsMetaSelector extends CloudObjectsSelector {
    * S3EventsMetaSelector}
    */
   public static S3EventsMetaSelector createSourceSelector(TypedProperties props) {
-    String sourceSelectorClass =
-        props.getString(
-            S3EventsMetaSelector.Config.SOURCE_INPUT_SELECTOR,
-            S3EventsMetaSelector.class.getName());
+    String sourceSelectorClass = getStringWithAltKeys(
+        props, DFSPathSelectorConfig.SOURCE_INPUT_SELECTOR, S3EventsMetaSelector.class.getName());
     try {
       S3EventsMetaSelector selector =
           (S3EventsMetaSelector)
@@ -83,7 +84,7 @@ public class S3EventsMetaSelector extends CloudObjectsSelector {
    * @param processedMessages array of processed messages to add more messages
    * @return the filtered list of valid S3 events in SQS.
    */
-  protected List<Map<String, Object>> getValidEvents(AmazonSQS sqs, List<Message> processedMessages) throws IOException {
+  protected List<Map<String, Object>> getValidEvents(SqsClient sqs, List<Message> processedMessages) throws IOException {
     List<Message> messages =
         getMessagesToProcess(
             sqs,
@@ -99,7 +100,7 @@ public class S3EventsMetaSelector extends CloudObjectsSelector {
                                                                     List<Message> messages) throws IOException {
     List<Map<String, Object>> validEvents = new ArrayList<>();
     for (Message message : messages) {
-      JSONObject messageBody = new JSONObject(message.getBody());
+      JSONObject messageBody = new JSONObject(message.body());
       Map<String, Object> messageMap;
       ObjectMapper mapper = new ObjectMapper();
       if (messageBody.has(SQS_MODEL_MESSAGE)) {
@@ -135,7 +136,7 @@ public class S3EventsMetaSelector extends CloudObjectsSelector {
    * @param lastCheckpointStr The last checkpoint instant string, empty if first run.
    * @return A pair of dataset of event records and the next checkpoint instant string.
    */
-  public Pair<List<String>, String> getNextEventsFromQueue(AmazonSQS sqs,
+  public Pair<List<String>, String> getNextEventsFromQueue(SqsClient sqs,
                                                            Option<String> lastCheckpointStr,
                                                            List<Message> processedMessages) {
     processedMessages.clear();
@@ -151,9 +152,13 @@ public class S3EventsMetaSelector extends CloudObjectsSelector {
               .getTime()).max().orElse(lastCheckpointStr.map(Long::parseLong).orElse(0L));
 
       for (Map<String, Object> eventRecord : eventRecords) {
-        filteredEventRecords.add(new ObjectMapper().writeValueAsString(eventRecord).replace("%3D", "="));
+        filteredEventRecords.add(new ObjectMapper().writeValueAsString(eventRecord).replace("%3D", "=")
+            .replace("%24", "$").replace("%A3", "£").replace("%23", "#").replace("%26", "&").replace("%3F", "?")
+            .replace("%7E", "~").replace("%25", "%").replace("%2B", "+"));
       }
-      return new ImmutablePair<>(filteredEventRecords, String.valueOf(newCheckpointTime));
+      // Return the old checkpoint if no messages to consume from queue.
+      String newCheckpoint = newCheckpointTime == 0 ? lastCheckpointStr.orElse(null) : String.valueOf(newCheckpointTime);
+      return new ImmutablePair<>(filteredEventRecords, newCheckpoint);
     } catch (JSONException | IOException e) {
       throw new HoodieException("Unable to read from SQS: ", e);
     }

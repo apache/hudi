@@ -61,6 +61,7 @@ public class HoodieMetricsConfig extends HoodieConfig {
   public static final ConfigProperty<String> METRICS_REPORTER_CLASS_NAME = ConfigProperty
       .key(METRIC_PREFIX + ".reporter.class")
       .defaultValue("")
+      .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("");
 
@@ -74,14 +75,42 @@ public class HoodieMetricsConfig extends HoodieConfig {
         }
         return Option.empty();
       })
+      .markAdvanced()
       .withDocumentation("The prefix given to the metrics names.");
 
   // Enable metrics collection from executors
   public static final ConfigProperty<String> EXECUTOR_METRICS_ENABLE = ConfigProperty
       .key(METRIC_PREFIX + ".executor.enable")
       .noDefaultValue()
+      .markAdvanced()
       .sinceVersion("0.7.0")
       .withDocumentation("");
+
+  public static final ConfigProperty<Boolean> LOCK_METRICS_ENABLE = ConfigProperty
+      .key(METRIC_PREFIX + ".lock.enable")
+      .defaultValue(false)
+      .withInferFunction(cfg -> {
+        if (cfg.contains(TURN_METRICS_ON)) {
+          return Option.of(cfg.getBoolean(TURN_METRICS_ON));
+        }
+        return Option.empty();
+      })
+      .markAdvanced()
+      .sinceVersion("0.13.0")
+      .withDocumentation("Enable metrics for locking infra. Useful when operating in multiwriter mode");
+
+  public static final ConfigProperty<String> METRICS_REPORTER_FILE_BASED_CONFIGS_PATH = ConfigProperty
+      .key(METRIC_PREFIX + ".configs.properties")
+      .defaultValue("")
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("Comma separated list of config file paths for metric exporter configs");
+
+  public static final ConfigProperty<Boolean> TURN_METRICS_COMPACTION_LOG_BLOCKS_ON = ConfigProperty
+      .key(METRIC_PREFIX + "compaction.log.blocks.on")
+      .defaultValue(false)
+      .sinceVersion("0.14.0")
+      .withDocumentation("Turn on/off metrics reporting for log blocks with compaction commit. off by default.");
 
   /**
    * @deprecated Use {@link #TURN_METRICS_ON} and its methods instead
@@ -148,6 +177,11 @@ public class HoodieMetricsConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder compactionLogBlocksEnable(boolean compactionLogBlockMetricsEnable) {
+      hoodieMetricsConfig.setValue(TURN_METRICS_COMPACTION_LOG_BLOCKS_ON, String.valueOf(compactionLogBlockMetricsEnable));
+      return this;
+    }
+
     public Builder withReporterType(String reporterType) {
       hoodieMetricsConfig.setValue(METRICS_REPORTER_TYPE_VALUE, reporterType);
       return this;
@@ -160,6 +194,11 @@ public class HoodieMetricsConfig extends HoodieConfig {
 
     public Builder withExecutorMetrics(boolean enable) {
       hoodieMetricsConfig.setValue(EXECUTOR_METRICS_ENABLE, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder withLockingMetrics(boolean enable) {
+      hoodieMetricsConfig.setValue(LOCK_METRICS_ENABLE, String.valueOf(enable));
       return this;
     }
 

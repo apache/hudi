@@ -21,8 +21,8 @@ package org.apache.hudi.hive.ddl;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -47,7 +47,7 @@ import static org.apache.hudi.hive.util.HiveSchemaUtil.HIVE_ESCAPE_CHARACTER;
  */
 public class JDBCExecutor extends QueryBasedDDLExecutor {
 
-  private static final Logger LOG = LogManager.getLogger(QueryBasedDDLExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(QueryBasedDDLExecutor.class);
 
   private Connection connection;
 
@@ -129,10 +129,11 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
     ResultSet result = null;
     try {
       DatabaseMetaData databaseMetaData = connection.getMetaData();
-      result = databaseMetaData.getColumns(null, databaseName, tableName, null);
+      String catalog = connection.getCatalog();
+      result = databaseMetaData.getColumns(catalog, databaseName, tableName, "%");
       while (result.next()) {
-        String columnName = result.getString(4);
-        String columnType = result.getString(6);
+        String columnName = result.getString("COLUMN_NAME");
+        String columnType = result.getString("TYPE_NAME");
         if ("DECIMAL".equals(columnType)) {
           int columnSize = result.getInt("COLUMN_SIZE");
           int decimalDigits = result.getInt("DECIMAL_DIGITS");
@@ -154,15 +155,12 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
       LOG.info("No partitions to add for " + tableName);
       return;
     }
-    LOG.info("Adding partitions " + partitionsToDrop.size() + " to table " + tableName);
+    LOG.info("Dropping partitions " + partitionsToDrop.size() + " from table " + tableName);
     List<String> sqls = constructDropPartitions(tableName, partitionsToDrop);
     sqls.stream().forEach(sql -> runSQL(sql));
   }
 
   private List<String> constructDropPartitions(String tableName, List<String> partitions) {
-    if (config.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM) <= 0) {
-      throw new HoodieHiveSyncException("batch-sync-num for sync hive table must be greater than 0, pls check your parameter");
-    }
     List<String> result = new ArrayList<>();
     int batchSyncPartitionNum = config.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM);
     StringBuilder alterSQL = getAlterTableDropPrefix(tableName);

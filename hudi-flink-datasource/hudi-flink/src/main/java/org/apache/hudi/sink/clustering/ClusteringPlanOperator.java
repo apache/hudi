@@ -29,7 +29,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.FlinkTables;
-import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.util.FlinkWriteClients;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
@@ -68,7 +68,7 @@ public class ClusteringPlanOperator extends AbstractStreamOperator<ClusteringPla
     // when starting up, rolls back all the inflight clustering instants if there exists,
     // these instants are in priority for scheduling task because the clustering instants are
     // scheduled from earliest(FIFO sequence).
-    ClusteringUtil.rollbackClustering(table, StreamerUtil.createWriteClient(conf, getRuntimeContext()));
+    ClusteringUtil.rollbackClustering(table, FlinkWriteClients.createWriteClient(conf, getRuntimeContext()));
   }
 
   @Override

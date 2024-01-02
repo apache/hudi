@@ -20,7 +20,6 @@ package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
 import org.apache.hudi.io.WriteHandleFactory;
@@ -35,7 +34,7 @@ import java.util.List;
 /**
  * Map function that handles a stream of HoodieRecords.
  */
-public class BulkInsertMapFunction<T extends HoodieRecordPayload>
+public class BulkInsertMapFunction<T>
     implements Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<List<WriteStatus>>> {
 
   private String instantTime;

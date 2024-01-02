@@ -69,8 +69,9 @@ public class BucketBulkInsertWriterHelper extends BulkInsertWriterHelper {
       }
       handle.write(recordKey, partitionPath, record);
     } catch (Throwable throwable) {
-      LOG.error("Global error thrown while trying to write records in HoodieRowDataCreateHandle", throwable);
-      throw throwable;
+      IOException ioException = new IOException("Exception happened when bulk insert.", throwable);
+      LOG.error("Global error thrown while trying to write records in HoodieRowDataCreateHandle", ioException);
+      throw ioException;
     }
   }
 
@@ -81,7 +82,7 @@ public class BucketBulkInsertWriterHelper extends BulkInsertWriterHelper {
         close();
       }
       HoodieRowDataCreateHandle rowCreateHandle = new HoodieRowDataCreateHandle(hoodieTable, writeConfig, partitionPath, fileId,
-          instantTime, taskPartitionId, taskId, taskEpochId, rowType);
+          instantTime, taskPartitionId, totalSubtaskNum, taskEpochId, rowType, preserveHoodieMetadata);
       handles.put(fileId, rowCreateHandle);
     }
     return handles.get(fileId);
@@ -91,16 +92,16 @@ public class BucketBulkInsertWriterHelper extends BulkInsertWriterHelper {
     return new SortOperatorGen(rowType, new String[] {FILE_GROUP_META_FIELD});
   }
 
-  private static String getFileId(Map<String, String> bucketIdToFileId, RowDataKeyGen keyGen, RowData record, String indexKeys, int numBuckets) {
+  private static String getFileId(Map<String, String> bucketIdToFileId, RowDataKeyGen keyGen, RowData record, String indexKeys, int numBuckets, boolean needFixedFileIdSuffix) {
     String recordKey = keyGen.getRecordKey(record);
     String partition = keyGen.getPartitionPath(record);
     final int bucketNum = BucketIdentifier.getBucketId(recordKey, indexKeys, numBuckets);
     String bucketId = partition + bucketNum;
-    return bucketIdToFileId.computeIfAbsent(bucketId, k -> BucketIdentifier.newBucketFileIdPrefix(bucketNum));
+    return bucketIdToFileId.computeIfAbsent(bucketId, k -> BucketIdentifier.newBucketFileIdPrefix(bucketNum, needFixedFileIdSuffix));
   }
 
-  public static RowData rowWithFileId(Map<String, String> bucketIdToFileId, RowDataKeyGen keyGen, RowData record, String indexKeys, int numBuckets) {
-    final String fileId = getFileId(bucketIdToFileId, keyGen, record, indexKeys, numBuckets);
+  public static RowData rowWithFileId(Map<String, String> bucketIdToFileId, RowDataKeyGen keyGen, RowData record, String indexKeys, int numBuckets, boolean needFixedFileIdSuffix) {
+    final String fileId = getFileId(bucketIdToFileId, keyGen, record, indexKeys, numBuckets, needFixedFileIdSuffix);
     return GenericRowData.of(StringData.fromString(fileId), record);
   }
 

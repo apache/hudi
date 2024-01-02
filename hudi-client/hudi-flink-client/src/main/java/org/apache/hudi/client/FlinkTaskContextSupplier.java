@@ -61,5 +61,10 @@ public class FlinkTaskContextSupplier extends TaskContextSupplier {
     // no operation for now
     return Option.empty();
   }
-  
+
+  @Override
+  public Supplier<Integer> getAttemptNumberSupplier() {
+    return () -> -1;
+  }
+
 }

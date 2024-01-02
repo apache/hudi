@@ -39,6 +39,9 @@ import java.time.Instant;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests {@link TablePathUtils}.
+ */
 public final class TestTablePathUtils {
   private static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
 
@@ -74,10 +77,10 @@ public final class TestTablePathUtils {
     assertTrue(new File(partitionPathURI2).mkdirs());
 
     HoodiePartitionMetadata partitionMetadata1 = new HoodiePartitionMetadata(fs, Instant.now().toString(), tablePath,
-                                                                             partitionPath1, partitionMetafileFormat);
+        partitionPath1, partitionMetafileFormat);
     partitionMetadata1.trySave(1);
     HoodiePartitionMetadata partitionMetadata2 = new HoodiePartitionMetadata(fs, Instant.now().toString(), tablePath,
-                                                                             partitionPath2, partitionMetafileFormat);
+        partitionPath2, partitionMetafileFormat);
     partitionMetadata2.trySave(2);
 
     // Create files

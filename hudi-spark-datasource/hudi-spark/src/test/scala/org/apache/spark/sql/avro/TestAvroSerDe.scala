@@ -20,6 +20,7 @@ package org.apache.spark.sql.avro
 import org.apache.avro.generic.GenericData
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.avro.model.{HoodieMetadataColumnStats, IntWrapper}
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.SchemaConverters.SchemaType
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test

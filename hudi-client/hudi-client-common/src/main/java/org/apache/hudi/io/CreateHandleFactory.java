@@ -19,13 +19,12 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.Serializable;
 
-public class CreateHandleFactory<T extends HoodieRecordPayload, I, K, O> extends WriteHandleFactory<T, I, K, O> implements Serializable {
+public class CreateHandleFactory<T, I, K, O> extends WriteHandleFactory<T, I, K, O> implements Serializable {
 
   private boolean preserveMetadata = false;
 

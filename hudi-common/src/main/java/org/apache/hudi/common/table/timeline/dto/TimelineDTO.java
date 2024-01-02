@@ -39,7 +39,7 @@ public class TimelineDTO {
 
   public static TimelineDTO fromTimeline(HoodieTimeline timeline) {
     TimelineDTO dto = new TimelineDTO();
-    dto.instants = timeline.getInstants().map(InstantDTO::fromInstant).collect(Collectors.toList());
+    dto.instants = timeline.getInstantsAsStream().map(InstantDTO::fromInstant).collect(Collectors.toList());
     return dto;
   }
 

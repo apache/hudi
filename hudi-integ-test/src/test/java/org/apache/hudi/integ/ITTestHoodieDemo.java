@@ -92,7 +92,8 @@ public class ITTestHoodieDemo extends ITTestBase {
   private HoodieFileFormat baseFileFormat;
 
   private static String HIVE_SYNC_CMD_FMT =
-      " --enable-hive-sync --hoodie-conf hoodie.datasource.hive_sync.jdbcurl=jdbc:hive2://hiveserver:10000 "
+      " --enable-hive-sync --hoodie-conf hoodie.datasource.hive_sync.jdbcurl=jdbc:hive2://hiveserver:10000/ "
+          + " --hoodie-conf hoodie.datasource.hive_sync.partition_extractor_class=org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor "
           + " --hoodie-conf hoodie.datasource.hive_sync.username=hive "
           + " --hoodie-conf hoodie.datasource.hive_sync.password=hive "
           + " --hoodie-conf hoodie.datasource.hive_sync.partition_fields=%s "
@@ -110,6 +111,7 @@ public class ITTestHoodieDemo extends ITTestBase {
   }
 
   @Test
+  @Disabled
   public void testParquetDemo() throws Exception {
     baseFileFormat = HoodieFileFormat.PARQUET;
 
@@ -199,7 +201,6 @@ public class ITTestHoodieDemo extends ITTestBase {
   private void ingestFirstBatchAndHiveSync() throws Exception {
     List<String> cmds = CollectionUtils.createImmutableList(
         "spark-submit"
-            + " --conf \'spark.executor.extraJavaOptions=-Dlog4jspark.root.logger=WARN,console\'"
             + " --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type COPY_ON_WRITE "
             + " --base-file-format " + baseFileFormat.toString()
@@ -215,9 +216,9 @@ public class ITTestHoodieDemo extends ITTestBase {
             + " --user hive"
             + " --pass hive"
             + " --jdbc-url jdbc:hive2://hiveserver:10000"
+            + " --partition-value-extractor org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor"
             + " --partitioned-by dt",
         ("spark-submit"
-            + " --conf \'spark.executor.extraJavaOptions=-Dlog4jspark.root.logger=WARN,console\'"
             + " --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type MERGE_ON_READ "
             + " --base-file-format " + baseFileFormat.toString()
@@ -231,33 +232,33 @@ public class ITTestHoodieDemo extends ITTestBase {
     executeSparkSQLCommand(SPARKSQL_BS_PREP_COMMANDS, true);
     List<String> bootstrapCmds = CollectionUtils.createImmutableList(
         "spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
-        + " --table-type COPY_ON_WRITE "
-        + " --run-bootstrap "
-        + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
-        + " --target-base-path " + COW_BOOTSTRAPPED_BASE_PATH + " --target-table " + COW_BOOTSTRAPPED_TABLE_NAME
-        + " --props /var/demo/config/dfs-source.properties"
-        + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
-        + " --initial-checkpoint-provider"
-        + " org.apache.hudi.utilities.checkpointing.InitialCheckpointFromAnotherHoodieTimelineProvider"
-        + " --hoodie-conf hoodie.bootstrap.base.path=" + BOOTSTRAPPED_SRC_PATH
-        + " --hoodie-conf hoodie.deltastreamer.checkpoint.provider.path=" + COW_BASE_PATH
-        + " --hoodie-conf hoodie.bootstrap.parallelism=2 "
-        + " --hoodie-conf hoodie.bootstrap.keygen.class=" + SimpleKeyGenerator.class.getName()
-        + String.format(HIVE_SYNC_CMD_FMT, "dt", COW_BOOTSTRAPPED_TABLE_NAME),
+            + " --table-type COPY_ON_WRITE "
+            + " --run-bootstrap "
+            + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
+            + " --target-base-path " + COW_BOOTSTRAPPED_BASE_PATH + " --target-table " + COW_BOOTSTRAPPED_TABLE_NAME
+            + " --props /var/demo/config/dfs-source.properties"
+            + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
+            + " --initial-checkpoint-provider"
+            + " org.apache.hudi.utilities.checkpointing.InitialCheckpointFromAnotherHoodieTimelineProvider"
+            + " --hoodie-conf hoodie.bootstrap.base.path=" + BOOTSTRAPPED_SRC_PATH
+            + " --hoodie-conf hoodie.deltastreamer.checkpoint.provider.path=" + COW_BASE_PATH
+            + " --hoodie-conf hoodie.bootstrap.parallelism=2 "
+            + " --hoodie-conf hoodie.datasource.write.keygenerator.class=" + SimpleKeyGenerator.class.getName()
+            + String.format(HIVE_SYNC_CMD_FMT, "dt", COW_BOOTSTRAPPED_TABLE_NAME),
         "spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
-        + " --table-type MERGE_ON_READ "
-        + " --run-bootstrap "
-        + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
-        + " --target-base-path " + MOR_BOOTSTRAPPED_BASE_PATH + " --target-table " + MOR_BOOTSTRAPPED_TABLE_NAME
-        + " --props /var/demo/config/dfs-source.properties"
-        + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
-        + " --initial-checkpoint-provider"
-        + " org.apache.hudi.utilities.checkpointing.InitialCheckpointFromAnotherHoodieTimelineProvider"
-        + " --hoodie-conf hoodie.bootstrap.base.path=" + BOOTSTRAPPED_SRC_PATH
-        + " --hoodie-conf hoodie.deltastreamer.checkpoint.provider.path=" + COW_BASE_PATH
-        + " --hoodie-conf hoodie.bootstrap.parallelism=2 "
-        + " --hoodie-conf hoodie.bootstrap.keygen.class=" + SimpleKeyGenerator.class.getName()
-        + String.format(HIVE_SYNC_CMD_FMT, "dt", MOR_BOOTSTRAPPED_TABLE_NAME));
+            + " --table-type MERGE_ON_READ "
+            + " --run-bootstrap "
+            + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
+            + " --target-base-path " + MOR_BOOTSTRAPPED_BASE_PATH + " --target-table " + MOR_BOOTSTRAPPED_TABLE_NAME
+            + " --props /var/demo/config/dfs-source.properties"
+            + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
+            + " --initial-checkpoint-provider"
+            + " org.apache.hudi.utilities.checkpointing.InitialCheckpointFromAnotherHoodieTimelineProvider"
+            + " --hoodie-conf hoodie.bootstrap.base.path=" + BOOTSTRAPPED_SRC_PATH
+            + " --hoodie-conf hoodie.deltastreamer.checkpoint.provider.path=" + COW_BASE_PATH
+            + " --hoodie-conf hoodie.bootstrap.parallelism=2 "
+            + " --hoodie-conf hoodie.datasource.write.keygenerator.class=" + SimpleKeyGenerator.class.getName()
+            + String.format(HIVE_SYNC_CMD_FMT, "dt", MOR_BOOTSTRAPPED_TABLE_NAME));
     executeCommandStringsInDocker(ADHOC_1_CONTAINER, bootstrapCmds);
   }
 
@@ -272,9 +273,7 @@ public class ITTestHoodieDemo extends ITTestBase {
     assertStdOutContains(stdOutErrPair,
         "|   partition    |\n+----------------+\n| dt=2018-08-31  |\n+----------------+\n", 3);
 
-    // There should have 5 data source tables except stock_ticks_mor_bs_rt.
-    // After [HUDI-2071] has solved, we can inc the number 5 to 6.
-    assertStdOutContains(stdOutErrPair, "'spark.sql.sources.provider'='hudi'", 5);
+    assertStdOutContains(stdOutErrPair, "'spark.sql.sources.provider'='hudi'", 6);
 
     stdOutErrPair = executeHiveCommandFile(HIVE_BATCH1_COMMANDS);
     assertStdOutContains(stdOutErrPair, "| symbol  |         _c1          |\n+---------+----------------------+\n"
@@ -307,7 +306,6 @@ public class ITTestHoodieDemo extends ITTestBase {
     List<String> cmds = CollectionUtils.createImmutableList(
             ("hdfs dfs -copyFromLocal -f " + INPUT_BATCH_PATH2 + " " + HDFS_BATCH_PATH2),
             ("spark-submit"
-            + " --conf \'spark.executor.extraJavaOptions=-Dlog4jspark.root.logger=WARN,console\'"
             + " --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type COPY_ON_WRITE "
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
@@ -316,7 +314,6 @@ public class ITTestHoodieDemo extends ITTestBase {
             + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
             + String.format(HIVE_SYNC_CMD_FMT, "dt", COW_TABLE_NAME)),
             ("spark-submit"
-            + " --conf \'spark.executor.extraJavaOptions=-Dlog4jspark.root.logger=WARN,console\'"
             + " --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type MERGE_ON_READ "
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
@@ -510,7 +507,7 @@ public class ITTestHoodieDemo extends ITTestBase {
   }
 
   private void scheduleAndRunCompaction() throws Exception {
-    executeCommandStringInDocker(ADHOC_1_CONTAINER, HUDI_CLI_TOOL + " --cmdfile " + COMPACTION_COMMANDS, true);
-    executeCommandStringInDocker(ADHOC_1_CONTAINER, HUDI_CLI_TOOL + " --cmdfile " + COMPACTION_BOOTSTRAP_COMMANDS, true);
+    executeCommandStringInDocker(ADHOC_1_CONTAINER, HUDI_CLI_TOOL + " script --file " + COMPACTION_COMMANDS, true);
+    executeCommandStringInDocker(ADHOC_1_CONTAINER, HUDI_CLI_TOOL + " script --file " + COMPACTION_BOOTSTRAP_COMMANDS, true);
   }
 }

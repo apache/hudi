@@ -29,7 +29,7 @@ import java.io.IOException;
 public interface HoodieInternalRowFileWriter {
 
   /**
-   * @returns {@code true} if this RowFileWriter can take in more writes. else {@code false}.
+   * @return {@code true} if this RowFileWriter can take in more writes. else {@code false}.
    */
   boolean canWrite();
 

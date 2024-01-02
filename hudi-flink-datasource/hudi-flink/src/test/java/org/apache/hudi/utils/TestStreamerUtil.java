@@ -18,15 +18,18 @@
 
 package org.apache.hudi.utils;
 
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.util.StreamerUtil;
-import org.apache.hudi.util.ViewStorageProperties;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -67,6 +70,7 @@ public class TestStreamerUtil {
         "Missing partition columns in the hoodie.properties.");
     assertArrayEquals(metaClient1.getTableConfig().getPartitionFields().get(), new String[] {"p0", "p1"});
     assertEquals(metaClient1.getTableConfig().getPreCombineField(), "ts");
+    assertEquals(metaClient1.getTableConfig().getKeyGeneratorClassName(), SimpleAvroKeyGenerator.class.getName());
 
     // Test for non-partitioned table.
     conf.removeConfig(FlinkOptions.PARTITION_PATH_FIELD);
@@ -77,6 +81,7 @@ public class TestStreamerUtil {
         .setConf(new org.apache.hadoop.conf.Configuration())
         .build();
     assertFalse(metaClient2.getTableConfig().getPartitionFields().isPresent());
+    assertEquals(metaClient2.getTableConfig().getKeyGeneratorClassName(), SimpleAvroKeyGenerator.class.getName());
   }
 
   @Test
@@ -103,11 +108,19 @@ public class TestStreamerUtil {
   }
 
   @Test
-  void testDumpRemoteViewStorageConfig() throws IOException {
+  void testTableExist() throws IOException {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    StreamerUtil.createWriteClient(conf);
-    FileSystemViewStorageConfig storageConfig = ViewStorageProperties.loadFromProperties(conf.getString(FlinkOptions.PATH), new Configuration());
-    assertThat(storageConfig.getStorageType(), is(FileSystemViewStorageType.REMOTE_FIRST));
+    String basePath = tempFile.getAbsolutePath();
+
+    assertFalse(StreamerUtil.tableExists(basePath, HadoopConfigurations.getHadoopConf(conf)));
+
+    try (FileSystem fs = FSUtils.getFs(basePath, HadoopConfigurations.getHadoopConf(conf))) {
+      fs.mkdirs(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME));
+      assertFalse(StreamerUtil.tableExists(basePath, HadoopConfigurations.getHadoopConf(conf)));
+
+      fs.create(new Path(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME), HoodieTableConfig.HOODIE_PROPERTIES_FILE));
+      assertTrue(StreamerUtil.tableExists(basePath, HadoopConfigurations.getHadoopConf(conf)));
+    }
   }
 }
 

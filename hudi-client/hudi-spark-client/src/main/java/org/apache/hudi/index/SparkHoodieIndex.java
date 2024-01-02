@@ -25,7 +25,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieIndexException;
@@ -34,7 +33,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.spark.api.java.JavaRDD;
 
 @SuppressWarnings("checkstyle:LineLength")
-public abstract class SparkHoodieIndex<T extends HoodieRecordPayload<T>>
+public abstract class SparkHoodieIndex<T>
     extends HoodieIndex<JavaRDD<HoodieRecord<T>>, JavaRDD<WriteStatus>> {
   protected SparkHoodieIndex(HoodieWriteConfig config) {
     super(config);

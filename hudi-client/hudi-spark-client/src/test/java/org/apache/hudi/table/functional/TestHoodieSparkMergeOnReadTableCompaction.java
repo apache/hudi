@@ -22,18 +22,19 @@ package org.apache.hudi.table.functional;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLayoutConfig;
-import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
@@ -42,10 +43,10 @@ import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -54,6 +55,7 @@ import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -74,6 +76,11 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     return Stream.of(data).map(Arguments::of);
   }
 
+  private static Stream<Arguments> writePayloadTest() {
+    // Payload class
+    return Stream.of(new Object[] {DefaultHoodieRecordPayload.class.getName(), PartialUpdateAvroPayload.class.getName()}).map(Arguments::of);
+  }
+
   private HoodieTestDataGenerator dataGen;
   private SparkRDDWriteClient client;
   private HoodieTableMetaClient metaClient;
@@ -83,14 +90,24 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     dataGen = new HoodieTestDataGenerator();
   }
 
-  @Test
-  public void testWriteDuringCompaction() throws IOException {
+  @AfterEach
+  public void teardown() throws IOException {
+    if (client != null) {
+      client.close();
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("writePayloadTest")
+  public void testWriteDuringCompaction(String payloadClass) throws IOException {
+    Properties props = getPropertiesForKeyGen(true);
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .forTable("test-trip-table")
         .withPath(basePath())
         .withSchema(TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
         .withAutoCommit(false)
+        .withWritePayLoad(payloadClass)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder()
@@ -98,23 +115,27 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
         .withLayoutConfig(HoodieLayoutConfig.newBuilder()
             .withLayoutType(HoodieStorageLayout.LayoutType.BUCKET.name())
             .withLayoutPartitioner(SparkBucketIndexPartitioner.class.getName()).build())
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BUCKET).withBucketNum("1").build()).build();
-    metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, config.getProps());
+        .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).withIndexType(HoodieIndex.IndexType.BUCKET).withBucketNum("1").build())
+        .build();
+    props.putAll(config.getProps());
+
+    metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, props);
     client = getHoodieWriteClient(config);
 
     // write data and commit
-    writeData(HoodieActiveTimeline.createNewInstantTime(), 100, true);
+    writeData(client.createNewInstantTime(), 100, true);
     // write data again, and in the case of bucket index, all records will go into log files (we use a small max_file_size)
-    writeData(HoodieActiveTimeline.createNewInstantTime(), 100, true);
+    writeData(client.createNewInstantTime(), 100, true);
     Assertions.assertEquals(200, readTableTotalRecordsNum());
     // schedule compaction
     String compactionTime = (String) client.scheduleCompaction(Option.empty()).get();
     // write data, and do not commit. those records should not visible to reader
-    String insertTime = HoodieActiveTimeline.createNewInstantTime();
+    String insertTime = client.createNewInstantTime();
     List<WriteStatus> writeStatuses = writeData(insertTime, 100, false);
     Assertions.assertEquals(200, readTableTotalRecordsNum());
     // commit the write. The records should be visible now even though the compaction does not complete.
-    client.commitStats(insertTime, writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
+    client.commitStats(insertTime, context().parallelize(writeStatuses, 1), writeStatuses.stream().map(WriteStatus::getStat)
+        .collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
     Assertions.assertEquals(300, readTableTotalRecordsNum());
     // after the compaction, total records should remain the same
     config.setValue(AUTO_COMMIT_ENABLE, "true");
@@ -125,6 +146,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
   @ParameterizedTest
   @MethodSource("writeLogTest")
   public void testWriteLogDuringCompaction(boolean enableMetadataTable, boolean enableTimelineServer) throws IOException {
+    Properties props = getPropertiesForKeyGen(true);
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .forTable("test-trip-table")
         .withPath(basePath())
@@ -138,8 +160,11 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
         .withLayoutConfig(HoodieLayoutConfig.newBuilder()
             .withLayoutType(HoodieStorageLayout.LayoutType.BUCKET.name())
             .withLayoutPartitioner(SparkBucketIndexPartitioner.class.getName()).build())
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BUCKET).withBucketNum("1").build()).build();
-    metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, config.getProps());
+        .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).withIndexType(HoodieIndex.IndexType.BUCKET).withBucketNum("1").build())
+        .build();
+    props.putAll(config.getProps());
+
+    metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, props);
     client = getHoodieWriteClient(config);
 
     final List<HoodieRecord> records = dataGen.generateInserts("001", 100);
@@ -174,7 +199,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatuses);
     if (doCommit) {
       List<HoodieWriteStat> writeStats = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
-      boolean committed = client.commitStats(instant, writeStats, Option.empty(), metaClient.getCommitActionType());
+      boolean committed = client.commitStats(instant, context().parallelize(writeStatuses, 1), writeStats, Option.empty(), metaClient.getCommitActionType());
       Assertions.assertTrue(committed);
     }
     metaClient = HoodieTableMetaClient.reload(metaClient);

@@ -1,0 +1,11 @@
+{
+  "type" : "record",
+  "name" : "Product",
+  "doc" : "A product from Acme's catalog",
+  "namespace" : "example.com",
+  "fields" : [ {
+    "name" : "productId",
+    "doc" : "The unique identifier for a product",
+    "type" : "long"
+  } ]
+}

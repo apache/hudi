@@ -27,7 +27,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
 
-public class TrinoQueryNode extends BaseQueryNode{
+public class TrinoQueryNode extends BaseQueryNode {
 
   public TrinoQueryNode(DeltaConfig.Config config) {
     this.config = config;
@@ -52,8 +52,7 @@ public class TrinoQueryNode extends BaseQueryNode{
       setSessionProperties(this.config.getTrinoProperties(), stmt);
       executeAndValidateQueries(this.config.getTrinoQueries(), stmt);
       stmt.close();
-    }
-    catch (Exception e) {
+    }  catch (Exception e) {
       throw new HoodieValidationException("Trino query validation failed due to " + e.getMessage(), e);
     }
   }

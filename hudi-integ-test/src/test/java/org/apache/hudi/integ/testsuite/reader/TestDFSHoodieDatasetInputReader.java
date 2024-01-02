@@ -51,18 +51,18 @@ public class TestDFSHoodieDatasetInputReader extends UtilitiesTestBase {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initTestServices(false, false);
+    UtilitiesTestBase.initTestServices(true, false, false);
   }
 
   @AfterAll
   public static void cleanupClass() {
-    UtilitiesTestBase.cleanupClass();
+    UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
   @BeforeEach
   public void setup() throws Exception {
     super.setup();
-    HoodieTestUtils.init(jsc.hadoopConfiguration(), dfsBasePath);
+    HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath);
   }
 
   @AfterEach
@@ -117,7 +117,7 @@ public class TestDFSHoodieDatasetInputReader extends UtilitiesTestBase {
 
   private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder() throws Exception {
     // Prepare the AvroParquetIO
-    return HoodieWriteConfig.newBuilder().withPath(dfsBasePath)
+    return HoodieWriteConfig.newBuilder().withPath(basePath)
         .withParallelism(2, 2)
         .withDeleteParallelism(2)
         .withSchema(HoodieTestDataGenerator

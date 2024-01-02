@@ -33,8 +33,10 @@ public class FlinkStateBackendConverter implements IStringConverter<StateBackend
   @Override
   public StateBackend convert(String value) throws ParameterException {
     switch (value) {
-      case "hashmap" : return new HashMapStateBackend();
-      case "rocksdb" : return new EmbeddedRocksDBStateBackend();
+      case "hashmap":
+        return new HashMapStateBackend();
+      case "rocksdb":
+        return new EmbeddedRocksDBStateBackend();
       default:
         throw new HoodieException(String.format("Unknown flink state backend %s. Supports only hashmap and rocksdb by now", value));
     }

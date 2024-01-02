@@ -22,22 +22,21 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
 import com.codahale.metrics.MetricRegistry;
-import org.apache.log4j.LogManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.management.MBeanServer;
 
-import java.io.Closeable;
 import java.lang.management.ManagementFactory;
 import java.util.Objects;
 import java.util.stream.IntStream;
-
 
 /**
  * Implementation of Jmx reporter, which used to report jmx metric.
  */
 public class JmxMetricsReporter extends MetricsReporter {
 
-  private static final org.apache.log4j.Logger LOG = LogManager.getLogger(JmxMetricsReporter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(JmxMetricsReporter.class);
 
   private final MetricRegistry registry;
   private JmxReporterServer jmxReporterServer;
@@ -84,11 +83,6 @@ public class JmxMetricsReporter extends MetricsReporter {
 
   @Override
   public void report() {
-  }
-
-  @Override
-  public Closeable getReporter() {
-    return jmxReporterServer.getReporter();
   }
 
   @Override

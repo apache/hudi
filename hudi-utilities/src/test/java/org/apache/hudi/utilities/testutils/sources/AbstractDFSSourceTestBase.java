@@ -22,10 +22,10 @@ import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.Source;
+import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.avro.generic.GenericRecord;
@@ -37,8 +37,6 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -62,23 +60,13 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initTestServices(false, false);
-  }
-
-  @AfterAll
-  public static void cleanupClass() {
-    UtilitiesTestBase.cleanupClass();
+    UtilitiesTestBase.initTestServices(true, false, false);
   }
 
   @BeforeEach
   public void setup() throws Exception {
     super.setup();
     schemaProvider = new FilebasedSchemaProvider(Helpers.setupSchemaOnDFS(), jsc);
-  }
-
-  @AfterEach
-  public void teardown() throws Exception {
-    super.teardown();
   }
 
   /**
@@ -117,7 +105,7 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
    */
   @Test
   public void testReadingFromSource() throws IOException {
-    dfs.mkdirs(new Path(dfsRoot));
+    fs.mkdirs(new Path(dfsRoot));
     SourceFormatAdapter sourceFormatAdapter = new SourceFormatAdapter(prepareDFSSource());
 
     // 1. Extract without any checkpoint => get all the data, respecting sourceLimit
@@ -125,7 +113,7 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
         sourceFormatAdapter.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE).getBatch());
     // Test respecting sourceLimit
     int sourceLimit = 10;
-    RemoteIterator<LocatedFileStatus> files = dfs.listFiles(generateOneFile("1", "000", 100), true);
+    RemoteIterator<LocatedFileStatus> files = fs.listFiles(generateOneFile("1", "000", 100), true);
     FileStatus file1Status = files.next();
     assertTrue(file1Status.getLen() > sourceLimit);
     assertEquals(Option.empty(),

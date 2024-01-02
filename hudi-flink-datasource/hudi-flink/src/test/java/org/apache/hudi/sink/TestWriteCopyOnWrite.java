@@ -19,20 +19,30 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
+import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.exception.HoodieWriteConflictException;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.sink.utils.TestWriteBase;
-import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -41,6 +51,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Test cases for stream write.
@@ -59,11 +70,16 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     setUp(conf);
   }
 
+  @AfterEach
+  public void after() {
+    conf = null;
+  }
+
   /**
    * Override to have custom configuration.
    */
   protected void setUp(Configuration conf) {
-    // for sub-class extension
+    // for subclass extension
   }
 
   @Test
@@ -105,12 +121,57 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
 
   @Test
   public void testSubtaskFails() throws Exception {
+    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
     // open the function and ingest data
     preparePipeline()
         .checkpoint(1)
         .assertEmptyEvent()
         .subTaskFails(0)
         .noCompleteInstant()
+        // write a commit and check the result
+        .consume(TestData.DATA_SET_INSERT)
+        .checkpoint(2)
+        .assertNextEvent()
+        .checkpointComplete(2)
+        .checkWrittenData(EXPECTED1)
+        // triggers task 0 failover, there is no pending instant that needs to recommit,
+        // the task sends an empty bootstrap event to trigger initialization of a new instant.
+        .subTaskFails(0, 0)
+        .assertEmptyEvent()
+        // rollback the last complete instant to inflight state, to simulate an instant commit failure
+        // while executing the post action of a checkpoint success notification event, the whole job should then
+        // trigger a failover.
+        .rollbackLastCompleteInstantToInflight()
+        .jobFailover()
+        .assertNextEvent()
+        .checkLastPendingInstantCompleted()
+        .end();
+  }
+
+  @Test
+  public void testPartialFailover() throws Exception {
+    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
+    conf.setString(FlinkOptions.OPERATION, "INSERT");
+    // open the function and ingest data
+    preparePipeline()
+        // triggers subtask failure for multiple times to simulate partial failover, for partial over,
+        // we allow the task to reuse the pending instant for data flushing, no metadata event should be sent
+        .subTaskFails(0, 1)
+        .assertNoEvent()
+        // the subtask reuses the pending instant
+        .checkpoint(3)
+        .assertNextEvent()
+        // if the write task can not fetch any pending instant when starts up(the coordinator restarts),
+        // it will send an event to the coordinator
+        .coordinatorFails()
+        .subTaskFails(0, 2)
+        // the subtask can not fetch the instant to write until a new instant is initialized
+        .checkpointThrows(4, "Timeout(1000ms) while waiting for instant initialize")
+        .assertEmptyEvent()
+        .subTaskFails(0, 3)
+        // the last checkpoint instant was rolled back by subTaskFails(0, 2)
+        // with EAGER cleaning strategy
+        .assertNoEvent()
         .end();
   }
 
@@ -239,7 +300,8 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
 
   @Test
   public void testInsertAppendMode() throws Exception {
-    prepareInsertPipeline()
+    conf.setString(FlinkOptions.OPERATION, "insert");
+    preparePipeline()
         // Each record is 208 bytes. so 4 records expect to trigger a mini-batch write
         .consume(TestData.DATA_SET_INSERT_SAME_KEY)
         .checkpoint(1)
@@ -294,7 +356,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     conf.setBoolean(FlinkOptions.CLUSTERING_ASYNC_ENABLED, true);
     conf.setInteger(FlinkOptions.CLUSTERING_DELTA_COMMITS, 1);
 
-    prepareInsertPipeline(conf)
+    preparePipeline()
         .consume(TestData.DATA_SET_INSERT_SAME_KEY)
         .checkpoint(1)
         .handleEvents(1)
@@ -334,6 +396,42 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .checkpointComplete(2)
         // Same the original base file content.
         .checkWrittenData(expected, 1)
+        .end();
+  }
+
+  @Test
+  public void testCommitOnEmptyBatch() throws Exception {
+    // reset the config option
+    conf.setBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), true);
+
+    preparePipeline()
+        .consume(TestData.DATA_SET_INSERT)
+        .assertEmptyDataFiles()
+        .checkpoint(1)
+        .assertNextEvent()
+        .checkpointComplete(1)
+        .checkCompletedInstantCount(1)
+        // Do checkpoint without data consumption
+        .checkpoint(2)
+        .assertNextEvent()
+        .checkpointComplete(2)
+        // The instant is committed successfully
+        .checkCompletedInstantCount(2)
+        // Continue to consume data
+        .consume(TestData.DATA_SET_UPDATE_INSERT)
+        .checkWrittenData(EXPECTED1)
+        .checkpoint(3)
+        .assertNextEvent()
+        .checkpointComplete(3)
+        .checkCompletedInstantCount(3)
+        // Commit the data and check after an empty batch
+        .checkWrittenData(EXPECTED2)
+        // Do checkpoint without data consumption
+        .checkpoint(4)
+        .assertNextEvent()
+        .checkpointComplete(4)
+        .checkCompletedInstantCount(4)
+        .checkWrittenData(EXPECTED2)
         .end();
   }
 
@@ -422,19 +520,155 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .end();
   }
 
+  // case1: txn2's time range is involved in txn1
+  //      |----------- txn1 -----------|
+  //              | ----- txn2 ----- |
+  @ParameterizedTest
+  @EnumSource(value = WriteConcurrencyMode.class, names = {"OPTIMISTIC_CONCURRENCY_CONTROL", "NON_BLOCKING_CONCURRENCY_CONTROL"})
+  public void testWriteMultiWriterInvolved(WriteConcurrencyMode writeConcurrencyMode) throws Exception {
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), writeConcurrencyMode.name());
+    conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
+
+    if (OptionsResolver.isCowTable(conf) && OptionsResolver.isNonBlockingConcurrencyControl(conf)) {
+      validateNonBlockingConcurrencyControlConditions();
+    } else {
+      TestHarness pipeline1 = preparePipeline(conf)
+          .consume(TestData.DATA_SET_INSERT_DUPLICATES)
+          .assertEmptyDataFiles();
+      // now start pipeline2 and commit the txn
+      Configuration conf2 = conf.clone();
+      conf2.setString(FlinkOptions.WRITE_CLIENT_ID, "2");
+      preparePipeline(conf2)
+          .consume(TestData.DATA_SET_INSERT_DUPLICATES)
+          .assertEmptyDataFiles()
+          .checkpoint(1)
+          .assertNextEvent()
+          .checkpointComplete(1)
+          .checkWrittenData(EXPECTED3, 1)
+          .end();
+      // step to commit the 2nd txn
+      validateConcurrentCommit(pipeline1);
+      pipeline1.end();
+    }
+  }
+
+  protected void validateNonBlockingConcurrencyControlConditions() {
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> preparePipeline(conf),
+        "Non-blocking concurrency control requires the MOR table with simple bucket index");
+  }
+
+  private void validateConcurrentCommit(TestHarness pipeline) throws Exception {
+    pipeline
+        .checkpoint(1)
+        .assertNextEvent();
+    if (OptionsResolver.isNonBlockingConcurrencyControl(conf)) {
+      // NB-CC(non-blocking concurrency control) allows concurrent modification of the same fileGroup
+      pipeline
+          .checkpointComplete(1)
+          .checkWrittenData(EXPECTED3, 1);
+    } else {
+      // normal OCC(optimistic concurrency control) should throw exception otherwise
+      pipeline
+          .checkpointCompleteThrows(1, HoodieWriteConflictException.class, "Cannot resolve conflicts");
+    }
+  }
+
+  // case2: txn2's time range has partial overlap with txn1
+  //      |----------- txn1 -----------|
+  //                       | ----- txn2 ----- |
+  @ParameterizedTest
+  @EnumSource(value = WriteConcurrencyMode.class, names = {"OPTIMISTIC_CONCURRENCY_CONTROL", "NON_BLOCKING_CONCURRENCY_CONTROL"})
+  public void testWriteMultiWriterPartialOverlapping(WriteConcurrencyMode writeConcurrencyMode) throws Exception {
+    conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), writeConcurrencyMode.name());
+    conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
+
+    if (OptionsResolver.isCowTable(conf) && OptionsResolver.isNonBlockingConcurrencyControl(conf)) {
+      validateNonBlockingConcurrencyControlConditions();
+    } else {
+      TestHarness pipeline1 = null;
+      TestHarness pipeline2 = null;
+      try {
+        pipeline1 = preparePipeline(conf)
+            .consume(TestData.DATA_SET_INSERT_DUPLICATES)
+            .assertEmptyDataFiles();
+        // now start pipeline2 and suspend the txn commit
+        Configuration conf2 = conf.clone();
+        conf2.setString(FlinkOptions.WRITE_CLIENT_ID, "2");
+        pipeline2 = preparePipeline(conf2)
+            .consume(TestData.DATA_SET_INSERT_DUPLICATES)
+            .assertEmptyDataFiles();
+
+        // step to commit the 1st txn, should succeed
+        pipeline1.checkpoint(1)
+            .assertNextEvent()
+            .checkpointComplete(1)
+            .checkWrittenData(EXPECTED3, 1);
+
+        // step to commit the 2nd txn
+        // should success for concurrent modification of same fileGroups if using non-blocking concurrency control
+        // should throw exception otherwise
+        validateConcurrentCommit(pipeline2);
+      } finally {
+        if (pipeline1 != null) {
+          pipeline1.end();
+        }
+        if (pipeline2 != null) {
+          pipeline2.end();
+        }
+      }
+    }
+  }
+
   @Test
   public void testReuseEmbeddedServer() throws IOException {
     conf.setInteger("hoodie.filesystem.view.remote.timeout.secs", 500);
-    HoodieFlinkWriteClient writeClient = StreamerUtil.createWriteClient(conf);
-    FileSystemViewStorageConfig viewStorageConfig = writeClient.getConfig().getViewStorageConfig();
+    conf.setString("hoodie.metadata.enable","true");
+    HoodieFlinkWriteClient writeClient = null;
+    HoodieFlinkWriteClient writeClient2 = null;
 
-    assertSame(viewStorageConfig.getStorageType(), FileSystemViewStorageType.REMOTE_FIRST);
+    try {
+      writeClient = FlinkWriteClients.createWriteClient(conf);
+      FileSystemViewStorageConfig viewStorageConfig = writeClient.getConfig().getViewStorageConfig();
 
-    // get another write client
-    writeClient = StreamerUtil.createWriteClient(conf);
-    assertSame(writeClient.getConfig().getViewStorageConfig().getStorageType(), FileSystemViewStorageType.REMOTE_FIRST);
-    assertEquals(viewStorageConfig.getRemoteViewServerPort(), writeClient.getConfig().getViewStorageConfig().getRemoteViewServerPort());
-    assertEquals(viewStorageConfig.getRemoteTimelineClientTimeoutSecs(), 500);
+      assertSame(viewStorageConfig.getStorageType(), FileSystemViewStorageType.REMOTE_FIRST);
+
+      // get another write client
+      writeClient2 = FlinkWriteClients.createWriteClient(conf);
+      assertSame(writeClient2.getConfig().getViewStorageConfig().getStorageType(), FileSystemViewStorageType.REMOTE_FIRST);
+      assertEquals(viewStorageConfig.getRemoteViewServerPort(), writeClient2.getConfig().getViewStorageConfig().getRemoteViewServerPort());
+      assertEquals(viewStorageConfig.getRemoteTimelineClientTimeoutSecs(), 500);
+    } finally {
+      if (writeClient != null) {
+        writeClient.close();
+      }
+      if (writeClient2 != null) {
+        writeClient2.close();
+      }
+    }
+  }
+
+  @Test
+  public void testRollbackFailedWritesWithLazyCleanPolicy() throws Exception {
+    conf.setString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(), HoodieFailedWritesCleaningPolicy.LAZY.name());
+
+    preparePipeline()
+        .consume(TestData.DATA_SET_INSERT)
+        .checkpoint(1)
+        .assertNextEvent()
+        .checkpointComplete(1)
+        .subTaskFails(0, 0)
+        .assertEmptyEvent()
+        .rollbackLastCompleteInstantToInflight()
+        .jobFailover()
+        .subTaskFails(0, 1)
+        // the last checkpoint instant was not rolled back by subTaskFails(0, 1)
+        // with LAZY cleaning strategy because clean action could roll back failed writes.
+        .assertNextEvent()
+        .end();
   }
 
   // -------------------------------------------------------------------------
@@ -447,14 +681,6 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
 
   protected TestHarness preparePipeline(Configuration conf) throws Exception {
     return TestHarness.instance().preparePipeline(tempFile, conf);
-  }
-
-  protected TestHarness prepareInsertPipeline() throws Exception {
-    return prepareInsertPipeline(conf);
-  }
-
-  protected TestHarness prepareInsertPipeline(Configuration conf) throws Exception {
-    return TestHarness.instance().preparePipeline(tempFile, conf, true);
   }
 
   protected HoodieTableType getTableType() {

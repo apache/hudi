@@ -37,7 +37,6 @@ import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.Objects;
 
-
 /**
  * A reporter which publishes metric values to a JMX server.
  */

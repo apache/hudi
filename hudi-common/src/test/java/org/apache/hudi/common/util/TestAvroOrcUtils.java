@@ -18,29 +18,33 @@
 
 package org.apache.hudi.common.util;
 
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
-
-import java.util.Arrays;
-import java.util.List;
-import org.apache.avro.Schema;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
-import org.apache.orc.TypeDescription;
 
+import org.apache.avro.Schema;
+import org.apache.orc.TypeDescription;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.Arrays;
+import java.util.List;
+
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+/**
+ * Tests {@link AvroOrcUtils}.
+ */
 public class TestAvroOrcUtils extends HoodieCommonTestHarness {
 
   public static List<Arguments> testCreateOrcSchemaArgs() {
     // the ORC schema is constructed in the order as AVRO_SCHEMA:
     // TRIP_SCHEMA_PREFIX, EXTRA_TYPE_SCHEMA, MAP_TYPE_SCHEMA, FARE_NESTED_SCHEMA, TIP_NESTED_SCHEMA, TRIP_SCHEMA_SUFFIX
     // The following types are tested:
-    // DATE, DECIMAL, LONG, INT, BYTES, ARRAY, RECORD, MAP, STRING, FLOAT, DOUBLE
+    // DATE, DECIMAL, LONG, INT, BYTES, ARRAY, RECORD, MAP, STRING, FLOAT, DOUBLE, ENUM
     TypeDescription orcSchema = TypeDescription.fromString("struct<"
-        + "timestamp:bigint,_row_key:string,partition_path:string,rider:string,driver:string,begin_lat:double,"
+        + "timestamp:bigint,_row_key:string,partition_path:string,"
+        + "trip_type:string,rider:string,driver:string,begin_lat:double,"
         + "begin_lon:double,end_lat:double,end_lon:double,"
         + "distance_in_meters:int,seconds_since_epoch:bigint,weight:float,nation:binary,"
         + "current_date:date,current_ts:bigint,height:decimal(10,6),"

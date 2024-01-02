@@ -18,8 +18,6 @@
 
 package org.apache.hudi.common.table.view;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
@@ -44,8 +42,11 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
@@ -58,7 +59,7 @@ import java.util.stream.Collectors;
  */
 public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTableFileSystemView {
 
-  private static final Logger LOG = LogManager.getLogger(IncrementalTimelineSyncFileSystemView.class);
+  private static final Logger LOG = LoggerFactory.getLogger(IncrementalTimelineSyncFileSystemView.class);
 
   // Allows incremental Timeline syncing
   private final boolean incrementalTimelineSyncEnabled;
@@ -77,12 +78,26 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
   }
 
   @Override
-  protected void runSync(HoodieTimeline oldTimeline, HoodieTimeline newTimeline) {
+  public void sync() {
+    try {
+      writeLock.lock();
+      maySyncIncrementally();
+    } finally {
+      writeLock.unlock();
+    }
+  }
+
+  protected void maySyncIncrementally() {
+    HoodieTimeline oldTimeline = getTimeline();
+    HoodieTimeline newTimeline = metaClient.reloadActiveTimeline().filterCompletedOrMajorOrMinorCompactionInstants();
     try {
       if (incrementalTimelineSyncEnabled) {
         TimelineDiffResult diffResult = TimelineDiffHelper.getNewInstantsForIncrementalSync(oldTimeline, newTimeline);
         if (diffResult.canSyncIncrementally()) {
           LOG.info("Doing incremental sync");
+          // need to refresh the completion time query view
+          // before amending existing file groups.
+          refreshCompletionTimeQueryView();
           runIncrementalSync(newTimeline, diffResult);
           LOG.info("Finished incremental sync");
           // Reset timeline to latest
@@ -93,14 +108,15 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
     } catch (Exception ioe) {
       LOG.error("Got exception trying to perform incremental sync. Reverting to complete sync", ioe);
     }
-
-    super.runSync(oldTimeline, newTimeline);
+    clear();
+    // Initialize with new Hoodie timeline.
+    init(metaClient, newTimeline);
   }
 
   /**
    * Run incremental sync based on the diff result produced.
    *
-   * @param timeline New Timeline
+   * @param timeline   New Timeline
    * @param diffResult Timeline Diff Result
    */
   private void runIncrementalSync(HoodieTimeline timeline, TimelineDiffResult diffResult) {
@@ -110,15 +126,26 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
     // First remove pending compaction instants which were completed
     diffResult.getFinishedCompactionInstants().stream().forEach(instant -> {
       try {
-        removePendingCompactionInstant(timeline, instant);
+        removePendingCompactionInstant(instant);
       } catch (IOException e) {
         throw new HoodieException(e);
       }
     });
 
-    // Add new completed instants found in the latest timeline
+    // Now remove pending log compaction instants which were completed or removed
+    diffResult.getFinishedOrRemovedLogCompactionInstants().stream().forEach(instant -> {
+      try {
+        removePendingLogCompactionInstant(instant);
+      } catch (IOException e) {
+        throw new HoodieException(e);
+      }
+    });
+
+    // Add new completed instants found in the latest timeline, this also contains inflight instants.
     diffResult.getNewlySeenInstants().stream()
-        .filter(instant -> instant.isCompleted() || instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION))
+        .filter(instant -> instant.isCompleted()
+            || instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION)
+            || instant.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION))
         .forEach(instant -> {
           try {
             if (instant.getAction().equals(HoodieTimeline.COMMIT_ACTION)
@@ -130,6 +157,8 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
               addCleanInstant(timeline, instant);
             } else if (instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION)) {
               addPendingCompactionInstant(timeline, instant);
+            } else if (instant.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION)) {
+              addPendingLogCompactionInstant(instant);
             } else if (instant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION)) {
               addRollbackInstant(timeline, instant);
             } else if (instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
@@ -144,13 +173,26 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
   /**
    * Remove Pending compaction instant.
    *
-   * @param timeline New Hoodie Timeline
    * @param instant Compaction Instant to be removed
    */
-  private void removePendingCompactionInstant(HoodieTimeline timeline, HoodieInstant instant) throws IOException {
+  private void removePendingCompactionInstant(HoodieInstant instant) throws IOException {
     LOG.info("Removing completed compaction instant (" + instant + ")");
     HoodieCompactionPlan plan = CompactionUtils.getCompactionPlan(metaClient, instant.getTimestamp());
     removePendingCompactionOperations(CompactionUtils.getPendingCompactionOperations(instant, plan)
+        .map(instantPair -> Pair.of(instantPair.getValue().getKey(),
+            CompactionOperation.convertFromAvroRecordInstance(instantPair.getValue().getValue()))));
+  }
+
+  /**
+   * Remove Pending compaction instant. This is called when logcompaction is converted to delta commit,
+   * so you no longer need to track them as pending.
+   *
+   * @param instant Log Compaction Instant to be removed
+   */
+  private void removePendingLogCompactionInstant(HoodieInstant instant) throws IOException {
+    LOG.info("Removing completed log compaction instant (" + instant + ")");
+    HoodieCompactionPlan plan = CompactionUtils.getLogCompactionPlan(metaClient, instant.getTimestamp());
+    removePendingLogCompactionOperations(CompactionUtils.getPendingCompactionOperations(instant, plan)
         .map(instantPair -> Pair.of(instantPair.getValue().getKey(),
             CompactionOperation.convertFromAvroRecordInstance(instantPair.getValue().getValue()))));
   }
@@ -184,6 +226,24 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
             entry.getValue().stream().map(Pair::getValue).collect(Collectors.toList()), DeltaApplyMode.ADD);
       }
     });
+  }
+
+  /**
+   * Add newly found compaction instant.
+   *
+   * @param instant Compaction Instant
+   */
+  private void addPendingLogCompactionInstant(HoodieInstant instant) throws IOException {
+    LOG.info("Syncing pending log compaction instant (" + instant + ")");
+    HoodieCompactionPlan compactionPlan = CompactionUtils.getLogCompactionPlan(metaClient, instant.getTimestamp());
+    List<Pair<String, CompactionOperation>> pendingOps =
+        CompactionUtils.getPendingCompactionOperations(instant, compactionPlan)
+            .map(p -> Pair.of(p.getValue().getKey(),
+                CompactionOperation.convertFromAvroRecordInstance(p.getValue().getValue())))
+            .collect(Collectors.toList());
+    // Update Pending log compaction instants.
+    // Since logcompaction works similar to a deltacommit. Updating the partition view is not required.
+    addPendingLogCompactionOperations(pendingOps.stream());
   }
 
   /**
@@ -363,7 +423,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
         .map(FileSlice::getBaseFile).filter(Option::isPresent).map(Option::get)
         .map(df -> Pair.of(Path.getPathWithoutSchemeAndAuthority(new Path(df.getPath())).toString(), df))
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
-    // Note: Delta Log Files and Data FIles can be empty when adding/removing pending compactions
+    // Note: Delta Log Files and Data Files can be empty when adding/removing pending compactions
     Map<String, HoodieBaseFile> deltaDataFiles = deltaFileGroups.stream().flatMap(HoodieFileGroup::getAllRawFileSlices)
         .map(FileSlice::getBaseFile).filter(Option::isPresent).map(Option::get)
         .map(df -> Pair.of(Path.getPathWithoutSchemeAndAuthority(new Path(df.getPath())).toString(), df))

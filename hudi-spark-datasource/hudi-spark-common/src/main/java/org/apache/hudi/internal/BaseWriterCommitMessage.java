@@ -18,7 +18,7 @@
 
 package org.apache.hudi.internal;
 
-import org.apache.hudi.client.HoodieInternalWriteStatus;
+import org.apache.hudi.client.WriteStatus;
 
 import java.util.Arrays;
 import java.util.List;
@@ -28,13 +28,13 @@ import java.util.List;
  */
 public class BaseWriterCommitMessage {
 
-  private List<HoodieInternalWriteStatus> writeStatuses;
+  private List<WriteStatus> writeStatuses;
 
-  public BaseWriterCommitMessage(List<HoodieInternalWriteStatus> writeStatuses) {
+  public BaseWriterCommitMessage(List<WriteStatus> writeStatuses) {
     this.writeStatuses = writeStatuses;
   }
 
-  public List<HoodieInternalWriteStatus> getWriteStatuses() {
+  public List<WriteStatus> getWriteStatuses() {
     return writeStatuses;
   }
 

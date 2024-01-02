@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -37,8 +36,8 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -52,9 +51,9 @@ import java.util.stream.Collectors;
 /**
  * Packs incoming records to be upserted, into buckets.
  */
-public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements Partitioner  {
+public class JavaUpsertPartitioner<T> implements Partitioner  {
 
-  private static final Logger LOG = LogManager.getLogger(JavaUpsertPartitioner.class);
+  private static final Logger LOG = LoggerFactory.getLogger(JavaUpsertPartitioner.class);
 
   /**
    * List of all small files to be corrected.
@@ -254,9 +253,8 @@ public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements 
 
       for (HoodieBaseFile file : allFiles) {
         if (file.getFileSize() < config.getParquetSmallFileLimit()) {
-          String filename = file.getFileName();
           SmallFile sf = new SmallFile();
-          sf.location = new HoodieRecordLocation(FSUtils.getCommitTime(filename), FSUtils.getFileId(filename));
+          sf.location = new HoodieRecordLocation(file.getCommitTime(), file.getFileId());
           sf.sizeBytes = file.getFileSize();
           smallFileLocations.add(sf);
         }
@@ -337,5 +335,10 @@ public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements 
       LOG.error("Error trying to compute average bytes/record ", t);
     }
     return avgSize;
+  }
+
+  public List<String> getSmallFileIds() {
+    return smallFiles.stream().map(smallFile -> smallFile.location.getFileId())
+        .collect(Collectors.toList());
   }
 }

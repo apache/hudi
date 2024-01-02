@@ -25,11 +25,15 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests {@link StringUtils}.
+ */
 public class TestStringUtils {
 
   private static final String[] STRINGS = {"This", "is", "a", "test"};
@@ -67,8 +71,8 @@ public class TestStringUtils {
     assertEquals("Test String", StringUtils.objToString("Test String"));
 
     // assert byte buffer
-    ByteBuffer byteBuffer1 = ByteBuffer.wrap("1234".getBytes());
-    ByteBuffer byteBuffer2 = ByteBuffer.wrap("5678".getBytes());
+    ByteBuffer byteBuffer1 = ByteBuffer.wrap(getUTF8Bytes("1234"));
+    ByteBuffer byteBuffer2 = ByteBuffer.wrap(getUTF8Bytes("5678"));
     // assert equal because ByteBuffer has overwritten the toString to return a summary string
     assertEquals(byteBuffer1.toString(), byteBuffer2.toString());
     // assert not equal
@@ -95,5 +99,26 @@ public class TestStringUtils {
     assertEquals(new ArrayList<>(), StringUtils.split("", ","));
     assertEquals(Arrays.asList("a", "b", "c"), StringUtils.split("a,b, c", ","));
     assertEquals(Arrays.asList("a", "b", "c"), StringUtils.split("a,b,, c ", ","));
+  }
+
+  @Test
+  public void testHexString() {
+    String str = "abcd";
+    assertEquals(StringUtils.toHexString(getUTF8Bytes(str)), toHexString(getUTF8Bytes(str)));
+  }
+
+  private static String toHexString(byte[] bytes) {
+    StringBuilder sb = new StringBuilder(bytes.length * 2);
+    for (byte b : bytes) {
+      sb.append(String.format("%02x", b));
+    }
+    return sb.toString();
+  }
+
+  @Test
+  public void testTruncate() {
+    assertNull(StringUtils.truncate(null, 10, 10));
+    assertEquals("http://use...ons/latest", StringUtils.truncate("http://username:password@myregistry.com:5000/versions/latest", 10, 10));
+    assertEquals("http://abc.com", StringUtils.truncate("http://abc.com", 10, 10));
   }
 }

@@ -18,8 +18,6 @@
 
 package org.apache.hudi.connect.utils;
 
-import com.google.protobuf.ByteString;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -36,18 +34,19 @@ import org.apache.hudi.connect.writers.KafkaConnectConfigs;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.CustomAvroKeyGenerator;
-import org.apache.hudi.keygen.CustomKeyGenerator;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+
+import com.google.protobuf.ByteString;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -62,12 +61,14 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+
 /**
  * Helper methods for Kafka.
  */
 public class KafkaConnectUtils {
 
-  private static final Logger LOG = LogManager.getLogger(KafkaConnectUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(KafkaConnectUtils.class);
   private static final String HOODIE_CONF_PREFIX = "hoodie.";
   public static final String HADOOP_CONF_DIR = "HADOOP_CONF_DIR";
   public static final String HADOOP_HOME = "HADOOP_HOME";
@@ -185,8 +186,7 @@ public class KafkaConnectUtils {
    * @return partition columns Returns the partition columns separated by comma.
    */
   public static String getPartitionColumns(KeyGenerator keyGenerator, TypedProperties typedProperties) {
-
-    if (keyGenerator instanceof CustomKeyGenerator || keyGenerator instanceof CustomAvroKeyGenerator) {
+    if (keyGenerator instanceof CustomAvroKeyGenerator) {
       return ((BaseKeyGenerator) keyGenerator).getPartitionPathFields().stream().map(
           pathField -> Arrays.stream(pathField.split(CustomAvroKeyGenerator.SPLIT_REGEX))
               .findFirst().orElse("Illegal partition path field format: '$pathField' for ${c.getClass.getSimpleName}"))
@@ -199,7 +199,6 @@ public class KafkaConnectUtils {
 
     return typedProperties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
   }
-
 
   /**
    * Get the Metadata from the latest commit file.
@@ -234,7 +233,7 @@ public class KafkaConnectUtils {
       LOG.error("Fatal error selecting hash algorithm", e);
       throw new HoodieException(e);
     }
-    byte[] digest = Objects.requireNonNull(md).digest(stringToHash.getBytes(StandardCharsets.UTF_8));
+    byte[] digest = Objects.requireNonNull(md).digest(getUTF8Bytes(stringToHash));
     return StringUtils.toHexString(digest).toUpperCase();
   }
 

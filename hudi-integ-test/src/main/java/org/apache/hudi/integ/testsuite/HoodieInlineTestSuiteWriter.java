@@ -19,34 +19,26 @@
 package org.apache.hudi.integ.testsuite;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieCompactionConfig;
-import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.config.HoodiePayloadConfig;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
-import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.integ.testsuite.HoodieTestSuiteJob.HoodieTestSuiteConfig;
 import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.CompactHelpers;
+import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.rdd.RDD;
@@ -73,7 +65,14 @@ public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
   }
 
   public void shutdownResources() {
-    // no-op for non continuous mode test suite writer.
+    if (this.deltaStreamerWrapper != null) {
+      log.info("Shutting down DS wrapper gracefully ");
+      this.deltaStreamerWrapper.shutdownGracefully();
+    }
+    if (this.writeClient != null) {
+      log.info("Closing local write client");
+      this.writeClient.close();
+    }
   }
 
   public RDD<GenericRecord> getNextBatch() throws Exception {
@@ -90,7 +89,7 @@ public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
 
   public Option<String> startCommit() {
     if (cfg.useDeltaStreamer) {
-      return Option.of(HoodieActiveTimeline.createNewInstantTime());
+      return Option.of(writeClient.createNewInstantTime());
     } else {
       return Option.of(writeClient.startCommit());
     }
@@ -197,7 +196,7 @@ public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
       Map<String, String> extraMetadata = new HashMap<>();
       /** Store the checkpoint in the commit metadata just like
        * {@link HoodieDeltaStreamer#commit(SparkRDDWriteClient, JavaRDD, Option)} **/
-      extraMetadata.put(HoodieDeltaStreamerWrapper.CHECKPOINT_KEY, lastCheckpoint.get());
+      extraMetadata.put(HoodieDeltaStreamer.CHECKPOINT_KEY, lastCheckpoint.get());
       if (generatedDataStats != null && generatedDataStats.count() > 1) {
         // Just stores the path where this batch of data is generated to
         extraMetadata.put(GENERATED_DATA_PATH, generatedDataStats.map(s -> s.getFilePath()).collect().get(0));
@@ -212,7 +211,7 @@ public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
       Map<String, String> extraMetadata = new HashMap<>();
       /** Store the checkpoint in the commit metadata just like
        * {@link HoodieDeltaStreamer#commit(SparkRDDWriteClient, JavaRDD, Option)} **/
-      extraMetadata.put(HoodieDeltaStreamerWrapper.CHECKPOINT_KEY, lastCheckpoint.get());
+      extraMetadata.put(HoodieDeltaStreamer.CHECKPOINT_KEY, lastCheckpoint.get());
       if (generatedDataStats != null && generatedDataStats.count() > 1) {
         // Just stores the path where this batch of data is generated to
         extraMetadata.put(GENERATED_DATA_PATH, generatedDataStats.map(s -> s.getFilePath()).collect().get(0));

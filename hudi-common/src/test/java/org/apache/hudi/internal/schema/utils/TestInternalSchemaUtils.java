@@ -21,36 +21,44 @@ package org.apache.hudi.internal.schema.utils;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.InternalSchemaBuilder;
 import org.apache.hudi.internal.schema.Types;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Assertions;
 
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Tests {@link InternalSchemaUtils}.
+ */
 public class TestInternalSchemaUtils {
   @Test
   public void testPruneSchema() {
     Types.RecordType record = getSimpleRecordType();
-    InternalSchema originSchema = new InternalSchema(record.fields());
+    InternalSchema originSchema = new InternalSchema(Types.RecordType.get(record.fields()));
     List<Integer> prunedCols = new ArrayList<>();
     prunedCols.add(4);
     prunedCols.add(3);
     prunedCols.add(0);
     prunedCols.add(2);
     InternalSchema prunedSchema = InternalSchemaUtils.pruneInternalSchemaByID(originSchema, prunedCols, null);
-    InternalSchema checkedSchema = new InternalSchema(Arrays.asList(new Types.Field[] {
-        Types.Field.get(0, "bool", Types.BooleanType.get()),
-        Types.Field.get(2, "long", Types.LongType.get()),
-        Types.Field.get(3, "float", Types.FloatType.get()),
-        Types.Field.get(4, "double", Types.DoubleType.get())
-    }));
+    InternalSchema checkedSchema = new InternalSchema(Types.RecordType.get(Arrays.asList(new Types.Field[] {
+            Types.Field.get(0, "bool", Types.BooleanType.get()),
+            Types.Field.get(2, "long", Types.LongType.get()),
+            Types.Field.get(3, "float", Types.FloatType.get()),
+            Types.Field.get(4, "double", Types.DoubleType.get())
+        })));
     Assertions.assertEquals(prunedSchema, checkedSchema);
 
     // nest schema
     Types.RecordType nestRecord = getNestRecordType();
-    InternalSchema originNestSchema = new InternalSchema(nestRecord.fields());
+    InternalSchema originNestSchema = new InternalSchema(Types.RecordType.get(nestRecord.fields()));
     List<Integer> prunedNestCols = new ArrayList<>();
     prunedNestCols.add(0);
     prunedNestCols.add(1);
@@ -74,6 +82,16 @@ public class TestInternalSchemaUtils {
     Map<String, Integer> result1 = InternalSchemaBuilder.getBuilder().buildNameToId(simpleRecord);
     Assertions.assertEquals(result1.size(), 5);
     Assertions.assertEquals(result1.get("double"), 4);
+  }
+
+  @Test
+  public void testIntTypeEqualsAfterDeserialization() throws Exception {
+    Types.IntType intType = Types.IntType.get();
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    new ObjectOutputStream(baos).writeObject(intType);
+    Types.IntType deserializedIntType = (Types.IntType)
+        new ObjectInputStream(new ByteArrayInputStream(baos.toByteArray())).readObject();
+    Assertions.assertEquals(intType, deserializedIntType);
   }
 
   public Types.RecordType getNestRecordType() {

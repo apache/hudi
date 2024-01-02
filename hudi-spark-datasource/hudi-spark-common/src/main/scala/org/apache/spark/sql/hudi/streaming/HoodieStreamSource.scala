@@ -17,25 +17,21 @@
 
 package org.apache.spark.sql.hudi.streaming
 
-import java.io.{BufferedWriter, InputStream, OutputStream, OutputStreamWriter}
-import java.nio.charset.StandardCharsets
-import java.util.Date
-
 import org.apache.hadoop.fs.Path
-
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, IncrementalRelation, MergeOnReadIncrementalRelation, SparkAdapterSupport}
+import org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT
+import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
+import org.apache.hudi.common.table.cdc.HoodieCDCUtils
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling._
+import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, handleHollowCommitIfNeeded}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.{FileIOUtils, TablePathUtils}
-
-import org.apache.spark.sql.hudi.streaming.HoodieStreamSource.VERSION
-import org.apache.spark.sql.hudi.streaming.HoodieSourceOffset.INIT_OFFSET
+import org.apache.hudi.common.util.TablePathUtils
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, IncrementalRelation, MergeOnReadIncrementalRelation, SparkAdapterSupport}
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.encoders.RowEncoder
-import org.apache.spark.sql.execution.streaming.{HDFSMetadataLog, Offset, Source}
+import org.apache.spark.sql.execution.streaming.{Offset, Source}
+import org.apache.spark.sql.hudi.streaming.HoodieSourceOffset.INIT_OFFSET
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, SQLContext}
@@ -51,75 +47,86 @@ class HoodieStreamSource(
     sqlContext: SQLContext,
     metadataPath: String,
     schemaOption: Option[StructType],
-    parameters: Map[String, String])
+    parameters: Map[String, String],
+    offsetRangeLimit: HoodieOffsetRangeLimit)
   extends Source with Logging with Serializable with SparkAdapterSupport {
 
   @transient private val hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
+
   private lazy val tablePath: Path = {
     val path = new Path(parameters.getOrElse("path", "Missing 'path' option"))
     val fs = path.getFileSystem(hadoopConf)
     TablePathUtils.getTablePath(fs, path).get()
   }
-  private lazy val metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(tablePath.toString).build()
+
+  private lazy val metaClient = HoodieTableMetaClient.builder()
+    .setConf(hadoopConf).setBasePath(tablePath.toString).build()
+
   private lazy val tableType = metaClient.getTableType
 
-  @transient private var lastOffset: HoodieSourceOffset = _
+  private val isCDCQuery = CDCRelation.isCDCEnabled(metaClient) &&
+    parameters.get(DataSourceReadOptions.QUERY_TYPE.key).contains(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL) &&
+    parameters.get(DataSourceReadOptions.INCREMENTAL_FORMAT.key).contains(DataSourceReadOptions.INCREMENTAL_FORMAT_CDC_VAL)
+
+  /**
+   * When hollow commits are found while doing streaming read , unlike batch incremental query,
+   * we do not use [[HollowCommitHandling.FAIL]] by default, instead we use [[HollowCommitHandling.BLOCK]]
+   * to block processing data from going beyond the hollow commits to avoid unintentional skip.
+   *
+   * Users can set [[DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT]] to
+   * [[HollowCommitHandling.USE_TRANSITION_TIME]] to avoid the blocking behavior.
+   */
+  private val hollowCommitHandling: HollowCommitHandling =
+    parameters.get(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key)
+      .map(HollowCommitHandling.valueOf)
+      .getOrElse(HollowCommitHandling.BLOCK)
+
   @transient private lazy val initialOffsets = {
-    val metadataLog =
-      new HDFSMetadataLog[HoodieSourceOffset](sqlContext.sparkSession, metadataPath) {
-        override def serialize(metadata: HoodieSourceOffset, out: OutputStream): Unit = {
-          val writer = new BufferedWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8))
-          writer.write("v" + VERSION + "\n")
-          writer.write(metadata.json)
-          writer.flush()
-        }
-
-        /**
-          * Deserialize the init offset from the metadata file.
-          * The format in the metadata file is like this:
-          * ----------------------------------------------
-          * v1         -- The version info in the first line
-          * offsetJson -- The json string of HoodieSourceOffset in the rest of the file
-          * -----------------------------------------------
-          * @param in
-          * @return
-          */
-        override def deserialize(in: InputStream): HoodieSourceOffset = {
-          val content = FileIOUtils.readAsUTFString(in)
-          // Get version from the first line
-          val firstLineEnd = content.indexOf("\n")
-          if (firstLineEnd > 0) {
-            val version = getVersion(content.substring(0, firstLineEnd))
-            if (version > VERSION) {
-              throw new IllegalStateException(s"UnSupportVersion: max support version is: $VERSION" +
-                s" current version is: $version")
-            }
-            // Get offset from the rest line in the file
-            HoodieSourceOffset.fromJson(content.substring(firstLineEnd + 1))
-          } else {
-            throw new IllegalStateException(s"Bad metadata format, failed to find the version line.")
-          }
-        }
-      }
+    val metadataLog = new HoodieMetadataLog(sqlContext.sparkSession, metadataPath)
     metadataLog.get(0).getOrElse {
-      metadataLog.add(0, INIT_OFFSET)
-      INIT_OFFSET
-    }
-  }
-
-  private def getVersion(versionLine: String): Int = {
-    if (versionLine.startsWith("v")) {
-      versionLine.substring(1).toInt
-    } else {
-      throw new IllegalStateException(s"Illegal version line: $versionLine " +
-        s"in the streaming metadata path")
+      val offset = offsetRangeLimit match {
+        case HoodieEarliestOffsetRangeLimit =>
+          INIT_OFFSET
+        case HoodieLatestOffsetRangeLimit =>
+          getLatestOffset.getOrElse(INIT_OFFSET)
+        case HoodieSpecifiedOffsetRangeLimit(instantTime) =>
+          HoodieSourceOffset(instantTime)
+      }
+      metadataLog.add(0, offset)
+      logInfo(s"The initial offset is $offset")
+      offset
     }
   }
 
   override def schema: StructType = {
-    schemaOption.getOrElse {
-      val schemaUtil = new TableSchemaResolver(metaClient)
-      AvroConversionUtils.convertAvroSchemaToStructType(schemaUtil.getTableAvroSchema)
+    if (isCDCQuery) {
+      CDCRelation.FULL_CDC_SPARK_SCHEMA
+    } else {
+      schemaOption.getOrElse {
+        val schemaUtil = new TableSchemaResolver(metaClient)
+        AvroConversionUtils.convertAvroSchemaToStructType(schemaUtil.getTableAvroSchema)
+      }
+    }
+  }
+
+  private def getLatestOffset: Option[HoodieSourceOffset] = {
+    metaClient.reloadActiveTimeline()
+    val filteredTimeline = handleHollowCommitIfNeeded(
+      metaClient.getActiveTimeline.filterCompletedInstants(), metaClient, hollowCommitHandling)
+    filteredTimeline match {
+      case activeInstants if !activeInstants.empty() =>
+        val timestamp = if (hollowCommitHandling == USE_TRANSITION_TIME) {
+          activeInstants.getInstantsOrderedByCompletionTime
+            .skip(activeInstants.countInstants() - 1)
+            .findFirst()
+            .get()
+            .getCompletionTime
+        } else {
+          activeInstants.lastInstant().get().getTimestamp
+        }
+        Some(HoodieSourceOffset(timestamp))
+      case _ =>
+        None
     }
   }
 
@@ -128,22 +135,10 @@ class HoodieStreamSource(
     * @return
     */
   override def getOffset: Option[Offset] = {
-    metaClient.reloadActiveTimeline()
-    val activeInstants = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants
-    if (!activeInstants.empty()) {
-      val currentLatestCommitTime = activeInstants.lastInstant().get().getTimestamp
-      if (lastOffset == null || currentLatestCommitTime > lastOffset.commitTime) {
-        lastOffset = HoodieSourceOffset(currentLatestCommitTime)
-      }
-    } else { // if there are no active commits, use the init offset
-      lastOffset = initialOffsets
-    }
-    Some(lastOffset)
+    getLatestOffset
   }
 
   override def getBatch(start: Option[Offset], end: Offset): DataFrame = {
-    initialOffsets
-
     val startOffset = start.map(HoodieSourceOffset(_))
       .getOrElse(initialOffsets)
     val endOffset = HoodieSourceOffset(end)
@@ -152,27 +147,39 @@ class HoodieStreamSource(
       sqlContext.internalCreateDataFrame(
         sqlContext.sparkContext.emptyRDD[InternalRow].setName("empty"), schema, isStreaming = true)
     } else {
-      // Consume the data between (startCommitTime, endCommitTime]
-      val incParams = parameters ++ Map(
-        DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
-        DataSourceReadOptions.BEGIN_INSTANTTIME.key -> startCommitTime(startOffset),
-        DataSourceReadOptions.END_INSTANTTIME.key -> endOffset.commitTime
-      )
+      if (isCDCQuery) {
+        val cdcOptions = Map(
+          DataSourceReadOptions.BEGIN_INSTANTTIME.key()-> startCommitTime(startOffset),
+          DataSourceReadOptions.END_INSTANTTIME.key() -> endOffset.commitTime
+        )
+        val rdd = CDCRelation.getCDCRelation(sqlContext, metaClient, cdcOptions)
+          .buildScan0(HoodieCDCUtils.CDC_COLUMNS, Array.empty)
 
-      val rdd = tableType match {
-        case HoodieTableType.COPY_ON_WRITE =>
-          val serDe = sparkAdapter.createSparkRowSerDe(RowEncoder(schema))
-          new IncrementalRelation(sqlContext, incParams, Some(schema), metaClient)
-            .buildScan()
-            .map(serDe.serializeRow)
-        case HoodieTableType.MERGE_ON_READ =>
-          val requiredColumns = schema.fields.map(_.name)
-          new MergeOnReadIncrementalRelation(sqlContext, incParams, Some(schema), metaClient)
-            .buildScan(requiredColumns, Array.empty[Filter])
-            .asInstanceOf[RDD[InternalRow]]
-        case _ => throw new IllegalArgumentException(s"UnSupport tableType: $tableType")
+        sqlContext.sparkSession.internalCreateDataFrame(rdd, CDCRelation.FULL_CDC_SPARK_SCHEMA, isStreaming = true)
+      } else {
+        // Consume the data between (startCommitTime, endCommitTime]
+        val incParams = parameters ++ Map(
+          DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
+          DataSourceReadOptions.BEGIN_INSTANTTIME.key -> startCommitTime(startOffset),
+          DataSourceReadOptions.END_INSTANTTIME.key -> endOffset.commitTime,
+          INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key -> hollowCommitHandling.name
+        )
+
+        val rdd = tableType match {
+          case HoodieTableType.COPY_ON_WRITE =>
+            val serDe = sparkAdapter.createSparkRowSerDe(schema)
+            new IncrementalRelation(sqlContext, incParams, Some(schema), metaClient)
+              .buildScan()
+              .map(serDe.serializeRow)
+          case HoodieTableType.MERGE_ON_READ =>
+            val requiredColumns = schema.fields.map(_.name)
+            new MergeOnReadIncrementalRelation(sqlContext, incParams, metaClient, Some(schema))
+              .buildScan(requiredColumns, Array.empty[Filter])
+              .asInstanceOf[RDD[InternalRow]]
+          case _ => throw new IllegalArgumentException(s"UnSupport tableType: $tableType")
+        }
+        sqlContext.internalCreateDataFrame(rdd, schema, isStreaming = true)
       }
-      sqlContext.internalCreateDataFrame(rdd, schema, isStreaming = true)
     }
   }
 
@@ -180,10 +187,7 @@ class HoodieStreamSource(
     startOffset match {
       case INIT_OFFSET => startOffset.commitTime
       case HoodieSourceOffset(commitTime) =>
-        val time = HoodieActiveTimeline.parseDateFromInstantTime(commitTime).getTime
-        // As we consume the data between (start, end], start is not included,
-        // so we +1s to the start commit time here.
-        HoodieActiveTimeline.formatDate(new Date(time + 1000))
+        commitTime
       case _=> throw new IllegalStateException("UnKnow offset type.")
     }
   }
@@ -191,8 +195,4 @@ class HoodieStreamSource(
   override def stop(): Unit = {
 
   }
-}
-
-object HoodieStreamSource {
-  val VERSION = 1
 }

@@ -28,16 +28,18 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.net.URI;
 
 /**
  * The common hoodie test harness to provide the basic infrastructure.
  */
 public class HoodieCommonTestHarness {
 
-  protected String tableName = null;
-  protected String basePath = null;
-  protected transient HoodieTestDataGenerator dataGen = null;
-  protected transient HoodieTableMetaClient metaClient;
+  protected String tableName;
+  protected String basePath;
+  protected URI baseUri;
+  protected HoodieTestDataGenerator dataGen;
+  protected HoodieTableMetaClient metaClient;
   @TempDir
   public java.nio.file.Path tempDir;
 
@@ -49,18 +51,27 @@ public class HoodieCommonTestHarness {
    * Initializes basePath.
    */
   protected void initPath() {
+    initPath("dataset");
+  }
+
+  /**
+   * Initializes basePath with folder name.
+   *
+   * @param folderName Folder name.
+   */
+  protected void initPath(String folderName) {
     try {
-      java.nio.file.Path basePath = tempDir.resolve("dataset");
+      java.nio.file.Path basePath = tempDir.resolve(folderName);
       java.nio.file.Files.createDirectories(basePath);
-      this.basePath = basePath.toString();
+      this.basePath = basePath.toAbsolutePath().toString();
+      this.baseUri = basePath.toUri();
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
   }
 
   /**
-   * Initializes a test data generator which used to generate test datas.
-   *
+   * Initializes a test data generator which used to generate test data.
    */
   protected void initTestDataGenerator() {
     dataGen = new HoodieTestDataGenerator();
@@ -72,7 +83,6 @@ public class HoodieCommonTestHarness {
 
   /**
    * Cleanups test data generator.
-   *
    */
   protected void cleanupTestDataGenerator() {
     if (dataGen != null) {
@@ -87,8 +97,16 @@ public class HoodieCommonTestHarness {
    * @throws IOException
    */
   protected void initMetaClient() throws IOException {
-    metaClient = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType());
-    basePath = metaClient.getBasePath();
+    if (basePath == null) {
+      initPath();
+    }
+    metaClient = HoodieTestUtils.init(basePath, getTableType());
+  }
+
+  protected void cleanMetaClient() {
+    if (metaClient != null) {
+      metaClient = null;
+    }
   }
 
   protected void refreshFsView() throws IOException {
@@ -104,7 +122,7 @@ public class HoodieCommonTestHarness {
   }
 
   protected SyncableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient) throws IOException {
-    return getFileSystemView(metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants());
+    return getFileSystemView(metaClient, metaClient.getActiveTimeline().filterCompletedOrMajorOrMinorCompactionInstants());
   }
 
   protected SyncableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline timeline)
@@ -115,8 +133,8 @@ public class HoodieCommonTestHarness {
   protected SyncableFileSystemView getFileSystemViewWithUnCommittedSlices(HoodieTableMetaClient metaClient) {
     try {
       return new HoodieTableFileSystemView(metaClient,
-              metaClient.getActiveTimeline(),
-              HoodieTestTable.of(metaClient).listAllBaseAndLogFiles()
+          metaClient.getActiveTimeline(),
+          HoodieTestTable.of(metaClient).listAllBaseAndLogFiles()
       );
     } catch (IOException ioe) {
       throw new HoodieIOException("Error getting file system view", ioe);

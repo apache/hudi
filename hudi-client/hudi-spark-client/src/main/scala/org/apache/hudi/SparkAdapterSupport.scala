@@ -26,13 +26,25 @@ import org.apache.spark.sql.hudi.SparkAdapter
  */
 trait SparkAdapterSupport {
 
+  lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter
+
+}
+
+object SparkAdapterSupport {
+
   lazy val sparkAdapter: SparkAdapter = {
-    val adapterClass =  if (HoodieSparkUtils.isSpark3_3) {
+    val adapterClass =  if (HoodieSparkUtils.isSpark3_5) {
+      "org.apache.spark.sql.adapter.Spark3_5Adapter"
+    } else if (HoodieSparkUtils.isSpark3_4) {
+      "org.apache.spark.sql.adapter.Spark3_4Adapter"
+    } else if (HoodieSparkUtils.isSpark3_3) {
       "org.apache.spark.sql.adapter.Spark3_3Adapter"
     } else if (HoodieSparkUtils.isSpark3_2) {
       "org.apache.spark.sql.adapter.Spark3_2Adapter"
-    } else if (HoodieSparkUtils.isSpark3_0 || HoodieSparkUtils.isSpark3_1) {
+    } else if (HoodieSparkUtils.isSpark3_1) {
       "org.apache.spark.sql.adapter.Spark3_1Adapter"
+    } else if (HoodieSparkUtils.isSpark3_0) {
+      "org.apache.spark.sql.adapter.Spark3_0Adapter"
     } else {
       "org.apache.spark.sql.adapter.Spark2Adapter"
     }

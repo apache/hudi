@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.13.0-SNAPSHOT</version>
+    <version>1.0.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -32,15 +32,30 @@
   </properties>
 
   <dependencies>
+    <!-- Logging -->
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-1.2-api</artifactId>
+    </dependency>
+
+    <!-- Hudi -->
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-common</artifactId>
       <version>${project.version}</version>
     </dependency>
+
+    <!-- Kryo -->
+    <dependency>
+      <groupId>com.esotericsoftware</groupId>
+      <artifactId>kryo-shaded</artifactId>
+    </dependency>
+
     <dependency>
         <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
     </dependency>
+
     <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-common</artifactId>
@@ -50,58 +65,11 @@
       <artifactId>jcommander</artifactId>
     </dependency>
 
-    <!-- Required for Testing -->
+    <!-- Testing -->
     <dependency>
-      <groupId>org.apache.logging.log4j</groupId>
-      <artifactId>log4j-core</artifactId>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter-api</artifactId>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter-engine</artifactId>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.junit.vintage</groupId>
-      <artifactId>junit-vintage-engine</artifactId>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter-params</artifactId>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.mockito</groupId>
-      <artifactId>mockito-junit-jupiter</artifactId>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.junit.platform</groupId>
-      <artifactId>junit-platform-runner</artifactId>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.junit.platform</groupId>
-      <artifactId>junit-platform-suite-api</artifactId>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.junit.platform</groupId>
-      <artifactId>junit-platform-commons</artifactId>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-tests-common</artifactId>
+      <version>${project.version}</version>
       <scope>test</scope>
     </dependency>
 
@@ -109,6 +77,7 @@
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-common</artifactId>
       <version>${project.version}</version>
+      <classifier>tests</classifier>
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>

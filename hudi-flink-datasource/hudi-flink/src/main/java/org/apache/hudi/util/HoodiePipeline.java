@@ -28,6 +28,7 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSink;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.EnvironmentSettings;
+import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
 import org.apache.flink.table.catalog.Catalog;
 import org.apache.flink.table.catalog.ObjectIdentifier;
@@ -41,8 +42,9 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.factories.FactoryUtil;
 import org.apache.flink.table.runtime.connector.sink.SinkRuntimeProviderContext;
 import org.apache.flink.table.runtime.connector.source.ScanRuntimeProviderContext;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.flink.table.utils.EncodingUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -52,14 +54,14 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- *  A tool class to construct hoodie flink pipeline.
+ * A tool class to construct hoodie flink pipeline.
  *
- *  <p>How to use ?</p>
- *  Method {@link #builder(String)} returns a pipeline builder. The builder
- *  can then define the hudi table columns, primary keys and partitions.
+ * <p>How to use ?</p>
+ * Method {@link #builder(String)} returns a pipeline builder. The builder
+ * can then define the hudi table columns, primary keys and partitions.
  *
- *  <p>An example:</p>
- *  <pre>
+ * <p>An example:</p>
+ * <pre>
  *    HoodiePipeline.Builder builder = HoodiePipeline.builder("myTable");
  *    DataStreamSink<?> sinkStream = builder
  *        .column("f0 int")
@@ -72,7 +74,7 @@ import java.util.stream.Collectors;
  */
 public class HoodiePipeline {
 
-  private static final Logger LOG = LogManager.getLogger(HoodiePipeline.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodiePipeline.class);
 
   /**
    * Returns the builder for hoodie pipeline construction.
@@ -126,6 +128,19 @@ public class HoodiePipeline {
     }
 
     /**
+     * Add table schema.
+     */
+    public Builder schema(Schema schema) {
+      for (Schema.UnresolvedColumn column : schema.getColumns()) {
+        column(column.toString());
+      }
+      if (schema.getPrimaryKey().isPresent()) {
+        pk(schema.getPrimaryKey().get().getColumnNames().stream().map(EncodingUtils::escapeIdentifier).collect(Collectors.joining(", ")));
+      }
+      return this;
+    }
+
+    /**
      * Add a config option.
      */
     public Builder option(ConfigOption<?> option, Object val) {
@@ -150,8 +165,8 @@ public class HoodiePipeline {
 
     public TableDescriptor getTableDescriptor() {
       EnvironmentSettings environmentSettings = EnvironmentSettings
-              .newInstance()
-              .build();
+          .newInstance()
+          .build();
       TableEnvironmentImpl tableEnv = TableEnvironmentImpl.create(environmentSettings);
       String sql = getCreateHoodieTableDDL(this.tableName, this.columns, this.options, this.pk, this.partitions);
       tableEnv.executeSql(sql);
@@ -183,34 +198,34 @@ public class HoodiePipeline {
       List<String> partitionField) {
     StringBuilder builder = new StringBuilder();
     builder.append("create table ")
-           .append(tableName)
-           .append("(\n");
+        .append(tableName)
+        .append("(\n");
     for (String field : fields) {
       builder.append("  ")
-             .append(field)
-             .append(",\n");
+          .append(field)
+          .append(",\n");
     }
     builder.append("  PRIMARY KEY(")
-           .append(pkField)
-           .append(") NOT ENFORCED\n")
-           .append(")\n");
+        .append(pkField)
+        .append(") NOT ENFORCED\n")
+        .append(")\n");
     if (!partitionField.isEmpty()) {
-      String partitons = partitionField
-              .stream()
-              .map(partitionName -> "`" + partitionName + "`")
-              .collect(Collectors.joining(","));
+      String partitions = partitionField
+          .stream()
+          .map(partitionName -> "`" + partitionName + "`")
+          .collect(Collectors.joining(","));
       builder.append("PARTITIONED BY (")
-             .append(partitons)
-             .append(")\n");
+          .append(partitions)
+          .append(")\n");
     }
     builder.append("with ('connector' = 'hudi'");
     options.forEach((k, v) -> builder
-            .append(",\n")
-            .append("  '")
-            .append(k)
-            .append("' = '")
-            .append(v)
-            .append("'"));
+        .append(",\n")
+        .append("  '")
+        .append(k)
+        .append("' = '")
+        .append(v)
+        .append("'"));
     builder.append("\n)");
     return builder.toString();
   }
@@ -227,8 +242,8 @@ public class HoodiePipeline {
     FactoryUtil.DefaultDynamicTableContext context = Utils.getTableContext(tablePath, catalogTable, Configuration.fromMap(catalogTable.getOptions()));
     HoodieTableFactory hoodieTableFactory = new HoodieTableFactory();
     return ((DataStreamSinkProvider) hoodieTableFactory.createDynamicTableSink(context)
-            .getSinkRuntimeProvider(new SinkRuntimeProviderContext(isBounded)))
-            .consumeDataStream(input);
+        .getSinkRuntimeProvider(new SinkRuntimeProviderContext(isBounded)))
+        .consumeDataStream(input);
   }
 
   /**
@@ -242,9 +257,9 @@ public class HoodiePipeline {
     FactoryUtil.DefaultDynamicTableContext context = Utils.getTableContext(tablePath, catalogTable, Configuration.fromMap(catalogTable.getOptions()));
     HoodieTableFactory hoodieTableFactory = new HoodieTableFactory();
     DataStreamScanProvider dataStreamScanProvider = (DataStreamScanProvider) ((ScanTableSource) hoodieTableFactory
-            .createDynamicTableSource(context))
-            .getScanRuntimeProvider(new ScanRuntimeProviderContext());
-    return  dataStreamScanProvider.produceDataStream(execEnv);
+        .createDynamicTableSource(context))
+        .getScanRuntimeProvider(new ScanRuntimeProviderContext());
+    return dataStreamScanProvider.produceDataStream(execEnv);
   }
 
   /***

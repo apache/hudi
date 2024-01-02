@@ -44,7 +44,6 @@ public class RowBasedSchemaProvider extends SchemaProvider {
 
   @Override
   public Schema getSourceSchema() {
-    return AvroConversionUtils.convertStructTypeToAvroSchema(rowStruct, HOODIE_RECORD_STRUCT_NAME,
-        HOODIE_RECORD_NAMESPACE);
+    return AvroConversionUtils.convertStructTypeToAvroSchema(rowStruct, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE);
   }
 }

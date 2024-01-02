@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -29,7 +30,6 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.testutils.ClusteringTestUtils;
 import org.apache.hudi.common.testutils.CompactionTestUtils;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -38,22 +38,21 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieHBaseIndexConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.WorkloadProfile;
+import org.apache.hudi.table.action.cluster.ClusteringTestUtils;
 import org.apache.hudi.table.action.deltacommit.SparkUpsertDeltaCommitPartitioner;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.avro.Schema;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -64,6 +63,7 @@ import java.util.Map;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.generateFakeHoodieWriteStat;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
@@ -76,7 +76,7 @@ import static org.mockito.Mockito.when;
 
 public class TestUpsertPartitioner extends HoodieClientTestBase {
 
-  private static final Logger LOG = LogManager.getLogger(TestUpsertPartitioner.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestUpsertPartitioner.class);
   private static final Schema SCHEMA = getSchemaFromResource(TestUpsertPartitioner.class, "/exampleSchema.avsc");
 
   private UpsertPartitioner getUpsertPartitioner(int smallFileSize, int numInserts, int numUpdates, int fileSize,
@@ -150,17 +150,17 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
   private static LinkedList<Option<byte[]>> generateCommitMetadataList() throws IOException {
     LinkedList<Option<byte[]>> commits = new LinkedList<>();
     // First commit with non zero records and bytes
-    commits.push(Option.of(generateCommitMetadataWith(2000, 10000).toJsonString().getBytes(StandardCharsets.UTF_8)));
+    commits.push(serializeCommitMetadata(generateCommitMetadataWith(2000, 10000)));
     // Second commit with non zero records and bytes
-    commits.push(Option.of(generateCommitMetadataWith(1500, 7500).toJsonString().getBytes(StandardCharsets.UTF_8)));
+    commits.push(serializeCommitMetadata(generateCommitMetadataWith(1500, 7500)));
     // Third commit with a small file
-    commits.push(Option.of(generateCommitMetadataWith(100, 500).toJsonString().getBytes(StandardCharsets.UTF_8)));
+    commits.push(serializeCommitMetadata(generateCommitMetadataWith(100, 500)));
     // Fourth commit with both zero records and zero bytes
-    commits.push(Option.of(generateCommitMetadataWith(0, 0).toJsonString().getBytes(StandardCharsets.UTF_8)));
+    commits.push(serializeCommitMetadata(generateCommitMetadataWith(0, 0)));
     // Fifth commit with zero records
-    commits.push(Option.of(generateCommitMetadataWith(0, 1500).toJsonString().getBytes(StandardCharsets.UTF_8)));
+    commits.push(serializeCommitMetadata(generateCommitMetadataWith(0, 1500)));
     // Sixth commit with zero bytes
-    commits.push(Option.of(generateCommitMetadataWith(2500, 0).toJsonString().getBytes(StandardCharsets.UTF_8)));
+    commits.push(serializeCommitMetadata(generateCommitMetadataWith(2500, 0)));
     return commits;
   }
 

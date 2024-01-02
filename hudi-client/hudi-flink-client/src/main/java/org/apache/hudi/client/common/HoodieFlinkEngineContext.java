@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -33,6 +34,9 @@ import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFlatMapFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ImmutablePair;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.util.FlinkClientUtil;
 
 import org.apache.flink.api.common.functions.RuntimeContext;
 
@@ -44,10 +48,6 @@ import java.util.Objects;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import org.apache.hudi.common.util.collection.ImmutablePair;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.util.FlinkClientUtil;
 
 import static org.apache.hudi.common.function.FunctionWrapper.throwingFlatMapToPairWrapper;
 import static org.apache.hudi.common.function.FunctionWrapper.throwingFlatMapWrapper;
@@ -66,6 +66,10 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
 
   private HoodieFlinkEngineContext() {
     this(new SerializableConfiguration(FlinkClientUtil.getHadoopConf()), new DefaultTaskContextSupplier());
+  }
+
+  public HoodieFlinkEngineContext(org.apache.hadoop.conf.Configuration hadoopConf) {
+    this(new SerializableConfiguration(hadoopConf), new DefaultTaskContextSupplier());
   }
 
   public HoodieFlinkEngineContext(TaskContextSupplier taskContextSupplier) {
@@ -159,6 +163,31 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
 
   @Override
   public void setJobStatus(String activeModule, String activityDescription) {
+    // no operation for now
+  }
+
+  @Override
+  public void putCachedDataIds(HoodieDataCacheKey cacheKey, int... ids) {
+    // no operation for now
+  }
+
+  @Override
+  public List<Integer> getCachedDataIds(HoodieDataCacheKey cacheKey) {
+    return Collections.emptyList();
+  }
+
+  @Override
+  public List<Integer> removeCachedDataIds(HoodieDataCacheKey cacheKey) {
+    return Collections.emptyList();
+  }
+
+  @Override
+  public void cancelJob(String jobId) {
+    // no operation for now
+  }
+
+  @Override
+  public void cancelAllJobs() {
     // no operation for now
   }
 

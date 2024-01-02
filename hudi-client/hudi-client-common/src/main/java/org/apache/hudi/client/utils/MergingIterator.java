@@ -18,20 +18,27 @@
 
 package org.apache.hudi.client.utils;
 
-import java.util.Iterator;
-import java.util.function.Function;
-import org.apache.avro.generic.GenericRecord;
-
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.Pair;
 
-public class MergingIterator<T extends GenericRecord> implements Iterator<T> {
+import java.util.Iterator;
+import java.util.function.BiFunction;
 
-  private final Iterator<T> leftIterator;
-  private final Iterator<T> rightIterator;
-  private final Function<Pair<T,T>, T> mergeFunction;
+/**
+ * Iterator providing for the semantic of simultaneously iterating over 2 other iterators
+ * and combining their respective output
+ *
+ * @param <T1> type returned by the first iterator
+ * @param <T2> type returned by the second iterator
+ * @param <R> type returned by this iterator
+ */
+public class MergingIterator<T1, T2, R> implements Iterator<R> {
 
-  public MergingIterator(Iterator<T> leftIterator, Iterator<T> rightIterator, Function<Pair<T,T>, T> mergeFunction) {
+  protected final Iterator<T1> leftIterator;
+  protected final Iterator<T2> rightIterator;
+
+  private final BiFunction<T1, T2, R> mergeFunction;
+
+  public MergingIterator(Iterator<T1> leftIterator, Iterator<T2> rightIterator, BiFunction<T1, T2, R> mergeFunction) {
     this.leftIterator = leftIterator;
     this.rightIterator = rightIterator;
     this.mergeFunction = mergeFunction;
@@ -46,7 +53,7 @@ public class MergingIterator<T extends GenericRecord> implements Iterator<T> {
   }
 
   @Override
-  public T next() {
-    return mergeFunction.apply(Pair.of(leftIterator.next(), rightIterator.next()));
+  public R next() {
+    return mergeFunction.apply(leftIterator.next(), rightIterator.next());
   }
 }

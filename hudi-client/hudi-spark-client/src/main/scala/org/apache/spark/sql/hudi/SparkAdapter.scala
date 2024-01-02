@@ -19,24 +19,28 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.avro.Schema
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.utils.SparkRowSerDe
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.spark.sql._
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
-import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
+import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
-import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan, SubqueryAlias}
+import org.apache.spark.sql.catalyst.planning.PhysicalOperation
+import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan}
+import org.apache.spark.sql.catalyst.util.DateFormatter
+import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
+import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
-import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, LogicalRelation, PartitionedFile, SparkParsePartitionUtil}
-import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.{DataType, StructType}
-import org.apache.spark.sql.{HoodieCatalystExpressionUtils, HoodieCatalystPlansUtils, Row, SparkSession}
+import org.apache.spark.sql.parser.HoodieExtendedParserInterface
+import org.apache.spark.sql.sources.{BaseRelation, Filter}
+import org.apache.spark.sql.types.{DataType, Metadata, StructType}
+import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import org.apache.spark.storage.StorageLevel
 
-import java.util.Locale
+import java.util.{Locale, TimeZone}
 
 /**
  * Interface adapting discrepancies and incompatibilities between different Spark versions
@@ -44,16 +48,43 @@ import java.util.Locale
 trait SparkAdapter extends Serializable {
 
   /**
-   * Creates instance of [[HoodieCatalystExpressionUtils]] providing for common utils operating
+   * Checks whether provided instance of [[InternalRow]] is actually an instance of [[ColumnarBatchRow]]
+   */
+  def isColumnarBatchRow(r: InternalRow): Boolean
+
+  /**
+   * Creates Catalyst [[Metadata]] for Hudi's meta-fields (designating these w/
+   * [[METADATA_COL_ATTR_KEY]] if available (available in Spark >= 3.2)
+   */
+  def createCatalystMetadataForMetaField: Metadata
+
+  /**
+   * Inject table-valued functions to SparkSessionExtensions
+   */
+  def injectTableFunctions(extensions : SparkSessionExtensions): Unit = {}
+
+  /**
+   * Returns an instance of [[HoodieCatalogUtils]] providing for common utils operating on Spark's
+   * [[TableCatalog]]s
+   */
+  def getCatalogUtils: HoodieCatalogUtils
+
+  /**
+   * Returns an instance of [[HoodieCatalystExpressionUtils]] providing for common utils operating
    * on Catalyst [[Expression]]s
    */
   def getCatalystExpressionUtils: HoodieCatalystExpressionUtils
 
   /**
-   * Creates instance of [[HoodieCatalystPlansUtils]] providing for common utils operating
+   * Returns an instance of [[HoodieCatalystPlansUtils]] providing for common utils operating
    * on Catalyst [[LogicalPlan]]s
    */
   def getCatalystPlanUtils: HoodieCatalystPlansUtils
+
+  /**
+   * Returns an instance of [[HoodieSchemaUtils]] providing schema utils.
+   */
+  def getSchemaUtils: HoodieSchemaUtils
 
   /**
    * Creates instance of [[HoodieAvroSerializer]] providing for ability to serialize
@@ -75,22 +106,27 @@ trait SparkAdapter extends Serializable {
   /**
    * Create the SparkRowSerDe.
    */
-  def createSparkRowSerDe(encoder: ExpressionEncoder[Row]): SparkRowSerDe
+  def createSparkRowSerDe(schema: StructType): SparkRowSerDe
 
   /**
    * Create the hoodie's extended spark sql parser.
    */
-  def createExtendedSparkParser: Option[(SparkSession, ParserInterface) => ParserInterface] = None
+  def createExtendedSparkParser(spark: SparkSession, delegate: ParserInterface): HoodieExtendedParserInterface
 
   /**
    * Create the SparkParsePartitionUtil.
    */
-  def createSparkParsePartitionUtil(conf: SQLConf): SparkParsePartitionUtil
+  def getSparkParsePartitionUtil: SparkParsePartitionUtil
 
   /**
-   * ParserInterface#parseMultipartIdentifier is supported since spark3, for spark2 this should not be called.
+   * Gets the [[HoodieSparkPartitionedFileUtils]].
    */
-  def parseMultipartIdentifier(parser: ParserInterface, sqlText: String): Seq[String]
+  def getSparkPartitionedFileUtils: HoodieSparkPartitionedFileUtils
+
+  /**
+   * Get the [[DateFormatter]].
+   */
+  def getDateFormatter(tz: TimeZone): DateFormatter
 
   /**
    * Combine [[PartitionedFile]] to [[FilePartition]] according to `maxSplitBytes`.
@@ -98,21 +134,27 @@ trait SparkAdapter extends Serializable {
   def getFilePartitions(sparkSession: SparkSession, partitionedFiles: Seq[PartitionedFile],
       maxSplitBytes: Long): Seq[FilePartition]
 
-  def isHoodieTable(table: LogicalPlan, spark: SparkSession): Boolean = {
-    unfoldSubqueryAliases(table) match {
-      case LogicalRelation(_, _, Some(table), _) => isHoodieTable(table)
-      case relation: UnresolvedRelation =>
-        isHoodieTable(getCatalystPlanUtils.toTableIdentifier(relation), spark)
-      case _=> false
+  /**
+   * Checks whether [[LogicalPlan]] refers to Hudi table, and if it's the case extracts
+   * corresponding [[CatalogTable]]
+   */
+  def resolveHoodieTable(plan: LogicalPlan): Option[CatalogTable] = {
+    EliminateSubqueryAliases(plan) match {
+      // First, we need to weed out unresolved plans
+      case plan if !plan.resolved => None
+      // NOTE: When resolving Hudi table we allow [[Filter]]s and [[Project]]s be applied
+      //       on top of it
+      case PhysicalOperation(_, _, LogicalRelation(_, _, Some(table), _)) if isHoodieTable(table) => Some(table)
+      case _ => None
     }
   }
 
   def isHoodieTable(map: java.util.Map[String, String]): Boolean = {
-    map.getOrDefault("provider", "").equals("hudi")
+    isHoodieTable(map.getOrDefault("provider", ""))
   }
 
   def isHoodieTable(table: CatalogTable): Boolean = {
-    table.provider.map(_.toLowerCase(Locale.ROOT)).orNull == "hudi"
+    isHoodieTable(table.provider.map(_.toLowerCase(Locale.ROOT)).orNull)
   }
 
   def isHoodieTable(tableId: TableIdentifier, spark: SparkSession): Boolean = {
@@ -120,19 +162,16 @@ trait SparkAdapter extends Serializable {
     isHoodieTable(table)
   }
 
-  protected def unfoldSubqueryAliases(plan: LogicalPlan): LogicalPlan = {
-    plan match {
-      case SubqueryAlias(_, relation: LogicalPlan) =>
-        unfoldSubqueryAliases(relation)
-      case other =>
-        other
-    }
+  def isHoodieTable(provider: String): Boolean = {
+    "hudi".equalsIgnoreCase(provider)
   }
 
   /**
    * Create instance of [[ParquetFileFormat]]
    */
-  def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat]
+  def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat]
+
+  def makeColumnarBatch(vectors: Array[ColumnVector], numRows: Int): ColumnarBatch
 
   /**
    * Create instance of [[InterpretedPredicate]]
@@ -140,6 +179,15 @@ trait SparkAdapter extends Serializable {
    * TODO move to HoodieCatalystExpressionUtils
    */
   def createInterpretedPredicate(e: Expression): InterpretedPredicate
+
+  /**
+   * Create Hoodie relation based on globPaths, otherwise use tablePath if it's empty
+   */
+  def createRelation(sqlContext: SQLContext,
+                     metaClient: HoodieTableMetaClient,
+                     schema: Schema,
+                     globPaths: Array[Path],
+                     parameters: java.util.Map[String, String]): BaseRelation
 
   /**
    * Create instance of [[HoodieFileScanRDD]]
@@ -152,29 +200,18 @@ trait SparkAdapter extends Serializable {
                               metadataColumns: Seq[AttributeReference] = Seq.empty): FileScanRDD
 
   /**
-   * Resolve [[DeleteFromTable]]
-   * SPARK-38626 condition is no longer Option in Spark 3.3
-   */
-  def resolveDeleteFromTable(deleteFromTable: Command,
-                             resolveExpression: Expression => Expression): LogicalPlan
-
-  /**
    * Extract condition in [[DeleteFromTable]]
    * SPARK-38626 condition is no longer Option in Spark 3.3
    */
   def extractDeleteCondition(deleteFromTable: Command): Expression
 
   /**
-   * Get parseQuery from ExtendedSqlParser, only for Spark 3.3+
-   */
-  def getQueryParserFromExtendedSqlParser(session: SparkSession, delegate: ParserInterface,
-                                          sqlText: String): LogicalPlan = {
-    // unsupported by default
-    throw new UnsupportedOperationException(s"Unsupported parseQuery method in Spark earlier than Spark 3.3.0")
-  }
-
-  /**
    * Converts instance of [[StorageLevel]] to a corresponding string
    */
   def convertStorageLevelToString(level: StorageLevel): String
+
+  /**
+   * Tries to translate a Catalyst Expression into data source Filter
+   */
+  def translateFilter(predicate: Expression, supportNestedPredicatePushdown: Boolean = false): Option[Filter]
 }

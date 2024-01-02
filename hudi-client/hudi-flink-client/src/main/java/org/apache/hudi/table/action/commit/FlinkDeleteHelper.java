@@ -42,11 +42,15 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Flink delete helper.
+ */
 @SuppressWarnings("checkstyle:LineLength")
 public class FlinkDeleteHelper<R> extends
     BaseDeleteHelper<EmptyHoodieRecordPayload, List<HoodieRecord<EmptyHoodieRecordPayload>>, List<HoodieKey>, List<WriteStatus>, R> {
 
   private FlinkDeleteHelper() {
+    super(ignored -> -1);
   }
 
   private static class DeleteHelperHolder {
@@ -120,5 +124,4 @@ public class FlinkDeleteHelper<R> extends
       throw new HoodieUpsertException("Failed to delete for commit time " + instantTime, e);
     }
   }
-
 }

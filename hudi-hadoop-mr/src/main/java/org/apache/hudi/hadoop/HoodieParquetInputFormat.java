@@ -18,6 +18,14 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.avro.HoodieTimestampAwareParquetInputFormat;
+
+import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
+import org.apache.hadoop.hive.ql.io.parquet.read.ParquetRecordReaderWrapper;
 import org.apache.hadoop.hive.ql.io.sarg.ConvertAstToSearchArg;
 import org.apache.hadoop.hive.ql.plan.TableScanDesc;
 import org.apache.hadoop.io.ArrayWritable;
@@ -27,13 +35,15 @@ import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
+import org.apache.parquet.hadoop.ParquetInputFormat;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.lang.reflect.Constructor;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -47,14 +57,38 @@ import java.util.stream.IntStream;
 @UseFileSplitsFromInputFormat
 public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieParquetInputFormat.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieParquetInputFormat.class);
+
+  private boolean supportAvroRead = false;
 
   public HoodieParquetInputFormat() {
     super(new HoodieCopyOnWriteTableInputFormat());
+    initAvroInputFormat();
   }
 
   protected HoodieParquetInputFormat(HoodieCopyOnWriteTableInputFormat delegate) {
     super(delegate);
+    initAvroInputFormat();
+  }
+
+  /**
+   * Spark2 use `parquet.hadoopParquetInputFormat` in `com.twitter:parquet-hadoop-bundle`.
+   * So that we need to distinguish the constructions of classes with
+   * `parquet.hadoopParquetInputFormat` or `org.apache.parquet.hadoop.ParquetInputFormat`.
+   * If we use `org.apache.parquet:parquet-hadoop`, we can use `HudiAvroParquetInputFormat`
+   * in Hive or Spark3 to get timestamp with correct type.
+   */
+  private void initAvroInputFormat() {
+    try {
+      Constructor[] constructors = ParquetRecordReaderWrapper.class.getConstructors();
+      if (Arrays.stream(constructors)
+          .anyMatch(c -> c.getParameterCount() > 0 && c.getParameterTypes()[0]
+              .getName().equals(ParquetInputFormat.class.getName()))) {
+        supportAvroRead = true;
+      }
+    } catch (SecurityException e) {
+      throw new HoodieException("Failed to check if support avro reader: " + e.getMessage(), e);
+    }
   }
 
   @Override
@@ -76,17 +110,29 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
       return createBootstrappingRecordReader(split, job, reporter);
     }
 
+    // adapt schema evolution
+    new SchemaEvolutionContext(split, job).doEvolutionForParquetFormat();
+
     if (LOG.isDebugEnabled()) {
       LOG.debug("EMPLOYING DEFAULT RECORD READER - " + split);
     }
 
+    HoodieRealtimeInputFormatUtils.addProjectionField(job, job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "").split("/"));
     return getRecordReaderInternal(split, job, reporter);
   }
 
   private RecordReader<NullWritable, ArrayWritable> getRecordReaderInternal(InputSplit split,
                                                                             JobConf job,
                                                                             Reporter reporter) throws IOException {
-    return super.getRecordReader(split, job, reporter);
+    try {
+      if (supportAvroRead && HoodieColumnProjectionUtils.supportTimestamp(job)) {
+        return new ParquetRecordReaderWrapper(new HoodieTimestampAwareParquetInputFormat(), split, job, reporter);
+      } else {
+        return super.getRecordReader(split, job, reporter);
+      }
+    } catch (final InterruptedException | IOException e) {
+      throw new RuntimeException("Cannot create a RecordReaderWrapper", e);
+    }
   }
 
   private RecordReader<NullWritable, ArrayWritable> createBootstrappingRecordReader(InputSplit split,

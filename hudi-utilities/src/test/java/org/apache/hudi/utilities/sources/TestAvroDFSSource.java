@@ -34,7 +34,7 @@ public class TestAvroDFSSource extends AbstractDFSSourceTestBase {
   @BeforeEach
   public void setup() throws Exception {
     super.setup();
-    this.dfsRoot = dfsBasePath + "/avroFiles";
+    this.dfsRoot = basePath + "/avroFiles";
     this.fileSuffix = ".avro";
   }
 

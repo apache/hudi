@@ -18,26 +18,40 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.hudi.exception.HoodieException;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.ArrayList;
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 import java.util.stream.Collectors;
 
-public class RetryHelper<T> {
-  private static final Logger LOG = LogManager.getLogger(RetryHelper.class);
-  private CheckedFunction<T> func;
-  private int num;
-  private long maxIntervalTime;
-  private long initialIntervalTime = 100L;
+/**
+ * Retry Helper implementation.
+ *
+ * @param <T> Type of return value for checked function.
+ */
+public class RetryHelper<T, R extends Exception> implements Serializable {
+  private static final Logger LOG = LoggerFactory.getLogger(RetryHelper.class);
+  private static final List<? extends Class<? extends Exception>> DEFAULT_RETRY_EXCEPTIONS = Arrays.asList(IOException.class, RuntimeException.class);
+  private transient CheckedFunction<T, R> func;
+  private final int num;
+  private final long maxIntervalTime;
+  private final long initialIntervalTime;
   private String taskInfo = "N/A";
   private List<? extends Class<? extends Exception>> retryExceptionsClasses;
 
-  public RetryHelper() {
+  public RetryHelper(long maxRetryIntervalMs, int maxRetryNumbers, long initialRetryIntervalMs,
+                     List<Class<? extends Exception>> retryExceptions, String taskInfo) {
+    this.num = maxRetryNumbers;
+    this.initialIntervalTime = initialRetryIntervalMs;
+    this.maxIntervalTime = maxRetryIntervalMs;
+    this.retryExceptionsClasses = retryExceptions;
+    this.taskInfo = taskInfo;
   }
 
   public RetryHelper(long maxRetryIntervalMs, int maxRetryNumbers, long initialRetryIntervalMs, String retryExceptions) {
@@ -45,25 +59,31 @@ public class RetryHelper<T> {
     this.initialIntervalTime = initialRetryIntervalMs;
     this.maxIntervalTime = maxRetryIntervalMs;
     if (StringUtils.isNullOrEmpty(retryExceptions)) {
-      this.retryExceptionsClasses = new ArrayList<>();
+      this.retryExceptionsClasses = DEFAULT_RETRY_EXCEPTIONS;
     } else {
-      this.retryExceptionsClasses = Arrays.stream(retryExceptions.split(","))
-          .map(exception -> (Exception) ReflectionUtils.loadClass(exception, ""))
-          .map(Exception::getClass)
-          .collect(Collectors.toList());
+      try {
+        this.retryExceptionsClasses = Arrays.stream(retryExceptions.split(","))
+            .map(exception -> (Exception) ReflectionUtils.loadClass(exception, ""))
+            .map(Exception::getClass)
+            .collect(Collectors.toList());
+      } catch (HoodieException e) {
+        LOG.error("Exception while loading retry exceptions classes '" + retryExceptions + "'.", e);
+        this.retryExceptionsClasses = DEFAULT_RETRY_EXCEPTIONS;
+      }
     }
   }
 
-  public RetryHelper(String taskInfo) {
+  public RetryHelper(long maxRetryIntervalMs, int maxRetryNumbers, long initialRetryIntervalMs, String retryExceptions, String taskInfo) {
+    this(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptions);
     this.taskInfo = taskInfo;
   }
 
-  public RetryHelper tryWith(CheckedFunction<T> func) {
+  public RetryHelper<T, R> tryWith(CheckedFunction<T, R> func) {
     this.func = func;
     return this;
   }
 
-  public T start() throws IOException {
+  public T start(CheckedFunction<T, R> func) throws R {
     int retries = 0;
     T functionResult = null;
 
@@ -72,19 +92,20 @@ public class RetryHelper<T> {
       try {
         functionResult = func.get();
         break;
-      } catch (IOException | RuntimeException e) {
+      } catch (Exception e) {
         if (!checkIfExceptionInRetryList(e)) {
           throw e;
         }
         if (retries++ >= num) {
-          LOG.error("Still failed to " + taskInfo + " after retried " + num + " times.", e);
+          String message = "Still failed to " + taskInfo + " after retried " + num + " times.";
+          LOG.error(message, e);
           throw e;
         }
-        LOG.warn("Catch Exception " + taskInfo + ", will retry after " + waitTime + " ms.", e);
+        LOG.warn("Catch Exception for " + taskInfo + ", will retry after " + waitTime + " ms.", e);
         try {
           Thread.sleep(waitTime);
         } catch (InterruptedException ex) {
-            // ignore InterruptedException here
+          // ignore InterruptedException here
         }
       }
     }
@@ -92,18 +113,16 @@ public class RetryHelper<T> {
     if (retries > 0) {
       LOG.info("Success to " + taskInfo + " after retried " + retries + " times.");
     }
+
     return functionResult;
+  }
+
+  public T start() throws R {
+    return start(this.func);
   }
 
   private boolean checkIfExceptionInRetryList(Exception e) {
     boolean inRetryList = false;
-
-    // if users didn't set hoodie.filesystem.operation.retry.exceptions
-    // we will retry all the IOException and RuntimeException
-    if (retryExceptionsClasses.isEmpty()) {
-      return true;
-    }
-
     for (Class<? extends Exception> clazz : retryExceptionsClasses) {
       if (clazz.isInstance(e)) {
         inRetryList = true;
@@ -122,8 +141,13 @@ public class RetryHelper<T> {
     return (long) Math.pow(2, retryCount) * initialIntervalTime + random.nextInt(100);
   }
 
+  /**
+   * Checked function interface.
+   *
+   * @param <T> Type of return value.
+   */
   @FunctionalInterface
-  public interface CheckedFunction<T> {
-    T get() throws IOException;
+  public interface CheckedFunction<T, R extends Exception> extends Serializable {
+    T get() throws R;
   }
 }

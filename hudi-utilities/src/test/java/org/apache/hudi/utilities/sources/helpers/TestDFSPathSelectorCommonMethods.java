@@ -23,7 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -38,12 +38,12 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.FileCreateUtils.createBaseFile;
-import static org.apache.hudi.utilities.sources.helpers.DFSPathSelector.Config.ROOT_INPUT_PATH_PROP;
-import static org.apache.hudi.utilities.sources.helpers.DatePartitionPathSelector.Config.PARTITIONS_LIST_PARALLELISM;
+import static org.apache.hudi.utilities.config.DFSPathSelectorConfig.ROOT_INPUT_PATH;
+import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.PARTITIONS_LIST_PARALLELISM;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestDFSPathSelectorCommonMethods extends HoodieClientTestHarness {
+public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarness {
 
   TypedProperties props;
   Path inputPath;
@@ -54,8 +54,8 @@ public class TestDFSPathSelectorCommonMethods extends HoodieClientTestHarness {
     initPath();
     initFileSystem();
     props = new TypedProperties();
-    props.setProperty(ROOT_INPUT_PATH_PROP, basePath);
-    props.setProperty(PARTITIONS_LIST_PARALLELISM, "1");
+    props.setProperty(ROOT_INPUT_PATH.key(), basePath);
+    props.setProperty(PARTITIONS_LIST_PARALLELISM.key(), "1");
     inputPath = new Path(basePath);
   }
 

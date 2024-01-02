@@ -18,11 +18,12 @@
 
 package org.apache.hudi.common.table.timeline.dto;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.collection.Pair;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
  * The data transfer object of clustering.

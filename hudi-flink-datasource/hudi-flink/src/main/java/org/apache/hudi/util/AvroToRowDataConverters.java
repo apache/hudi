@@ -32,6 +32,7 @@ import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.types.logical.ArrayType;
 import org.apache.flink.table.types.logical.DecimalType;
+import org.apache.flink.table.types.logical.LocalZonedTimestampType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimestampType;
@@ -127,6 +128,8 @@ public class AvroToRowDataConverters {
         return AvroToRowDataConverters::convertToDate;
       case TIME_WITHOUT_TIME_ZONE:
         return AvroToRowDataConverters::convertToTime;
+      case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
+        return createTimestampConverter(((LocalZonedTimestampType) type).getPrecision());
       case TIMESTAMP_WITHOUT_TIME_ZONE:
         return createTimestampConverter(((TimestampType) type).getPrecision());
       case CHAR:
@@ -212,7 +215,7 @@ public class AvroToRowDataConverters {
       throw new IllegalArgumentException(
           "Avro does not support TIMESTAMP type with precision: "
               + precision
-              + ", it only supports precision less than 6.");
+              + ", it only support precisions <= 6.");
     }
     return avroObject -> {
       final Instant instant;

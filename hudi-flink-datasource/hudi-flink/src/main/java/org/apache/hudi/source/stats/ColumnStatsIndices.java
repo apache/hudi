@@ -23,9 +23,9 @@ import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.collection.Tuple3;
 import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
@@ -42,8 +42,6 @@ import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.flink.table.types.logical.TimeType;
-import org.apache.flink.table.types.logical.TimestampType;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -273,29 +271,6 @@ public class ColumnStatsIndices {
       Object rawVal,
       LogicalType logicalType,
       Map<LogicalType, AvroToRowDataConverters.AvroToRowDataConverter> converters) {
-    // fix time unit
-    switch (logicalType.getTypeRoot()) {
-      case TIME_WITHOUT_TIME_ZONE:
-        TimeType timeType = (TimeType) logicalType;
-        if (timeType.getPrecision() == 3) {
-          // the precision in HoodieMetadata is 6
-          rawVal = ((Long) rawVal) / 1000;
-        } else if (timeType.getPrecision() == 9) {
-          rawVal = ((Long) rawVal) * 1000;
-        }
-        break;
-      case TIMESTAMP_WITHOUT_TIME_ZONE:
-        TimestampType timestampType = (TimestampType) logicalType;
-        if (timestampType.getPrecision() == 3) {
-          // the precision in HoodieMetadata is 6
-          rawVal = ((Long) rawVal) / 1000;
-        } else if (timestampType.getPrecision() == 9) {
-          rawVal = ((Long) rawVal) * 1000;
-        }
-        break;
-      default:
-        // no operation
-    }
     AvroToRowDataConverters.AvroToRowDataConverter converter =
         converters.computeIfAbsent(logicalType, k -> AvroToRowDataConverters.createConverter(logicalType));
     return converter.convert(rawVal);
@@ -311,8 +286,7 @@ public class ColumnStatsIndices {
     //    - Deserializing fetched records into [[RowData]]s
     HoodieTableMetadata metadataTable = HoodieTableMetadata.create(
         HoodieFlinkEngineContext.DEFAULT,
-        metadataConfig, basePath,
-        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
+        metadataConfig, basePath);
 
     // TODO encoding should be done internally w/in HoodieBackedTableMetadata
     List<String> encodedTargetColumnNames = Arrays.stream(targetColumns)
@@ -340,22 +314,6 @@ public class ColumnStatsIndices {
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
-  private static class Tuple3 {
-    public Object f0;
-    public Object f1;
-    public Object f2;
-
-    private Tuple3(Object f0, Object f1, Object f2) {
-      this.f0 = f0;
-      this.f1 = f1;
-      this.f2 = f2;
-    }
-
-    public static Tuple3 of(Object f0, Object f1, Object f2) {
-      return new Tuple3(f0, f1, f2);
-    }
-  }
-
   private static DataType getMetadataDataType() {
     return AvroSchemaConverter.convertToDataType(HoodieMetadataRecord.SCHEMA$);
   }

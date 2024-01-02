@@ -18,11 +18,10 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.common.table.HoodieTableMetaClient
-
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.execution.command.AlterTableRenameCommand
+import org.apache.spark.sql.execution.command.{AlterTableRenameCommand, AlterTableSetPropertiesCommand}
 
 /**
  * Command for alter hudi table's table name.
@@ -46,6 +45,14 @@ case class AlterHoodieTableRenameCommand(
 
       // Call AlterTableRenameCommand#run to rename table in meta.
       AlterTableRenameCommand(oldName, newName, isView).run(sparkSession)
+
+      // update table properties path in every op
+      if (hoodieCatalogTable.table.properties.contains("path")) {
+        val catalogTable = sparkSession.sessionState.catalog.getTableMetadata(newName)
+        val path = catalogTable.storage.locationUri.get.getPath
+        AlterTableSetPropertiesCommand(newName, Map("path" -> path), isView).run(sparkSession)
+      }
+
     }
     Seq.empty[Row]
   }

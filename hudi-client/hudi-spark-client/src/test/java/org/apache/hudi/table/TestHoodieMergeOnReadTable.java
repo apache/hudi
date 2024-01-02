@@ -19,8 +19,11 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.client.HoodieReadClient;
+import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -36,8 +39,10 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.Transformations;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.index.HoodieIndex;
@@ -60,10 +65,10 @@ import org.apache.hadoop.mapred.JobConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.storage.StorageLevel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -77,9 +82,10 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
-import static org.apache.hudi.testutils.HoodieClientTestHarness.buildProfile;
+import static org.apache.hudi.testutils.HoodieSparkClientTestHarness.buildProfile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness {
@@ -87,18 +93,25 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
   private HoodieTableMetaClient metaClient;
   private HoodieTestDataGenerator dataGen;
 
-  @BeforeEach
-  void setUp() throws IOException {
-    Properties properties = new Properties();
+  void setUp(Properties props) throws IOException {
+    Properties properties = CollectionUtils.copy(props);
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
     metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, properties);
     dataGen = new HoodieTestDataGenerator();
+  }
+
+  @BeforeEach
+  void beforeEach() {
+    jsc().getPersistentRDDs().values().forEach(JavaRDD::unpersist);
   }
 
   // Check if record level metadata is aggregated properly at the end of write.
   @Test
   public void testMetadataAggregateFromWriteStatus() throws Exception {
     HoodieWriteConfig cfg = getConfigBuilder(false).withWriteStatusClass(MetadataMergeWriteStatus.class).build();
+
+    setUp(cfg.getProps());
+
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
 
       String newCommitTime = "001";
@@ -125,6 +138,9 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true);
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig cfg = cfgBuilder.build();
+
+    setUp(cfg.getProps());
+
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
 
       /**
@@ -203,17 +219,121 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
   }
 
   // TODO: Enable metadata virtual keys in this test once the feature HUDI-2593 is completed
-  @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  public void testLogFileCountsAfterCompaction(boolean preserveCommitMeta) throws Exception {
+  @Test
+  public void testLogFileCountsAfterCompaction() throws Exception {
     boolean populateMetaFields = true;
     // insert 100 records
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true, false, HoodieIndex.IndexType.BLOOM,
-        1024 * 1024 * 1024L, HoodieClusteringConfig.newBuilder().build(), preserveCommitMeta);
+        1024 * 1024 * 1024L, HoodieClusteringConfig.newBuilder().build());
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig config = cfgBuilder.build();
 
+    setUp(config.getProps());
+
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config);) {
+      String newCommitTime = "100";
+      writeClient.startCommitWithTime(newCommitTime);
+
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
+      JavaRDD<HoodieRecord> recordsRDD = jsc().parallelize(records, 1);
+      writeClient.insert(recordsRDD, newCommitTime).collect();
+
+      // Update all the 100 records
+      newCommitTime = "101";
+      List<HoodieRecord> updatedRecords = dataGen.generateUpdates(newCommitTime, records);
+      JavaRDD<HoodieRecord> updatedRecordsRDD = jsc().parallelize(updatedRecords, 1);
+
+      SparkRDDReadClient readClient = new SparkRDDReadClient(context(), config);
+      JavaRDD<HoodieRecord> updatedTaggedRecordsRDD = readClient.tagLocation(updatedRecordsRDD);
+
+      writeClient.startCommitWithTime(newCommitTime);
+      writeClient.upsertPreppedRecords(updatedTaggedRecordsRDD, newCommitTime).collect();
+
+      // Write them to corresponding avro logfiles
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
+          writeClient.getEngineContext().getHadoopConf().get(), config, writeClient.getEngineContext())) {
+        HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable
+            .of(metaClient, HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS, metadataWriter);
+
+        Set<String> allPartitions = updatedRecords.stream()
+            .map(record -> record.getPartitionPath())
+            .collect(Collectors.groupingBy(partitionPath -> partitionPath))
+            .keySet();
+        assertEquals(allPartitions.size(), testTable.listAllBaseFiles().length);
+
+        // Verify that all data file has one log file
+        HoodieTable table = HoodieSparkTable.create(config, context(), metaClient);
+        for (String partitionPath : dataGen.getPartitionPaths()) {
+          List<FileSlice> groupedLogFiles =
+              table.getSliceView().getLatestFileSlices(partitionPath).collect(Collectors.toList());
+          for (FileSlice fileSlice : groupedLogFiles) {
+            assertEquals(1, fileSlice.getLogFiles().count(),
+                "There should be 1 log file written for the latest data file - " + fileSlice);
+          }
+        }
+
+        // Do a compaction
+        String compactionInstantTime = writeClient.scheduleCompaction(Option.empty()).get().toString();
+        HoodieWriteMetadata<JavaRDD<WriteStatus>> result = writeClient.compact(compactionInstantTime);
+
+        // Verify that recently written compacted data file has no log file
+        metaClient = HoodieTableMetaClient.reload(metaClient);
+        table = HoodieSparkTable.create(config, context(), metaClient);
+        HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+
+        assertTrue(HoodieTimeline
+                .compareTimestamps(timeline.lastInstant().get().getTimestamp(), HoodieTimeline.GREATER_THAN, newCommitTime),
+            "Compaction commit should be > than last insert");
+
+        for (String partitionPath : dataGen.getPartitionPaths()) {
+          List<FileSlice> groupedLogFiles =
+              table.getSliceView().getLatestFileSlices(partitionPath).collect(Collectors.toList());
+          for (FileSlice slice : groupedLogFiles) {
+            assertEquals(0, slice.getLogFiles().count(), "After compaction there should be no log files visible on a full view");
+          }
+          assertTrue(result.getCommitMetadata().get().getWritePartitionPaths().stream().anyMatch(part -> part.contentEquals(partitionPath)));
+        }
+
+        // Check the entire dataset has all records still
+        String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
+        for (int i = 0; i < fullPartitionPaths.length; i++) {
+          fullPartitionPaths[i] = String.format("%s/%s/*", basePath(), dataGen.getPartitionPaths()[i]);
+        }
+        Dataset<Row> actual = HoodieClientTestUtils.read(jsc(), basePath(), sqlContext(), fs(), fullPartitionPaths);
+        List<Row> rows = actual.collectAsList();
+        assertEquals(updatedRecords.size(), rows.size());
+        for (Row row : rows) {
+          assertEquals(row.getAs(HoodieRecord.COMMIT_TIME_METADATA_FIELD), newCommitTime);
+        }
+      }
+    }
+  }
+
+  @ParameterizedTest
+  @CsvSource({"true,avro", "true,parquet", "false,avro", "false,parquet"})
+  public void testLogBlocksCountsAfterLogCompaction(boolean populateMetaFields, String logFileFormat) throws Exception {
+
+    HoodieCompactionConfig compactionConfig = HoodieCompactionConfig.newBuilder()
+        .withMaxNumDeltaCommitsBeforeCompaction(1)
+        .withLogCompactionBlocksThreshold(1)
+        .build();
+    // insert 100 records
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
+        .withCompactionConfig(compactionConfig);
+    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
+    HoodieWriteConfig config = cfgBuilder
+        .withStorageConfig(HoodieStorageConfig.newBuilder()
+            .hfileMaxFileSize(1024 * 1024 * 1024)
+            .parquetMaxFileSize(1024 * 1024 * 1024)
+            .logFileDataBlockFormat(logFileFormat)
+            .build())
+        .build();
+    setUp(config.getProps());
+
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
       String newCommitTime = "100";
       writeClient.startCommitWithTime(newCommitTime);
 
@@ -232,63 +352,60 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       writeClient.startCommitWithTime(newCommitTime);
       writeClient.upsertPreppedRecords(updatedTaggedRecordsRDD, newCommitTime).collect();
 
+
+      newCommitTime = "102";
+      writeClient.startCommitWithTime(newCommitTime);
+      writeClient.upsertPreppedRecords(updatedTaggedRecordsRDD, newCommitTime).collect();
+
+
       // Write them to corresponding avro logfiles
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
-      HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
-          writeClient.getEngineContext().getHadoopConf().get(), config, writeClient.getEngineContext());
-      HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable
-          .of(metaClient, HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS, metadataWriter);
+      try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
+          writeClient.getEngineContext().getHadoopConf().get(), config, writeClient.getEngineContext())) {
+        HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable
+            .of(metaClient, HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS, metadataWriter);
 
-      Set<String> allPartitions = updatedRecords.stream()
-          .map(record -> record.getPartitionPath())
-          .collect(Collectors.groupingBy(partitionPath -> partitionPath))
-          .keySet();
-      assertEquals(allPartitions.size(), testTable.listAllBaseFiles().length);
+        Set<String> allPartitions = updatedRecords.stream()
+            .map(record -> record.getPartitionPath())
+            .collect(Collectors.groupingBy(partitionPath -> partitionPath))
+            .keySet();
+        assertEquals(allPartitions.size(), testTable.listAllBaseFiles().length);
 
-      // Verify that all data file has one log file
-      HoodieTable table = HoodieSparkTable.create(config, context(), metaClient);
-      for (String partitionPath : dataGen.getPartitionPaths()) {
-        List<FileSlice> groupedLogFiles =
-            table.getSliceView().getLatestFileSlices(partitionPath).collect(Collectors.toList());
-        for (FileSlice fileSlice : groupedLogFiles) {
-          assertEquals(1, fileSlice.getLogFiles().count(),
-              "There should be 1 log file written for the latest data file - " + fileSlice);
+        // Verify that all data file has one log file
+        HoodieTable table = HoodieSparkTable.create(config, context(), metaClient);
+        for (String partitionPath : dataGen.getPartitionPaths()) {
+          List<FileSlice> groupedLogFiles =
+              table.getSliceView().getLatestFileSlices(partitionPath).collect(Collectors.toList());
+          for (FileSlice fileSlice : groupedLogFiles) {
+            assertEquals(2, fileSlice.getLogFiles().count(),
+                "There should be 1 log file written for the latest data file - " + fileSlice);
+          }
         }
-      }
 
-      // Do a compaction
-      String compactionInstantTime = writeClient.scheduleCompaction(Option.empty()).get().toString();
-      HoodieWriteMetadata<JavaRDD<WriteStatus>> result = writeClient.compact(compactionInstantTime);
+        // Do a log compaction
+        String logCompactionInstantTime = writeClient.scheduleLogCompaction(Option.empty()).get().toString();
+        HoodieWriteMetadata<JavaRDD<WriteStatus>> result = writeClient.logCompact(logCompactionInstantTime);
 
-      // Verify that recently written compacted data file has no log file
-      metaClient = HoodieTableMetaClient.reload(metaClient);
-      table = HoodieSparkTable.create(config, context(), metaClient);
-      HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+        // Verify that recently written compacted data file has no log file
+        metaClient = HoodieTableMetaClient.reload(metaClient);
+        table = HoodieSparkTable.create(config, context(), metaClient);
+        HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
 
-      assertTrue(HoodieTimeline
-              .compareTimestamps(timeline.lastInstant().get().getTimestamp(), HoodieTimeline.GREATER_THAN, newCommitTime),
-          "Compaction commit should be > than last insert");
+        assertTrue(HoodieTimeline
+                .compareTimestamps(timeline.lastInstant().get().getTimestamp(), HoodieTimeline.GREATER_THAN, newCommitTime),
+            "Compaction commit should be > than last insert");
 
-      for (String partitionPath : dataGen.getPartitionPaths()) {
-        List<FileSlice> groupedLogFiles =
-            table.getSliceView().getLatestFileSlices(partitionPath).collect(Collectors.toList());
-        for (FileSlice slice : groupedLogFiles) {
-          assertEquals(0, slice.getLogFiles().count(), "After compaction there should be no log files visible on a full view");
+        for (String partitionPath : dataGen.getPartitionPaths()) {
+          List<FileSlice> fileSlices =
+              table.getSliceView().getLatestFileSlices(partitionPath).collect(Collectors.toList());
+          assertEquals(1, fileSlices.size());
+          for (FileSlice slice : fileSlices) {
+            assertEquals(3, slice.getLogFiles().count(), "After compaction there will still be one log file.");
+            assertNotNull(slice.getBaseFile(), "Base file is not created by log compaction operation.");
+          }
+          assertTrue(result.getCommitMetadata().get().getWritePartitionPaths().stream().anyMatch(part -> part.contentEquals(partitionPath)));
         }
-        assertTrue(result.getCommitMetadata().get().getWritePartitionPaths().stream().anyMatch(part -> part.contentEquals(partitionPath)));
-      }
-
-      // Check the entire dataset has all records still
-      String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
-      for (int i = 0; i < fullPartitionPaths.length; i++) {
-        fullPartitionPaths[i] = String.format("%s/%s/*", basePath(), dataGen.getPartitionPaths()[i]);
-      }
-      Dataset<Row> actual = HoodieClientTestUtils.read(jsc(), basePath(), sqlContext(), fs(), fullPartitionPaths);
-      List<Row> rows = actual.collectAsList();
-      assertEquals(updatedRecords.size(), rows.size());
-      for (Row row: rows) {
-        assertEquals(row.getAs(HoodieRecord.COMMIT_TIME_METADATA_FIELD), preserveCommitMeta ? newCommitTime : compactionInstantTime);
       }
     }
   }
@@ -300,7 +417,12 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
   @ValueSource(booleans = {true, false})
   public void testMetadataStatsOnCommit(Boolean rollbackUsingMarkers) throws Exception {
     HoodieWriteConfig cfg = getConfigBuilder(false, rollbackUsingMarkers, IndexType.INMEMORY)
-        .withAutoCommit(false).build();
+        .withAvroSchemaValidate(false)
+        .withAllowAutoEvolutionColumnDrop(true)
+        .withAutoCommit(false)
+        .build();
+
+    setUp(cfg.getProps());
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
       HoodieTable table = HoodieSparkTable.create(cfg, context(), metaClient);
@@ -345,7 +467,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       inserts = 0;
       int upserts = 0;
       List<WriteStatus> writeStatusList = statuses.collect();
-      for (WriteStatus ws: writeStatusList) {
+      for (WriteStatus ws : writeStatusList) {
         inserts += ws.getStat().getNumInserts();
         upserts += ws.getStat().getNumUpdateWrites();
       }
@@ -381,6 +503,9 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
   @Test
   public void testRollingStatsWithSmallFileHandling() throws Exception {
     HoodieWriteConfig cfg = getConfigBuilder(false, IndexType.INMEMORY).withAutoCommit(false).build();
+
+    setUp(cfg.getProps());
+
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
       Map<String, Long> fileIdToInsertsMap = new HashMap<>();
       Map<String, Long> fileIdToUpsertsMap = new HashMap<>();
@@ -497,6 +622,9 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
   @Test
   public void testHandleUpdateWithMultiplePartitions() throws Exception {
     HoodieWriteConfig cfg = getConfig(true);
+
+    setUp(cfg.getProps());
+
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
 
       /**
@@ -572,48 +700,4 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       assertEquals(fewRecordsForDelete.size() - numRecordsInPartition, status.getTotalErrorRecords());
     }
   }
-
-  @Test
-  public void testReleaseResource() throws Exception {
-    HoodieWriteConfig.Builder builder = getConfigBuilder(true);
-    builder.withReleaseResourceEnabled(true);
-    builder.withAutoCommit(false);
-    /**
-     * Write 1 (test when RELEASE_RESOURCE_ENABLE is true)
-     */
-    try (SparkRDDWriteClient client = getHoodieWriteClient(builder.build())) {
-
-      String newCommitTime = "001";
-      client.startCommitWithTime(newCommitTime);
-
-      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
-      JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
-      writeRecords.persist(StorageLevel.MEMORY_AND_DISK());
-      List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
-      assertNoWriteErrors(statuses);
-      client.commitStats(newCommitTime, statuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
-      assertEquals(spark().sparkContext().persistentRdds().size(), 0);
-    }
-
-    builder.withReleaseResourceEnabled(false);
-
-    /**
-     * Write 2 (test when RELEASE_RESOURCE_ENABLE is false)
-     */
-    try (SparkRDDWriteClient client = getHoodieWriteClient(builder.build())) {
-      String newCommitTime = "002";
-      client.startCommitWithTime(newCommitTime);
-
-      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
-      JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
-
-      writeRecords.persist(StorageLevel.MEMORY_AND_DISK());
-      List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
-      assertNoWriteErrors(statuses);
-      client.commitStats(newCommitTime, statuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
-      assertTrue(spark().sparkContext().persistentRdds().size() > 0);
-    }
-
-  }
 }
-

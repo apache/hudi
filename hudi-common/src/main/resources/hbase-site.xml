@@ -1700,13 +1700,6 @@ possible configurations would overwhelm and obscure the important.
     </description>
   </property>
   <property>
-    <name>hbase.status.listener.class</name>
-    <value>org.apache.hadoop.hbase.client.ClusterStatusListener$MulticastListener</value>
-    <description>
-      Implementation of the status listener with a multicast message.
-    </description>
-  </property>
-  <property>
     <name>hbase.status.multicast.address.ip</name>
     <value>226.1.1.3</value>
     <description>

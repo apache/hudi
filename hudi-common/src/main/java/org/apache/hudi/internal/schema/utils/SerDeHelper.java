@@ -18,17 +18,17 @@
 
 package org.apache.hudi.internal.schema.utils;
 
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.Type;
+import org.apache.hudi.internal.schema.Types;
+
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
-import org.apache.hadoop.hbase.exceptions.IllegalArgumentIOException;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.Type;
-import org.apache.hudi.internal.schema.Types;
 
 import java.io.IOException;
 import java.io.StringWriter;
@@ -41,6 +41,9 @@ import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * Utils of serialization and deserialization.
+ */
 public class SerDeHelper {
   private SerDeHelper() {
 
@@ -179,12 +182,12 @@ public class SerDeHelper {
         if (!type.isNestedType()) {
           generator.writeString(type.toString());
         } else {
-          throw new IllegalArgumentIOException(String.format("cannot write unknown types: %s", type));
+          throw new HoodieIOException(String.format("cannot write unknown types: %s", type));
         }
     }
   }
 
-  private static Type parserTypeFromJson(JsonNode jsonNode) {
+  private static Type parseTypeFromJson(JsonNode jsonNode) {
     if (jsonNode.isTextual()) {
       String type = jsonNode.asText().toLowerCase(Locale.ROOT);
       // deal with fixed and decimal
@@ -236,7 +239,7 @@ public class SerDeHelper {
           // extract
           int id = field.get(ID).asInt();
           String name = field.get(NAME).asText();
-          Type type = parserTypeFromJson(field.get(TYPE));
+          Type type = parseTypeFromJson(field.get(TYPE));
           String doc = field.has(DOC) ? field.get(DOC).asText() : null;
           boolean optional = field.get(OPTIONAL).asBoolean();
           // build fields
@@ -245,14 +248,14 @@ public class SerDeHelper {
         return Types.RecordType.get(fields);
       } else if (ARRAY.equals(typeStr)) {
         int elementId = jsonNode.get(ELEMENT_ID).asInt();
-        Type elementType = parserTypeFromJson(jsonNode.get(ELEMENT));
+        Type elementType = parseTypeFromJson(jsonNode.get(ELEMENT));
         boolean optional = jsonNode.get(ELEMENT_OPTIONAL).asBoolean();
         return Types.ArrayType.get(elementId, optional, elementType);
       } else if (MAP.equals(typeStr)) {
         int keyId = jsonNode.get(KEY_ID).asInt();
-        Type keyType = parserTypeFromJson(jsonNode.get(KEY));
+        Type keyType = parseTypeFromJson(jsonNode.get(KEY));
         int valueId = jsonNode.get(VALUE_ID).asInt();
-        Type valueType = parserTypeFromJson(jsonNode.get(VALUE));
+        Type valueType = parseTypeFromJson(jsonNode.get(VALUE));
         boolean optional = jsonNode.get(VALUE_OPTIONAL).asBoolean();
         return Types.MapType.get(keyId, valueId, keyType, valueType, optional);
       }
@@ -269,14 +272,14 @@ public class SerDeHelper {
   public static InternalSchema fromJson(JsonNode jsonNode) {
     Integer maxColumnId = !jsonNode.has(MAX_COLUMN_ID) ? null : jsonNode.get(MAX_COLUMN_ID).asInt();
     Long versionId = !jsonNode.has(VERSION_ID) ? null : jsonNode.get(VERSION_ID).asLong();
-    Types.RecordType type = (Types.RecordType)parserTypeFromJson(jsonNode);
+    Types.RecordType type = (Types.RecordType) parseTypeFromJson(jsonNode);
     if (versionId == null) {
-      return new InternalSchema(type.fields());
+      return new InternalSchema(type);
     } else {
       if (maxColumnId != null) {
-        return new InternalSchema(versionId, maxColumnId, type.fields());
+        return new InternalSchema(versionId, maxColumnId, type);
       } else {
-        return new InternalSchema(versionId, type.fields());
+        return new InternalSchema(versionId, type);
       }
     }
   }

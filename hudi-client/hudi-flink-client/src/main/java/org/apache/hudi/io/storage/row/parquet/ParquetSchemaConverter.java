@@ -31,7 +31,6 @@ import org.apache.flink.table.types.logical.LocalZonedTimestampType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.MapType;
 import org.apache.flink.table.types.logical.RowType;
-
 import org.apache.flink.table.types.logical.TimestampType;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.LogicalTypeAnnotation;
@@ -76,7 +75,7 @@ public class ParquetSchemaConverter {
    * Converts Flink Internal Type to Parquet schema.
    *
    * @param typeInformation Flink type information
-   * @param legacyMode is standard LIST and MAP schema or back-compatible schema
+   * @param legacyMode      is standard LIST and MAP schema or back-compatible schema
    * @return Parquet schema
    */
   public static MessageType toParquetType(
@@ -540,13 +539,11 @@ public class ParquetSchemaConverter {
   public static MessageType convertToParquetMessageType(String name, RowType rowType) {
     Type[] types = new Type[rowType.getFieldCount()];
     for (int i = 0; i < rowType.getFieldCount(); i++) {
-      types[i] = convertToParquetType(rowType.getFieldNames().get(i), rowType.getTypeAt(i));
+      String fieldName = rowType.getFieldNames().get(i);
+      LogicalType fieldType = rowType.getTypeAt(i);
+      types[i] = convertToParquetType(fieldName, fieldType, fieldType.isNullable() ? Type.Repetition.OPTIONAL : Type.Repetition.REQUIRED);
     }
     return new MessageType(name, types);
-  }
-
-  private static Type convertToParquetType(String name, LogicalType type) {
-    return convertToParquetType(name, type, Type.Repetition.OPTIONAL);
   }
 
   private static Type convertToParquetType(
@@ -569,7 +566,7 @@ public class ParquetSchemaConverter {
         int scale = ((DecimalType) type).getScale();
         int numBytes = computeMinBytesForDecimalPrecision(precision);
         return Types.primitive(
-            PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY, repetition)
+                PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY, repetition)
             .as(LogicalTypeAnnotation.decimalType(scale, precision))
             .length(numBytes)
             .named(name);
@@ -603,9 +600,10 @@ public class ParquetSchemaConverter {
             .named(name);
       case TIMESTAMP_WITHOUT_TIME_ZONE:
         TimestampType timestampType = (TimestampType) type;
-        if (timestampType.getPrecision() == 3) {
+        if (timestampType.getPrecision() == 3 || timestampType.getPrecision() == 6) {
+          TimeUnit timeunit = timestampType.getPrecision() == 3 ? TimeUnit.MILLIS : TimeUnit.MICROS;
           return Types.primitive(PrimitiveType.PrimitiveTypeName.INT64, repetition)
-              .as(LogicalTypeAnnotation.timestampType(true, TimeUnit.MILLIS))
+              .as(LogicalTypeAnnotation.timestampType(true, timeunit))
               .named(name);
         } else {
           return Types.primitive(PrimitiveType.PrimitiveTypeName.INT96, repetition)
@@ -613,9 +611,10 @@ public class ParquetSchemaConverter {
         }
       case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
         LocalZonedTimestampType localZonedTimestampType = (LocalZonedTimestampType) type;
-        if (localZonedTimestampType.getPrecision() == 3) {
+        if (localZonedTimestampType.getPrecision() == 3 || localZonedTimestampType.getPrecision() == 6) {
+          TimeUnit timeunit = localZonedTimestampType.getPrecision() == 3 ? TimeUnit.MILLIS : TimeUnit.MICROS;
           return Types.primitive(PrimitiveType.PrimitiveTypeName.INT64, repetition)
-              .as(LogicalTypeAnnotation.timestampType(false, TimeUnit.MILLIS))
+              .as(LogicalTypeAnnotation.timestampType(false, timeunit))
               .named(name);
         } else {
           return Types.primitive(PrimitiveType.PrimitiveTypeName.INT96, repetition)
@@ -651,7 +650,7 @@ public class ParquetSchemaConverter {
             .addField(
                 Types
                     .repeatedGroup()
-                    .addField(convertToParquetType("key", keyType, repetition))
+                    .addField(convertToParquetType("key", keyType, Type.Repetition.REQUIRED))
                     .addField(convertToParquetType("value", valueType, repetition))
                     .named("key_value"))
             .named(name);

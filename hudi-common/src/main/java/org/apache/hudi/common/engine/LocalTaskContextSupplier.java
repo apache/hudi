@@ -22,6 +22,9 @@ import org.apache.hudi.common.util.Option;
 
 import java.util.function.Supplier;
 
+/**
+ * Supplier of task context using local Java engine.
+ */
 public final class LocalTaskContextSupplier extends TaskContextSupplier {
   @Override
   public Supplier<Integer> getPartitionIdSupplier() {
@@ -42,4 +45,10 @@ public final class LocalTaskContextSupplier extends TaskContextSupplier {
   public Option<String> getProperty(EngineProperty prop) {
     return Option.empty();
   }
+
+  @Override
+  public Supplier<Integer> getAttemptNumberSupplier() {
+    return () -> 0;
+  }
+
 }

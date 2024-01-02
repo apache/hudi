@@ -18,14 +18,20 @@
 
 package org.apache.hudi.hadoop.utils;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.hudi.hadoop.utils.shims.HiveShim;
+import org.apache.hudi.hadoop.utils.shims.HiveShims;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapreduce.JobContext;
+
+import org.apache.hive.common.util.HiveVersionInfo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -38,7 +44,7 @@ import java.util.stream.Collectors;
 
 public class HoodieHiveUtils {
 
-  public static final Logger LOG = LogManager.getLogger(HoodieHiveUtils.class);
+  public static final Logger LOG = LoggerFactory.getLogger(HoodieHiveUtils.class);
 
   public static final String HOODIE_INCREMENTAL_USE_DATABASE = "hoodie.incremental.use.database";
   public static final String HOODIE_CONSUME_MODE_PATTERN = "hoodie.%s.consume.mode";
@@ -73,6 +79,10 @@ public class HoodieHiveUtils {
   public static final int MAX_COMMIT_ALL = -1;
   public static final Pattern HOODIE_CONSUME_MODE_PATTERN_STRING = Pattern.compile("hoodie\\.(.*)\\.consume\\.mode");
   public static final String GLOBALLY_CONSISTENT_READ_TIMESTAMP = "last_replication_timestamp";
+
+  private static final boolean IS_HIVE3 = isHive3();
+
+  private static final HiveShim HIVE_SHIM = HiveShims.getInstance(IS_HIVE3);
 
   public static boolean shouldIncludePendingCommits(JobConf job, String tableName) {
     return job.getBoolean(String.format(HOODIE_CONSUME_PENDING_COMMITS, tableName), false);
@@ -145,5 +155,39 @@ public class HoodieHiveUtils {
 
   public static boolean isIncrementalUseDatabase(Configuration conf) {
     return conf.getBoolean(HOODIE_INCREMENTAL_USE_DATABASE, false);
+  }
+
+  public static boolean isHive3() {
+    return HiveVersionInfo.getShortVersion().startsWith("3");
+  }
+
+  public static boolean isHive2() {
+    return HiveVersionInfo.getShortVersion().startsWith("2");
+  }
+
+  /**
+   * Get timestamp writeable object from long value.
+   * Hive3 use TimestampWritableV2 to build timestamp objects and Hive2 use TimestampWritable.
+   * So that we need to initialize timestamp according to the version of Hive.
+   */
+  public static Writable getTimestampWriteable(long value, boolean timestampMillis) {
+    return HIVE_SHIM.getTimestampWriteable(value, timestampMillis);
+  }
+
+  /**
+   * Get date writeable object from int value.
+   * Hive3 use DateWritableV2 to build date objects and Hive2 use DateWritable.
+   * So that we need to initialize date according to the version of Hive.
+   */
+  public static Writable getDateWriteable(int value) {
+    return HIVE_SHIM.getDateWriteable(value);
+  }
+
+  public static int getDays(Object dateWritable) {
+    return HIVE_SHIM.getDays(dateWritable);
+  }
+
+  public static long getMills(Object timestamp) {
+    return HIVE_SHIM.getMills(timestamp);
   }
 }

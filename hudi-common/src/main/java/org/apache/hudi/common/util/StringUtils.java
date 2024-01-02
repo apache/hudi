@@ -21,6 +21,7 @@ package org.apache.hudi.common.util;
 import javax.annotation.Nullable;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -31,6 +32,7 @@ import java.util.stream.Stream;
  */
 public class StringUtils {
 
+  public static final char[] HEX_CHAR = new char[]{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
   public static final String EMPTY_STRING = "";
 
   /**
@@ -78,12 +80,32 @@ public class StringUtils {
     return String.join(delimiter, elements);
   }
 
-  public static String toHexString(byte[] bytes) {
-    StringBuilder sb = new StringBuilder(bytes.length * 2);
-    for (byte b : bytes) {
-      sb.append(String.format("%02x", b));
+  public static String join(final List<String> list, final String separator) {
+    if (list == null || list.size() == 0) {
+      return null;
     }
-    return sb.toString();
+    return org.apache.hadoop.util.StringUtils.join(separator, list.toArray(new String[0]));
+  }
+
+  public static String toHexString(byte[] bytes) {
+    return new String(encodeHex(bytes));
+  }
+
+  public static char[] encodeHex(byte[] data) {
+    int l = data.length;
+    char[] out = new char[l << 1];
+    int i = 0;
+
+    for (int var4 = 0; i < l; ++i) {
+      out[var4++] = HEX_CHAR[(240 & data[i]) >>> 4];
+      out[var4++] = HEX_CHAR[15 & data[i]];
+    }
+
+    return out;
+  }
+
+  public static byte[] getUTF8Bytes(String str) {
+    return str.getBytes(StandardCharsets.UTF_8);
   }
 
   public static boolean isNullOrEmpty(String str) {
@@ -134,5 +156,31 @@ public class StringUtils {
       return Collections.emptyList();
     }
     return Stream.of(input.split(delimiter)).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
+  }
+
+  public static String getSuffixBy(String input, int ch) {
+    int i = input.lastIndexOf(ch);
+    if (i == -1) {
+      return input;
+    }
+    return input.substring(i);
+  }
+
+  public static String removeSuffixBy(String input, int ch) {
+    int i = input.lastIndexOf(ch);
+    if (i == -1) {
+      return input;
+    }
+    return input.substring(0, i);
+  }
+
+  public static String truncate(String str, int headLength, int tailLength) {
+    if (isNullOrEmpty(str) || str.length() <= headLength + tailLength) {
+      return str;
+    }
+    String head = str.substring(0, headLength);
+    String tail = str.substring(str.length() - tailLength);
+
+    return head + "..." + tail;
   }
 }

@@ -62,7 +62,7 @@
  </check>
  <check level="error" class="org.scalastyle.scalariform.ParameterNumberChecker" enabled="true">
   <parameters>
-   <parameter name="maxParameters"><![CDATA[8]]></parameter>
+   <parameter name="maxParameters"><![CDATA[12]]></parameter>
   </parameters>
  </check>
  <check level="error" class="org.scalastyle.scalariform.MagicNumberChecker" enabled="false">
@@ -128,6 +128,11 @@
    <parameter name="group.javax">java?\..*</parameter>
    <parameter name="group.java">javax?\..*</parameter>
    <parameter name="group.scala">scala\..*</parameter>
+  </parameters>
+ </check>
+ <check level="error" class="org.scalastyle.scalariform.IllegalImportsChecker" enabled="true">
+  <parameters>
+   <parameter name="illegalImports"><![CDATA[com.google.common]]></parameter>
   </parameters>
  </check>
 

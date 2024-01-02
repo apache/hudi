@@ -90,4 +90,14 @@ public class TestHoodieHeartbeatClient extends HoodieCommonTestHarness {
     hoodieHeartbeatClient.stop(instantTime1);
     assertFalse(HeartbeatUtils.deleteHeartbeatFile(metaClient.getFs(), basePath, instantTime2));
   }
+
+  @Test
+  public void testStopHeartbeatTimers() throws IOException {
+    HoodieHeartbeatClient hoodieHeartbeatClient =
+        new HoodieHeartbeatClient(metaClient.getFs(), metaClient.getBasePath(), heartBeatInterval, numTolerableMisses);
+    hoodieHeartbeatClient.start(instantTime1);
+    hoodieHeartbeatClient.stopHeartbeatTimers();
+    assertFalse(hoodieHeartbeatClient.isHeartbeatExpired(instantTime1));
+    assertTrue(hoodieHeartbeatClient.getHeartbeat(instantTime1).isHeartbeatStopped());
+  }
 }

@@ -17,10 +17,32 @@
 
 package org.apache.spark.sql
 
-import HoodieSparkTypeUtils.isCastPreservingOrdering
-import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expm1, Expression, FromUTCTimestamp, FromUnixTime, Log, Log10, Log1p, Log2, Lower, Multiply, ParseToDate, ParseToTimestamp, ShiftLeft, ShiftRight, ToUTCTimestamp, ToUnixTimestamp, Upper}
+import org.apache.spark.sql.HoodieSparkTypeUtils.isCastPreservingOrdering
+import org.apache.spark.sql.catalyst.encoders.{ExpressionEncoder, RowEncoder}
+import org.apache.spark.sql.catalyst.expressions.{Add, AnsiCast, Attribute, AttributeReference, AttributeSet, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expm1, Expression, FromUTCTimestamp, FromUnixTime, Log, Log10, Log1p, Log2, Lower, Multiply, ParseToDate, ParseToTimestamp, PredicateHelper, ShiftLeft, ShiftRight, ToUTCTimestamp, ToUnixTimestamp, Upper}
+import org.apache.spark.sql.execution.datasources.DataSourceStrategy
+import org.apache.spark.sql.types.{DataType, StructType}
 
-object HoodieSpark32CatalystExpressionUtils extends HoodieCatalystExpressionUtils {
+object HoodieSpark32CatalystExpressionUtils extends HoodieSpark3CatalystExpressionUtils with PredicateHelper {
+
+  override def getEncoder(schema: StructType): ExpressionEncoder[Row] = {
+    RowEncoder.apply(schema).resolveAndBind()
+  }
+
+  override def normalizeExprs(exprs: Seq[Expression], attributes: Seq[Attribute]): Seq[Expression] =
+    DataSourceStrategy.normalizeExprs(exprs, attributes)
+
+  override def extractPredicatesWithinOutputSet(condition: Expression,
+                                                outputSet: AttributeSet): Option[Expression] = {
+    super[PredicateHelper].extractPredicatesWithinOutputSet(condition, outputSet)
+  }
+
+  override def matchCast(expr: Expression): Option[(Expression, DataType, Option[String])] =
+    expr match {
+      case Cast(child, dataType, timeZoneId, _) => Some((child, dataType, timeZoneId))
+      case AnsiCast(child, dataType, timeZoneId) => Some((child, dataType, timeZoneId))
+      case _ => None
+    }
 
   override def tryMatchAttributeOrderingPreservingTransformation(expr: Expression): Option[AttributeReference] = {
     expr match {
@@ -28,6 +50,18 @@ object HoodieSpark32CatalystExpressionUtils extends HoodieCatalystExpressionUtil
       case _ => None
     }
   }
+
+  def canUpCast(fromType: DataType, toType: DataType): Boolean =
+    Cast.canUpCast(fromType, toType)
+
+  override def unapplyCastExpression(expr: Expression): Option[(Expression, DataType, Option[String], Boolean)] =
+    expr match {
+      case Cast(castedExpr, dataType, timeZoneId, ansiEnabled) =>
+        Some((castedExpr, dataType, timeZoneId, ansiEnabled))
+      case AnsiCast(castedExpr, dataType, timeZoneId) =>
+        Some((castedExpr, dataType, timeZoneId, true))
+      case _ => None
+    }
 
   private object OrderPreservingTransformation {
     def unapply(expr: Expression): Option[AttributeReference] = {

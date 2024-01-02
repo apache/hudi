@@ -32,7 +32,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
+import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
 import com.beust.jcommander.IValueValidator;
 import com.beust.jcommander.JCommander;
@@ -44,12 +44,12 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -67,13 +67,13 @@ import scala.Tuple2;
 /**
  * Loads data from Parquet Sources.
  *
- * @deprecated This utility is deprecated in 0.10.0 and will be removed in 0.11.0. Use {@link HoodieDeltaStreamer.Config#runBootstrap} instead.
- * @see HoodieDeltaStreamer
+ * @see HoodieStreamer
+ * @deprecated This utility is deprecated in 0.10.0 and will be removed in 0.11.0. Use {@link HoodieStreamer.Config#runBootstrap} instead.
  */
 public class HDFSParquetImporter implements Serializable {
 
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LogManager.getLogger(HDFSParquetImporter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HDFSParquetImporter.class);
 
   private static final DateTimeFormatter PARTITION_FORMATTER = DateTimeFormatter.ofPattern("yyyy/MM/dd")
       .withZone(ZoneId.systemDefault());
@@ -125,7 +125,7 @@ public class HDFSParquetImporter implements Serializable {
         ret = dataImport(jsc);
       } while (ret != 0 && retry-- > 0);
     } catch (Throwable t) {
-      LOG.error(t);
+      LOG.error("Import data error", t);
     }
     return ret;
   }

@@ -19,14 +19,16 @@
 package org.apache.hudi.common.model.debezium;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieDebeziumAvroPayloadException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Objects;
 
 /**
  * Provides support for seamlessly applying changes captured via Debezium for MysqlDB.
@@ -36,13 +38,13 @@ import java.io.IOException;
  * - For inserts, op=i
  * - For deletes, op=d
  * - For updates, op=u
- * - For snapshort inserts, op=r
+ * - For snapshot inserts, op=r
  * <p>
  * This payload implementation will issue matching insert, delete, updates against the hudi table
  */
 public class MySqlDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
 
-  private static final Logger LOG = LogManager.getLogger(MySqlDebeziumAvroPayload.class);
+  private static final Logger LOG = LoggerFactory.getLogger(MySqlDebeziumAvroPayload.class);
 
   public MySqlDebeziumAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
@@ -52,16 +54,43 @@ public class MySqlDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
     super(record);
   }
 
-  private String extractSeq(IndexedRecord record) {
-    return ((CharSequence) ((GenericRecord) record).get(DebeziumConstants.ADDED_SEQ_COL_NAME)).toString();
+  private Option<String> extractSeq(IndexedRecord record) {
+    Object value = ((GenericRecord) record).get(DebeziumConstants.ADDED_SEQ_COL_NAME);
+    return Option.ofNullable(Objects.toString(value, null));
   }
 
   @Override
   protected boolean shouldPickCurrentRecord(IndexedRecord currentRecord, IndexedRecord insertRecord, Schema schema) throws IOException {
-    String currentSourceSeq = extractSeq(currentRecord);
-    String insertSourceSeq = extractSeq(insertRecord);
-    // Pick the current value in storage only if its Seq (file+pos) is latest
-    // compared to the Seq (file+pos) of the insert value
-    return insertSourceSeq.compareTo(currentSourceSeq) < 0;
+    String insertSourceSeq = extractSeq(insertRecord)
+        .orElseThrow(() ->
+            new HoodieDebeziumAvroPayloadException(String.format("%s cannot be null in insert record: %s",
+                DebeziumConstants.ADDED_SEQ_COL_NAME, insertRecord)));
+    Option<String> currentSourceSeqOpt = extractSeq(currentRecord);
+
+    // handle bootstrap case
+    if (!currentSourceSeqOpt.isPresent()) {
+      return false;
+    }
+
+    // Seq is file+pos string like "001.000010", getting [001,000010] from it
+    String[] currentFilePos = currentSourceSeqOpt.get().split("\\.");
+    String[] insertFilePos = insertSourceSeq.split("\\.");
+
+    long currentFileNum = Long.valueOf(currentFilePos[0]);
+    long insertFileNum = Long.valueOf(insertFilePos[0]);
+
+    if (insertFileNum < currentFileNum) {
+      // pick the current value
+      return true;
+    } else if (insertFileNum > currentFileNum) {
+      // pick the insert value
+      return false;
+    }
+
+    // file name is the same, compare the position in the file
+    Long currentPos = Long.valueOf(currentFilePos[1]);
+    Long insertPos = Long.valueOf(insertFilePos[1]);
+
+    return insertPos <= currentPos;
   }
 }

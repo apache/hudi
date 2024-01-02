@@ -21,6 +21,11 @@ package org.apache.hudi.common.util;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+
+/**
+ * Utils for Base64 encoding and decoding.
+ */
 public final class Base64CodecUtil {
 
   /**
@@ -30,7 +35,7 @@ public final class Base64CodecUtil {
    * @return A newly-allocated byte array containing the decoded bytes.
    */
   public static byte[] decode(String encodedString) {
-    return Base64.getDecoder().decode(encodedString.getBytes(StandardCharsets.UTF_8));
+    return Base64.getDecoder().decode(getUTF8Bytes(encodedString));
   }
 
   /**

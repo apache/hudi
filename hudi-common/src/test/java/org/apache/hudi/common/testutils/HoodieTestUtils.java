@@ -19,6 +19,7 @@
 package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -26,6 +27,8 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import com.esotericsoftware.kryo.Kryo;
@@ -33,6 +36,11 @@ import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.serializers.JavaSerializer;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.junit.jupiter.api.Assumptions;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -40,8 +48,10 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * A utility class for testing.
@@ -70,11 +80,27 @@ public class HoodieTestUtils {
     return init(getDefaultHadoopConf(), basePath, tableType, properties);
   }
 
-  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, boolean bootstrapIndexEnable) throws IOException {
+  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, boolean bootstrapIndexEnable, String keyGenerator) throws IOException {
+    return init(basePath, tableType, bootstrapBasePath, bootstrapIndexEnable, keyGenerator, "datestr");
+  }
+
+  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, boolean bootstrapIndexEnable, String keyGenerator,
+                                             String partitionFieldConfigValue) throws IOException {
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.BOOTSTRAP_BASE_PATH.key(), bootstrapBasePath);
     props.put(HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE.key(), bootstrapIndexEnable);
+    if (keyGenerator != null) {
+      props.put("hoodie.datasource.write.keygenerator.class", keyGenerator);
+    }
+    if (keyGenerator != null && !keyGenerator.equals("org.apache.hudi.keygen.NonpartitionedKeyGenerator")) {
+      props.put("hoodie.datasource.write.partitionpath.field", partitionFieldConfigValue);
+      props.put(HoodieTableConfig.PARTITION_FIELDS.key(), partitionFieldConfigValue);
+    }
     return init(getDefaultHadoopConf(), basePath, tableType, props);
+  }
+
+  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, boolean bootstrapIndexEnable) throws IOException {
+    return init(basePath, tableType, bootstrapBasePath, bootstrapIndexEnable, null);
   }
 
   public static HoodieTableMetaClient init(String basePath, HoodieFileFormat baseFileFormat) throws IOException {
@@ -124,34 +150,39 @@ public class HoodieTestUtils {
   }
 
   public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
-                                           Properties properties)
-      throws IOException {
-    properties = HoodieTableMetaClient.withPropertyBuilder()
-      .setTableName(RAW_TRIPS_TEST_NAME)
-      .setTableType(tableType)
-      .setPayloadClass(HoodieAvroPayload.class)
-      .fromProperties(properties)
-      .build();
-    return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
+                                           Properties properties) throws IOException {
+    return init(hadoopConf, basePath, tableType, properties, null);
   }
 
   public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
                                            Properties properties, String databaseName)
       throws IOException {
-    properties = HoodieTableMetaClient.withPropertyBuilder()
-      .setDatabaseName(databaseName)
-      .setTableName(RAW_TRIPS_TEST_NAME)
-      .setTableType(tableType)
-      .setPayloadClass(HoodieAvroPayload.class)
-      .fromProperties(properties)
-      .build();
-    return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
+    HoodieTableMetaClient.PropertyBuilder builder =
+        HoodieTableMetaClient.withPropertyBuilder()
+            .setDatabaseName(databaseName)
+            .setTableName(RAW_TRIPS_TEST_NAME)
+            .setTableType(tableType)
+            .setPayloadClass(HoodieAvroPayload.class);
+
+    String keyGen = properties.getProperty("hoodie.datasource.write.keygenerator.class");
+    if (!Objects.equals(keyGen, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
+        && !properties.containsKey("hoodie.datasource.write.partitionpath.field")) {
+      builder.setPartitionFields("some_nonexistent_field");
+    }
+
+    Properties processedProperties = builder.fromProperties(properties).build();
+
+    return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, processedProperties);
   }
 
-  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, HoodieFileFormat baseFileFormat) throws IOException {
+  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, HoodieFileFormat baseFileFormat, String keyGenerator) throws IOException {
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.BOOTSTRAP_BASE_PATH.key(), bootstrapBasePath);
     props.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), baseFileFormat.name());
+    if (keyGenerator != null) {
+      props.put("hoodie.datasource.write.keygenerator.class", keyGenerator);
+      props.put("hoodie.datasource.write.partitionpath.field", "datestr");
+    }
     return init(getDefaultHadoopConf(), basePath, tableType, props);
   }
 
@@ -203,5 +234,63 @@ public class HoodieTestUtils {
     String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
     HoodieTestUtils.init(hadoopConf, metadataTableBasePath, HoodieTableType.MERGE_ON_READ);
     HoodieTestDataGenerator.createCommitFile(metadataTableBasePath, instantTime + "001", wrapperFs.getConf());
+  }
+
+  public static int getJavaVersion() {
+    String version = System.getProperty("java.version");
+    if (version.startsWith("1.")) {
+      version = version.substring(2, 3);
+    } else {
+      int dot = version.indexOf(".");
+      if (dot != -1) {
+        version = version.substring(0, dot);
+      }
+    }
+    return Integer.parseInt(version);
+  }
+
+  public static boolean shouldUseExternalHdfs() {
+    return getJavaVersion() == 11 || getJavaVersion() == 17;
+  }
+
+  public static DistributedFileSystem useExternalHdfs() throws IOException {
+    // For Java 17, this unit test has to run in Docker
+    // Need to set -Duse.external.hdfs=true in mvn command to run this test
+    Assumptions.assumeTrue(Boolean.valueOf(System.getProperty("use.external.hdfs", "false")));
+    Configuration conf = new Configuration();
+    conf.set("fs.defaultFS", "hdfs://localhost:9000");
+    conf.set("dfs.replication", "3");
+    return (DistributedFileSystem) DistributedFileSystem.get(conf);
+  }
+
+  public static List<String> getLogFileListFromFileSlice(FileSlice fileSlice) {
+    return fileSlice.getLogFiles().map(logFile -> logFile.getPath().toString())
+        .collect(Collectors.toList());
+  }
+
+  public static HoodieInstant getCompleteInstant(FileSystem fs, Path parent,
+                                                 String instantTime, String action) {
+    return new HoodieInstant(getCompleteInstantFileStatus(fs, parent, instantTime, action));
+  }
+
+  public static Path getCompleteInstantPath(FileSystem fs, Path parent,
+                                            String instantTime, String action) {
+    return getCompleteInstantFileStatus(fs, parent, instantTime, action).getPath();
+  }
+
+  private static FileStatus getCompleteInstantFileStatus(FileSystem fs, Path parent,
+                                                         String instantTime, String action) {
+    try {
+      String actionSuffix = "." + action;
+      Path wildcardPath = new Path(parent, instantTime + "_*" + actionSuffix);
+      FileStatus[] fileStatuses = fs.globStatus(wildcardPath);
+      if (fileStatuses.length != 1) {
+        throw new IOException("Error occur when finding path " + wildcardPath);
+      }
+
+      return fileStatuses[0];
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to get instant file status", e);
+    }
   }
 }

@@ -32,13 +32,11 @@ import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.types.logical.ArrayType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.flink.table.types.logical.TimestampType;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -157,8 +155,9 @@ public class RowDataToAvroConverters {
               }
             };
         break;
+      case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
       case TIMESTAMP_WITHOUT_TIME_ZONE:
-        final int precision = ((TimestampType) type).getPrecision();
+        final int precision = DataTypeUtils.precision(type);
         if (precision <= 3) {
           converter =
               new RowDataToAvroConverter() {
@@ -176,7 +175,8 @@ public class RowDataToAvroConverters {
 
                 @Override
                 public Object convert(Schema schema, Object object) {
-                  return ChronoUnit.MICROS.between(Instant.EPOCH, ((TimestampData) object).toInstant());
+                  Instant instant = ((TimestampData) object).toInstant();
+                  return  Math.addExact(Math.multiplyExact(instant.getEpochSecond(), 1000_000), instant.getNano() / 1000);
                 }
               };
         } else {
@@ -231,7 +231,7 @@ public class RowDataToAvroConverters {
             actualSchema = types.get(1);
           } else {
             throw new IllegalArgumentException(
-                "The Avro schema is not a nullable type: " + schema.toString());
+                "The Avro schema is not a nullable type: " + schema);
           }
         } else {
           actualSchema = schema;

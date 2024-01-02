@@ -17,7 +17,8 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, OverwriteWithLatestAvroPayload}
+import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecordMerger, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.spark.sql.types._
@@ -31,15 +32,19 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
   def testWithDefaultSqlOptions(): Unit = {
     val ops1 = Map("primaryKey" -> "id")
     val with1 = HoodieOptionConfig.withDefaultSqlOptions(ops1)
-    assertTrue(with1.size == 3)
+    assertTrue(with1.size == 5)
     assertTrue(with1("primaryKey") == "id")
     assertTrue(with1("type") == "cow")
     assertTrue(with1("payloadClass") == classOf[OverwriteWithLatestAvroPayload].getName)
+    assertTrue(with1("recordMergerStrategy") == HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
+    assertTrue(with1("payloadType") == DataSourceWriteOptions.PAYLOAD_TYPE.defaultValue)
 
     val ops2 = Map("primaryKey" -> "id",
       "preCombineField" -> "timestamp",
       "type" -> "mor",
-      "payloadClass" -> classOf[DefaultHoodieRecordPayload].getName
+      "payloadClass" -> classOf[DefaultHoodieRecordPayload].getName,
+      "recordMergerStrategy" -> HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID,
+      "payloadType" -> DataSourceWriteOptions.PAYLOAD_TYPE.defaultValue
     )
     val with2 = HoodieOptionConfig.withDefaultSqlOptions(ops2)
     assertTrue(ops2 == with2)
@@ -53,7 +58,7 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
       "hoodie.index.type" -> "INMEMORY",
       "hoodie.compact.inline" -> "true"
     )
-    val tableConfigs = HoodieOptionConfig.mappingSqlOptionToTableConfig(sqlOptions)
+    val tableConfigs = HoodieOptionConfig.mapSqlOptionsToTableConfigs(sqlOptions)
 
     assertTrue(tableConfigs.size == 5)
     assertTrue(tableConfigs(HoodieTableConfig.RECORDKEY_FIELDS.key) == "id,addr")
@@ -105,16 +110,6 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
         StructField("timestamp", TimestampType, true),
         StructField("dt", StringType, true))
     )
-
-    // miss primaryKey parameter
-    val sqlOptions1 = baseSqlOptions ++ Map(
-      "type" -> "mor"
-    )
-
-    val e1 = intercept[IllegalArgumentException] {
-      HoodieOptionConfig.validateTable(spark, schema, sqlOptions1)
-    }
-    assertTrue(e1.getMessage.contains("No `primaryKey` is specified."))
 
     // primary field not found
     val sqlOptions2 = baseSqlOptions ++ Map(

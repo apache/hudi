@@ -20,7 +20,7 @@ package org.apache.hudi.utilities.sources.debezium;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.debezium.DebeziumConstants;
-import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import org.apache.spark.api.java.JavaSparkContext;
@@ -36,7 +36,7 @@ public class PostgresDebeziumSource extends DebeziumSource {
   public PostgresDebeziumSource(TypedProperties props, JavaSparkContext sparkContext,
                                 SparkSession sparkSession,
                                 SchemaProvider schemaProvider,
-                                HoodieDeltaStreamerMetrics metrics) {
+                                HoodieIngestionMetrics metrics) {
     super(props, sparkContext, sparkSession, schemaProvider, metrics);
   }
 
@@ -57,6 +57,7 @@ public class PostgresDebeziumSource extends DebeziumSource {
               String.format("%s as %s", DebeziumConstants.INCOMING_OP_FIELD, DebeziumConstants.FLATTENED_OP_COL_NAME),
               String.format("%s as %s", DebeziumConstants.INCOMING_TS_MS_FIELD, DebeziumConstants.UPSTREAM_PROCESSING_TS_COL_NAME),
               String.format("%s as %s", DebeziumConstants.INCOMING_SOURCE_NAME_FIELD, DebeziumConstants.FLATTENED_SHARD_NAME),
+              String.format("%s as %s", DebeziumConstants.INCOMING_SOURCE_SCHEMA_FIELD, DebeziumConstants.FLATTENED_SCHEMA_NAME),
               String.format("%s as %s", DebeziumConstants.INCOMING_SOURCE_TS_MS_FIELD, DebeziumConstants.FLATTENED_TS_COL_NAME),
               String.format("%s as %s", DebeziumConstants.INCOMING_SOURCE_TXID_FIELD, DebeziumConstants.FLATTENED_TX_ID_COL_NAME),
               String.format("%s as %s", DebeziumConstants.INCOMING_SOURCE_LSN_FIELD, DebeziumConstants.FLATTENED_LSN_COL_NAME),
@@ -70,6 +71,7 @@ public class PostgresDebeziumSource extends DebeziumSource {
               String.format("%s as %s", DebeziumConstants.INCOMING_OP_FIELD, DebeziumConstants.FLATTENED_OP_COL_NAME),
               String.format("%s as %s", DebeziumConstants.INCOMING_TS_MS_FIELD, DebeziumConstants.UPSTREAM_PROCESSING_TS_COL_NAME),
               String.format("%s as %s", DebeziumConstants.INCOMING_SOURCE_NAME_FIELD, DebeziumConstants.FLATTENED_SHARD_NAME),
+              String.format("%s as %s", DebeziumConstants.INCOMING_SOURCE_SCHEMA_FIELD, DebeziumConstants.FLATTENED_SCHEMA_NAME),
               String.format("%s as %s", DebeziumConstants.INCOMING_SOURCE_TS_MS_FIELD, DebeziumConstants.FLATTENED_TS_COL_NAME),
               String.format("%s as %s", DebeziumConstants.INCOMING_SOURCE_TXID_FIELD, DebeziumConstants.FLATTENED_TX_ID_COL_NAME),
               String.format("%s as %s", DebeziumConstants.INCOMING_SOURCE_LSN_FIELD, DebeziumConstants.FLATTENED_LSN_COL_NAME),

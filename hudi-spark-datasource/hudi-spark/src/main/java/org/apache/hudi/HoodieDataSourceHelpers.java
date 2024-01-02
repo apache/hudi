@@ -55,7 +55,7 @@ public class HoodieDataSourceHelpers {
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public static List<String> listCommitsSince(FileSystem fs, String basePath, String instantTimestamp) {
     HoodieTimeline timeline = allCompletedCommitsCompactions(fs, basePath);
-    return timeline.findInstantsAfter(instantTimestamp, Integer.MAX_VALUE).getInstants()
+    return timeline.findInstantsAfter(instantTimestamp, Integer.MAX_VALUE).getInstantsAsStream()
         .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
   }
 

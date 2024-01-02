@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.bucket;
 
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.common.AbstractWriteOperator;
 import org.apache.hudi.sink.common.WriteOperatorFactory;
 
@@ -31,7 +32,9 @@ import org.apache.flink.configuration.Configuration;
 public class BucketStreamWriteOperator<I> extends AbstractWriteOperator<I> {
 
   public BucketStreamWriteOperator(Configuration conf) {
-    super(new BucketStreamWriteFunction<>(conf));
+    super(OptionsResolver.isConsistentHashingBucketIndexType(conf)
+        ? new ConsistentBucketStreamWriteFunction<>(conf)
+        : new BucketStreamWriteFunction<>(conf));
   }
 
   public static <I> WriteOperatorFactory<I> getFactory(Configuration conf) {

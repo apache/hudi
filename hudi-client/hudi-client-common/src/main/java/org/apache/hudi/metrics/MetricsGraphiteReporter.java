@@ -24,10 +24,9 @@ import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.graphite.Graphite;
 import com.codahale.metrics.graphite.GraphiteReporter;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.io.Closeable;
 import java.net.InetSocketAddress;
 import java.util.concurrent.TimeUnit;
 
@@ -36,7 +35,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class MetricsGraphiteReporter extends MetricsReporter {
 
-  private static final Logger LOG = LogManager.getLogger(MetricsGraphiteReporter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(MetricsGraphiteReporter.class);
   private final MetricRegistry registry;
   private final GraphiteReporter graphiteReporter;
   private final HoodieWriteConfig config;
@@ -76,11 +75,6 @@ public class MetricsGraphiteReporter extends MetricsReporter {
     } else {
       LOG.error("Cannot report metrics as the graphiteReporter is null.");
     }
-  }
-
-  @Override
-  public Closeable getReporter() {
-    return graphiteReporter;
   }
 
   private GraphiteReporter createGraphiteReport() {

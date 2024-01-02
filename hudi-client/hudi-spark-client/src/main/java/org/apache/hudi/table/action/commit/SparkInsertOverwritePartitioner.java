@@ -19,12 +19,13 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.List;
@@ -34,16 +35,31 @@ import java.util.List;
  */
 public class SparkInsertOverwritePartitioner extends UpsertPartitioner {
 
-  private static final Logger LOG = LogManager.getLogger(SparkInsertOverwritePartitioner.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SparkInsertOverwritePartitioner.class);
 
   public SparkInsertOverwritePartitioner(WorkloadProfile profile, HoodieEngineContext context, HoodieTable table,
                                          HoodieWriteConfig config) {
     super(profile, context, table, config);
   }
 
+  @Override
+  public BucketInfo getBucketInfo(int bucketNumber) {
+    BucketInfo bucketInfo = super.getBucketInfo(bucketNumber);
+    switch (bucketInfo.bucketType) {
+      case INSERT:
+        return bucketInfo;
+      case UPDATE:
+        // Insert overwrite always generates new bucket file id
+        return new BucketInfo(BucketType.INSERT, FSUtils.createNewFileIdPfx(), bucketInfo.partitionPath);
+      default:
+        throw new AssertionError();
+    }
+  }
+
   /**
    * Returns a list of small files in the given partition path.
    */
+  @Override
   protected List<SmallFile> getSmallFiles(String partitionPath) {
     // for overwrite, we ignore all existing files. So do not consider any file to be smallFiles
     return Collections.emptyList();

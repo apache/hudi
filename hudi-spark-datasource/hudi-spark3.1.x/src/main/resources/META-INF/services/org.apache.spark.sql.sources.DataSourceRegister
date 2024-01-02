@@ -16,4 +16,4 @@
 # limitations under the License.
 
 
-org.apache.hudi.Spark3xDefaultSource
+org.apache.hudi.Spark31DefaultSource

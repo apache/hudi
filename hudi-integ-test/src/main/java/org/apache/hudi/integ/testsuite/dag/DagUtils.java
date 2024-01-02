@@ -178,8 +178,7 @@ public class DagUtils {
       DeltaConfig.Config config = DeltaConfig.Config.newBuilder().withConfigsMap(convertJsonNodeToMap(node))
           .withName(name).build();
       return (DagNode) ReflectionUtils.loadClass(generateFQN(type), config);
-    }
-    catch (ClassNotFoundException e) {
+    } catch (ClassNotFoundException e) {
       throw new RuntimeException(e);
     }
   }
@@ -231,8 +230,7 @@ public class DagUtils {
       List<JsonNode> flattened = new ArrayList<>();
       flattened.add(entry.getValue());
       queries = (List<Pair<String, Integer>>) getQueryMapper().readValue(flattened.toString(), List.class);
-    }
-    catch (Exception e) {
+    } catch (Exception e) {
       e.printStackTrace();
     }
     return queries;
@@ -244,8 +242,7 @@ public class DagUtils {
       List<JsonNode> flattened = new ArrayList<>();
       flattened.add(entry.getValue());
       properties = (List<String>) getQueryEnginePropertyMapper().readValue(flattened.toString(), List.class);
-    }
-    catch (Exception e) {
+    } catch (Exception e) {
       e.printStackTrace();
     }
     return properties;
@@ -254,20 +251,15 @@ public class DagUtils {
   private static Object getValue(JsonNode node) {
     if (node.isInt()) {
       return node.asInt();
-    }
-    else if (node.isLong()) {
+    } else if (node.isLong()) {
       return node.asLong();
-    }
-    else if (node.isShort()) {
+    } else if (node.isShort()) {
       return node.asInt();
-    }
-    else if (node.isBoolean()) {
+    } else if (node.isBoolean()) {
       return node.asBoolean();
-    }
-    else if (node.isDouble()) {
+    } else if (node.isDouble()) {
       return node.asDouble();
-    }
-    else if (node.isFloat()) {
+    } else if (node.isFloat()) {
       return node.asDouble();
     }
     return node.textValue();
@@ -287,6 +279,7 @@ public class DagUtils {
         case HIVE_PROPERTIES:
           ((ObjectNode) configNode).put(HIVE_PROPERTIES,
               MAPPER.readTree(getQueryEnginePropertyMapper().writeValueAsString(node.getConfig().getHiveProperties())));
+          break;
         case PRESTO_QUERIES:
           ((ObjectNode) configNode).put(PRESTO_QUERIES,
               MAPPER.readTree(getQueryMapper().writeValueAsString(node.getConfig().getHiveQueries())));
@@ -376,8 +369,7 @@ public class DagUtils {
 
           if (fieldName.contains("query")) {
             query = parser.getValueAsString();
-          }
-          else if (fieldName.contains("result")) {
+          } else if (fieldName.contains("result")) {
             result = parser.getValueAsInt();
             pairs.add(Pair.of(query, result));
           }

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.exception;
 
-
 /**
  * <p>
  * Exception thrown for Hoodie failures. The root of the exception hierarchy.

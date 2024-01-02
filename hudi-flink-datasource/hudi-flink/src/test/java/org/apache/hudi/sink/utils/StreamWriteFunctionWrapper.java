@@ -29,6 +29,8 @@ import org.apache.hudi.sink.bootstrap.BootstrapOperator;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
+import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 
 import org.apache.flink.api.common.ExecutionConfig;
@@ -42,12 +44,12 @@ import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.testutils.MockEnvironment;
 import org.apache.flink.runtime.operators.testutils.MockEnvironmentBuilder;
 import org.apache.flink.streaming.api.graph.StreamConfig;
-import org.apache.flink.streaming.api.operators.StreamingRuntimeContext;
 import org.apache.flink.streaming.api.operators.collect.utils.MockFunctionSnapshotContext;
 import org.apache.flink.streaming.api.operators.collect.utils.MockOperatorEventGateway;
 import org.apache.flink.streaming.util.MockStreamTask;
 import org.apache.flink.streaming.util.MockStreamTaskBuilder;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
 
 import java.util.HashSet;
@@ -63,9 +65,10 @@ import java.util.concurrent.CompletableFuture;
  */
 public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   private final Configuration conf;
+  private final RowType rowType;
 
   private final IOManager ioManager;
-  private final StreamingRuntimeContext runtimeContext;
+  private final MockStreamingRuntimeContext runtimeContext;
   private final MockOperatorEventGateway gateway;
   private final MockOperatorCoordinatorContext coordinatorContext;
   private final StreamWriteOperatorCoordinator coordinator;
@@ -114,10 +117,10 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     this.runtimeContext = new MockStreamingRuntimeContext(false, 1, 0, environment);
     this.gateway = new MockOperatorEventGateway();
     this.conf = conf;
+    this.rowType = (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf)).getLogicalType();
     // one function
     this.coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), 1);
     this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
-    this.compactFunctionWrapper = new CompactFunctionWrapper(this.conf);
     this.bucketAssignFunctionContext = new MockBucketAssignFunctionContext();
     this.stateInitializationContext = new MockStateInitializationContext();
     this.asyncCompaction = OptionsResolver.needsAsyncCompaction(conf);
@@ -127,12 +130,13 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
         .setConfig(new StreamConfig(conf))
         .setExecutionConfig(new ExecutionConfig().enableObjectReuse())
         .build();
+    this.compactFunctionWrapper = new CompactFunctionWrapper(this.conf, this.streamTask, this.streamConfig);
   }
 
   public void openFunction() throws Exception {
     this.coordinator.start();
     this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
-    toHoodieFunction = new RowDataToHoodieFunction<>(TestConfigurations.ROW_TYPE, conf);
+    toHoodieFunction = new RowDataToHoodieFunction<>(rowType, conf);
     toHoodieFunction.setRuntimeContext(runtimeContext);
     toHoodieFunction.open(conf);
 
@@ -155,6 +159,8 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     }
 
     setupWriteFunction();
+    // handle the bootstrap event
+    coordinator.handleEventFromOperator(0, getNextEvent());
 
     if (asyncCompaction) {
       compactFunctionWrapper.openFunction();
@@ -210,12 +216,25 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     }
   }
 
+  public void jobFailover() throws Exception {
+    coordinatorFails();
+    subTaskFails(0, 0);
+  }
+
+  public void coordinatorFails() throws Exception {
+    this.coordinator.close();
+    this.coordinator.start();
+    this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
+  }
+
   public void checkpointFails(long checkpointId) {
     coordinator.notifyCheckpointAborted(checkpointId);
   }
 
-  public void subTaskFails(int taskID) throws Exception {
+  public void subTaskFails(int taskID, int attemptNumber) throws Exception {
     coordinator.subtaskFailed(taskID, new RuntimeException("Dummy exception"));
+    // reset the attempt number to simulate the task failover/retries
+    this.runtimeContext.setAttemptNumber(attemptNumber);
     setupWriteFunction();
   }
 
@@ -259,9 +278,6 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     writeFunction.setOperatorEventGateway(gateway);
     writeFunction.initializeState(this.stateInitializationContext);
     writeFunction.open(conf);
-
-    // handle the bootstrap event
-    coordinator.handleEventFromOperator(0, getNextEvent());
   }
 
   // -------------------------------------------------------------------------
@@ -277,28 +293,6 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
     public boolean isKeyInState(String key) {
       return this.updateKeys.contains(key);
-    }
-  }
-
-  private static class ScalaCollector<T> implements Collector<T> {
-    private T val;
-
-    public static <T> ScalaCollector<T> getInstance() {
-      return new ScalaCollector<>();
-    }
-
-    @Override
-    public void collect(T t) {
-      this.val = t;
-    }
-
-    @Override
-    public void close() {
-      this.val = null;
-    }
-
-    public T getVal() {
-      return val;
     }
   }
 }

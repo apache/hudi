@@ -26,8 +26,9 @@ import org.apache.spark.sql.types.StructType
 
 class Spark33HoodieFileScanRDD(@transient private val sparkSession: SparkSession,
                                read: PartitionedFile => Iterator[InternalRow],
-                        @transient filePartitions: Seq[FilePartition],
-                        readDataSchema: StructType, metadataColumns: Seq[AttributeReference] = Seq.empty)
+                               @transient filePartitions: Seq[FilePartition],
+                               readDataSchema: StructType,
+                               metadataColumns: Seq[AttributeReference] = Seq.empty)
   extends FileScanRDD(sparkSession, read, filePartitions, readDataSchema, metadataColumns)
     with HoodieUnsafeRDD {
 

@@ -48,7 +48,7 @@ public abstract class HoodieBootstrapSchemaProvider {
   public final Schema getBootstrapSchema(HoodieEngineContext context, List<Pair<String, List<HoodieFileStatus>>> partitions) {
     if (writeConfig.getSchema() != null) {
       // Use schema specified by user if set
-      Schema userSchema = Schema.parse(writeConfig.getSchema());
+      Schema userSchema = new Schema.Parser().parse(writeConfig.getSchema());
       if (!HoodieAvroUtils.getNullSchema().equals(userSchema)) {
         return userSchema;
       }

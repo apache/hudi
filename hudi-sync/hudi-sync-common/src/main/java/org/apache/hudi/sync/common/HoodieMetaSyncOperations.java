@@ -33,6 +33,8 @@ public interface HoodieMetaSyncOperations {
 
   String HOODIE_LAST_COMMIT_TIME_SYNC = "last_commit_time_sync";
 
+  String HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC = "last_commit_completion_time_sync";
+
   /**
    * Create the table.
    *
@@ -97,6 +99,15 @@ public interface HoodieMetaSyncOperations {
   }
 
   /**
+   * Get the metadata of partitions that belong to the specified table
+   * @param tableName
+   * @return
+   */
+  default List<Partition> getPartitionsByFilter(String tableName, String filter) {
+    return Collections.emptyList();
+  }
+
+  /**
    * Check if a database already exists in the metastore.
    */
   default boolean databaseExists(String databaseName) {
@@ -125,6 +136,15 @@ public interface HoodieMetaSyncOperations {
   }
 
   /**
+   * Get the schema from the Hudi table on storage.
+   *
+   * @param includeMetadataField true if to include metadata fields in the schema
+   */
+  default MessageType getStorageSchema(boolean includeMetadataField) {
+    return null;
+  }
+
+  /**
    * Update schema for the table in the metastore.
    */
   default void updateTableSchema(String tableName, MessageType newSchema) {
@@ -147,15 +167,24 @@ public interface HoodieMetaSyncOperations {
 
   /**
    * Update the field comments for table in metastore, by using the ones from storage.
+   *
+   * @return
    */
-  default void updateTableComments(String tableName, List<FieldSchema> fromMetastore, List<FieldSchema> fromStorage) {
-
+  default boolean updateTableComments(String tableName, List<FieldSchema> fromMetastore, List<FieldSchema> fromStorage) {
+    return false;
   }
 
   /**
    * Get the timestamp of last sync.
    */
   default Option<String> getLastCommitTimeSynced(String tableName) {
+    return Option.empty();
+  }
+
+  /**
+   * Get the commit completion time of last sync
+   */
+  default Option<String> getLastCommitCompletionTimeSynced(String tableName) {
     return Option.empty();
   }
 
@@ -168,9 +197,20 @@ public interface HoodieMetaSyncOperations {
 
   /**
    * Update the table properties in metastore.
+   *
+   * @return true if properties updated.
    */
-  default void updateTableProperties(String tableName, Map<String, String> tableProperties) {
+  default boolean updateTableProperties(String tableName, Map<String, String> tableProperties) {
+    return false;
+  }
 
+  /**
+   * Update the SerDe properties in metastore.
+   *
+   * @return true if properties updated.
+   */
+  default boolean updateSerdeProperties(String tableName, Map<String, String> serdeProperties, boolean useRealtimeFormat) {
+    return false;
   }
 
   /**

@@ -65,8 +65,15 @@ public abstract class Either<L, R> {
     return new EitherLeft<>(left);
   }
 
+  /**
+   * Utility that holds R value only.
+   *
+   * @param <L> Left value type.
+   * @param <R> Right value type.
+   */
   public static class EitherRight<L, R> extends Either<L, R> {
     private final R value;
+
     private EitherRight(@Nonnull R right) {
       this.value = right;
     }
@@ -78,8 +85,15 @@ public abstract class Either<L, R> {
     }
   }
 
+  /**
+   * Utility that holds L value only.
+   *
+   * @param <L> Left value type.
+   * @param <R> Right value type.
+   */
   public static class EitherLeft<L, R> extends Either<L, R> {
     private final L value;
+
     private EitherLeft(@Nonnull L value) {
       this.value = value;
     }

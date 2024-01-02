@@ -29,9 +29,9 @@ import org.apache.hudi.hive.util.HiveSchemaUtil;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -52,7 +52,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_F
  */
 public abstract class QueryBasedDDLExecutor implements DDLExecutor {
 
-  private static final Logger LOG = LogManager.getLogger(QueryBasedDDLExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(QueryBasedDDLExecutor.class);
 
   protected final HiveSyncConfig config;
   protected final String databaseName;
@@ -100,7 +100,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     try {
       String newSchemaStr = HiveSchemaUtil.generateSchemaString(newSchema, config.getSplitStrings(META_SYNC_PARTITION_FIELDS), config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE));
       // Cascade clause should not be present for non-partitioned tables
-      String cascadeClause = config.getSplitStrings(HIVE_SUPPORT_TIMESTAMP_TYPE).size() > 0 ? " cascade" : "";
+      String cascadeClause = config.getSplitStrings(META_SYNC_PARTITION_FIELDS).size() > 0 ? " cascade" : "";
       StringBuilder sqlBuilder = new StringBuilder("ALTER TABLE ").append(HIVE_ESCAPE_CHARACTER)
           .append(databaseName).append(HIVE_ESCAPE_CHARACTER).append(".")
           .append(HIVE_ESCAPE_CHARACTER).append(tableName)
@@ -156,9 +156,6 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
   }
 
   private List<String> constructAddPartitions(String tableName, List<String> partitions) {
-    if (config.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM) <= 0) {
-      throw new HoodieHiveSyncException("batch-sync-num for sync hive table must be greater than 0, pls check your parameter");
-    }
     List<String> result = new ArrayList<>();
     int batchSyncPartitionNum = config.getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM);
     StringBuilder alterSQL = getAlterTablePrefix(tableName);

@@ -31,6 +31,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
 import java.io.IOException;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -46,10 +47,10 @@ public class TestDirectWriteMarkers extends TestWriteMarkersBase {
     this.jsc = new JavaSparkContext(
         HoodieClientTestUtils.getSparkConfForTest(TestDirectWriteMarkers.class.getName()));
     this.context = new HoodieSparkEngineContext(jsc);
-    this.fs = FSUtils.getFs(metaClient.getBasePath(), metaClient.getHadoopConf());
-    this.markerFolderPath =  new Path(metaClient.getMarkerFolderPath("000"));
+    this.fs = FSUtils.getFs(metaClient.getBasePathV2().toString(), metaClient.getHadoopConf());
+    this.markerFolderPath =  new Path(Paths.get(metaClient.getMarkerFolderPath("000")).toUri());
     this.writeMarkers = new DirectWriteMarkers(
-        fs, metaClient.getBasePath(), markerFolderPath.toString(), "000");
+        fs, metaClient.getBasePathV2().toString(), markerFolderPath.toString(), "000");
   }
 
   @AfterEach
@@ -65,11 +66,11 @@ public class TestDirectWriteMarkers extends TestWriteMarkersBase {
         .sorted().collect(Collectors.toList());
     assertEquals(3, markerFiles.size());
     assertIterableEquals(CollectionUtils.createImmutableList(
-            "file:" + markerFolderPath.toString()
+            markerFolderPath.toString()
                 + (isTablePartitioned ? "/2020/06/01" : "") + "/file1.marker.MERGE",
-            "file:" + markerFolderPath.toString()
+            markerFolderPath.toString()
                 + (isTablePartitioned ? "/2020/06/02" : "") + "/file2.marker.APPEND",
-            "file:" + markerFolderPath.toString()
+            markerFolderPath.toString()
                 + (isTablePartitioned ? "/2020/06/03" : "") + "/file3.marker.CREATE"),
         markerFiles.stream().map(m -> m.getPath().toString()).collect(Collectors.toList())
     );

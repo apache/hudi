@@ -18,7 +18,6 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.google.common.collect.{Lists, Maps}
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieLogFile
@@ -29,16 +28,16 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.parquet.avro.AvroSchemaConverter
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
-
 import java.util.Objects
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.Supplier
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import scala.collection.JavaConverters.{asScalaBufferConverter, asScalaIteratorConverter, mapAsScalaMapConverter}
 
 class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBuilder {
   override def parameters: Array[ProcedureParameter] = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "log_file_path_pattern", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
+    ProcedureParameter.required(1, "log_file_path_pattern", DataTypes.StringType),
     ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 10)
   )
 
@@ -59,7 +58,8 @@ class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBui
     val fs = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build.getFs
     val logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(logFilePathPattern)).iterator().asScala
       .map(_.getPath.toString).toList
-    val commitCountAndMetadata: java.util.Map[String, java.util.List[(HoodieLogBlockType, (java.util.Map[HeaderMetadataType, String], java.util.Map[HeaderMetadataType, String]), Int)]] = Maps.newHashMap()
+    val commitCountAndMetadata =
+      new java.util.HashMap[String, java.util.List[(HoodieLogBlockType, (java.util.Map[HeaderMetadataType, String], java.util.Map[HeaderMetadataType, String]), Int)]]()
     var numCorruptBlocks = 0
     var dummyInstantTimeCount = 0
     logFilePaths.foreach {
@@ -93,7 +93,7 @@ class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBui
             }
             block match {
               case dataBlock: HoodieDataBlock =>
-                val recordItr = dataBlock.getRecordIterator
+                val recordItr = dataBlock.getRecordIterator(HoodieRecordType.AVRO)
                 recordItr.asScala.foreach(_ => recordCount.incrementAndGet())
                 recordItr.close()
             }
@@ -102,14 +102,15 @@ class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBui
             val list = commitCountAndMetadata.get(instantTime)
             list.add((block.getBlockType, (block.getLogBlockHeader, block.getLogBlockFooter), recordCount.get()))
           } else {
-            val list = Lists.newArrayList((block.getBlockType, (block.getLogBlockHeader, block.getLogBlockFooter), recordCount.get()))
+            val list = new java.util.ArrayList[(HoodieLogBlockType, (java.util.Map[HeaderMetadataType, String], java.util.Map[HeaderMetadataType, String]), Int)]
+            list.add(block.getBlockType, (block.getLogBlockHeader, block.getLogBlockFooter), recordCount.get())
             commitCountAndMetadata.put(instantTime, list)
           }
         }
         reader.close()
       }
     }
-    val rows: java.util.List[Row] = Lists.newArrayList()
+    val rows = new java.util.ArrayList[Row]
     val objectMapper = new ObjectMapper()
     commitCountAndMetadata.asScala.foreach {
       case (instantTime, values) =>

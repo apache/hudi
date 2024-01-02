@@ -23,10 +23,10 @@ import org.apache.hudi.utilities.UtilHelpers;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -34,7 +34,6 @@ import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -53,7 +52,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Writer 1 DeltaStreamer ingesting data into partitions 0 to 10, Writer 2 Spark datasource ingesting data into partitions 100 to 110.
  * Multiple spark datasource writers, each writing to exclusive set of partitions.
  *
- * Example comamnd
+ * Example command
  * spark-submit
  * --packages org.apache.spark:spark-avro_2.11:2.4.0
  * --conf spark.task.cpus=3
@@ -95,7 +94,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class HoodieMultiWriterTestSuiteJob {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieMultiWriterTestSuiteJob.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieMultiWriterTestSuiteJob.class);
 
   public static void main(String[] args) throws Exception {
     final HoodieMultiWriterTestSuiteConfig cfg = new HoodieMultiWriterTestSuiteConfig();
@@ -134,7 +133,7 @@ public class HoodieMultiWriterTestSuiteJob {
     AtomicBoolean jobFailed = new AtomicBoolean(false);
     AtomicInteger counter = new AtomicInteger(0);
     List<Long> waitTimes = new ArrayList<>();
-    for (int i = 0;i < jobIndex ;i++) {
+    for (int i = 0; i < jobIndex; i++) {
       if (i == 0) {
         waitTimes.add(0L);
       } else {

@@ -25,7 +25,6 @@ import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.testutils.CloudObjectTestUtils;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
-import com.amazonaws.services.sqs.AmazonSQS;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -33,6 +32,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import software.amazon.awssdk.services.sqs.SqsClient;
 
 import java.io.IOException;
 import java.util.List;
@@ -50,16 +50,16 @@ public abstract class AbstractCloudObjectsSourceTestBase extends UtilitiesTestBa
   protected String sqsUrl = "test-queue";
   protected String regionName = "us-east-1";
   @Mock
-  protected AmazonSQS sqs;
+  protected SqsClient sqs;
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initTestServices(false, false);
+    UtilitiesTestBase.initTestServices();
   }
 
   @AfterAll
   public static void cleanupClass() {
-    UtilitiesTestBase.cleanupClass();
+    UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
   @BeforeEach

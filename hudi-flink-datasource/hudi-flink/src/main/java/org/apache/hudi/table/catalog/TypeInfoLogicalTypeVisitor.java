@@ -137,7 +137,7 @@ public class TypeInfoLogicalTypeVisitor extends LogicalTypeDefaultVisitor<TypeIn
     int precision = timestampType.getPrecision();
     // see org.apache.hudi.hive.util.HiveSchemaUtil#convertField for details.
     // default supports timestamp
-    if (precision == 6) {
+    if (precision <= 6) {
       return TypeInfoFactory.timestampTypeInfo;
     } else {
       return TypeInfoFactory.longTypeInfo;

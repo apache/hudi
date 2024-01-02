@@ -18,7 +18,6 @@
 
 package org.apache.hudi.integ.testsuite.generator;
 
-import com.google.common.annotations.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
@@ -331,12 +330,13 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
     return genericData.validate(baseSchema, record);
   }
 
-  /*
+  /**
    * Generates a sequential timestamp (daily increment), and updates the timestamp field of the record.
    * Note: When generating records, number of records to be generated must be more than numDatePartitions * parallelism,
    * to guarantee that at least numDatePartitions are created.
+   *
+   * @VisibleForTesting
    */
-  @VisibleForTesting
   public GenericRecord updateTimestamp(GenericRecord record, String fieldName) {
     long delta = TimeUnit.SECONDS.convert((partitionIndex++ % numDatePartitions) + startPartition, TimeUnit.DAYS);
     record.put(fieldName, delta);

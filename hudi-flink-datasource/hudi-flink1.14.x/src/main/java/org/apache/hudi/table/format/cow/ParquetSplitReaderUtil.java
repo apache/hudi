@@ -20,10 +20,11 @@ package org.apache.hudi.table.format.cow;
 
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.table.format.cow.vector.HeapArrayVector;
+import org.apache.hudi.table.format.cow.vector.HeapDecimalVector;
 import org.apache.hudi.table.format.cow.vector.HeapMapColumnVector;
 import org.apache.hudi.table.format.cow.vector.HeapRowColumnVector;
-import org.apache.hudi.table.format.cow.vector.ParquetDecimalVector;
 import org.apache.hudi.table.format.cow.vector.reader.ArrayColumnReader;
+import org.apache.hudi.table.format.cow.vector.reader.EmptyColumnReader;
 import org.apache.hudi.table.format.cow.vector.reader.FixedLenBytesColumnReader;
 import org.apache.hudi.table.format.cow.vector.reader.Int64TimestampColumnReader;
 import org.apache.hudi.table.format.cow.vector.reader.MapColumnReader;
@@ -59,17 +60,19 @@ import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.ArrayType;
 import org.apache.flink.table.types.logical.DecimalType;
 import org.apache.flink.table.types.logical.IntType;
+import org.apache.flink.table.types.logical.LocalZonedTimestampType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.MapType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimestampType;
-import org.apache.flink.table.types.logical.VarBinaryType;
 import org.apache.flink.util.Preconditions;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.ParquetRuntimeException;
 import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.column.page.PageReadStore;
 import org.apache.parquet.column.page.PageReader;
+import org.apache.parquet.filter.UnboundRecordFilter;
+import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.InvalidSchemaException;
 import org.apache.parquet.schema.OriginalType;
@@ -78,7 +81,6 @@ import org.apache.parquet.schema.Type;
 
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -89,6 +91,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.table.runtime.functions.SqlDateTimeUtils.dateToInternal;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.parquet.Preconditions.checkArgument;
 
 /**
@@ -113,7 +116,9 @@ public class ParquetSplitReaderUtil {
       int batchSize,
       Path path,
       long splitStart,
-      long splitLength) throws IOException {
+      long splitLength,
+      FilterPredicate filterPredicate,
+      UnboundRecordFilter recordFilter) throws IOException {
     List<String> selNonPartNames = Arrays.stream(selectedFields)
         .mapToObj(i -> fullFieldNames[i])
         .filter(n -> !partitionSpec.containsKey(n))
@@ -146,7 +151,9 @@ public class ParquetSplitReaderUtil {
         batchSize,
         new org.apache.hadoop.fs.Path(path.toUri()),
         splitStart,
-        splitLength);
+        splitLength,
+        filterPredicate,
+        recordFilter);
   }
 
   private static ColumnVector createVector(
@@ -182,7 +189,7 @@ public class ParquetSplitReaderUtil {
         } else {
           bsv.fill(value instanceof byte[]
               ? (byte[]) value
-              : value.toString().getBytes(StandardCharsets.UTF_8));
+              : getUTF8Bytes(value.toString()));
         }
         return bsv;
       case BOOLEAN:
@@ -226,17 +233,18 @@ public class ParquetSplitReaderUtil {
         }
         return lv;
       case DECIMAL:
-        DecimalType decimalType = (DecimalType) type;
-        int precision = decimalType.getPrecision();
-        int scale = decimalType.getScale();
-        DecimalData decimal = value == null
-            ? null
-            : Preconditions.checkNotNull(DecimalData.fromBigDecimal((BigDecimal) value, precision, scale));
-        ColumnVector internalVector = createVectorFromConstant(
-            new VarBinaryType(),
-            decimal == null ? null : decimal.toUnscaledBytes(),
-            batchSize);
-        return new ParquetDecimalVector(internalVector);
+        HeapDecimalVector decv = new HeapDecimalVector(batchSize);
+        if (value == null) {
+          decv.fillWithNulls();
+        } else {
+          DecimalType decimalType = (DecimalType) type;
+          int precision = decimalType.getPrecision();
+          int scale = decimalType.getScale();
+          DecimalData decimal = Preconditions.checkNotNull(
+              DecimalData.fromBigDecimal((BigDecimal) value, precision, scale));
+          decv.fill(decimal.toUnscaledBytes());
+        }
+        return decv;
       case FLOAT:
         HeapFloatVector fv = new HeapFloatVector(batchSize);
         if (value == null) {
@@ -269,6 +277,30 @@ public class ParquetSplitReaderUtil {
           tv.fill(TimestampData.fromLocalDateTime((LocalDateTime) value));
         }
         return tv;
+      case ARRAY:
+        HeapArrayVector arrayVector = new HeapArrayVector(batchSize);
+        if (value == null) {
+          arrayVector.fillWithNulls();
+          return arrayVector;
+        } else {
+          throw new UnsupportedOperationException("Unsupported create array with default value.");
+        }
+      case MAP:
+        HeapMapColumnVector mapVector = new HeapMapColumnVector(batchSize, null, null);
+        if (value == null) {
+          mapVector.fillWithNulls();
+          return mapVector;
+        } else {
+          throw new UnsupportedOperationException("Unsupported create map with default value.");
+        }
+      case ROW:
+        HeapRowColumnVector rowVector = new HeapRowColumnVector(batchSize);
+        if (value == null) {
+          rowVector.fillWithNulls();
+          return rowVector;
+        } else {
+          throw new UnsupportedOperationException("Unsupported create row with default value.");
+        }
       default:
         throw new UnsupportedOperationException("Unsupported type: " + type);
     }
@@ -334,7 +366,10 @@ public class ParquetSplitReaderUtil {
       case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
         switch (descriptor.getPrimitiveType().getPrimitiveTypeName()) {
           case INT64:
-            return new Int64TimestampColumnReader(utcTimestamp, descriptor, pageReader, ((TimestampType) fieldType).getPrecision());
+            int precision = fieldType instanceof TimestampType
+                ? ((TimestampType) fieldType).getPrecision()
+                : ((LocalZonedTimestampType) fieldType).getPrecision();
+            return new Int64TimestampColumnReader(utcTimestamp, descriptor, pageReader, precision);
           case INT96:
             return new TimestampColumnReader(utcTimestamp, descriptor, pageReader);
           default:
@@ -350,7 +385,7 @@ public class ParquetSplitReaderUtil {
             return new BytesColumnReader(descriptor, pageReader);
           case FIXED_LEN_BYTE_ARRAY:
             return new FixedLenBytesColumnReader(
-                descriptor, pageReader, ((DecimalType) fieldType).getPrecision());
+                descriptor, pageReader);
           default:
             throw new AssertionError();
         }
@@ -383,14 +418,20 @@ public class ParquetSplitReaderUtil {
         GroupType groupType = physicalType.asGroupType();
         List<ColumnReader> fieldReaders = new ArrayList<>();
         for (int i = 0; i < rowType.getFieldCount(); i++) {
-          fieldReaders.add(
-              createColumnReader(
-                  utcTimestamp,
-                  rowType.getTypeAt(i),
-                  groupType.getType(i),
-                  descriptors,
-                  pages,
-                  depth + 1));
+          // schema evolution: read the parquet file with a new extended field name.
+          int fieldIndex = getFieldIndexInPhysicalType(rowType.getFields().get(i).getName(), groupType);
+          if (fieldIndex < 0) {
+            fieldReaders.add(new EmptyColumnReader());
+          } else {
+            fieldReaders.add(
+                createColumnReader(
+                    utcTimestamp,
+                    rowType.getTypeAt(i),
+                    groupType.getType(fieldIndex),
+                    descriptors,
+                    pages,
+                    depth + 1));
+          }
         }
         return new RowColumnReader(fieldReaders);
       default:
@@ -472,7 +513,7 @@ public class ParquetSplitReaderUtil {
                 || typeName == PrimitiveType.PrimitiveTypeName.BINARY)
                 && primitiveType.getOriginalType() == OriginalType.DECIMAL,
             "Unexpected type: %s", typeName);
-        return new HeapBytesVector(batchSize);
+        return new HeapDecimalVector(batchSize);
       case ARRAY:
         ArrayType arrayType = (ArrayType) fieldType;
         return new HeapArrayVector(
@@ -504,20 +545,35 @@ public class ParquetSplitReaderUtil {
       case ROW:
         RowType rowType = (RowType) fieldType;
         GroupType groupType = physicalType.asGroupType();
-        WritableColumnVector[] columnVectors =
-            new WritableColumnVector[rowType.getFieldCount()];
+        WritableColumnVector[] columnVectors = new WritableColumnVector[rowType.getFieldCount()];
         for (int i = 0; i < columnVectors.length; i++) {
-          columnVectors[i] =
-              createWritableColumnVector(
-                  batchSize,
-                  rowType.getTypeAt(i),
-                  groupType.getType(i),
-                  descriptors,
-                  depth + 1);
+          // schema evolution: read the file with a new extended field name.
+          int fieldIndex = getFieldIndexInPhysicalType(rowType.getFields().get(i).getName(), groupType);
+          if (fieldIndex < 0) {
+            columnVectors[i] = (WritableColumnVector) createVectorFromConstant(rowType.getTypeAt(i), null, batchSize);
+          } else {
+            columnVectors[i] =
+                createWritableColumnVector(
+                    batchSize,
+                    rowType.getTypeAt(i),
+                    groupType.getType(fieldIndex),
+                    descriptors,
+                    depth + 1);
+          }
         }
         return new HeapRowColumnVector(batchSize, columnVectors);
       default:
         throw new UnsupportedOperationException(fieldType + " is not supported now.");
     }
+  }
+
+  /**
+   * Returns the field index with given physical row type {@code groupType} and field name {@code fieldName}.
+   *
+   * @return The physical field index or -1 if the field does not exist
+   */
+  private static int getFieldIndexInPhysicalType(String fieldName, GroupType groupType) {
+    // get index from fileSchema type, else, return -1
+    return groupType.containsField(fieldName) ? groupType.getFieldIndex(fieldName) : -1;
   }
 }

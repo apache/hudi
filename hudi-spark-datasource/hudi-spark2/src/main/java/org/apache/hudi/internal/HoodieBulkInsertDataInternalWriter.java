@@ -19,7 +19,11 @@
 package org.apache.hudi.internal;
 
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.commit.BucketBulkInsertDataInternalWriterHelper;
+import org.apache.hudi.table.action.commit.BulkInsertDataInternalWriterHelper;
+import org.apache.hudi.table.action.commit.ConsistentBucketBulkInsertDataInternalWriterHelper;
 
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.sources.v2.writer.DataWriter;
@@ -38,8 +42,18 @@ public class HoodieBulkInsertDataInternalWriter implements DataWriter<InternalRo
   public HoodieBulkInsertDataInternalWriter(HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
                                             String instantTime, int taskPartitionId, long taskId, long taskEpochId,
                                             StructType structType, boolean populateMetaFields, boolean arePartitionRecordsSorted) {
-    this.bulkInsertWriterHelper = new BulkInsertDataInternalWriterHelper(hoodieTable,
-        writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, structType, populateMetaFields, arePartitionRecordsSorted);
+    if (writeConfig.getIndexType() == HoodieIndex.IndexType.BUCKET) {
+      if (writeConfig.getBucketIndexEngineType() == HoodieIndex.BucketIndexEngineType.SIMPLE) {
+        this.bulkInsertWriterHelper = new BucketBulkInsertDataInternalWriterHelper(hoodieTable,
+            writeConfig, instantTime, taskPartitionId, taskId, 0, structType, populateMetaFields, arePartitionRecordsSorted);
+      } else {
+        this.bulkInsertWriterHelper = new ConsistentBucketBulkInsertDataInternalWriterHelper(hoodieTable,
+            writeConfig, instantTime, taskPartitionId, taskId, 0, structType, populateMetaFields, arePartitionRecordsSorted);
+      }
+    } else {
+      this.bulkInsertWriterHelper = new BulkInsertDataInternalWriterHelper(hoodieTable,
+          writeConfig, instantTime, taskPartitionId, taskId, 0, structType, populateMetaFields, arePartitionRecordsSorted);
+    }
   }
 
   @Override

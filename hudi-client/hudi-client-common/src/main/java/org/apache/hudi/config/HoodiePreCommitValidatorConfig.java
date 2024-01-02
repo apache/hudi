@@ -42,12 +42,14 @@ public class HoodiePreCommitValidatorConfig extends HoodieConfig {
   public static final ConfigProperty<String> VALIDATOR_CLASS_NAMES = ConfigProperty
       .key("hoodie.precommit.validators")
       .defaultValue("")
+      .markAdvanced()
       .withDocumentation("Comma separated list of class names that can be invoked to validate commit");
   public static final String VALIDATOR_TABLE_VARIABLE = "<TABLE_NAME>";
 
   public static final ConfigProperty<String> EQUALITY_SQL_QUERIES = ConfigProperty
       .key("hoodie.precommit.validators.equality.sql.queries")
       .defaultValue("")
+      .markAdvanced()
       .withDocumentation("Spark SQL queries to run on table before committing new data to validate state before and after commit."
           + " Multiple queries separated by ';' delimiter are supported."
           + " Example: \"select count(*) from \\<TABLE_NAME\\>"
@@ -56,6 +58,7 @@ public class HoodiePreCommitValidatorConfig extends HoodieConfig {
   public static final ConfigProperty<String> SINGLE_VALUE_SQL_QUERIES = ConfigProperty
       .key("hoodie.precommit.validators.single.value.sql.queries")
       .defaultValue("")
+      .markAdvanced()
       .withDocumentation("Spark SQL queries to run on table before committing new data to validate state after commit."
           + "Multiple queries separated by ';' delimiter are supported."
           + "Expected result is included as part of query separated by '#'. Example query: 'query1#result1:query2#result2'"
@@ -70,6 +73,7 @@ public class HoodiePreCommitValidatorConfig extends HoodieConfig {
   public static final ConfigProperty<String> INEQUALITY_SQL_QUERIES = ConfigProperty
       .key("hoodie.precommit.validators.inequality.sql.queries")
       .defaultValue("")
+      .markAdvanced()
       .withDocumentation("Spark SQL queries to run on table before committing new data to validate state before and after commit."
           + "Multiple queries separated by ';' delimiter are supported."
           + "Example query: 'select count(*) from \\<TABLE_NAME\\> where col=null'"

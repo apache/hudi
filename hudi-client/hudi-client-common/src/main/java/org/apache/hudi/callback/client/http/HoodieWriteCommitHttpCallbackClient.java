@@ -18,6 +18,9 @@
 
 package org.apache.hudi.callback.client.http;
 
+import org.apache.hudi.config.HoodieWriteCommitCallbackConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
+
 import org.apache.http.HttpHeaders;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -26,10 +29,8 @@ import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
-import org.apache.hudi.config.HoodieWriteCommitCallbackConfig;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -39,7 +40,7 @@ import java.io.IOException;
  */
 public class HoodieWriteCommitHttpCallbackClient implements Closeable {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieWriteCommitHttpCallbackClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteCommitHttpCallbackClient.class);
 
   public static final String HEADER_KEY_API_KEY = "HUDI-CALLBACK-KEY";
 

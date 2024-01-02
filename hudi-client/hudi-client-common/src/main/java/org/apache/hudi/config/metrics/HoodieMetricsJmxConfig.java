@@ -46,12 +46,14 @@ public class HoodieMetricsJmxConfig extends HoodieConfig {
   public static final ConfigProperty<String> JMX_HOST_NAME = ConfigProperty
       .key(JMX_PREFIX + ".host")
       .defaultValue("localhost")
+      .markAdvanced()
       .sinceVersion("0.5.1")
       .withDocumentation("Jmx host to connect to");
 
   public static final ConfigProperty<Integer> JMX_PORT_NUM = ConfigProperty
       .key(JMX_PREFIX + ".port")
       .defaultValue(9889)
+      .markAdvanced()
       .sinceVersion("0.5.1")
       .withDocumentation("Jmx port to connect to");
 

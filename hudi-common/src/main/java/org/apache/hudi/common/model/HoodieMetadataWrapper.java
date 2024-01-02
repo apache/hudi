@@ -20,6 +20,9 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 
+/**
+ * Wrapper for Hudi metadata.
+ */
 public class HoodieMetadataWrapper {
 
   private HoodieArchivedMetaEntry avroMetadataFromTimeline;

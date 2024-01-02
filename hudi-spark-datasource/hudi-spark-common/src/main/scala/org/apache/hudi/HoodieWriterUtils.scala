@@ -17,19 +17,24 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.AutoRecordKeyGenerationUtils.shouldAutoGenerateRecordKeys
 import org.apache.hudi.DataSourceOptionsHelper.allAlternatives
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
-import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig}
+import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig, TypedProperties}
+import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.config.HoodieWriteConfig.SPARK_SQL_MERGE_INTO_PREPPED_KEY
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
+import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
-import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.hudi.command.SqlKeyGenerator
+import org.apache.hudi.util.SparkKeyGenUtils
+import org.apache.spark.sql.hudi.command.{MergeIntoKeyGenerator, SqlKeyGenerator}
+import org.apache.spark.sql.{Dataset, Row, SparkSession}
+import org.slf4j.LoggerFactory
 
-import java.util.Properties
 import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters._
 
@@ -38,26 +43,19 @@ import scala.collection.JavaConverters._
  */
 object HoodieWriterUtils {
 
-  def javaParametersWithWriteDefaults(parameters: java.util.Map[String, String]): java.util.Map[String, String] = {
-    mapAsJavaMap(parametersWithWriteDefaults(parameters.asScala.toMap))
-  }
+  private val log = LoggerFactory.getLogger(getClass)
 
   /**
-    * Add default options for unspecified write options keys.
-    *
-    * @param parameters
-    * @return
-    */
+   * Add default options for unspecified write options keys.
+   */
   def parametersWithWriteDefaults(parameters: Map[String, String]): Map[String, String] = {
     val globalProps = DFSPropertiesConfiguration.getGlobalProps.asScala
-    val props = new Properties()
-    props.putAll(parameters)
+    val props = TypedProperties.fromMap(parameters)
     val hoodieConfig: HoodieConfig = new HoodieConfig(props)
     hoodieConfig.setDefaultValue(OPERATION)
     hoodieConfig.setDefaultValue(TABLE_TYPE)
     hoodieConfig.setDefaultValue(PRECOMBINE_FIELD)
     hoodieConfig.setDefaultValue(PAYLOAD_CLASS_NAME)
-    hoodieConfig.setDefaultValue(RECORDKEY_FIELD)
     hoodieConfig.setDefaultValue(KEYGENERATOR_CLASS_NAME)
     hoodieConfig.setDefaultValue(ENABLE)
     hoodieConfig.setDefaultValue(COMMIT_METADATA_KEYPREFIX)
@@ -71,7 +69,6 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_DATABASE_NAME)
     hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_TABLE_NAME)
     hoodieConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT)
-    hoodieConfig.setDefaultValue(HiveSyncConfigHolder.METASTORE_URIS)
     hoodieConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_USER)
     hoodieConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_PASS)
     hoodieConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_URL)
@@ -86,32 +83,72 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(ASYNC_CLUSTERING_ENABLE)
     hoodieConfig.setDefaultValue(ENABLE_ROW_WRITER)
     hoodieConfig.setDefaultValue(RECONCILE_SCHEMA)
+    hoodieConfig.setDefaultValue(MAKE_NEW_COLUMNS_NULLABLE)
     hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS)
     hoodieConfig.setDefaultValue(KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED)
     Map() ++ hoodieConfig.getProps.asScala ++ globalProps ++ DataSourceOptionsHelper.translateConfigurations(parameters)
   }
 
   /**
+   * Determines whether writes need to take prepped path or regular non-prepped path.
+   * - For spark-sql writes (UPDATES, DELETES), we could use prepped flow due to the presences of meta fields.
+   * - For pkless tables, if incoming df has meta fields, we could use prepped flow.
+   *
+   * @param hoodieConfig hoodie config of interest.
+   * @param parameters   raw parameters.
+   * @param operation    operation type.
+   * @param df           incoming dataframe
+   * @return true if prepped writes, false otherwise.
+   */
+  def canDoPreppedWrites(hoodieConfig: HoodieConfig, parameters: Map[String, String], operation: WriteOperationType, df: Dataset[Row]): Boolean = {
+    var isPrepped = false
+    if (shouldAutoGenerateRecordKeys(parameters)
+      && parameters.getOrElse(SPARK_SQL_WRITES_PREPPED_KEY, "false").equals("false")
+      && parameters.getOrElse(SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").equals("false")
+      && df.schema.fieldNames.contains(HoodieRecord.RECORD_KEY_METADATA_FIELD)) {
+      // with pk less table, writes using spark-ds writer can potentially use the prepped path if meta fields are present in the incoming df.
+      if (operation == WriteOperationType.UPSERT) {
+        log.warn("Changing operation type to UPSERT PREPPED for pk less table upserts ")
+        isPrepped = true
+      } else if (operation == WriteOperationType.DELETE) {
+        log.warn("Changing operation type to DELETE PREPPED for pk less table deletes ")
+        isPrepped = true
+      }
+    }
+    isPrepped
+  }
+
+  /**
+   * Fetch params by translating alternatives if any. Do not set any default as this method is intended to be called
+   * before validation.
+   *
+   * @param parameters hash map of parameters.
+   * @return hash map of raw with translated parameters.
+   */
+  def getParamsWithAlternatives(parameters: Map[String, String]): Map[String, String] = {
+    val globalProps = DFSPropertiesConfiguration.getGlobalProps.asScala
+    val props = TypedProperties.fromMap(parameters)
+    val hoodieConfig: HoodieConfig = new HoodieConfig(props)
+    // do not set any default as this is called before validation.
+    Map() ++ hoodieConfig.getProps.asScala ++ globalProps ++ DataSourceOptionsHelper.translateConfigurations(parameters)
+  }
+
+  /**
    * Get the partition columns to stored to hoodie.properties.
-   * @param parameters
-   * @return
    */
   def getPartitionColumns(parameters: Map[String, String]): String = {
-    val props = new Properties()
-    props.putAll(parameters.asJava)
-    HoodieSparkUtils.getPartitionColumns(props)
+    SparkKeyGenUtils.getPartitionColumns(TypedProperties.fromMap(parameters))
   }
 
   def convertMapToHoodieConfig(parameters: Map[String, String]): HoodieConfig = {
-    val properties = new Properties()
-    properties.putAll(mapAsJavaMap(parameters))
+    val properties = TypedProperties.fromMap(mapAsJavaMap(parameters))
     new HoodieConfig(properties)
   }
 
   def getOriginKeyGenerator(parameters: Map[String, String]): String = {
     val kg = parameters.getOrElse(KEYGENERATOR_CLASS_NAME.key(), null)
-    if (classOf[SqlKeyGenerator].getCanonicalName == kg) {
-      parameters.getOrElse(SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME, null)
+    if (classOf[SqlKeyGenerator].getCanonicalName == kg || classOf[MergeIntoKeyGenerator].getCanonicalName == kg) {
+      parameters.getOrElse(SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME, null)
     } else {
       kg
     }
@@ -126,38 +163,51 @@ object HoodieWriterUtils {
    * Detects conflicts between new parameters and existing table configurations
    */
   def validateTableConfig(spark: SparkSession, params: Map[String, String],
-      tableConfig: HoodieConfig, isOverWriteMode: Boolean): Unit = {
+                          tableConfig: HoodieConfig, isOverWriteMode: Boolean): Unit = {
     // If Overwrite is set as save mode, we don't need to do table config validation.
     if (!isOverWriteMode) {
       val resolver = spark.sessionState.conf.resolver
       val diffConfigs = StringBuilder.newBuilder
       params.foreach { case (key, value) =>
-        val existingValue = getStringFromTableConfigWithAlternatives(tableConfig, key)
-        if (null != existingValue && !resolver(existingValue, value)) {
-          diffConfigs.append(s"$key:\t$value\t${tableConfig.getString(key)}\n")
+        // Base file format can change between writes, so ignore it.
+        if (!HoodieTableConfig.BASE_FILE_FORMAT.key.equals(key)) {
+          val existingValue = getStringFromTableConfigWithAlternatives(tableConfig, key)
+          if (null != existingValue && !resolver(existingValue, value)) {
+            diffConfigs.append(s"$key:\t$value\t${tableConfig.getString(key)}\n")
+          }
         }
       }
 
       if (null != tableConfig) {
         val datasourceRecordKey = params.getOrElse(RECORDKEY_FIELD.key(), null)
         val tableConfigRecordKey = tableConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS)
-        if (null != datasourceRecordKey && null != tableConfigRecordKey
-          && datasourceRecordKey != tableConfigRecordKey) {
+        if ((null != datasourceRecordKey && null != tableConfigRecordKey
+          && datasourceRecordKey != tableConfigRecordKey) || (null != datasourceRecordKey && datasourceRecordKey.nonEmpty
+          && tableConfigRecordKey == null)) {
+          // if both are non null, they should match.
+          // if incoming record key is non empty, table config should also be non empty.
           diffConfigs.append(s"RecordKey:\t$datasourceRecordKey\t$tableConfigRecordKey\n")
         }
 
         val datasourcePreCombineKey = params.getOrElse(PRECOMBINE_FIELD.key(), null)
         val tableConfigPreCombineKey = tableConfig.getString(HoodieTableConfig.PRECOMBINE_FIELD)
-        if (null != datasourcePreCombineKey && null != tableConfigPreCombineKey
-          && datasourcePreCombineKey != tableConfigPreCombineKey) {
+        if (null != datasourcePreCombineKey && null != tableConfigPreCombineKey && datasourcePreCombineKey != tableConfigPreCombineKey) {
           diffConfigs.append(s"PreCombineKey:\t$datasourcePreCombineKey\t$tableConfigPreCombineKey\n")
         }
 
         val datasourceKeyGen = getOriginKeyGenerator(params)
-        val tableConfigKeyGen = tableConfig.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME)
+        val tableConfigKeyGen = KeyGeneratorType.getKeyGeneratorClassName(tableConfig)
         if (null != datasourceKeyGen && null != tableConfigKeyGen
           && datasourceKeyGen != tableConfigKeyGen) {
           diffConfigs.append(s"KeyGenerator:\t$datasourceKeyGen\t$tableConfigKeyGen\n")
+        }
+
+        val datasourcePartitionFields = params.getOrElse(PARTITIONPATH_FIELD.key(), null)
+        val currentPartitionFields = if (datasourcePartitionFields == null) null else SparkKeyGenUtils.getPartitionColumns(TypedProperties.fromMap(params))
+        val tableConfigPartitionFields = tableConfig.getString(HoodieTableConfig.PARTITION_FIELDS)
+        if (null != datasourcePartitionFields && null != tableConfigPartitionFields
+          && currentPartitionFields != tableConfigPartitionFields) {
+          diffConfigs.append(s"PartitionPath:\t$currentPartitionFields\t$tableConfigPartitionFields\n")
         }
       }
 
@@ -183,7 +233,7 @@ object HoodieWriterUtils {
     val diffConfigs = StringBuilder.newBuilder
 
     if (null != tableConfig) {
-      val tableConfigKeyGen = tableConfig.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME)
+      val tableConfigKeyGen = KeyGeneratorType.getKeyGeneratorClassName(tableConfig)
       if (null != tableConfigKeyGen && null != datasourceKeyGen) {
         val nonPartitionedTableConfig = tableConfigKeyGen.equals(classOf[NonpartitionedKeyGenerator].getCanonicalName)
         val simpleKeyDataSourceConfig = datasourceKeyGen.equals(classOf[SimpleKeyGenerator].getCanonicalName)
@@ -211,14 +261,17 @@ object HoodieWriterUtils {
     }
   }
 
-  val sparkDatasourceConfigsToTableConfigsMap = Map(
+  private val sparkDatasourceConfigsToTableConfigsMap = Map(
     TABLE_NAME -> HoodieTableConfig.NAME,
     TABLE_TYPE -> HoodieTableConfig.TYPE,
     PRECOMBINE_FIELD -> HoodieTableConfig.PRECOMBINE_FIELD,
     PARTITIONPATH_FIELD -> HoodieTableConfig.PARTITION_FIELDS,
     RECORDKEY_FIELD -> HoodieTableConfig.RECORDKEY_FIELDS,
-    PAYLOAD_CLASS_NAME -> HoodieTableConfig.PAYLOAD_CLASS_NAME
+    PAYLOAD_CLASS_NAME -> HoodieTableConfig.PAYLOAD_CLASS_NAME,
+    PAYLOAD_TYPE -> HoodieTableConfig.PAYLOAD_TYPE,
+    RECORD_MERGER_STRATEGY -> HoodieTableConfig.RECORD_MERGER_STRATEGY
   )
+
   def mappingSparkDatasourceConfigsToTableConfigs(options: Map[String, String]): Map[String, String] = {
     val includingTableConfigs = scala.collection.mutable.Map() ++ options
     sparkDatasourceConfigsToTableConfigsMap.foreach(kv => {

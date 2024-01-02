@@ -24,7 +24,6 @@ import org.apache.hudi.integ.testsuite.dag.WorkflowDag;
 import org.apache.hudi.integ.testsuite.dag.WriterContext;
 import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
 import org.apache.hudi.integ.testsuite.dag.nodes.DelayNode;
-import org.apache.hudi.metrics.Metrics;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;

@@ -18,11 +18,14 @@
 
 package org.apache.hudi.table.catalog;
 
+import org.apache.hudi.configuration.OptionsResolver;
+
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.catalog.CommonCatalogOptions;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -59,6 +62,13 @@ public class CatalogOptions {
       .booleanType()
       .defaultValue(false)
       .withDescription("Whether the table is external, default false");
+
+  /**
+   * Returns all the config options.
+   */
+  public static List<ConfigOption<?>> allOptions() {
+    return OptionsResolver.allOptions(CatalogOptions.class);
+  }
 
   /**
    * Returns all the common table options that can be shared.

@@ -18,14 +18,69 @@
 
 package org.apache.spark.sql
 
-import org.apache.spark.sql.catalyst.expressions.Expression
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.hudi.SparkHoodieTableFileIndex
+import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.analysis.ResolvedTable
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression, ProjectionOverSchema}
+import org.apache.spark.sql.catalyst.planning.ScanOperation
+import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, MergeIntoTable, Project}
+import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
+import org.apache.spark.sql.execution.command.AlterTableRecoverPartitionsCommand
+import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, ParquetFileFormat}
+import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
+import org.apache.spark.sql.types.StructType
 
 object HoodieSpark31CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
 
-  override def isRelationTimeTravel(plan: LogicalPlan): Boolean = false
+  def unapplyResolvedTable(plan: LogicalPlan): Option[(TableCatalog, Identifier, Table)] =
+    plan match {
+      case ResolvedTable(catalog, identifier, table) => Some((catalog, identifier, table))
+      case _ => None
+    }
 
-  override def getRelationTimeTravel(plan: LogicalPlan): Option[(LogicalPlan, Option[Expression], Option[String])] = {
-    throw new IllegalStateException(s"Should not call getRelationTimeTravel for Spark <= 3.2.x")
+  override def unapplyMergeIntoTable(plan: LogicalPlan): Option[(LogicalPlan, LogicalPlan, Expression)] = {
+    plan match {
+      case MergeIntoTable(targetTable, sourceTable, mergeCondition, _, _) =>
+        Some((targetTable, sourceTable, mergeCondition))
+      case _ => None
+    }
   }
+
+  override def maybeApplyForNewFileFormat(plan: LogicalPlan): LogicalPlan = {
+    plan match {
+      case s@ScanOperation(_, _,
+      l@LogicalRelation(fs: HadoopFsRelation, _, _, _))
+        if fs.fileFormat.isInstanceOf[ParquetFileFormat with HoodieFormatTrait]
+          && !fs.fileFormat.asInstanceOf[ParquetFileFormat with HoodieFormatTrait].isProjected =>
+        FileFormatUtilsForFileGroupReader.applyNewFileFormatChanges(s, l, fs)
+      case _ => plan
+    }
+  }
+
+  override def projectOverSchema(schema: StructType, output: AttributeSet): ProjectionOverSchema = ProjectionOverSchema(schema)
+
+  override def isRepairTable(plan: LogicalPlan): Boolean = {
+    plan.isInstanceOf[AlterTableRecoverPartitionsCommand]
+  }
+
+  override def getRepairTableChildren(plan: LogicalPlan): Option[(TableIdentifier, Boolean, Boolean, String)] = {
+    plan match {
+      // For Spark >= 3.2.x, AlterTableRecoverPartitionsCommand was renamed RepairTableCommand, and added two new
+      // parameters: enableAddPartitions and enableDropPartitions. By setting them to true and false, can restore
+      // AlterTableRecoverPartitionsCommand's behavior
+      case c: AlterTableRecoverPartitionsCommand =>
+        Some((c.tableName, true, false, c.cmd))
+    }
+  }
+
+  /**
+   * Managing Indexes commands are not supported for Spark3.1
+   */
+  override def unapplyCreateIndex(plan: LogicalPlan): Option[(LogicalPlan, String, String, Boolean, Seq[(Seq[String], Map[String, String])], Map[String, String])] = None
+
+  override def unapplyDropIndex(plan: LogicalPlan): Option[(LogicalPlan, String, Boolean)] = None
+
+  override def unapplyShowIndexes(plan: LogicalPlan): Option[(LogicalPlan, Seq[Attribute])] = None
+
+  override def unapplyRefreshIndex(plan: LogicalPlan): Option[(LogicalPlan, String)] = None
 }

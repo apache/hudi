@@ -43,10 +43,10 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -62,10 +62,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+
 public class TimelineServerPerf implements Serializable {
 
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LogManager.getLogger(TimelineServerPerf.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TimelineServerPerf.class);
   private final Config cfg;
   private transient TimelineService timelineServer;
   private final boolean useExternalTimelineServer;
@@ -95,7 +97,7 @@ public class TimelineServerPerf implements Serializable {
   public void run() throws IOException {
     JavaSparkContext jsc = UtilHelpers.buildSparkContext("hudi-view-perf-" + cfg.basePath, cfg.sparkMaster);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-    List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(engineContext, cfg.basePath, cfg.useFileListingFromMetadata, true);
+    List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(engineContext, cfg.basePath, cfg.useFileListingFromMetadata);
     Collections.shuffle(allPartitionPaths);
     List<String> selected = allPartitionPaths.stream().filter(p -> !p.contains("error")).limit(cfg.maxPartitions)
         .collect(Collectors.toList());
@@ -200,7 +202,7 @@ public class TimelineServerPerf implements Serializable {
 
     private void addHeader() throws IOException {
       String header = "Partition,Thread,Min,Max,Mean,Median,75th,95th\n";
-      outputStream.write(header.getBytes());
+      outputStream.write(getUTF8Bytes(header));
       outputStream.flush();
     }
 
@@ -210,7 +212,7 @@ public class TimelineServerPerf implements Serializable {
             x.medianTime, x.p75, x.p95);
         System.out.println(row);
         try {
-          outputStream.write(row.getBytes());
+          outputStream.write(getUTF8Bytes(row));
         } catch (IOException e) {
           throw new RuntimeException(e);
         }

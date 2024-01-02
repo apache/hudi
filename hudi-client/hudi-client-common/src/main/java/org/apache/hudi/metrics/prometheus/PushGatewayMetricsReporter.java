@@ -18,12 +18,16 @@
 
 package org.apache.hudi.metrics.prometheus;
 
-import com.codahale.metrics.MetricFilter;
-import com.codahale.metrics.MetricRegistry;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metrics.MetricUtils;
 import org.apache.hudi.metrics.MetricsReporter;
 
-import java.io.Closeable;
+import com.codahale.metrics.MetricFilter;
+import com.codahale.metrics.MetricRegistry;
+
+import java.util.Collections;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
@@ -33,6 +37,7 @@ public class PushGatewayMetricsReporter extends MetricsReporter {
   private final int periodSeconds;
   private final boolean deleteShutdown;
   private final String configuredJobName;
+  private final Map<String, String> configuredLabels;
   private final boolean randomSuffix;
 
   public PushGatewayMetricsReporter(HoodieWriteConfig config, MetricRegistry registry) {
@@ -42,6 +47,7 @@ public class PushGatewayMetricsReporter extends MetricsReporter {
     periodSeconds = config.getPushGatewayReportPeriodSeconds();
     deleteShutdown = config.getPushGatewayDeleteOnShutdown();
     configuredJobName = config.getPushGatewayJobName();
+    configuredLabels = Collections.unmodifiableMap(parseLabels(config.getPushGatewayLabels()));
     randomSuffix = config.getPushGatewayRandomJobNameSuffix();
 
     pushGatewayReporter = new PushGatewayReporter(
@@ -50,6 +56,7 @@ public class PushGatewayMetricsReporter extends MetricsReporter {
         TimeUnit.SECONDS,
         TimeUnit.SECONDS,
         getJobName(),
+        configuredLabels,
         serverHost,
         serverPort,
         deleteShutdown);
@@ -66,13 +73,12 @@ public class PushGatewayMetricsReporter extends MetricsReporter {
   }
 
   @Override
-  public Closeable getReporter() {
-    return pushGatewayReporter;
-  }
-
-  @Override
   public void stop() {
     pushGatewayReporter.stop();
+  }
+
+  public Map<String, String> getLabels() {
+    return configuredLabels;
   }
 
   private String getJobName() {
@@ -81,5 +87,13 @@ public class PushGatewayMetricsReporter extends MetricsReporter {
       return configuredJobName + random.nextLong();
     }
     return configuredJobName;
+  }
+
+  private static Map<String, String> parseLabels(String labels) {
+    if (StringUtils.isNullOrEmpty(labels)) {
+      return Collections.emptyMap();
+    }
+
+    return MetricUtils.getLabelsAsMap(labels);
   }
 }

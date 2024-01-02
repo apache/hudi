@@ -18,8 +18,6 @@
 
 package org.apache.hudi.table.action.rollback;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -35,8 +33,11 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -55,7 +56,7 @@ import java.util.stream.Stream;
  */
 public class BaseRollbackHelper implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(BaseRollbackHelper.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BaseRollbackHelper.class);
   protected static final String EMPTY_STRING = "";
 
   protected final HoodieTableMetaClient metaClient;
@@ -83,7 +84,7 @@ public class BaseRollbackHelper implements Serializable {
   }
 
   /**
-   * Collect all file info that needs to be rollbacked.
+   * Collect all file info that needs to be rolled back.
    */
   public List<HoodieRollbackStat> collectRollbackStats(HoodieEngineContext context, HoodieInstant instantToRollback,
                                                        List<HoodieRollbackRequest> rollbackRequests) {
@@ -120,14 +121,14 @@ public class BaseRollbackHelper implements Serializable {
         return partitionToRollbackStats.stream();
       } else if (!rollbackRequest.getLogBlocksToBeDeleted().isEmpty()) {
         HoodieLogFormat.Writer writer = null;
+        final Path filePath;
         try {
           String fileId = rollbackRequest.getFileId();
-          String latestBaseInstant = rollbackRequest.getLatestBaseInstant();
 
           writer = HoodieLogFormat.newWriterBuilder()
               .onParentPath(FSUtils.getPartitionPath(metaClient.getBasePath(), rollbackRequest.getPartitionPath()))
               .withFileId(fileId)
-              .overBaseCommit(latestBaseInstant)
+              .withDeltaCommit(instantToRollback.getTimestamp())
               .withFs(metaClient.getFs())
               .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
 
@@ -135,7 +136,10 @@ public class BaseRollbackHelper implements Serializable {
           if (doDelete) {
             Map<HoodieLogBlock.HeaderMetadataType, String> header = generateHeader(instantToRollback.getTimestamp());
             // if update belongs to an existing log file
-            writer.appendBlock(new HoodieCommandBlock(header));
+            // use the log file path from AppendResult in case the file handle may roll over
+            filePath = writer.appendBlock(new HoodieCommandBlock(header)).logFile().getPath();
+          } else {
+            filePath = writer.getLogFile().getPath();
           }
         } catch (IOException | InterruptedException io) {
           throw new HoodieRollbackException("Failed to rollback for instant " + instantToRollback, io);
@@ -153,7 +157,7 @@ public class BaseRollbackHelper implements Serializable {
         // getFileStatus would reflect correct stats and FileNotFoundException is not thrown in
         // cloud-storage : HUDI-168
         Map<FileStatus, Long> filesToNumBlocksRollback = Collections.singletonMap(
-            metaClient.getFs().getFileStatus(Objects.requireNonNull(writer).getLogFile().getPath()),
+            metaClient.getFs().getFileStatus(Objects.requireNonNull(filePath)),
             1L
         );
 
@@ -210,7 +214,7 @@ public class BaseRollbackHelper implements Serializable {
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, metaClient.getActiveTimeline().lastInstant().get().getTimestamp());
     header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, commit);
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
-        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
+        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK.ordinal()));
     return header;
   }
 }

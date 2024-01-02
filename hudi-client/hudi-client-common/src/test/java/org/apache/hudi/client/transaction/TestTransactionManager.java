@@ -63,6 +63,11 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder()
             .withLockProvider(InProcessLockProvider.class)
+            .withLockWaitTimeInMillis(50L)
+            .withNumRetries(2)
+            .withRetryWaitTimeInMillis(10L)
+            .withClientNumRetries(2)
+            .withClientRetryWaitTimeInMillis(10L)
             .build())
         .build();
   }

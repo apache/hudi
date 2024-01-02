@@ -55,11 +55,11 @@ public class HoodieExampleDataGenerator<T extends HoodieRecordPayload<T>> {
   public static final String[] DEFAULT_PARTITION_PATHS =
       {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH};
   public static String TRIP_EXAMPLE_SCHEMA = "{\"type\": \"record\",\"name\": \"triprec\",\"fields\": [ "
-          + "{\"name\": \"ts\",\"type\": \"long\"},{\"name\": \"uuid\", \"type\": \"string\"},"
-          + "{\"name\": \"rider\", \"type\": \"string\"},{\"name\": \"driver\", \"type\": \"string\"},"
-          + "{\"name\": \"begin_lat\", \"type\": \"double\"},{\"name\": \"begin_lon\", \"type\": \"double\"},"
-          + "{\"name\": \"end_lat\", \"type\": \"double\"},{\"name\": \"end_lon\", \"type\": \"double\"},"
-          + "{\"name\":\"fare\",\"type\": \"double\"}]}";
+      + "{\"name\": \"ts\",\"type\": \"long\"},{\"name\": \"uuid\", \"type\": \"string\"},"
+      + "{\"name\": \"rider\", \"type\": \"string\"},{\"name\": \"driver\", \"type\": \"string\"},"
+      + "{\"name\": \"begin_lat\", \"type\": \"double\"},{\"name\": \"begin_lon\", \"type\": \"double\"},"
+      + "{\"name\": \"end_lat\", \"type\": \"double\"},{\"name\": \"end_lon\", \"type\": \"double\"},"
+      + "{\"name\":\"fare\",\"type\": \"double\"}]}";
   public static Schema avroSchema = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
 
   private static final Random RAND = new Random(46474747);
@@ -131,17 +131,58 @@ public class HoodieExampleDataGenerator<T extends HoodieRecordPayload<T>> {
   }
 
   /**
+   * Generates new inserts, across a single partition path. It also updates the list of existing keys.
+   */
+  public List<HoodieRecord<T>> generateInsertsOnPartition(String commitTime, Integer n, String partitionPath) {
+    return generateInsertsStreamOnPartition(commitTime, n, partitionPath).collect(Collectors.toList());
+  }
+
+  /**
+   * Generates new inserts, across a single partition path. It also updates the list of existing keys.
+   */
+  public Stream<HoodieRecord<T>> generateInsertsStreamOnPartition(String commitTime, Integer n, String partitionPath) {
+    int currSize = getNumExistingKeys();
+
+    return IntStream.range(0, n).boxed().map(i -> {
+      HoodieKey key = new HoodieKey(UUID.randomUUID().toString(), partitionPath);
+      KeyPartition kp = new KeyPartition();
+      kp.key = key;
+      kp.partitionPath = partitionPath;
+      existingKeys.put(currSize + i, kp);
+      numExistingKeys++;
+      return new HoodieAvroRecord<>(key, generateRandomValue(key, commitTime));
+    });
+  }
+
+  /**
    * Generates new updates, randomly distributed across the keys above. There can be duplicates within the returned
    * list
    *
    * @param commitTime Commit Timestamp
-   * @param n Number of updates (including dups)
+   * @param n          Number of updates (including dups)
    * @return list of hoodie record updates
    */
   public List<HoodieRecord<T>> generateUpdates(String commitTime, Integer n) {
     List<HoodieRecord<T>> updates = new ArrayList<>();
     for (int i = 0; i < n; i++) {
       KeyPartition kp = existingKeys.get(RAND.nextInt(numExistingKeys - 1));
+      HoodieRecord<T> record = generateUpdateRecord(kp.key, commitTime);
+      updates.add(record);
+    }
+    return updates;
+  }
+
+  /**
+   * Generates new updates, one for each of the keys above
+   * list
+   *
+   * @param commitTime Commit Timestamp
+   * @return list of hoodie record updates
+   */
+  public List<HoodieRecord<T>> generateUniqueUpdates(String commitTime) {
+    List<HoodieRecord<T>> updates = new ArrayList<>();
+    for (int i = 0; i < numExistingKeys; i++) {
+      KeyPartition kp = existingKeys.get(i);
       HoodieRecord<T> record = generateUpdateRecord(kp.key, commitTime);
       updates.add(record);
     }
@@ -155,8 +196,8 @@ public class HoodieExampleDataGenerator<T extends HoodieRecordPayload<T>> {
   private Option<String> convertToString(HoodieRecord<T> record) {
     try {
       String str = HoodieAvroUtils
-              .bytesToAvro(((HoodieAvroPayload)record.getData()).getRecordBytes(), avroSchema)
-              .toString();
+          .bytesToAvro(((HoodieAvroPayload) record.getData()).getRecordBytes(), avroSchema)
+          .toString();
       str = "{" + str.substring(str.indexOf("\"ts\":"));
       return Option.of(str.replaceAll("}", ", \"partitionpath\": \"" + record.getPartitionPath() + "\"}"));
     } catch (IOException e) {
@@ -166,7 +207,7 @@ public class HoodieExampleDataGenerator<T extends HoodieRecordPayload<T>> {
 
   public List<String> convertToStringList(List<HoodieRecord<T>> records) {
     return records.stream().map(this::convertToString).filter(Option::isPresent).map(Option::get)
-            .collect(Collectors.toList());
+        .collect(Collectors.toList());
   }
 
   public int getNumExistingKeys() {

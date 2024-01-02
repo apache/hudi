@@ -26,8 +26,9 @@ import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
+import org.apache.hudi.sink.meta.CkpMetadataFactory;
 import org.apache.hudi.sink.utils.TimeWait;
-import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.util.FlinkWriteClients;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
@@ -112,22 +113,21 @@ public class BulkInsertWriteFunction<I>
   @Override
   public void open(Configuration parameters) throws IOException {
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
-    this.writeClient = StreamerUtil.createWriteClient(this.config, getRuntimeContext());
-    this.ckpMetadata = CkpMetadata.getInstance(config);
+    this.writeClient = FlinkWriteClients.createWriteClient(this.config, getRuntimeContext());
+    this.ckpMetadata = CkpMetadataFactory.getCkpMetadata(writeClient.getConfig(), config);
     this.initInstant = lastPendingInstant();
     sendBootstrapEvent();
-    initWriterHelper();
   }
 
   @Override
   public void processElement(I value, Context ctx, Collector<Object> out) throws IOException {
+    initWriterHelperIfNeeded();
     this.writerHelper.write((RowData) value);
   }
 
   @Override
   public void close() {
     if (this.writeClient != null) {
-      this.writeClient.cleanHandlesGracefully();
       this.writeClient.close();
     }
   }
@@ -136,6 +136,7 @@ public class BulkInsertWriteFunction<I>
    * End input action for batch source.
    */
   public void endInput() {
+    initWriterHelperIfNeeded();
     final List<WriteStatus> writeStatus = this.writerHelper.getWriteStatuses(this.taskID);
 
     final WriteMetadataEvent event = WriteMetadataEvent.builder()
@@ -165,11 +166,13 @@ public class BulkInsertWriteFunction<I>
   //  Utilities
   // -------------------------------------------------------------------------
 
-  private void initWriterHelper() {
-    String instant = instantToWrite();
-    this.writerHelper = WriterHelpers.getWriterHelper(this.config, this.writeClient.getHoodieTable(), this.writeClient.getConfig(),
-        instant, this.taskID, getRuntimeContext().getNumberOfParallelSubtasks(), getRuntimeContext().getAttemptNumber(),
-        this.rowType);
+  private void initWriterHelperIfNeeded() {
+    if (writerHelper == null) {
+      String instant = instantToWrite();
+      this.writerHelper = WriterHelpers.getWriterHelper(this.config, this.writeClient.getHoodieTable(), this.writeClient.getConfig(),
+          instant, this.taskID, getRuntimeContext().getNumberOfParallelSubtasks(), getRuntimeContext().getAttemptNumber(),
+          this.rowType);
+    }
   }
 
   private void sendBootstrapEvent() {

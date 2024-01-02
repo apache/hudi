@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.data;
 
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -91,7 +92,17 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
   }
 
   @Override
+  public int getId() {
+    return -1;
+  }
+
+  @Override
   public void persist(String level) {
+    // No OP
+  }
+
+  @Override
+  public void persist(String level, HoodieEngineContext engineContext, HoodieDataCacheKey cacheKey) {
     // No OP
   }
 
@@ -123,6 +134,16 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
         StreamSupport.stream(
             Spliterators.spliteratorUnknownSize(mapper.apply(e), Spliterator.ORDERED), true));
     return new HoodieListData<>(mappedStream, lazy);
+  }
+
+  @Override
+  public <K, V> HoodiePairData<K, V> flatMapToPair(SerializableFunction<T, Iterator<? extends Pair<K, V>>> func) {
+    Function<T, Iterator<? extends Pair<K, V>>> mapper = throwingMapWrapper(func);
+    Stream<Pair<K, V>> mappedStream = asStream().flatMap(e ->
+        StreamSupport.stream(
+            Spliterators.spliteratorUnknownSize(mapper.apply(e), Spliterator.ORDERED), true));
+
+    return new HoodieListPairData<>(mappedStream, lazy);
   }
 
   @Override
@@ -173,6 +194,11 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
   @Override
   public long count() {
     return super.count();
+  }
+
+  @Override
+  public int getNumPartitions() {
+    return 1;
   }
 
   @Override

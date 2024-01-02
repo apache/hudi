@@ -18,9 +18,7 @@
 
 package org.apache.hudi.common.util;
 
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
-
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -29,16 +27,20 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -47,8 +49,13 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
+/**
+ * An internal cache implementation for managing different version of schemas.
+ * This is a Global cache; all threads in one container/executor share the same cache.
+ * A map of (tablePath, HistorySchemas) is maintained.
+ */
 public class InternalSchemaCache {
-  private static final Logger LOG = LogManager.getLogger(InternalSchemaCache.class);
+  private static final Logger LOG = LoggerFactory.getLogger(InternalSchemaCache.class);
   // Use segment lock to reduce competition.
   // the lock size should be powers of 2 for better hash.
   private static Object[] lockList = new Object[16];
@@ -113,7 +120,7 @@ public class InternalSchemaCache {
   private static Option<InternalSchema> getSchemaByReadingCommitFile(long versionID, HoodieTableMetaClient metaClient) {
     try {
       HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-      List<HoodieInstant> instants = timeline.getInstants().filter(f -> f.getTimestamp().equals(String.valueOf(versionID))).collect(Collectors.toList());
+      List<HoodieInstant> instants = timeline.getInstantsAsStream().filter(f -> f.getTimestamp().equals(String.valueOf(versionID))).collect(Collectors.toList());
       if (instants.isEmpty()) {
         return Option.empty();
       }
@@ -162,9 +169,11 @@ public class InternalSchemaCache {
    * step1：
    * try to parser internalSchema from HoodieInstant directly
    * step2：
-   * if we cannot parser internalSchema in step1，
+   * if we cannot parser internalSchema in step1， (eg: current versionId HoodieInstant has been archived)
    * try to find internalSchema in historySchema.
-   *
+   * step3:
+   * if we cannot parser internalSchema in step2  (eg: schema evolution is not enabled when we create hoodie table, however after some inserts we enable schema evolution)
+   * try to convert table schema to internalSchema.
    * @param versionId the internalSchema version to be search.
    * @param tablePath table path
    * @param hadoopConf conf
@@ -172,19 +181,15 @@ public class InternalSchemaCache {
    * @return a internalSchema.
    */
   public static InternalSchema getInternalSchemaByVersionId(long versionId, String tablePath, Configuration hadoopConf, String validCommits) {
+    String avroSchema = "";
     Set<String> commitSet = Arrays.stream(validCommits.split(",")).collect(Collectors.toSet());
-    List<String> validateCommitList = commitSet.stream().map(fileName -> {
-      String fileExtension = HoodieInstant.getTimelineFileExtension(fileName);
-      return fileName.replace(fileExtension, "");
-    }).collect(Collectors.toList());
+    List<String> validateCommitList = commitSet.stream().map(HoodieInstant::extractTimestamp).collect(Collectors.toList());
 
     FileSystem fs = FSUtils.getFs(tablePath, hadoopConf);
     Path hoodieMetaPath = new Path(tablePath, HoodieTableMetaClient.METAFOLDER_NAME);
     //step1:
-    Path candidateCommitFile = commitSet.stream().filter(fileName -> {
-      String fileExtension = HoodieInstant.getTimelineFileExtension(fileName);
-      return fileName.replace(fileExtension, "").equals(versionId + "");
-    }).findFirst().map(f -> new Path(hoodieMetaPath, f)).orElse(null);
+    Path candidateCommitFile = commitSet.stream().filter(fileName -> HoodieInstant.extractTimestamp(fileName).equals(versionId + ""))
+        .findFirst().map(f -> new Path(hoodieMetaPath, f)).orElse(null);
     if (candidateCommitFile != null) {
       try {
         byte[] data;
@@ -195,6 +200,7 @@ public class InternalSchemaCache {
         }
         HoodieCommitMetadata metadata = HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class);
         String latestInternalSchemaStr = metadata.getMetadata(SerDeHelper.LATEST_SCHEMA);
+        avroSchema = metadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
         if (latestInternalSchemaStr != null) {
           return SerDeHelper.fromJson(latestInternalSchemaStr).orElse(null);
         }
@@ -205,8 +211,23 @@ public class InternalSchemaCache {
     }
     // step2:
     FileBasedInternalSchemaStorageManager fileBasedInternalSchemaStorageManager = new FileBasedInternalSchemaStorageManager(hadoopConf, new Path(tablePath));
-    String lastestHistorySchema = fileBasedInternalSchemaStorageManager.getHistorySchemaStrByGivenValidCommits(validateCommitList);
-    return InternalSchemaUtils.searchSchema(versionId, SerDeHelper.parseSchemas(lastestHistorySchema));
+    String latestHistorySchema = fileBasedInternalSchemaStorageManager.getHistorySchemaStrByGivenValidCommits(validateCommitList);
+    if (latestHistorySchema.isEmpty()) {
+      return InternalSchema.getEmptyInternalSchema();
+    }
+    InternalSchema fileSchema = InternalSchemaUtils.searchSchema(versionId, SerDeHelper.parseSchemas(latestHistorySchema));
+    // step3:
+    return fileSchema.isEmptySchema()
+            ? StringUtils.isNullOrEmpty(avroSchema)
+              ? InternalSchema.getEmptyInternalSchema()
+              : AvroInternalSchemaConverter.convert(HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(avroSchema)))
+            : fileSchema;
+  }
+
+  public static InternalSchema getInternalSchemaByVersionId(long versionId, HoodieTableMetaClient metaClient) {
+    String validCommitLists = metaClient
+        .getCommitsAndCompactionTimeline().filterCompletedInstants().getInstantsAsStream().map(HoodieInstant::getFileName).collect(Collectors.joining(","));
+    return getInternalSchemaByVersionId(versionId, metaClient.getBasePathV2().toString(), metaClient.getHadoopConf(), validCommitLists);
   }
 }
 

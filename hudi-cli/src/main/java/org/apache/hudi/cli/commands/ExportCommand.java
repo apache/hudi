@@ -32,6 +32,8 @@ import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Reader;
@@ -40,15 +42,17 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
-import org.apache.hudi.common.util.ClosableIterator;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
-import org.springframework.shell.core.CommandMarker;
-import org.springframework.shell.core.annotation.CliCommand;
-import org.springframework.shell.core.annotation.CliOption;
-import org.springframework.stereotype.Component;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.shell.standard.ShellComponent;
+import org.springframework.shell.standard.ShellMethod;
+import org.springframework.shell.standard.ShellOption;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -63,20 +67,22 @@ import java.util.stream.Collectors;
  * directory specified by the parameter --localFolder
  * The instants are exported in the json format.
  */
-@Component
-public class ExportCommand implements CommandMarker {
+@ShellComponent
+public class ExportCommand {
 
-  @CliCommand(value = "export instants", help = "Export Instants and their metadata from the Timeline")
+  private static final Logger LOG = LoggerFactory.getLogger(ExportCommand.class);
+
+  @ShellMethod(key = "export instants", value = "Export Instants and their metadata from the Timeline")
   public String exportInstants(
-      @CliOption(key = {"limit"}, help = "Limit Instants", unspecifiedDefaultValue = "-1") final Integer limit,
-      @CliOption(key = {"actions"}, help = "Comma separated list of Instant actions to export",
-          unspecifiedDefaultValue = "clean,commit,deltacommit,rollback,savepoint,restore") final String filter,
-      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"localFolder"}, help = "Local Folder to export to", mandatory = true) String localFolder)
+      @ShellOption(value = {"--limit"}, help = "Limit Instants", defaultValue = "-1") final Integer limit,
+      @ShellOption(value = {"--actions"}, help = "Comma separated list of Instant actions to export",
+              defaultValue = "clean,commit,deltacommit,rollback,savepoint,restore") final String filter,
+      @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
+      @ShellOption(value = {"--localFolder"}, help = "Local Folder to export to") String localFolder)
       throws Exception {
 
     final String basePath = HoodieCLI.getTableMetaClient().getBasePath();
-    final Path archivePath = new Path(basePath + "/.hoodie/.commits_.archive*");
+    final Path archivePath = new Path(HoodieCLI.getTableMetaClient().getArchivePath());
     final Set<String> actionSet = new HashSet<String>(Arrays.asList(filter.split(",")));
     int numExports = limit == -1 ? Integer.MAX_VALUE : limit;
     int numCopied = 0;
@@ -88,7 +94,7 @@ public class ExportCommand implements CommandMarker {
     // The non archived instants can be listed from the Timeline.
     HoodieTimeline timeline = HoodieCLI.getTableMetaClient().getActiveTimeline().filterCompletedInstants()
         .filter(i -> actionSet.contains(i.getAction()));
-    List<HoodieInstant> nonArchivedInstants = timeline.getInstants().collect(Collectors.toList());
+    List<HoodieInstant> nonArchivedInstants = timeline.getInstants();
 
     // Archived instants are in the commit archive files
     FileStatus[] statuses = FSUtils.getFs(basePath, HoodieCLI.conf).globStatus(archivePath);
@@ -120,11 +126,11 @@ public class ExportCommand implements CommandMarker {
       Reader reader = HoodieLogFormat.newReader(fileSystem, new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema());
 
       // read the avro blocks
-      while (reader.hasNext() && copyCount < limit) {
+      while (reader.hasNext() && copyCount++ < limit) {
         HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();
-        try (ClosableIterator<IndexedRecord> recordItr = blk.getRecordIterator()) {
+        try (ClosableIterator<HoodieRecord<IndexedRecord>> recordItr = blk.getRecordIterator(HoodieRecordType.AVRO)) {
           while (recordItr.hasNext()) {
-            IndexedRecord ir = recordItr.next();
+            IndexedRecord ir = recordItr.next().getData();
             // Archived instants are saved as arvo encoded HoodieArchivedMetaEntry records. We need to get the
             // metadata record from the entry and convert it to json.
             HoodieArchivedMetaEntry archiveEntryRecord = (HoodieArchivedMetaEntry) SpecificData.get()
@@ -157,11 +163,12 @@ public class ExportCommand implements CommandMarker {
             }
 
             final String instantTime = archiveEntryRecord.get("commitTime").toString();
+            if (metadata == null) {
+              LOG.error("Could not load metadata for action " + action + " at instant time " + instantTime);
+              continue;
+            }
             final String outPath = localFolder + Path.SEPARATOR + instantTime + "." + action;
             writeToFile(outPath, HoodieAvroUtils.avroToJson(metadata, true));
-            if (++copyCount == limit) {
-              break;
-            }
           }
         }
       }
@@ -226,8 +233,10 @@ public class ExportCommand implements CommandMarker {
   }
 
   private void writeToFile(String path, byte[] data) throws Exception {
-    FileOutputStream writer = new FileOutputStream(path);
-    writer.write(data);
-    writer.close();
+    try (FileOutputStream writer = new FileOutputStream(path)) {
+      writer.write(data);
+    } catch (IOException e) {
+      throw e;
+    }
   }
 }

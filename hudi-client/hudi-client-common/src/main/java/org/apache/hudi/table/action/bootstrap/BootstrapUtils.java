@@ -18,6 +18,14 @@
 
 package org.apache.hudi.table.action.bootstrap;
 
+import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.common.bootstrap.FileStatusUtils;
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.collection.Pair;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -25,12 +33,6 @@ import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
 import org.apache.hadoop.fs.RemoteIterator;
-import org.apache.hudi.avro.model.HoodieFileStatus;
-import org.apache.hudi.common.bootstrap.FileStatusUtils;
-import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.collection.Pair;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -44,16 +46,16 @@ public class BootstrapUtils {
 
   /**
    * Returns leaf folders with files under a path.
-   * @param metaClient Hoodie table metadata client
+   * @param baseFileFormat Hoodie base file format
    * @param fs  File System
    * @param context JHoodieEngineContext
    * @return list of partition paths with files under them.
    * @throws IOException
    */
-  public static List<Pair<String, List<HoodieFileStatus>>> getAllLeafFoldersWithFiles(HoodieTableMetaClient metaClient,
-      FileSystem fs, String basePathStr, HoodieEngineContext context) throws IOException {
+  public static List<Pair<String, List<HoodieFileStatus>>> getAllLeafFoldersWithFiles(HoodieFileFormat baseFileFormat,
+                                                                                      FileSystem fs, String basePathStr, HoodieEngineContext context) throws IOException {
     final Path basePath = new Path(basePathStr);
-    final String baseFileExtension = metaClient.getTableConfig().getBaseFileFormat().getFileExtension();
+    final String baseFileExtension = baseFileFormat.getFileExtension();
     final Map<Integer, List<String>> levelToPartitions = new HashMap<>();
     final Map<String, List<HoodieFileStatus>> partitionToFiles = new HashMap<>();
     PathFilter filePathFilter = getFilePathFilter(baseFileExtension);
@@ -125,7 +127,7 @@ public class BootstrapUtils {
   }
 
   private static PathFilter getExcludeMetaPathFilter() {
-    // Avoid listing and including any folders under the metafolder
+    // Avoid listing and including any folders under the meta folder
     return (path) -> !path.toString().contains(HoodieTableMetaClient.METAFOLDER_NAME);
   }
 }

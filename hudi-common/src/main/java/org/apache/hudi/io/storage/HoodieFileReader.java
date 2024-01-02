@@ -18,54 +18,48 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.util.ClosableIterator;
-import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.Pair;
+
+import org.apache.avro.Schema;
 
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.util.List;
 import java.util.Set;
 
-public interface HoodieFileReader<R extends IndexedRecord> extends AutoCloseable {
+/**
+ * Hudi's File Reader interface providing common set of APIs to fetch
+ *
+ * <ul>
+ *   <li>{@link HoodieRecord}s</li>
+ *   <li>Metadata (statistics, bloom-filters, etc)</li>
+ * </ul>
+ *
+ * from a file persisted in storage.
+ *
+ * @param <T> target engine-specific representation of the raw data ({@code IndexedRecord} for Avro,
+ *           {@code InternalRow} for Spark, etc)
+ */
+public interface HoodieFileReader<T> extends AutoCloseable {
 
   String[] readMinMaxRecordKeys();
 
   BloomFilter readBloomFilter();
 
-  Set<String> filterRowKeys(Set<String> candidateRowKeys);
+  Set<Pair<String, Long>> filterRowKeys(Set<String> candidateRowKeys);
 
-  ClosableIterator<R> getRecordIterator(Schema readerSchema) throws IOException;
+  ClosableIterator<HoodieRecord<T>> getRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException;
 
-  default ClosableIterator<R> getRecordIterator() throws IOException {
+  default ClosableIterator<HoodieRecord<T>> getRecordIterator(Schema readerSchema) throws IOException {
+    return getRecordIterator(readerSchema, readerSchema);
+  }
+
+  default ClosableIterator<HoodieRecord<T>> getRecordIterator() throws IOException {
     return getRecordIterator(getSchema());
   }
 
-  default Option<R> getRecordByKey(String key, Schema readerSchema) throws IOException {
-    throw new UnsupportedOperationException();
-  }
-
-  default Option<R> getRecordByKey(String key) throws IOException {
-    return getRecordByKey(key, getSchema());
-  }
-
-  default ClosableIterator<R> getRecordsByKeysIterator(List<String> keys, Schema schema) throws IOException {
-    throw new UnsupportedOperationException();
-  }
-
-  default ClosableIterator<R> getRecordsByKeysIterator(List<String> keys) throws IOException {
-    return getRecordsByKeysIterator(keys, getSchema());
-  }
-
-  default ClosableIterator<R> getRecordsByKeyPrefixIterator(List<String> keyPrefixes, Schema schema) throws IOException {
-    throw new UnsupportedEncodingException();
-  }
-
-  default ClosableIterator<R> getRecordsByKeyPrefixIterator(List<String> keyPrefixes) throws IOException {
-    return getRecordsByKeyPrefixIterator(keyPrefixes, getSchema());
-  }
+  ClosableIterator<String> getRecordKeyIterator() throws IOException;
 
   Schema getSchema();
 

@@ -37,8 +37,8 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
    * SHOW COMPACTION  ON path = STRING (LIMIT limit = INTEGER_VALUE)?
    */
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.optional(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.optional(1, "path", DataTypes.StringType, None),
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
     ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 20)
   )
 
@@ -65,7 +65,7 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
     assert(metaClient.getTableType == HoodieTableType.MERGE_ON_READ,
       s"Cannot show compaction on a Non Merge On Read table.")
     val compactionInstants = metaClient.getActiveTimeline.getInstants.iterator().asScala
-      .filter(p => p.getAction == HoodieTimeline.COMPACTION_ACTION)
+      .filter(p => p.getAction == HoodieTimeline.COMPACTION_ACTION || p.getAction == HoodieTimeline.COMMIT_ACTION)
       .toSeq
       .sortBy(f => f.getTimestamp)
       .reverse

@@ -36,7 +36,7 @@ abstract class AbstractInternalSchemaStorageManager {
 
   /**
    * Get latest history schema string.
-   * Using give validCommits to validate all legal histroy Schema files, and return the latest one.
+   * Using give validCommits to validate all legal history Schema files, and return the latest one.
    * If the passed valid commits is null or empty, valid instants will be fetched from the file-system and used.
    */
   public abstract String getHistorySchemaStrByGivenValidCommits(List<String> validCommits);

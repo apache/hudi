@@ -18,6 +18,7 @@
 
 package org.apache.hudi.index.bloom;
 
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.junit.jupiter.api.Test;
@@ -36,33 +37,37 @@ public class TestBucketizedBloomCheckPartitioner {
 
   @Test
   public void testAssignmentCorrectness() {
-    Map<String, Long> fileToComparisons = new HashMap<String, Long>() {
+    HoodieFileGroupId fg1 = new HoodieFileGroupId("p1", "f1");
+    HoodieFileGroupId fg2 = new HoodieFileGroupId("p1", "f2");
+    HoodieFileGroupId fg3 = new HoodieFileGroupId("p1", "f3");
+
+    Map<HoodieFileGroupId, Long> fileToComparisons = new HashMap<HoodieFileGroupId, Long>() {
       {
-        put("f1", 40L);
-        put("f2", 35L);
-        put("f3", 20L);
+        put(fg1, 40L);
+        put(fg2, 35L);
+        put(fg3, 20L);
       }
     };
     BucketizedBloomCheckPartitioner p = new BucketizedBloomCheckPartitioner(4, fileToComparisons, 10);
-    Map<String, List<Integer>> assignments = p.getFileGroupToPartitions();
-    assertEquals(4, assignments.get("f1").size(), "f1 should have 4 buckets");
-    assertEquals(4, assignments.get("f2").size(), "f2 should have 4 buckets");
-    assertEquals(2, assignments.get("f3").size(), "f3 should have 2 buckets");
-    assertArrayEquals(new Integer[] {0, 0, 1, 3}, assignments.get("f1").toArray(), "f1 spread across 3 partitions");
-    assertArrayEquals(new Integer[] {1, 2, 2, 0}, assignments.get("f2").toArray(), "f2 spread across 3 partitions");
-    assertArrayEquals(new Integer[] {3, 1}, assignments.get("f3").toArray(), "f3 spread across 2 partitions");
+    Map<HoodieFileGroupId, List<Integer>> assignments = p.getFileGroupToPartitions();
+    assertEquals(4, assignments.get(fg1).size(), "f1 should have 4 buckets");
+    assertEquals(4, assignments.get(fg2).size(), "f2 should have 4 buckets");
+    assertEquals(2, assignments.get(fg3).size(), "f3 should have 2 buckets");
+    assertArrayEquals(new Integer[] {0, 0, 1, 3}, assignments.get(fg1).toArray(), "f1 spread across 3 partitions");
+    assertArrayEquals(new Integer[] {2, 2, 3, 1}, assignments.get(fg2).toArray(), "f2 spread across 3 partitions");
+    assertArrayEquals(new Integer[] {1, 0}, assignments.get(fg3).toArray(), "f3 spread across 2 partitions");
   }
 
   @Test
   public void testUniformPacking() {
     // evenly distribute 10 buckets/file across 100 partitions
-    Map<String, Long> comparisons1 = new HashMap<String, Long>() {
+    Map<HoodieFileGroupId, Long> comparisons1 = new HashMap<HoodieFileGroupId, Long>() {
       {
-        IntStream.range(0, 10).forEach(f -> put("f" + f, 100L));
+        IntStream.range(0, 10).forEach(f -> put(new HoodieFileGroupId("p1", "f" + f), 100L));
       }
     };
     BucketizedBloomCheckPartitioner partitioner = new BucketizedBloomCheckPartitioner(100, comparisons1, 10);
-    Map<String, List<Integer>> assignments = partitioner.getFileGroupToPartitions();
+    Map<HoodieFileGroupId, List<Integer>> assignments = partitioner.getFileGroupToPartitions();
     assignments.forEach((key, value) -> assertEquals(10, value.size()));
     Map<Integer, Long> partitionToNumBuckets =
         assignments.entrySet().stream().flatMap(e -> e.getValue().stream().map(p -> Pair.of(p, e.getKey())))
@@ -72,9 +77,9 @@ public class TestBucketizedBloomCheckPartitioner {
 
   @Test
   public void testNumPartitions() {
-    Map<String, Long> comparisons1 = new HashMap<String, Long>() {
+    Map<HoodieFileGroupId, Long> comparisons1 = new HashMap<HoodieFileGroupId, Long>() {
       {
-        IntStream.range(0, 10).forEach(f -> put("f" + f, 100L));
+        IntStream.range(0, 10).forEach(f -> put(new HoodieFileGroupId("p1", "f" + f), 100L));
       }
     };
     BucketizedBloomCheckPartitioner p = new BucketizedBloomCheckPartitioner(10000, comparisons1, 10);
@@ -83,15 +88,15 @@ public class TestBucketizedBloomCheckPartitioner {
 
   @Test
   public void testGetPartitions() {
-    Map<String, Long> comparisons1 = new HashMap<String, Long>() {
+    Map<HoodieFileGroupId, Long> comparisons1 = new HashMap<HoodieFileGroupId, Long>() {
       {
-        IntStream.range(0, 100000).forEach(f -> put("f" + f, 100L));
+        IntStream.range(0, 100000).forEach(f -> put(new HoodieFileGroupId("p1", "f" + f), 100L));
       }
     };
     BucketizedBloomCheckPartitioner p = new BucketizedBloomCheckPartitioner(1000, comparisons1, 10);
 
     IntStream.range(0, 100000).forEach(f -> {
-      int partition = p.getPartition(Pair.of("f" + f, "value"));
+      int partition = p.getPartition(Pair.of(new HoodieFileGroupId("p1", "f" + f), "value"));
       assertTrue(0 <= partition && partition <= 1000, "partition is out of range: " + partition);
     });
   }

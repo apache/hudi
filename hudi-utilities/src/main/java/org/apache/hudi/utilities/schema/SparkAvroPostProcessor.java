@@ -20,18 +20,22 @@ package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.types.StructType;
 
 /**
  * HUDI-1343:Add standard schema postprocessor which would rewrite the schema using spark-avro conversion.
  */
 public class SparkAvroPostProcessor extends SchemaPostProcessor {
 
+  @Deprecated
   public static class Config {
+    @Deprecated
     public static final String SPARK_AVRO_POST_PROCESSOR_PROP_ENABLE =
-            "hoodie.deltastreamer.schemaprovider.spark_avro_post_processor.enable";
+        HoodieSchemaProviderConfig.SPARK_AVRO_POST_PROCESSOR_ENABLE.key();
   }
 
   public SparkAvroPostProcessor(TypedProperties props, JavaSparkContext jssc) {
@@ -40,8 +44,13 @@ public class SparkAvroPostProcessor extends SchemaPostProcessor {
 
   @Override
   public Schema processSchema(Schema schema) {
-    return schema != null ? AvroConversionUtils.convertStructTypeToAvroSchema(
-        AvroConversionUtils.convertAvroSchemaToStructType(schema), RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME,
-        RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE) : null;
+    if (schema == null) {
+      return null;
+    }
+
+    StructType structType = AvroConversionUtils.convertAvroSchemaToStructType(schema);
+    // NOTE: It's critical that we preserve incoming schema's qualified record-name to make
+    //       sure we maintain schema's compatibility (as defined by [[AvroSchemaCompatibility]])
+    return AvroConversionUtils.convertStructTypeToAvroSchema(structType, schema.getFullName());
   }
 }

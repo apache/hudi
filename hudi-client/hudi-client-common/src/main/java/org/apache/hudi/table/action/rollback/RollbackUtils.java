@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.rollback;
 
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -28,8 +27,10 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -41,7 +42,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 public class RollbackUtils {
 
-  private static final Logger LOG = LogManager.getLogger(RollbackUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(RollbackUtils.class);
 
   /**
    * Get Latest version of Rollback plan corresponding to a clean instant.
@@ -65,7 +66,7 @@ public class RollbackUtils {
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, rollbackInstantTime);
     header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, instantToRollback);
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
-        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
+        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK.ordinal()));
     return header;
   }
 
@@ -81,14 +82,16 @@ public class RollbackUtils {
     final List<String> successDeleteFiles = new ArrayList<>();
     final List<String> failedDeleteFiles = new ArrayList<>();
     final Map<FileStatus, Long> commandBlocksCount = new HashMap<>();
-    final Map<FileStatus, Long> writtenLogFileSizeMap = new HashMap<>();
+    final Map<String, Long> logFilesFromFailedCommit = new HashMap<>();
     Option.ofNullable(stat1.getSuccessDeleteFiles()).ifPresent(successDeleteFiles::addAll);
     Option.ofNullable(stat2.getSuccessDeleteFiles()).ifPresent(successDeleteFiles::addAll);
     Option.ofNullable(stat1.getFailedDeleteFiles()).ifPresent(failedDeleteFiles::addAll);
     Option.ofNullable(stat2.getFailedDeleteFiles()).ifPresent(failedDeleteFiles::addAll);
     Option.ofNullable(stat1.getCommandBlocksCount()).ifPresent(commandBlocksCount::putAll);
     Option.ofNullable(stat2.getCommandBlocksCount()).ifPresent(commandBlocksCount::putAll);
-    return new HoodieRollbackStat(stat1.getPartitionPath(), successDeleteFiles, failedDeleteFiles, commandBlocksCount);
+    Option.ofNullable(stat1.getLogFilesFromFailedCommit()).ifPresent(logFilesFromFailedCommit::putAll);
+    Option.ofNullable(stat2.getLogFilesFromFailedCommit()).ifPresent(logFilesFromFailedCommit::putAll);
+    return new HoodieRollbackStat(stat1.getPartitionPath(), successDeleteFiles, failedDeleteFiles, commandBlocksCount, logFilesFromFailedCommit);
   }
 
 }

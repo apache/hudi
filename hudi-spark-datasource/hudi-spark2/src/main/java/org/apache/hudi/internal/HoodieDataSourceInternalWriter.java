@@ -19,8 +19,7 @@
 package org.apache.hudi.internal;
 
 import org.apache.hudi.DataSourceUtils;
-import org.apache.hudi.client.HoodieInternalWriteStatus;
-import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 
@@ -34,7 +33,6 @@ import org.apache.spark.sql.sources.v2.writer.WriterCommitMessage;
 import org.apache.spark.sql.types.StructType;
 
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -51,7 +49,6 @@ public class HoodieDataSourceInternalWriter implements DataSourceWriter {
   private final DataSourceInternalWriterHelper dataSourceInternalWriterHelper;
   private final boolean populateMetaFields;
   private final Boolean arePartitionRecordsSorted;
-  private Map<String, String> extraMetadataMap = new HashMap<>();
 
   public HoodieDataSourceInternalWriter(String instantTime, HoodieWriteConfig writeConfig, StructType structType,
                                         SparkSession sparkSession, Configuration configuration, DataSourceOptions dataSourceOptions,
@@ -61,7 +58,7 @@ public class HoodieDataSourceInternalWriter implements DataSourceWriter {
     this.structType = structType;
     this.populateMetaFields = populateMetaFields;
     this.arePartitionRecordsSorted = arePartitionRecordsSorted;
-    this.extraMetadataMap = DataSourceUtils.getExtraMetadata(dataSourceOptions.asMap());
+    Map<String, String> extraMetadataMap = DataSourceUtils.getExtraMetadata(dataSourceOptions.asMap());
     this.dataSourceInternalWriterHelper = new DataSourceInternalWriterHelper(instantTime, writeConfig, structType,
         sparkSession, configuration, extraMetadataMap);
   }
@@ -89,9 +86,9 @@ public class HoodieDataSourceInternalWriter implements DataSourceWriter {
 
   @Override
   public void commit(WriterCommitMessage[] messages) {
-    List<HoodieWriteStat> writeStatList = Arrays.stream(messages).map(m -> (HoodieWriterCommitMessage) m)
-        .flatMap(m -> m.getWriteStatuses().stream().map(HoodieInternalWriteStatus::getStat)).collect(Collectors.toList());
-    dataSourceInternalWriterHelper.commit(writeStatList);
+    List<WriteStatus> writeStatuses = Arrays.stream(messages).map(m -> (HoodieWriterCommitMessage) m)
+        .flatMap(m -> m.getWriteStatuses().stream()).collect(Collectors.toList());
+    dataSourceInternalWriterHelper.commit(writeStatuses);
   }
 
   @Override

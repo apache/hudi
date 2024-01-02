@@ -20,7 +20,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.13.0-SNAPSHOT</version>
+    <version>1.0.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -66,37 +66,48 @@
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
               </transformers>
               <artifactSet>
-                <includes>
+                <includes combine.children="append">
                   <include>org.apache.hudi:hudi-common</include>
+                  <include>org.apache.hudi:hudi-client-common</include>
+                  <include>org.apache.hudi:hudi-java-client</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
+
+                  <!-- Kryo -->
+                  <include>com.esotericsoftware:kryo-shaded</include>
+                  <include>com.esotericsoftware:minlog</include>
+                  <include>org.objenesis:objenesis</include>
 
                   <include>org.apache.parquet:parquet-avro</include>
                   <include>org.apache.avro:avro</include>
+                  <include>com.github.ben-manes.caffeine:caffeine</include>
                   <include>org.codehaus.jackson:*</include>
-                  <include>com.esotericsoftware:kryo-shaded</include>
-                  <include>org.objenesis:objenesis</include>
-                  <include>com.esotericsoftware:minlog</include>
-                  <include>org.apache.hbase:hbase-common</include>
-                  <include>org.apache.hbase:hbase-client</include>
-                  <include>org.apache.hbase:hbase-hadoop-compat</include>
-                  <include>org.apache.hbase:hbase-hadoop2-compat</include>
-                  <include>org.apache.hbase:hbase-metrics</include>
-                  <include>org.apache.hbase:hbase-metrics-api</include>
-                  <include>org.apache.hbase:hbase-protocol</include>
-                  <include>org.apache.hbase:hbase-protocol-shaded</include>
-                  <include>org.apache.hbase:hbase-server</include>
-                  <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
-                  <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
-                  <include>org.apache.hbase.thirdparty:hbase-shaded-miscellaneous</include>
-                  <include>org.apache.htrace:htrace-core4</include>
                   <include>com.yammer.metrics:metrics-core</include>
                   <include>com.google.guava:guava</include>
                   <include>commons-lang:commons-lang</include>
                   <include>commons-io:commons-io</include>
                   <include>com.google.protobuf:protobuf-java</include>
+                  <include>org.openjdk.jol:jol-core</include>
                 </includes>
               </artifactSet>
-              <relocations>
+              <relocations combine.children="append">
+                <!-- Kryo -->
+                <relocation>
+                  <pattern>com.esotericsoftware.kryo.</pattern>
+                  <shadedPattern>org.apache.hudi.com.esotericsoftware.kryo.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.esotericsoftware.reflectasm.</pattern>
+                  <shadedPattern>org.apache.hudi.com.esotericsoftware.reflectasm.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.esotericsoftware.minlog.</pattern>
+                  <shadedPattern>org.apache.hudi.com.esotericsoftware.minlog.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.objenesis.</pattern>
+                  <shadedPattern>org.apache.hudi.org.objenesis.</shadedPattern>
+                </relocation>
+
                 <relocation>
                   <pattern>org.apache.parquet.avro.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.parquet.avro.</shadedPattern>
@@ -108,37 +119,6 @@
                 <relocation>
                   <pattern>org.apache.commons.io.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.commons.io.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.hbase.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.hbase.</shadedPattern>
-                  <excludes>
-                    <exclude>org.apache.hadoop.hbase.KeyValue$KeyComparator</exclude>
-                  </excludes>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hbase.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hbase.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.htrace.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.codehaus.jackson.</pattern>
-                  <shadedPattern>org.apache.hudi.org.codehaus.jackson.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>com.esotericsoftware.kryo.</pattern>
-                  <shadedPattern>org.apache.hudi.com.esotericsoftware.kryo.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.objenesis.</pattern>
-                  <shadedPattern>org.apache.hudi.org.objenesis.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>com.esotericsoftware.minlog.</pattern>
-                  <shadedPattern>org.apache.hudi.com.esotericsoftware.minlog.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.yammer.metrics.</pattern>
@@ -156,73 +136,9 @@
                   <pattern>com.google.protobuf.</pattern>
                   <shadedPattern>${trino.bundle.bootstrap.shade.prefix}com.google.protobuf.</shadedPattern>
                 </relocation>
-                <!-- The classes below in org.apache.hadoop.metrics2 package come from
-                hbase-hadoop-compat and hbase-hadoop2-compat, which have to be shaded one by one,
-                instead of shading all classes under org.apache.hadoop.metrics2 including ones
-                from hadoop. -->
                 <relocation>
-                  <pattern>org.apache.hadoop.metrics2.MetricHistogram</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.MetricHistogram
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.MetricsExecutor</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.MetricsExecutor
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.impl.JmxCacheBuster</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.impl.JmxCacheBuster</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.lib.DefaultMetricsSystemHelper</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.DefaultMetricsSystemHelper
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.lib.DynamicMetricsRegistry</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.DynamicMetricsRegistry
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.lib.MetricsExecutorImpl</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MetricsExecutorImpl
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.lib.MutableFastCounter</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableFastCounter
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.lib.MutableHistogram</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableHistogram
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.lib.MutableRangeHistogram</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableRangeHistogram
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.lib.MutableSizeHistogram</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableSizeHistogram
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.lib.MutableTimeHistogram</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableTimeHistogram
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.util.MetricQuantile</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.util.MetricQuantile
-                  </shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.metrics2.util.MetricSampleQuantiles</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.util.MetricSampleQuantiles
-                  </shadedPattern>
+                  <pattern>org.openjdk.jol.</pattern>
+                  <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
                 </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
@@ -261,6 +177,30 @@
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-hadoop-mr-bundle</artifactId>
       <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-client-common</artifactId>
+      <version>${project.version}</version>
+      <exclusions>
+        <exclusion>
+          <artifactId>guava</artifactId>
+          <groupId>com.google.guava</groupId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-java-client</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <!-- Kryo -->
+    <dependency>
+      <groupId>com.esotericsoftware</groupId>
+      <artifactId>kryo-shaded</artifactId>
+      <version>${kryo.shaded.version}</version>
+      <scope>compile</scope>
     </dependency>
 
     <!-- Parquet -->
@@ -302,7 +242,7 @@
     <dependency>
       <groupId>com.google.protobuf</groupId>
       <artifactId>protobuf-java</artifactId>
-      <version>2.5.0</version>
+      <version>${proto.version}</version>
       <scope>${trino.bundle.bootstrap.scope}</scope>
     </dependency>
 

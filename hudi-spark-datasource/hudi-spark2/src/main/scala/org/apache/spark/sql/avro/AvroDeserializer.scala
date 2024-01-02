@@ -111,7 +111,7 @@ class AvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType) {
           // the value is processed as timestamp type with millisecond precision.
           updater.setLong(ordinal, value.asInstanceOf[Long] * 1000)
         case other => throw new IncompatibleSchemaException(
-          s"Cannot convert Avro logical type ${other} to Catalyst Timestamp type.")
+          s"Cannot convert Avro logical type $other to Catalyst Timestamp type.")
       }
 
       // Before we upgrade Avro to 1.8 for logical type support, spark-avro converts Long to Date.
@@ -132,6 +132,7 @@ class AvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType) {
             val bytes = new Array[Byte](s.getByteLength)
             System.arraycopy(s.getBytes, 0, bytes, 0, s.getByteLength)
             UTF8String.fromBytes(bytes)
+          case s: GenericData.EnumSymbol => UTF8String.fromString(s.toString)
         }
         updater.set(ordinal, str)
 

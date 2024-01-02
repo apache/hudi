@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 /**
@@ -65,6 +66,16 @@ public interface TableFileSystemView {
     Stream<HoodieBaseFile> getLatestBaseFilesBeforeOrOn(String partitionPath, String maxCommitTime);
 
     /**
+     * Streams the latest version base files in all partitions with precondition that
+     * commitTime(file) before maxCommitTime.
+     *
+     * @param maxCommitTime The max commit time to consider.
+     * @return A {@link Map} of partition path to the latest version base files before or on the
+     * commit time
+     */
+    Map<String, Stream<HoodieBaseFile>> getAllLatestBaseFilesBeforeOrOn(String maxCommitTime);
+
+    /**
      * Stream all the latest data files pass.
      */
     Stream<HoodieBaseFile> getLatestBaseFilesInRange(List<String> commitsToReturn);
@@ -97,6 +108,19 @@ public interface TableFileSystemView {
     Stream<FileSlice> getLatestFileSlices(String partitionPath);
 
     /**
+     * Stream all the latest file slices in the given partition
+     * without caching the file group mappings.
+     *
+     * <p>This is useful for some table services such as compaction and clustering, these services may search around the files to clean
+     * within some ancient data partitions, if there triggers a full table service for enormous number of partitions, the cache could
+     * cause a huge memory pressure to the timeline server which induces an OOM exception.
+     *
+     * <p>The caching of these file groups does not benefit to writers most often because the writers
+     * write to recent data partitions usually.
+     */
+    Stream<FileSlice> getLatestFileSlicesStateless(String partitionPath);
+
+    /**
      * Get Latest File Slice for a given fileId in a given partition.
      */
     Option<FileSlice> getLatestFileSlice(String partitionPath, String fileId);
@@ -115,6 +139,14 @@ public interface TableFileSystemView {
      */
     Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionPath, String maxCommitTime,
         boolean includeFileSlicesInPendingCompaction);
+
+    /**
+     * Stream all latest file slices with precondition that commitTime(file) before maxCommitTime.
+     *
+     * @param maxCommitTime Max Instant Time
+     * @return A {@link Map} of partition path to the latest file slices before maxCommitTime.
+     */
+    Map<String, Stream<FileSlice>> getAllLatestFileSlicesBeforeOrOn(String maxCommitTime);
 
     /**
      * Stream all "merged" file-slices before on an instant time If a file-group has a pending compaction request, the
@@ -150,11 +182,30 @@ public interface TableFileSystemView {
   Stream<HoodieFileGroup> getAllFileGroups(String partitionPath);
 
   /**
+   * Stream all the file groups for a given partition without caching the file group mappings.
+   *
+   * <p>This is useful for some table services such as cleaning, the cleaning service may search around the files to clean
+   * within some ancient data partitions, if there triggers a full table cleaning for enormous number of partitions, the cache could
+   * cause a huge memory pressure to the timeline server which induces an OOM exception.
+   *
+   * <p>The caching of these file groups does not benefit to writers most often because the writers
+   * write to recent data partitions usually.
+   */
+  Stream<HoodieFileGroup> getAllFileGroupsStateless(String partitionPath);
+
+  /**
    * Return Pending Compaction Operations.
    *
-   * @return Pair<Pair<InstantTime,CompactionOperation>>
+   * @return Stream<Pair<InstantTime,CompactionOperation>>
    */
   Stream<Pair<String, CompactionOperation>> getPendingCompactionOperations();
+
+  /**
+   * Return Pending Compaction Operations.
+   *
+   * @return Stream<Pair<InstantTime,CompactionOperation>>
+   */
+  Stream<Pair<String, CompactionOperation>> getPendingLogCompactionOperations();
 
   /**
    * Last Known Instant on which the view is built.
@@ -177,6 +228,11 @@ public interface TableFileSystemView {
   Stream<HoodieFileGroup> getReplacedFileGroupsBefore(String maxCommitTime, String partitionPath);
 
   /**
+   * Stream all the replaced file groups after or on minCommitTime.
+   */
+  Stream<HoodieFileGroup> getReplacedFileGroupsAfterOrOn(String minCommitTime, String partitionPath);
+
+  /**
    * Stream all the replaced file groups for given partition.
    */
   Stream<HoodieFileGroup> getAllReplacedFileGroups(String partitionPath);
@@ -185,4 +241,10 @@ public interface TableFileSystemView {
    * Filegroups that are in pending clustering.
    */
   Stream<Pair<HoodieFileGroupId, HoodieInstant>> getFileGroupsInPendingClustering();
+
+
+  /**
+   * Load all partition and file slices into view
+   */
+  Void loadAllPartitions();
 }

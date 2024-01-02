@@ -22,7 +22,6 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
@@ -33,7 +32,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.BaseSparkCommitActionExecutor;
 
-public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPayload<T>>
+public class SparkExecuteClusteringCommitActionExecutor<T>
     extends BaseSparkCommitActionExecutor<T> {
 
   private final HoodieClusteringPlan clusteringPlan;

@@ -18,8 +18,6 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -27,14 +25,20 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
-
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieMetadataException;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.hudi.expression.Expression;
+import org.apache.hudi.internal.schema.Types;
+
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -68,6 +72,13 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   }
 
   /**
+   * Return the base-path of the Metadata Table for the given Dataset identified by base-path
+   */
+  static Path getMetadataTableBasePath(Path dataTableBasePath) {
+    return new Path(dataTableBasePath, HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH);
+  }
+
+  /**
    * Returns the base path of the Dataset provided the base-path of the Metadata Table of this
    * Dataset
    */
@@ -93,25 +104,42 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * @param basePath The base path to check
    */
   static boolean isMetadataTable(String basePath) {
+    if (basePath == null || basePath.isEmpty()) {
+      return false;
+    }
     if (basePath.endsWith(Path.SEPARATOR)) {
       basePath = basePath.substring(0, basePath.length() - 1);
     }
     return basePath.endsWith(HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH);
   }
 
-  static HoodieTableMetadata create(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String datasetBasePath,
-                                    String spillableMapPath) {
-    return create(engineContext, metadataConfig, datasetBasePath, spillableMapPath, false);
+  static HoodieTableMetadata create(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String datasetBasePath) {
+    return create(engineContext, metadataConfig, datasetBasePath, false);
   }
 
-  static HoodieTableMetadata create(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String datasetBasePath,
-                                    String spillableMapPath, boolean reuse) {
+  static HoodieTableMetadata create(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String datasetBasePath, boolean reuse) {
     if (metadataConfig.enabled()) {
-      return new HoodieBackedTableMetadata(engineContext, metadataConfig, datasetBasePath, spillableMapPath, reuse);
-    } else {
-      return new FileSystemBackedTableMetadata(engineContext, new SerializableConfiguration(engineContext.getHadoopConf()),
-          datasetBasePath, metadataConfig.shouldAssumeDatePartitioning());
+      HoodieBackedTableMetadata metadata = createHoodieBackedTableMetadata(engineContext, metadataConfig, datasetBasePath, reuse);
+      // If the MDT is not initialized then we fallback to FSBackedTableMetadata
+      if (metadata.isMetadataTableInitialized()) {
+        return metadata;
+      }
     }
+
+    return createFSBackedTableMetadata(engineContext, datasetBasePath);
+  }
+
+  static FileSystemBackedTableMetadata createFSBackedTableMetadata(HoodieEngineContext engineContext,
+                                                                   String datasetBasePath) {
+    return new FileSystemBackedTableMetadata(
+        engineContext, new SerializableConfiguration(engineContext.getHadoopConf()), datasetBasePath);
+  }
+
+  static HoodieBackedTableMetadata createHoodieBackedTableMetadata(HoodieEngineContext engineContext,
+                                                                   HoodieMetadataConfig metadataConfig,
+                                                                   String datasetBasePath,
+                                                                   boolean reuse) {
+    return new HoodieBackedTableMetadata(engineContext, metadataConfig, datasetBasePath, reuse);
   }
 
   /**
@@ -120,14 +148,34 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   FileStatus[] getAllFilesInPartition(Path partitionPath) throws IOException;
 
   /**
+   * Retrieve the paths of partitions under the provided sub-directories,
+   * and try to filter these partitions using the provided {@link Expression}.
+   */
+  List<String> getPartitionPathWithPathPrefixUsingFilterExpression(List<String> relativePathPrefixes,
+                                                                   Types.RecordType partitionFields,
+                                                                   Expression expression) throws IOException;
+
+  /**
+   * Fetches all partition paths that are the sub-directories of the list of provided (relative) paths.
+   * <p>
+   * E.g., Table has partition 4 partitions:
+   * year=2022/month=08/day=30, year=2022/month=08/day=31, year=2022/month=07/day=03, year=2022/month=07/day=04
+   * The relative path "year=2022" returns all partitions, while the relative path
+   * "year=2022/month=07" returns only two partitions.
+   */
+  List<String> getPartitionPathWithPathPrefixes(List<String> relativePathPrefixes) throws IOException;
+
+  /**
    * Fetch list of all partition paths, per the latest snapshot of the metadata.
    */
   List<String> getAllPartitionPaths() throws IOException;
 
   /**
    * Fetch all files for given partition paths.
+   *
+   * NOTE: Absolute partition paths are expected here
    */
-  Map<String, FileStatus[]> getAllFilesInPartitions(List<String> partitionPaths) throws IOException;
+  Map<String, FileStatus[]> getAllFilesInPartitions(Collection<String> partitionPaths) throws IOException;
 
   /**
    * Get the bloom filter for the FileID from the metadata table.
@@ -162,10 +210,16 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
       throws HoodieMetadataException;
 
   /**
+   * Returns the location of record keys which are found in the record index.
+   * Records that are not found are ignored and wont be part of map object that is returned.
+   */
+  Map<String, HoodieRecordGlobalLocation> readRecordIndex(List<String> recordKeys);
+
+  /**
    * Fetch records by key prefixes. Key prefix passed is expected to match the same prefix as stored in Metadata table partitions. For eg, in case of col stats partition,
    * actual keys in metadata partition is encoded values of column name, partition name and file name. So, key prefixes passed to this method is expected to be encoded already.
    *
-   * @param keyPrefixes list of key prefixes for which interested records are looked up for.
+   * @param keyPrefixes   list of key prefixes for which interested records are looked up for.
    * @param partitionName partition name in metadata table where the records are looked up for.
    * @return {@link HoodieData} of {@link HoodieRecord}s with records matching the passed in key prefixes.
    */
@@ -187,4 +241,9 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * Clear the states of the table metadata.
    */
   void reset();
+
+  /**
+   * Returns the number of shards in a metadata table partition.
+   */
+  int getNumFileGroupsForPartition(MetadataPartitionType partition);
 }

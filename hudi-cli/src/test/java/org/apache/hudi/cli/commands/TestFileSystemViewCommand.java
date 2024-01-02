@@ -24,6 +24,7 @@ import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
+import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroup;
@@ -36,7 +37,9 @@ import org.apache.hudi.common.util.NumericUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.springframework.shell.core.CommandResult;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.shell.Shell;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -57,7 +60,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Test class for {@link FileSystemViewCommand}.
  */
 @Tag("functional")
+@SpringBootTest(properties = {"spring.shell.interactive.enabled=false", "spring.shell.command.script.enabled=false"})
 public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
+
+  @Autowired
+  private Shell shell;
 
   private String nonpartitionedTablePath;
   private String partitionedTablePath;
@@ -78,8 +85,8 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
     String nonpartitionedTableName = "nonpartitioned_" + tableName();
     nonpartitionedTablePath = tablePath(nonpartitionedTableName);
     new TableCommand().createTable(
-            nonpartitionedTablePath, nonpartitionedTableName,
-            "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload");
+        nonpartitionedTablePath, nonpartitionedTableName,
+        "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload");
 
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
 
@@ -119,8 +126,8 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
     String partitionedTableName = "partitioned_" + tableName();
     partitionedTablePath = tablePath(partitionedTableName);
     new TableCommand().createTable(
-            partitionedTablePath, partitionedTableName,
-            "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload");
+        partitionedTablePath, partitionedTableName,
+        "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload");
 
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
 
@@ -161,8 +168,8 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
   @Test
   public void testShowCommits() {
     // Test default show fsview all
-    CommandResult cr = shell().executeCommand("show fsview all");
-    assertTrue(cr.isSuccess());
+    Object result = shell.evaluate(() -> "show fsview all --pathRegex */*/*");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     // Get all file groups
     Stream<HoodieFileGroup> fileGroups = partitionedFsView.getAllFileGroups(partitionPath);
@@ -199,7 +206,7 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_DELTA_FILES);
     String expected = HoodiePrintHelper.print(header, fieldNameToConverterMap, "", false, -1, false, rows);
     expected = removeNonWordAndStripSpace(expected);
-    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    String got = removeNonWordAndStripSpace(result.toString());
     assertEquals(expected, got);
   }
 
@@ -209,8 +216,8 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
   @Test
   public void testShowCommitsWithSpecifiedValues() {
     // Test command with options, baseFileOnly and maxInstant is 2
-    CommandResult cr = shell().executeCommand("show fsview all --baseFileOnly true --maxInstant 2");
-    assertTrue(cr.isSuccess());
+    Object result = shell.evaluate(() -> "show fsview all --pathRegex */*/* --baseFileOnly true --maxInstant 2");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     List<Comparable[]> rows = new ArrayList<>();
     Stream<HoodieFileGroup> fileGroups = partitionedFsView.getAllFileGroups(partitionPath);
@@ -242,7 +249,7 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
 
     String expected = HoodiePrintHelper.print(header, fieldNameToConverterMap, "", false, -1, false, rows);
     expected = removeNonWordAndStripSpace(expected);
-    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    String got = removeNonWordAndStripSpace(result.toString());
     assertEquals(expected, got);
   }
 
@@ -263,12 +270,12 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
       row[idx++] = fs.getLogFiles().count();
       row[idx++] = fs.getLogFiles().mapToLong(HoodieLogFile::getFileSize).sum();
       long logFilesScheduledForCompactionTotalSize =
-          fs.getLogFiles().filter(lf -> lf.getBaseCommitTime().equals(fs.getBaseInstantTime()))
+          fs.getLogFiles().filter(lf -> lf.getDeltaCommitTime().equals(fs.getBaseInstantTime()))
               .mapToLong(HoodieLogFile::getFileSize).sum();
       row[idx++] = logFilesScheduledForCompactionTotalSize;
 
       long logFilesUnscheduledTotalSize =
-          fs.getLogFiles().filter(lf -> !lf.getBaseCommitTime().equals(fs.getBaseInstantTime()))
+          fs.getLogFiles().filter(lf -> !lf.getDeltaCommitTime().equals(fs.getBaseInstantTime()))
               .mapToLong(HoodieLogFile::getFileSize).sum();
       row[idx++] = logFilesUnscheduledTotalSize;
 
@@ -278,16 +285,17 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
       double logUnscheduledToBaseRatio = dataFileSize > 0 ? logFilesUnscheduledTotalSize / (dataFileSize * 1.0) : -1;
       row[idx++] = logUnscheduledToBaseRatio;
 
-      row[idx++] = fs.getLogFiles().filter(lf -> lf.getBaseCommitTime().equals(fs.getBaseInstantTime()))
+      row[idx++] = fs.getLogFiles().filter(lf -> lf.getDeltaCommitTime().equals(fs.getBaseInstantTime()))
           .collect(Collectors.toList()).toString();
-      row[idx++] = fs.getLogFiles().filter(lf -> !lf.getBaseCommitTime().equals(fs.getBaseInstantTime()))
+      row[idx++] = fs.getLogFiles().filter(lf -> !lf.getDeltaCommitTime().equals(fs.getBaseInstantTime()))
           .collect(Collectors.toList()).toString();
       rows.add(row);
     });
     return rows;
   }
 
-  /**(
+  /**
+   * (
    * Test case for command 'show fsview latest'.
    */
   @Test
@@ -316,21 +324,21 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
 
     // Test show with partition path '2016/03/15'
     new TableCommand().connect(partitionedTablePath, null, false, 0, 0, 0);
-    CommandResult partitionedTableCR = shell().executeCommand("show fsview latest --partitionPath " + partitionPath);
-    assertTrue(partitionedTableCR.isSuccess());
+    Object partitionedTable = shell.evaluate(() -> "show fsview latest --partitionPath " + partitionPath);
+    assertTrue(ShellEvaluationResultUtil.isSuccess(partitionedTable));
 
     Stream<FileSlice> partitionedFileSlice = partitionedFsView.getLatestFileSlices(partitionPath);
 
     List<Comparable[]> partitionedRows = fileSlicesToCRList(partitionedFileSlice, partitionPath);
     String partitionedExpected = HoodiePrintHelper.print(header, fieldNameToConverterMap, "", false, -1, false, partitionedRows);
     partitionedExpected = removeNonWordAndStripSpace(partitionedExpected);
-    String partitionedResults = removeNonWordAndStripSpace(partitionedTableCR.getResult().toString());
+    String partitionedResults = removeNonWordAndStripSpace(partitionedTable.toString());
     assertEquals(partitionedExpected, partitionedResults);
 
     // Test show for non-partitioned table
     new TableCommand().connect(nonpartitionedTablePath, null, false, 0, 0, 0);
-    CommandResult nonpartitionedTableCR = shell().executeCommand("show fsview latest");
-    assertTrue(nonpartitionedTableCR.isSuccess());
+    Object nonpartitionedTable = shell.evaluate(() -> "show fsview latest");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(nonpartitionedTable));
 
     Stream<FileSlice> nonpartitionedFileSlice = nonpartitionedFsView.getLatestFileSlices("");
 
@@ -338,7 +346,7 @@ public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
 
     String nonpartitionedExpected = HoodiePrintHelper.print(header, fieldNameToConverterMap, "", false, -1, false, nonpartitionedRows);
     nonpartitionedExpected = removeNonWordAndStripSpace(nonpartitionedExpected);
-    String nonpartitionedResults = removeNonWordAndStripSpace(nonpartitionedTableCR.getResult().toString());
+    String nonpartitionedResults = removeNonWordAndStripSpace(nonpartitionedTable.toString());
     assertEquals(nonpartitionedExpected, nonpartitionedResults);
   }
 }

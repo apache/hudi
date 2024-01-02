@@ -50,6 +50,10 @@ public interface LockProvider<T> extends Lock, AutoCloseable {
     throw new IllegalArgumentException();
   }
 
+  default String getCurrentOwnerLockInfo() {
+    return "";
+  }
+
   @Override
   default void close() {
   }

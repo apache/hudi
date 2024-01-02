@@ -18,13 +18,12 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.util.Option;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -56,6 +55,20 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   default T preCombine(T oldValue, Properties properties) {
     return preCombine(oldValue);
+  }
+
+  /**
+   * When more than one HoodieRecord have the same HoodieKey in the incoming batch, this function combines them before attempting to insert/upsert by taking in a schema.
+   * Implementation can leverage the schema to decide their business logic to do preCombine.
+   *
+   * @param oldValue   instance of the old {@link HoodieRecordPayload} to be combined with.
+   * @param schema     Payload related schema. For example use schema to overwrite old instance for specified fields that doesn't equal to default value.
+   * @param properties Payload related properties. For example pass the ordering field(s) name to extract from value in storage.
+   * @return the combined value
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  default T preCombine(T oldValue, Schema schema, Properties properties) {
+    return preCombine(oldValue, properties);
   }
 
   /**

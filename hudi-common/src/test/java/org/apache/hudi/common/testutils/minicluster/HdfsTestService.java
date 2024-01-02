@@ -18,18 +18,14 @@
 
 package org.apache.hudi.common.testutils.minicluster;
 
-import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
-import org.apache.hudi.common.util.FileIOUtils;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.BindException;
 import java.nio.file.Files;
@@ -40,13 +36,13 @@ import java.util.Objects;
  */
 public class HdfsTestService {
 
-  private static final Logger LOG = LogManager.getLogger(HdfsTestService.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HdfsTestService.class);
 
   /**
    * Configuration settings.
    */
-  private Configuration hadoopConf;
-  private final String workDir;
+  private final Configuration hadoopConf;
+  private final java.nio.file.Path dfsBaseDirPath;
 
   /**
    * Embedded HDFS cluster.
@@ -54,7 +50,12 @@ public class HdfsTestService {
   private MiniDFSCluster miniDfsCluster;
 
   public HdfsTestService() throws IOException {
-    workDir = Files.createTempDirectory("temp").toAbsolutePath().toString();
+    this(new Configuration());
+  }
+
+  public HdfsTestService(Configuration hadoopConf) throws IOException {
+    this.hadoopConf = hadoopConf;
+    this.dfsBaseDirPath = Files.createTempDirectory("hdfs-test-service" + System.currentTimeMillis());
   }
 
   public Configuration getHadoopConf() {
@@ -62,15 +63,12 @@ public class HdfsTestService {
   }
 
   public MiniDFSCluster start(boolean format) throws IOException {
-    Objects.requireNonNull(workDir, "The work dir must be set before starting cluster.");
-    hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
+    Objects.requireNonNull(dfsBaseDirPath, "dfs base dir must be set before starting cluster.");
 
     // If clean, then remove the work dir so we can start fresh.
-    String localDFSLocation = getDFSLocation(workDir);
     if (format) {
-      LOG.info("Cleaning HDFS cluster data at: " + localDFSLocation + " and starting fresh.");
-      File file = new File(localDFSLocation);
-      FileIOUtils.deleteDirectory(file);
+      LOG.info("Cleaning HDFS cluster data at: " + dfsBaseDirPath + " and starting fresh.");
+      Files.deleteIfExists(dfsBaseDirPath);
     }
 
     int loop = 0;
@@ -84,7 +82,7 @@ public class HdfsTestService {
         // Configure and start the HDFS cluster
         // boolean format = shouldFormatDFSCluster(localDFSLocation, clean);
         String bindIP = "127.0.0.1";
-        configureDFSCluster(hadoopConf, localDFSLocation, bindIP, namenodeRpcPort,
+        configureDFSCluster(hadoopConf, dfsBaseDirPath.toString(), bindIP, namenodeRpcPort,
             datanodePort, datanodeIpcPort, datanodeHttpPort);
         miniDfsCluster = new MiniDFSCluster.Builder(hadoopConf).numDataNodes(1).format(format).checkDataNodeAddrConfig(true)
             .checkDataNodeHostConfig(true).build();
@@ -107,28 +105,17 @@ public class HdfsTestService {
       miniDfsCluster.shutdown(true, true);
     }
     miniDfsCluster = null;
-    hadoopConf = null;
-  }
-
-  /**
-   * Get the location on the local FS where we store the HDFS data.
-   *
-   * @param baseFsLocation The base location on the local filesystem we have write access to create dirs.
-   * @return The location for HDFS data.
-   */
-  private static String getDFSLocation(String baseFsLocation) {
-    return baseFsLocation + Path.SEPARATOR + "dfs";
   }
 
   /**
    * Configure the DFS Cluster before launching it.
    *
-   * @param config The already created Hadoop configuration we'll further configure for HDFS
-   * @param localDFSLocation The location on the local filesystem where cluster data is stored
-   * @param bindIP An IP address we want to force the datanode and namenode to bind to.
+   * @param config           The already created Hadoop configuration we'll further configure for HDFS
+   * @param dfsBaseDir       The location on the local filesystem where cluster data is stored
+   * @param bindIP           An IP address we want to force the datanode and namenode to bind to.
    * @return The updated Configuration object.
    */
-  private static Configuration configureDFSCluster(Configuration config, String localDFSLocation, String bindIP,
+  private static Configuration configureDFSCluster(Configuration config, String dfsBaseDir, String bindIP,
       int namenodeRpcPort, int datanodePort, int datanodeIpcPort, int datanodeHttpPort) {
 
     LOG.info("HDFS force binding to ip: " + bindIP);
@@ -141,12 +128,13 @@ public class HdfsTestService {
     // issues with the internal IP addresses. This config disables that check,
     // and will allow a datanode to connect regardless.
     config.setBoolean("dfs.namenode.datanode.registration.ip-hostname-check", false);
-    config.set("hdfs.minidfs.basedir", localDFSLocation);
+    config.set("hdfs.minidfs.basedir", dfsBaseDir);
     // allow current user to impersonate others
     String user = System.getProperty("user.name");
     config.set("hadoop.proxyuser." + user + ".groups", "*");
     config.set("hadoop.proxyuser." + user + ".hosts", "*");
-    config.setBoolean("dfs.permissions",false);
+    config.setBoolean("dfs.permissions", false);
+    config.set("dfs.blocksize","16777216");
     return config;
   }
 

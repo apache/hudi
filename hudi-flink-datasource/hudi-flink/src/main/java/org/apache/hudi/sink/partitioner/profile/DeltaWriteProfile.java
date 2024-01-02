@@ -19,8 +19,8 @@
 package org.apache.hudi.sink.partitioner.profile;
 
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -50,7 +50,7 @@ public class DeltaWriteProfile extends WriteProfile {
     List<SmallFile> smallFileLocations = new ArrayList<>();
 
     // Init here since this class (and member variables) might not have been initialized
-    HoodieTimeline commitTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
+    HoodieTimeline commitTimeline = metaClient.getCommitsTimeline().filterCompletedAndCompactionInstants();
 
     // Find out all eligible small file slices
     if (!commitTimeline.empty()) {
@@ -70,16 +70,14 @@ public class DeltaWriteProfile extends WriteProfile {
       for (FileSlice smallFileSlice : allSmallFileSlices) {
         SmallFile sf = new SmallFile();
         if (smallFileSlice.getBaseFile().isPresent()) {
-          // TODO : Move logic of file name, file id, base commit time handling inside file slice
-          String filename = smallFileSlice.getBaseFile().get().getFileName();
-          sf.location = new HoodieRecordLocation(FSUtils.getCommitTime(filename), FSUtils.getFileId(filename));
+          HoodieBaseFile baseFile = smallFileSlice.getBaseFile().get();
+          sf.location = new HoodieRecordLocation(baseFile.getCommitTime(), baseFile.getFileId());
           sf.sizeBytes = getTotalFileSize(smallFileSlice);
           smallFileLocations.add(sf);
         } else {
           smallFileSlice.getLogFiles().findFirst().ifPresent(logFile -> {
             // in case there is something error, and the file slice has no log file
-            sf.location = new HoodieRecordLocation(FSUtils.getBaseCommitTimeFromLogPath(logFile.getPath()),
-                FSUtils.getFileIdFromLogPath(logFile.getPath()));
+            sf.location = new HoodieRecordLocation(logFile.getDeltaCommitTime(), logFile.getFileId());
             sf.sizeBytes = getTotalFileSize(smallFileSlice);
             smallFileLocations.add(sf);
           });

@@ -21,19 +21,17 @@ package org.apache.hudi.table.action.restore;
 
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.rollback.MergeOnReadRollbackActionExecutor;
 
-public class MergeOnReadRestoreActionExecutor<T extends HoodieRecordPayload, I, K, O>
+public class MergeOnReadRestoreActionExecutor<T, I, K, O>
     extends BaseRestoreActionExecutor<T, I, K, O> {
   public MergeOnReadRestoreActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table,
-                                          String instantTime, String restoreInstantTime) {
-    super(context, config, table, instantTime, restoreInstantTime);
+                                          String instantTime, String savepointToRestoreTimestamp) {
+    super(context, config, table, instantTime, savepointToRestoreTimestamp);
   }
 
   @Override
@@ -51,8 +49,8 @@ public class MergeOnReadRestoreActionExecutor<T extends HoodieRecordPayload, I, 
         throw new IllegalArgumentException("invalid action name " + instantToRollback.getAction());
     }
     table.getMetaClient().reloadActiveTimeline();
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
-    table.scheduleRollback(context, instantTime, instantToRollback, false, false);
+    String instantTime = table.getMetaClient().createNewInstantTime();
+    table.scheduleRollback(context, instantTime, instantToRollback, false, false, true);
     table.getMetaClient().reloadActiveTimeline();
     MergeOnReadRollbackActionExecutor rollbackActionExecutor = new MergeOnReadRollbackActionExecutor(
         context,
@@ -62,7 +60,6 @@ public class MergeOnReadRestoreActionExecutor<T extends HoodieRecordPayload, I, 
         instantToRollback,
         true,
         true,
-        false,
         false);
 
     // TODO : Get file status and create a rollback stat and file

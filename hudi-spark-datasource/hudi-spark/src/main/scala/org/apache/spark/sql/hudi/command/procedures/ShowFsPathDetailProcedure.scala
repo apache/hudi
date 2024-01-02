@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import com.google.common.collect.Lists
 import org.apache.hadoop.fs.{ContentSummary, FileStatus, Path}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.spark.sql.Row
@@ -28,9 +27,10 @@ import java.util.function.Supplier
 
 class ShowFsPathDetailProcedure extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "path", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "path", DataTypes.StringType),
     ProcedureParameter.optional(1, "is_sub", DataTypes.BooleanType, false),
-    ProcedureParameter.optional(2, "sort", DataTypes.BooleanType, true)
+    ProcedureParameter.optional(2, "sort", DataTypes.BooleanType, true),
+    ProcedureParameter.optional(3, "limit", DataTypes.IntegerType, 100)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -54,11 +54,12 @@ class ShowFsPathDetailProcedure extends BaseProcedure with ProcedureBuilder {
     val srcPath = getArgValueOrDefault(args, PARAMETERS(0)).get.asInstanceOf[String]
     val isSub = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Boolean]
     val sort = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Boolean]
+    val limit = getArgValueOrDefault(args, PARAMETERS(3))
 
     val path: Path = new Path(srcPath)
     val fs = FSUtils.getFs(path, jsc.hadoopConfiguration())
     val status: Array[FileStatus] = if (isSub) fs.listStatus(path) else fs.globStatus(path)
-    val rows: java.util.List[Row] = Lists.newArrayList()
+    val rows: java.util.List[Row] = new java.util.ArrayList[Row]()
 
     if (status.nonEmpty) {
       for (i <- status.indices) {
@@ -72,9 +73,17 @@ class ShowFsPathDetailProcedure extends BaseProcedure with ProcedureBuilder {
 
     val df = spark.sqlContext.createDataFrame(rows, OUTPUT_TYPE)
     if (sort) {
-      df.orderBy(df("storage_size").desc).collect()
+      if (limit.isDefined) {
+        df.orderBy(df("storage_size").desc).limit(limit.get.asInstanceOf[Int]).collect()
+      } else {
+        df.orderBy(df("storage_size").desc).collect()
+      }
     } else {
-      df.orderBy(df("file_num").desc).collect()
+      if (limit.isDefined) {
+        df.orderBy(df("file_num").desc).limit(limit.get.asInstanceOf[Int]).collect()
+      } else {
+        df.orderBy(df("file_num").desc).collect()
+      }
     }
   }
 

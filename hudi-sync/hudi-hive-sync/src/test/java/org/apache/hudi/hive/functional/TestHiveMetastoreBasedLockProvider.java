@@ -125,6 +125,28 @@ public class TestHiveMetastoreBasedLockProvider extends HiveSyncFunctionalTestHa
       // expected
     }
     lockProvider.unlock();
+
+    // not acquired in the beginning
+    HiveMetastoreBasedLockProvider lockProvider1 = new HiveMetastoreBasedLockProvider(lockConfiguration, hiveConf());
+    HiveMetastoreBasedLockProvider lockProvider2 = new HiveMetastoreBasedLockProvider(lockConfiguration, hiveConf());
+    lockComponent.setOperationType(DataOperationType.NO_TXN);
+    Assertions.assertTrue(lockProvider1.acquireLock(lockConfiguration.getConfig()
+        .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS, lockComponent));
+    try {
+      boolean acquireStatus = lockProvider2.acquireLock(lockConfiguration.getConfig()
+          .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS, lockComponent);
+      Assertions.assertFalse(acquireStatus);
+    } catch (IllegalArgumentException e) {
+      // expected
+    }
+    lockProvider1.unlock();
+    Assertions.assertTrue(lockProvider2.acquireLock(lockConfiguration.getConfig()
+        .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS, lockComponent));
+    lockProvider2.unlock();
+
+    lockProvider.close();
+    lockProvider1.close();
+    lockProvider2.close();
   }
 
   @Test

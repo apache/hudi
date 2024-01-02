@@ -18,10 +18,12 @@
 
 package org.apache.hudi.common.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.apache.hudi.common.util.Option;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -74,11 +76,35 @@ public class HoodieDeltaWriteStat extends HoodieWriteStat {
     return logFiles;
   }
 
+  public void putRecordsStats(Map<String, HoodieColumnRangeMetadata<Comparable>> stats) {
+    if (!recordsStats.isPresent()) {
+      recordsStats = Option.of(stats);
+    } else {
+      // in case there are multiple log blocks for one write process.
+      recordsStats = Option.of(mergeRecordsStats(recordsStats.get(), stats));
+    }
+  }
+
+  // keep for serialization efficiency
   public void setRecordsStats(Map<String, HoodieColumnRangeMetadata<Comparable>> stats) {
     recordsStats = Option.of(stats);
   }
 
   public Option<Map<String, HoodieColumnRangeMetadata<Comparable>>> getColumnStats() {
     return recordsStats;
+  }
+
+  private static Map<String, HoodieColumnRangeMetadata<Comparable>> mergeRecordsStats(
+      Map<String, HoodieColumnRangeMetadata<Comparable>> stats1,
+      Map<String, HoodieColumnRangeMetadata<Comparable>> stats2) {
+    Map<String, HoodieColumnRangeMetadata<Comparable>> mergedStats = new HashMap<>(stats1);
+    for (Map.Entry<String, HoodieColumnRangeMetadata<Comparable>> entry : stats2.entrySet()) {
+      final String colName = entry.getKey();
+      final HoodieColumnRangeMetadata<Comparable> metadata = mergedStats.containsKey(colName)
+          ? HoodieColumnRangeMetadata.merge(mergedStats.get(colName), entry.getValue())
+          : entry.getValue();
+      mergedStats.put(colName, metadata);
+    }
+    return mergedStats;
   }
 }

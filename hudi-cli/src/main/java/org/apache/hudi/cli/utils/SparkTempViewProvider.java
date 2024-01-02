@@ -18,6 +18,7 @@
 
 package org.apache.hudi.cli.utils;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.spark.SparkConf;
@@ -29,34 +30,28 @@ import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
-import org.springframework.shell.support.logging.HandlerUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
-import java.util.logging.Handler;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 public class SparkTempViewProvider implements TempViewProvider {
-  private static final Logger LOG = HandlerUtils.getLogger(SparkTempViewProvider.class);
+
+  private static final Logger LOG = LoggerFactory.getLogger(SparkTempViewProvider.class);
 
   private JavaSparkContext jsc;
   private SQLContext sqlContext;
 
   public SparkTempViewProvider(String appName) {
     try {
-      Handler handler = LOG.getParent().getHandlers()[0];
-      SparkConf sparkConf = new SparkConf().setAppName(appName)
-              .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer").setMaster("local[8]");
+      SparkConf sparkConf = SparkUtil.getDefaultConf(appName, Option.of("local[8]"));
+
       jsc = new JavaSparkContext(sparkConf);
       sqlContext = new SQLContext(jsc);
-      if (handler != null) {
-        LOG.getParent().removeHandler(LOG.getParent().getHandlers()[0]);
-        LOG.getParent().addHandler(handler);
-      }
     } catch (Throwable ex) {
       // log full stack trace and rethrow. Without this its difficult to debug failures, if any
-      LOG.log(Level.WARNING, "unable to initialize spark context ", ex);
+      LOG.warn("unable to initialize spark context ", ex);
       throw new HoodieException(ex);
     }
   }
@@ -95,7 +90,7 @@ public class SparkTempViewProvider implements TempViewProvider {
       System.out.println("Wrote table view: " + tableName);
     } catch (Throwable ex) {
       // log full stack trace and rethrow. Without this its difficult to debug failures, if any
-      LOG.log(Level.WARNING, "unable to write ", ex);
+      LOG.warn("unable to write ", ex);
       throw new HoodieException(ex);
     }
   }
@@ -106,7 +101,7 @@ public class SparkTempViewProvider implements TempViewProvider {
       this.sqlContext.sql(sqlText).show(Integer.MAX_VALUE, false);
     } catch (Throwable ex) {
       // log full stack trace and rethrow. Without this its difficult to debug failures, if any
-      LOG.log(Level.WARNING, "unable to read ", ex);
+      LOG.warn("unable to read ", ex);
       throw new HoodieException(ex);
     }
   }
@@ -117,7 +112,7 @@ public class SparkTempViewProvider implements TempViewProvider {
       sqlContext.sql("SHOW TABLES").show(Integer.MAX_VALUE, false);
     } catch (Throwable ex) {
       // log full stack trace and rethrow. Without this its difficult to debug failures, if any
-      LOG.log(Level.WARNING, "unable to get all views ", ex);
+      LOG.warn("unable to get all views ", ex);
       throw new HoodieException(ex);
     }
   }
@@ -128,7 +123,7 @@ public class SparkTempViewProvider implements TempViewProvider {
       sqlContext.sql("DROP TABLE IF EXISTS " + tableName);
     } catch (Throwable ex) {
       // log full stack trace and rethrow. Without this its difficult to debug failures, if any
-      LOG.log(Level.WARNING, "unable to initialize spark context ", ex);
+      LOG.warn("unable to initialize spark context ", ex);
       throw new HoodieException(ex);
     }
   }

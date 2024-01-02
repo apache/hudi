@@ -19,6 +19,7 @@
 
 package org.apache.hudi.hive.replication;
 
+import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.hive.testutils.HiveTestCluster;
 
 import org.apache.hadoop.fs.Path;
@@ -38,9 +39,9 @@ import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitParams.LOCAL_
 import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitParams.REMOTE_BASE_PATH;
 import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitParams.REMOTE_HIVE_SERVER_JDBC_URLS;
 import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitParams.REMOTE_HIVE_SITE_URI;
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -72,9 +73,9 @@ public class TestHiveSyncGlobalCommitTool {
     params.loadedProps.setProperty(META_SYNC_DATABASE_NAME.key(), DB_NAME);
     params.loadedProps.setProperty(META_SYNC_TABLE_NAME.key(), TBL_NAME);
     params.loadedProps.setProperty(META_SYNC_BASE_PATH.key(), localCluster.tablePath(DB_NAME, TBL_NAME));
-    params.loadedProps.setProperty(META_SYNC_ASSUME_DATE_PARTITION.key(), "true");
     params.loadedProps.setProperty(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), "false");
     params.loadedProps.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");
+    params.loadedProps.setProperty(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), SlashEncodedDayPartitionValueExtractor.class.getName());
     return params;
   }
 

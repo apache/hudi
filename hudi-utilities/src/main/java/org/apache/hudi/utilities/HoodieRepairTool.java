@@ -40,9 +40,9 @@ import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -138,7 +138,7 @@ import java.util.stream.Collectors;
  */
 public class HoodieRepairTool {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieRepairTool.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieRepairTool.class);
   private static final String BACKUP_DIR_PREFIX = "hoodie_repair_backup_";
   // Repair config
   private final Config cfg;
@@ -164,7 +164,7 @@ public class HoodieRepairTool {
         .build();
 
     this.tableMetadata = new FileSystemBackedTableMetadata(
-        context, context.getHadoopConf(), cfg.basePath, cfg.assumeDatePartitioning);
+        context, metaClient.getTableConfig(), context.getHadoopConf(), cfg.basePath);
   }
 
   public boolean run() {

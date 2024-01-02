@@ -1,0 +1,60 @@
+{
+  "type" : "record",
+  "name" : "example",
+  "doc" : "A representation of an event",
+  "namespace" : "example.com",
+  "fields" : [ {
+    "name" : "dtstart",
+    "doc" : "Event starting time",
+    "type" : "string"
+  }, {
+    "name" : "dtend",
+    "doc" : "Event ending time",
+    "default" : null,
+    "type" : [ "null", "string" ]
+  }, {
+    "name" : "summary",
+    "doc" : "",
+    "type" : "string"
+  }, {
+    "name" : "location",
+    "doc" : "",
+    "default" : null,
+    "type" : [ "null", "string" ]
+  }, {
+    "name" : "url",
+    "doc" : "",
+    "default" : null,
+    "type" : [ "null", "string" ]
+  }, {
+    "name" : "duration",
+    "doc" : "Event duration",
+    "default" : null,
+    "type" : [ "null", "string" ]
+  }, {
+    "name" : "rdate",
+    "doc" : "Recurrence date",
+    "default" : null,
+    "type" : [ "null", "string" ]
+  }, {
+    "name" : "rrule",
+    "doc" : "Recurrence rule",
+    "default" : null,
+    "type" : [ "null", "string" ]
+  }, {
+    "name" : "category",
+    "doc" : "",
+    "default" : null,
+    "type" : [ "null", "string" ]
+  }, {
+    "name" : "description",
+    "doc" : "",
+    "default" : null,
+    "type" : [ "null", "string" ]
+  }, {
+    "name" : "geo",
+    "doc" : "",
+    "default" : null,
+    "type" : "null"
+  } ]
+}

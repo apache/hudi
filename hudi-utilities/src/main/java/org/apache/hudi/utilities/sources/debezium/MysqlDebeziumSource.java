@@ -20,7 +20,7 @@ package org.apache.hudi.utilities.sources.debezium;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.debezium.DebeziumConstants;
-import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import org.apache.spark.api.java.JavaSparkContext;
@@ -44,7 +44,7 @@ public class MysqlDebeziumSource extends DebeziumSource {
   public MysqlDebeziumSource(TypedProperties props, JavaSparkContext sparkContext,
                              SparkSession sparkSession,
                              SchemaProvider schemaProvider,
-                             HoodieDeltaStreamerMetrics metrics) {
+                             HoodieIngestionMetrics metrics) {
     super(props, sparkContext, sparkSession, schemaProvider, metrics);
     this.sqlContext = sparkSession.sqlContext();
     sqlContext.udf().register(generateUniqueSeqUdfFn, (UDF2<String, Long, String>) MysqlDebeziumSource::generateUniqueSequence, DataTypes.StringType);

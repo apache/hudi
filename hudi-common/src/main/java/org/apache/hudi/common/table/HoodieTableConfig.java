@@ -19,49 +19,61 @@
 package org.apache.hudi.common.table;
 
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
-import org.apache.hudi.common.bootstrap.index.NoOpBootstrapIndex;
-import org.apache.hudi.common.config.ConfigClassProperty;
-import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.OrderedProperties;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.RecordPayloadType;
+import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.BinaryUtil;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.metadata.MetadataPartitionType;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.HashSet;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.DATE_TIME_PARSER;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.INPUT_TIME_UNIT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_TIMEZONE_FORMAT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT;
+import static org.apache.hudi.common.util.ConfigUtils.fetchConfigs;
+import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Configurations on the Hoodie Table like type of ingestion, storage formats, hive table name etc Configurations are loaded from hoodie.properties, these properties are usually set during
@@ -70,17 +82,9 @@ import static java.nio.charset.StandardCharsets.UTF_8;
  * @see HoodieTableMetaClient
  * @since 0.3.0
  */
-@ConfigClassProperty(name = "Table Configurations",
-    groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "Configurations that persist across writes and read on a Hudi table "
-        + " like  base, log file formats, table name, creation schema, table version layouts. "
-        + " Configurations are loaded from hoodie.properties, these properties are usually set during "
-        + "initializing a path as hoodie base path and rarely changes during "
-        + "the lifetime of the table. Writers/Queries' configurations are validated against these "
-        + " each time for compatibility.")
 public class HoodieTableConfig extends HoodieConfig {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieTableConfig.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieTableConfig.class);
 
   public static final String HOODIE_PROPERTIES_FILE = "hoodie.properties";
   public static final String HOODIE_PROPERTIES_FILE_BACKUP = "hoodie.properties.backup";
@@ -89,7 +93,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> DATABASE_NAME = ConfigProperty
       .key("hoodie.database.name")
-      .noDefaultValue()
+      .noDefaultValue("Database name can't have default value as it's used to toggle Hive incremental query feature. See HUDI-2837")
       .withDocumentation("Database name that will be used for incremental query.If different databases have the same table name during incremental query, "
           + "we can set it to limit the table name under a specific database");
 
@@ -127,6 +131,18 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Columns used to uniquely identify the table. Concatenated values of these fields are used as "
           + " the record key component of HoodieKey.");
 
+  public static final ConfigProperty<Boolean> CDC_ENABLED = ConfigProperty
+      .key("hoodie.table.cdc.enabled")
+      .defaultValue(false)
+      .sinceVersion("0.13.0")
+      .withDocumentation("When enable, persist the change data if necessary, and can be queried as a CDC query mode.");
+
+  public static final ConfigProperty<String> CDC_SUPPLEMENTAL_LOGGING_MODE = ConfigProperty
+      .key("hoodie.table.cdc.supplemental.logging.mode")
+      .defaultValue(HoodieCDCSupplementalLoggingMode.DATA_BEFORE_AFTER.name())
+      .withDocumentation(HoodieCDCSupplementalLoggingMode.class)
+      .sinceVersion("0.13.0");
+
   public static final ConfigProperty<String> CREATE_SCHEMA = ConfigProperty
       .key("hoodie.table.create.schema")
       .noDefaultValue()
@@ -152,8 +168,21 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<String> PAYLOAD_CLASS_NAME = ConfigProperty
       .key("hoodie.compaction.payload.class")
       .defaultValue(OverwriteWithLatestAvroPayload.class.getName())
+      .deprecatedAfter("1.0.0")
       .withDocumentation("Payload class to use for performing compactions, i.e merge delta logs with current base file and then "
           + " produce a new base file.");
+
+  public static final ConfigProperty<String> PAYLOAD_TYPE = ConfigProperty
+      .key("hoodie.compaction.payload.type")
+      .defaultValue(RecordPayloadType.OVERWRITE_LATEST_AVRO.name())
+      .sinceVersion("1.0.0")
+      .withDocumentation(RecordPayloadType.class);
+
+  public static final ConfigProperty<String> RECORD_MERGER_STRATEGY = ConfigProperty
+      .key("hoodie.compaction.record.merger.strategy")
+      .defaultValue(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
+      .sinceVersion("0.13.0")
+      .withDocumentation("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.record.merger.impls which has the same merger strategy id");
 
   public static final ConfigProperty<String> ARCHIVELOG_FOLDER = ConfigProperty
       .key("hoodie.archivelog.folder")
@@ -168,7 +197,14 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<String> BOOTSTRAP_INDEX_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.index.class")
       .defaultValue(HFileBootstrapIndex.class.getName())
+      .deprecatedAfter("1.0.0")
       .withDocumentation("Implementation to use, for mapping base files to bootstrap base file, that contain actual data.");
+
+  public static final ConfigProperty<String> BOOTSTRAP_INDEX_TYPE = ConfigProperty
+      .key("hoodie.bootstrap.index.type")
+      .defaultValue(BootstrapIndexType.HFILE.name())
+      .sinceVersion("1.0.0")
+      .withDocumentation("Bootstrap index type determines which implementation to use, for mapping base files to bootstrap base file, that contain actual data.");
 
   public static final ConfigProperty<String> BOOTSTRAP_BASE_PATH = ConfigProperty
       .key("hoodie.bootstrap.base.path")
@@ -184,7 +220,14 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<String> KEY_GENERATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.table.keygenerator.class")
       .noDefaultValue()
+      .deprecatedAfter("1.0.0")
       .withDocumentation("Key Generator class property for the hoodie table");
+
+  public static final ConfigProperty<String> KEY_GENERATOR_TYPE = ConfigProperty
+      .key("hoodie.table.keygenerator.type")
+      .noDefaultValue()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Key Generator type to determine key generator class");
 
   public static final ConfigProperty<HoodieTimelineTimeZone> TIMELINE_TIMEZONE = ConfigProperty
       .key("hoodie.table.timeline.timezone")
@@ -200,20 +243,28 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> DROP_PARTITION_COLUMNS = ConfigProperty
       .key("hoodie.datasource.write.drop.partition.columns")
       .defaultValue(false)
+      .markAdvanced()
       .withDocumentation("When set to true, will not write the partition columns into hudi. By default, false.");
+
+  public static final ConfigProperty<Boolean> MULTIPLE_BASE_FILE_FORMATS_ENABLE = ConfigProperty
+      .key("hoodie.table.multiple.base.file.formats.enable")
+      .defaultValue(false)
+      .sinceVersion("1.0.0")
+      .withDocumentation("When set to true, the table can support reading and writing multiple base file formats.");
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
 
-  public static final List<String> PERSISTED_CONFIG_LIST = Arrays.asList(
-      Config.DATE_TIME_PARSER_PROP,
-      Config.INPUT_TIME_UNIT, Config.TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX_PROP,
-      Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP, Config.TIMESTAMP_INPUT_TIMEZONE_FORMAT_PROP,
-      Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, Config.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT_PROP,
-      Config.TIMESTAMP_TIMEZONE_FORMAT_PROP, Config.DATE_TIME_PARSER_PROP
+  public static final List<ConfigProperty<String>> PERSISTED_CONFIG_LIST = Arrays.asList(
+      INPUT_TIME_UNIT,
+      TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX,
+      TIMESTAMP_INPUT_DATE_FORMAT,
+      TIMESTAMP_INPUT_TIMEZONE_FORMAT,
+      TIMESTAMP_OUTPUT_DATE_FORMAT,
+      TIMESTAMP_OUTPUT_TIMEZONE_FORMAT,
+      TIMESTAMP_TIMEZONE_FORMAT,
+      DATE_TIME_PARSER
   );
-
-  public static final String NO_OP_BOOTSTRAP_INDEX_CLASS = NoOpBootstrapIndex.class.getName();
 
   public static final ConfigProperty<String> TABLE_CHECKSUM = ConfigProperty
       .key("hoodie.table.checksum")
@@ -235,17 +286,43 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Comma-separated list of metadata partitions that have been completely built and in-sync with data table. "
           + "These partitions are ready for use by the readers");
 
+  public static final ConfigProperty<String> SECONDARY_INDEXES_METADATA = ConfigProperty
+      .key("hoodie.table.secondary.indexes.metadata")
+      .noDefaultValue()
+      .sinceVersion("0.13.0")
+      .withDocumentation("The metadata of secondary indexes");
+
+  public static final ConfigProperty<String> INDEX_DEFINITION_PATH = ConfigProperty
+      .key("hoodie.table.index.defs.path")
+      .noDefaultValue()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Absolute path where the index definitions are stored");
+
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
-  public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName) {
+  public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName, String recordMergerStrategyId) {
     super();
     Path propertyPath = new Path(metaPath, HOODIE_PROPERTIES_FILE);
     LOG.info("Loading table properties from " + propertyPath);
     try {
-      fetchConfigs(fs, metaPath);
+      this.props = fetchConfigs(fs, metaPath, HOODIE_PROPERTIES_FILE, HOODIE_PROPERTIES_FILE_BACKUP, MAX_READ_RETRIES, READ_RETRY_DELAY_MSEC);
+      boolean needStore = false;
       if (contains(PAYLOAD_CLASS_NAME) && payloadClassName != null
           && !getString(PAYLOAD_CLASS_NAME).equals(payloadClassName)) {
         setValue(PAYLOAD_CLASS_NAME, payloadClassName);
+        needStore = true;
+      }
+      if (contains(PAYLOAD_TYPE) && payloadClassName != null
+          && !payloadClassName.equals(RecordPayloadType.valueOf(getString(PAYLOAD_TYPE)).getClassName())) {
+        setValue(PAYLOAD_TYPE, RecordPayloadType.fromClassName(payloadClassName).name());
+        needStore = true;
+      }
+      if (contains(RECORD_MERGER_STRATEGY) && recordMergerStrategyId != null
+          && !getString(RECORD_MERGER_STRATEGY).equals(recordMergerStrategyId)) {
+        setValue(RECORD_MERGER_STRATEGY, recordMergerStrategyId);
+        needStore = true;
+      }
+      if (needStore) {
         // FIXME(vc): wonder if this can be removed. Need to look into history.
         try (FSDataOutputStream outputStream = fs.create(propertyPath)) {
           storeProperties(props, outputStream);
@@ -254,8 +331,6 @@ public class HoodieTableConfig extends HoodieConfig {
     } catch (IOException e) {
       throw new HoodieIOException("Could not load Hoodie properties from " + propertyPath, e);
     }
-    ValidationUtils.checkArgument(contains(TYPE) && contains(NAME),
-        "hoodie.properties file seems invalid. Please check for left over `.updated` files if any, manually copy it to hoodie.properties and retry");
   }
 
   private static Properties getOrderedPropertiesWithTableChecksum(Properties props) {
@@ -297,48 +372,10 @@ public class HoodieTableConfig extends HoodieConfig {
     super();
   }
 
-  private void fetchConfigs(FileSystem fs, String metaPath) throws IOException {
-    Path cfgPath = new Path(metaPath, HOODIE_PROPERTIES_FILE);
-    try (FSDataInputStream is = fs.open(cfgPath)) {
-      props.load(is);
-    } catch (IOException ioe) {
-      if (!fs.exists(cfgPath)) {
-        LOG.warn("Run `table recover-configs` if config update/delete failed midway. Falling back to backed up configs.");
-        // try the backup. this way no query ever fails if update fails midway.
-        Path backupCfgPath = new Path(metaPath, HOODIE_PROPERTIES_FILE_BACKUP);
-        try (FSDataInputStream is = fs.open(backupCfgPath)) {
-          props.load(is);
-        }
-      } else {
-        throw ioe;
-      }
-    }
-  }
-
   public static void recover(FileSystem fs, Path metadataFolder) throws IOException {
     Path cfgPath = new Path(metadataFolder, HOODIE_PROPERTIES_FILE);
     Path backupCfgPath = new Path(metadataFolder, HOODIE_PROPERTIES_FILE_BACKUP);
     recoverIfNeeded(fs, cfgPath, backupCfgPath);
-  }
-
-  static void recoverIfNeeded(FileSystem fs, Path cfgPath, Path backupCfgPath) throws IOException {
-    if (!fs.exists(cfgPath)) {
-      // copy over from backup
-      try (FSDataInputStream in = fs.open(backupCfgPath);
-           FSDataOutputStream out = fs.create(cfgPath, false)) {
-        FileIOUtils.copy(in, out);
-      }
-    }
-    // regardless, we don't need the backup anymore.
-    fs.delete(backupCfgPath, false);
-  }
-
-  private static void upsertProperties(Properties current, Properties updated) {
-    updated.forEach((k, v) -> current.setProperty(k.toString(), v.toString()));
-  }
-
-  private static void deleteProperties(Properties current, Properties deleted) {
-    deleted.forEach((k, v) -> current.remove(k.toString()));
   }
 
   private static void modify(FileSystem fs, Path metadataFolder, Properties modifyProps, BiConsumer<Properties, Properties> modifyFn) {
@@ -348,25 +385,27 @@ public class HoodieTableConfig extends HoodieConfig {
       // 0. do any recovery from prior attempts.
       recoverIfNeeded(fs, cfgPath, backupCfgPath);
 
-      // 1. backup the existing properties.
-      try (FSDataInputStream in = fs.open(cfgPath);
-           FSDataOutputStream out = fs.create(backupCfgPath, false)) {
-        FileIOUtils.copy(in, out);
+      // 1. Read the existing config
+      TypedProperties props = fetchConfigs(fs, metadataFolder.toString(), HOODIE_PROPERTIES_FILE, HOODIE_PROPERTIES_FILE_BACKUP, MAX_READ_RETRIES, READ_RETRY_DELAY_MSEC);
+
+      // 2. backup the existing properties.
+      try (FSDataOutputStream out = fs.create(backupCfgPath, false)) {
+        storeProperties(props, out);
       }
-      /// 2. delete the properties file, reads will go to the backup, until we are done.
+
+      // 3. delete the properties file, reads will go to the backup, until we are done.
       fs.delete(cfgPath, false);
-      // 3. read current props, upsert and save back.
+
+      // 4. Upsert and save back.
       String checksum;
-      try (FSDataInputStream in = fs.open(backupCfgPath);
-           FSDataOutputStream out = fs.create(cfgPath, true)) {
-        Properties props = new TypedProperties();
-        props.load(in);
+      try (FSDataOutputStream out = fs.create(cfgPath, true)) {
         modifyFn.accept(props, modifyProps);
         checksum = storeProperties(props, out);
       }
+
       // 4. verify and remove backup.
       try (FSDataInputStream in = fs.open(cfgPath)) {
-        Properties props = new TypedProperties();
+        props.clear();
         props.load(in);
         if (!props.containsKey(TABLE_CHECKSUM.key()) || !props.getProperty(TABLE_CHECKSUM.key()).equals(checksum)) {
           // delete the properties file and throw exception indicating update failure
@@ -375,6 +414,8 @@ public class HoodieTableConfig extends HoodieConfig {
           throw new HoodieIOException("Checksum property missing or does not match.");
         }
       }
+
+      // 5. delete the backup properties file
       fs.delete(backupCfgPath, false);
     } catch (IOException e) {
       throw new HoodieIOException("Error updating table configs.", e);
@@ -386,13 +427,13 @@ public class HoodieTableConfig extends HoodieConfig {
    * here for safely updating with recovery and also ensuring the table config continues to be readable.
    */
   public static void update(FileSystem fs, Path metadataFolder, Properties updatedProps) {
-    modify(fs, metadataFolder, updatedProps, HoodieTableConfig::upsertProperties);
+    modify(fs, metadataFolder, updatedProps, ConfigUtils::upsertProperties);
   }
 
   public static void delete(FileSystem fs, Path metadataFolder, Set<String> deletedProps) {
     Properties props = new Properties();
     deletedProps.forEach(p -> props.setProperty(p, ""));
-    modify(fs, metadataFolder, props, HoodieTableConfig::deleteProperties);
+    modify(fs, metadataFolder, props, ConfigUtils::deleteProperties);
   }
 
   /**
@@ -411,7 +452,8 @@ public class HoodieTableConfig extends HoodieConfig {
       }
       hoodieConfig.setDefaultValue(TYPE);
       if (hoodieConfig.getString(TYPE).equals(HoodieTableType.MERGE_ON_READ.name())) {
-        hoodieConfig.setDefaultValue(PAYLOAD_CLASS_NAME);
+        hoodieConfig.setDefaultValue(PAYLOAD_TYPE);
+        hoodieConfig.setDefaultValue(RECORD_MERGER_STRATEGY);
       }
       hoodieConfig.setDefaultValue(ARCHIVELOG_FOLDER);
       if (!hoodieConfig.contains(TIMELINE_LAYOUT_VERSION)) {
@@ -420,12 +462,11 @@ public class HoodieTableConfig extends HoodieConfig {
       }
       if (hoodieConfig.contains(BOOTSTRAP_BASE_PATH)) {
         // Use the default bootstrap index class.
-        hoodieConfig.setDefaultValue(BOOTSTRAP_INDEX_CLASS_NAME, getDefaultBootstrapIndexClass(properties));
+        hoodieConfig.setDefaultValue(BOOTSTRAP_INDEX_CLASS_NAME, BootstrapIndexType.getDefaultBootstrapIndexClassName(hoodieConfig));
       }
       if (hoodieConfig.contains(TIMELINE_TIMEZONE)) {
         HoodieInstantTimeGenerator.setCommitTimeZone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getString(TIMELINE_TIMEZONE)));
       }
-
       hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS);
 
       storeProperties(hoodieConfig.getProps(), outputStream);
@@ -438,7 +479,7 @@ public class HoodieTableConfig extends HoodieConfig {
     }
     String table = props.getProperty(NAME.key());
     String database = props.getProperty(DATABASE_NAME.key(), "");
-    return BinaryUtil.generateChecksum(String.format(TABLE_CHECKSUM_FORMAT, database, table).getBytes(UTF_8));
+    return BinaryUtil.generateChecksum(getUTF8Bytes(String.format(TABLE_CHECKSUM_FORMAT, database, table)));
   }
 
   public static boolean validateChecksum(Properties props) {
@@ -475,10 +516,14 @@ public class HoodieTableConfig extends HoodieConfig {
    * Read the payload class for HoodieRecords from the table properties.
    */
   public String getPayloadClass() {
-    // There could be tables written with payload class from com.uber.hoodie. Need to transparently
-    // change to org.apache.hudi
-    return getStringOrDefault(PAYLOAD_CLASS_NAME).replace("com.uber.hoodie",
-        "org.apache.hudi");
+    return RecordPayloadType.getPayloadClassName(this);
+  }
+
+  /**
+   * Read the payload class for HoodieRecords from the table properties.
+   */
+  public String getRecordMergerStrategy() {
+    return getStringOrDefault(RECORD_MERGER_STRATEGY);
   }
 
   public String getPreCombineField() {
@@ -486,9 +531,13 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   public Option<String[]> getRecordKeyFields() {
-    String keyFieldsValue = getStringOrDefault(RECORDKEY_FIELDS, HoodieRecord.RECORD_KEY_METADATA_FIELD);
-    return Option.of(Arrays.stream(keyFieldsValue.split(","))
-        .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[] {}));
+    String keyFieldsValue = getStringOrDefault(RECORDKEY_FIELDS, null);
+    if (keyFieldsValue == null) {
+      return Option.empty();
+    } else {
+      return Option.of(Arrays.stream(keyFieldsValue.split(","))
+          .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[] {}));
+    }
   }
 
   public Option<String[]> getPartitionFields() {
@@ -499,29 +548,53 @@ public class HoodieTableConfig extends HoodieConfig {
     return Option.empty();
   }
 
+  public boolean isTablePartitioned() {
+    return getPartitionFields().map(pfs -> pfs.length > 0).orElse(false);
+  }
+
+  public Option<String> getSecondaryIndexesMetadata() {
+    if (contains(SECONDARY_INDEXES_METADATA)) {
+      return Option.of(getString(SECONDARY_INDEXES_METADATA));
+    }
+
+    return Option.empty();
+  }
+
   /**
    * @returns the partition field prop.
+   * @deprecated please use {@link #getPartitionFields()} instead
    */
+  @Deprecated
   public String getPartitionFieldProp() {
-    return getString(PARTITION_FIELDS);
+    // NOTE: We're adding a stub returning empty string to stay compatible w/ pre-existing
+    //       behavior until this method is fully deprecated
+    return Option.ofNullable(getString(PARTITION_FIELDS)).orElse("");
   }
 
   /**
    * Read the payload class for HoodieRecords from the table properties.
    */
   public String getBootstrapIndexClass() {
-    // There could be tables written with payload class from com.uber.hoodie. Need to transparently
-    // change to org.apache.hudi
-    return getStringOrDefault(BOOTSTRAP_INDEX_CLASS_NAME, getDefaultBootstrapIndexClass(props));
+    if (!props.getBoolean(BOOTSTRAP_INDEX_ENABLE.key(), BOOTSTRAP_INDEX_ENABLE.defaultValue())) {
+      return BootstrapIndexType.NO_OP.getClassName();
+    }
+    String bootstrapIndexClassName;
+    if (contains(BOOTSTRAP_INDEX_TYPE)) {
+      bootstrapIndexClassName = BootstrapIndexType.valueOf(getString(BOOTSTRAP_INDEX_TYPE)).getClassName();
+    } else if (contains(BOOTSTRAP_INDEX_CLASS_NAME)) {
+      bootstrapIndexClassName = getString(BOOTSTRAP_INDEX_CLASS_NAME);
+    } else {
+      bootstrapIndexClassName = BootstrapIndexType.valueOf(BOOTSTRAP_INDEX_TYPE.defaultValue()).getClassName();
+    }
+    return bootstrapIndexClassName;
   }
 
   public static String getDefaultBootstrapIndexClass(Properties props) {
     HoodieConfig hoodieConfig = new HoodieConfig(props);
-    String defaultClass = BOOTSTRAP_INDEX_CLASS_NAME.defaultValue();
     if (!hoodieConfig.getBooleanOrDefault(BOOTSTRAP_INDEX_ENABLE)) {
-      defaultClass = NO_OP_BOOTSTRAP_INDEX_CLASS;
+      return BootstrapIndexType.NO_OP.getClassName();
     }
-    return defaultClass;
+    return BootstrapIndexType.valueOf(BOOTSTRAP_INDEX_TYPE.defaultValue()).getClassName();
   }
 
   public Option<String> getBootstrapBasePath() {
@@ -589,8 +662,27 @@ public class HoodieTableConfig extends HoodieConfig {
     return getStringOrDefault(RECORDKEY_FIELDS, HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 
+  /**
+   * @returns the record key field prop.
+   */
+  public String getRawRecordKeyFieldProp() {
+    return getStringOrDefault(RECORDKEY_FIELDS, null);
+  }
+
+  public boolean isCDCEnabled() {
+    return getBooleanOrDefault(CDC_ENABLED);
+  }
+
+  public HoodieCDCSupplementalLoggingMode cdcSupplementalLoggingMode() {
+    return HoodieCDCSupplementalLoggingMode.valueOf(getStringOrDefault(CDC_SUPPLEMENTAL_LOGGING_MODE).toUpperCase());
+  }
+
   public String getKeyGeneratorClassName() {
-    return getString(KEY_GENERATOR_CLASS_NAME);
+    return KeyGeneratorType.getKeyGeneratorClassName(this);
+  }
+
+  public HoodieTimelineTimeZone getTimelineTimezone() {
+    return HoodieTimelineTimeZone.valueOf(getStringOrDefault(TIMELINE_TIMEZONE));
   }
 
   public String getHiveStylePartitioningEnable() {
@@ -605,6 +697,10 @@ public class HoodieTableConfig extends HoodieConfig {
     return getBooleanOrDefault(DROP_PARTITION_COLUMNS);
   }
 
+  public boolean isMultipleBaseFileFormatsEnabled() {
+    return getBooleanOrDefault(MULTIPLE_BASE_FILE_FORMATS_ENABLE);
+  }
+
   /**
    * Read the table checksum.
    */
@@ -612,17 +708,99 @@ public class HoodieTableConfig extends HoodieConfig {
     return getLong(TABLE_CHECKSUM);
   }
 
-  public List<String> getMetadataPartitionsInflight() {
-    return StringUtils.split(
+  public Set<String> getMetadataPartitionsInflight() {
+    return new HashSet<>(StringUtils.split(
         getStringOrDefault(TABLE_METADATA_PARTITIONS_INFLIGHT, StringUtils.EMPTY_STRING),
-        CONFIG_VALUES_DELIMITER
-    );
+        CONFIG_VALUES_DELIMITER));
   }
 
   public Set<String> getMetadataPartitions() {
     return new HashSet<>(
         StringUtils.split(getStringOrDefault(TABLE_METADATA_PARTITIONS, StringUtils.EMPTY_STRING),
             CONFIG_VALUES_DELIMITER));
+  }
+
+  /**
+   * @returns the index definition path.
+   */
+  public Option<String> getIndexDefinitionPath() {
+    return Option.ofNullable(getString(INDEX_DEFINITION_PATH));
+  }
+
+  /**
+   * @returns true if metadata table has been created and is being used for this dataset, else returns false.
+   */
+  public boolean isMetadataTableAvailable() {
+    return isMetadataPartitionAvailable(MetadataPartitionType.FILES);
+  }
+
+  /**
+   * Checks if metadata table is enabled and the specified partition has been initialized.
+   *
+   * @param partition The partition to check
+   * @returns true if the specific partition has been initialized, else returns false.
+   */
+  public boolean isMetadataPartitionAvailable(MetadataPartitionType partition) {
+    return getMetadataPartitions().contains(partition.getPartitionPath());
+  }
+
+  /**
+   * Enables or disables the specified metadata table partition.
+   *
+   * @param partitionType The partition
+   * @param enabled       If true, the partition is enabled, else disabled
+   */
+  public void setMetadataPartitionState(HoodieTableMetaClient metaClient, MetadataPartitionType partitionType, boolean enabled) {
+    ValidationUtils.checkArgument(!partitionType.getPartitionPath().contains(CONFIG_VALUES_DELIMITER),
+        "Metadata Table partition path cannot contain a comma: " + partitionType.getPartitionPath());
+    Set<String> partitions = getMetadataPartitions();
+    Set<String> partitionsInflight = getMetadataPartitionsInflight();
+    if (enabled) {
+      partitions.add(partitionType.getPartitionPath());
+      partitionsInflight.remove(partitionType.getPartitionPath());
+    } else if (partitionType.equals(MetadataPartitionType.FILES)) {
+      // file listing partition is required for all other partitions to work
+      // Disabling file partition will also disable all partitions
+      partitions.clear();
+      partitionsInflight.clear();
+    } else {
+      partitions.remove(partitionType.getPartitionPath());
+      partitionsInflight.remove(partitionType.getPartitionPath());
+    }
+    setValue(TABLE_METADATA_PARTITIONS, partitions.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
+    setValue(TABLE_METADATA_PARTITIONS_INFLIGHT, partitionsInflight.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
+    update(metaClient.getFs(), new Path(metaClient.getMetaPath()), getProps());
+    LOG.info(String.format("MDT %s partition %s has been %s", metaClient.getBasePathV2(), partitionType.name(), enabled ? "enabled" : "disabled"));
+  }
+
+  /**
+   * Enables the specified metadata table partition as inflight.
+   *
+   * @param partitionTypes The list of partitions to enable as inflight.
+   */
+  public void setMetadataPartitionsInflight(HoodieTableMetaClient metaClient, List<MetadataPartitionType> partitionTypes) {
+    Set<String> partitionsInflight = getMetadataPartitionsInflight();
+    partitionTypes.forEach(t -> {
+      ValidationUtils.checkArgument(!t.getPartitionPath().contains(CONFIG_VALUES_DELIMITER),
+          "Metadata Table partition path cannot contain a comma: " + t.getPartitionPath());
+      partitionsInflight.add(t.getPartitionPath());
+    });
+
+    setValue(TABLE_METADATA_PARTITIONS_INFLIGHT, partitionsInflight.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
+    update(metaClient.getFs(), new Path(metaClient.getMetaPath()), getProps());
+    LOG.info(String.format("MDT %s partitions %s have been set to inflight", metaClient.getBasePathV2(), partitionTypes));
+  }
+
+  public void setMetadataPartitionsInflight(HoodieTableMetaClient metaClient, MetadataPartitionType... partitionTypes) {
+    setMetadataPartitionsInflight(metaClient, Arrays.stream(partitionTypes).collect(Collectors.toList()));
+  }
+
+  /**
+   * Clear {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS}
+   * {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS_INFLIGHT}.
+   */
+  public void clearMetadataPartitions(HoodieTableMetaClient metaClient) {
+    setMetadataPartitionState(metaClient, MetadataPartitionType.FILES, false);
   }
 
   /**

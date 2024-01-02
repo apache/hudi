@@ -36,7 +36,7 @@ import org.apache.spark.sql.{AnalysisException, SparkSession}
 import java.util.Locale
 
 class HoodieSpark3_3ExtendedSqlParser(session: SparkSession, delegate: ParserInterface)
-  extends ParserInterface with Logging {
+  extends HoodieExtendedParserInterface with Logging {
 
   private lazy val conf = session.sqlContext.conf
   private lazy val builder = new HoodieSpark3_3ExtendedSqlAstBuilder(conf, delegate)
@@ -56,9 +56,7 @@ class HoodieSpark3_3ExtendedSqlParser(session: SparkSession, delegate: ParserInt
     }
   }
 
-  // SPARK-37266 Added parseQuery to ParserInterface in Spark 3.3.0
-  // Don't mark this as override for backward compatibility
-  def parseQuery(sqlText: String): LogicalPlan = delegate.parseQuery(sqlText)
+  override def parseQuery(sqlText: String): LogicalPlan = delegate.parseQuery(sqlText)
 
   override def parseExpression(sqlText: String): Expression = delegate.parseExpression(sqlText)
 
@@ -125,7 +123,11 @@ class HoodieSpark3_3ExtendedSqlParser(session: SparkSession, delegate: ParserInt
     normalized.contains("system_time as of") ||
       normalized.contains("timestamp as of") ||
       normalized.contains("system_version as of") ||
-      normalized.contains("version as of")
+      normalized.contains("version as of") ||
+      normalized.contains("create index") ||
+      normalized.contains("drop index") ||
+      normalized.contains("show indexes") ||
+      normalized.contains("refresh index")
   }
 }
 

@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -35,7 +36,6 @@ import org.apache.hudi.common.testutils.Transformations;
 import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
@@ -43,7 +43,7 @@ import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.table.HoodieJavaCopyOnWriteTable;
 import org.apache.hudi.table.HoodieJavaTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.testutils.HoodieJavaClientTestBase;
+import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
 import org.apache.avro.Schema;
@@ -52,11 +52,11 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.JobConf;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.nio.file.Paths;
@@ -76,9 +76,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase {
+public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarness {
 
-  private static final Logger LOG = LogManager.getLogger(TestJavaCopyOnWriteActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestJavaCopyOnWriteActionExecutor.class);
   private static final Schema SCHEMA = getSchemaFromResource(TestJavaCopyOnWriteActionExecutor.class, "/exampleSchema.avsc");
 
   @Test
@@ -99,7 +99,9 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
           context.getTaskContextSupplier().getAttemptIdSupplier().get());
       HoodieCreateHandle io = new HoodieCreateHandle(config, instantTime, table, partitionPath, fileName,
           context.getTaskContextSupplier());
-      return Pair.of(io.makeNewPath(record.getPartitionPath()), writeToken);
+      Pair<Path, String> result = Pair.of(io.makeNewPath(record.getPartitionPath()), writeToken);
+      io.close();
+      return result;
     }).collect(Collectors.toList()).get(0);
 
     assertEquals(newPathWithWriteToken.getKey().toString(), Paths.get(this.basePath, partitionPath,
@@ -127,7 +129,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
     HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
     writeClient.startCommitWithTime(firstCommitTime);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    BaseFileUtils fileUtils = BaseFileUtils.getInstance(metaClient);
+    BaseFileUtils fileUtils = getFileUtilsInstance(metaClient);
 
     String partitionPath = "2016/01/31";
 
@@ -408,11 +410,10 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
 
   @Test
   public void testInsertUpsertWithHoodieAvroPayload() throws Exception {
-    Schema schema = getSchemaFromResource(TestJavaCopyOnWriteActionExecutor.class, "/testDataGeneratorSchema.txt");
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withEngineType(EngineType.JAVA)
         .withPath(basePath)
-        .withSchema(schema.toString())
+        .withSchema(TRIP_EXAMPLE_SCHEMA)
         .withStorageConfig(HoodieStorageConfig.newBuilder()
             .parquetMaxFileSize(1000 * 1024).hfileMaxFileSize(1000 * 1024).build())
         .build();
@@ -475,7 +476,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
     HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
     writeClient.startCommitWithTime(firstCommitTime);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    BaseFileUtils fileUtils = BaseFileUtils.getInstance(metaClient);
+    BaseFileUtils fileUtils = getFileUtilsInstance(metaClient);
 
     String partitionPath = "2022/04/09";
 

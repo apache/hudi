@@ -20,8 +20,8 @@ package org.apache.hudi.timeline.service.handlers.marker;
 
 import org.apache.hudi.common.util.Option;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -32,7 +32,7 @@ import java.util.concurrent.ExecutorService;
  * A runnable that performs periodic, batched creation of markers for write operations.
  */
 public class MarkerCreationDispatchingRunnable implements Runnable {
-  public static final Logger LOG = LogManager.getLogger(MarkerCreationDispatchingRunnable.class);
+  public static final Logger LOG = LoggerFactory.getLogger(MarkerCreationDispatchingRunnable.class);
 
   // Marker directory states, {markerDirPath -> MarkerDirState instance}
   private final Map<String, MarkerDirState> markerDirStateMap;
@@ -66,8 +66,10 @@ public class MarkerCreationDispatchingRunnable implements Runnable {
 
     // Only fetch pending marker creation requests that can be processed,
     // i.e., that markers can be written to a underlying file
-    for (String markerDir : markerDirStateMap.keySet()) {
-      MarkerDirState markerDirState = markerDirStateMap.get(markerDir);
+    // markerDirStateMap is used in other thread, need to ensure thread safety
+    for (Map.Entry<String, MarkerDirState> entry : markerDirStateMap.entrySet()) {
+      String markerDir = entry.getKey();
+      MarkerDirState markerDirState = entry.getValue();
       Option<Integer> fileIndex = markerDirState.getNextFileIndexToUse();
       if (!fileIndex.isPresent()) {
         LOG.debug("All marker files are busy, skip batch processing of create marker requests in " + markerDir);

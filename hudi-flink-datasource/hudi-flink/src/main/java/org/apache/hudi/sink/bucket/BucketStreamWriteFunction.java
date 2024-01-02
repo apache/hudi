@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.sink.StreamWriteFunction;
 
@@ -39,7 +40,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * A stream write function with bucket hash index.
+ * A stream write function with simple bucket hash index.
  *
  * <p>The task holds a fresh new local index: {(partition + bucket number) &rarr fileId} mapping, this index
  * is used for deciding whether the incoming records in an UPDATE or INSERT.
@@ -56,6 +57,8 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
   private int bucketNum;
 
   private String indexKeyFields;
+
+  private boolean isNonBlockingConcurrencyControl;
 
   /**
    * BucketID to file group mapping in each partition.
@@ -83,7 +86,8 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
   public void open(Configuration parameters) throws IOException {
     super.open(parameters);
     this.bucketNum = config.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
-    this.indexKeyFields = config.getString(FlinkOptions.INDEX_KEY_FIELD);
+    this.indexKeyFields = OptionsResolver.getIndexKeyField(config);
+    this.isNonBlockingConcurrencyControl = OptionsResolver.isNonBlockingConcurrencyControl(config);
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
     this.parallelism = getRuntimeContext().getNumberOfParallelSubtasks();
     this.bucketIndex = new HashMap<>();
@@ -111,14 +115,14 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     bootstrapIndexIfNeed(partition);
     Map<Integer, String> bucketToFileId = bucketIndex.computeIfAbsent(partition, p -> new HashMap<>());
     final int bucketNum = BucketIdentifier.getBucketId(hoodieKey, indexKeyFields, this.bucketNum);
-    final String bucketId = partition + bucketNum;
+    final String bucketId = partition + "/" + bucketNum;
 
     if (incBucketIndex.contains(bucketId)) {
       location = new HoodieRecordLocation("I", bucketToFileId.get(bucketNum));
     } else if (bucketToFileId.containsKey(bucketNum)) {
       location = new HoodieRecordLocation("U", bucketToFileId.get(bucketNum));
     } else {
-      String newFileId = BucketIdentifier.newBucketFileIdPrefix(bucketNum);
+      String newFileId = BucketIdentifier.newBucketFileIdPrefix(bucketNum, isNonBlockingConcurrencyControl);
       location = new HoodieRecordLocation("I", newFileId);
       bucketToFileId.put(bucketNum, newFileId);
       incBucketIndex.add(bucketId);
@@ -134,8 +138,9 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
    * (partition + curBucket) % numPartitions == this taskID belongs to this task.
    */
   public boolean isBucketToLoad(int bucketNumber, String partition) {
-    int globalHash = ((partition + bucketNumber).hashCode()) & Integer.MAX_VALUE;
-    return BucketIdentifier.mod(globalHash, parallelism) == taskID;
+    final int partitionIndex = (partition.hashCode() & Integer.MAX_VALUE) % parallelism;
+    int globalIndex = partitionIndex + bucketNumber;
+    return BucketIdentifier.mod(globalIndex, parallelism)  == taskID;
   }
 
   /**
@@ -143,6 +148,10 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
    * This is a required operation for each restart to avoid having duplicate file ids for one bucket.
    */
   private void bootstrapIndexIfNeed(String partition) {
+    if (OptionsResolver.isInsertOverwrite(config)) {
+      // skips the index loading for insert overwrite operation.
+      return;
+    }
     if (bucketIndex.containsKey(partition)) {
       return;
     }
@@ -151,17 +160,18 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
 
     // Load existing fileID belongs to this task
     Map<Integer, String> bucketToFileIDMap = new HashMap<>();
-    this.writeClient.getHoodieTable().getFileSystemView().getAllFileGroups(partition).forEach(fileGroup -> {
-      String fileID = fileGroup.getFileGroupId().getFileId();
-      int bucketNumber = BucketIdentifier.bucketIdFromFileId(fileID);
+    this.writeClient.getHoodieTable().getHoodieView().getLatestFileSlices(partition).forEach(fileSlice -> {
+      String fileId = fileSlice.getFileId();
+      int bucketNumber = BucketIdentifier.bucketIdFromFileId(fileId);
       if (isBucketToLoad(bucketNumber, partition)) {
-        LOG.info(String.format("Should load this partition bucket %s with fileID %s", bucketNumber, fileID));
+        LOG.info(String.format("Should load this partition bucket %s with fileId %s", bucketNumber, fileId));
+        // Validate that one bucketId has only ONE fileId
         if (bucketToFileIDMap.containsKey(bucketNumber)) {
-          throw new RuntimeException(String.format("Duplicate fileID %s from bucket %s of partition %s found "
-              + "during the BucketStreamWriteFunction index bootstrap.", fileID, bucketNumber, partition));
+          throw new RuntimeException(String.format("Duplicate fileId %s from bucket %s of partition %s found "
+              + "during the BucketStreamWriteFunction index bootstrap.", fileId, bucketNumber, partition));
         } else {
-          LOG.info(String.format("Adding fileID %s to the bucket %s of partition %s.", fileID, bucketNumber, partition));
-          bucketToFileIDMap.put(bucketNumber, fileID);
+          LOG.info(String.format("Adding fileId %s to the bucket %s of partition %s.", fileId, bucketNumber, partition));
+          bucketToFileIDMap.put(bucketNumber, fileId);
         }
       }
     });

@@ -20,12 +20,15 @@ package org.apache.hudi.index;
 
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.bloom.HoodieBloomIndex;
+import org.apache.hudi.index.bloom.HoodieGlobalBloomIndex;
 import org.apache.hudi.index.bloom.ListBasedHoodieBloomIndexHelper;
+import org.apache.hudi.index.bucket.HoodieConsistentBucketIndex;
+import org.apache.hudi.index.bucket.HoodieSimpleBucketIndex;
+import org.apache.hudi.index.simple.HoodieGlobalSimpleIndex;
 import org.apache.hudi.index.simple.HoodieSimpleIndex;
 import org.apache.hudi.index.state.FlinkInMemoryStateIndex;
 
@@ -36,21 +39,32 @@ public final class FlinkHoodieIndexFactory {
   public static HoodieIndex createIndex(HoodieFlinkEngineContext context, HoodieWriteConfig config) {
     // first use index class config to create index.
     if (!StringUtils.isNullOrEmpty(config.getIndexClass())) {
-      Object instance = ReflectionUtils.loadClass(config.getIndexClass(), config);
-      if (!(instance instanceof HoodieIndex)) {
-        throw new HoodieIndexException(config.getIndexClass() + " is not a subclass of HoodieIndex");
-      }
-      return (HoodieIndex) instance;
+      return HoodieIndexUtils.createUserDefinedIndex(config);
     }
 
-    // TODO more indexes to be added
     switch (config.getIndexType()) {
+      case FLINK_STATE:
+        // Flink state index stores the index mappings with a state-backend,
+        // instantiates an in-memory HoodieIndex component as a placeholder.
       case INMEMORY:
         return new FlinkInMemoryStateIndex(context, config);
       case BLOOM:
         return new HoodieBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
+      case GLOBAL_BLOOM:
+        return new HoodieGlobalBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
       case SIMPLE:
         return new HoodieSimpleIndex(config, Option.empty());
+      case GLOBAL_SIMPLE:
+        return new HoodieGlobalSimpleIndex(config, Option.empty());
+      case BUCKET:
+        switch (config.getBucketIndexEngineType()) {
+          case SIMPLE:
+            return new HoodieSimpleBucketIndex(config);
+          case CONSISTENT_HASHING:
+            return new HoodieConsistentBucketIndex(config);
+          default:
+            throw new HoodieIndexException("Unknown bucket index engine type: " + config.getBucketIndexEngineType());
+        }
       default:
         throw new HoodieIndexException("Unsupported index type " + config.getIndexType());
     }

@@ -18,18 +18,21 @@
 
 package org.apache.hudi.common.testutils;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocatedFileStatus;
-import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
 import org.apache.hudi.common.fs.inline.InMemoryFileSystem;
+import org.apache.hudi.common.table.log.TestLogReaderUtils;
+import org.apache.hudi.common.util.FileIOUtils;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.RemoteIterator;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -58,8 +61,14 @@ public class FileSystemTestUtils {
     return new Path(FILE_SCHEME + fileSuffix);
   }
 
+  public static Path getRandomOuterFSPath(String extension) {
+    String randomFileName = UUID.randomUUID().toString();
+    String fileSuffix = COLON + FORWARD_SLASH + TEMP + FORWARD_SLASH + randomFileName;
+    return new Path(FILE_SCHEME + fileSuffix + "." + extension);
+  }
+
   public static Path getPhantomFile(Path outerPath, long startOffset, long inlineLength) {
-    // Generate phathom inline file
+    // Generate phantom inline file
     return InLineFSUtils.getInlineFilePath(outerPath, FILE_SCHEME, startOffset, inlineLength);
   }
 
@@ -85,5 +94,12 @@ public class FileSystemTestUtils {
       statuses.add(itr.next());
     }
     return statuses;
+  }
+
+  public static String readLastLineFromResourceFile(String resourceName) throws IOException {
+    try (InputStream inputStream = TestLogReaderUtils.class.getResourceAsStream(resourceName)) {
+      List<String> lines = FileIOUtils.readAsUTFStringLines(inputStream);
+      return lines.get(lines.size() - 1);
+    }
   }
 }

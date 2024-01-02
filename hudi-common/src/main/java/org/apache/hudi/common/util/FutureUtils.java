@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import javax.annotation.Nonnull;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -29,18 +28,38 @@ import java.util.stream.Collectors;
 public class FutureUtils {
 
   /**
-   * Parallel CompletableFutures
+   * Similar to {@link CompletableFuture#allOf(CompletableFuture[])} with a few important
+   * differences:
    *
-   * @param futures CompletableFuture list
-   * @return a new CompletableFuture which will completed when all of the given CompletableFutures complete.
+   * <ol>
+   *  <li>Completes successfully as soon as *all* of the futures complete successfully</li>
+   *  <li>Completes exceptionally as soon as *any* of the futures complete exceptionally</li>
+   *  <li>In case it's completed exceptionally all the other futures not completed yet, will be
+   *  cancelled</li>
+   * </ol>
+   *
+   * @param futures list of {@link CompletableFuture}s
    */
-  public static <T> CompletableFuture<List<T>> allOf(@Nonnull List<CompletableFuture<T>> futures) {
-    return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
-        .thenApply(aVoid ->
-            futures.stream()
-                // NOTE: This join wouldn't block, since all the
-                //       futures are completed at this point.
-                .map(CompletableFuture::join)
-                .collect(Collectors.toList()));
+  public static <T> CompletableFuture<List<T>> allOf(List<CompletableFuture<T>> futures) {
+    CompletableFuture<Void> union = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
+
+    futures.forEach(future -> {
+      // NOTE: We add a callback to every future, to cancel all the other not yet completed futures,
+      //       which will be providing for an early termination semantic: whenever any of the futures
+      //       fail other futures will be cancelled and the exception will be returned as a result
+      future.whenComplete((ignored, throwable) -> {
+        if (throwable != null) {
+          futures.forEach(f -> f.cancel(true));
+          union.completeExceptionally(throwable);
+        }
+      });
+    });
+
+    return union.thenApply(aVoid ->
+        futures.stream()
+            // NOTE: This join wouldn't block, since all the
+            //       futures are completed at this point.
+            .map(CompletableFuture::join)
+            .collect(Collectors.toList()));
   }
 }

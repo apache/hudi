@@ -26,7 +26,7 @@ import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.functions.sink.RichSinkFunction;
-import org.apache.flink.table.api.TableSchema;
+import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.sink.DynamicTableSink;
 import org.apache.flink.table.connector.sink.SinkFunctionProvider;
@@ -62,7 +62,7 @@ public class CollectSinkTableFactory implements DynamicTableSinkFactory {
     FactoryUtil.TableFactoryHelper helper = FactoryUtil.createTableFactoryHelper(this, context);
     helper.validate();
 
-    TableSchema schema = context.getCatalogTable().getSchema();
+    ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     RESULT.clear();
     return new CollectTableSink(schema, context.getObjectIdentifier().getObjectName());
   }
@@ -91,11 +91,11 @@ public class CollectSinkTableFactory implements DynamicTableSinkFactory {
    */
   private static class CollectTableSink implements DynamicTableSink {
 
-    private final TableSchema schema;
+    private final ResolvedSchema schema;
     private final String tableName;
 
     private CollectTableSink(
-        TableSchema schema,
+        ResolvedSchema schema,
         String tableName) {
       this.schema = schema;
       this.tableName = tableName;

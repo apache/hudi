@@ -52,18 +52,16 @@ import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.apache.hadoop.hive.ql.exec.vector.ColumnVector;
+import org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch;
 import org.apache.hive.service.server.HiveServer2;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
 import org.apache.orc.OrcFile;
 import org.apache.orc.TypeDescription;
 import org.apache.orc.Writer;
-import org.apache.orc.storage.ql.exec.vector.ColumnVector;
-import org.apache.orc.storage.ql.exec.vector.VectorizedRowBatch;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetFileWriter.Mode;
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -74,6 +72,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.BufferedReader;
 import java.io.FileInputStream;
@@ -86,11 +85,12 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 
+import scala.Tuple2;
+
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
@@ -102,48 +102,68 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
  */
 public class UtilitiesTestBase {
 
-  protected static String dfsBasePath;
+  @TempDir
+  protected static java.nio.file.Path sharedTempDir;
+  protected static FileSystem fs;
+  protected static String basePath;
   protected static HdfsTestService hdfsTestService;
   protected static MiniDFSCluster dfsCluster;
-  protected static DistributedFileSystem dfs;
-  protected transient JavaSparkContext jsc = null;
-  protected transient HoodieSparkEngineContext context = null;
-  protected transient SparkSession sparkSession = null;
-  protected transient SQLContext sqlContext;
   protected static HiveServer2 hiveServer;
   protected static HiveTestService hiveTestService;
   protected static ZookeeperTestService zookeeperTestService;
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
+  protected static JavaSparkContext jsc;
+  protected static HoodieSparkEngineContext context;
+  protected static SparkSession sparkSession;
+  protected static SQLContext sqlContext;
+  protected static Configuration hadoopConf;
+
   @BeforeAll
   public static void setLogLevel() {
-    Logger rootLogger = Logger.getRootLogger();
-    rootLogger.setLevel(Level.ERROR);
-    Logger.getLogger("org.apache.spark").setLevel(Level.WARN);
+    org.apache.log4j.Logger rootLogger = org.apache.log4j.Logger.getRootLogger();
+    rootLogger.setLevel(org.apache.log4j.Level.ERROR);
+    org.apache.log4j.Logger.getLogger("org.apache.spark").setLevel(org.apache.log4j.Level.WARN);
   }
 
-  public static void initTestServices(boolean needsHive, boolean needsZookeeper) throws Exception {
+  public static void initTestServices() throws Exception {
+    initTestServices(false, false, false);
+  }
 
-    if (hdfsTestService == null) {
-      hdfsTestService = new HdfsTestService();
+  public static void initTestServices(boolean needsHdfs, boolean needsHive, boolean needsZookeeper) throws Exception {
+    hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
+    hadoopConf.set("hive.exec.scratchdir", System.getenv("java.io.tmpdir") + "/hive");
+
+    if (needsHdfs) {
+      hdfsTestService = new HdfsTestService(hadoopConf);
       dfsCluster = hdfsTestService.start(true);
-      dfs = dfsCluster.getFileSystem();
-      dfsBasePath = dfs.getWorkingDirectory().toString();
-      dfs.mkdirs(new Path(dfsBasePath));
+      fs = dfsCluster.getFileSystem();
+      basePath = fs.getWorkingDirectory().toString();
+      fs.mkdirs(new Path(basePath));
+    } else {
+      fs = FileSystem.getLocal(hadoopConf);
+      basePath = sharedTempDir.toUri().toString();
     }
+
     if (needsHive) {
-      hiveTestService = new HiveTestService(hdfsTestService.getHadoopConf());
+      hiveTestService = new HiveTestService(hadoopConf);
       hiveServer = hiveTestService.start();
-      clearHiveDb();
+      clearHiveDb(basePath + "/dummy" + System.currentTimeMillis());
     }
+
     if (needsZookeeper) {
-      zookeeperTestService = new ZookeeperTestService(hdfsTestService.getHadoopConf());
+      zookeeperTestService = new ZookeeperTestService(hadoopConf);
       zookeeperTestService.start();
     }
+
+    jsc = UtilHelpers.buildSparkContext(UtilitiesTestBase.class.getName() + "-hoodie", "local[4]");
+    context = new HoodieSparkEngineContext(jsc);
+    sqlContext = new SQLContext(jsc);
+    sparkSession = SparkSession.builder().config(jsc.getConf()).getOrCreate();
   }
 
   @AfterAll
-  public static void cleanupClass() {
+  public static void cleanUpUtilitiesTestServices() {
     if (hdfsTestService != null) {
       hdfsTestService.stop();
       hdfsTestService = null;
@@ -160,20 +180,6 @@ public class UtilitiesTestBase {
       zookeeperTestService.stop();
       zookeeperTestService = null;
     }
-  }
-
-  @BeforeEach
-  public void setup() throws Exception {
-    TestDataSource.initDataGen();
-    jsc = UtilHelpers.buildSparkContext(this.getClass().getName() + "-hoodie", "local[2]");
-    context = new HoodieSparkEngineContext(jsc);
-    sqlContext = new SQLContext(jsc);
-    sparkSession = SparkSession.builder().config(jsc.getConf()).getOrCreate();
-  }
-
-  @AfterEach
-  public void teardown() throws Exception {
-    TestDataSource.resetDataGen();
     if (jsc != null) {
       jsc.stop();
       jsc = null;
@@ -185,6 +191,16 @@ public class UtilitiesTestBase {
     if (context != null) {
       context = null;
     }
+  }
+
+  @BeforeEach
+  public void setup() throws Exception {
+    TestDataSource.initDataGen();
+  }
+
+  @AfterEach
+  public void teardown() throws Exception {
+    TestDataSource.resetDataGen();
   }
 
   /**
@@ -202,7 +218,6 @@ public class UtilitiesTestBase {
     props.setProperty(META_SYNC_DATABASE_NAME.key(), "testdb1");
     props.setProperty(META_SYNC_TABLE_NAME.key(), tableName);
     props.setProperty(META_SYNC_BASE_PATH.key(), basePath);
-    props.setProperty(META_SYNC_ASSUME_DATE_PARTITION.key(), "false");
     props.setProperty(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), "false");
     props.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");
     return new HiveSyncConfig(props);
@@ -213,14 +228,14 @@ public class UtilitiesTestBase {
    * 
    * @throws IOException
    */
-  private static void clearHiveDb() throws Exception {
+  private static void clearHiveDb(String tempWriteablePath) throws Exception {
     // Create Dummy hive sync config
-    HiveSyncConfig hiveSyncConfig = getHiveSyncConfig("/dummy", "dummy");
+    HiveSyncConfig hiveSyncConfig = getHiveSyncConfig(tempWriteablePath, "dummy");
     hiveSyncConfig.setHadoopConf(hiveTestService.getHiveConf());
     HoodieTableMetaClient.withPropertyBuilder()
       .setTableType(HoodieTableType.COPY_ON_WRITE)
       .setTableName(hiveSyncConfig.getString(META_SYNC_TABLE_NAME))
-      .initTable(dfs.getConf(), hiveSyncConfig.getString(META_SYNC_BASE_PATH));
+      .initTable(fs.getConf(), hiveSyncConfig.getString(META_SYNC_BASE_PATH));
 
     QueryBasedDDLExecutor ddlExecutor = new JDBCExecutor(hiveSyncConfig);
     ddlExecutor.runSQL("drop database if exists " + hiveSyncConfig.getString(META_SYNC_DATABASE_NAME));
@@ -371,20 +386,20 @@ public class UtilitiesTestBase {
     }
 
     public static TypedProperties setupSchemaOnDFS() throws IOException {
-      return setupSchemaOnDFS("delta-streamer-config", "source.avsc");
+      return setupSchemaOnDFS("streamer-config", "source.avsc");
     }
 
     public static TypedProperties setupSchemaOnDFS(String scope, String filename) throws IOException {
-      UtilitiesTestBase.Helpers.copyToDFS(scope + "/" + filename, dfs, dfsBasePath + "/" + filename);
+      UtilitiesTestBase.Helpers.copyToDFS(scope + "/" + filename, fs, basePath + "/" + filename);
       TypedProperties props = new TypedProperties();
-      props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/" + filename);
+      props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", basePath + "/" + filename);
       return props;
     }
 
     public static TypedProperties setupSchemaOnDFSWithAbsoluteScope(String scope, String filename) throws IOException {
-      UtilitiesTestBase.Helpers.copyToDFSFromAbsolutePath(scope + "/" + filename, dfs, dfsBasePath + "/" + filename);
+      UtilitiesTestBase.Helpers.copyToDFSFromAbsolutePath(scope + "/" + filename, fs, basePath + "/" + filename);
       TypedProperties props = new TypedProperties();
-      props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/" + filename);
+      props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", basePath + "/" + filename);
       return props;
     }
 
@@ -419,6 +434,25 @@ public class UtilitiesTestBase {
 
     public static String[] jsonifyRecords(List<HoodieRecord> records) {
       return records.stream().map(Helpers::toJsonString).toArray(String[]::new);
+    }
+
+    public static Tuple2<String, String>[] jsonifyRecordsByPartitions(List<HoodieRecord> records, int partitions) {
+      Tuple2<String, String>[] data = new Tuple2[records.size()];
+      for (int i = 0; i < records.size(); i++) {
+        int key = i % partitions;
+        String value = Helpers.toJsonString(records.get(i));
+        data[i] = new Tuple2<>(Long.toString(key), value);
+      }
+      return data;
+    }
+
+    public static Tuple2<String, String>[] jsonifyRecordsByPartitionsWithNullKafkaKey(List<HoodieRecord> records, int partitions) {
+      Tuple2<String, String>[] data = new Tuple2[records.size()];
+      for (int i = 0; i < records.size(); i++) {
+        String value = Helpers.toJsonString(records.get(i));
+        data[i] = new Tuple2<>(null, value);
+      }
+      return data;
     }
 
     private static void addAvroRecord(

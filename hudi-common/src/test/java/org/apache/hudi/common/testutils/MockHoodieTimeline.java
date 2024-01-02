@@ -35,7 +35,8 @@ public class MockHoodieTimeline extends HoodieActiveTimeline {
   public MockHoodieTimeline(Stream<String> completed, Stream<String> inflights) {
     super();
     this.setInstants(Stream
-        .concat(completed.map(s -> new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, s)),
+        .concat(completed.map(s -> new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, s,
+                InProcessTimeGenerator.createNewInstantTime())),
             inflights.map(s -> new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, s)))
         .sorted(Comparator.comparing(HoodieInstant::getFileName)).collect(Collectors.toList()));
   }

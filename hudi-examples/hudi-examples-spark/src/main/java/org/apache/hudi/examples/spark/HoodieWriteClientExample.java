@@ -35,16 +35,15 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.examples.common.HoodieExampleDataGenerator;
 import org.apache.hudi.examples.common.HoodieExampleSparkUtils;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.table.action.HoodieWriteMetadata;
-
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -65,7 +64,7 @@ import java.util.stream.Collectors;
  */
 public class HoodieWriteClientExample {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieWriteClientExample.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteClientExample.class);
 
   private static String tableType = HoodieTableType.COPY_ON_WRITE.name();
 
@@ -145,7 +144,7 @@ public class HoodieWriteClientExample {
         HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(instant.get());
         client.commitCompaction(instant.get(), compactionMetadata.getCommitMetadata().get(), Option.empty());
       }
-
+      client.close();
     }
   }
 

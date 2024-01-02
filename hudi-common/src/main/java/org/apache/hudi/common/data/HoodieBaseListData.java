@@ -25,6 +25,11 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+/**
+ * Data representation of either a stream or a list of objects with Type T.
+ *
+ * @param <T> Object value type.
+ */
 public abstract class HoodieBaseListData<T> {
 
   protected final Either<Stream<T>, List<T>> data;

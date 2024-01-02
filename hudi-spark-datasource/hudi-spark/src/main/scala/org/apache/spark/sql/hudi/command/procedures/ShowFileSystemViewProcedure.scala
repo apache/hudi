@@ -17,24 +17,25 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import com.google.common.collect.Lists
 import org.apache.hadoop.fs.{FileStatus, Path}
-import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.fs.{FSUtils, HoodieWrapperFileSystem}
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieDefaultTimeline, HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.{CompletionTimeQueryView, HoodieDefaultTimeline, HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util
+import org.apache.hudi.common.util.StringUtils
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.{Function, Supplier}
 import java.util.stream.Collectors
-import scala.collection.JavaConverters.{asJavaIteratorConverter, asScalaIteratorConverter}
+import scala.collection.JavaConversions
+import scala.collection.JavaConverters.{asJavaIterableConverter, asJavaIteratorConverter, asScalaIteratorConverter}
 
 class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS_ALL: Array[ProcedureParameter] = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "max_instant", DataTypes.StringType, ""),
     ProcedureParameter.optional(2, "include_max", DataTypes.BooleanType, false),
     ProcedureParameter.optional(3, "include_in_flight", DataTypes.BooleanType, false),
@@ -55,13 +56,13 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
   ))
 
   private val PARAMETERS_LATEST: Array[ProcedureParameter] = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "max_instant", DataTypes.StringType, ""),
     ProcedureParameter.optional(2, "include_max", DataTypes.BooleanType, false),
     ProcedureParameter.optional(3, "include_inflight", DataTypes.BooleanType, false),
     ProcedureParameter.optional(4, "exclude_compaction", DataTypes.BooleanType, false),
     ProcedureParameter.optional(5, "limit", DataTypes.IntegerType, 10),
-    ProcedureParameter.required(6, "partition_path", DataTypes.StringType, None),
+    ProcedureParameter.required(6, "partition_path", DataTypes.StringType),
     ProcedureParameter.optional(7, "merge", DataTypes.BooleanType, true)
 
   )
@@ -92,8 +93,12 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
     val basePath = getBasePath(table)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
     val fs = metaClient.getFs
-    val globPath = String.format("%s/%s/*", basePath, globRegex)
-    val statuses = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(globPath))
+    val statuses = if (globRegex == PARAMETERS_ALL.apply(6).default) {
+      FSUtils.getAllDataFileStatus(fs, new Path(basePath))
+    } else {
+      val globPath = String.format("%s/%s/*", basePath, globRegex)
+      FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(globPath))
+    }
     var timeline: HoodieTimeline = if (excludeCompaction) {
       metaClient.getActiveTimeline.getCommitsTimeline
     } else {
@@ -118,12 +123,14 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
         metaClient.getActiveTimeline.getInstantDetails(instant)
       }
     }
-    val filteredTimeline = new HoodieDefaultTimeline(Lists.newArrayList(instants.asJava).stream(), details)
+
+    val filteredTimeline = new HoodieDefaultTimeline(
+      new java.util.ArrayList[HoodieInstant](JavaConversions.asJavaCollection(instants.toList)).stream(), details)
     new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses.toArray(new Array[FileStatus](0)))
   }
 
   private def showAllFileSlices(fsView: HoodieTableFileSystemView): java.util.List[Row] = {
-    val rows: java.util.List[Row] = Lists.newArrayList()
+    val rows: java.util.List[Row] = new java.util.ArrayList[Row]
     fsView.getAllFileGroups.iterator().asScala.foreach(fg => {
       fg.getAllFileSlices.iterator().asScala.foreach(fs => {
         val fileId = fg.getFileGroupId.getFileId
@@ -150,18 +157,19 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
                                    maxInstant: String,
                                    merge: Boolean): java.util.List[Row] = {
     var fileSliceStream: java.util.stream.Stream[FileSlice] = null
+    val basePath = getBasePath(table)
+    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val completionTimeQueryView = new CompletionTimeQueryView(metaClient)
     if (!merge) {
       fileSliceStream = fsView.getLatestFileSlices(partition)
     } else {
       fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(partition, if (maxInstant.isEmpty) {
-        val basePath = getBasePath(table)
-        val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
         metaClient.getActiveTimeline.filterCompletedAndCompactionInstants().lastInstant().get().getTimestamp
       } else {
         maxInstant
       })
     }
-    val rows: java.util.List[Row] = Lists.newArrayList()
+    val rows: java.util.List[Row] = new java.util.ArrayList[Row]
     fileSliceStream.iterator().asScala.foreach {
       fs => {
         val fileId = fs.getFileId
@@ -175,10 +183,11 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
         val numLogFiles = fs.getLogFiles.count()
         val sumLogFileSize = fs.getLogFiles.iterator().asScala.map(_.getFileSize).sum
         val logFilesScheduledForCompactionTotalSize = fs.getLogFiles.iterator().asScala
-          .filter(logFile => logFile.getBaseCommitTime.equals(fs.getBaseInstantTime))
+          // this is candidate for next compaction scheduling(with compaction instant time > fs.getBaseInstantTime)
+          .filter(logFile => completionTimeQueryView.getCompletionTime(logFile.getDeltaCommitTime).isPresent)
           .map(_.getFileSize).sum
         val logFilesUnscheduledTotalSize = fs.getLogFiles.iterator().asScala
-          .filter(logFile => !logFile.getBaseCommitTime.equals(fs.getBaseInstantTime))
+          .filter(logFile => !completionTimeQueryView.getCompletionTime(logFile.getDeltaCommitTime).isPresent)
           .map(_.getFileSize).sum
         val logSelectedForCompactionToBaseRatio = if (baseFileSize > 0) {
           logFilesScheduledForCompactionTotalSize / (baseFileSize * 1.0)
@@ -191,10 +200,10 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
           -1
         }
         val logFilesCommitTimeEqualInstantTime = fs.getLogFiles.iterator().asScala
-          .filter(logFile => logFile.getBaseCommitTime.equals(fs.getBaseInstantTime))
+          .filter(logFile => logFile.getDeltaCommitTime.equals(fs.getBaseInstantTime))
           .mkString("[", ",", "]")
         val logFilesCommitTimeNonEqualInstantTime = fs.getLogFiles.iterator().asScala
-          .filter(logFile => !logFile.getBaseCommitTime.equals(fs.getBaseInstantTime))
+          .filter(logFile => !logFile.getDeltaCommitTime.equals(fs.getBaseInstantTime))
           .mkString("[", ",", "]")
         rows.add(Row(partition, fileId, baseInstantTime, baseFilePath, baseFileSize, numLogFiles, sumLogFileSize,
           logFilesScheduledForCompactionTotalSize, logFilesUnscheduledTotalSize, logSelectedForCompactionToBaseRatio,
@@ -202,6 +211,7 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
         ))
       }
     }
+    completionTimeQueryView.close()
     rows
   }
 

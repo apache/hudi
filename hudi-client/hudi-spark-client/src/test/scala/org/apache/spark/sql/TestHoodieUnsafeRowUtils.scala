@@ -21,7 +21,7 @@ package org.apache.spark.sql
 import org.apache.spark.sql.HoodieUnsafeRowUtils.{composeNestedFieldPath, getNestedInternalRowValue, getNestedRowValue}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
-import org.junit.jupiter.api.Assertions.{assertEquals, fail}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
 import org.junit.jupiter.api.Test
 
 class TestHoodieUnsafeRowUtils {
@@ -41,11 +41,9 @@ class TestHoodieUnsafeRowUtils {
 
     assertEquals(
       Seq((1, schema(1)), (0, schema(1).dataType.asInstanceOf[StructType](0))),
-      composeNestedFieldPath(schema, "bar.baz").parts.toSeq)
+      composeNestedFieldPath(schema, "bar.baz").get.parts.toSeq)
 
-    assertThrows(classOf[IllegalArgumentException]) { () =>
-      composeNestedFieldPath(schema, "foo.baz")
-    }
+    assertTrue(composeNestedFieldPath(schema, "foo.baz").isEmpty)
   }
 
   @Test
@@ -65,36 +63,36 @@ class TestHoodieUnsafeRowUtils {
 
     assertEquals(
       123,
-      getNestedInternalRowValue(row, composeNestedFieldPath(schema, "bar.baz"))
+      getNestedInternalRowValue(row, composeNestedFieldPath(schema, "bar.baz").get)
     )
     assertEquals(
       456L,
-      getNestedInternalRowValue(row, composeNestedFieldPath(schema, "bar.bor"))
+      getNestedInternalRowValue(row, composeNestedFieldPath(schema, "bar.bor").get)
     )
     assertEquals(
       "str",
-      getNestedInternalRowValue(row, composeNestedFieldPath(schema, "foo"))
+      getNestedInternalRowValue(row, composeNestedFieldPath(schema, "foo").get)
     )
     assertEquals(
       row.getStruct(1, 2),
-      getNestedInternalRowValue(row, composeNestedFieldPath(schema, "bar"))
+      getNestedInternalRowValue(row, composeNestedFieldPath(schema, "bar").get)
     )
 
     val rowProperNullable = InternalRow("str", null)
 
     assertEquals(
       null,
-      getNestedInternalRowValue(rowProperNullable, composeNestedFieldPath(schema, "bar.baz"))
+      getNestedInternalRowValue(rowProperNullable, composeNestedFieldPath(schema, "bar.baz").get)
     )
     assertEquals(
       null,
-      getNestedInternalRowValue(rowProperNullable, composeNestedFieldPath(schema, "bar"))
+      getNestedInternalRowValue(rowProperNullable, composeNestedFieldPath(schema, "bar").get)
     )
 
     val rowInvalidNullable = InternalRow(null, InternalRow(123, 456L))
 
     assertThrows(classOf[IllegalArgumentException]) { () =>
-      getNestedInternalRowValue(rowInvalidNullable, composeNestedFieldPath(schema, "foo"))
+      getNestedInternalRowValue(rowInvalidNullable, composeNestedFieldPath(schema, "foo").get)
     }
   }
 
@@ -115,36 +113,36 @@ class TestHoodieUnsafeRowUtils {
 
     assertEquals(
       123,
-      getNestedRowValue(row, composeNestedFieldPath(schema, "bar.baz"))
+      getNestedRowValue(row, composeNestedFieldPath(schema, "bar.baz").get)
     )
     assertEquals(
       456L,
-      getNestedRowValue(row, composeNestedFieldPath(schema, "bar.bor"))
+      getNestedRowValue(row, composeNestedFieldPath(schema, "bar.bor").get)
     )
     assertEquals(
       "str",
-      getNestedRowValue(row, composeNestedFieldPath(schema, "foo"))
+      getNestedRowValue(row, composeNestedFieldPath(schema, "foo").get)
     )
     assertEquals(
       row.getStruct(1),
-      getNestedRowValue(row, composeNestedFieldPath(schema, "bar"))
+      getNestedRowValue(row, composeNestedFieldPath(schema, "bar").get)
     )
 
     val rowProperNullable = Row("str", null)
 
     assertEquals(
       null,
-      getNestedRowValue(rowProperNullable, composeNestedFieldPath(schema, "bar.baz"))
+      getNestedRowValue(rowProperNullable, composeNestedFieldPath(schema, "bar.baz").get)
     )
     assertEquals(
       null,
-      getNestedRowValue(rowProperNullable, composeNestedFieldPath(schema, "bar"))
+      getNestedRowValue(rowProperNullable, composeNestedFieldPath(schema, "bar").get)
     )
 
     val rowInvalidNullable = Row(null, Row(123, 456L))
 
     assertThrows(classOf[IllegalArgumentException]) { () =>
-      getNestedRowValue(rowInvalidNullable, composeNestedFieldPath(schema, "foo"))
+      getNestedRowValue(rowInvalidNullable, composeNestedFieldPath(schema, "foo").get)
     }
   }
 

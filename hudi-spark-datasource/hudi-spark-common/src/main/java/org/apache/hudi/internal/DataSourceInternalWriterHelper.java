@@ -19,6 +19,7 @@
 package org.apache.hudi.internal;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -31,22 +32,24 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.types.StructType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Helper class for HoodieDataSourceInternalWriter used by Spark datasource v2.
  */
 public class DataSourceInternalWriterHelper {
 
-  private static final Logger LOG = LogManager.getLogger(DataSourceInternalWriterHelper.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DataSourceInternalWriterHelper.class);
   public static final String INSTANT_TIME_OPT_KEY = "hoodie.instant.time";
 
   private final String instantTime;
@@ -61,14 +64,15 @@ public class DataSourceInternalWriterHelper {
     this.instantTime = instantTime;
     this.operationType = WriteOperationType.BULK_INSERT;
     this.extraMetadata = extraMetadata;
-    this.writeClient  = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(new JavaSparkContext(sparkSession.sparkContext())), writeConfig);
-    writeClient.setOperationType(operationType);
-    writeClient.startCommitWithTime(instantTime);
+    this.writeClient = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(new JavaSparkContext(sparkSession.sparkContext())), writeConfig);
+    this.writeClient.setOperationType(operationType);
+    this.writeClient.startCommitWithTime(instantTime);
+    this.writeClient.initTable(operationType, Option.of(instantTime));
 
     this.metaClient = HoodieTableMetaClient.builder().setConf(configuration).setBasePath(writeConfig.getBasePath()).build();
     this.metaClient.validateTableProperties(writeConfig.getProps());
     this.hoodieTable = HoodieSparkTable.create(writeConfig, new HoodieSparkEngineContext(new JavaSparkContext(sparkSession.sparkContext())), metaClient);
-    writeClient.preWrite(instantTime, WriteOperationType.BULK_INSERT, metaClient);
+    this.writeClient.preWrite(instantTime, WriteOperationType.BULK_INSERT, metaClient);
   }
 
   public boolean useCommitCoordinator() {
@@ -79,9 +83,10 @@ public class DataSourceInternalWriterHelper {
     LOG.info("Received commit of a data writer = " + message);
   }
 
-  public void commit(List<HoodieWriteStat> writeStatList) {
+  public void commit(List<WriteStatus> writeStatuses) {
     try {
-      writeClient.commitStats(instantTime, writeStatList, Option.of(extraMetadata),
+      List<HoodieWriteStat> writeStatList = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
+      writeClient.commitStats(instantTime, writeClient.getEngineContext().parallelize(writeStatuses), writeStatList, Option.of(extraMetadata),
           CommitUtils.getCommitActionType(operationType, metaClient.getTableType()));
     } catch (Exception ioe) {
       throw new HoodieException(ioe.getMessage(), ioe);
@@ -92,7 +97,6 @@ public class DataSourceInternalWriterHelper {
 
   public void abort() {
     LOG.error("Commit " + instantTime + " aborted ");
-    writeClient.rollback(instantTime);
     writeClient.close();
   }
 

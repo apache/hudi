@@ -21,7 +21,7 @@ package org.apache.hudi.cli.integ;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.commands.TableCommand;
 import org.apache.hudi.cli.testutils.HoodieCLIIntegrationTestBase;
-import org.apache.hudi.client.CompactionAdminClient;
+import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.TestCompactionAdminClient;
 import org.apache.hudi.client.WriteStatus;
@@ -29,7 +29,6 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -39,17 +38,18 @@ import org.apache.hudi.common.testutils.CompactionTestUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.testutils.HoodieClientTestBase;
+
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.shell.core.CommandResult;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.shell.Shell;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;
@@ -60,7 +60,6 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -69,8 +68,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * A command use SparkLauncher need load jars under lib which generate during mvn package.
  * Use integration test instead of unit test.
  */
+@SpringBootTest(properties = {"spring.shell.interactive.enabled=false", "spring.shell.command.script.enabled=false"})
 public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
 
+  @Autowired
+  private Shell shell;
   @BeforeEach
   public void init() throws IOException {
     tableName = "test_table_" + ITTestCompactionCommand.class.getName();
@@ -93,13 +95,13 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
     // generate commits
     generateCommits();
 
-    CommandResult cr = getShell().executeCommand(
-        String.format("compaction schedule --hoodieConfigs hoodie.compact.inline.max.delta.commits=1 --sparkMaster %s",
+    Object result = shell.evaluate(() ->
+            String.format("compaction schedule --hoodieConfigs hoodie.compact.inline.max.delta.commits=1 --sparkMaster %s",
             "local"));
     assertAll("Command run failed",
-        () -> assertTrue(cr.isSuccess()),
+        () -> assertTrue(ShellEvaluationResultUtil.isSuccess(result)),
         () -> assertTrue(
-            cr.getResult().toString().startsWith("Attempted to schedule compaction for")));
+                result.toString().startsWith("Attempted to schedule compaction for")));
 
     // there is 1 requested compaction
     HoodieActiveTimeline timeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
@@ -119,18 +121,18 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
     String schemaPath = Paths.get(basePath, "compaction.schema").toString();
     writeSchemaToTmpFile(schemaPath);
 
-    CommandResult cr2 = getShell().executeCommand(
-        String.format("compaction run --parallelism %s --schemaFilePath %s --sparkMaster %s",
+    Object result2 = shell.evaluate(() ->
+            String.format("compaction run --parallelism %s --schemaFilePath %s --sparkMaster %s --hoodieConfigs hoodie.embed.timeline.server=false",
             2, schemaPath, "local"));
 
     assertAll("Command run failed",
-        () -> assertTrue(cr2.isSuccess()),
+        () -> assertTrue(ShellEvaluationResultUtil.isSuccess(result2)),
         () -> assertTrue(
-            cr2.getResult().toString().startsWith("Compaction successfully completed for")));
+            result2.toString().startsWith("Compaction successfully completed for")));
 
     // assert compaction complete
     assertTrue(HoodieCLI.getTableMetaClient().getActiveTimeline().reload()
-        .filterCompletedInstants().getInstants()
+        .filterCompletedInstants().getInstantsAsStream()
         .map(HoodieInstant::getTimestamp).collect(Collectors.toList()).contains(instance),
         "Pending compaction must be completed");
   }
@@ -146,19 +148,19 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
     String schemaPath = Paths.get(basePath, "compaction.schema").toString();
     writeSchemaToTmpFile(schemaPath);
 
-    CommandResult cr2 = getShell().executeCommand(
-        String.format("compaction scheduleAndExecute --parallelism %s --schemaFilePath %s --sparkMaster %s "
-            + "--hoodieConfigs hoodie.compact.inline.max.delta.commits=1",
+    Object result = shell.evaluate(() ->
+            String.format("compaction scheduleAndExecute --parallelism %s --schemaFilePath %s --sparkMaster %s "
+                    + "--hoodieConfigs hoodie.compact.inline.max.delta.commits=1",
             2, schemaPath, "local"));
 
     assertAll("Command run failed",
-        () -> assertTrue(cr2.isSuccess()),
+        () -> assertTrue(ShellEvaluationResultUtil.isSuccess(result)),
         () -> assertTrue(
-            cr2.getResult().toString().startsWith("Schedule and execute compaction successfully completed")));
+                result.toString().startsWith("Schedule and execute compaction successfully completed")));
 
     // assert compaction complete
     assertTrue(HoodieCLI.getTableMetaClient().getActiveTimeline().reload()
-            .filterCompletedInstants().getInstants()
+            .filterCompletedInstants().getInstantsAsStream()
             .map(HoodieInstant::getTimestamp).count() > 0,
         "Completed compaction couldn't be 0");
   }
@@ -173,14 +175,14 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
 
     String instance = prepareScheduleCompaction();
 
-    CommandResult cr = getShell().executeCommand(
-        String.format("compaction validate --instant %s --sparkMaster %s", instance, "local"));
+    Object result = shell.evaluate(() ->
+            String.format("compaction validate --instant %s --sparkMaster %s", instance, "local"));
 
     assertAll("Command run failed",
-        () -> assertTrue(cr.isSuccess()),
+        () -> assertTrue(ShellEvaluationResultUtil.isSuccess(result)),
         () -> assertTrue(
             // compaction requested should be valid
-            cr.getResult().toString().contains("COMPACTION PLAN VALID")));
+            result.toString().contains("COMPACTION PLAN VALID")));
   }
 
   /**
@@ -195,14 +197,14 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
 
     String instance = prepareScheduleCompaction();
 
-    CommandResult cr = getShell().executeCommand(
-        String.format("compaction unschedule --instant %s --sparkMaster %s", instance, "local"));
+    Object result = shell.evaluate(() ->
+            String.format("compaction unschedule --instant %s --sparkMaster %s", instance, "local"));
 
     // Always has no file
     assertAll("Command run failed",
-        () -> assertTrue(cr.isSuccess()),
+        () -> assertTrue(ShellEvaluationResultUtil.isSuccess(result)),
         () -> assertEquals("No File renames needed to unschedule pending compaction. Operation successful.",
-            cr.getResult().toString()));
+           result.toString()));
   }
 
   /**
@@ -219,14 +221,15 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
     CompactionOperation op = CompactionOperation.convertFromAvroRecordInstance(
         CompactionUtils.getCompactionPlan(metaClient, "001").getOperations().stream().findFirst().get());
 
-    CommandResult cr = getShell().executeCommand(
-        String.format("compaction unscheduleFileId --fileId %s --partitionPath %s --sparkMaster %s",
+    Object result = shell.evaluate(() ->
+            String.format("compaction unscheduleFileId --fileId %s --partitionPath %s --sparkMaster %s",
             op.getFileGroupId().getFileId(), op.getFileGroupId().getPartitionPath(), "local"));
 
+    // Always has no file
     assertAll("Command run failed",
-        () -> assertTrue(cr.isSuccess()),
-        () -> assertTrue(removeNonWordAndStripSpace(cr.getResult().toString()).contains("true")),
-        () -> assertFalse(removeNonWordAndStripSpace(cr.getResult().toString()).contains("false")));
+        () -> assertTrue(ShellEvaluationResultUtil.isSuccess(result)),
+        () -> assertEquals("No File renames needed to unschedule file from pending compaction. Operation successful.",
+            result.toString()));
   }
 
   /**
@@ -242,39 +245,23 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
         numEntriesPerInstant, numEntriesPerInstant, numEntriesPerInstant);
 
     metaClient.reloadActiveTimeline();
-    CompactionAdminClient client = new CompactionAdminClient(new HoodieSparkEngineContext(jsc), metaClient.getBasePath());
-    List<Pair<HoodieLogFile, HoodieLogFile>> renameFiles =
-        client.getRenamingActionsForUnschedulingCompactionPlan(metaClient, compactionInstant, 1, Option.empty(), false);
 
-    renameFiles.forEach(lfPair -> {
-      try {
-        metaClient.getFs().rename(lfPair.getLeft().getPath(), lfPair.getRight().getPath());
-      } catch (IOException e) {
-        throw new HoodieIOException(e.getMessage(), e);
-      }
-    });
+    Object result = shell.evaluate(() ->
+            String.format("compaction repair --instant %s --sparkMaster %s", compactionInstant, "local"));
 
-    client.unscheduleCompactionPlan(compactionInstant, false, 1, false);
-
-    CommandResult cr = getShell().executeCommand(
-        String.format("compaction repair --instant %s --sparkMaster %s", compactionInstant, "local"));
-
-    // All Executes is succeeded, result contains true and has no false
-    // Expected:
-    // ║ File Id │ Source File Path │ Destination File Path │ Rename Executed? │ Rename Succeeded? │ Error ║
-    // ║ *       │     *            │        *              │    true          │     true          │       ║
+    // Always has no file
     assertAll("Command run failed",
-        () -> assertTrue(cr.isSuccess()),
-        () -> assertTrue(removeNonWordAndStripSpace(cr.getResult().toString()).contains("true")),
-        () -> assertFalse(removeNonWordAndStripSpace(cr.getResult().toString()).contains("false")));
+        () -> assertTrue(ShellEvaluationResultUtil.isSuccess(result)),
+        () -> assertEquals("No File renames needed to repair compaction. Operation successful.",
+            result.toString()));
   }
 
   private String prepareScheduleCompaction() {
     // generate requested compaction
-    CommandResult cr = getShell().executeCommand(
-        String.format("compaction schedule --hoodieConfigs hoodie.compact.inline.max.delta.commits=1 --sparkMaster %s",
+    Object result = shell.evaluate(() ->
+            String.format("compaction schedule --hoodieConfigs hoodie.compact.inline.max.delta.commits=1 --sparkMaster %s",
             "local"));
-    assertTrue(cr.isSuccess());
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     // get compaction instance
     HoodieActiveTimeline timeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
@@ -299,11 +286,12 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
         .withDeleteParallelism(2).forTable(tableName)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
 
-    SparkRDDWriteClient<HoodieAvroPayload> client = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jsc), cfg);
+    try (SparkRDDWriteClient<HoodieAvroPayload> client = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jsc), cfg)) {
 
-    List<HoodieRecord> records = insert(jsc, client, dataGen);
-    upsert(jsc, client, dataGen, records);
-    delete(jsc, client, records);
+      List<HoodieRecord> records = insert(jsc, client, dataGen);
+      upsert(jsc, client, dataGen, records);
+      delete(jsc, client, records);
+    }
   }
 
   private List<HoodieRecord> insert(JavaSparkContext jsc, SparkRDDWriteClient<HoodieAvroPayload> client,

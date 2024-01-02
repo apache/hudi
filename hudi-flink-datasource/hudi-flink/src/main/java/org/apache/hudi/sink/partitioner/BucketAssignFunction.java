@@ -35,7 +35,7 @@ import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.sink.bootstrap.IndexRecord;
 import org.apache.hudi.sink.utils.PayloadCreation;
 import org.apache.hudi.table.action.commit.BucketInfo;
-import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.util.FlinkWriteClients;
 
 import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.api.common.state.StateTtlConfig;
@@ -115,7 +115,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
   @Override
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
-    HoodieWriteConfig writeConfig = StreamerUtil.getHoodieClientConfig(this.conf, true);
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf, true);
     HoodieFlinkEngineContext context = new HoodieFlinkEngineContext(
         new SerializableConfiguration(HadoopConfigurations.getHadoopConf(this.conf)),
         new FlinkTaskContextSupplier(getRuntimeContext()));
@@ -173,34 +173,43 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     final String partitionPath = hoodieKey.getPartitionPath();
     final HoodieRecordLocation location;
 
-    // Only changing records need looking up the index for the location,
-    // append only records are always recognized as INSERT.
-    HoodieRecordGlobalLocation oldLoc = indexState.value();
-    if (isChangingRecords && oldLoc != null) {
-      // Set up the instant time as "U" to mark the bucket as an update bucket.
-      if (!Objects.equals(oldLoc.getPartitionPath(), partitionPath)) {
-        if (globalIndex) {
-          // if partition path changes, emit a delete record for old partition path,
-          // then update the index state using location with new partition path.
-          HoodieRecord<?> deleteRecord = new HoodieAvroRecord<>(new HoodieKey(recordKey, oldLoc.getPartitionPath()),
-              payloadCreation.createDeletePayload((BaseAvroPayload) record.getData()));
-          deleteRecord.setCurrentLocation(oldLoc.toLocal("U"));
-          deleteRecord.seal();
-          out.collect((O) deleteRecord);
+    if (isChangingRecords) {
+      // Only changing records need looking up the index for the location,
+      // append only records are always recognized as INSERT.
+      HoodieRecordGlobalLocation oldLoc = indexState.value();
+      if (oldLoc != null) {
+        // Set up the instant time as "U" to mark the bucket as an update bucket.
+        if (!Objects.equals(oldLoc.getPartitionPath(), partitionPath)) {
+          if (globalIndex) {
+            // if partition path changes, emit a delete record for old partition path,
+            // then update the index state using location with new partition path.
+            HoodieRecord<?> deleteRecord = new HoodieAvroRecord<>(new HoodieKey(recordKey, oldLoc.getPartitionPath()),
+                payloadCreation.createDeletePayload((BaseAvroPayload) record.getData()));
+
+            deleteRecord.unseal();
+            deleteRecord.setCurrentLocation(oldLoc.toLocal("U"));
+            deleteRecord.seal();
+
+            out.collect((O) deleteRecord);
+          }
+          location = getNewRecordLocation(partitionPath);
+        } else {
+          location = oldLoc.toLocal("U");
+          this.bucketAssigner.addUpdate(partitionPath, location.getFileId());
         }
-        location = getNewRecordLocation(partitionPath);
       } else {
-        location = oldLoc.toLocal("U");
-        this.bucketAssigner.addUpdate(partitionPath, location.getFileId());
+        location = getNewRecordLocation(partitionPath);
       }
+      // always refresh the index
+      updateIndexState(partitionPath, location);
     } else {
       location = getNewRecordLocation(partitionPath);
     }
-    // always refresh the index
-    if (isChangingRecords) {
-      updateIndexState(partitionPath, location);
-    }
+
+    record.unseal();
     record.setCurrentLocation(location);
+    record.seal();
+
     out.collect((O) record);
   }
 

@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
+import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.config.HoodieCleanConfig
@@ -30,11 +31,16 @@ import java.util.function.Supplier
 class RunCleanProcedure extends BaseProcedure with ProcedureBuilder with Logging {
 
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "skip_locking", DataTypes.BooleanType, false),
     ProcedureParameter.optional(2, "schedule_in_line", DataTypes.BooleanType, true),
-    ProcedureParameter.optional(3, "clean_policy", DataTypes.StringType, None),
-    ProcedureParameter.optional(4, "retain_commits", DataTypes.IntegerType, 10)
+    ProcedureParameter.optional(3, "clean_policy", DataTypes.StringType),
+    ProcedureParameter.optional(4, "retain_commits", DataTypes.IntegerType),
+    ProcedureParameter.optional(5, "hours_retained", DataTypes.IntegerType),
+    ProcedureParameter.optional(6, "file_versions_retained", DataTypes.IntegerType),
+    ProcedureParameter.optional(7, "trigger_strategy", DataTypes.StringType),
+    ProcedureParameter.optional(8, "trigger_max_commits", DataTypes.IntegerType),
+    ProcedureParameter.optional(9, "options", DataTypes.StringType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -64,26 +70,50 @@ class RunCleanProcedure extends BaseProcedure with ProcedureBuilder with Logging
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
     val skipLocking = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Boolean]
     val scheduleInLine = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Boolean]
-    val cleanPolicy = getArgValueOrDefault(args, PARAMETERS(3))
-    val retainCommits = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[Integer]
-    val basePath = getBasePath(tableName, Option.empty)
-    val cleanInstantTime = HoodieActiveTimeline.createNewInstantTime()
-    var props: Map[String, String] = Map(
-      HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key() -> String.valueOf(retainCommits)
-    )
-    if (cleanPolicy.isDefined) {
-      props += (HoodieCleanConfig.CLEANER_POLICY.key() -> String.valueOf(cleanPolicy.get))
+    var confs: Map[String, String] = Map.empty
+    if (getArgValueOrDefault(args, PARAMETERS(3)).isDefined) {
+      confs += HoodieCleanConfig.CLEANER_POLICY.key() -> getArgValueOrDefault(args, PARAMETERS(3)).get.toString
     }
-    val client = HoodieCLIUtils.createHoodieClientFromPath(sparkSession, basePath, props)
-    val hoodieCleanMeta = client.clean(cleanInstantTime, scheduleInLine, skipLocking)
+    if (getArgValueOrDefault(args, PARAMETERS(4)).isDefined) {
+      confs += HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key() -> getArgValueOrDefault(args, PARAMETERS(4)).get.toString
+    }
+    if (getArgValueOrDefault(args, PARAMETERS(5)).isDefined) {
+      confs += HoodieCleanConfig.CLEANER_HOURS_RETAINED.key() -> getArgValueOrDefault(args, PARAMETERS(5)).get.toString
+    }
+    if (getArgValueOrDefault(args, PARAMETERS(6)).isDefined) {
+      confs += HoodieCleanConfig.CLEANER_FILE_VERSIONS_RETAINED.key() -> getArgValueOrDefault(args, PARAMETERS(6)).get.toString
+    }
+    if (getArgValueOrDefault(args, PARAMETERS(7)).isDefined) {
+      confs += HoodieCleanConfig.CLEAN_TRIGGER_STRATEGY.key() -> getArgValueOrDefault(args, PARAMETERS(7)).get.toString
+    }
+    if (getArgValueOrDefault(args, PARAMETERS(8)).isDefined) {
+      confs += HoodieCleanConfig.CLEAN_MAX_COMMITS.key() -> getArgValueOrDefault(args, PARAMETERS(8)).get.toString
+    }
+    if (getArgValueOrDefault(args, PARAMETERS(9)).isDefined) {
+      confs ++= HoodieCLIUtils.extractOptions(getArgValueOrDefault(args, PARAMETERS(9)).get.asInstanceOf[String])
+    }
 
-    if (hoodieCleanMeta == null) Seq.empty
-    else Seq(Row(hoodieCleanMeta.getStartCleanTime,
-      hoodieCleanMeta.getTimeTakenInMillis,
-      hoodieCleanMeta.getTotalFilesDeleted,
-      hoodieCleanMeta.getEarliestCommitToRetain,
-      JsonUtils.getObjectMapper.writeValueAsString(hoodieCleanMeta.getBootstrapPartitionMetadata),
-      hoodieCleanMeta.getVersion))
+    val basePath = getBasePath(tableName, Option.empty)
+
+    var client: SparkRDDWriteClient[_] = null
+    try {
+      client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, confs,
+        tableName.asInstanceOf[Option[String]])
+      val cleanInstantTime = client.createNewInstantTime()
+      val hoodieCleanMeta = client.clean(cleanInstantTime, scheduleInLine, skipLocking)
+
+      if (hoodieCleanMeta == null) Seq.empty
+      else Seq(Row(hoodieCleanMeta.getStartCleanTime,
+        hoodieCleanMeta.getTimeTakenInMillis,
+        hoodieCleanMeta.getTotalFilesDeleted,
+        hoodieCleanMeta.getEarliestCommitToRetain,
+        JsonUtils.getObjectMapper.writeValueAsString(hoodieCleanMeta.getBootstrapPartitionMetadata),
+        hoodieCleanMeta.getVersion))
+    } finally {
+      if (client != null) {
+        client.close()
+      }
+    }
   }
 }
 

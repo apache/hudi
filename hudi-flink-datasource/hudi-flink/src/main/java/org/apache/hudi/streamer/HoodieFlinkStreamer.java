@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.sink.utils.Pipelines;
@@ -69,14 +70,13 @@ public class HoodieFlinkStreamer {
     TypedProperties kafkaProps = DFSPropertiesConfiguration.getGlobalProps();
     kafkaProps.putAll(StreamerUtil.appendKafkaProps(cfg));
 
+    Configuration conf = FlinkStreamerConfig.toFlinkConfig(cfg);
     // Read from kafka source
     RowType rowType =
-        (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(cfg))
+        (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
             .getLogicalType();
 
-    Configuration conf = FlinkStreamerConfig.toFlinkConfig(cfg);
     long ckpTimeout = env.getCheckpointConfig().getCheckpointTimeout();
-    int parallelism = env.getParallelism();
     conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
 
     DataStream<RowData> dataStream = env.addSource(new FlinkKafkaConsumer<>(
@@ -98,12 +98,30 @@ public class HoodieFlinkStreamer {
       }
     }
 
-    DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, parallelism, dataStream);
-    DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream);
-    if (OptionsResolver.needsAsyncCompaction(conf)) {
-      Pipelines.compact(conf, pipeline);
+    OptionsInference.setupSinkTasks(conf, env.getParallelism());
+    OptionsInference.setupClientId(conf);
+    DataStream<Object> pipeline;
+    // Append mode
+    if (OptionsResolver.isAppendMode(conf)) {
+      // append mode should not compaction operator
+      conf.set(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
+      pipeline = Pipelines.append(conf, rowType, dataStream);
+      if (OptionsResolver.needsAsyncClustering(conf)) {
+        Pipelines.cluster(conf, rowType, pipeline);
+      } else if (OptionsResolver.isLazyFailedWritesCleanPolicy(conf)) {
+        // add clean function to rollback failed writes for lazy failed writes cleaning policy
+        Pipelines.clean(conf, pipeline);
+      } else {
+        Pipelines.dummySink(pipeline);
+      }
     } else {
-      Pipelines.clean(conf, pipeline);
+      DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream);
+      pipeline = Pipelines.hoodieStreamWrite(conf, hoodieRecordDataStream);
+      if (OptionsResolver.needsAsyncCompaction(conf)) {
+        Pipelines.compact(conf, pipeline);
+      } else {
+        Pipelines.clean(conf, pipeline);
+      }
     }
 
     env.execute(cfg.targetTableName);

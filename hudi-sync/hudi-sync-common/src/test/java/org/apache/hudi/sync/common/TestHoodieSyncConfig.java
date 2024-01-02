@@ -29,7 +29,6 @@ import org.junit.jupiter.api.Test;
 import java.util.Properties;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DECODE_PARTITION;
@@ -76,44 +75,77 @@ class TestHoodieSyncConfig {
 
   @Test
   void testInferPartitionFields() {
-    Properties props1 = new Properties();
-    props1.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "foo,bar");
-    HoodieSyncConfig config1 = new HoodieSyncConfig(props1, new Configuration());
-    assertEquals("foo,bar", config1.getStringOrDefault(META_SYNC_PARTITION_FIELDS));
-  }
+    Properties props0 = new Properties();
+    HoodieSyncConfig config0 = new HoodieSyncConfig(props0, new Configuration());
+    assertEquals("", config0.getStringOrDefault(META_SYNC_PARTITION_FIELDS),
+        String.format("should get default value due to absence of both %s and %s",
+            HoodieTableConfig.PARTITION_FIELDS.key(), KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()));
 
-  @Test
-  void testInferPartitonExtractorClass() {
     Properties props1 = new Properties();
-    props1.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "foo,bar");
+    props1.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), "foo,bar,baz");
     HoodieSyncConfig config1 = new HoodieSyncConfig(props1, new Configuration());
-    assertEquals("org.apache.hudi.hive.MultiPartKeysValueExtractor",
-        config1.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
+    assertEquals("foo,bar,baz", config1.getStringOrDefault(META_SYNC_PARTITION_FIELDS),
+        String.format("should infer from %s", HoodieTableConfig.PARTITION_FIELDS.key()));
 
     Properties props2 = new Properties();
-    props2.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "foo");
-    props2.setProperty(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key(), "true");
+    props2.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "foo,bar");
     HoodieSyncConfig config2 = new HoodieSyncConfig(props2, new Configuration());
-    assertEquals("org.apache.hudi.hive.HiveStylePartitionValueExtractor",
-        config2.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
+    assertEquals("foo,bar", config2.getStringOrDefault(META_SYNC_PARTITION_FIELDS),
+        String.format("should infer from %s", KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()));
 
-    HoodieSyncConfig config3 = new HoodieSyncConfig(new Properties(), new Configuration());
-    assertEquals("org.apache.hudi.hive.NonPartitionedExtractor",
-        config3.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
+    Properties props3 = new Properties();
+    props3.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), "foo,bar,baz");
+    props3.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "foo,bar");
+    HoodieSyncConfig config3 = new HoodieSyncConfig(props3, new Configuration());
+    assertEquals("foo,bar,baz", config3.getStringOrDefault(META_SYNC_PARTITION_FIELDS),
+        String.format("should infer from %s, which has higher precedence.", HoodieTableConfig.PARTITION_FIELDS.key()));
 
-    Properties props4 = new Properties();
-    props4.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "");
-    HoodieSyncConfig config4 = new HoodieSyncConfig(props4, new Configuration());
-    assertEquals("org.apache.hudi.hive.NonPartitionedExtractor",
-        config4.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
   }
 
   @Test
-  void testInferAssumeDatePartition() {
+  void testInferPartitionExtractorClass() {
+    Properties props0 = new Properties();
+    HoodieSyncConfig config0 = new HoodieSyncConfig(props0, new Configuration());
+    assertEquals("org.apache.hudi.hive.MultiPartKeysValueExtractor",
+        config0.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS),
+        String.format("should get default value due to absence of both %s and %s",
+            HoodieTableConfig.PARTITION_FIELDS.key(), KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()));
+
     Properties props1 = new Properties();
-    props1.setProperty(HoodieMetadataConfig.ASSUME_DATE_PARTITIONING.key(), "true");
+    props1.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), "");
     HoodieSyncConfig config1 = new HoodieSyncConfig(props1, new Configuration());
-    assertEquals("true", config1.getString(META_SYNC_ASSUME_DATE_PARTITION));
+    assertEquals("org.apache.hudi.hive.NonPartitionedExtractor",
+        config1.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS),
+        String.format("should infer from %s", HoodieTableConfig.PARTITION_FIELDS.key()));
+
+    Properties props2 = new Properties();
+    props2.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "foo,bar");
+    HoodieSyncConfig config2 = new HoodieSyncConfig(props2, new Configuration());
+    assertEquals("org.apache.hudi.hive.MultiPartKeysValueExtractor",
+        config2.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS),
+        String.format("should infer from %s", KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()));
+
+    Properties props3 = new Properties();
+    props3.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), "");
+    props3.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "foo,bar");
+    HoodieSyncConfig config3 = new HoodieSyncConfig(props3, new Configuration());
+    assertEquals("org.apache.hudi.hive.NonPartitionedExtractor",
+        config3.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS),
+        String.format("should infer from %s, which has higher precedence.", HoodieTableConfig.PARTITION_FIELDS.key()));
+
+    Properties props4 = new Properties();
+    props4.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), "foo");
+    props4.setProperty(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key(), "true");
+    HoodieSyncConfig config4 = new HoodieSyncConfig(props4, new Configuration());
+    assertEquals("org.apache.hudi.hive.HiveStylePartitionValueExtractor",
+        config4.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
+
+    Properties props5 = new Properties();
+    props5.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), "foo");
+    props5.setProperty(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key(), "false");
+    HoodieSyncConfig config5 = new HoodieSyncConfig(props5, new Configuration());
+    assertEquals("org.apache.hudi.hive.SinglePartPartitionValueExtractor",
+        config5.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
   }
 
   @Test

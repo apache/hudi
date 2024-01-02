@@ -18,28 +18,27 @@
 
 package org.apache.hudi.client.heartbeat;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieHeartbeatException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.NotThreadSafe;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.Serializable;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.ConcurrentHashMap;
+
+import static org.apache.hudi.common.heartbeat.HoodieHeartbeatUtils.getLastHeartbeatTime;
 
 /**
  * This class creates heartbeat for hudi client. This heartbeat is used to ascertain whether the running job is or not.
@@ -49,17 +48,16 @@ import java.util.TimerTask;
 @NotThreadSafe
 public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieHeartbeatClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieHeartbeatClient.class);
 
   private final transient FileSystem fs;
   private final String basePath;
   // path to the heartbeat folder where all writers are updating their heartbeats
-  private String heartbeatFolderPath;
+  private final String heartbeatFolderPath;
   // heartbeat interval in millis
   private final Long heartbeatIntervalInMs;
-  private Integer numTolerableHeartbeatMisses;
   private final Long maxAllowableHeartbeatIntervalInMs;
-  private Map<String, Heartbeat> instantToHeartbeatMap;
+  private final Map<String, Heartbeat> instantToHeartbeatMap;
 
   public HoodieHeartbeatClient(FileSystem fs, String basePath, Long heartbeatIntervalInMs,
                                Integer numTolerableHeartbeatMisses) {
@@ -68,19 +66,18 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
     this.basePath = basePath;
     this.heartbeatFolderPath = HoodieTableMetaClient.getHeartbeatFolderPath(basePath);
     this.heartbeatIntervalInMs = heartbeatIntervalInMs;
-    this.numTolerableHeartbeatMisses = numTolerableHeartbeatMisses;
-    this.maxAllowableHeartbeatIntervalInMs = this.heartbeatIntervalInMs * this.numTolerableHeartbeatMisses;
-    this.instantToHeartbeatMap = new HashMap<>();
+    this.maxAllowableHeartbeatIntervalInMs = this.heartbeatIntervalInMs * numTolerableHeartbeatMisses;
+    this.instantToHeartbeatMap = new ConcurrentHashMap<>();
   }
 
-  class Heartbeat {
+  static class Heartbeat {
 
     private String instantTime;
     private Boolean isHeartbeatStarted = false;
     private Boolean isHeartbeatStopped = false;
     private Long lastHeartbeatTime;
     private Integer numHeartbeats = 0;
-    private Timer timer = new Timer();
+    private Timer timer = new Timer(true);
 
     public String getInstantTime() {
       return instantTime;
@@ -159,7 +156,8 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
 
   /**
    * Start a new heartbeat for the specified instant. If there is already one running, this will be a NO_OP
-   * @param instantTime
+   *
+   * @param instantTime The instant time for the heartbeat.
    */
   public void start(String instantTime) {
     LOG.info("Received request to start heartbeat for instant time " + instantTime);
@@ -181,46 +179,55 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
   }
 
   /**
-   * Stops the heartbeat for the specified instant.
-   * @param instantTime
+   * Stops the heartbeat and deletes the heartbeat file for the specified instant.
+   *
+   * @param instantTime The instant time for the heartbeat.
    * @throws HoodieException
    */
   public void stop(String instantTime) throws HoodieException {
     Heartbeat heartbeat = instantToHeartbeatMap.get(instantTime);
-    if (heartbeat != null && heartbeat.isHeartbeatStarted() && !heartbeat.isHeartbeatStopped()) {
-      LOG.info("Stopping heartbeat for instant " + instantTime);
-      heartbeat.getTimer().cancel();
-      heartbeat.setHeartbeatStopped(true);
-      LOG.info("Stopped heartbeat for instant " + instantTime);
+    if (isHeartbeatStarted(heartbeat)) {
+      stopHeartbeatTimer(heartbeat);
       HeartbeatUtils.deleteHeartbeatFile(fs, basePath, instantTime);
       LOG.info("Deleted heartbeat file for instant " + instantTime);
     }
   }
 
   /**
-   * Stops all heartbeats started via this instance of the client.
+   * Stops all timers of heartbeats started via this instance of the client.
+   *
    * @throws HoodieException
    */
-  public void stop() throws HoodieException {
-    instantToHeartbeatMap.values().forEach(heartbeat -> stop(heartbeat.getInstantTime()));
+  public void stopHeartbeatTimers() throws HoodieException {
+    instantToHeartbeatMap.values().stream().filter(this::isHeartbeatStarted).forEach(this::stopHeartbeatTimer);
   }
 
-  public static Long getLastHeartbeatTime(FileSystem fs, String basePath, String instantTime) throws IOException {
-    Path heartbeatFilePath = new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + Path.SEPARATOR + instantTime);
-    if (fs.exists(heartbeatFilePath)) {
-      return fs.getFileStatus(heartbeatFilePath).getModificationTime();
-    } else {
-      // NOTE : This can happen when a writer is upgraded to use lazy cleaning and the last write had failed
-      return 0L;
-    }
+  /**
+   * Whether the given heartbeat is started.
+   *
+   * @param heartbeat The heartbeat to check whether is started.
+   * @return Whether the heartbeat is started.
+   * @throws IOException
+   */
+  private boolean isHeartbeatStarted(Heartbeat heartbeat) {
+    return heartbeat != null && heartbeat.isHeartbeatStarted() && !heartbeat.isHeartbeatStopped();
+  }
+
+  /**
+   * Stops the timer of the given heartbeat.
+   *
+   * @param heartbeat The heartbeat to stop.
+   */
+  private void stopHeartbeatTimer(Heartbeat heartbeat) {
+    LOG.info("Stopping heartbeat for instant " + heartbeat.getInstantTime());
+    heartbeat.getTimer().cancel();
+    heartbeat.setHeartbeatStopped(true);
+    LOG.info("Stopped heartbeat for instant " + heartbeat.getInstantTime());
   }
 
   public static Boolean heartbeatExists(FileSystem fs, String basePath, String instantTime) throws IOException {
     Path heartbeatFilePath = new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + Path.SEPARATOR + instantTime);
-    if (fs.exists(heartbeatFilePath)) {
-      return true;
-    }
-    return false;
+    return fs.exists(heartbeatFilePath);
   }
 
   public boolean isHeartbeatExpired(String instantTime) throws IOException {
@@ -232,6 +239,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
       lastHeartbeatForWriter = new Heartbeat();
       lastHeartbeatForWriter.setLastHeartbeatTime(lastHeartbeatForWriterTime);
       lastHeartbeatForWriter.setInstantTime(instantTime);
+      lastHeartbeatForWriter.getTimer().cancel();
     }
     if (currentTime - lastHeartbeatForWriter.getLastHeartbeatTime() > this.maxAllowableHeartbeatIntervalInMs) {
       LOG.warn("Heartbeat expired, currentTime = " + currentTime + ", last heartbeat = " + lastHeartbeatForWriter
@@ -239,15 +247,6 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
       return true;
     }
     return false;
-  }
-
-  public List<String> getAllExistingHeartbeatInstants() throws IOException {
-    Path heartbeatFolder = new Path(heartbeatFolderPath);
-    if (this.fs.exists(heartbeatFolder)) {
-      FileStatus[] fileStatus = this.fs.listStatus(new Path(heartbeatFolderPath));
-      return Arrays.stream(fileStatus).map(fs -> fs.getPath().getName()).collect(Collectors.toList());
-    }
-    return Collections.EMPTY_LIST;
   }
 
   private void updateHeartbeat(String instantTime) throws HoodieHeartbeatException {
@@ -267,7 +266,12 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
       heartbeat.setLastHeartbeatTime(newHeartbeatTime);
       heartbeat.setNumHeartbeats(heartbeat.getNumHeartbeats() + 1);
     } catch (IOException io) {
-      throw new HoodieHeartbeatException("Unable to generate heartbeat ", io);
+      Boolean isHeartbeatStopped = instantToHeartbeatMap.get(instantTime).isHeartbeatStopped;
+      if (isHeartbeatStopped) {
+        LOG.warn(String.format("update heart beat failed, because the instant time %s was stopped ? : %s", instantTime, isHeartbeatStopped));
+        return;
+      }
+      throw new HoodieHeartbeatException("Unable to generate heartbeat for instant " + instantTime, io);
     }
   }
 
@@ -281,7 +285,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
 
   @Override
   public void close() {
-    this.stop();
+    this.stopHeartbeatTimers();
     this.instantToHeartbeatMap.clear();
   }
 }

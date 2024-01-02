@@ -18,44 +18,45 @@
 
 package org.apache.hudi.index.bucket;
 
+import org.apache.hudi.client.utils.LazyIterableIterator;
+import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
+
+import static org.apache.hudi.index.HoodieIndexUtils.tagAsNewRecordIfNeeded;
 
 /**
  * Simple bucket index implementation, with fixed bucket number.
  */
 public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieSimpleBucketIndex.class);
-
   public HoodieSimpleBucketIndex(HoodieWriteConfig config) {
     super(config);
   }
 
-  private Map<Integer, HoodieRecordLocation> loadPartitionBucketIdFileIdMapping(
+  public Map<Integer, HoodieRecordLocation> loadBucketIdToFileIdMappingForPartition(
       HoodieTable hoodieTable,
       String partition) {
     // bucketId -> fileIds
     Map<Integer, HoodieRecordLocation> bucketIdToFileIdMapping = new HashMap<>();
     hoodieTable.getMetaClient().reloadActiveTimeline();
     HoodieIndexUtils
-        .getLatestBaseFilesForPartition(partition, hoodieTable)
-        .forEach(file -> {
-          String fileId = file.getFileId();
-          String commitTime = file.getCommitTime();
+        .getLatestFileSlicesForPartition(partition, hoodieTable)
+        .forEach(fileSlice -> {
+          String fileId = fileSlice.getFileId();
+          String commitTime = fileSlice.getBaseInstantTime();
+
           int bucketId = BucketIdentifier.bucketIdFromFileId(fileId);
           if (!bucketIdToFileIdMapping.containsKey(bucketId)) {
             bucketIdToFileIdMapping.put(bucketId, new HoodieRecordLocation(commitTime, fileId));
@@ -68,32 +69,33 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
     return bucketIdToFileIdMapping;
   }
 
+  public int getBucketID(HoodieKey key) {
+    return BucketIdentifier.getBucketId(key, indexKeyFields, numBuckets);
+  }
+
   @Override
   public boolean canIndexLogFiles() {
     return false;
   }
 
   @Override
-  protected BucketIndexLocationMapper getLocationMapper(HoodieTable table, List<String> partitionPath) {
-    return new SimpleBucketIndexLocationMapper(table, partitionPath);
-  }
-
-  public class SimpleBucketIndexLocationMapper implements BucketIndexLocationMapper {
-
-    /**
-     * Mapping from partitionPath -> bucketId -> fileInfo
-     */
-    private final Map<String, Map<Integer, HoodieRecordLocation>> partitionPathFileIDList;
-
-    public SimpleBucketIndexLocationMapper(HoodieTable table, List<String> partitions) {
-      partitionPathFileIDList = partitions.stream().collect(Collectors.toMap(p -> p, p -> loadPartitionBucketIdFileIdMapping(table, p)));
-    }
-
-    @Override
-    public Option<HoodieRecordLocation> getRecordLocation(HoodieKey key, String partitionPath) {
-      int bucketId = BucketIdentifier.getBucketId(key, indexKeyFields, numBuckets);
-      Map<Integer, HoodieRecordLocation> bucketIdToFileIdMapping = partitionPathFileIDList.get(partitionPath);
-      return Option.ofNullable(bucketIdToFileIdMapping.getOrDefault(bucketId, null));
-    }
+  public <R> HoodieData<HoodieRecord<R>> tagLocation(
+      HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
+      HoodieTable hoodieTable)
+      throws HoodieIndexException {
+    Map<String, Map<Integer, HoodieRecordLocation>> partitionPathFileIDList = new HashMap<>();
+    return records.mapPartitions(iterator -> new LazyIterableIterator<HoodieRecord<R>, HoodieRecord<R>>(iterator) {
+      @Override
+      protected HoodieRecord<R> computeNext() {
+        HoodieRecord record = inputItr.next();
+        int bucketId = getBucketID(record.getKey());
+        String partitionPath = record.getPartitionPath();
+        if (!partitionPathFileIDList.containsKey(partitionPath)) {
+          partitionPathFileIDList.put(partitionPath, loadBucketIdToFileIdMappingForPartition(hoodieTable, partitionPath));
+        }
+        HoodieRecordLocation loc = partitionPathFileIDList.get(partitionPath).getOrDefault(bucketId, null);
+        return tagAsNewRecordIfNeeded(record, Option.ofNullable(loc));
+      }
+      }, false);
   }
 }

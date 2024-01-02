@@ -19,23 +19,25 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.io.HoodieCreateHandle;
+import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieMergeHandle;
+import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieSparkTable;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -48,6 +50,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -59,7 +62,7 @@ import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResou
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
+public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness implements Serializable {
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -78,7 +81,6 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
   private WriteStatus prepareFirstRecordCommit(List<String> recordsStrs) throws IOException {
     // Create a bunch of records with an old version of schema
     final HoodieWriteConfig config = makeHoodieClientConfig("/exampleSchema.avsc");
-    config.setValue(HoodieCompactionConfig.PRESERVE_COMMIT_METADATA, "false");
     final HoodieSparkTable table = HoodieSparkTable.create(config, context);
     final List<WriteStatus> statuses = jsc.parallelize(Arrays.asList(1)).map(x -> {
       List<HoodieRecord> insertRecords = new ArrayList<>();
@@ -89,13 +91,16 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
       }
       Map<String, HoodieRecord> insertRecordMap = insertRecords.stream()
           .collect(Collectors.toMap(r -> r.getRecordKey(), Function.identity()));
-      HoodieCreateHandle<?,?,?,?> createHandle =
-          new HoodieCreateHandle(config, "100", table, insertRecords.get(0).getPartitionPath(), "f1-0", insertRecordMap, supplier);
-      createHandle.write();
+      HoodieWriteHandle<?,?,?,?> createHandle = new CreateHandleFactory<>(false)
+          .create(config, "100", table, insertRecords.get(0).getPartitionPath(), "f1-0", supplier);
+      for (HoodieRecord record : insertRecordMap.values()) {
+        createHandle.write(record, createHandle.getWriterSchemaWithMetaFields(), createHandle.getConfig().getProps());
+      }
       return createHandle.close().get(0);
     }).collect();
 
-    final Path commitFile = new Path(config.getBasePath() + "/.hoodie/" + HoodieTimeline.makeCommitFileName("100"));
+    final Path commitFile = new Path(config.getBasePath() + "/.hoodie/"
+        + HoodieTimeline.makeCommitFileName("100" + "_" + InProcessTimeGenerator.createNewInstantTime()));
     FSUtils.getFs(basePath, HoodieTestUtils.getDefaultHadoopConf()).create(commitFile);
     return statuses.get(0);
   }
@@ -133,7 +138,8 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
                 new Path(updateTable.getConfig().getBasePath() + "/" + insertResult.getStat().getPath()),
                 mergeHandle.getWriterSchemaWithMetaFields());
         for (GenericRecord rec : oldRecords) {
-          mergeHandle.write(rec);
+          // TODO create hoodie record with rec can getRecordKey
+          mergeHandle.write(new HoodieAvroIndexedRecord(rec));
         }
         mergeHandle.close();
       };
@@ -181,7 +187,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
     final HoodieWriteConfig config = makeHoodieClientConfig("/exampleEvolvedSchemaChangeOrder.avsc");
     final HoodieSparkTable table = HoodieSparkTable.create(config, context);
     String recordStr = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
-        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"added_field\":1},\"number\":12";
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"added_field\":1,\"number\":12}";
     List<HoodieRecord> updateRecords = buildUpdateRecords(recordStr, insertResult.getFileId());
     String assertMsg = "UpdateFunction could not read records written with exampleSchema.avsc using the "
         + "exampleEvolvedSchemaChangeOrder.avsc as column order change";

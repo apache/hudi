@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import com.google.common.collect.Lists
 import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.spark.sql.Row
@@ -29,7 +28,7 @@ import scala.collection.JavaConverters.asScalaIteratorConverter
 
 class StatsWriteAmplificationProcedure extends BaseProcedure with ProcedureBuilder {
   override def parameters: Array[ProcedureParameter] = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10)
   )
 
@@ -49,7 +48,7 @@ class StatsWriteAmplificationProcedure extends BaseProcedure with ProcedureBuild
     val activeTimeline = client.getActiveTimeline
     val timeline = activeTimeline.getCommitTimeline.filterCompletedInstants()
 
-    val rows: java.util.List[Row] = Lists.newArrayList()
+    val rows = new java.util.ArrayList[Row]
     val df = new DecimalFormat("#.00")
     var totalRecordsUpserted = 0L
     var totalRecordsWritten = 0L

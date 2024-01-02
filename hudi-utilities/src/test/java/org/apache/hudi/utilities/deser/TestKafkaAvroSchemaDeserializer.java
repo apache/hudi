@@ -21,7 +21,6 @@ package org.apache.hudi.utilities.deser;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.sources.AvroKafkaSource;
 import org.apache.hudi.utilities.sources.helpers.SchemaTestProvider;
-import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -45,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 /**
  * Tests {@link KafkaAvroSchemaDeserializer}.
  */
-public class TestKafkaAvroSchemaDeserializer extends UtilitiesTestBase {
+public class TestKafkaAvroSchemaDeserializer {
 
   private final SchemaRegistryClient schemaRegistry;
   private final KafkaAvroSerializer avroSerializer;

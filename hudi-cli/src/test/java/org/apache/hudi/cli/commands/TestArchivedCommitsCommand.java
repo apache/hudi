@@ -24,6 +24,8 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.cli.testutils.HoodieTestCommitUtilities;
+import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
+import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -34,12 +36,13 @@ import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
-import org.apache.hudi.client.HoodieTimelineArchiver;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.springframework.shell.core.CommandResult;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.shell.Shell;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -52,7 +55,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Test Cases for {@link ArchivedCommitsCommand}.
  */
 @Tag("functional")
+@SpringBootTest(properties = {"spring.shell.interactive.enabled=false", "spring.shell.command.script.enabled=false"})
 public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
+
+  @Autowired
+  private Shell shell;
 
   private String tablePath;
 
@@ -73,7 +80,7 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
     // Generate archive
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath)
         .withSchema(HoodieTestCommitMetadataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 3).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(4, 5).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
@@ -111,8 +118,8 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
    */
   @Test
   public void testShowArchivedCommits() {
-    CommandResult cr = shell().executeCommand("show archived commit stats");
-    assertTrue(cr.isSuccess());
+    Object result = shell.evaluate(() -> "show archived commit stats");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     TableHeader header = new TableHeader().addTableHeaderField("action").addTableHeaderField("instant")
         .addTableHeaderField("partition").addTableHeaderField("file_id").addTableHeaderField("prev_instant")
@@ -125,7 +132,7 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
 
     // Generate expected data
     final List<Comparable[]> rows = new ArrayList<>();
-    for (int i = 100; i < 104; i++) {
+    for (int i = 100; i < 102; i++) {
       String instant = String.valueOf(i);
       for (int j = 0; j < 3; j++) {
         Comparable[] defaultComp = new Comparable[] {"commit", instant,
@@ -153,7 +160,7 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
     String expectedResult = HoodiePrintHelper.print(
         header, new HashMap<>(), "", false, -1, false, rows);
     expectedResult = removeNonWordAndStripSpace(expectedResult);
-    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    String got = removeNonWordAndStripSpace(result.toString());
     assertEquals(expectedResult, got);
   }
 
@@ -162,32 +169,31 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
    */
   @Test
   public void testShowCommits() throws Exception {
-    CommandResult cr = shell().executeCommand("show archived commits");
-    assertTrue(cr.isSuccess());
+    Object cmdResult = shell.evaluate(() -> "show archived commits --limit 5");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(cmdResult));
     final List<Comparable[]> rows = new ArrayList<>();
 
-    // Test default skipMetadata and limit 10
+    // Test default skipMetadata and limit 5
     TableHeader header = new TableHeader().addTableHeaderField("CommitTime").addTableHeaderField("CommitType");
-    for (int i = 100; i < 103; i++) {
-      String instant = String.valueOf(i);
-      Comparable[] result = new Comparable[] {instant, "commit"};
-      rows.add(result);
-      rows.add(result);
-      rows.add(result);
-    }
-    rows.add(new Comparable[] {"103", "commit"});
-    String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, 10, false, rows);
+    Comparable[] result1 = new Comparable[] {"100", "commit"};
+    Comparable[] result2 = new Comparable[] {"101", "commit"};
+    rows.add(result1);
+    rows.add(result1);
+    rows.add(result1);
+    rows.add(result2);
+    rows.add(result2);
+    String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, 5, false, rows);
     expected = removeNonWordAndStripSpace(expected);
-    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    String got = removeNonWordAndStripSpace(cmdResult.toString());
     assertEquals(expected, got);
 
     // Test with Metadata and no limit
-    cr = shell().executeCommand("show archived commits --skipMetadata false --limit -1");
-    assertTrue(cr.isSuccess());
+    cmdResult = shell.evaluate(() -> "show archived commits --skipMetadata false --limit 0");
+    assertTrue(ShellEvaluationResultUtil.isSuccess(cmdResult));
 
     rows.clear();
 
-    for (int i = 100; i < 104; i++) {
+    for (int i = 100; i < 102; i++) {
       String instant = String.valueOf(i);
       // Since HoodiePrintHelper order data by default, need to order commitMetadata
       HoodieCommitMetadata metadata = HoodieTestCommitMetadataGenerator.generateCommitMetadata(tablePath, instant);
@@ -198,9 +204,9 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
       rows.add(result);
     }
     header = header.addTableHeaderField("CommitDetails");
-    expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
+    expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, 0, false, rows);
     expected = removeNonWordAndStripSpace(expected);
-    got = removeNonWordAndStripSpace(cr.getResult().toString());
+    got = removeNonWordAndStripSpace(cmdResult.toString());
     assertEquals(expected, got);
   }
 }

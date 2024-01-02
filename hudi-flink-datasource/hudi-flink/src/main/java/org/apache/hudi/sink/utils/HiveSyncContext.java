@@ -18,14 +18,15 @@
 
 package org.apache.hudi.sink.utils;
 
-import org.apache.hudi.aws.sync.AwsGlueCatalogSyncTool;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.table.format.FilePathUtils;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
@@ -39,6 +40,7 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_MODE;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_TABLE_STRATEGY;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_PROPERTIES;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_SERDE_PROPERTIES;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
@@ -46,7 +48,6 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USER;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_JDBC;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.METASTORE_URIS;
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
@@ -66,6 +67,9 @@ public class HiveSyncContext {
   private final Properties props;
   private final HiveConf hiveConf;
 
+  public static final String AWS_GLUE_CATALOG_SYNC_TOOL_CLASS =
+      "org.apache.hudi.aws.sync.AwsGlueCatalogSyncTool";
+
   private HiveSyncContext(Properties props, HiveConf hiveConf) {
     this.props = props;
     this.hiveConf = hiveConf;
@@ -74,7 +78,9 @@ public class HiveSyncContext {
   public HiveSyncTool hiveSyncTool() {
     HiveSyncMode syncMode = HiveSyncMode.of(props.getProperty(HIVE_SYNC_MODE.key()));
     if (syncMode == HiveSyncMode.GLUE) {
-      return new AwsGlueCatalogSyncTool(props, hiveConf);
+      return ((HiveSyncTool) ReflectionUtils.loadClass(AWS_GLUE_CATALOG_SYNC_TOOL_CLASS,
+          new Class<?>[] {Properties.class, org.apache.hadoop.conf.Configuration.class},
+          props, hiveConf));
     }
     return new HiveSyncTool(props, hiveConf);
   }
@@ -93,7 +99,7 @@ public class HiveSyncContext {
 
   @VisibleForTesting
   public static Properties buildSyncConfig(Configuration conf) {
-    TypedProperties props = new TypedProperties();
+    TypedProperties props = StreamerUtil.flinkConf2TypedProperties(conf);
     props.setPropertyIfNonNull(META_SYNC_BASE_PATH.key(), conf.getString(FlinkOptions.PATH));
     props.setPropertyIfNonNull(META_SYNC_BASE_FILE_FORMAT.key(), conf.getString(FlinkOptions.HIVE_SYNC_FILE_FORMAT));
     props.setPropertyIfNonNull(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), "false");
@@ -115,7 +121,7 @@ public class HiveSyncContext {
     props.setPropertyIfNonNull(HIVE_AUTO_CREATE_DATABASE.key(), String.valueOf(conf.getBoolean(FlinkOptions.HIVE_SYNC_AUTO_CREATE_DB)));
     props.setPropertyIfNonNull(META_SYNC_DECODE_PARTITION.key(), String.valueOf(conf.getBoolean(FlinkOptions.URL_ENCODE_PARTITIONING)));
     props.setPropertyIfNonNull(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE.key(), String.valueOf(conf.getBoolean(FlinkOptions.HIVE_SYNC_SKIP_RO_SUFFIX)));
-    props.setPropertyIfNonNull(META_SYNC_ASSUME_DATE_PARTITION.key(), String.valueOf(conf.getBoolean(FlinkOptions.HIVE_SYNC_ASSUME_DATE_PARTITION)));
+    props.setPropertyIfNonNull(HIVE_SYNC_TABLE_STRATEGY.key(), String.valueOf(conf.getString(FlinkOptions.HIVE_SYNC_TABLE_STRATEGY)));
     return props;
   }
 }

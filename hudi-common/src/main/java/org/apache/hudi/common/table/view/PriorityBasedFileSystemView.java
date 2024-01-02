@@ -34,11 +34,12 @@ import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.http.HttpStatus;
 import org.apache.http.client.HttpResponseException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 /**
@@ -47,7 +48,7 @@ import java.util.stream.Stream;
  */
 public class PriorityBasedFileSystemView implements SyncableFileSystemView, Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(PriorityBasedFileSystemView.class);
+  private static final Logger LOG = LoggerFactory.getLogger(PriorityBasedFileSystemView.class);
 
   private final SyncableFileSystemView preferredView;
   private final SyncableFileSystemView secondaryView;
@@ -146,6 +147,12 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   }
 
   @Override
+  public Map<String, Stream<HoodieBaseFile>> getAllLatestBaseFilesBeforeOrOn(String maxCommitTime) {
+    return execute(maxCommitTime, preferredView::getAllLatestBaseFilesBeforeOrOn,
+        secondaryView::getAllLatestBaseFilesBeforeOrOn);
+  }
+
+  @Override
   public Option<HoodieBaseFile> getLatestBaseFile(String partitionPath, String fileId) {
     return execute(partitionPath, fileId, preferredView::getLatestBaseFile, secondaryView::getLatestBaseFile);
   }
@@ -161,6 +168,11 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   }
 
   @Override
+  public Void loadAllPartitions() {
+    return execute(preferredView::loadAllPartitions, secondaryView::loadAllPartitions);
+  }
+
+  @Override
   public Stream<HoodieBaseFile> getAllBaseFiles(String partitionPath) {
     return execute(partitionPath, preferredView::getAllBaseFiles, secondaryView::getAllBaseFiles);
   }
@@ -168,6 +180,11 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   @Override
   public Stream<FileSlice> getLatestFileSlices(String partitionPath) {
     return execute(partitionPath, preferredView::getLatestFileSlices, secondaryView::getLatestFileSlices);
+  }
+
+  @Override
+  public Stream<FileSlice> getLatestFileSlicesStateless(String partitionPath) {
+    return execute(partitionPath, preferredView::getLatestFileSlicesStateless, secondaryView::getLatestFileSlicesStateless);
   }
 
   @Override
@@ -181,6 +198,12 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
       boolean includeFileSlicesInPendingCompaction) {
     return execute(partitionPath, maxCommitTime, includeFileSlicesInPendingCompaction,
         preferredView::getLatestFileSlicesBeforeOrOn, secondaryView::getLatestFileSlicesBeforeOrOn);
+  }
+
+  @Override
+  public Map<String, Stream<FileSlice>> getAllLatestFileSlicesBeforeOrOn(String maxCommitTime) {
+    return execute(maxCommitTime, preferredView::getAllLatestFileSlicesBeforeOrOn,
+        secondaryView::getAllLatestFileSlicesBeforeOrOn);
   }
 
   @Override
@@ -205,6 +228,11 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   }
 
   @Override
+  public Stream<HoodieFileGroup> getAllFileGroupsStateless(String partitionPath) {
+    return execute(partitionPath, preferredView::getAllFileGroupsStateless, secondaryView::getAllFileGroupsStateless);
+  }
+
+  @Override
   public Stream<HoodieFileGroup> getReplacedFileGroupsBeforeOrOn(String maxCommitTime, String partitionPath) {
     return execute(maxCommitTime, partitionPath, preferredView::getReplacedFileGroupsBeforeOrOn, secondaryView::getReplacedFileGroupsBeforeOrOn);
   }
@@ -215,6 +243,11 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   }
 
   @Override
+  public Stream<HoodieFileGroup> getReplacedFileGroupsAfterOrOn(String minCommitTime, String partitionPath) {
+    return execute(minCommitTime, partitionPath, preferredView::getReplacedFileGroupsAfterOrOn, secondaryView::getReplacedFileGroupsAfterOrOn);
+  }
+
+  @Override
   public Stream<HoodieFileGroup> getAllReplacedFileGroups(String partitionPath) {
     return execute(partitionPath, preferredView::getAllReplacedFileGroups, secondaryView::getAllReplacedFileGroups);
   }
@@ -222,6 +255,11 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   @Override
   public Stream<Pair<String, CompactionOperation>> getPendingCompactionOperations() {
     return execute(preferredView::getPendingCompactionOperations, secondaryView::getPendingCompactionOperations);
+  }
+
+  @Override
+  public Stream<Pair<String, CompactionOperation>> getPendingLogCompactionOperations() {
+    return execute(preferredView::getPendingLogCompactionOperations, secondaryView::getPendingLogCompactionOperations);
   }
 
   @Override

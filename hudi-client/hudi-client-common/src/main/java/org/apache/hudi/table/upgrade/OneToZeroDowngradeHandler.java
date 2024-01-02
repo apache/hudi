@@ -43,13 +43,13 @@ public class OneToZeroDowngradeHandler implements DowngradeHandler {
       SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     // fetch pending commit info
-    HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterPendingExcludingCompaction();
+    HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterPendingExcludingMajorAndMinorCompaction();
     List<HoodieInstant> commits = inflightTimeline.getReverseOrderedInstants().collect(Collectors.toList());
     for (HoodieInstant inflightInstant : commits) {
       // delete existing markers
       WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, inflightInstant.getTimestamp());
       writeMarkers.quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
     }
-    return Collections.EMPTY_MAP;
+    return Collections.emptyMap();
   }
 }

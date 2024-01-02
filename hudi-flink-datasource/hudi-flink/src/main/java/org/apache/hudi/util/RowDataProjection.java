@@ -25,6 +25,7 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 
+import javax.annotation.Nullable;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.List;
@@ -37,7 +38,7 @@ public class RowDataProjection implements Serializable {
 
   private final RowData.FieldGetter[] fieldGetters;
 
-  private RowDataProjection(LogicalType[] types, int[] positions) {
+  protected RowDataProjection(LogicalType[] types, int[] positions) {
     ValidationUtils.checkArgument(types.length == positions.length,
         "types and positions should have the equal number");
     this.fieldGetters = new RowData.FieldGetter[types.length];
@@ -68,9 +69,10 @@ public class RowDataProjection implements Serializable {
    */
   public RowData project(RowData rowData) {
     GenericRowData genericRowData = new GenericRowData(this.fieldGetters.length);
+    genericRowData.setRowKind(rowData.getRowKind());
     for (int i = 0; i < this.fieldGetters.length; i++) {
       final Object val = this.fieldGetters[i].getFieldOrNull(rowData);
-      genericRowData.setField(i, val);
+      genericRowData.setField(i, getVal(i, val));
     }
     return genericRowData;
   }
@@ -85,5 +87,9 @@ public class RowDataProjection implements Serializable {
       values[i] = val;
     }
     return values;
+  }
+
+  protected @Nullable Object getVal(int pos, @Nullable Object val) {
+    return val;
   }
 }

@@ -17,12 +17,12 @@
   <parent>
     <artifactId>hudi-spark-datasource</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.13.0-SNAPSHOT</version>
+    <version>1.0.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
   <artifactId>hudi-spark3.1.x_2.12</artifactId>
-  <version>0.13.0-SNAPSHOT</version>
+  <version>1.0.0-SNAPSHOT</version>
 
   <name>hudi-spark3.1.x_2.12</name>
   <packaging>jar</packaging>
@@ -149,16 +149,19 @@
   </build>
 
   <dependencies>
+
     <dependency>
-      <groupId>org.scala-lang</groupId>
-      <artifactId>scala-library</artifactId>
-      <version>${scala12.version}</version>
+      <groupId>org.apache.spark</groupId>
+      <artifactId>spark-sql_${scala.binary.version}</artifactId>
+      <version>${spark31.version}</version>
+      <optional>true</optional>
     </dependency>
 
     <dependency>
       <groupId>org.apache.spark</groupId>
-      <artifactId>spark-sql_2.12</artifactId>
+      <artifactId>spark-core_${scala.binary.version}</artifactId>
       <version>${spark31.version}</version>
+      <scope>provided</scope>
       <optional>true</optional>
     </dependency>
 
@@ -217,6 +220,12 @@
     <!-- Hoodie - Test -->
     <dependency>
       <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-tests-common</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-client-common</artifactId>
       <version>${project.version}</version>
       <classifier>tests</classifier>
@@ -263,14 +272,10 @@
       </exclusions>
     </dependency>
 
+    <!-- Parquet -->
     <dependency>
-      <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter-api</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter-params</artifactId>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-avro</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>

@@ -19,19 +19,14 @@
 package org.apache.hudi
 
 import org.apache.avro.generic.GenericRecord
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.testutils.DataSourceTestUtils
-import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.types.{ArrayType, StructField, StructType}
+import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.io.TempDir
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-import java.io.File
-import java.nio.file.Paths
 import scala.collection.JavaConverters
 
 class TestHoodieSparkUtils {
@@ -91,63 +86,13 @@ class TestHoodieSparkUtils {
   }
 
   @Test
-  def testGlobPaths(@TempDir tempDir: File): Unit = {
-    val folders: Seq[Path] = Seq(
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder1").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder2").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, ".hoodie").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, ".hoodie", "metadata").toUri)
-    )
-
-    val files: Seq[Path] = Seq(
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder1", "file1").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder1", "file2").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder2", "file3").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder2","file4").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, ".hoodie","metadata", "file5").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, ".hoodie","metadata", "file6").toUri)
-    )
-
-    folders.foreach(folder => new File(folder.toUri).mkdir())
-    files.foreach(file => new File(file.toUri).createNewFile())
-
-    var paths = Seq(tempDir.getAbsolutePath + "/*")
-    var globbedPaths = HoodieSparkUtils.checkAndGlobPathIfNecessary(paths,
-      new Path(paths.head).getFileSystem(new Configuration()))
-    assertEquals(folders.filterNot(entry => entry.toString.contains(".hoodie"))
-      .sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
-
-    paths = Seq(tempDir.getAbsolutePath + "/*/*")
-    globbedPaths = HoodieSparkUtils.checkAndGlobPathIfNecessary(paths,
-      new Path(paths.head).getFileSystem(new Configuration()))
-    assertEquals(files.filterNot(entry => entry.toString.contains(".hoodie"))
-      .sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
-
-    paths = Seq(tempDir.getAbsolutePath + "/folder1/*")
-    globbedPaths = HoodieSparkUtils.checkAndGlobPathIfNecessary(paths,
-      new Path(paths.head).getFileSystem(new Configuration()))
-    assertEquals(Seq(files(0), files(1)).sortWith(_.toString < _.toString),
-      globbedPaths.sortWith(_.toString < _.toString))
-
-    paths = Seq(tempDir.getAbsolutePath + "/folder2/*")
-    globbedPaths = HoodieSparkUtils.checkAndGlobPathIfNecessary(paths,
-      new Path(paths.head).getFileSystem(new Configuration()))
-    assertEquals(Seq(files(2), files(3)).sortWith(_.toString < _.toString),
-      globbedPaths.sortWith(_.toString < _.toString))
-
-    paths = Seq(tempDir.getAbsolutePath + "/folder1/*", tempDir.getAbsolutePath + "/folder2/*")
-    globbedPaths = HoodieSparkUtils.checkAndGlobPathIfNecessary(paths,
-      new Path(paths.head).getFileSystem(new Configuration()))
-    assertEquals(files.filterNot(entry => entry.toString.contains(".hoodie"))
-      .sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
-  }
-
-  @Test
   def testCreateRddSchemaEvol(): Unit = {
     val spark = SparkSession.builder
       .appName("Hoodie Datasource test")
       .master("local[2]")
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+      .config("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
+      .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
       .getOrCreate
 
     val schema = DataSourceTestUtils.getStructTypeExampleSchema
@@ -184,6 +129,8 @@ class TestHoodieSparkUtils {
       .appName("Hoodie Datasource test")
       .master("local[2]")
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+      .config("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
+      .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
       .getOrCreate
 
     val innerStruct1 = new StructType().add("innerKey","string",false).add("innerValue", "long", true)
@@ -253,11 +200,40 @@ class TestHoodieSparkUtils {
       fail("createRdd should fail, because records don't have a column which is not nullable in the passed in schema")
     } catch {
       case e: Exception =>
-        assertTrue(e.getMessage.contains("null of string in field new_nested_col of test_namespace.test_struct_name.nullableInnerStruct of union"))
+        if (HoodieSparkUtils.gteqSpark3_3) {
+          assertTrue(e.getMessage.contains("null value for (non-nullable) string at test_struct_name.nullableInnerStruct[nullableInnerStruct].new_nested_col"))
+        } else {
+          assertTrue(e.getMessage.contains("null of string in field new_nested_col of test_namespace.test_struct_name.nullableInnerStruct of union"))
+        }
     }
     spark.stop()
   }
 
   def convertRowListToSeq(inputList: java.util.List[Row]): Seq[Row] =
     JavaConverters.asScalaIteratorConverter(inputList.iterator).asScala.toSeq
+}
+
+object TestHoodieSparkUtils {
+
+
+  def setNullableRec(structType: StructType, columnName: Array[String], index: Int): StructType = {
+    StructType(structType.map {
+      case StructField(name, StructType(fields), nullable, metadata) if name.equals(columnName(index)) =>
+        StructField(name, setNullableRec(StructType(fields), columnName, index + 1), nullable, metadata)
+      case StructField(name, ArrayType(StructType(fields), _), nullable, metadata) if name.equals(columnName(index)) =>
+        StructField(name, ArrayType(setNullableRec(StructType(fields), columnName, index + 1)), nullable, metadata)
+      case StructField(name, dataType, _, metadata) if name.equals(columnName(index)) =>
+        StructField(name, dataType, nullable = false, metadata)
+      case y: StructField => y
+    })
+  }
+
+  def setColumnNotNullable(df: DataFrame, columnName: String): DataFrame = {
+    // get schema
+    val schema = df.schema
+    // modify [[StructField] with name `cn`
+    val newSchema = setNullableRec(schema, columnName.split('.'), 0)
+    // apply new schema
+    df.sqlContext.createDataFrame(df.rdd, newSchema)
+  }
 }

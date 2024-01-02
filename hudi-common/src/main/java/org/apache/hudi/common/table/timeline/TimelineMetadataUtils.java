@@ -18,9 +18,9 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.avro.model.HoodieCommitMetadata;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieIndexCommitMetadata;
 import org.apache.hudi.avro.model.HoodieIndexPlan;
@@ -38,14 +38,12 @@ import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 
-import org.apache.avro.Schema;
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.file.FileReader;
 import org.apache.avro.file.SeekableByteArrayInput;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DatumWriter;
-import org.apache.avro.specific.SpecificData;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecordBase;
@@ -59,6 +57,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * Utils for Hudi timeline metadata.
+ */
 public class TimelineMetadataUtils {
 
   private static final Integer DEFAULT_VERSION = 1;
@@ -74,33 +75,33 @@ public class TimelineMetadataUtils {
   }
 
   public static HoodieRollbackMetadata convertRollbackMetadata(String startRollbackTime, Option<Long> durationInMs,
-      List<HoodieInstant> instants, List<HoodieRollbackStat> rollbackStats) {
+                                                               List<HoodieInstant> instants, List<HoodieRollbackStat> rollbackStats) {
     Map<String, HoodieRollbackPartitionMetadata> partitionMetadataBuilder = new HashMap<>();
     int totalDeleted = 0;
     for (HoodieRollbackStat stat : rollbackStats) {
       Map<String, Long> rollbackLogFiles = stat.getCommandBlocksCount().keySet().stream()
           .collect(Collectors.toMap(f -> f.getPath().toString(), FileStatus::getLen));
       HoodieRollbackPartitionMetadata metadata = new HoodieRollbackPartitionMetadata(stat.getPartitionPath(),
-          stat.getSuccessDeleteFiles(), stat.getFailedDeleteFiles(), rollbackLogFiles);
+          stat.getSuccessDeleteFiles(), stat.getFailedDeleteFiles(), rollbackLogFiles, stat.getLogFilesFromFailedCommit());
       partitionMetadataBuilder.put(stat.getPartitionPath(), metadata);
       totalDeleted += stat.getSuccessDeleteFiles().size();
     }
 
     return new HoodieRollbackMetadata(startRollbackTime, durationInMs.orElseGet(() -> -1L), totalDeleted,
-      instants.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()),
-      Collections.unmodifiableMap(partitionMetadataBuilder), DEFAULT_VERSION,
-      instants.stream().map(instant -> new HoodieInstantInfo(instant.getTimestamp(), instant.getAction())).collect(Collectors.toList()));
+        instants.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()),
+        Collections.unmodifiableMap(partitionMetadataBuilder), DEFAULT_VERSION,
+        instants.stream().map(instant -> new HoodieInstantInfo(instant.getTimestamp(), instant.getAction())).collect(Collectors.toList()));
   }
 
   public static HoodieSavepointMetadata convertSavepointMetadata(String user, String comment,
-      Map<String, List<String>> latestFiles) {
+                                                                 Map<String, List<String>> latestFiles) {
     Map<String, HoodieSavepointPartitionMetadata> partitionMetadataBuilder = new HashMap<>();
     for (Map.Entry<String, List<String>> stat : latestFiles.entrySet()) {
       HoodieSavepointPartitionMetadata metadata = new HoodieSavepointPartitionMetadata(stat.getKey(), stat.getValue());
       partitionMetadataBuilder.put(stat.getKey(), metadata);
     }
     return new HoodieSavepointMetadata(user, System.currentTimeMillis(), comment,
-      Collections.unmodifiableMap(partitionMetadataBuilder), DEFAULT_VERSION);
+        Collections.unmodifiableMap(partitionMetadataBuilder), DEFAULT_VERSION);
   }
 
   public static Option<byte[]> serializeCompactionPlan(HoodieCompactionPlan compactionWorkload) throws IOException {
@@ -147,6 +148,21 @@ public class TimelineMetadataUtils {
     return serializeAvroMetadata(indexCommitMetadata, HoodieIndexCommitMetadata.class);
   }
 
+  public static Option<byte[]> serializeCommitMetadata(org.apache.hudi.common.model.HoodieCommitMetadata commitMetadata) throws IOException {
+    if (commitMetadata instanceof org.apache.hudi.common.model.HoodieReplaceCommitMetadata) {
+      return serializeReplaceCommitMetadata(MetadataConversionUtils.convertCommitMetadata(commitMetadata));
+    }
+    return serializeCommitMetadata(MetadataConversionUtils.convertCommitMetadata(commitMetadata));
+  }
+
+  private static Option<byte[]> serializeCommitMetadata(HoodieCommitMetadata commitMetadata) throws IOException {
+    return serializeAvroMetadata(commitMetadata, HoodieCommitMetadata.class);
+  }
+
+  private static Option<byte[]> serializeReplaceCommitMetadata(HoodieReplaceCommitMetadata commitMetadata) throws IOException {
+    return serializeAvroMetadata(commitMetadata, HoodieReplaceCommitMetadata.class);
+  }
+
   public static <T extends SpecificRecordBase> Option<byte[]> serializeAvroMetadata(T metadata, Class<T> clazz)
       throws IOException {
     DatumWriter<T> datumWriter = new SpecificDatumWriter<>(clazz);
@@ -186,16 +202,16 @@ public class TimelineMetadataUtils {
     return deserializeAvroMetadata(bytes, HoodieRequestedReplaceMetadata.class);
   }
 
-  public static HoodieReplaceCommitMetadata deserializeHoodieReplaceMetadata(byte[] bytes) throws IOException {
-    return deserializeAvroMetadata(bytes, HoodieReplaceCommitMetadata.class);
-  }
-
   public static HoodieIndexPlan deserializeIndexPlan(byte[] bytes) throws IOException {
     return deserializeAvroMetadata(bytes, HoodieIndexPlan.class);
   }
 
-  public static HoodieIndexCommitMetadata deserializeIndexCommitMetadata(byte[] bytes) throws IOException {
-    return deserializeAvroMetadata(bytes, HoodieIndexCommitMetadata.class);
+  public static HoodieCommitMetadata deserializeCommitMetadata(byte[] bytes) throws IOException {
+    return deserializeAvroMetadata(bytes, HoodieCommitMetadata.class);
+  }
+
+  public static HoodieReplaceCommitMetadata deserializeReplaceCommitMetadata(byte[] bytes) throws IOException {
+    return deserializeAvroMetadata(bytes, HoodieReplaceCommitMetadata.class);
   }
 
   public static <T extends SpecificRecordBase> T deserializeAvroMetadata(byte[] bytes, Class<T> clazz)
@@ -204,14 +220,5 @@ public class TimelineMetadataUtils {
     FileReader<T> fileReader = DataFileReader.openReader(new SeekableByteArrayInput(bytes), reader);
     ValidationUtils.checkArgument(fileReader.hasNext(), "Could not deserialize metadata of type " + clazz);
     return fileReader.next();
-  }
-
-  public static <T extends SpecificRecordBase> T deserializeAvroRecordMetadata(byte[] bytes, Schema schema)
-      throws IOException {
-    return  deserializeAvroRecordMetadata(HoodieAvroUtils.bytesToAvro(bytes, schema), schema);
-  }
-
-  public static <T extends SpecificRecordBase> T deserializeAvroRecordMetadata(Object object, Schema schema) {
-    return  (T) SpecificData.get().deepCopy(schema, object);
   }
 }

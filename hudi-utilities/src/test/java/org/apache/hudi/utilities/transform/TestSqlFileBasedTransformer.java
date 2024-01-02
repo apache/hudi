@@ -20,8 +20,9 @@
 package org.apache.hudi.utilities.transform;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.utilities.exception.HoodieTransformException;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
+
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
@@ -49,24 +50,24 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initTestServices(false, false);
+    UtilitiesTestBase.initTestServices();
     UtilitiesTestBase.Helpers.copyToDFS(
-        "delta-streamer-config/sql-file-transformer.sql",
-        UtilitiesTestBase.dfs,
-        UtilitiesTestBase.dfsBasePath + "/sql-file-transformer.sql");
+        "streamer-config/sql-file-transformer.sql",
+        UtilitiesTestBase.fs,
+        UtilitiesTestBase.basePath + "/sql-file-transformer.sql");
     UtilitiesTestBase.Helpers.copyToDFS(
-        "delta-streamer-config/sql-file-transformer-invalid.sql",
-        UtilitiesTestBase.dfs,
-        UtilitiesTestBase.dfsBasePath + "/sql-file-transformer-invalid.sql");
+        "streamer-config/sql-file-transformer-invalid.sql",
+        UtilitiesTestBase.fs,
+        UtilitiesTestBase.basePath + "/sql-file-transformer-invalid.sql");
     UtilitiesTestBase.Helpers.copyToDFS(
-        "delta-streamer-config/sql-file-transformer-empty.sql",
-        UtilitiesTestBase.dfs,
-        UtilitiesTestBase.dfsBasePath + "/sql-file-transformer-empty.sql");
+        "streamer-config/sql-file-transformer-empty.sql",
+        UtilitiesTestBase.fs,
+        UtilitiesTestBase.basePath + "/sql-file-transformer-empty.sql");
   }
 
   @AfterAll
   public static void cleanupClass() {
-    UtilitiesTestBase.cleanupClass();
+    UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
   @Override
@@ -98,9 +99,9 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
     // Test if the class throws hoodie IO exception correctly when given a incorrect config.
     props.setProperty(
         "hoodie.deltastreamer.transformer.sql.file",
-        UtilitiesTestBase.dfsBasePath + "/non-exist-sql-file.sql");
+        UtilitiesTestBase.basePath + "/non-exist-sql-file.sql");
     assertThrows(
-        HoodieIOException.class,
+        HoodieTransformException.class,
         () -> sqlFileTransformer.apply(jsc, sparkSession, inputDatasetRows, props));
   }
 
@@ -109,7 +110,7 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
     // Test if the SQL file based transformer works as expected for the invalid SQL statements.
     props.setProperty(
         "hoodie.deltastreamer.transformer.sql.file",
-        UtilitiesTestBase.dfsBasePath + "/sql-file-transformer-invalid.sql");
+        UtilitiesTestBase.basePath + "/sql-file-transformer-invalid.sql");
     assertThrows(
         ParseException.class,
         () -> sqlFileTransformer.apply(jsc, sparkSession, inputDatasetRows, props));
@@ -120,7 +121,7 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
     // Test if the SQL file based transformer works as expected for the empty SQL statements.
     props.setProperty(
         "hoodie.deltastreamer.transformer.sql.file",
-        UtilitiesTestBase.dfsBasePath + "/sql-file-transformer-empty.sql");
+        UtilitiesTestBase.basePath + "/sql-file-transformer-empty.sql");
     Dataset<Row> emptyRow = sqlFileTransformer.apply(jsc, sparkSession, inputDatasetRows, props);
     String[] actualRows = emptyRow.as(Encoders.STRING()).collectAsList().toArray(new String[0]);
     String[] expectedRows = emptyDatasetRow.collectAsList().toArray(new String[0]);
@@ -132,12 +133,12 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
     // Test if the SQL file based transformer works as expected for the correct input.
     props.setProperty(
         "hoodie.deltastreamer.transformer.sql.file",
-        UtilitiesTestBase.dfsBasePath + "/sql-file-transformer.sql");
+        UtilitiesTestBase.basePath + "/sql-file-transformer.sql");
     Dataset<Row> transformedRow =
         sqlFileTransformer.apply(jsc, sparkSession, inputDatasetRows, props);
 
     // Called distinct() and sort() to match the transformation in this file:
-    // hudi-utilities/src/test/resources/delta-streamer-config/sql-file-transformer.sql
+    // hudi-utilities/src/test/resources/streamer-config/sql-file-transformer.sql
     String[] expectedRows =
         inputDatasetRows
             .distinct()

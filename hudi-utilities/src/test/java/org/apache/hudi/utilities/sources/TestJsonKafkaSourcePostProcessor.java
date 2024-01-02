@@ -18,22 +18,31 @@
 
 package org.apache.hudi.utilities.sources;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
+import org.apache.hudi.utilities.config.JsonKafkaPostProcessorConfig;
 import org.apache.hudi.utilities.exception.HoodieSourcePostProcessException;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
+import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
 import org.apache.hudi.utilities.sources.processor.maxwell.MaxwellJsonKafkaSourcePostProcessor;
+import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.streaming.kafka010.KafkaTestUtils;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -41,29 +50,53 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Objects;
 
-import static org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config.JSON_KAFKA_PROCESSOR_CLASS_OPT;
+import static org.apache.hudi.utilities.config.JsonKafkaPostProcessorConfig.JSON_KAFKA_PROCESSOR_CLASS;
 import static org.apache.hudi.utilities.testutils.UtilitiesTestBase.Helpers.jsonifyRecords;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
-public class TestJsonKafkaSourcePostProcessor extends TestJsonKafkaSource {
+public class TestJsonKafkaSourcePostProcessor extends SparkClientFunctionalTestHarness {
+  private static KafkaTestUtils testUtils;
+
+  private final HoodieIngestionMetrics metrics = mock(HoodieIngestionMetrics.class);
+  private SchemaProvider schemaProvider;
+
+  @BeforeAll
+  public static void initClass() {
+    testUtils = new KafkaTestUtils();
+    testUtils.setup();
+  }
+
+  @AfterAll
+  public static void cleanupClass() {
+    testUtils.teardown();
+  }
+
+  @BeforeEach
+  public void init() throws Exception {
+    String schemaFilePath = Objects.requireNonNull(TestJsonKafkaSource.SCHEMA_FILE_URL).toURI().getPath();
+    TypedProperties props = new TypedProperties();
+    props.put("hoodie.deltastreamer.schemaprovider.source.schema.file", schemaFilePath);
+    schemaProvider = new FilebasedSchemaProvider(props, jsc());
+  }
 
   @Test
   public void testNoPostProcessor() {
     // topic setup.
-    final String topic = TEST_TOPIC_PREFIX + "testNoPostProcessor";
+    final String topic = BaseTestKafkaSource.TEST_TOPIC_PREFIX + "testNoPostProcessor";
     testUtils.createTopic(topic, 2);
 
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-    TypedProperties props = createPropsForJsonSource(topic, null, "earliest");
+    TypedProperties props = TestJsonKafkaSource.createPropsForJsonKafkaSource(testUtils.brokerAddress(), topic, null, "earliest");
 
     Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
 
-    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
+    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", 1000, HoodieTestDataGenerator.SHORT_TRIP_SCHEMA)));
     InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 900);
 
     assertEquals(900, fetch1.getBatch().get().count());
@@ -72,19 +105,19 @@ public class TestJsonKafkaSourcePostProcessor extends TestJsonKafkaSource {
   @Test
   public void testSampleJsonKafkaSourcePostProcessor() {
     // topic setup.
-    final String topic = TEST_TOPIC_PREFIX + "testSampleJsonKafkaSourcePostProcessor";
+    final String topic = BaseTestKafkaSource.TEST_TOPIC_PREFIX + "testSampleJsonKafkaSourcePostProcessor";
     testUtils.createTopic(topic, 2);
 
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-    TypedProperties props = createPropsForJsonSource(topic, null, "earliest");
+    TypedProperties props = TestJsonKafkaSource.createPropsForJsonKafkaSource(testUtils.brokerAddress(), topic, null, "earliest");
 
     // processor class name setup
-    props.setProperty(JSON_KAFKA_PROCESSOR_CLASS_OPT.key(), SampleJsonKafkaSourcePostProcessor.class.getName());
+    props.setProperty(JSON_KAFKA_PROCESSOR_CLASS.key(), SampleJsonKafkaSourcePostProcessor.class.getName());
 
     Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
 
-    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
+    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", 1000, HoodieTestDataGenerator.SHORT_TRIP_SCHEMA)));
     InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 900);
 
     assertNotEquals(900, fetch1.getBatch().get().count());
@@ -93,18 +126,18 @@ public class TestJsonKafkaSourcePostProcessor extends TestJsonKafkaSource {
   @Test
   public void testInvalidJsonKafkaSourcePostProcessor() {
     // topic setup.
-    final String topic = TEST_TOPIC_PREFIX + "testInvalidJsonKafkaSourcePostProcessor";
+    final String topic = BaseTestKafkaSource.TEST_TOPIC_PREFIX + "testInvalidJsonKafkaSourcePostProcessor";
     testUtils.createTopic(topic, 2);
 
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-    TypedProperties props = createPropsForJsonSource(topic, null, "earliest");
+    TypedProperties props = TestJsonKafkaSource.createPropsForJsonKafkaSource(testUtils.brokerAddress(), topic, null, "earliest");
 
     // processor class name setup
-    props.setProperty(JSON_KAFKA_PROCESSOR_CLASS_OPT.key(), "InvalidJsonKafkaSourcePostProcessor");
+    props.setProperty(JSON_KAFKA_PROCESSOR_CLASS.key(), "InvalidJsonKafkaSourcePostProcessor");
 
     Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
-    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
+    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", 1000, HoodieTestDataGenerator.SHORT_TRIP_SCHEMA)));
 
     Assertions.assertThrows(HoodieSourcePostProcessException.class,
         () -> kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 900));
@@ -113,20 +146,20 @@ public class TestJsonKafkaSourcePostProcessor extends TestJsonKafkaSource {
   @Test
   public void testChainedJsonKafkaSourcePostProcessor() {
     // topic setup.
-    final String topic = TEST_TOPIC_PREFIX + "testChainedJsonKafkaSourcePostProcessor";
+    final String topic = BaseTestKafkaSource.TEST_TOPIC_PREFIX + "testChainedJsonKafkaSourcePostProcessor";
     testUtils.createTopic(topic, 2);
 
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-    TypedProperties props = createPropsForJsonSource(topic, null, "earliest");
+    TypedProperties props = TestJsonKafkaSource.createPropsForJsonKafkaSource(testUtils.brokerAddress(), topic, null, "earliest");
 
     // processor class name setup
-    props.setProperty(JSON_KAFKA_PROCESSOR_CLASS_OPT.key(), SampleJsonKafkaSourcePostProcessor.class.getName()
+    props.setProperty(JSON_KAFKA_PROCESSOR_CLASS.key(), SampleJsonKafkaSourcePostProcessor.class.getName()
         + "," + DummyJsonKafkaSourcePostProcessor.class.getName());
 
     Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
 
-    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
+    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", 1000, HoodieTestDataGenerator.SHORT_TRIP_SCHEMA)));
     InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 900);
 
     assertEquals(0, fetch1.getBatch().get().count());
@@ -190,8 +223,8 @@ public class TestJsonKafkaSourcePostProcessor extends TestJsonKafkaSource {
 
     ObjectMapper mapper = new ObjectMapper();
     TypedProperties props = new TypedProperties();
-    props.setProperty(MaxwellJsonKafkaSourcePostProcessor.Config.DATABASE_NAME_REGEX_PROP.key(), "hudi(_)?[0-9]{0,2}");
-    props.setProperty(MaxwellJsonKafkaSourcePostProcessor.Config.TABLE_NAME_REGEX_PROP.key(), "hudi_maxwell(_)?[0-9]{0,2}");
+    props.setProperty(JsonKafkaPostProcessorConfig.DATABASE_NAME_REGEX.key(), "hudi(_)?[0-9]{0,2}");
+    props.setProperty(JsonKafkaPostProcessorConfig.TABLE_NAME_REGEX.key(), "hudi_maxwell(_)?[0-9]{0,2}");
 
     // test insert and update
     JavaRDD<String> inputInsertAndUpdate = jsc().parallelize(Arrays.asList(hudiMaxwell01Insert, hudiMaxwell01Update));
@@ -200,15 +233,15 @@ public class TestJsonKafkaSourcePostProcessor extends TestJsonKafkaSource {
       // database name should be null
       JsonNode database = record.get("database");
       // insert and update records should be tagged as no delete
-      boolean isDelete = record.get(HoodieRecord.HOODIE_IS_DELETED).booleanValue();
+      boolean isDelete = record.get(HoodieRecord.HOODIE_IS_DELETED_FIELD).booleanValue();
 
       assertFalse(isDelete);
       assertNull(database);
     });
 
     // test delete
-    props.setProperty(MaxwellJsonKafkaSourcePostProcessor.Config.PRECOMBINE_FIELD_TYPE_PROP.key(), "DATE_STRING");
-    props.setProperty(MaxwellJsonKafkaSourcePostProcessor.Config.PRECOMBINE_FIELD_FORMAT_PROP.key(), "yyyy-MM-dd HH:mm:ss");
+    props.setProperty(JsonKafkaPostProcessorConfig.PRECOMBINE_FIELD_TYPE.key(), "DATE_STRING");
+    props.setProperty(JsonKafkaPostProcessorConfig.PRECOMBINE_FIELD_FORMAT.key(), "yyyy-MM-dd HH:mm:ss");
     props.setProperty(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "update_time");
 
     JavaRDD<String> inputDelete = jsc().parallelize(Collections.singletonList(hudiMaxwell01Delete));
@@ -220,7 +253,7 @@ public class TestJsonKafkaSourcePostProcessor extends TestJsonKafkaSource {
         .process(inputDelete).map(mapper::readTree).foreach(record -> {
 
           // delete records should be tagged as delete
-          boolean isDelete = record.get(HoodieRecord.HOODIE_IS_DELETED).booleanValue();
+          boolean isDelete = record.get(HoodieRecord.HOODIE_IS_DELETED_FIELD).booleanValue();
           // update_time should equals ts
           String updateTime = record.get("update_time").textValue();
 
@@ -229,7 +262,7 @@ public class TestJsonKafkaSourcePostProcessor extends TestJsonKafkaSource {
         });
 
     // test preCombine field is not time
-    props.setProperty(MaxwellJsonKafkaSourcePostProcessor.Config.PRECOMBINE_FIELD_TYPE_PROP.key(), "NON_TIMESTAMP");
+    props.setProperty(JsonKafkaPostProcessorConfig.PRECOMBINE_FIELD_TYPE.key(), "NON_TIMESTAMP");
     props.setProperty(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "id");
 
     JavaRDD<String> inputDelete2 = jsc().parallelize(Collections.singletonList(hudiMaxwell01Delete));
@@ -256,8 +289,8 @@ public class TestJsonKafkaSourcePostProcessor extends TestJsonKafkaSource {
     assertEquals(0, ddlDataNum);
 
     // test table regex without database regex
-    props.remove(MaxwellJsonKafkaSourcePostProcessor.Config.DATABASE_NAME_REGEX_PROP.key());
-    props.setProperty(MaxwellJsonKafkaSourcePostProcessor.Config.TABLE_NAME_REGEX_PROP.key(), "hudi_maxwell(_)?[0-9]{0,2}");
+    props.remove(JsonKafkaPostProcessorConfig.DATABASE_NAME_REGEX.key());
+    props.setProperty(JsonKafkaPostProcessorConfig.TABLE_NAME_REGEX.key(), "hudi_maxwell(_)?[0-9]{0,2}");
 
     JavaRDD<String> dataWithoutDatabaseRegex = jsc().parallelize(Arrays.asList(hudiMaxwell01Insert, hudi02Maxwell01Insert));
     long countWithoutDatabaseRegex = processor.process(dataWithoutDatabaseRegex).count();

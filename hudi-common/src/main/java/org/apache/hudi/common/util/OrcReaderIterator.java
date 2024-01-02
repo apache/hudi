@@ -18,17 +18,18 @@
 
 package org.apache.hudi.common.util;
 
-import java.util.List;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.exception.HoodieIOException;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericData.Record;
-import org.apache.orc.storage.ql.exec.vector.VectorizedRowBatch;
-import org.apache.hudi.exception.HoodieIOException;
-
+import org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch;
 import org.apache.orc.RecordReader;
 import org.apache.orc.TypeDescription;
 
 import java.io.IOException;
+import java.util.List;
 
 /**
  * This class wraps a ORC reader and provides an iterator based api to read from an ORC file.

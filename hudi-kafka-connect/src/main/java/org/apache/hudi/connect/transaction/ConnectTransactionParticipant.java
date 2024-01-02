@@ -31,8 +31,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.LinkedList;
@@ -46,7 +46,7 @@ import java.util.concurrent.LinkedBlockingQueue;
  */
 public class ConnectTransactionParticipant implements TransactionParticipant {
 
-  private static final Logger LOG = LogManager.getLogger(ConnectTransactionParticipant.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ConnectTransactionParticipant.class);
 
   private final LinkedList<SinkRecord> buffer;
   private final BlockingQueue<ControlMessage> controlEvents;

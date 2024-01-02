@@ -19,21 +19,16 @@
 package org.apache.hudi.index.bucket;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.List;
@@ -43,7 +38,7 @@ import java.util.List;
  */
 public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieBucketIndex.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieBucketIndex.class);
 
   protected final int numBuckets;
   protected final List<String> indexKeyFields;
@@ -65,36 +60,14 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
   }
 
   @Override
-  public <R> HoodieData<HoodieRecord<R>> tagLocation(
-      HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
-      HoodieTable hoodieTable)
-      throws HoodieIndexException {
-    // Initialize necessary information before tagging. e.g., hashing metadata
-    List<String> partitions = records.map(HoodieRecord::getPartitionPath).distinct().collectAsList();
-    LOG.info("Initializing hashing metadata for partitions: " + partitions);
-    BucketIndexLocationMapper mapper = getLocationMapper(hoodieTable, partitions);
-
-    return records.mapPartitions(iterator ->
-        new LazyIterableIterator<HoodieRecord<R>, HoodieRecord<R>>(iterator) {
-          @Override
-          protected HoodieRecord<R> computeNext() {
-            // TODO maybe batch the operation to improve performance
-            HoodieRecord record = inputItr.next();
-            Option<HoodieRecordLocation> loc = mapper.getRecordLocation(record.getKey(), record.getPartitionPath());
-            return HoodieIndexUtils.getTaggedRecord(record, loc);
-          }
-        },
-        false
-    );
-  }
-
-  @Override
   public boolean requiresTagging(WriteOperationType operationType) {
     switch (operationType) {
       case INSERT:
       case INSERT_OVERWRITE:
       case UPSERT:
       case DELETE:
+      case DELETE_PREPPED:
+      case BULK_INSERT:
         return true;
       default:
         return false;
@@ -124,9 +97,4 @@ public abstract class HoodieBucketIndex extends HoodieIndex<Object, Object> {
   public int getNumBuckets() {
     return numBuckets;
   }
-
-  /**
-   * Get a location mapper for the given table & partitionPath
-   */
-  protected abstract BucketIndexLocationMapper getLocationMapper(HoodieTable table, List<String> partitionPath);
 }

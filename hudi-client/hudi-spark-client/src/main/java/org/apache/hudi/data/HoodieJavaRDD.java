@@ -22,8 +22,10 @@ package org.apache.hudi.data;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.util.collection.MappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.spark.api.java.JavaPairRDD;
@@ -83,7 +85,18 @@ public class HoodieJavaRDD<T> implements HoodieData<T> {
   }
 
   @Override
+  public int getId() {
+    return rddData.id();
+  }
+
+  @Override
   public void persist(String level) {
+    rddData.persist(StorageLevel.fromString(level));
+  }
+
+  @Override
+  public void persist(String level, HoodieEngineContext engineContext, HoodieDataCacheKey cacheKey) {
+    engineContext.putCachedDataIds(cacheKey, this.getId());
     rddData.persist(StorageLevel.fromString(level));
   }
 
@@ -103,6 +116,11 @@ public class HoodieJavaRDD<T> implements HoodieData<T> {
   }
 
   @Override
+  public int getNumPartitions() {
+    return rddData.getNumPartitions();
+  }
+
+  @Override
   public <O> HoodieData<O> map(SerializableFunction<T, O> func) {
     return HoodieJavaRDD.of(rddData.map(func::apply));
   }
@@ -114,7 +132,16 @@ public class HoodieJavaRDD<T> implements HoodieData<T> {
 
   @Override
   public <O> HoodieData<O> flatMap(SerializableFunction<T, Iterator<O>> func) {
+    // NOTE: Unrolling this lambda into a method reference results in [[ClassCastException]]
+    //       due to weird interop b/w Scala and Java
     return HoodieJavaRDD.of(rddData.flatMap(e -> func.apply(e)));
+  }
+
+  @Override
+  public <K, V> HoodiePairData<K, V> flatMapToPair(SerializableFunction<T, Iterator<? extends Pair<K, V>>> func) {
+    return HoodieJavaPairRDD.of(
+        rddData.flatMapToPair(e ->
+            new MappingIterator<>(func.apply(e), p -> new Tuple2<>(p.getKey(), p.getValue()))));
   }
 
   @Override

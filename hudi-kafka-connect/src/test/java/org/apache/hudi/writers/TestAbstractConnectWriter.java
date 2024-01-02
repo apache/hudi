@@ -51,6 +51,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestAbstractConnectWriter {
@@ -139,7 +140,7 @@ public class TestAbstractConnectWriter {
   private SinkRecord getNextKafkaRecord(Object record) {
     return new SinkRecord(TOPIC_NAME, PARTITION_NUMBER,
         org.apache.kafka.connect.data.Schema.OPTIONAL_BYTES_SCHEMA,
-        ("key-" + currentKafkaOffset).getBytes(),
+        getUTF8Bytes("key-" + currentKafkaOffset),
         org.apache.kafka.connect.data.Schema.OPTIONAL_BYTES_SCHEMA,
         record, currentKafkaOffset++);
   }

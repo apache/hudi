@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
@@ -27,23 +26,21 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.exception.HoodieCompactionException;
+import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hudi.exception.HoodieException;
-
-import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -52,7 +49,7 @@ import java.util.Objects;
 
 public class HoodieCompactor {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieCompactor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieCompactor.class);
   public static final String EXECUTE = "execute";
   public static final String SCHEDULE = "schedule";
   public static final String SCHEDULE_AND_EXECUTE = "scheduleandexecute";
@@ -60,20 +57,24 @@ public class HoodieCompactor {
   private transient FileSystem fs;
   private TypedProperties props;
   private final JavaSparkContext jsc;
-  private final HoodieTableMetaClient metaClient;
+  private HoodieTableMetaClient metaClient;
 
   public HoodieCompactor(JavaSparkContext jsc, Config cfg) {
-    this.cfg = cfg;
-    this.jsc = jsc;
-    this.props = cfg.propsFilePath == null
-        ? UtilHelpers.buildProperties(cfg.configs)
-        : readConfigFromFileSystem(jsc, cfg);
-    this.metaClient = UtilHelpers.createMetaClient(jsc, cfg.basePath, true);
+    this(jsc, cfg, UtilHelpers.buildProperties(jsc.hadoopConfiguration(), cfg.propsFilePath, cfg.configs),
+        UtilHelpers.createMetaClient(jsc, cfg.basePath, true));
   }
 
-  private TypedProperties readConfigFromFileSystem(JavaSparkContext jsc, Config cfg) {
-    return UtilHelpers.readConfig(jsc.hadoopConfiguration(), new Path(cfg.propsFilePath), cfg.configs)
-        .getProps(true);
+  public HoodieCompactor(JavaSparkContext jsc, Config cfg, TypedProperties props, HoodieTableMetaClient metaClient) {
+    this.cfg = cfg;
+    this.jsc = jsc;
+    this.props = props;
+    this.metaClient = metaClient;
+    // Disable async cleaning, will trigger synchronous cleaning manually.
+    this.props.put(HoodieCleanConfig.ASYNC_CLEAN.key(), false);
+    if (this.metaClient.getTableConfig().isMetadataTableAvailable()) {
+      // add default lock config options if MDT is enabled.
+      UtilHelpers.addLockOptions(cfg.basePath, this.props);
+    }
   }
 
   public static class Config implements Serializable {
@@ -89,7 +90,7 @@ public class HoodieCompactor {
     public String schemaFile = null;
     @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = false)
     public String sparkMaster = null;
-    @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = true)
+    @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = false)
     public String sparkMemory = null;
     @Parameter(names = {"--retry", "-rt"}, description = "number of retries", required = false)
     public int retry = 0;
@@ -168,26 +169,22 @@ public class HoodieCompactor {
     JCommander cmd = new JCommander(cfg, null, args);
     if (cfg.help || args.length == 0) {
       cmd.usage();
-      System.exit(1);
+      throw new HoodieException("Fail to run compaction for " + cfg.tableName + ", return code: " + 1);
     }
     final JavaSparkContext jsc = UtilHelpers.buildSparkContext("compactor-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory);
-    int ret = 0;
-    try {
-      HoodieCompactor compactor = new HoodieCompactor(jsc, cfg);
-      ret = compactor.compact(cfg.retry);
-    } catch (Throwable throwable) {
-      LOG.error("Fail to run compaction for " + cfg.tableName, throwable);
-    } finally {
-      jsc.stop();
-      System.exit(ret);
+    int ret = new HoodieCompactor(jsc, cfg).compact(cfg.retry);
+    if (ret != 0) {
+      throw new HoodieException("Fail to run compaction for " + cfg.tableName + ", return code: " + ret);
     }
+    LOG.info("Success to run compaction for " + cfg.tableName);
+    jsc.stop();
   }
 
   public int compact(int retry) {
     this.fs = FSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
     // need to do validate in case that users call compact() directly without setting cfg.runningMode
     validateRunningMode(cfg);
-    LOG.info(cfg);
+    LOG.info(cfg.toString());
 
     int ret = UtilHelpers.retry(retry, () -> {
       switch (cfg.runningMode.toLowerCase()) {
@@ -257,19 +254,19 @@ public class HoodieCompactor {
       // If no compaction instant is provided by --instant-time, find the earliest scheduled compaction
       // instant from the active timeline
       if (StringUtils.isNullOrEmpty(cfg.compactionInstantTime)) {
-        HoodieTableMetaClient metaClient = UtilHelpers.createMetaClient(jsc, cfg.basePath, true);
-        Option<HoodieInstant> firstCompactionInstant =
-            metaClient.getActiveTimeline().firstInstant(
-                HoodieTimeline.COMPACTION_ACTION, HoodieInstant.State.REQUESTED);
+        metaClient = HoodieTableMetaClient.reload(metaClient);
+        Option<HoodieInstant> firstCompactionInstant = metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
         if (firstCompactionInstant.isPresent()) {
           cfg.compactionInstantTime = firstCompactionInstant.get().getTimestamp();
           LOG.info("Found the earliest scheduled compaction instant which will be executed: "
               + cfg.compactionInstantTime);
         } else {
-          throw new HoodieCompactionException("There is no scheduled compaction in the table.");
+          LOG.info("There is no scheduled compaction in the table.");
+          return 0;
         }
       }
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(cfg.compactionInstantTime);
+      clean(client);
       return UtilHelpers.handleErrors(compactionMetadata.getCommitMetadata().get(), cfg.compactionInstantTime);
     }
   }
@@ -290,10 +287,13 @@ public class HoodieCompactor {
 
   private String getSchemaFromLatestInstant() throws Exception {
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
-    if (metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
-      throw new HoodieException("Cannot run compaction without any completed commits");
-    }
     Schema schema = schemaUtil.getTableAvroSchema(false);
     return schema.toString();
+  }
+
+  private void clean(SparkRDDWriteClient<?> client) {
+    if (client.getConfig().isAutoClean()) {
+      client.clean();
+    }
   }
 }

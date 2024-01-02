@@ -19,6 +19,7 @@
 package org.apache.hudi.common.functional;
 
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
@@ -26,9 +27,7 @@ import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
-import org.apache.hudi.common.testutils.minicluster.MiniClusterUtil;
 
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
@@ -40,6 +39,7 @@ import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -52,15 +52,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.shouldUseExternalHdfs;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
-/**
- * This class is intentionally using a different way of setting up the MiniDFSCluster and not relying on
- * {@link MiniClusterUtil} to reproduce append() issue : https://issues.apache.org/jira/browse/HDFS-6325 Reference :
- * https://issues.apache.org/jira/secure/attachment/12645053/HDFS-6325.patch.
- */
 public class TestHoodieLogFormatAppendFailure {
 
   private static File baseDir;
@@ -68,8 +65,11 @@ public class TestHoodieLogFormatAppendFailure {
 
   @BeforeAll
   public static void setUpClass() throws IOException {
+    // This test is not supported yet for Java 17 due to MiniDFSCluster can't initialize under Java 17
+    Assumptions.assumeFalse(shouldUseExternalHdfs());
+
     // NOTE : The MiniClusterDFS leaves behind the directory under which the cluster was created
-    baseDir = new File("/tmp/" + UUID.randomUUID().toString());
+    baseDir = new File("/tmp/" + UUID.randomUUID());
     FileUtil.fullyDelete(baseDir);
     // Append is not supported in LocalFileSystem. HDFS needs to be setup.
     Configuration conf = new Configuration();
@@ -83,6 +83,9 @@ public class TestHoodieLogFormatAppendFailure {
 
   @AfterAll
   public static void tearDownClass() {
+    // This test is not supported yet for Java 17 due to MiniDFSCluster can't initialize under Java 17
+    Assumptions.assumeFalse(shouldUseExternalHdfs());
+
     cluster.shutdown(true);
     // Force clean up the directory under which the cluster was created
     FileUtil.fullyDelete(baseDir);
@@ -101,15 +104,15 @@ public class TestHoodieLogFormatAppendFailure {
     fs.mkdirs(testPath);
 
     // Some data & append.
-    List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 10);
+    List<HoodieRecord> records = SchemaTestUtil.generateTestRecords(0, 10).stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>(2);
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
-    HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
 
     Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(testPath)
-        .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits.archive")
-        .overBaseCommit("").withFs(fs).build();
+        .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits")
+        .withDeltaCommit("").withFs(fs).build();
 
     writer.appendBlock(dataBlock);
     // get the current log file version to compare later
@@ -139,15 +142,15 @@ public class TestHoodieLogFormatAppendFailure {
     // Opening a new Writer right now will throw IOException. The code should handle this, rollover the logfile and
     // return a new writer with a bumped up logVersion
     writer = HoodieLogFormat.newWriterBuilder().onParentPath(testPath)
-        .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits.archive")
-        .overBaseCommit("").withFs(fs).build();
+        .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits")
+        .withDeltaCommit("").withFs(fs).build();
     header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
-        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
+        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK.ordinal()));
 
     writer.appendBlock(new HoodieCommandBlock(header));
     // The log version should be different for this new writer
     assertNotEquals(writer.getLogFile().getLogVersion(), logFileVersion);
+    writer.close();
   }
-
 }

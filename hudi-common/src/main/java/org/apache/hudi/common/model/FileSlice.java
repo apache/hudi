@@ -18,9 +18,11 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 
 import java.io.Serializable;
+import java.util.List;
 import java.util.Objects;
 import java.util.TreeSet;
 import java.util.stream.Stream;
@@ -71,6 +73,15 @@ public class FileSlice implements Serializable {
     this.logFiles = new TreeSet<>(HoodieLogFile.getReverseLogFileComparator());
   }
 
+  public FileSlice(HoodieFileGroupId fileGroupId, String baseInstantTime,
+                   HoodieBaseFile baseFile, List<HoodieLogFile> logFiles) {
+    this.fileGroupId = fileGroupId;
+    this.baseInstantTime = baseInstantTime;
+    this.baseFile = baseFile;
+    this.logFiles = new TreeSet<>(HoodieLogFile.getReverseLogFileComparator());
+    this.logFiles.addAll(logFiles);
+  }
+
   public void setBaseFile(HoodieBaseFile baseFile) {
     this.baseFile = baseFile;
   }
@@ -107,10 +118,21 @@ public class FileSlice implements Serializable {
     return Option.fromJavaOptional(logFiles.stream().findFirst());
   }
 
+  public long getTotalFileSize() {
+    return getBaseFile().map(HoodieBaseFile::getFileSize).orElse(0L)
+        + getLogFiles().mapToLong(HoodieLogFile::getFileSize).sum();
+  }
+
   /**
-   * Returns true if there is no data file and no log files. Happens as part of pending compaction
-   * 
-   * @return
+   * Returns the latest instant time of the file slice.
+   */
+  public String getLatestInstantTime() {
+    Option<String> latestDeltaCommitTime = getLatestLogFile().map(HoodieLogFile::getDeltaCommitTime);
+    return latestDeltaCommitTime.isPresent() ? HoodieTimeline.maxInstant(latestDeltaCommitTime.get(), getBaseInstantTime()) : getBaseInstantTime();
+  }
+
+  /**
+   * Returns true if there is no data file and no log files. Happens as part of pending compaction.
    */
   public boolean isEmpty() {
     return (baseFile == null) && (logFiles.isEmpty());

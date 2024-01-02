@@ -20,6 +20,8 @@ package org.apache.hudi.metrics.datadog;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.metrics.MetricUtils;
 
 import com.codahale.metrics.Clock;
 import com.codahale.metrics.Counter;
@@ -34,11 +36,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.SortedMap;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -52,7 +55,7 @@ import java.util.stream.Collectors;
  */
 public class DatadogReporter extends ScheduledReporter {
 
-  private static final Logger LOG = LogManager.getLogger(DatadogReporter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DatadogReporter.class);
 
   private final DatadogHttpClient client;
   private final String prefix;
@@ -84,18 +87,22 @@ public class DatadogReporter extends ScheduledReporter {
       SortedMap<String, Histogram> histograms,
       SortedMap<String, Meter> meters,
       SortedMap<String, Timer> timers) {
-    final long now = clock.getTime() / 1000;
-    final PayloadBuilder builder = new PayloadBuilder();
 
-    builder.withMetricType(MetricType.gauge);
-    gauges.forEach((metricName, metric) -> {
-      builder.addGauge(prefix(metricName), now, (long) metric.getValue());
+    Map<List<String>, List<Pair<String, List<String>>>> labelsPair = gauges.keySet().stream().map(MetricUtils::getLabelsAndMetricList)
+        .collect(Collectors.groupingBy(Pair::getValue));
+    labelsPair.entrySet().forEach(labelsKeyValue -> {
+      final long now = clock.getTime() / 1000;
+      final PayloadBuilder builder = new PayloadBuilder();
+      builder.withMetricType(MetricType.gauge);
+      gauges.forEach(
+          (metricName, metric) -> builder.addGauge(prefix(MetricUtils.getMetricAndLabels(metricName).getKey()),
+              now, (long) metric.getValue()));
+      host.ifPresent(builder::withHost);
+      List<String> runTimeLables = labelsKeyValue.getKey();
+      tags.map(runTimeLables::addAll);
+      builder.withTags(runTimeLables);
+      client.send(builder.build());
     });
-
-    host.ifPresent(builder::withHost);
-    tags.ifPresent(builder::withTags);
-
-    client.send(builder.build());
   }
 
   protected String prefix(String... components) {

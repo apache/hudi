@@ -44,7 +44,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -242,35 +241,33 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
   @ValueSource(booleans = {true, false})
   public void testGetDeltaCommitsSinceLatestCompaction(boolean hasCompletedCompaction) {
     HoodieActiveTimeline timeline = prepareTimeline(hasCompletedCompaction);
-    Pair<HoodieTimeline, HoodieInstant> actual =
-        CompactionUtils.getDeltaCommitsSinceLatestCompaction(timeline).get();
+    Pair<HoodieTimeline, HoodieInstant> actual = CompactionUtils.getDeltaCommitsSinceLatestCompaction(timeline).get();
     if (hasCompletedCompaction) {
-      Stream<HoodieInstant> instants = actual.getLeft().getInstants();
       assertEquals(
           Stream.of(
-              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "07"),
-              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "08"),
-              new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, "09"))
+              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "700"),
+              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "800"),
+              new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, "900"))
               .collect(Collectors.toList()),
-          actual.getLeft().getInstants().collect(Collectors.toList()));
+          actual.getLeft().getInstants());
       assertEquals(
-          new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "06"),
+          new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "600"),
           actual.getRight());
     } else {
       assertEquals(
           Stream.of(
-              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "01"),
-              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "02"),
-              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "03"),
-              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "04"),
-              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "05"),
-              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "07"),
-              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "08"),
-              new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, "09"))
+              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "100"),
+              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "200"),
+              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "300"),
+              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "400"),
+              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "500"),
+              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "700"),
+              new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "800"),
+              new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, "900"))
               .collect(Collectors.toList()),
-          actual.getLeft().getInstants().collect(Collectors.toList()));
+          actual.getLeft().getInstants());
       assertEquals(
-          new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "01"),
+          new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "100"),
           actual.getRight());
     }
   }
@@ -285,41 +282,41 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
   @ValueSource(booleans = {true, false})
   public void testGetOldestInstantToKeepForCompaction(boolean hasCompletedCompaction) {
     HoodieActiveTimeline timeline = prepareTimeline(hasCompletedCompaction);
-    Option<HoodieInstant> actual = CompactionUtils.getOldestInstantToRetainForCompaction(timeline, 20);
+    Option<HoodieInstant> actual = CompactionUtils.getEarliestInstantToRetainForCompaction(timeline, 20);
 
     if (hasCompletedCompaction) {
-      assertEquals(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "06"), actual.get());
+      assertEquals(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "600"), actual.get());
     } else {
-      assertEquals(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "01"), actual.get());
+      assertEquals(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "100"), actual.get());
     }
 
-    actual = CompactionUtils.getOldestInstantToRetainForCompaction(timeline, 3);
-    assertEquals(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "07"), actual.get());
+    actual = CompactionUtils.getEarliestInstantToRetainForCompaction(timeline, 3);
+    assertEquals(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "700"), actual.get());
 
-    actual = CompactionUtils.getOldestInstantToRetainForCompaction(timeline, 2);
-    assertEquals(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "08"), actual.get());
+    actual = CompactionUtils.getEarliestInstantToRetainForCompaction(timeline, 2);
+    assertEquals(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "800"), actual.get());
   }
 
   @Test
   public void testGetOldestInstantToKeepForCompactionWithEmptyDeltaCommits() {
     HoodieActiveTimeline timeline = new MockHoodieActiveTimeline();
-    assertEquals(Option.empty(), CompactionUtils.getOldestInstantToRetainForCompaction(timeline, 20));
+    assertEquals(Option.empty(), CompactionUtils.getEarliestInstantToRetainForCompaction(timeline, 20));
   }
 
   private HoodieActiveTimeline prepareTimeline(boolean hasCompletedCompaction) {
+    List<HoodieInstant> instants = new ArrayList<>();
+    instants.add(new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "100", "110"));
+    instants.add(new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "200", "210"));
+    instants.add(new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "300", "310"));
+    instants.add(new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "400", "410"));
+    instants.add(new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "500", "510"));
     if (hasCompletedCompaction) {
-      return new MockHoodieActiveTimeline(
-          Stream.of("01", "02", "03", "04", "05", "07", "08"),
-          Stream.of("06"),
-          Stream.of(Pair.of("09", HoodieTimeline.DELTA_COMMIT_ACTION)));
-    } else {
-      return new MockHoodieActiveTimeline(
-          Stream.of("01", "02", "03", "04", "05", "07", "08"),
-          Stream.empty(),
-          Stream.of(
-              Pair.of("06", HoodieTimeline.COMMIT_ACTION),
-              Pair.of("09", HoodieTimeline.DELTA_COMMIT_ACTION)));
+      instants.add(new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "600", "610"));
     }
+    instants.add(new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "700", "710"));
+    instants.add(new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "800", "810"));
+    instants.add(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "900", "910"));
+    return new MockHoodieActiveTimeline(instants);
   }
 
   /**
@@ -370,16 +367,9 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
       this.setInstants(new ArrayList<>());
     }
 
-    public MockHoodieActiveTimeline(
-        Stream<String> completedDeltaCommits,
-        Stream<String> completedCompactionCommits,
-        Stream<Pair<String, String>> inflights) {
+    public MockHoodieActiveTimeline(List<HoodieInstant> instants) {
       super();
-      this.setInstants(Stream.concat(
-          Stream.concat(completedDeltaCommits.map(s -> new HoodieInstant(false, DELTA_COMMIT_ACTION, s)),
-              completedCompactionCommits.map(s -> new HoodieInstant(false, COMMIT_ACTION, s))),
-              inflights.map(s -> new HoodieInstant(true, s.getRight(), s.getLeft())))
-          .sorted(Comparator.comparing(HoodieInstant::getFileName)).collect(Collectors.toList()));
+      this.setInstants(instants);
     }
   }
 }

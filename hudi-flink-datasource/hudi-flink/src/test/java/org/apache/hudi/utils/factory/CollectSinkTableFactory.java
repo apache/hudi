@@ -18,6 +18,8 @@
 
 package org.apache.hudi.utils.factory;
 
+import org.apache.hudi.util.ChangelogModes;
+
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.api.java.typeutils.RowTypeInfo;
@@ -37,7 +39,6 @@ import org.apache.flink.table.factories.FactoryUtil;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.utils.TypeConversions;
 import org.apache.flink.types.Row;
-import org.apache.flink.types.RowKind;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -50,7 +51,7 @@ import java.util.Set;
  * Factory for CollectTableSink.
  *
  * <p>Note: The CollectTableSink collects all the data of a table into a global collection {@code RESULT},
- * so the tests should executed in single thread and the table name should be the same.
+ * so the tests should execute in single thread and the table name should be the same.
  */
 public class CollectSinkTableFactory implements DynamicTableSinkFactory {
   public static final String FACTORY_ID = "collect";
@@ -104,11 +105,7 @@ public class CollectSinkTableFactory implements DynamicTableSinkFactory {
 
     @Override
     public ChangelogMode getChangelogMode(ChangelogMode requestedMode) {
-      return ChangelogMode.newBuilder()
-          .addContainedKind(RowKind.INSERT)
-          .addContainedKind(RowKind.DELETE)
-          .addContainedKind(RowKind.UPDATE_AFTER)
-          .build();
+      return ChangelogModes.FULL;
     }
 
     @Override

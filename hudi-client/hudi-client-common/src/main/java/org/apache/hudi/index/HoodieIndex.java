@@ -22,6 +22,8 @@ import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.EnumDescription;
+import org.apache.hudi.common.config.EnumFieldDescription;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
@@ -88,6 +90,18 @@ public abstract class HoodieIndex<I, O> implements Serializable {
       HoodieData<WriteStatus> writeStatuses, HoodieEngineContext context,
       HoodieTable hoodieTable) throws HoodieIndexException;
 
+
+  /**
+   * Extracts the location of written records, and updates the index.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public HoodieData<WriteStatus> updateLocation(
+      HoodieData<WriteStatus> writeStatuses, HoodieEngineContext context,
+      HoodieTable hoodieTable, String instant) throws HoodieIndexException {
+    return updateLocation(writeStatuses, context, hoodieTable);
+  }
+
+
   /**
    * Rollback the effects of the commit made at instantTime.
    */
@@ -99,13 +113,13 @@ public abstract class HoodieIndex<I, O> implements Serializable {
    * implementation is able to obtain the same mapping, for two hoodie keys with same `recordKey` but different
    * `partitionPath`
    *
-   * @return whether or not, the index implementation is global in nature
+   * @return whether the index implementation is global in nature
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public abstract boolean isGlobal();
 
   /**
-   * This is used by storage to determine, if its safe to send inserts, straight to the log, i.e having a
+   * This is used by storage to determine, if it is safe to send inserts, straight to the log, i.e. having a
    * {@link FileSlice}, with no data file.
    *
    * @return Returns true/false depending on whether the impl has this capability
@@ -121,12 +135,13 @@ public abstract class HoodieIndex<I, O> implements Serializable {
   public abstract boolean isImplicitWithStorage();
 
   /**
-   * To indicate if a operation type requires location tagging before writing
+   * To indicate if an operation type requires location tagging before writing
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public boolean requiresTagging(WriteOperationType operationType) {
     switch (operationType) {
       case DELETE:
+      case DELETE_PREPPED:
       case UPSERT:
         return true;
       default:
@@ -135,16 +150,69 @@ public abstract class HoodieIndex<I, O> implements Serializable {
   }
 
   /**
-   * Each index type should implement it's own logic to release any resources acquired during the process.
+   * Each index type should implement its own logic to release any resources acquired during the process.
    */
   public void close() {
   }
 
+  @EnumDescription("Determines how input records are indexed, i.e., looked up based on the key "
+      + "for the location in the existing table. Default is SIMPLE on Spark engine, and INMEMORY "
+      + "on Flink and Java engines.")
   public enum IndexType {
-    HBASE, INMEMORY, BLOOM, GLOBAL_BLOOM, SIMPLE, GLOBAL_SIMPLE, BUCKET, FLINK_STATE
+
+    @EnumFieldDescription("uses an external managed Apache HBase table to store record key to "
+        + "location mapping. HBase index is a global index, enforcing key uniqueness across all "
+        + "partitions in the table.")
+    HBASE,
+
+    @EnumFieldDescription("Uses in-memory hashmap in Spark and Java engine and Flink in-memory "
+        + "state in Flink for indexing.")
+    INMEMORY,
+
+    @EnumFieldDescription("Employs bloom filters built out of the record keys, "
+        + "optionally also pruning candidate files using record key ranges. "
+        + "Key uniqueness is enforced inside partitions.")
+    BLOOM,
+
+    @EnumFieldDescription("Employs bloom filters built out of the record keys, "
+        + "optionally also pruning candidate files using record key ranges. "
+        + "Key uniqueness is enforced across all partitions in the table. ")
+    GLOBAL_BLOOM,
+
+    @EnumFieldDescription("Performs a lean join of the incoming update/delete records "
+        + "against keys extracted from the table on storage."
+        + "Key uniqueness is enforced inside partitions.")
+    SIMPLE,
+
+    @EnumFieldDescription("Performs a lean join of the incoming update/delete records "
+        + "against keys extracted from the table on storage."
+        + "Key uniqueness is enforced across all partitions in the table.")
+    GLOBAL_SIMPLE,
+
+    @EnumFieldDescription("locates the file group containing the record fast by using bucket "
+        + "hashing, particularly beneficial in large scale. Use `hoodie.index.bucket.engine` to "
+        + "choose bucket engine type, i.e., how buckets are generated.")
+    BUCKET,
+    @EnumFieldDescription("Internal Config for indexing based on Flink state.")
+    FLINK_STATE,
+
+    @EnumFieldDescription("Index which saves the record key to location mappings in the "
+        + "HUDI Metadata Table. Record index is a global index, enforcing key uniqueness across all "
+        + "partitions in the table. Supports sharding to achieve very high scale.")
+    RECORD_INDEX
   }
 
+  @EnumDescription("Determines the type of bucketing or hashing to use when `hoodie.index.type`"
+      + " is set to `BUCKET`.")
   public enum BucketIndexEngineType {
-    SIMPLE, CONSISTENT_HASHING
+
+    @EnumFieldDescription("Uses a fixed number of buckets for file groups which cannot shrink or "
+        + "expand. This works for both COW and MOR tables.")
+    SIMPLE,
+
+    @EnumFieldDescription("Supports dynamic number of buckets with bucket resizing to properly "
+        + "size each bucket. This solves potential data skew problem where one bucket can be "
+        + "significantly larger than others in SIMPLE engine type. This only works with MOR tables.")
+    CONSISTENT_HASHING
   }
 }

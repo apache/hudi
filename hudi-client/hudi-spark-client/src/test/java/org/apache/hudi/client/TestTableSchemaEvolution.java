@@ -18,13 +18,13 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
@@ -41,6 +41,8 @@ import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.List;
@@ -57,7 +59,6 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_SCHE
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class TestTableSchemaEvolution extends HoodieClientTestBase {
 
@@ -74,47 +75,44 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
       ",{\"name\": \"new_field_without_default\", \"type\": [\"boolean\", \"null\"]}";
 
   // TRIP_EXAMPLE_SCHEMA with a new_field added
-  public static final String TRIP_EXAMPLE_SCHEMA_EVOLVED = TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA
+  public static final String TRIP_EXAMPLE_SCHEMA_EVOLVED_COL_ADDED = TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA
       + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA + EXTRA_FIELD_SCHEMA + TRIP_SCHEMA_SUFFIX;
 
   // TRIP_EXAMPLE_SCHEMA with tip field removed
-  public static final String TRIP_EXAMPLE_SCHEMA_DEVOLVED = TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA
+  public static final String TRIP_EXAMPLE_SCHEMA_EVOLVED_COL_DROPPED = TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA
       + FARE_NESTED_SCHEMA + TRIP_SCHEMA_SUFFIX;
 
   @Test
-  public void testSchemaCompatibilityBasic() throws Exception {
-    assertTrue(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA),
+  public void testSchemaCompatibilityBasic() {
+    assertTrue(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA, false),
         "Same schema is compatible");
 
     String reorderedSchema = TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + TIP_NESTED_SCHEMA + FARE_NESTED_SCHEMA
         + MAP_TYPE_SCHEMA + TRIP_SCHEMA_SUFFIX;
-    assertTrue(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, reorderedSchema),
+    assertTrue(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, reorderedSchema, false),
         "Reordered fields are compatible");
-    assertTrue(TableSchemaResolver.isSchemaCompatible(reorderedSchema, TRIP_EXAMPLE_SCHEMA),
+    assertTrue(isSchemaCompatible(reorderedSchema, TRIP_EXAMPLE_SCHEMA, false),
         "Reordered fields are compatible");
 
     String renamedSchema = TRIP_EXAMPLE_SCHEMA.replace("tip_history", "tip_future");
-    assertFalse(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, renamedSchema),
-        "Renamed fields are not compatible");
 
-    assertFalse(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA_DEVOLVED),
-        "Deleted single field is not compatible");
-    String deletedMultipleFieldSchema = TRIP_SCHEMA_PREFIX + TIP_NESTED_SCHEMA + TRIP_SCHEMA_SUFFIX;
-    assertFalse(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, deletedMultipleFieldSchema),
-        "Deleted multiple fields are not compatible");
+    assertFalse(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, renamedSchema, false),
+        "Renaming fields is essentially: dropping old field, created a new one");
+    assertTrue(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, renamedSchema, true),
+        "Renaming fields is essentially: dropping old field, created a new one");
 
     String renamedRecordSchema = TRIP_EXAMPLE_SCHEMA.replace("triprec", "triprec_renamed");
-    assertFalse(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, renamedRecordSchema),
+    assertFalse(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, renamedRecordSchema, false),
         "Renamed record name is not compatible");
 
     String swappedFieldSchema = TRIP_SCHEMA_PREFIX + MAP_TYPE_SCHEMA.replace("city_to_state", "fare")
         + FARE_NESTED_SCHEMA.replace("fare", "city_to_state") + TIP_NESTED_SCHEMA + TRIP_SCHEMA_SUFFIX;
-    assertFalse(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, swappedFieldSchema),
+    assertFalse(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, swappedFieldSchema, false),
         "Swapped fields are not compatible");
 
     String typeChangeSchemaDisallowed = TRIP_SCHEMA_PREFIX + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA
         + TIP_NESTED_SCHEMA.replace("string", "boolean") + TRIP_SCHEMA_SUFFIX;
-    assertFalse(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, typeChangeSchemaDisallowed),
+    assertFalse(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, typeChangeSchemaDisallowed, false),
         "Incompatible field type change is not allowed");
 
     // Array of allowed schema field type transitions
@@ -125,10 +123,10 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     for (String[] fieldChange : allowedFieldChanges) {
       String fromSchema = TRIP_SCHEMA_PREFIX + EXTRA_FIELD_SCHEMA.replace("string", fieldChange[0]) + TRIP_SCHEMA_SUFFIX;
       String toSchema = TRIP_SCHEMA_PREFIX + EXTRA_FIELD_SCHEMA.replace("string", fieldChange[1]) + TRIP_SCHEMA_SUFFIX;
-      assertTrue(TableSchemaResolver.isSchemaCompatible(fromSchema, toSchema),
+      assertTrue(isSchemaCompatible(fromSchema, toSchema, false),
           "Compatible field type change is not allowed");
       if (!fieldChange[0].equals("byte") && fieldChange[1].equals("byte")) {
-        assertFalse(TableSchemaResolver.isSchemaCompatible(toSchema, fromSchema),
+        assertFalse(isSchemaCompatible(toSchema, fromSchema, false),
             "Incompatible field type change is allowed");
       }
     }
@@ -136,32 +134,31 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     // Names and aliases should match
     String fromSchema = TRIP_SCHEMA_PREFIX + EXTRA_FIELD_SCHEMA + TRIP_SCHEMA_SUFFIX;
     String toSchema = TRIP_SCHEMA_PREFIX.replace("triprec", "new_triprec") + EXTRA_FIELD_SCHEMA + TRIP_SCHEMA_SUFFIX;
-    assertFalse(TableSchemaResolver.isSchemaCompatible(fromSchema, toSchema), "Field names should match");
-    assertFalse(TableSchemaResolver.isSchemaCompatible(toSchema, fromSchema), "Field names should match");
+    assertFalse(isSchemaCompatible(fromSchema, toSchema, false), "Field names should match");
+    assertFalse(isSchemaCompatible(toSchema, fromSchema, false), "Field names should match");
 
 
-    assertTrue(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA_EVOLVED),
+    assertTrue(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA_EVOLVED_COL_ADDED, false),
         "Added field with default is compatible (Evolved Schema)");
 
     String multipleAddedFieldSchema = TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA
         + TIP_NESTED_SCHEMA + EXTRA_FIELD_SCHEMA + EXTRA_FIELD_SCHEMA.replace("new_field", "new_new_field")
         + TRIP_SCHEMA_SUFFIX;
-    assertTrue(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, multipleAddedFieldSchema),
+    assertTrue(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, multipleAddedFieldSchema, false),
         "Multiple added fields with defaults are compatible");
 
-    assertFalse(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA,
-        TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA
-            + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA + EXTRA_FIELD_WITHOUT_DEFAULT_SCHEMA + TRIP_SCHEMA_SUFFIX),
+    assertFalse(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA
+            + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA + EXTRA_FIELD_WITHOUT_DEFAULT_SCHEMA + TRIP_SCHEMA_SUFFIX, false),
         "Added field without default and not nullable is not compatible (Evolved Schema)");
 
-    assertTrue(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA,
-        TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA
-            + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA + TRIP_SCHEMA_SUFFIX + EXTRA_FIELD_NULLABLE_SCHEMA),
+    assertTrue(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA
+            + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA + TRIP_SCHEMA_SUFFIX + EXTRA_FIELD_NULLABLE_SCHEMA, false),
         "Added nullable field is compatible (Evolved Schema)");
   }
 
-  @Test
-  public void testMORTable() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testMORTable(boolean shouldAllowDroppedColumns) throws Exception {
     tableType = HoodieTableType.MERGE_ON_READ;
 
     // Create the table
@@ -171,7 +168,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
       .setTimelineLayoutVersion(VERSION_1)
       .initTable(metaClient.getHadoopConf(), metaClient.getBasePath());
 
-    HoodieWriteConfig hoodieWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA);
+    HoodieWriteConfig hoodieWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA, shouldAllowDroppedColumns);
     SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
 
     // Initial inserts with TRIP_EXAMPLE_SCHEMA
@@ -194,130 +191,75 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     // Delete with same schema is allowed
     final int numDeleteRecords = 2;
     numRecords -= numDeleteRecords;
-    deleteBatch(hoodieWriteConfig, client, "004", "003", initCommitTime, numDeleteRecords,
-        SparkRDDWriteClient::delete, false, false, 0, 0);
+    deleteBatch(hoodieWriteConfig, client, "004", "003", initCommitTime, numDeleteRecords, false, false, 0, 0);
     checkLatestDeltaCommit("004");
     checkReadRecords("000", numRecords);
 
-    // Insert with evolved schema is not allowed
-    HoodieWriteConfig hoodieDevolvedWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA_DEVOLVED);
+    // Insert with evolved schema (column dropped) is allowed
+    HoodieWriteConfig hoodieDevolvedWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA_EVOLVED_COL_DROPPED, shouldAllowDroppedColumns);
     client = getHoodieWriteClient(hoodieDevolvedWriteConfig);
-    final List<HoodieRecord> failedRecords = generateInsertsWithSchema("004", numRecords, TRIP_EXAMPLE_SCHEMA_DEVOLVED);
+    final List<HoodieRecord> failedRecords = generateInsertsWithSchema("005", numRecords, TRIP_EXAMPLE_SCHEMA_EVOLVED_COL_DROPPED);
+    // We cannot use insertBatch directly here because we want to insert records
+    // with a evolved schema and insertBatch inserts records using the TRIP_EXAMPLE_SCHEMA.
     try {
-      // We cannot use insertBatch directly here because we want to insert records
-      // with a devolved schema and insertBatch inserts records using the TRIP_EXAMPLE_SCHEMA.
       writeBatch(client, "005", "004", Option.empty(), "003", numRecords,
-          (String s, Integer a) -> failedRecords, SparkRDDWriteClient::insert, false, 0, 0, 0, false);
-      fail("Insert with devolved scheme should fail");
-    } catch (HoodieInsertException ex) {
-      // no new commit
-      checkLatestDeltaCommit("004");
-      checkReadRecords("000", numRecords);
-      client.rollback("005");
+          (String s, Integer a) -> failedRecords, SparkRDDWriteClient::insert, false, numRecords, 2 * numRecords, 5, false);
+      assertTrue(shouldAllowDroppedColumns);
+    } catch (HoodieInsertException e) {
+      assertFalse(shouldAllowDroppedColumns);
+      return;
     }
 
-    // Update with devolved schema is also not allowed
-    try {
-      updateBatch(hoodieDevolvedWriteConfig, client, "005", "004", Option.empty(),
-                  initCommitTime, numUpdateRecords, SparkRDDWriteClient::upsert, false, false, 0, 0, 0);
-      fail("Update with devolved scheme should fail");
-    } catch (HoodieUpsertException ex) {
-      // no new commit
-      checkLatestDeltaCommit("004");
-      checkReadRecords("000", numRecords);
-      client.rollback("005");
-    }
+    // Update with evolved schema (column dropped) might be allowed depending on config set.
+    updateBatch(hoodieDevolvedWriteConfig, client, "006", "005", Option.empty(),
+                initCommitTime, numUpdateRecords, SparkRDDWriteClient::upsert, false, false, numUpdateRecords, 2 * numRecords, 0);
 
     // Insert with an evolved scheme is allowed
-    HoodieWriteConfig hoodieEvolvedWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA_EVOLVED);
+    HoodieWriteConfig hoodieEvolvedWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA_EVOLVED_COL_ADDED, shouldAllowDroppedColumns);
     client = getHoodieWriteClient(hoodieEvolvedWriteConfig);
 
     // We cannot use insertBatch directly here because we want to insert records
     // with an evolved schema and insertBatch inserts records using the TRIP_EXAMPLE_SCHEMA.
-    final List<HoodieRecord> evolvedRecords = generateInsertsWithSchema("005", numRecords, TRIP_EXAMPLE_SCHEMA_EVOLVED);
-    writeBatch(client, "005", "004", Option.empty(), initCommitTime, numRecords,
-        (String s, Integer a) -> evolvedRecords, SparkRDDWriteClient::insert, false, 0, 0, 0, false);
+    final List<HoodieRecord> evolvedRecords = generateInsertsWithSchema("007", numRecords, TRIP_EXAMPLE_SCHEMA_EVOLVED_COL_ADDED);
+    writeBatch(client, "007", "006", Option.empty(), initCommitTime, numRecords,
+        (String s, Integer a) -> evolvedRecords, SparkRDDWriteClient::insert, false, numRecords, 3 * numRecords, 7, false);
 
     // new commit
-    checkLatestDeltaCommit("005");
-    checkReadRecords("000", 2 * numRecords);
+    checkLatestDeltaCommit("007");
+    checkReadRecords("000", 3 * numRecords);
 
     // Updates with evolved schema is allowed
-    final List<HoodieRecord> updateRecords = generateUpdatesWithSchema("006", numUpdateRecords, TRIP_EXAMPLE_SCHEMA_EVOLVED);
-    writeBatch(client, "006", "005", Option.empty(), initCommitTime,
-        numUpdateRecords, (String s, Integer a) -> updateRecords, SparkRDDWriteClient::upsert, false, 0, 0, 0, false);
-    // new commit
-    checkLatestDeltaCommit("006");
-    checkReadRecords("000", 2 * numRecords);
-
-    // Now even the original schema cannot be used for updates as it is devolved in relation to the
-    // current schema of the dataset.
-    client = getHoodieWriteClient(hoodieWriteConfig);
-    try {
-      updateBatch(hoodieWriteConfig, client, "007", "006", Option.empty(),
-                  initCommitTime, numUpdateRecords, SparkRDDWriteClient::upsert, false, false, 0, 0, 0);
-      fail("Update with original scheme should fail");
-    } catch (HoodieUpsertException ex) {
-      // no new commit
-      checkLatestDeltaCommit("006");
-      checkReadRecords("000", 2 * numRecords);
-      client.rollback("007");
-    }
-
-    // Now even the original schema cannot be used for inserts as it is devolved in relation to the
-    // current schema of the dataset.
-    try {
-      // We are not using insertBatch directly here because insertion of these
-      // records will fail and we dont want to keep these records within HoodieTestDataGenerator as we
-      // will be testing updates later.
-      failedRecords.clear();
-      failedRecords.addAll(dataGen.generateInserts("007", numRecords));
-      writeBatch(client, "007", "006", Option.empty(), initCommitTime, numRecords,
-          (String s, Integer a) -> failedRecords, SparkRDDWriteClient::insert, true, numRecords, numRecords, 1, false);
-      fail("Insert with original scheme should fail");
-    } catch (HoodieInsertException ex) {
-      // no new commit
-      checkLatestDeltaCommit("006");
-      checkReadRecords("000", 2 * numRecords);
-      client.rollback("007");
-
-      // Remove the inserts from the in-memory state of HoodieTestDataGenerator
-      // as these records were never inserted in the dataset. This is required so
-      // that future calls to updateBatch or deleteBatch do not generate updates
-      // or deletes for records which do not even exist.
-      for (HoodieRecord record : failedRecords) {
-        assertTrue(dataGen.deleteExistingKeyIfPresent(record.getKey()));
-      }
-    }
-
-    // Rollback to the original schema
-    client.restoreToInstant("004", hoodieWriteConfig.isMetadataTableEnabled());
-    checkLatestDeltaCommit("004");
-
-    // Updates with original schema are now allowed
-    client = getHoodieWriteClient(hoodieWriteConfig);
-    updateBatch(hoodieWriteConfig, client, "008", "004", Option.empty(),
-                initCommitTime, numUpdateRecords, SparkRDDWriteClient::upsert, false, false, 0, 0, 0);
+    final List<HoodieRecord> updateRecords = generateUpdatesWithSchema("008", numUpdateRecords, TRIP_EXAMPLE_SCHEMA_EVOLVED_COL_ADDED);
+    writeBatch(client, "008", "007", Option.empty(), initCommitTime,
+        numUpdateRecords, (String s, Integer a) -> updateRecords, SparkRDDWriteClient::upsert, false, numRecords, 4 * numRecords, 8, false);
     // new commit
     checkLatestDeltaCommit("008");
-    checkReadRecords("000", 2 * numRecords);
+    checkReadRecords("000", 4 * numRecords);
 
-    // Insert with original schema is allowed now
-    insertBatch(hoodieWriteConfig, client, "009", "008", numRecords, SparkRDDWriteClient::insert,
-        false, false, 0, 0, 0, Option.empty());
-    checkLatestDeltaCommit("009");
-    checkReadRecords("000", 3 * numRecords);
+    // Now try updating w/ the original schema (should succeed)
+    client = getHoodieWriteClient(hoodieWriteConfig);
+    try {
+      updateBatch(hoodieWriteConfig, client, "009", "008", Option.empty(),
+          initCommitTime, numUpdateRecords, SparkRDDWriteClient::upsert, false, false, numUpdateRecords, 4 * numRecords, 9);
+      assertTrue(shouldAllowDroppedColumns);
+    } catch (HoodieUpsertException e) {
+      assertFalse(shouldAllowDroppedColumns);
+    }
   }
 
-  @Test
-  public void testCopyOnWriteTable() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testCopyOnWriteTable(boolean shouldAllowDroppedColumns) throws Exception {
     // Create the table
     HoodieTableMetaClient.withPropertyBuilder()
       .fromMetaClient(metaClient)
       .setTimelineLayoutVersion(VERSION_1)
       .initTable(metaClient.getHadoopConf(), metaClient.getBasePath());
 
-    HoodieWriteConfig hoodieWriteConfig = getWriteConfigBuilder(TRIP_EXAMPLE_SCHEMA).withRollbackUsingMarkers(false).build();
+    HoodieWriteConfig hoodieWriteConfig = getWriteConfigBuilder(TRIP_EXAMPLE_SCHEMA)
+        .withRollbackUsingMarkers(false)
+        .withAllowAutoEvolutionColumnDrop(shouldAllowDroppedColumns)
+        .build();
     SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
 
     // Initial inserts with TRIP_EXAMPLE_SCHEMA
@@ -336,117 +278,57 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     // Delete with same schema is allowed
     final int numDeleteRecords = 2;
     numRecords -= numDeleteRecords;
-    deleteBatch(hoodieWriteConfig, client, "003", "002", initCommitTime, numDeleteRecords,
-        SparkRDDWriteClient::delete, false, true, 0, numRecords);
+    deleteBatch(hoodieWriteConfig, client, "003", "002", initCommitTime, numDeleteRecords, false, true, 0, numRecords);
     checkReadRecords("000", numRecords);
 
-    // Insert with devolved schema is not allowed
-    HoodieWriteConfig hoodieDevolvedWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA_DEVOLVED);
+    // Inserting records w/ new evolved schema (w/ tip column dropped)
+    HoodieWriteConfig hoodieDevolvedWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA_EVOLVED_COL_DROPPED, shouldAllowDroppedColumns);
     client = getHoodieWriteClient(hoodieDevolvedWriteConfig);
-    final List<HoodieRecord> failedRecords = generateInsertsWithSchema("004", numRecords, TRIP_EXAMPLE_SCHEMA_DEVOLVED);
+    final List<HoodieRecord> failedRecords = generateInsertsWithSchema("004", numRecords, TRIP_EXAMPLE_SCHEMA_EVOLVED_COL_DROPPED);
     try {
-      // We cannot use insertBatch directly here because we want to insert records
-      // with a devolved schema.
       writeBatch(client, "004", "003", Option.empty(), "003", numRecords,
-          (String s, Integer a) -> failedRecords, SparkRDDWriteClient::insert, true, numRecords, numRecords, 1, false);
-      fail("Insert with devolved scheme should fail");
-    } catch (HoodieInsertException ex) {
-      // no new commit
-      HoodieTimeline curTimeline = metaClient.reloadActiveTimeline().getCommitTimeline().filterCompletedInstants();
-      assertTrue(curTimeline.lastInstant().get().getTimestamp().equals("003"));
-      client.rollback("004");
+          (String s, Integer a) -> failedRecords, SparkRDDWriteClient::insert, true, numRecords, numRecords * 2, 1, false);
+      assertTrue(shouldAllowDroppedColumns);
+    } catch (HoodieInsertException e) {
+      assertFalse(shouldAllowDroppedColumns);
+      return;
     }
 
-    // Update with devolved schema is not allowed
-    try {
-      updateBatch(hoodieDevolvedWriteConfig, client, "004", "003", Option.empty(),
-                  initCommitTime, numUpdateRecords, SparkRDDWriteClient::upsert, false, true,
-                  numUpdateRecords, 2 * numRecords, 5);
-      fail("Update with devolved scheme should fail");
-    } catch (HoodieUpsertException ex) {
-      // no new commit
-      HoodieTimeline curTimeline = metaClient.reloadActiveTimeline().getCommitTimeline().filterCompletedInstants();
-      assertTrue(curTimeline.lastInstant().get().getTimestamp().equals("003"));
-      client.rollback("004");
-    }
+    // Updating records w/ new evolved schema
+    updateBatch(hoodieDevolvedWriteConfig, client, "005", "004", Option.empty(),
+                initCommitTime, numUpdateRecords, SparkRDDWriteClient::upsert, false, true,
+                numUpdateRecords, 2 * numRecords, 5);
 
-    // Insert with evolved scheme is allowed
-    HoodieWriteConfig hoodieEvolvedWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA_EVOLVED);
+    // Inserting with evolved schema is allowed
+    HoodieWriteConfig hoodieEvolvedWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA_EVOLVED_COL_ADDED, shouldAllowDroppedColumns);
     client = getHoodieWriteClient(hoodieEvolvedWriteConfig);
-    final List<HoodieRecord> evolvedRecords = generateInsertsWithSchema("004", numRecords, TRIP_EXAMPLE_SCHEMA_EVOLVED);
+    final List<HoodieRecord> evolvedRecords = generateInsertsWithSchema("006", numRecords, TRIP_EXAMPLE_SCHEMA_EVOLVED_COL_ADDED);
     // We cannot use insertBatch directly here because we want to insert records
     // with a evolved schema.
-    writeBatch(client, "004", "003", Option.empty(), initCommitTime, numRecords,
-        (String s, Integer a) -> evolvedRecords, SparkRDDWriteClient::insert, true, numRecords, 2 * numRecords, 4, false);
+    writeBatch(client, "006", "005", Option.empty(), initCommitTime, numRecords,
+        (String s, Integer a) -> evolvedRecords, SparkRDDWriteClient::insert, true, numRecords, 3 * numRecords, 6, false);
+
     // new commit
     HoodieTimeline curTimeline = metaClient.reloadActiveTimeline().getCommitTimeline().filterCompletedInstants();
-    assertTrue(curTimeline.lastInstant().get().getTimestamp().equals("004"));
-    checkReadRecords("000", 2 * numRecords);
+    assertTrue(curTimeline.lastInstant().get().getTimestamp().equals("006"));
+    checkReadRecords("000", 3 * numRecords);
 
-    // Updates with evolved schema is allowed
-    final List<HoodieRecord> updateRecords = generateUpdatesWithSchema("005", numUpdateRecords, TRIP_EXAMPLE_SCHEMA_EVOLVED);
-    writeBatch(client, "005", "004", Option.empty(), initCommitTime,
-        numUpdateRecords, (String s, Integer a) -> updateRecords, SparkRDDWriteClient::upsert, true, numUpdateRecords, 2 * numRecords, 5, false);
-    checkReadRecords("000", 2 * numRecords);
+    // Updating with evolved schema is allowed
+    final List<HoodieRecord> updateRecords = generateUpdatesWithSchema("007", numUpdateRecords, TRIP_EXAMPLE_SCHEMA_EVOLVED_COL_ADDED);
+    writeBatch(client, "007", "006", Option.empty(), initCommitTime,
+        numUpdateRecords, (String s, Integer a) -> updateRecords, SparkRDDWriteClient::upsert, true, numUpdateRecords, 3 * numRecords, 7, false);
+    checkReadRecords("000", 3 * numRecords);
 
-    // Now even the original schema cannot be used for updates as it is devolved
-    // in relation to the current schema of the dataset.
+    // Now try updating w/ the original schema (should succeed)
     client = getHoodieWriteClient(hoodieWriteConfig);
     try {
-      updateBatch(hoodieWriteConfig, client, "006", "005", Option.empty(),
-                  initCommitTime, numUpdateRecords, SparkRDDWriteClient::upsert, false, true,
-                  numUpdateRecords, numRecords, 2);
-      fail("Update with original scheme should fail");
-    } catch (HoodieUpsertException ex) {
-      // no new commit
-      curTimeline = metaClient.reloadActiveTimeline().getCommitTimeline().filterCompletedInstants();
-      assertTrue(curTimeline.lastInstant().get().getTimestamp().equals("005"));
-      client.rollback("006");
+      updateBatch(hoodieWriteConfig, client, "008", "007", Option.empty(),
+          initCommitTime, numUpdateRecords, SparkRDDWriteClient::upsert, false, true,
+          numUpdateRecords, 3 * numRecords, 8);
+      assertTrue(shouldAllowDroppedColumns);
+    } catch (HoodieUpsertException e) {
+      assertFalse(shouldAllowDroppedColumns);
     }
-
-    // Now even the original schema cannot be used for inserts as it is devolved
-    // in relation to the current schema of the dataset.
-    try {
-      // We are not using insertBatch directly here because insertion of these
-      // records will fail and we dont want to keep these records within
-      // HoodieTestDataGenerator.
-      failedRecords.clear();
-      failedRecords.addAll(dataGen.generateInserts("006", numRecords));
-      writeBatch(client, "006", "005", Option.empty(), initCommitTime, numRecords,
-          (String s, Integer a) -> failedRecords, SparkRDDWriteClient::insert, true, numRecords, numRecords, 1, false);
-      fail("Insert with original scheme should fail");
-    } catch (HoodieInsertException ex) {
-      // no new commit
-      curTimeline = metaClient.reloadActiveTimeline().getCommitTimeline().filterCompletedInstants();
-      assertTrue(curTimeline.lastInstant().get().getTimestamp().equals("005"));
-      client.rollback("006");
-
-      // Remove the inserts from the in-memory state of HoodieTestDataGenerator
-      // as these records were never inserted in the dataset. This is required so
-      // that future calls to updateBatch or deleteBatch do not generate updates
-      // or deletes for records which do not even exist.
-      for (HoodieRecord record : failedRecords) {
-        assertTrue(dataGen.deleteExistingKeyIfPresent(record.getKey()));
-      }
-    }
-
-    // Revert to the older commit and ensure that the original schema can now
-    // be used for inserts and inserts.
-    client.restoreToInstant("003", hoodieWriteConfig.isMetadataTableEnabled());
-    curTimeline = metaClient.reloadActiveTimeline().getCommitTimeline().filterCompletedInstants();
-    assertTrue(curTimeline.lastInstant().get().getTimestamp().equals("003"));
-    checkReadRecords("000", numRecords);
-
-    // Insert with original schema is allowed now
-    insertBatch(hoodieWriteConfig, client, "007", "003", numRecords, SparkRDDWriteClient::insert,
-        false, true, numRecords, 2 * numRecords, 1, Option.empty());
-    checkReadRecords("000", 2 * numRecords);
-
-    // Update with original schema is allowed now
-    updateBatch(hoodieWriteConfig, client, "008", "007", Option.empty(),
-        initCommitTime, numUpdateRecords, SparkRDDWriteClient::upsert, false, true,
-        numUpdateRecords, 2 * numRecords, 5);
-    checkReadRecords("000", 2 * numRecords);
   }
 
   private void checkReadRecords(String instantTime, int numExpectedRecords) throws IOException {
@@ -476,18 +358,18 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
 
   private void checkLatestDeltaCommit(String instantTime) {
     HoodieTimeline timeline = metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-    assertTrue(timeline.lastInstant().get().getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION));
-    assertTrue(timeline.lastInstant().get().getTimestamp().equals(instantTime));
+    assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, timeline.lastInstant().get().getAction());
+    assertEquals(instantTime, timeline.lastInstant().get().getTimestamp());
   }
 
   private List<HoodieRecord> generateInsertsWithSchema(String commitTime, int numRecords, String schemaStr) {
-    HoodieTestDataGenerator gen = schemaStr.equals(TRIP_EXAMPLE_SCHEMA_EVOLVED) ? dataGenEvolved : dataGenDevolved;
+    HoodieTestDataGenerator gen = schemaStr.equals(TRIP_EXAMPLE_SCHEMA_EVOLVED_COL_ADDED) ? dataGenEvolved : dataGenDevolved;
     List<HoodieRecord> records = gen.generateInserts(commitTime, numRecords);
     return convertToSchema(records, schemaStr);
   }
 
   private List<HoodieRecord> generateUpdatesWithSchema(String commitTime, int numRecords, String schemaStr) {
-    HoodieTestDataGenerator gen = schemaStr.equals(TRIP_EXAMPLE_SCHEMA_EVOLVED) ? dataGenEvolved : dataGenDevolved;
+    HoodieTestDataGenerator gen = schemaStr.equals(TRIP_EXAMPLE_SCHEMA_EVOLVED_COL_ADDED) ? dataGenEvolved : dataGenDevolved;
     List<HoodieRecord> records = gen.generateUniqueUpdates(commitTime, numRecords);
     return convertToSchema(records, schemaStr);
   }
@@ -507,8 +389,8 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     }).collect(Collectors.toList());
   }
 
-  private HoodieWriteConfig getWriteConfig(String schema) {
-    return getWriteConfigBuilder(schema).build();
+  private HoodieWriteConfig getWriteConfig(String schema, boolean shouldAllowDroppedColumns) {
+    return getWriteConfigBuilder(schema).withAllowAutoEvolutionColumnDrop(shouldAllowDroppedColumns).build();
   }
 
   private HoodieWriteConfig.Builder getWriteConfigBuilder(String schema) {
@@ -516,6 +398,10 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(IndexType.INMEMORY).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withAvroSchemaValidate(true);
+  }
+
+  private static boolean isSchemaCompatible(String oldSchema, String newSchema, boolean shouldAllowDroppedColumns) {
+    return AvroSchemaUtils.isSchemaCompatible(new Schema.Parser().parse(oldSchema), new Schema.Parser().parse(newSchema), shouldAllowDroppedColumns);
   }
 
   @Override
