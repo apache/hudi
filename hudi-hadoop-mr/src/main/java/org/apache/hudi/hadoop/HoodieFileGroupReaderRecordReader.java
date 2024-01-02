@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.TablePathUtils;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeRecordReader;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
@@ -244,6 +245,11 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
   }
 
   private static Schema createRequestedSchema(Schema tableSchema, JobConf jobConf) {
+    String readCols = jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR);
+    if (StringUtils.isNullOrEmpty(readCols)) {
+      return Schema.createRecord(tableSchema.getName(), tableSchema.getDoc(),
+          tableSchema.getNamespace(), tableSchema.isError());
+    }
     //hive will handle the partition cols
     String partitionColString = jobConf.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS);
     Set<String> partitionColumns;
