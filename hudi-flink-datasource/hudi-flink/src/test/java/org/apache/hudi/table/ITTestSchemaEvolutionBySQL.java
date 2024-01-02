@@ -19,6 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.adapter.TestHoodieCatalogs;
+import org.apache.hudi.exception.HoodieCatalogException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.table.catalog.HoodieCatalogTestUtils;
 import org.apache.hudi.table.catalog.HoodieHiveCatalog;
@@ -194,6 +195,28 @@ public class ITTestSchemaEvolutionBySQL {
     tableEnv.executeSql("alter table t1 reset ('k')");
     table = hoodieCatalog.getTable(new ObjectPath("hudi", "t1"));
     assertFalse(table.getOptions().containsKey("k"));
+  }
+
+  @Test
+  void testAlterTableType() {
+    // Alter table type is not supported
+    Exception e = assertThrows(
+        TableException.class,
+        () -> tableEnv.executeSql("alter table t1 set ('table.type' = 'MERGE_ON_READ')"),
+        "Should throw exception because alter table type is not supported.");
+    assertTrue(e.getCause() instanceof HoodieCatalogException);
+    assertTrue(e.getCause().getMessage().contains("Hoodie catalog does not support to alter table type and index type"));
+  }
+
+  @Test
+  void testAlterIndexType() {
+    // Alter index type is not supported
+    Exception e = assertThrows(
+        TableException.class,
+        () -> tableEnv.executeSql("alter table t1 set ('index.type' = 'BUCKET')"),
+        "Should throw exception because alter index type is not supported.");
+    assertTrue(e.getCause() instanceof HoodieCatalogException);
+    assertTrue(e.getCause().getMessage().contains("Hoodie catalog does not support to alter table type and index type"));
   }
 
   @Test
