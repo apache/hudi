@@ -98,13 +98,14 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
         .setConf(jobConf)
         .setBasePath(tableBasePath)
         .build();
-    Schema tableSchema = getLatestTableSchema(metaClient, jobConf);
+    String latestCommitTime = getLatestCommitTime(split, metaClient);
+    Schema tableSchema = getLatestTableSchema(metaClient, jobConf, latestCommitTime);
     Schema requestedSchema = createRequestedSchema(tableSchema, jobConf);
     Map<String, String[]> hosts = new HashMap<>();
     this.readerContext = new HiveHoodieReaderContext(readerCreator, split, jobConf, reporter, tableSchema, hosts, metaClient);
     this.arrayWritable = new ArrayWritable(Writable.class, new Writable[requestedSchema.getFields().size()]);
     this.fileGroupReader = new HoodieFileGroupReader<>(readerContext, jobConf, tableBasePath,
-        getLatestCommitTime(split, metaClient), getFileSliceFromSplit(fileSplit, hosts, readerContext.getFs(tableBasePath, jobConf), tableBasePath),
+        latestCommitTime, getFileSliceFromSplit(fileSplit, hosts, readerContext.getFs(tableBasePath, jobConf), tableBasePath),
         tableSchema, requestedSchema, metaClient.getTableConfig().getProps(), metaClient.getTableConfig(), fileSplit.getStart(),
         fileSplit.getLength(), false);
     this.fileGroupReader.initRecordIterators();
@@ -163,15 +164,12 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
         : new ArrayList<>();
   }
 
-  private static Schema getLatestTableSchema(HoodieTableMetaClient metaClient, JobConf jobConf) {
+  private static Schema getLatestTableSchema(HoodieTableMetaClient metaClient, JobConf jobConf, String latestCommitTime) {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
     try {
-      Option<Schema> schemaOpt = tableSchemaResolver.getTableAvroSchemaFromLatestCommit(true);
-      if (schemaOpt.isPresent()) {
-        // Add partitioning fields to writer schema for resulting row to contain null values for these fields
-        return HoodieRealtimeRecordReaderUtils.addPartitionFields(schemaOpt.get(), getPartitionFieldNames(jobConf));
-      }
-      throw new RuntimeException("Unable to get table schema");
+      Schema schema = tableSchemaResolver.getTableAvroSchema(latestCommitTime);
+      // Add partitioning fields to writer schema for resulting row to contain null values for these fields
+      return HoodieRealtimeRecordReaderUtils.addPartitionFields(schema, getPartitionFieldNames(jobConf));
     } catch (Exception e) {
       throw new RuntimeException("Unable to get table schema", e);
     }
@@ -260,6 +258,9 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
         Arrays.stream(jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR).split(",")).filter(c -> !partitionColumns.contains(c)).collect(Collectors.toList()));
   }
 
+  /**
+   * `schema.on.read` and skip merge not implemented
+   */
   public static boolean useFilegroupReader(final JobConf jobConf) {
     return jobConf.getBoolean(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue())
         && !jobConf.getBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue())
