@@ -19,6 +19,8 @@
 package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TablePathUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -26,6 +28,7 @@ import org.apache.hudi.hadoop.avro.HoodieTimestampAwareParquetInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.ql.io.parquet.read.ParquetRecordReaderWrapper;
 import org.apache.hadoop.hive.ql.io.sarg.ConvertAstToSearchArg;
@@ -91,13 +94,25 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
     }
   }
 
+  private static boolean checkTableIsHudi(final InputSplit split, final JobConf job) {
+    try {
+      Option<Path> tablePathOpt = TablePathUtils.getTablePath(((FileSplit) split).getPath(), job);
+      if (!tablePathOpt.isPresent()) {
+        return false;
+      }
+      return tablePathOpt.get().getFileSystem(job).exists(new Path(tablePathOpt.get(), HoodieTableMetaClient.METAFOLDER_NAME));
+    } catch (IOException e) {
+      return false;
+    }
+  }
+
   @Override
   public RecordReader<NullWritable, ArrayWritable> getRecordReader(final InputSplit split, final JobConf job,
                                                                    final Reporter reporter) throws IOException {
 
     if (HoodieFileGroupReaderRecordReader.useFilegroupReader(job)) {
       try {
-        if (!(split instanceof FileSplit) || !TablePathUtils.getTablePath(((FileSplit) split).getPath(), job).isPresent()) {
+        if (!(split instanceof FileSplit) || !checkTableIsHudi(split, job)) {
           return super.getRecordReader(split, job, reporter);
         }
         if (supportAvroRead && HoodieColumnProjectionUtils.supportTimestamp(job)) {
