@@ -43,9 +43,6 @@ files. With the introduction of [multi-modal index](https://www.onehouse.ai/blog
 [RFC-27](https://github.com/apache/hudi/blob/master/rfc/rfc-27/rfc-27.md) added a new partition corresponding to column_stats index in metadata table of Hudi. We plan to use the information stored in this partition for pruning the files. 
 
 ## Implementation
-Describe the new thing you want to do in appropriate detail, how it fits into the project architecture.
-Provide a detailed description of how you intend to implement this feature.This may be fairly extensive and have large subsections of its own.
-Or it may be a few sentences. Use judgement based on the scope of the change.
 
 We propose two different approaches for integrating column stats index with different query engines and discuss the pros and cons for the same below.
 1. **Using domains** - Presto and Trino have the concept of column domains. Domain is actually the set of possible values that need to be returned for a particular column. Domains get created at the time of creating splits for processing. Domains basically contain a map of column to possible values where the possible values are populated after doing the necessary pre work of combining all the different filter predicates supplied as part of the query. [This draft PR](https://github.com/apache/hudi/pull/6087) shows the use of these domains for integrating data skipping index with presto engine. 
@@ -55,7 +52,96 @@ This basically involves exposing a new api in HoodieTableMetadata.java as below 
 FileStatus[] getFilesToQueryUsingCSI(List<String> columns, ColumnDomain<ColumnHandle> columnDomain) throws IOException;
 ```
 
-This makes the integration with presto and trino a fairly easy task. However some work needs to be done to get the column domains from Hive as explained [here](https://cwiki.apache.org/confluence/display/HUDI/RFC-27+Data+skipping+index+to+improve+query+performance#RFC27Dataskippingindextoimprovequeryperformance-Hive). Once we have the query predicates in Hive, an adapter needs to be written for converting them to column domains. 
+ColumnHandle object only defines a column in the hudi table and comprises the name and type attributes. The possible values of TYPE includes Boolean, Long, Double, Integer, Biginteger and varchar.
+ColumnDomain contains a map which contains the possible values for every column getting filtered. This is how it looks like - 
+
+```java
+public class ColumnDomain<T> {
+
+    //This contains the range of values per column, which needs to be checked for overlap against the file stats for that particular column
+    private final Option<Map<T, Domain>> domains;
+}
+```
+
+Domain consists of a NavigableMap<Marker, Range>. Range is defined using Markers. Marker can take care of below cases: 
+
+1. `>` (greater than bound, e.g col1 > 34)
+2. `>=` (greater than or equal to bound, e.g col1 >= 34)
+3. `<` (lower than bound, e.g col1 < 34)
+4. `<=` (lower than or equal to bound, e.g col1 <= 34)
+5. `=` (exact bound, e.g col1 == 34)
+
+For cases such as IN operator, We can have a list of Ranges defined for that column. Similarly cases for NOT IN operator can also be handled.
+
+Marker class looks like below: 
+
+```java
+public class Marker implements Comparable<Marker> {
+
+    public enum Bound {
+        BELOW,
+        EXACTLY,
+        ABOVE
+    }
+
+    private final Type type;
+    private final Option<Object> value;
+    private final Bound bound;
+}
+```
+
+Any possible Range can be defined with the combination of 2 markers, low and high.
+
+```java
+class Range {
+    private final Marker low;
+    private final Marker high;
+    
+    //utility methods to check if two ranges overlap each other
+}
+```
+
+Let us try to define the bounds given above one by one in the format Range{lower_marker, higher_marker}.
+1. col1 > 34 
+
+    Range{Marker(Integer, Option.of(34), ABOVE), Marker(Integer, Option.empty(), BELOW)}
+
+2. col1 >= 34
+   
+    Range{Marker(Integer, Option.of(34), EXACT), Marker(Integer, Option.empty(), BELOW)}
+
+3. col1 < 34
+   
+    Range{Marker(Integer, Option.empty(), ABOVE), Marker(Integer, Option.of(34), BELOW)}
+
+4. col1 <= 34
+   
+    Range{Marker(Integer, Option.empty(), ABOVE), Marker(Integer, Option.of(34), EXACT)}
+
+5. col1 = 34
+   
+    Range{Marker(Integer, Option.of(34), EXACT), Marker(Integer, Option.of(34), EXACT)}
+
+
+The process of file pruning can be depicted on a high level as below:
+
+The flow needs to make use of below API introduced as part of this RFC:
+```java
+FileStatus[] getFilesToQueryUsingCSI(List<String> columns, ColumnDomain<ColumnHandle> columnDomain) throws IOException;
+```
+
+Query engines need to prepare the list of columns and the columnDomain objects to call the above API. This API performs the below tasks - 
+> Create encoded ColumnID objects to be able to search Metadata table using getRecordsByKeyPrefixes() method. 
+> For every column C in the list of columns, do the following:
+- get the actual Domain object from columnDomain for C, say the range is R1.
+- prepare a range object R2 using the min and max values in every file for C
+- compare to see if R1 and R2 overlap each other using utility methods in Range class.
+- If yes, add this file to the list of filtered files per column, else reject it.
+
+> Finally get the intersection of all column wise filtered files. This is the list of pruned files to be scanned further.
+
+
+This makes the integration with presto and trino a fairly easy task. However, some work needs to be done to get the column domains from Hive as explained [here](https://cwiki.apache.org/confluence/display/HUDI/RFC-27+Data+skipping+index+to+improve+query+performance#RFC27Dataskippingindextoimprovequeryperformance-Hive). Once we have the query predicates in Hive, an adapter needs to be written for converting them to column domains. 
 
 2. **Using generic HudiExpression** - This approach follows the general pattern of creating a tree like structure for making of any query predicates. More details about this approach can be found [here](https://cwiki.apache.org/confluence/display/HUDI/RFC-27+Data+skipping+index+to+improve+query+performance#RFC27Dataskippingindextoimprovequeryperformance-HowtoapplyquerypredicatesinHudi?).
 One of the main benefits of using this approach is that it is very generic and solves the long term purpose of implementing filter pushdowns using various kind of filters. However, this involves more work in terms of creating these expressions and implementing the corresponding support for the different operators involved therein. 
