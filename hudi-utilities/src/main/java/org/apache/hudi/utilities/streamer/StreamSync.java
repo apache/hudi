@@ -1144,17 +1144,6 @@ public class StreamSync implements Serializable, Closeable {
   /**
    * Register Avro Schemas.
    *
-   * @param schemaProvider Schema Provider
-   */
-  private void registerAvroSchemas(SchemaProvider schemaProvider) {
-    if (null != schemaProvider) {
-      registerAvroSchemas(schemaProvider.getSourceSchema(), schemaProvider.getTargetSchema());
-    }
-  }
-
-  /**
-   * Register Avro Schemas.
-   *
    * @param sourceSchema Source Schema
    * @param targetSchema Target Schema
    */
