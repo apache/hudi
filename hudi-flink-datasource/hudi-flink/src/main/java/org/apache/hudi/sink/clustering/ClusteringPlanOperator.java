@@ -42,7 +42,6 @@ import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Operator that generates the clustering plan with pluggable strategies on finished checkpoints.
