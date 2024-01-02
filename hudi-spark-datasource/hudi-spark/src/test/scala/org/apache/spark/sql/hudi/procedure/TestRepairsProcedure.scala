@@ -34,7 +34,9 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import java.io.IOException
 import java.net.URL
 import java.nio.file.{Files, Paths}
+import java.util.Properties
 import scala.collection.JavaConverters.asScalaIteratorConverter
+import scala.jdk.CollectionConverters.asScalaSetConverter
 
 class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
 
@@ -106,6 +108,22 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
            |  preCombineField = 'ts'
            | )
        """.stripMargin)
+
+      val filePath = s"""$tablePath/.hoodie/hoodie.properties"""
+      val fs = FSUtils.getFs(filePath, new Configuration())
+      val fis = fs.open(new Path(filePath))
+      val prevProps = new Properties
+      prevProps.load(fis)
+      fis.close()
+
+      // write props to a file
+      val curPropPath = s"""${tmp.getCanonicalPath}/tmp/hoodie.properties"""
+      val path = new Path(curPropPath)
+      val out = fs.create(path)
+      prevProps.store(out, "hudi properties")
+      out.close()
+      fs.close()
+
       // create commit instant
       val newProps: URL = this.getClass.getClassLoader.getResource("table-config.properties")
 
@@ -140,6 +158,15 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
         .mkString("\n")
 
       assertEquals(expectedOutput, actual)
+
+      spark.sql(s"""call repair_overwrite_hoodie_props(table => '$tableName', new_props_file_path => '${curPropPath}')""")
+      val config = HoodieTableMetaClient.builder().setBasePath(tablePath).setConf(new Configuration()).build().getTableConfig
+      val props = config.getProps
+      assertEquals(prevProps.size(), props.size())
+      props.entrySet().asScala.foreach((entry) => {
+        val key = entry.getKey.toString
+        assertEquals(entry.getValue, prevProps.getProperty(key))
+      })
     }
   }
 
