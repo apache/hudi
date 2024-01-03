@@ -71,7 +71,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
 
   test("Test alter column types") {
     withRecordType()(withTempDir { tmp =>
-      Seq("mor").foreach { tableType =>
+      Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         if (HoodieSparkUtils.gteqSpark3_1) {
