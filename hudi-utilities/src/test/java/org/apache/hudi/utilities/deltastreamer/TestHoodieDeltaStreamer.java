@@ -188,7 +188,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     if (type == HoodieRecordType.SPARK) {
       Map<String, String> opts = new HashMap<>();
       opts.put(HoodieWriteConfig.RECORD_MERGER_IMPLS.key(), HoodieSparkRecordMerger.class.getName());
-      opts.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet");
+      opts.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(),"parquet");
       for (Map.Entry<String, String> entry : opts.entrySet()) {
         hoodieConfig.add(String.format("%s=%s", entry.getKey(), entry.getValue()));
       }
@@ -465,16 +465,16 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // Initial bulk insert
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
     addRecordMerger(recordType, cfg.configs);
-    syncAndAssertRecordCount(cfg,1000, tableBasePath, "00000",  1);
+    syncAndAssertRecordCount(cfg, 1000,  tableBasePath,  "00000",  1);
 
     // No new data => no commits.
     cfg.sourceLimit = 0;
-    syncAndAssertRecordCount(cfg,1000, tableBasePath, "00000",  1);
+    syncAndAssertRecordCount(cfg, 1000,  tableBasePath,  "00000",  1);
 
     // upsert() #1
     cfg.sourceLimit = 2000;
     cfg.operation = WriteOperationType.UPSERT;
-    syncAndAssertRecordCount(cfg,1950, tableBasePath,"00001", 2);
+    syncAndAssertRecordCount(cfg,1950, tableBasePath, "00001", 2);
     List<Row> counts = countsPerCommit(tableBasePath, sqlContext);
     assertEquals(1950, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
 
@@ -2086,43 +2086,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @Test
-  public void testEmptyBatchWithNullSchemaValue() throws Exception {
-    PARQUET_SOURCE_ROOT = basePath + "/parquetFilesDfs" + testNum;
-    int parquetRecordsCount = 10;
-    prepareParquetDFSFiles(parquetRecordsCount, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, false, null, null);
-    prepareParquetDFSSource(false, false, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
-        PARQUET_SOURCE_ROOT, false, "partition_path", "0");
-
-    String tableBasePath = basePath + "/test_parquet_table" + testNum;
-    HoodieDeltaStreamer.Config config = TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
-        null, PROPS_FILENAME_TEST_PARQUET, false,
-        false, 100000, false, null, null, "timestamp", null);
-    HoodieDeltaStreamer deltaStreamer1 = new HoodieDeltaStreamer(config, jsc);
-    deltaStreamer1.sync();
-    assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(jsc.hadoopConfiguration()).build();
-    HoodieInstant firstCommit = metaClient.getActiveTimeline().lastInstant().get();
-    deltaStreamer1.shutdownGracefully();
-
-    prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, "2.parquet", false, null, null);
-    HoodieDeltaStreamer.Config updatedConfig = config;
-    updatedConfig.schemaProviderClassName = NullValueSchemaProvider.class.getName();
-    updatedConfig.sourceClassName = TestParquetDFSSourceEmptyBatch.class.getName();
-    HoodieDeltaStreamer deltaStreamer2 = new HoodieDeltaStreamer(updatedConfig, jsc);
-    deltaStreamer2.sync();
-    // since we mimic'ed empty batch, total records should be same as first sync().
-    assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
-
-    // validate schema is set in commit even if target schema returns null on empty batch
-    TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
-    HoodieInstant secondCommit = metaClient.reloadActiveTimeline().lastInstant().get();
-    Schema lastCommitSchema = tableSchemaResolver.getTableAvroSchema(secondCommit, true);
-    assertNotEquals(firstCommit, secondCommit);
-    assertNotEquals(lastCommitSchema, Schema.create(Schema.Type.NULL));
-    deltaStreamer2.shutdownGracefully();
-  }
-
-  @Test
   public void testDeltaStreamerRestartAfterMissingHoodieProps() throws Exception {
     testDeltaStreamerRestartAfterMissingHoodieProps(true);
   }
@@ -2955,22 +2918,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     @Override
     public Schema getTargetSchema() {
-      return null;
-    }
-  }
-
-  private static class NullValueSchemaProvider extends SchemaProvider {
-
-    public NullValueSchemaProvider(TypedProperties props) {
-      super(props);
-    }
-
-    public NullValueSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
-      super(props, jssc);
-    }
-
-    @Override
-    public Schema getSourceSchema() {
       return null;
     }
   }

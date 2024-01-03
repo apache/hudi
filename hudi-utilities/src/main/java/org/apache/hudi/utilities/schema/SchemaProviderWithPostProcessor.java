@@ -38,16 +38,14 @@ public class SchemaProviderWithPostProcessor extends SchemaProvider {
 
   @Override
   public Schema getSourceSchema() {
-    Schema sourceSchema = schemaProvider.getSourceSchema();
-    return schemaPostProcessor.map(processor -> processor.processSchema(sourceSchema))
-        .orElse(sourceSchema);
+    return schemaPostProcessor.map(processor -> processor.processSchema(schemaProvider.getSourceSchema()))
+        .orElse(schemaProvider.getSourceSchema());
   }
 
   @Override
   public Schema getTargetSchema() {
-    Schema sourceSchema = schemaProvider.getSourceSchema();
-    return schemaPostProcessor.map(processor -> processor.processSchema(sourceSchema))
-        .orElse(sourceSchema);
+    return schemaPostProcessor.map(processor -> processor.processSchema(schemaProvider.getTargetSchema()))
+        .orElse(schemaProvider.getTargetSchema());
   }
 
   public SchemaProvider getOriginalSchemaProvider() {
