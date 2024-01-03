@@ -402,9 +402,7 @@ public class StreamSync implements Serializable, Closeable {
         .build();
     String instantTime = metaClient.createNewInstantTime();
 
-    long startInput = System.currentTimeMillis();
     InputBatch inputBatch = readFromSource(instantTime, metaClient);
-    LOG.error("Time to read from source : " + (System.currentTimeMillis() - startInput));
 
     if (inputBatch != null) {
 
@@ -450,9 +448,7 @@ public class StreamSync implements Serializable, Closeable {
         }
       }
 
-      long startWrite = System.currentTimeMillis();
       result = writeToSinkAndDoMetaSync(instantTime, inputBatch, metrics, overallTimerContext);
-      LOG.error("Time to write to sink : " + (System.currentTimeMillis() - startWrite));
     }
 
     metrics.updateStreamerSyncMetrics(System.currentTimeMillis());
@@ -500,9 +496,7 @@ public class StreamSync implements Serializable, Closeable {
     InputBatch sourceDataToSync = null;
     while (curRetryCount++ < maxRetryCount && sourceDataToSync == null) {
       try {
-        long start = System.currentTimeMillis();
         sourceDataToSync = fetchFromSourceAndPrepareRecords(resumeCheckpointStr, instantTime, metaClient);
-        LOG.error("Time to fetch from source and prepare records : " + (System.currentTimeMillis() - start));
       } catch (HoodieSourceTimeoutException e) {
         if (curRetryCount >= maxRetryCount) {
           throw e;
@@ -529,9 +523,7 @@ public class StreamSync implements Serializable, Closeable {
       throw new UnsupportedOperationException("Spark record only support parquet log.");
     }
 
-    long start = System.currentTimeMillis();
     InputBatch inputBatch = fetchNextBatchFromSource(resumeCheckpointStr, metaClient);
-    LOG.error("Time to fetch next batch from source : " + (System.currentTimeMillis() - start));
     final String checkpointStr = inputBatch.getCheckpointForNextBatch();
     final SchemaProvider schemaProvider = inputBatch.getSchemaProvider();
 
@@ -635,9 +627,7 @@ public class StreamSync implements Serializable, Closeable {
         inputBatchForWriter = formatAdapter.fetchNewDataInRowFormat(resumeCheckpointStr, cfg.sourceLimit);
       } else {
         // Pull the data from the source & prepare the write
-        long start = System.currentTimeMillis();
         InputBatch<JavaRDD<GenericRecord>> dataAndCheckpoint = formatAdapter.fetchNewDataInAvroFormat(resumeCheckpointStr, cfg.sourceLimit);
-        LOG.error("Time to fetch new data in avro format : " + (System.currentTimeMillis() - start));
         checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
         // Rewrite transformed records into the expected target schema
         schemaProvider = getDeducedSchemaProvider(dataAndCheckpoint.getSchemaProvider().getTargetSchema(), dataAndCheckpoint.getSchemaProvider(), metaClient);
@@ -835,9 +825,7 @@ public class StreamSync implements Serializable, Closeable {
           }
         }
       }
-      long startCommit = System.currentTimeMillis();
       boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, partitionToReplacedFileIds, Option.empty());
-      LOG.error("Time to commit : " + (System.currentTimeMillis() - startCommit));
       if (success) {
         LOG.info("Commit " + instantTime + " successful!");
         this.formatAdapter.getSource().onCommit(inputBatch.getCheckpointForNextBatch());
