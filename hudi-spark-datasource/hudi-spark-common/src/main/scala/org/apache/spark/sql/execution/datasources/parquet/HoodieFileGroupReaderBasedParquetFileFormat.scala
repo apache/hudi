@@ -39,8 +39,6 @@ import org.apache.spark.sql.types._
 import org.apache.spark.util.SerializableConfiguration
 
 import java.io.Closeable
-import scala.annotation.tailrec
-import scala.collection.mutable
 import scala.jdk.CollectionConverters.asScalaIteratorConverter
 
 trait HoodieFormatTrait {
@@ -214,14 +212,14 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     reader.initRecordIterators()
     // Append partition values to rows and project to output schema
     appendPartitionAndProject(
-      reader.getClosableIterator.asInstanceOf[java.util.Iterator[InternalRow]].asScala,
+      reader.getClosableIterator,
       requiredSchema,
       partitionSchema,
       outputSchema,
       partitionValues)
   }
 
-  private def appendPartitionAndProject(iter: Iterator[InternalRow],
+  private def appendPartitionAndProject(iter: HoodieFileGroupReader.HoodieFileGroupReaderIterator[InternalRow],
                                         inputSchema: StructType,
                                         partitionSchema: StructType,
                                         to: StructType,
