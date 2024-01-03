@@ -276,7 +276,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
     Schema requiredSchema = createSchemaFromFields(requiredFields);
     return Option.of(Pair.of(readerContext.getFileRecordIterator(file.getHadoopPath(), 0, file.getFileLen(),
-        requiredSchema, createSchemaFromFields(allFields), hadoopConf, this.needMerge), requiredSchema));
+        createSchemaFromFields(allFields), requiredSchema, hadoopConf, this.needMerge), requiredSchema));
   }
 
   /**
