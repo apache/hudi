@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
@@ -175,6 +176,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         fileSlice,
         avroSchema,
         avroSchema,
+        Option.empty(),
         props,
         metaClient.getTableConfig(),
         0,

@@ -37,6 +37,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.EmptyIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.internal.schema.InternalSchema;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
@@ -97,6 +98,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
   private final Option<UnaryOperator<T>> outputConverter;
 
+  private final InternalSchema internalSchema;
+
   private boolean needMORMerge;
   private boolean needMerge;
 
@@ -109,11 +112,13 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                                FileSlice fileSlice,
                                Schema dataSchema,
                                Schema requestedSchema,
+                               Option<InternalSchema> internalSchemaOpt,
                                TypedProperties props,
                                HoodieTableConfig tableConfig,
                                long start,
                                long length,
                                boolean shouldUseRecordPosition) {
+    this.internalSchema = internalSchemaOpt.orElse(InternalSchema.getEmptyInternalSchema());
     this.readerContext = readerContext;
     this.hadoopConf = hadoopConf;
     this.hoodieBaseFileOption = fileSlice.getBaseFile();
@@ -313,6 +318,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         .withLogFiles(logFiles)
         .withLatestInstantTime(readerState.latestCommitTime)
         .withReaderSchema(readerState.logRecordAvroSchema)
+        .withInternalSchema(internalSchema)
         .withReadBlocksLazily(getBooleanWithAltKeys(props, HoodieReaderConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE))
         .withReverseReader(false)
         .withBufferSize(getIntWithAltKeys(props, HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE))

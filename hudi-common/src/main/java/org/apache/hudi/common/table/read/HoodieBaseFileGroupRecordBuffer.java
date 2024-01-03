@@ -262,6 +262,9 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
 
     if (mergedRecord.isPresent()
         && !mergedRecord.get().getLeft().isDelete(mergedRecord.get().getRight(), payloadProps)) {
+      if (!mergedRecord.get().getRight().equals(readerSchema)) {
+        return Option.ofNullable((T) mergedRecord.get().getLeft().rewriteRecordWithNewSchema(mergedRecord.get().getRight(), null, readerSchema).getData());
+      }
       return Option.ofNullable((T) mergedRecord.get().getLeft().getData());
     }
     return Option.empty();
