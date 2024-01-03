@@ -91,7 +91,7 @@ public class ZookeeperBasedLockProvider implements LockProvider<InterProcessMute
       for (String part : parts) {
         if (!part.isEmpty()) {
           currentPath.append("/").append(part);
-          createNodeIfNotExists(currentPath.toString());
+          createNodeIfNotExists(curatorFrameworkClient, currentPath.toString());
         }
       }
     } catch (Exception e) {
@@ -100,12 +100,11 @@ public class ZookeeperBasedLockProvider implements LockProvider<InterProcessMute
     }
   }
 
-  private void createNodeIfNotExists(String path) throws Exception {
-    if (this.curatorFrameworkClient.checkExists().forPath(path) == null) {
-      this.curatorFrameworkClient.create().forPath(path);
+  private static synchronized void createNodeIfNotExists(CuratorFramework curatorFrameworkClient, String path) throws Exception {
+    if (curatorFrameworkClient.checkExists().forPath(path) == null) {
+      curatorFrameworkClient.create().forPath(path);
     }
   }
-
 
   // Only used for testing
   public ZookeeperBasedLockProvider(
