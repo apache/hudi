@@ -109,7 +109,6 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
       options,
       new Configuration(hadoopConf))
 
-    val tablePath = new Path(tableState.tablePath)
     val requestedAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(requiredSchema, sanitizedTableName)
     val dataAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName)
     val extraProps = spark.sparkContext.broadcast(sparkAdapter.getExtraProps(supportBatchResult, spark.sessionState.conf, options, augmentedHadoopConf))
@@ -119,6 +118,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     val props: TypedProperties = HoodieFileIndex.getConfigProperties(spark, options)
 
     (file: PartitionedFile) => {
+      val tablePath = new Path(tableState.tablePath)
       lazy val readerContext = new SparkFileFormatInternalRowReaderContext(extraProps.value, tableState.recordKeyField, filters, shouldUseRecordPosition)
       val filePath = sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(file)
       val filegroupName = FSUtils.getFileIdFromFilePath(filePath)
