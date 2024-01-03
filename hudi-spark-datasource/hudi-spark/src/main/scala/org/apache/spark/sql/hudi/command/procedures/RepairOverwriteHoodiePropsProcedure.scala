@@ -17,7 +17,9 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
+import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.spark.internal.Logging
@@ -47,6 +49,14 @@ class RepairOverwriteHoodiePropsProcedure extends BaseProcedure with ProcedureBu
 
   def outputType: StructType = OUTPUT_TYPE
 
+  def loadNewProps(filePath: String, props: Properties):Unit = {
+    val fs = FSUtils.getFs(filePath, new Configuration())
+    val fis = fs.open(new Path(filePath))
+    props.load(fis)
+
+    fis.close()
+  }
+
   override def call(args: ProcedureArgs): Seq[Row] = {
     super.checkArgs(PARAMETERS, args)
 
@@ -57,7 +67,7 @@ class RepairOverwriteHoodiePropsProcedure extends BaseProcedure with ProcedureBu
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(tablePath).build
 
     var newProps = new Properties
-    newProps.load(new FileInputStream(overwriteFilePath))
+    loadNewProps(overwriteFilePath, newProps)
     val oldProps = metaClient.getTableConfig.propsMap
     val metaPathDir = new Path(tablePath, METAFOLDER_NAME)
     HoodieTableConfig.create(metaClient.getFs, metaPathDir, newProps)

@@ -40,6 +40,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
 import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -161,14 +162,15 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
     // Should return backup config if hoodie.properties is corrupted
     Properties props = new Properties();
+    props.put(TABLE_CHECKSUM.key(), "0");
     try (FSDataOutputStream out = fs.create(cfgPath)) {
-      props.store(out, "No checksum in file so is invalid");
+      props.store(out, "Wrong checksum in file so is invalid");
     }
     new HoodieTableConfig(fs, metaPath.toString(), null, null);
 
     // Should throw exception if both hoodie.properties and backup are corrupted
     try (FSDataOutputStream out = fs.create(backupCfgPath)) {
-      props.store(out, "No checksum in file so is invalid");
+      props.store(out, "Wrong checksum in file so is invalid");
     }
     assertThrows(IllegalArgumentException.class, () -> new HoodieTableConfig(fs, metaPath.toString(), null, null));
   }

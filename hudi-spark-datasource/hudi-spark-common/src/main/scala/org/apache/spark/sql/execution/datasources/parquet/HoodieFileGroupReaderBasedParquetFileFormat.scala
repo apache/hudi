@@ -38,6 +38,9 @@ import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types._
 import org.apache.spark.util.SerializableConfiguration
 
+import java.io.Closeable
+import scala.annotation.tailrec
+import scala.collection.mutable
 import scala.jdk.CollectionConverters.asScalaIteratorConverter
 
 trait HoodieFormatTrait {
@@ -228,15 +231,26 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     } else {
       val unsafeProjection = generateUnsafeProjection(StructType(inputSchema.fields ++ partitionSchema.fields), to)
       val joinedRow = new JoinedRow()
-      iter.map(d => unsafeProjection(joinedRow(d, partitionValues)))
+      makeCloseableFileGroupMappingRecordIterator(iter, d => unsafeProjection(joinedRow(d, partitionValues)))
     }
   }
 
-  private def projectSchema(iter: Iterator[InternalRow],
+  private def projectSchema(iter: HoodieFileGroupReader.HoodieFileGroupReaderIterator[InternalRow],
                             from: StructType,
                             to: StructType): Iterator[InternalRow] = {
     val unsafeProjection = generateUnsafeProjection(from, to)
-    iter.map(d => unsafeProjection(d))
+    makeCloseableFileGroupMappingRecordIterator(iter, d => unsafeProjection(d))
+  }
+
+  def makeCloseableFileGroupMappingRecordIterator(closeableFileGroupRecordIterator: HoodieFileGroupReader.HoodieFileGroupReaderIterator[InternalRow],
+                                                  mappingFunction: Function[InternalRow, InternalRow]): Iterator[InternalRow] = {
+    new Iterator[InternalRow] with Closeable {
+      override def hasNext: Boolean = closeableFileGroupRecordIterator.hasNext
+
+      override def next(): InternalRow = mappingFunction(closeableFileGroupRecordIterator.next())
+
+      override def close(): Unit = closeableFileGroupRecordIterator.close()
+    }
   }
 
 }
