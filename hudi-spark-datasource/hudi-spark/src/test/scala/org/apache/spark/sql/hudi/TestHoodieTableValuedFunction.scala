@@ -192,6 +192,69 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
     }
   }
 
+  test(s"Test hudi_filesystem_view") {
+    if (HoodieSparkUtils.gteqSpark3_2) {
+      withTempDir { tmp =>
+        Seq(
+          ("cow", true),
+          ("mor", true),
+          ("cow", false),
+          ("mor", false)
+        ).foreach { parameters =>
+          val tableType = parameters._1
+          val isTableId = parameters._2
+
+          val tableName = generateTableName
+          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+          val identifier = if (isTableId) tableName else tablePath
+          spark.sql("set hoodie.sql.insert.mode = non-strict")
+
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double
+               |) using hudi
+               |partitioned by (price)
+               |tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id'
+               |)
+               |location '$tablePath'
+               |""".stripMargin
+          )
+
+          spark.sql(
+            s"""
+               | insert into $tableName
+               | values (1, 'a1', 10.0), (2, 'a2', 20.0), (3, 'a3', 30.0)
+               | """.stripMargin
+          )
+          spark.sql(
+            s"""
+               | insert into $tableName
+               | values (4, 'a4', 10.0), (5, 'a5', 20.0), (6, 'a6', 30.0)
+               | """.stripMargin
+          )
+          val result1DF = spark.sql(s"select * from hudi_filesystem_view('$identifier', 'price*')")
+          result1DF.show(false)
+          val result1Array = result1DF.select(
+              col("Partition_Path")
+            ).orderBy("Partition_Path").take(10)
+          checkAnswer(result1Array)(
+            Seq("price=10.0"),
+            Seq("price=10.0"),
+            Seq("price=20.0"),
+            Seq("price=20.0"),
+            Seq("price=30.0"),
+            Seq("price=30.0")
+          )
+        }
+      }
+    }
+  }
+
   test(s"Test hudi_table_changes cdc") {
     if (HoodieSparkUtils.gteqSpark3_2) {
       withTempDir { tmp =>
