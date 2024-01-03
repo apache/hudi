@@ -2959,7 +2959,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }
   }
 
-  private static class NullValueSchemaProvider extends SchemaProvider {
+  public static class NullValueSchemaProvider extends SchemaProvider {
 
     public NullValueSchemaProvider(TypedProperties props) {
       super(props);
