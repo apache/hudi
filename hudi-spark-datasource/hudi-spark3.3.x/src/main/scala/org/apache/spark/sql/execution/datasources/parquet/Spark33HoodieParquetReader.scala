@@ -58,13 +58,6 @@ object Spark33HoodieParquetReader {
       sqlConf.getConfString("spark.sql.legacy.parquet.nanosAsLong", "false").toBoolean
     )
 
-    val returningBatch = sqlConf.parquetVectorizedReaderEnabled &&
-      options.getOrElse("returning_batch",
-        throw new IllegalArgumentException(
-          "OPTION_RETURNING_BATCH should always be set for ParquetFileFormat. " +
-            "To workaround this issue, set spark.sql.parquet.enableVectorizedReader=false."))
-        .equals("true")
-
     val parquetOptions = new ParquetOptions(options, sqlConf)
     Map(
       "enableVectorizedReader" -> vectorized.toString,
@@ -80,7 +73,7 @@ object Spark33HoodieParquetReader {
       "timestampConversion" -> sqlConf.isParquetINT96TimestampConversion.toString,
       "enableOffHeapColumnVector" -> sqlConf.offHeapColumnVectorEnabled.toString,
       "capacity" -> sqlConf.parquetVectorizedReaderBatchSize.toString,
-      "returningBatch" -> returningBatch.toString,
+      "returningBatch" -> sqlConf.parquetVectorizedReaderEnabled.toString,
       "enableRecordFilter" -> sqlConf.parquetRecordFilterEnabled.toString,
       "timeZoneId" -> sqlConf.sessionLocalTimeZone
     )

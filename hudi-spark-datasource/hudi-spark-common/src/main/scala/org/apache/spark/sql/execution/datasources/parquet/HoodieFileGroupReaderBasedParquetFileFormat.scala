@@ -17,18 +17,18 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
+import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.MergeOnReadSnapshotRelation.createPartitionedFile
 import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.cdc.{CDCFileGroupIterator, CDCRelation, HoodieCDCFileGroupSplit}
 import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
+import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieFileGroupId}
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
-import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieSparkUtils, HoodieTableSchema, HoodieTableState, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieTableSchema, HoodieTableState, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
@@ -108,7 +108,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
       options,
       new Configuration(hadoopConf))
 
-
+    val tablePath = new Path(tableState.tablePath)
     val requestedAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(requiredSchema, sanitizedTableName)
     val dataAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName)
     val extraProps = spark.sparkContext.broadcast(sparkAdapter.getExtraProps(supportBatchResult, spark.sessionState.conf, options, augmentedHadoopConf))
@@ -118,50 +118,28 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     val props: TypedProperties = HoodieFileIndex.getConfigProperties(spark, options)
 
     (file: PartitionedFile) => {
+      lazy val readerContext = new SparkFileFormatInternalRowReaderContext(extraProps.value, tableState.recordKeyField, filters, shouldUseRecordPosition)
+      val filePath = sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(file)
+      val filegroupName = FSUtils.getFileIdFromFilePath(filePath)
       file.partitionValues match {
         // Snapshot or incremental queries.
         case fileSliceMapping: HoodiePartitionFileSliceMapping =>
-          val filePath = sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(file)
-          val filegroupName = if (FSUtils.isLogFile(filePath)) {
-            FSUtils.getFileId(filePath.getName).substring(1)
-          } else {
-            FSUtils.getFileId(filePath.getName)
-          }
+
           fileSliceMapping.getSlice(filegroupName) match {
             case Some(fileSlice) if !isCount =>
               if (requiredSchema.isEmpty && !fileSlice.getLogFiles.findAny().isPresent) {
                 val hoodieBaseFile = fileSlice.getBaseFile.get()
                 baseFileReader(createPartitionedFile(fileSliceMapping.getPartitionValues, hoodieBaseFile.getHadoopPath, 0, hoodieBaseFile.getFileLen))
               } else {
-                val readerContext: HoodieReaderContext[InternalRow] = new SparkFileFormatInternalRowReaderContext(extraProps.value, recordKeyColumn, filters, shouldUseRecordPosition)
-                val serializedHadoopConf = broadcastedHadoopConf.value.value
-                val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
-                  .builder().setConf(serializedHadoopConf).setBasePath(tableState.tablePath).build
-                val reader = new HoodieFileGroupReader[InternalRow](
-                  readerContext,
-                  serializedHadoopConf,
-                  tableState.tablePath,
-                  tableState.latestCommitTimestamp.get,
-                  fileSlice,
-                  broadcastedDataSchema.value,
-                  broadcastedRequestedSchema.value,
-                  metaClient.getTableConfig.getProps,
-                  metaClient.getTableConfig,
-                  file.start,
-                  file.length,
-                  shouldUseRecordPosition)
-                reader.initRecordIterators()
-                // Append partition values to rows and project to output schema
-                appendPartitionAndProject(
-                  reader.getClosableIterator.asInstanceOf[java.util.Iterator[InternalRow]].asScala,
-                  requiredSchema,
-                  partitionSchema,
-                  outputSchema,
-                  fileSliceMapping.getPartitionValues)
+                buildFileGroupReaderIterator(fileSlice, fileSliceMapping.getPartitionValues, broadcastedDataSchema.value,
+                  broadcastedRequestedSchema.value, requiredSchema, partitionSchema, outputSchema, file.start, file.length,
+                  broadcastedHadoopConf.value.value, readerContext)
               }
 
-            // TODO: Use FileGroupReader here: HUDI-6942.
-            case _ => baseFileReader(file)
+            case _ =>
+              buildFileGroupReaderIterator(createFileSlice(tablePath,filePath, filegroupName), file.partitionValues, broadcastedDataSchema.value,
+                broadcastedRequestedSchema.value, requiredSchema, partitionSchema, outputSchema, file.start, file.length,
+                broadcastedHadoopConf.value.value, readerContext)
           }
         // CDC queries.
         case hoodiePartitionCDCFileGroupSliceMapping: HoodiePartitionCDCFileGroupMapping =>
@@ -169,10 +147,20 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
           val fileGroupSplit: HoodieCDCFileGroupSplit = HoodieCDCFileGroupSplit(fileSplits)
           buildCDCRecordIterator(
             fileGroupSplit, cdcFileReader, broadcastedHadoopConf.value.value, props, requiredSchema)
-        // TODO: Use FileGroupReader here: HUDI-6942.
-        case _ => baseFileReader(file)
+
+        case _ =>
+          buildFileGroupReaderIterator(createFileSlice(tablePath, filePath, filegroupName), file.partitionValues, broadcastedDataSchema.value,
+            broadcastedRequestedSchema.value, requiredSchema, partitionSchema, outputSchema, file.start, file.length,
+            broadcastedHadoopConf.value.value, readerContext)
       }
     }
+  }
+
+  protected def createFileSlice(tablePath: Path, filePath: Path, fileId: String): FileSlice = {
+    val fgID = new HoodieFileGroupId(FSUtils.getRelativePartitionPath(tablePath, filePath.getParent), fileId)
+    val commitTime = FSUtils.getCommitTime(filePath.toString)
+    val baseFile = new HoodieBaseFile(filePath.toString, fileId, commitTime, null)
+    new FileSlice(fgID, commitTime, baseFile, java.util.Collections.emptyList())
   }
 
   protected def buildCDCRecordIterator(cdcFileGroupSplit: HoodieCDCFileGroupSplit,
@@ -192,6 +180,42 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
       cdcSchema,
       requiredSchema,
       props)
+  }
+
+  protected def buildFileGroupReaderIterator(fileSlice: FileSlice,
+                                             partitionValues: InternalRow,
+                                             dataAvroSchema: Schema,
+                                             requestedAvroSchema: Schema,
+                                             requiredSchema: StructType,
+                                             partitionSchema: StructType,
+                                             outputSchema: StructType,
+                                             start: Long,
+                                             length: Long,
+                                             serializedHadoopConf: Configuration,
+                                             readerContext: SparkFileFormatInternalRowReaderContext): Iterator[InternalRow] = {
+    val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
+      .builder().setConf(serializedHadoopConf).setBasePath(tableState.tablePath).build
+    val reader = new HoodieFileGroupReader[InternalRow](
+      readerContext,
+      serializedHadoopConf,
+      tableState.tablePath,
+      tableState.latestCommitTimestamp.get,
+      fileSlice,
+      dataAvroSchema,
+      requestedAvroSchema,
+      metaClient.getTableConfig.getProps,
+      metaClient.getTableConfig,
+      start,
+      length,
+      shouldUseRecordPosition)
+    reader.initRecordIterators()
+    // Append partition values to rows and project to output schema
+    appendPartitionAndProject(
+      reader.getClosableIterator.asInstanceOf[java.util.Iterator[InternalRow]].asScala,
+      requiredSchema,
+      partitionSchema,
+      outputSchema,
+      partitionValues)
   }
 
   private def appendPartitionAndProject(iter: Iterator[InternalRow],
