@@ -103,12 +103,9 @@ public class ClusteringPlanOperator extends AbstractStreamOperator<ClusteringPla
         pendingClusteringInstantTimes.stream()
             .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED).findFirst());
 
-    long pendingClusteringCount = pendingClusteringInstantTimes.stream()
-        .filter(instant -> instant.getState() == State.REQUESTED).count();
-
     // record metrics
     clusteringMetrics.setFirstPendingClusteringInstant(firstRequested);
-    clusteringMetrics.setPendingClusteringPlanCount(pendingClusteringCount);
+    clusteringMetrics.setPendingClusteringPlanCount(pendingClusteringInstantTimes.size());
 
     if (!firstRequested.isPresent()) {
       // do nothing.
