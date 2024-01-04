@@ -160,7 +160,7 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
     return jobConfCopy;
   }
 
-  private static List<String> getPartitionFieldNames(JobConf jobConf) {
+  public static List<String> getPartitionFieldNames(JobConf jobConf) {
     String partitionFields = jobConf.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "");
     return partitionFields.length() > 0 ? Arrays.stream(partitionFields.split("/")).collect(Collectors.toList())
         : new ArrayList<>();
@@ -263,9 +263,6 @@ public class HoodieFileGroupReaderRecordReader implements RecordReader<NullWrita
     }
     //if they are actually written to the file, then it is ok to read them from the file
     tableSchema.getFields().forEach(f -> partitionColumns.remove(f.name().toLowerCase(Locale.ROOT)));
-    //need to filter those partitions because they will be added back later on. And we don't want that
-    jobConf.set(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS,
-        Arrays.stream(jobConf.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS).split(",")).filter(partitionColumns::contains).collect(Collectors.joining(",")));
     return HoodieAvroUtils.generateProjectionSchema(tableSchema,
         Arrays.stream(jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR).split(",")).filter(c -> !partitionColumns.contains(c)).collect(Collectors.toList()));
   }

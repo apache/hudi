@@ -19,6 +19,8 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
@@ -55,11 +57,14 @@ import org.apache.hadoop.mapred.Reporter;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
 
@@ -73,6 +78,9 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   protected final Map<String, TypeInfo> columnTypeMap;
   private final ObjectInspectorCache objectInspectorCache;
   private RecordReader<NullWritable, ArrayWritable> firstRecordReader = null;
+
+  private final List<String> partitionCols;
+  private final Set<String> partitionColSet;
 
   private final String recordKeyField;
   protected HiveHoodieReaderContext(HoodieFileGroupReaderRecordReader.HiveReaderCreator readerCreator,
@@ -88,6 +96,9 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     this.reporter = reporter;
     this.writerSchema = writerSchema;
     this.hosts = hosts;
+    this.partitionCols = HoodieFileGroupReaderRecordReader.getPartitionFieldNames(jobConf).stream()
+            .filter(n -> writerSchema.getField(n) != null).collect(Collectors.toList());
+    this.partitionColSet = new HashSet<>(this.partitionCols);
     String tableName = metaClient.getTableConfig().getTableName();
     recordKeyField = metaClient.getTableConfig().populateMetaFields()
         ? HoodieRecord.RECORD_KEY_METADATA_FIELD
@@ -110,18 +121,21 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   @Override
   public ClosableIterator<ArrayWritable> getFileRecordIterator(Path filePath, long start, long length, Schema dataSchema, Schema requiredSchema, Configuration conf) throws IOException {
     JobConf jobConfCopy = new JobConf(jobConf);
-    setSchemas(jobConfCopy, dataSchema, requiredSchema);
+    Schema modifiedDataSchema = HoodieAvroUtils.generateProjectionSchema(dataSchema, Stream.concat(dataSchema.getFields().stream()
+            .map(f -> f.name().toLowerCase(Locale.ROOT)).filter(n -> !partitionColSet.contains(n)),
+        partitionCols.stream()).collect(Collectors.toList()));
+    setSchemas(jobConfCopy, modifiedDataSchema, requiredSchema);
     InputSplit inputSplit = new FileSplit(filePath, start, length, hosts.get(filePath.toString()));
     RecordReader<NullWritable, ArrayWritable> recordReader = readerCreator.getRecordReader(inputSplit, jobConfCopy, reporter);
     if (firstRecordReader == null) {
       firstRecordReader = recordReader;
     }
     ClosableIterator<ArrayWritable> recordIterator = new RecordReaderValueIterator<>(recordReader);
-    if (dataSchema.equals(requiredSchema)) {
+    if (modifiedDataSchema.equals(requiredSchema)) {
       return  recordIterator;
     }
     //The record reader puts the required columns in the positions of the data schema and nulls the rest of the columns
-    return new CloseableMappingIterator<>(recordIterator, projectRecord(dataSchema, requiredSchema));
+    return new CloseableMappingIterator<>(recordIterator, projectRecord(modifiedDataSchema, requiredSchema));
   }
 
   private void setSchemas(JobConf jobConf, Schema dataSchema, Schema requiredSchema) {
