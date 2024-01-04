@@ -24,11 +24,9 @@ import TabItem from '@theme/TabItem';
 0.14.1 release is mainly intended for bug fixes and stability. The fixes span across many components, including
 
 * DeltaStreamer
-* Metadata table and timeline server out of sync issue
-* Table services
 * Spark SQL
-* Presto stability/pref fixes
-* Trino stability/perf fixes
+* Spark datasource writer
+* Table services
 * Meta Syncs
 * Flink engine
 * Unit, functional, integration tests and CI
