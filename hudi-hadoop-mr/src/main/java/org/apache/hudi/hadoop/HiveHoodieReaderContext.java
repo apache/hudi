@@ -120,6 +120,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   @Override
   public ClosableIterator<ArrayWritable> getFileRecordIterator(Path filePath, long start, long length, Schema dataSchema, Schema requiredSchema, Configuration conf) throws IOException {
     JobConf jobConfCopy = new JobConf(jobConf);
+    //move the partition cols to the end, because in some cases it has issues if we don't do that
     Schema modifiedDataSchema = HoodieAvroUtils.generateProjectionSchema(dataSchema, Stream.concat(dataSchema.getFields().stream()
             .map(f -> f.name().toLowerCase(Locale.ROOT)).filter(n -> !partitionColSet.contains(n)),
         partitionCols.stream()).collect(Collectors.toList()));
