@@ -1,6 +1,6 @@
 ---
 title: "Release 0.10.0"
-sidebar_position: 12
+sidebar_position: 13
 layout: releases
 toc: true
 ---
