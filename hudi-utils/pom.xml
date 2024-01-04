@@ -22,12 +22,12 @@
     <groupId>org.apache.hudi</groupId>
     <artifactId>hudi-utils</artifactId>
     <packaging>jar</packaging>
-    <version>1.0-SNAPSHOT</version>
+    <version>0.14.1</version>
     <name>hudiUtils</name>
 
     <properties>
         <jdk.version>1.8</jdk.version>
-        <hudi.version>1.0.0-SNAPSHOT</hudi.version>
+        <hudi.version>0.14.1</hudi.version>
         <hudi.spark.module>hudi-spark2</hudi.spark.module>
         <scala.binary.version>2.12</scala.binary.version>
         <junit.version>4.11</junit.version>

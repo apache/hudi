@@ -17,7 +17,7 @@
 # limitations under the License.
 #
 
-VERSION=1.0.0-SNAPSHOT
+VERSION=0.14.1
 
 JARS=(
 "$HOME/.m2/repository/org/apache/hudi/hudi-utilities-bundle_2.12/$VERSION/hudi-utilities-bundle_2.12-$VERSION.jar"
@@ -35,7 +35,7 @@ JARS=(
 printf -v CLASSPATH ':%s' "${JARS[@]}"
 echo "CLASSPATH=$CLASSPATH"
 
-java -cp target/hudi-utils-1.0-SNAPSHOT-jar-with-dependencies.jar$CLASSPATH \
+java -cp target/hudi-utils-0.14.1-jar-with-dependencies.jar$CLASSPATH \
 org.apache.hudi.utils.HoodieConfigDocGenerator
 
 cp /tmp/configurations.md ../website/docs/configurations.md
