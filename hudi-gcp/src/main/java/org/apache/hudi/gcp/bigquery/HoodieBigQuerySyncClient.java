@@ -47,6 +47,7 @@ import com.google.cloud.bigquery.ViewDefinition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -182,16 +183,19 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
     Table existingTable = bigquery.getTable(TableId.of(projectId, datasetName, tableName));
     ExternalTableDefinition definition = existingTable.getDefinition();
     Schema remoteTableSchema = definition.getSchema();
-    // Add the partition fields into the schema to avoid conflicts while updating
-    List<Field> updatedTableFields = remoteTableSchema.getFields().stream()
+    List<Field> finalTableFields = new ArrayList<>(schema.getFields());
+    // Add the partition fields into the schema to avoid conflicts while updating. And ensure the partition fields are at the end to
+    // avoid unnecessary updates.
+    List<Field> bqPartitionFields = remoteTableSchema.getFields().stream()
         .filter(field -> partitionFields.contains(field.getName()))
         .collect(Collectors.toList());
-    updatedTableFields.addAll(schema.getFields());
-    Schema finalSchema = Schema.of(updatedTableFields);
+    finalTableFields.addAll(bqPartitionFields);
+    Schema finalSchema = Schema.of(finalTableFields);
     boolean sameSchema = definition.getSchema() != null && definition.getSchema().equals(finalSchema);
     boolean samePartitionFilter = partitionFields.isEmpty()
         || (requirePartitionFilter == (definition.getHivePartitioningOptions().getRequirePartitionFilter() != null && definition.getHivePartitioningOptions().getRequirePartitionFilter()));
     if (sameSchema && samePartitionFilter) {
+      LOG.info("No table update is needed.");
       return; // No need to update schema.
     }
     ExternalTableDefinition.Builder builder = definition.toBuilder();

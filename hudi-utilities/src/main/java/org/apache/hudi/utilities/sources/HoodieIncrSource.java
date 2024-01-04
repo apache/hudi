@@ -62,9 +62,7 @@ public class HoodieIncrSource extends RowSource {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieIncrSource.class);
   public static final Set<String> HOODIE_INCR_SOURCE_READ_OPT_KEYS =
-      CollectionUtils.createImmutableSet(
-          "hoodie.datasource.read.use.new.parquet.file.format",
-          HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key());
+      CollectionUtils.createImmutableSet(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key());
   private final Option<SnapshotLoadQuerySplitter> snapshotLoadQuerySplitter;
 
   public static class Config {

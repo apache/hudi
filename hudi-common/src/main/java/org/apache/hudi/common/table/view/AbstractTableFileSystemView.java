@@ -1270,7 +1270,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   abstract Stream<Pair<String, CompactionOperation>> fetchPendingLogCompactionOperations();
 
   /**
-   * Check if there is an bootstrap base file present for this file.
+   * Check if there is a bootstrap base file present for this file.
    *
    * @param fgId File-Group Id
    * @return true if there is associated bootstrap base-file, false otherwise

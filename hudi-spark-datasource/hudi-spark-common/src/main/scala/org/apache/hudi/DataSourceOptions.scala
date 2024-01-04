@@ -86,15 +86,6 @@ object DataSourceReadOptions {
       s"payload implementation to merge (${REALTIME_PAYLOAD_COMBINE_OPT_VAL}) or skip merging altogether" +
       s"${REALTIME_SKIP_MERGE_OPT_VAL}")
 
-  val USE_NEW_HUDI_PARQUET_FILE_FORMAT: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.datasource.read.use.new.parquet.file.format")
-    .defaultValue("true")
-    .markAdvanced()
-    .sinceVersion("0.14.0")
-    .withDocumentation("Read using the new Hudi parquet file format. The new Hudi parquet file format is " +
-      "introduced as an experimental feature in 0.14.0. Currently, the new Hudi parquet file format only applies " +
-      "to bootstrap and MOR queries. Schema evolution is also not supported by the new file format.")
-
   val READ_PATHS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.paths")
     .noDefaultValue()
@@ -218,6 +209,37 @@ object DataSourceReadOptions {
   val SCHEMA_EVOLUTION_ENABLED: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE
 
   val INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT: ConfigProperty[String] = HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT
+
+  val CREATE_TIMELINE_RELATION: ConfigProperty[String] =
+    ConfigProperty.key("hoodie.datasource.read.table.valued.function.timeline.relation")
+      .defaultValue("false")
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("When this is set, the relation created by DefaultSource is for a view representing" +
+        " the result set of the table valued function hudi_query_timeline(...)")
+
+  val TIMELINE_RELATION_ARG_ARCHIVED_TIMELINE:  ConfigProperty[String] =
+    ConfigProperty.key("hoodie.datasource.read.table.valued.function.timeline.relation.archived")
+      .defaultValue("false")
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("When this is set, the result set of the table valued function hudi_query_timeline(...)" +
+        " will include archived timeline")
+
+  val CREATE_FILESYSTEM_RELATION: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.create.filesystem.relation")
+    .defaultValue("false")
+    .markAdvanced()
+    .sinceVersion("1.0.0")
+    .withDocumentation("When this is set, the relation created by DefaultSource is for a view representing" +
+      " the result set of the table valued function hudi_filesystem_view(...)")
+
+  val FILESYSTEM_RELATION_ARG_SUBPATH:  ConfigProperty[String] =
+    ConfigProperty.key("hoodie.datasource.read.table.valued.function.filesystem.relation.subpath")
+      .defaultValue("")
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("A regex under the table's base path to get file system view information")
 
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
   @Deprecated
