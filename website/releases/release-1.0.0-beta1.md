@@ -1,6 +1,6 @@
 ---
 title: "Release 1.0.0-beta1"
-sidebar_position: 1
+sidebar_position: 3
 layout: releases
 toc: true
 ---
