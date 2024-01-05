@@ -77,8 +77,8 @@ public class FlinkClusteringMetrics extends FlinkWriteMetrics {
     metricGroup.gauge(getMetricsName(actionType, "clusteringCost"), () -> clusteringCost);
   }
 
-  public void setPendingClusteringPlanCount(long pendingClusteringTaskCount) {
-    this.pendingClusteringCount = pendingClusteringTaskCount;
+  public void setPendingClusteringCount(long pendingClusteringCount) {
+    this.pendingClusteringCount = pendingClusteringCount;
   }
 
   public void setFirstPendingClusteringInstant(Option<HoodieInstant> firstPendingClusteringInstant) {

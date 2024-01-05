@@ -104,7 +104,7 @@ public class ClusteringPlanOperator extends AbstractStreamOperator<ClusteringPla
 
     // record metrics
     clusteringMetrics.setFirstPendingClusteringInstant(firstRequested);
-    clusteringMetrics.setPendingClusteringPlanCount(pendingClusteringInstantTimes.size());
+    clusteringMetrics.setPendingClusteringCount(pendingClusteringInstantTimes.size());
 
     if (!firstRequested.isPresent()) {
       // do nothing.
