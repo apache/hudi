@@ -123,7 +123,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     //move the partition cols to the end, because in some cases it has issues if we don't do that
     Schema modifiedDataSchema = HoodieAvroUtils.generateProjectionSchema(dataSchema, Stream.concat(dataSchema.getFields().stream()
             .map(f -> f.name().toLowerCase(Locale.ROOT)).filter(n -> !partitionColSet.contains(n)),
-        partitionCols.stream()).collect(Collectors.toList()));
+        partitionCols.stream().filter(c -> dataSchema.getField(c) != null)).collect(Collectors.toList()));
     setSchemas(jobConfCopy, modifiedDataSchema, requiredSchema);
     InputSplit inputSplit = new FileSplit(filePath, start, length, hosts.get(filePath.toString()));
     RecordReader<NullWritable, ArrayWritable> recordReader = readerCreator.getRecordReader(inputSplit, jobConfCopy, reporter);
