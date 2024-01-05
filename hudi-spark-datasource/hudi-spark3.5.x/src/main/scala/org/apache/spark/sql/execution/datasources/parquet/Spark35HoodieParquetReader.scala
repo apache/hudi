@@ -27,6 +27,7 @@ import org.apache.parquet.filter2.predicate.FilterApi
 import org.apache.parquet.hadoop.{ParquetInputFormat, ParquetRecordReader}
 import org.apache.spark.TaskContext
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.catalyst.types.DataTypeUtils.toAttributes
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils, FileFormat, PartitionedFile, RecordReaderIterator}
@@ -86,6 +87,7 @@ object Spark35HoodieParquetReader {
 
   def getReader(file: PartitionedFile,
                 requiredSchema: StructType,
+                partitionSchema: StructType,
                 filters: Seq[Filter],
                 sharedConf: Configuration,
                 extraProps: Map[String,String]): Iterator[InternalRow] = {
@@ -109,14 +111,12 @@ object Spark35HoodieParquetReader {
     val enableRecordFilter = extraProps("enableRecordFilter").toBoolean
     val timeZoneId = Option(extraProps("timeZoneId"))
 
-
-
-    assert(file.partitionValues.numFields == 0)
+    assert(file.partitionValues.numFields == partitionSchema.size)
 
     val filePath = file.toPath
     val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
 
-    val schemaEvolutionUtils = new Spark35ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema)
+    val schemaEvolutionUtils = new Spark35ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema, partitionSchema)
 
     val fileFooter = if (enableVectorizedReader) {
       // When there are vectorized reads, we can avoid reading the footer twice by reading
@@ -211,7 +211,7 @@ object Spark35HoodieParquetReader {
       try {
         vectorizedReader.initialize(split, hadoopAttemptContext, Option.apply(fileFooter))
         //logDebug(s"Appending $partitionSchema ${file.partitionValues}")
-        vectorizedReader.initBatch(StructType(Seq.empty), file.partitionValues)
+        vectorizedReader.initBatch(partitionSchema, file.partitionValues)
         if (returningBatch) {
           vectorizedReader.enableReturningBatches()
         }
@@ -245,11 +245,16 @@ object Spark35HoodieParquetReader {
       try {
         readerWithRowIndexes.initialize(split, hadoopAttemptContext)
 
-        val fullSchema = toAttributes(requiredSchema)
+        val fullSchema = toAttributes(requiredSchema) ++ toAttributes(partitionSchema)
         val unsafeProjection = schemaEvolutionUtils.generateUnsafeProjection(fullSchema, timeZoneId)
-        // There is no partition columns
-        iter.map(unsafeProjection)
 
+        if (partitionSchema.length == 0) {
+          // There is no partition columns
+          iter.map(unsafeProjection)
+        } else {
+          val joinedRow = new JoinedRow()
+          iter.map(d => unsafeProjection(joinedRow(d, file.partitionValues)))
+        }
       } catch {
         case e: Throwable =>
           // SPARK-23457: In case there is an exception in initialization, close the iterator to

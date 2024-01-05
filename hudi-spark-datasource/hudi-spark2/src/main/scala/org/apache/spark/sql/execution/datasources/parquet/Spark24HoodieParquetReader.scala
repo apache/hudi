@@ -75,6 +75,7 @@ object Spark24HoodieParquetReader {
 
   def getReader(file: PartitionedFile,
                 requiredSchema: StructType,
+                partitionSchema: StructType,
                 filters: Seq[Filter],
                 sharedConf: Configuration,
                 extraProps: Map[String, String]): Iterator[InternalRow] = {
@@ -95,7 +96,8 @@ object Spark24HoodieParquetReader {
     val returningBatch = extraProps("returningBatch").toBoolean
     val enableRecordFilter = extraProps("enableRecordFilter").toBoolean
     val timeZoneId = Option(extraProps("timeZoneId"))
-    assert(file.partitionValues.numFields == 0)
+
+    assert(file.partitionValues.numFields == partitionSchema.size)
 
     val fileSplit =
       new FileSplit(new Path(new URI(file.filePath)), file.start, file.length, Array.empty)
@@ -181,7 +183,7 @@ object Spark24HoodieParquetReader {
       taskContext.foreach(_.addTaskCompletionListener[Unit](_ => iter.close()))
       vectorizedReader.initialize(split, hadoopAttemptContext)
 
-      vectorizedReader.initBatch(StructType(Nil), InternalRow.empty)
+      vectorizedReader.initBatch(partitionSchema, file.partitionValues)
 
       if (returningBatch) {
         vectorizedReader.enableReturningBatches()
@@ -203,7 +205,7 @@ object Spark24HoodieParquetReader {
       taskContext.foreach(_.addTaskCompletionListener[Unit](_ => iter.close()))
       reader.initialize(split, hadoopAttemptContext)
 
-      val fullSchema = requiredSchema.toAttributes
+      val fullSchema = requiredSchema.toAttributes ++ partitionSchema.toAttributes
       val unsafeProjection = if (implicitTypeChangeInfos.isEmpty) {
         GenerateUnsafeProjection.generate(fullSchema, fullSchema)
       } else {
@@ -211,7 +213,7 @@ object Spark24HoodieParquetReader {
           if (implicitTypeChangeInfos.containsKey(i)) {
             StructField(f.name, implicitTypeChangeInfos.get(i).getRight, f.nullable, f.metadata)
           } else f
-        }).toAttributes
+        }).toAttributes ++ partitionSchema.toAttributes
         val castSchema = newFullSchema.zipWithIndex.map { case (attr, i) =>
           if (implicitTypeChangeInfos.containsKey(i)) {
             val srcType = implicitTypeChangeInfos.get(i).getRight
@@ -229,8 +231,14 @@ object Spark24HoodieParquetReader {
       //
       // NOTE: We're making appending of the partitioned values to the rows read from the
       //       data file configurable
-      // There is no partition columns
-      iter.asInstanceOf[Iterator[InternalRow]].map(unsafeProjection)
+      if (partitionSchema.length == 0) {
+        // There is no partition columns
+        iter.asInstanceOf[Iterator[InternalRow]].map(unsafeProjection)
+      } else {
+        val joinedRow = new JoinedRow()
+        iter.asInstanceOf[Iterator[InternalRow]]
+          .map(d => unsafeProjection(joinedRow(d, file.partitionValues)))
+      }
     }
   }
 }

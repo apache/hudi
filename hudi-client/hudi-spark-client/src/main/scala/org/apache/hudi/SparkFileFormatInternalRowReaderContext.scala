@@ -70,10 +70,6 @@ class SparkFileFormatInternalRowReaderContext(extraProps: Map[String, String],
                                      requiredSchema: Schema,
                                      conf: Configuration,
                                      isMerge: Boolean): ClosableIterator[InternalRow] = {
-    // partition value is empty because the spark parquet reader will append the partition columns to
-    // each row if they are given. That is the only usage of the partition values in the reader.
-    val fileInfo = sparkAdapter.getSparkPartitionedFileUtils
-      .createPartitionedFile(InternalRow.empty, filePath, start, length)
     val structType: StructType = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
     if (FSUtils.isLogFile(filePath)) {
       val projection: UnsafeProjection = HoodieInternalRowUtils.getCachedUnsafeProjection(structType, structType)
@@ -88,9 +84,12 @@ class SparkFileFormatInternalRowReaderContext(extraProps: Map[String, String],
           }
         }).asInstanceOf[ClosableIterator[InternalRow]]
     } else {
-
+      // partition value is empty because the spark parquet reader will append the partition columns to
+      // each row if they are given. That is the only usage of the partition values in the reader.
+      val fileInfo = sparkAdapter.getSparkPartitionedFileUtils
+        .createPartitionedFile(InternalRow.empty, filePath, start, length)
       new CloseableInternalRowIterator(sparkAdapter.getParquetReader(fileInfo,
-        getAppliedRequiredSchema(structType, shouldUseRecordPosition && isMerge),
+        getAppliedRequiredSchema(structType, shouldUseRecordPosition && isMerge), StructType(Seq.empty),
         getFiltersForRead(isMerge), conf, extraProps))
     }
   }

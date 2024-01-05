@@ -41,7 +41,8 @@ import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 
 abstract class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
                                                  filePath: Path,
-                                                 requiredSchema: StructType) {
+                                                 requiredSchema: StructType,
+                                                 partitionSchema: StructType) {
   // Fetch internal schema
   private lazy val internalSchemaStr: String = sharedConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA)
 
@@ -161,7 +162,7 @@ abstract class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
           StructField(f.name, typeChangeInfos.get(i).getRight, f.nullable, f.metadata)
         } else f
       })
-      val newFullSchema = toAttributes(newSchema)
+      val newFullSchema = toAttributes(newSchema) ++ toAttributes(partitionSchema)
       val castSchema = newFullSchema.zipWithIndex.map { case (attr, i) =>
         if (typeChangeInfos.containsKey(i)) {
           val srcType = typeChangeInfos.get(i).getRight

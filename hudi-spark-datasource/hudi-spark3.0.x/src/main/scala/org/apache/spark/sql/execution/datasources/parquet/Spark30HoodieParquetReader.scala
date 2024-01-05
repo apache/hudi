@@ -29,6 +29,7 @@ import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GRO
 import org.apache.parquet.hadoop._
 import org.apache.spark.TaskContext
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.internal.SQLConf
@@ -71,6 +72,7 @@ object Spark30HoodieParquetReader {
 
   def getReader(file: PartitionedFile,
                 requiredSchema: StructType,
+                partitionSchema: StructType,
                 filters: Seq[Filter],
                 sharedConf: Configuration,
                 extraProps: Map[String, String]): Iterator[InternalRow] = {
@@ -92,7 +94,7 @@ object Spark30HoodieParquetReader {
     val enableRecordFilter = extraProps("enableRecordFilter").toBoolean
     val timeZoneId = Option(extraProps("timeZoneId"))
 
-    assert(file.partitionValues.numFields == 0)
+    assert(file.partitionValues.numFields == partitionSchema.size)
 
     val filePath = new Path(new URI(file.filePath))
     val split =
@@ -103,7 +105,7 @@ object Spark30HoodieParquetReader {
         file.length,
         Array.empty,
         null)
-    val schemaEvolutionUtils = new Spark30ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema)
+    val schemaEvolutionUtils = new Spark30ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema, partitionSchema)
 
     lazy val footerFileMetaData =
       ParquetFileReader.readFooter(sharedConf, filePath, SKIP_ROW_GROUPS).getFileMetaData
@@ -176,7 +178,7 @@ object Spark30HoodieParquetReader {
       // SPARK-23457 Register a task completion listener before `initialization`.
       taskContext.foreach(_.addTaskCompletionListener[Unit](_ => iter.close()))
       vectorizedReader.initialize(split, hadoopAttemptContext)
-      vectorizedReader.initBatch(StructType(Seq.empty), file.partitionValues)
+      vectorizedReader.initBatch(partitionSchema, file.partitionValues)
       if (returningBatch) {
         vectorizedReader.enableReturningBatches()
       }
@@ -198,10 +200,16 @@ object Spark30HoodieParquetReader {
       taskContext.foreach(_.addTaskCompletionListener[Unit](_ => iter.close()))
       reader.initialize(split, hadoopAttemptContext)
 
-      val fullSchema = requiredSchema.toAttributes
+      val fullSchema = requiredSchema.toAttributes ++ partitionSchema.toAttributes
       val unsafeProjection = schemaEvolutionUtils.generateUnsafeProjection(fullSchema, timeZoneId)
-      // There is no partition columns
-      iter.map(unsafeProjection)
+
+      if (partitionSchema.length == 0) {
+        // There is no partition columns
+        iter.map(unsafeProjection)
+      } else {
+        val joinedRow = new JoinedRow()
+        iter.map(d => unsafeProjection(joinedRow(d, file.partitionValues)))
+      }
     }
   }
 

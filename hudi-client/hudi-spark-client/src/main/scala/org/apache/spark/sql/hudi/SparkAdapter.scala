@@ -220,6 +220,7 @@ trait SparkAdapter extends Serializable {
 
   def getParquetReader(file: PartitionedFile,
                        requiredSchema: StructType,
+                       partitionSchema: StructType,
                        filters: Seq[Filter],
                        sharedConf: Configuration,
                        extraProps: Map[String, String]): Iterator[InternalRow]

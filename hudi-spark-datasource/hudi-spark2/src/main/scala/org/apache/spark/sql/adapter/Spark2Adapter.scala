@@ -209,9 +209,9 @@ class Spark2Adapter extends SparkAdapter {
     batch
   }
 
-  override def getParquetReader(file: PartitionedFile, requiredSchema: StructType, filters: Seq[sources.Filter],
-                                sharedConf: Configuration, extraProps: Map[String, String]): Iterator[InternalRow] = {
-    Spark24HoodieParquetReader.getReader(file, requiredSchema, filters, sharedConf, extraProps)
+  override def getParquetReader(file: PartitionedFile, requiredSchema: StructType,  partitionSchema: StructType,
+                                filters: Seq[sources.Filter], sharedConf: Configuration, extraProps: Map[String, String]): Iterator[InternalRow] = {
+    Spark24HoodieParquetReader.getReader(file, requiredSchema, partitionSchema, filters, new Configuration(sharedConf), extraProps)
   }
 
   override def getExtraProps(vectorized: Boolean, sqlConf: SQLConf, options: Map[String, String], hadoopConf: Configuration): Map[String, String] = {
