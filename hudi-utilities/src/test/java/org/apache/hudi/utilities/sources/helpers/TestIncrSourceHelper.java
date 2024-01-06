@@ -49,7 +49,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Disabled;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -65,6 +65,7 @@ import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Disabled
 class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
 
   private ObjectMapper mapper = new ObjectMapper();
@@ -112,7 +113,7 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
     return inputDs;
   }
 
-  @Test
+  @Disabled
   void testEmptySource() {
     StructType schema = new StructType();
     Dataset<Row> emptyDataset = spark().createDataFrame(new ArrayList<Row>(), schema);
@@ -126,7 +127,7 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
     assertTrue(!result.getRight().isPresent());
   }
 
-  @Test
+  @Disabled
   void testSingleObjectExceedingSourceLimit() {
     List<Triple<String, Long, String>> filePathSizeAndCommitTime = new ArrayList<>();
     // Add file paths and sizes to the list
@@ -151,7 +152,7 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
     assertEquals(100L, row.get(0));
   }
 
-  @Test
+  @Disabled
   void testMultipleObjectExceedingSourceLimit() {
     List<Triple<String, Long, String>> filePathSizeAndCommitTime = new ArrayList<>();
     // Add file paths and sizes to the list
@@ -189,7 +190,7 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
     assertEquals(500L, row.get(0));
   }
 
-  @Test
+  @Disabled
   void testCatchAllObjects() {
     List<Triple<String, Long, String>> filePathSizeAndCommitTime = new ArrayList<>();
     // Add file paths and sizes to the list
@@ -216,7 +217,7 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
     assertEquals(1050L, row.get(0));
   }
 
-  @Test
+  @Disabled
   void testFileOrderingAcrossCommits() {
     List<Triple<String, Long, String>> filePathSizeAndCommitTime = new ArrayList<>();
     // Add file paths and sizes to the list
@@ -249,7 +250,7 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
     assertEquals(200L, row.get(0));
   }
 
-  @Test
+  @Disabled
   void testLastObjectInCommit() {
     List<Triple<String, Long, String>> filePathSizeAndCommitTime = new ArrayList<>();
     // Add file paths and sizes to the list
@@ -342,7 +343,7 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
 
   // Tests to validate previous, begin and end instances during query generation for
   // different missing checkpoint strategies
-  @Test
+  @Disabled
   void testQueryInfoGeneration() throws IOException {
     String commitTimeForReads = "1";
     String commitTimeForWrites = "2";

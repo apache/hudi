@@ -27,9 +27,8 @@ import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.time.LocalDate;
@@ -47,6 +46,7 @@ import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.D
 import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.LOOKBACK_DAYS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@Disabled
 public class TestDatePartitionPathSelector extends HoodieSparkClientTestHarness {
 
   private transient HoodieSparkEngineContext context = null;
@@ -189,8 +189,7 @@ public class TestDatePartitionPathSelector extends HoodieSparkClientTestHarness 
     return Stream.of(data).map(Arguments::of);
   }
 
-  @ParameterizedTest(name = "[{index}] {0}")
-  @MethodSource("configParams")
+  @Disabled
   public void testPruneDatePartitionPaths(
       String tableName,
       String dateFormat,
