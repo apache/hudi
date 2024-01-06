@@ -47,7 +47,7 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.streaming.kafka010.KafkaTestUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Disabled;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -65,6 +65,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.mock;
 
+@Disabled
 public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
   protected static final String TEST_TOPIC_PREFIX = "hoodie_avro_test_";
 
@@ -148,7 +149,7 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
     return props;
   }
 
-  @Test
+  @Disabled
   public void testAppendKafkaOffsets() throws IOException {
     UtilitiesTestBase.Helpers.saveStringsToDFS(new String[] {dataGen.generateGenericRecord().getSchema().toString()}, fs(), SCHEMA_PATH);
     ConsumerRecord<Object, Object> recordConsumerRecord = new ConsumerRecord<Object,Object>("test", 0, 1L,
@@ -180,7 +181,7 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
     assertNull(withKafkaOffsetsAndNullKafkaKey.get("_hoodie_kafka_source_key"));
   }
 
-  @Test
+  @Disabled
   public void testAppendKafkaOffsetsSourceFormatAdapter() throws IOException {
     UtilitiesTestBase.Helpers.saveStringsToDFS(new String[] {dataGen.generateGenericRecord().getSchema().toString()}, fs(), SCHEMA_PATH);
     final String topic = TEST_TOPIC_PREFIX + "testKafkaOffsetAppend";

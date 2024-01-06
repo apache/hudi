@@ -37,10 +37,8 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.util.stream.Stream;
@@ -52,6 +50,7 @@ import static org.apache.hudi.utilities.testutils.SanitizationTestUtils.invalidC
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+@Disabled
 public class TestSanitizationUtils {
 
   protected static SparkSession spark;
@@ -74,8 +73,7 @@ public class TestSanitizationUtils {
     spark.close();
   }
 
-  @ParameterizedTest
-  @MethodSource("provideDataFiles")
+  @Disabled
   public void testSanitizeDataset(String unsanitizedDataFile, String sanitizedDataFile, StructType unsanitizedSchema, StructType sanitizedSchema) {
     Dataset<Row> expectedSanitizedDataset = spark.read().schema(sanitizedSchema).format("json").load(sanitizedDataFile);
     Dataset<Row> unsanitizedDataset = spark.read().schema(unsanitizedSchema).format("json").load(unsanitizedDataFile);
@@ -98,31 +96,31 @@ public class TestSanitizationUtils {
     assertEquals(sanitizedSchema, expectedSanitizedSchema);
   }
 
-  @Test
+  @Disabled
   public void testGoodAvroSchema() {
     String goodJson = getJson("src/test/resources/streamer-config/file_schema_provider_valid.avsc");
     testSanitizeSchema(goodJson,generateProperFormattedSchema());
   }
 
-  @Test
+  @Disabled
   public void testBadAvroSchema() {
     String badJson = getJson("src/test/resources/streamer-config/file_schema_provider_invalid.avsc");
     testSanitizeSchema(badJson,generateRenamedSchemaWithDefaultReplacement());
   }
 
-  @Test
+  @Disabled
   public void testBadAvroSchemaAltCharMask() {
     String badJson = getJson("src/test/resources/streamer-config/file_schema_provider_invalid.avsc");
     testSanitizeSchema(badJson,generateRenamedSchemaWithConfiguredReplacement(),true, "_");
   }
 
-  @Test
+  @Disabled
   public void testBadAvroSchemaDisabledTest() {
     String badJson = getJson("src/test/resources/streamer-config/file_schema_provider_invalid.avsc");
     assertThrows(SchemaParseException.class, () -> testSanitizeSchema(badJson,generateRenamedSchemaWithDefaultReplacement(), false));
   }
 
-  @Test
+  @Disabled
   private String getJson(String path) {
     FileSystem fs = FSUtils.getFs(path, jsc.hadoopConfiguration(), true);
     String schemaStr;

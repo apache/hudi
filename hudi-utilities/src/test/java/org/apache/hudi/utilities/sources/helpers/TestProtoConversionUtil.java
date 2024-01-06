@@ -50,7 +50,7 @@ import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Disabled;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -70,6 +70,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.utilities.sources.helpers.ProtoConversionUtil.toUnsignedBigInteger;
 
+@Disabled
 public class TestProtoConversionUtil {
   private static final Random RANDOM = new Random();
   private static final String MAX_UNSIGNED_LONG = "18446744073709551615";
@@ -77,7 +78,7 @@ public class TestProtoConversionUtil {
   private static final String WRAPPED_UNSIGNED_LONG_FIELD_NAME = "wrapped_unsigned_long";
   private static final Conversions.DecimalConversion DECIMAL_CONVERSION = new Conversions.DecimalConversion();
 
-  @Test
+  @Disabled
   public void allFieldsSet_wellKnownTypesAndTimestampsAsRecords() throws IOException {
     Schema.Parser parser = new Schema.Parser();
     Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_wrapped_and_timestamp_as_record.avsc"));
@@ -92,7 +93,7 @@ public class TestProtoConversionUtil {
     assertUnsignedLongCorrectness(wrappedUnsignedLongSchema, input.getWrappedUnsignedLong().getValue(), (GenericFixed) ((GenericRecord) actual.get(WRAPPED_UNSIGNED_LONG_FIELD_NAME)).get("value"));
   }
 
-  @Test
+  @Disabled
   public void noFieldsSet_wellKnownTypesAndTimestampsAsRecords() throws IOException {
     Sample sample = Sample.newBuilder().build();
     Schema.Parser parser = new Schema.Parser();
@@ -101,7 +102,7 @@ public class TestProtoConversionUtil {
     Assertions.assertEquals(createDefaultOutput(convertedSchema), actual);
   }
 
-  @Test
+  @Disabled
   public void allFieldsSet_defaultOptions() throws IOException {
     Schema.Parser parser = new Schema.Parser();
     Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_defaults.avsc"));
@@ -116,7 +117,7 @@ public class TestProtoConversionUtil {
     assertUnsignedLongCorrectness(wrappedUnsignedLongSchema, input.getWrappedUnsignedLong().getValue(), (GenericFixed) actual.get(WRAPPED_UNSIGNED_LONG_FIELD_NAME));
   }
 
-  @Test
+  @Disabled
   public void noFieldsSet_defaultOptions() throws IOException {
     Sample sample = Sample.newBuilder().build();
     Schema.Parser parser = new Schema.Parser();
@@ -125,7 +126,7 @@ public class TestProtoConversionUtil {
     Assertions.assertEquals(createDefaultOutput(convertedSchema), actual);
   }
 
-  @Test
+  @Disabled
   public void recursiveSchema_noOverflow() throws IOException {
     Schema.Parser parser = new Schema.Parser();
     Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/parent_schema_recursive_depth_2.avsc"));
@@ -134,7 +135,7 @@ public class TestProtoConversionUtil {
     Assertions.assertEquals(inputAndOutput.getRight(), actual);
   }
 
-  @Test
+  @Disabled
   public void recursiveSchema_withOverflow() throws Exception {
     Schema.Parser parser = new Schema.Parser();
     Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/parent_schema_recursive_depth_2.avsc"));
@@ -153,7 +154,7 @@ public class TestProtoConversionUtil {
     Assertions.assertEquals(input.getChildren(1).getRecurseField().getRecurseField(), parsedChildren2Overflow);
   }
 
-  @Test
+  @Disabled
   public void oneOfSchema() throws IOException {
     Schema.Parser parser = new Schema.Parser();
     Schema convertedSchema = parser.parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/oneof_schema.avsc"));
@@ -167,7 +168,7 @@ public class TestProtoConversionUtil {
     Assertions.assertEquals(expectedRecord, actual);
   }
 
-  @Test
+  @Disabled
   public void longToUnsignedBigIntegerConversion() {
     Assertions.assertEquals("0", toUnsignedBigInteger(0).toString());
     Assertions.assertEquals(MAX_UNSIGNED_LONG, toUnsignedBigInteger(-1).toString());

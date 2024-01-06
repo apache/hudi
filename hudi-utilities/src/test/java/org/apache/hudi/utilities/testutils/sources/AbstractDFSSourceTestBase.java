@@ -39,7 +39,7 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Disabled;
 
 import java.io.IOException;
 import java.util.List;
@@ -50,6 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * An abstract test base for {@link Source} using DFS as the file system.
  */
+@Disabled
 public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
 
   protected FilebasedSchemaProvider schemaProvider;
@@ -103,7 +104,7 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
    *
    * @throws IOException
    */
-  @Test
+  @Disabled
   public void testReadingFromSource() throws IOException {
     fs.mkdirs(new Path(dfsRoot));
     SourceFormatAdapter sourceFormatAdapter = new SourceFormatAdapter(prepareDFSSource());

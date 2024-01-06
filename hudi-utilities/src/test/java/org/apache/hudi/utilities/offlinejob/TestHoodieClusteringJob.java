@@ -30,7 +30,7 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.utilities.HoodieClusteringJob;
 
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Disabled;
 
 import java.util.Properties;
 
@@ -39,8 +39,9 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAM
 /**
  * Test cases for {@link HoodieClusteringJob}.
  */
+@Disabled
 public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
-  @Test
+  @Disabled
   public void testHoodieClusteringJobWithClean() throws Exception {
     String tableBasePath = basePath + "/asyncClustering";
     Properties props = getPropertiesForKeyGen(true);

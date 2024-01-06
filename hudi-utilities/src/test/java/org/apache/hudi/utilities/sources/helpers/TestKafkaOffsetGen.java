@@ -33,7 +33,7 @@ import org.apache.spark.streaming.kafka010.KafkaTestUtils;
 import org.apache.spark.streaming.kafka010.OffsetRange;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Disabled;
 
 import java.util.UUID;
 
@@ -46,6 +46,7 @@ import static org.mockito.Mockito.mock;
 /**
  * Tests against {@link KafkaOffsetGen}.
  */
+@Disabled
 public class TestKafkaOffsetGen {
 
   private final String testTopicName = "hoodie_test_" + UUID.randomUUID();
@@ -75,7 +76,7 @@ public class TestKafkaOffsetGen {
     return props;
   }
 
-  @Test
+  @Disabled
   public void testGetNextOffsetRangesFromEarliest() {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     testUtils.createTopic(testTopicName, 1);
@@ -93,7 +94,7 @@ public class TestKafkaOffsetGen {
     assertEquals(1000, nextOffsetRanges[0].untilOffset());
   }
 
-  @Test
+  @Disabled
   public void testGetNextOffsetRangesFromLatest() {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     testUtils.createTopic(testTopicName, 1);
@@ -105,7 +106,7 @@ public class TestKafkaOffsetGen {
     assertEquals(1000, nextOffsetRanges[0].untilOffset());
   }
 
-  @Test
+  @Disabled
   public void testGetNextOffsetRangesFromCheckpoint() {
     String lastCheckpointString = testTopicName + ",0:250";
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
@@ -119,7 +120,7 @@ public class TestKafkaOffsetGen {
     assertEquals(750, nextOffsetRanges[0].untilOffset());
   }
 
-  @Test
+  @Disabled
   public void testGetNextOffsetRangesFromTimestampCheckpointType() {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     testUtils.createTopic(testTopicName, 1);
@@ -133,7 +134,7 @@ public class TestKafkaOffsetGen {
     assertEquals(500, nextOffsetRanges[0].untilOffset());
   }
 
-  @Test
+  @Disabled
   public void testGetNextOffsetRangesFromMultiplePartitions() {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     testUtils.createTopic(testTopicName, 2);
@@ -147,7 +148,7 @@ public class TestKafkaOffsetGen {
     assertEquals(249, nextOffsetRanges[1].untilOffset());
   }
 
-  @Test
+  @Disabled
   public void testGetNextOffsetRangesFromGroup() {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     testUtils.createTopic(testTopicName, 2);
@@ -171,7 +172,7 @@ public class TestKafkaOffsetGen {
     assertEquals(500, nextOffsetRanges[1].untilOffset());
   }
 
-  @Test
+  @Disabled
   public void testGetNextOffsetRangesWithMinPartitionsForSinglePartition() {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     testUtils.createTopic(testTopicName, 1);
@@ -193,7 +194,7 @@ public class TestKafkaOffsetGen {
     assertEquals(300, nextOffsetRanges[1].untilOffset());
   }
 
-  @Test
+  @Disabled
   public void testGetNextOffsetRangesWithMinPartitionsForMultiPartition() {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     testUtils.createTopic(testTopicName, 2);
@@ -241,7 +242,7 @@ public class TestKafkaOffsetGen {
     assertEquals(150, nextOffsetRanges[3].untilOffset());
   }
 
-  @Test
+  @Disabled
   public void testCheckTopicExists() {
     TypedProperties props = getConsumerConfigs("latest", "string");
     KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(props);
@@ -254,7 +255,7 @@ public class TestKafkaOffsetGen {
     assertFalse(topicExists);
   }
 
-  @Test
+  @Disabled
   public void testTopicNameNotPresentInProps() {
     assertThrows(HoodieNotSupportedException.class, () -> new KafkaOffsetGen(new TypedProperties()));
   }

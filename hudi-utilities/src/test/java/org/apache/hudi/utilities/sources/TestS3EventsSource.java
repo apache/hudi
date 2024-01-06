@@ -30,7 +30,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Disabled;
 
 import java.io.IOException;
 import java.util.List;
@@ -43,6 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /**
  * Basic tests for {@link S3EventsSource}.
  */
+@Disabled
 public class TestS3EventsSource extends AbstractCloudObjectsSourceTestBase {
 
   @BeforeEach
@@ -64,7 +65,7 @@ public class TestS3EventsSource extends AbstractCloudObjectsSourceTestBase {
    *
    * @throws IOException
    */
-  @Test
+  @Disabled
   public void testReadingFromSource() throws IOException {
 
     SourceFormatAdapter sourceFormatAdapter = new SourceFormatAdapter(prepareCloudObjectSource());

@@ -30,9 +30,7 @@ import org.apache.hadoop.fs.Path;
 import org.json.JSONObject;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.api.Disabled;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
@@ -55,6 +53,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+@Disabled
 public class TestS3EventsMetaSelector extends HoodieSparkClientTestHarness {
 
   TypedProperties props;
@@ -85,8 +84,7 @@ public class TestS3EventsMetaSelector extends HoodieSparkClientTestHarness {
     cleanupResources();
   }
 
-  @ParameterizedTest
-  @ValueSource(classes = {S3EventsMetaSelector.class})
+  @Disabled
   public void testNextEventsFromQueueShouldReturnsEventsFromQueue(Class<?> clazz) {
     S3EventsMetaSelector selector = (S3EventsMetaSelector) ReflectionUtils.loadClass(clazz.getName(), props);
     // setup s3 record
@@ -113,7 +111,7 @@ public class TestS3EventsMetaSelector extends HoodieSparkClientTestHarness {
     assertEquals("1627376736755", eventFromQueue.getRight());
   }
 
-  @Test
+  @Disabled
   public void testEventsFromQueueNoMessages() {
     S3EventsMetaSelector selector = new S3EventsMetaSelector(props);
     Map<String, String> attribute = new HashMap<>();

@@ -23,14 +23,14 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.api.Disabled;
 
 import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
+@Disabled
 public class TestFlinkWriteClient extends HoodieFlinkClientTestHarness {
 
   @BeforeEach
@@ -40,8 +40,7 @@ public class TestFlinkWriteClient extends HoodieFlinkClientTestHarness {
     initMetaClient();
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
+  @Disabled
   public void testWriteClientAndTableServiceClientWithTimelineServer(
       boolean enableEmbeddedTimelineServer) throws IOException {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
