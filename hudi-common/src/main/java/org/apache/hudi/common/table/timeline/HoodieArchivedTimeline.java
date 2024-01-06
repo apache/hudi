@@ -150,36 +150,39 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
     return new HoodieArchivedTimeline(metaClient);
   }
 
-  private HoodieInstant readCommit(String instantTime, GenericRecord record, LoadMode loadMode) {
+  private HoodieInstant readCommit(String instantTime, GenericRecord record, Option<BiConsumer<String, GenericRecord>> instantDetailsConsumer) {
     final String action = record.get(ACTION_ARCHIVED_META_FIELD).toString();
     final String completionTime = record.get(COMPLETION_TIME_ARCHIVED_META_FIELD).toString();
-    loadInstantDetails(record, instantTime, loadMode);
+    instantDetailsConsumer.ifPresent(consumer -> consumer.accept(instantTime, record));
     return new HoodieInstant(HoodieInstant.State.COMPLETED, action, instantTime, completionTime);
   }
 
-  private void loadInstantDetails(GenericRecord record, String instantTime, LoadMode loadMode) {
+  @Nullable
+  private BiConsumer<String, GenericRecord> getInstantDetailsFunc(LoadMode loadMode) {
     switch (loadMode) {
       case METADATA:
-        ByteBuffer commitMeta = (ByteBuffer) record.get(METADATA_ARCHIVED_META_FIELD);
-        if (commitMeta != null) {
-          // in case the entry comes from an empty completed meta file
-          this.readCommits.put(instantTime, commitMeta.array());
-        }
-        break;
+        return (instant, record) -> {
+          ByteBuffer commitMeta = (ByteBuffer) record.get(METADATA_ARCHIVED_META_FIELD);
+          if (commitMeta != null) {
+            // in case the entry comes from an empty completed meta file
+            this.readCommits.put(instant, commitMeta.array());
+          }
+        };
       case PLAN:
-        ByteBuffer plan = (ByteBuffer) record.get(PLAN_ARCHIVED_META_FIELD);
-        if (plan != null) {
-          // in case the entry comes from an empty completed meta file
-          this.readCommits.put(instantTime, plan.array());
-        }
-        break;
+        return (instant, record) -> {
+          ByteBuffer plan = (ByteBuffer) record.get(PLAN_ARCHIVED_META_FIELD);
+          if (plan != null) {
+            // in case the entry comes from an empty completed meta file
+            this.readCommits.put(instant, plan.array());
+          }
+        };
       default:
-        // no operation
+        return null;
     }
   }
 
   private List<HoodieInstant> loadInstants() {
-    return loadInstants(null, LoadMode.SLIM);
+    return loadInstants(null, LoadMode.ACTION);
   }
 
   private List<HoodieInstant> loadInstants(String startTs, String endTs) {
@@ -201,7 +204,8 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
       LoadMode loadMode,
       Function<GenericRecord, Boolean> commitsFilter) {
     Map<String, HoodieInstant> instantsInRange = new ConcurrentHashMap<>();
-    loadInstants(metaClient, filter, loadMode, commitsFilter, (instantTime, avroRecord) -> instantsInRange.putIfAbsent(instantTime, readCommit(instantTime, avroRecord, loadMode)));
+    Option<BiConsumer<String, GenericRecord>> instantDetailsConsumer = Option.ofNullable(getInstantDetailsFunc(loadMode));
+    loadInstants(metaClient, filter, loadMode, commitsFilter, (instantTime, avroRecord) -> instantsInRange.putIfAbsent(instantTime, readCommit(instantTime, avroRecord, instantDetailsConsumer)));
     ArrayList<HoodieInstant> result = new ArrayList<>(instantsInRange.values());
     Collections.sort(result);
     return result;
@@ -271,15 +275,19 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
    */
   public enum LoadMode {
     /**
+     * Loads the instantTime, completionTime.
+     */
+    TIME,
+    /**
      * Loads the instantTime, completionTime, action.
      */
-    SLIM,
+    ACTION,
     /**
      * Loads the instantTime, completionTime, action, metadata.
      */
     METADATA,
     /**
-     * Loads the instantTime, completionTime, plan.
+     * Loads the instantTime, completionTime, action, plan.
      */
     PLAN
   }
@@ -288,8 +296,8 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
    * A time based filter with range (startTs, endTs].
    */
   public static class TimeRangeFilter {
-    private final String startTs;
-    private final String endTs;
+    protected final String startTs;
+    protected final String endTs;
 
     public TimeRangeFilter(String startTs, String endTs) {
       this.startTs = startTs;
@@ -302,14 +310,26 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   }
 
   /**
+   * A time based filter with range [startTs, endTs).
+   */
+  public static class ClosedOpenTimeRangeFilter extends TimeRangeFilter {
+
+    public ClosedOpenTimeRangeFilter(String startTs, String endTs) {
+      super(startTs, endTs);
+    }
+
+    public boolean isInRange(String instantTime) {
+      return HoodieTimeline.isInClosedOpenRange(instantTime, this.startTs, this.endTs);
+    }
+  }
+
+  /**
    * A time based filter with range [startTs, +&#8734).
    */
   public static class StartTsFilter extends TimeRangeFilter {
-    private final String startTs;
 
     public StartTsFilter(String startTs) {
       super(startTs, null); // endTs is never used
-      this.startTs = startTs;
     }
 
     public boolean isInRange(String instantTime) {

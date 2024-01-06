@@ -24,12 +24,18 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.RecordPayloadType;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -38,6 +44,8 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
 
 public class ConfigUtils {
   public static final String STREAMER_CONFIG_PREFIX = "hoodie.streamer.";
@@ -270,11 +278,11 @@ public class ConfigUtils {
    * Gets the raw value for a {@link ConfigProperty} config from properties. The key and
    * alternative keys are used to fetch the config.
    *
-   * @param props          Configs in {@link TypedProperties}.
+   * @param props          Configs in {@link Properties}.
    * @param configProperty {@link ConfigProperty} config to fetch.
    * @return {@link Option} of value if the config exists; empty {@link Option} otherwise.
    */
-  public static Option<Object> getRawValueWithAltKeys(TypedProperties props,
+  public static Option<Object> getRawValueWithAltKeys(Properties props,
                                                       ConfigProperty<?> configProperty) {
     if (props.containsKey(configProperty.key())) {
       return Option.ofNullable(props.get(configProperty.key()));
@@ -321,11 +329,11 @@ public class ConfigUtils {
    * alternative keys are used to fetch the config. If the config is not found, an
    * {@link IllegalArgumentException} is thrown.
    *
-   * @param props          Configs in {@link TypedProperties}.
+   * @param props          Configs in {@link Properties}.
    * @param configProperty {@link ConfigProperty} config of String type to fetch.
    * @return String value if the config exists.
    */
-  public static String getStringWithAltKeys(TypedProperties props,
+  public static String getStringWithAltKeys(Properties props,
                                             ConfigProperty<String> configProperty) {
     return getStringWithAltKeys(props, configProperty, false);
   }
@@ -337,14 +345,14 @@ public class ConfigUtils {
    * the properties. If not using default value, if the config is not found, an
    * {@link IllegalArgumentException} is thrown.
    *
-   * @param props           Configs in {@link TypedProperties}.
+   * @param props           Configs in {@link Properties}.
    * @param configProperty  {@link ConfigProperty} config of String type to fetch.
    * @param useDefaultValue Whether to use default value from {@link ConfigProperty}.
    * @return String value if the config exists; otherwise, if the config does not exist and
    * {@code useDefaultValue} is true, returns default String value if there is default value
    * defined in the {@link ConfigProperty} config and {@code null} otherwise.
    */
-  public static String getStringWithAltKeys(TypedProperties props,
+  public static String getStringWithAltKeys(Properties props,
                                             ConfigProperty<String> configProperty,
                                             boolean useDefaultValue) {
     if (useDefaultValue) {
@@ -363,12 +371,12 @@ public class ConfigUtils {
    * alternative keys are used to fetch the config. The default value as the input of the method
    * is returned if the config is not found in the properties.
    *
-   * @param props          Configs in {@link TypedProperties}.
+   * @param props          Configs in {@link Properties}.
    * @param configProperty {@link ConfigProperty} config of String type to fetch.
    * @param defaultValue   Default value.
    * @return String value if the config exists; default value otherwise.
    */
-  public static String getStringWithAltKeys(TypedProperties props,
+  public static String getStringWithAltKeys(Properties props,
                                             ConfigProperty<?> configProperty,
                                             String defaultValue) {
     Option<Object> rawValue = getRawValueWithAltKeys(props, configProperty);
@@ -429,12 +437,12 @@ public class ConfigUtils {
    * alternative keys are used to fetch the config. The default value of {@link ConfigProperty}
    * config, if exists, is returned if the config is not found in the properties.
    *
-   * @param props          Configs in {@link TypedProperties}.
+   * @param props          Configs in {@link Properties}.
    * @param configProperty {@link ConfigProperty} config to fetch.
    * @return boolean value if the config exists; default boolean value if the config does not exist
    * and there is default value defined in the {@link ConfigProperty} config; {@code false} otherwise.
    */
-  public static boolean getBooleanWithAltKeys(TypedProperties props,
+  public static boolean getBooleanWithAltKeys(Properties props,
                                               ConfigProperty<?> configProperty) {
     Option<Object> rawValue = getRawValueWithAltKeys(props, configProperty);
     boolean defaultValue = configProperty.hasDefaultValue()
@@ -537,5 +545,72 @@ public class ConfigUtils {
       keys.addAll(configProperty.getAlternatives());
       return keys.stream();
     }).collect(Collectors.toSet());
+  }
+
+  public static TypedProperties fetchConfigs(
+      FileSystem fs,
+      String metaPath,
+      String propertiesFile,
+      String propertiesBackupFile,
+      int maxReadRetries,
+      int maxReadRetryDelayInMs) throws IOException {
+    Path cfgPath = new Path(metaPath, propertiesFile);
+    Path backupCfgPath = new Path(metaPath, propertiesBackupFile);
+    int readRetryCount = 0;
+    boolean found = false;
+
+    TypedProperties props = new TypedProperties();
+    while (readRetryCount++ < maxReadRetries) {
+      for (Path path : Arrays.asList(cfgPath, backupCfgPath)) {
+        // Read the properties and validate that it is a valid file
+        try (FSDataInputStream is = fs.open(path)) {
+          props.clear();
+          props.load(is);
+          found = true;
+          if (props.containsKey(TABLE_CHECKSUM.key())) {
+            ValidationUtils.checkArgument(HoodieTableConfig.validateChecksum(props));
+          }
+          return props;
+        } catch (IOException e) {
+          LOG.warn(String.format("Could not read properties from %s: %s", path, e));
+        } catch (IllegalArgumentException e) {
+          LOG.warn(String.format("Invalid properties file %s: %s", path, props));
+        }
+      }
+
+      // Failed to read all files so wait before retrying. This can happen in cases of parallel updates to the properties.
+      try {
+        Thread.sleep(maxReadRetryDelayInMs);
+      } catch (InterruptedException e) {
+        LOG.warn("Interrupted while waiting");
+      }
+    }
+
+    // If we are here then after all retries either no properties file was found or only an invalid file was found.
+    if (found) {
+      throw new IllegalArgumentException("hoodie.properties file seems invalid. Please check for left over `.updated` files if any, manually copy it to hoodie.properties and retry");
+    } else {
+      throw new HoodieIOException("Could not load Hoodie properties from " + cfgPath);
+    }
+  }
+
+  public static void recoverIfNeeded(FileSystem fs, Path cfgPath, Path backupCfgPath) throws IOException {
+    if (!fs.exists(cfgPath)) {
+      // copy over from backup
+      try (FSDataInputStream in = fs.open(backupCfgPath);
+           FSDataOutputStream out = fs.create(cfgPath, false)) {
+        FileIOUtils.copy(in, out);
+      }
+    }
+    // regardless, we don't need the backup anymore.
+    fs.delete(backupCfgPath, false);
+  }
+
+  public static void upsertProperties(Properties current, Properties updated) {
+    updated.forEach((k, v) -> current.setProperty(k.toString(), v.toString()));
+  }
+
+  public static void deleteProperties(Properties current, Properties deleted) {
+    deleted.forEach((k, v) -> current.remove(k.toString()));
   }
 }

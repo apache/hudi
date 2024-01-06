@@ -33,6 +33,9 @@ public class BucketIdentifier implements Serializable {
   // Compatible with the spark bucket name
   private static final Pattern BUCKET_NAME = Pattern.compile(".*_(\\d+)(?:\\..*)?$");
 
+  // Ensure the same records keys from different writers are desired to be distributed into the same bucket
+  private static final String CONSTANT_FILE_ID_SUFFIX = "-0000-0000-0000-000000000000";
+
   public static int getBucketId(HoodieRecord record, String indexKeyFields, int numBuckets) {
     return getBucketId(record.getKey(), indexKeyFields, numBuckets);
   }
@@ -87,6 +90,14 @@ public class BucketIdentifier implements Serializable {
     return String.format("%08d", n);
   }
 
+  public static String newBucketFileIdPrefix(int bucketId, boolean fixed) {
+    return fixed ? newBucketFileIdFixedSuffix(bucketId) : newBucketFileIdPrefix(bucketId);
+  }
+
+  public static String newBucketFileIdPrefix(String bucketId, boolean fixed) {
+    return fixed ? newBucketFileIdFixedSuffix(bucketId) : newBucketFileIdPrefix(bucketId);
+  }
+
   public static String newBucketFileIdPrefix(int bucketId) {
     return newBucketFileIdPrefix(bucketIdStr(bucketId));
   }
@@ -97,6 +108,14 @@ public class BucketIdentifier implements Serializable {
 
   public static String newBucketFileIdPrefix(String bucketId) {
     return FSUtils.createNewFileIdPfx().replaceFirst(".{8}", bucketId);
+  }
+
+  private static String newBucketFileIdFixedSuffix(String bucketId) {
+    return bucketId + CONSTANT_FILE_ID_SUFFIX;
+  }
+
+  private static String newBucketFileIdFixedSuffix(int bucketId) {
+    return newBucketFileIdFixedSuffix(bucketIdStr(bucketId));
   }
 
   public static boolean isBucketFileName(String name) {

@@ -32,6 +32,7 @@ import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.table.action.commit.FlinkWriteHelper;
@@ -39,6 +40,7 @@ import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
@@ -113,6 +115,11 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   private transient TotalSizeTracer tracer;
 
   /**
+   * Metrics for flink stream write.
+   */
+  protected transient FlinkStreamWriteMetrics writeMetrics;
+
+  /**
    * Constructs a StreamingSinkFunction.
    *
    * @param config The config options
@@ -127,6 +134,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     initBuffer();
     initWriteFunction();
     initMergeClass();
+    registerMetrics();
   }
 
   @Override
@@ -385,6 +393,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
    * @param value HoodieRecord
    */
   protected void bufferRecord(HoodieRecord<?> value) {
+    writeMetrics.markRecordIn();
     final String bucketID = getBucketID(value);
 
     DataBucket bucket = this.buckets.computeIfAbsent(bucketID,
@@ -395,6 +404,8 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
 
     boolean flushBucket = bucket.detector.detect(item);
     boolean flushBuffer = this.tracer.trace(bucket.detector.lastRecordSize);
+    // update buffer metrics after tracing buffer size
+    writeMetrics.setWriteBufferedSize(this.tracer.bufferSize);
     if (flushBucket) {
       if (flushBucket(bucket)) {
         this.tracer.countDown(bucket.detector.totalSize);
@@ -449,6 +460,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
 
   @SuppressWarnings("unchecked, rawtypes")
   private void flushRemaining(boolean endInput) {
+    writeMetrics.startDataFlush();
     this.currentInstant = instantToWrite(hasData());
     if (this.currentInstant == null) {
       // in case there are empty checkpoints that has no input data
@@ -488,11 +500,24 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     this.writeStatuses.addAll(writeStatus);
     // blocks flushing until the coordinator starts a new instant
     this.confirming = true;
+
+    writeMetrics.endDataFlush();
+    writeMetrics.resetAfterCommit();
+  }
+
+  private void registerMetrics() {
+    MetricGroup metrics = getRuntimeContext().getMetricGroup();
+    writeMetrics = new FlinkStreamWriteMetrics(metrics);
+    writeMetrics.registerMetrics();
   }
 
   protected List<WriteStatus> writeBucket(String instant, DataBucket bucket, List<HoodieRecord> records) {
     bucket.preWrite(records);
-    return writeFunction.apply(records, instant);
+    writeMetrics.startFileFlush();
+    List<WriteStatus> statuses = writeFunction.apply(records, instant);
+    writeMetrics.endFileFlush();
+    writeMetrics.increaseNumOfFilesWritten();
+    return statuses;
   }
 
   private List<HoodieRecord> deduplicateRecordsIfNeeded(List<HoodieRecord> records) {

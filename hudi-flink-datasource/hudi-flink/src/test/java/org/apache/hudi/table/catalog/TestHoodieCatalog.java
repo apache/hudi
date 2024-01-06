@@ -28,6 +28,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
+import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -66,6 +68,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -248,6 +251,30 @@ public class TestHoodieCatalog {
     // test create exist table
     assertThrows(TableAlreadyExistException.class,
         () -> catalog.createTable(tablePath, EXPECTED_CATALOG_TABLE, false));
+
+    // validate key generator for partitioned table
+    HoodieTableMetaClient metaClient =
+        StreamerUtil.createMetaClient(catalog.inferTablePath(catalogPathStr, tablePath), new org.apache.hadoop.conf.Configuration());
+    String keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
+    assertEquals(keyGeneratorClassName, SimpleAvroKeyGenerator.class.getName());
+
+    // validate key generator for non partitioned table
+    ObjectPath nonPartitionPath = new ObjectPath(TEST_DEFAULT_DATABASE, "tb");
+    final ResolvedCatalogTable nonPartitionCatalogTable = new ResolvedCatalogTable(
+        CatalogTable.of(
+            Schema.newBuilder().fromResolvedSchema(CREATE_TABLE_SCHEMA).build(),
+            "test",
+            new ArrayList<>(),
+            EXPECTED_OPTIONS),
+        CREATE_TABLE_SCHEMA
+    );
+
+    catalog.createTable(nonPartitionPath, nonPartitionCatalogTable, false);
+
+    metaClient =
+        StreamerUtil.createMetaClient(catalog.inferTablePath(catalogPathStr, nonPartitionPath), new org.apache.hadoop.conf.Configuration());
+    keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
+    assertEquals(keyGeneratorClassName, NonpartitionedAvroKeyGenerator.class.getName());
   }
 
   @Test

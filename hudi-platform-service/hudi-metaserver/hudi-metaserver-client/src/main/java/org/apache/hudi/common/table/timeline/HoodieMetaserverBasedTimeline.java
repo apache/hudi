@@ -51,7 +51,13 @@ public class HoodieMetaserverBasedTimeline extends HoodieActiveTimeline {
   }
 
   @Override
-  public void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data, boolean allowRedundantTransitions) {
+  protected void transitionStateToComplete(boolean shouldLock, HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data) {
+    ValidationUtils.checkArgument(fromInstant.getTimestamp().equals(toInstant.getTimestamp()));
+    metaserverClient.transitionInstantState(databaseName, tableName, fromInstant, toInstant, data);
+  }
+
+  @Override
+  public void transitionPendingState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data, boolean allowRedundantTransitions) {
     ValidationUtils.checkArgument(fromInstant.getTimestamp().equals(toInstant.getTimestamp()));
     metaserverClient.transitionInstantState(databaseName, tableName, fromInstant, toInstant, data);
   }
@@ -81,5 +87,19 @@ public class HoodieMetaserverBasedTimeline extends HoodieActiveTimeline {
   @Override
   public HoodieMetaserverBasedTimeline reload() {
     return new HoodieMetaserverBasedTimeline(metaClient, metaClient.getMetaserverConfig());
+  }
+
+  /**
+   * Completion time is essential for {@link HoodieActiveTimeline},
+   * TODO [HUDI-6883] We should change HoodieMetaserverBasedTimeline to store completion time as well.
+   */
+  @Override
+  protected String getInstantFileName(HoodieInstant instant) {
+    if (instant.isCompleted()) {
+      // Set a fake completion time.
+      return instant.getFileName("0").replace("_0", "");
+    }
+
+    return instant.getFileName();
   }
 }

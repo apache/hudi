@@ -137,6 +137,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
 
       LOG.info("Committing Clustering {} finished with result {}.", clusteringCommitTime, metadata);
       table.getActiveTimeline().transitionReplaceInflightToComplete(
+          false,
           HoodieTimeline.getReplaceCommitInflightInstant(clusteringCommitTime),
           serializeCommitMetadata(metadata));
     } catch (IOException e) {

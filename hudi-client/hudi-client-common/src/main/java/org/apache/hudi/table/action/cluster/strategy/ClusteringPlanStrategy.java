@@ -121,7 +121,7 @@ public abstract class ClusteringPlanStrategy<T,I,K,O> implements Serializable {
             .collect(Collectors.toSet());
     fgIdsInPendingCompactionLogCompactionAndClustering.addAll(fileSystemView.getFileGroupsInPendingClustering().map(Pair::getKey).collect(Collectors.toSet()));
 
-    return hoodieTable.getSliceView().getLatestFileSlices(partition)
+    return hoodieTable.getSliceView().getLatestFileSlicesStateless(partition)
         // file ids already in clustering are not eligible
         .filter(slice -> !fgIdsInPendingCompactionLogCompactionAndClustering.contains(slice.getFileGroupId()));
   }

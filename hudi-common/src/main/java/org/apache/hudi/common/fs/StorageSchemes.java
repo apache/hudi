@@ -77,7 +77,9 @@ public enum StorageSchemes {
   // Volcengine Object Storage
   TOS("tos", null, null),
   // Volcengine Cloud HDFS
-  CFS("cfs", null, null);
+  CFS("cfs", null, null),
+  // Hopsworks File System
+  HOPSFS("hopsfs", false, true);
 
   private String scheme;
   // null for uncertain if write is transactional, please update this for each FS

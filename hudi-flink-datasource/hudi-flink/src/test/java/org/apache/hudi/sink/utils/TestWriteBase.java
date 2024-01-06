@@ -18,8 +18,8 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -268,7 +268,8 @@ public class TestWriteBase {
      * Stop the timeline server.
      */
     public TestHarness stopTimelineServer() {
-      pipeline.getCoordinator().getWriteClient().getTimelineServer().ifPresent(EmbeddedTimelineService::stop);
+      HoodieFlinkWriteClient<?> client = pipeline.getCoordinator().getWriteClient();
+      client.getTimelineServer().ifPresent(embeddedTimelineService -> embeddedTimelineService.stopForBasePath(client.getConfig().getBasePath()));
       return this;
     }
 
@@ -302,6 +303,31 @@ public class TestWriteBase {
       checkInstantState(HoodieInstant.State.COMPLETED, lastPending);
       this.lastComplete = lastPending;
       this.lastPending = newInflight; // refresh last pending instant
+      return this;
+    }
+
+    /**
+     * Flush data and commit using endInput. Asserts the commit would fail.
+     */
+    public void endInputThrows(Class<?> cause, String msg) {
+      // this triggers the data write and event send
+      this.pipeline.endInput();
+      final OperatorEvent nextEvent = this.pipeline.getNextEvent();
+      this.pipeline.getCoordinator().handleEventFromOperator(0, nextEvent);
+      assertTrue(this.pipeline.getCoordinatorContext().isJobFailed(), "Job should have been failed");
+      Throwable throwable = this.pipeline.getCoordinatorContext().getJobFailureReason().getCause();
+      assertThat(throwable, instanceOf(cause));
+      assertThat(throwable.getMessage(), containsString(msg));
+    }
+
+    /**
+     * Flush data and commit using endInput.
+     */
+    public TestHarness endInput() {
+      // this triggers the data write and event send
+      this.pipeline.endInput();
+      final OperatorEvent nextEvent = this.pipeline.getNextEvent();
+      this.pipeline.getCoordinator().handleEventFromOperator(0, nextEvent);
       return this;
     }
 
@@ -496,6 +522,7 @@ public class TestWriteBase {
 
     public void end() throws Exception {
       this.pipeline.close();
+      this.pipeline = null;
     }
 
     private String lastPendingInstant() {
@@ -524,9 +551,16 @@ public class TestWriteBase {
     }
 
     protected String lastCompleteInstant() {
-      return OptionsResolver.isMorTable(conf)
-          ? TestUtils.getLastDeltaCompleteInstant(basePath)
-          : TestUtils.getLastCompleteInstant(basePath, HoodieTimeline.COMMIT_ACTION);
+      // If using optimistic concurrency control, fetch last complete instant of current writer from ckp metadata
+      // because there are multiple write clients commit to the timeline.
+      if (OptionsResolver.isMultiWriter(conf)) {
+        return this.ckpMetadata.lastCompleteInstant();
+      } else {
+        // fetch the instant from timeline.
+        return OptionsResolver.isMorTable(conf)
+            ? TestUtils.getLastDeltaCompleteInstant(basePath)
+            : TestUtils.getLastCompleteInstant(basePath, HoodieTimeline.COMMIT_ACTION);
+      }
     }
 
     public TestHarness checkCompletedInstantCount(int count) {

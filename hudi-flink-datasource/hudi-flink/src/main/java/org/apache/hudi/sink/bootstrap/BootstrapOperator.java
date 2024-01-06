@@ -155,6 +155,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
 
     // wait for the other bootstrap tasks finish bootstrapping.
     waitForBootstrapReady(getRuntimeContext().getIndexOfThisSubtask());
+    hoodieTable = null;
   }
 
   /**
@@ -198,7 +199,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
     if (!StringUtils.isNullOrEmpty(lastInstantTime)) {
       commitsTimeline = commitsTimeline.findInstantsAfter(lastInstantTime);
     }
-    Option<HoodieInstant> latestCommitTime = commitsTimeline.filterCompletedInstants().lastInstant();
+    Option<HoodieInstant> latestCommitTime = commitsTimeline.filterCompletedAndCompactionInstants().lastInstant();
 
     if (latestCommitTime.isPresent()) {
       BaseFileUtils fileUtils = BaseFileUtils.getInstance(this.hoodieTable.getBaseFileFormat());

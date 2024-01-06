@@ -163,12 +163,10 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   }
 
   private void acquireLock() {
-    try {
+    try (FSDataOutputStream fos = fs.create(this.lockFile, false)) {
       if (!fs.exists(this.lockFile)) {
-        FSDataOutputStream fos = fs.create(this.lockFile, false);
         initLockInfo();
         fos.writeBytes(lockInfo.toString());
-        fos.close();
       }
     } catch (IOException e) {
       throw new HoodieIOException(generateLogStatement(LockState.FAILED_TO_ACQUIRE), e);
@@ -182,11 +180,9 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   }
 
   public void reloadCurrentOwnerLockInfo() {
-    try {
+    try (FSDataInputStream fis = fs.open(this.lockFile)) {
       if (fs.exists(this.lockFile)) {
-        FSDataInputStream fis = fs.open(this.lockFile);
         this.currentOwnerLockInfo = FileIOUtils.readAsUTFString(fis);
-        fis.close();
       } else {
         this.currentOwnerLockInfo = "";
       }
@@ -201,7 +197,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
 
   private void checkRequiredProps(final LockConfiguration config) {
     ValidationUtils.checkArgument(config.getConfig().getString(FILESYSTEM_LOCK_PATH_PROP_KEY, null) != null
-          || config.getConfig().getString(HoodieWriteConfig.BASE_PATH.key(), null) != null);
+        || config.getConfig().getString(HoodieWriteConfig.BASE_PATH.key(), null) != null);
     ValidationUtils.checkArgument(config.getConfig().getInteger(FILESYSTEM_LOCK_EXPIRE_PROP_KEY) >= 0);
   }
 

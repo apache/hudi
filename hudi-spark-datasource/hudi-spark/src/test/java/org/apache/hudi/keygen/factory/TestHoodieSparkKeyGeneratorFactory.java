@@ -72,6 +72,7 @@ public class TestHoodieSparkKeyGeneratorFactory {
 
     // set KeyGenerator type only
     props.put(KEYGENERATOR_TYPE.key(), KeyGeneratorType.CUSTOM.name());
+    props.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "field:simple");
     KeyGenerator keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
     assertEquals(CustomKeyGenerator.class.getName(), keyGenerator.getClass().getName());
 

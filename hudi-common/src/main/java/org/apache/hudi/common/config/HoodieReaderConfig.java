@@ -28,7 +28,7 @@ import javax.annotation.concurrent.Immutable;
 @ConfigClassProperty(name = "Reader Configs",
     groupName = ConfigGroups.Names.READER,
     description = "Configurations that control file group reading.")
-public class HoodieReaderConfig {
+public class HoodieReaderConfig extends HoodieConfig {
   public static final ConfigProperty<String> COMPACTION_LAZY_BLOCK_READ_ENABLE = ConfigProperty
       .key("hoodie.compaction.lazy.block.read")
       .defaultValue("true")
@@ -51,4 +51,18 @@ public class HoodieReaderConfig {
       .sinceVersion("0.13.0")
       .withDocumentation("New optimized scan for log blocks that handles all multi-writer use-cases while appending to log files. "
           + "It also differentiates original blocks written by ingestion writers and compacted blocks written log compaction.");
+
+  public static final ConfigProperty<Boolean> FILE_GROUP_READER_ENABLED = ConfigProperty
+      .key("hoodie.file.group.reader.enabled")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Use engine agnostic file group reader if enabled");
+
+  public static final ConfigProperty<Boolean> MERGE_USE_RECORD_POSITIONS = ConfigProperty
+      .key("hoodie.merge.use.record.positions")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Whether to use positions in the block header for data blocks containing updates and delete blocks for merging.");
 }

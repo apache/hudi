@@ -26,8 +26,8 @@ import org.apache.hudi.common.model.HoodieSyncTableStrategy;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -191,7 +191,7 @@ public class TestHiveSyncTool {
 
   @BeforeEach
   public void setUp() throws Exception {
-    HiveTestUtil.setUp();
+    HiveTestUtil.setUp(Option.empty(), true);
   }
 
   @AfterEach
@@ -1592,11 +1592,11 @@ public class TestHiveSyncTool {
     hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED.key(), enablePushDown);
     hiveSyncProps.setProperty(META_SYNC_CONDITIONAL_SYNC.key(), "true");
 
-    String commitTime1 = HoodieInstantTimeGenerator.createNewInstantTime(1);
-    String commitTime2 = HoodieInstantTimeGenerator.createNewInstantTime(2);
-    String commitTime3 = HoodieInstantTimeGenerator.createNewInstantTime(3);
-    String commitTime4 = HoodieInstantTimeGenerator.createNewInstantTime(4);
-    String commitTime5 = HoodieInstantTimeGenerator.createNewInstantTime(5);
+    String commitTime1 = InProcessTimeGenerator.createNewInstantTime(1);
+    String commitTime2 = InProcessTimeGenerator.createNewInstantTime(2);
+    String commitTime3 = InProcessTimeGenerator.createNewInstantTime(3);
+    String commitTime4 = InProcessTimeGenerator.createNewInstantTime(4);
+    String commitTime5 = InProcessTimeGenerator.createNewInstantTime(5);
 
     // Commit 4 and commit5 will be committed first
     HiveTestUtil.createMORTable(commitTime4, commitTime5, 2, true, true);
@@ -1643,8 +1643,8 @@ public class TestHiveSyncTool {
 
   private String getLastCommitCompletionTimeSynced() {
     return hiveClient.getActiveTimeline()
-        .getInstantsOrderedByStateTransitionTime()
-        .skip(hiveClient.getActiveTimeline().countInstants() - 1).findFirst().get().getStateTransitionTime();
+        .getInstantsOrderedByCompletionTime()
+        .skip(hiveClient.getActiveTimeline().countInstants() - 1).findFirst().get().getCompletionTime();
   }
 
   private void reInitHiveSyncClient() {

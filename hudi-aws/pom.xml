@@ -192,6 +192,12 @@
             <version>${aws.sdk.httpcore.version}</version>
         </dependency>
 
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>sts</artifactId>
+            <version>${aws.sdk.version}</version>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.apache.hudi</groupId>

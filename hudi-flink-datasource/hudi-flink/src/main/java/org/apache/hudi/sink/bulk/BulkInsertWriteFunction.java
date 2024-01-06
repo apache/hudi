@@ -117,11 +117,11 @@ public class BulkInsertWriteFunction<I>
     this.ckpMetadata = CkpMetadataFactory.getCkpMetadata(writeClient.getConfig(), config);
     this.initInstant = lastPendingInstant();
     sendBootstrapEvent();
-    initWriterHelper();
   }
 
   @Override
   public void processElement(I value, Context ctx, Collector<Object> out) throws IOException {
+    initWriterHelperIfNeeded();
     this.writerHelper.write((RowData) value);
   }
 
@@ -136,6 +136,7 @@ public class BulkInsertWriteFunction<I>
    * End input action for batch source.
    */
   public void endInput() {
+    initWriterHelperIfNeeded();
     final List<WriteStatus> writeStatus = this.writerHelper.getWriteStatuses(this.taskID);
 
     final WriteMetadataEvent event = WriteMetadataEvent.builder()
@@ -165,11 +166,13 @@ public class BulkInsertWriteFunction<I>
   //  Utilities
   // -------------------------------------------------------------------------
 
-  private void initWriterHelper() {
-    String instant = instantToWrite();
-    this.writerHelper = WriterHelpers.getWriterHelper(this.config, this.writeClient.getHoodieTable(), this.writeClient.getConfig(),
-        instant, this.taskID, getRuntimeContext().getNumberOfParallelSubtasks(), getRuntimeContext().getAttemptNumber(),
-        this.rowType);
+  private void initWriterHelperIfNeeded() {
+    if (writerHelper == null) {
+      String instant = instantToWrite();
+      this.writerHelper = WriterHelpers.getWriterHelper(this.config, this.writeClient.getHoodieTable(), this.writeClient.getConfig(),
+          instant, this.taskID, getRuntimeContext().getNumberOfParallelSubtasks(), getRuntimeContext().getAttemptNumber(),
+          this.rowType);
+    }
   }
 
   private void sendBootstrapEvent() {

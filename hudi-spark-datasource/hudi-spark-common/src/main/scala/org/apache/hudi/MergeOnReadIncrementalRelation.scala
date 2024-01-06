@@ -17,13 +17,13 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.fs.{FileStatus, GlobPattern, Path}
+import org.apache.hadoop.fs.{FileStatus, GlobPattern}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieSparkConfUtils.getHollowCommitHandling
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
-import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, getCommitMetadata, handleHollowCommitIfNeeded}
+import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, concatTimeline, getCommitMetadata, handleHollowCommitIfNeeded}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.StringUtils
@@ -58,11 +58,17 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
   override protected def timeline: HoodieTimeline = {
     if (fullTableScan) {
       handleHollowCommitIfNeeded(metaClient.getCommitsAndCompactionTimeline, metaClient, hollowCommitHandling)
-    } else if (hollowCommitHandling == HollowCommitHandling.USE_TRANSITION_TIME) {
-      metaClient.getCommitsAndCompactionTimeline.findInstantsInRangeByStateTransitionTime(startTimestamp, endTimestamp)
     } else {
-      handleHollowCommitIfNeeded(metaClient.getCommitsAndCompactionTimeline, metaClient, hollowCommitHandling)
-        .findInstantsInRange(startTimestamp, endTimestamp)
+      val completeTimeline = if (hollowCommitHandling == HollowCommitHandling.USE_TRANSITION_TIME) {
+        metaClient.getCommitsTimeline.filterCompletedInstants()
+          .findInstantsInRangeByCompletionTime(startTimestamp, endTimestamp)
+      } else {
+        handleHollowCommitIfNeeded(metaClient.getCommitsTimeline.filterCompletedInstants(), metaClient, hollowCommitHandling)
+          .findInstantsInRange(startTimestamp, endTimestamp)
+      }
+      // Need to add pending compaction instants to avoid data missing, see HUDI-5990 for details.
+      val pendingCompactionTimeline = metaClient.getCommitsAndCompactionTimeline.filterPendingMajorOrMinorCompactionTimeline()
+      concatTimeline(completeTimeline, pendingCompactionTimeline, metaClient)
     }
   }
 
@@ -113,6 +119,43 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
     }
   }
 
+  def listFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Map[InternalRow, Seq[FileSlice]] = {
+    val slices = if (includedCommits.isEmpty) {
+      List()
+    } else {
+      val fileSlices = if (fullTableScan) {
+        listLatestFileSlices(Seq(), partitionFilters, dataFilters)
+      } else {
+        val latestCommit = includedCommits.last.getTimestamp
+        val fsView = new HoodieTableFileSystemView(metaClient, timeline, affectedFilesInCommits)
+        val modifiedPartitions = getWritePartitionPaths(commitsMetadata)
+
+        fileIndex.listMatchingPartitionPaths(HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilters))
+          .map(p => p.path).filter(p => modifiedPartitions.contains(p))
+          .flatMap { relativePartitionPath =>
+            fsView.getLatestMergedFileSlicesBeforeOrOn(relativePartitionPath, latestCommit).iterator().asScala
+          }
+      }
+      filterFileSlices(fileSlices, globPattern)
+    }
+
+    slices.groupBy(fs => {
+      if (fs.getBaseFile.isPresent) {
+        getPartitionColumnValuesAsInternalRow(fs.getBaseFile.get.getFileStatus)
+      } else {
+        getPartitionColumnValuesAsInternalRow(fs.getLogFiles.findAny.get.getFileStatus)
+      }
+    })
+  }
+
+  def getRequiredFilters: Seq[Filter] = {
+    if (includedCommits.isEmpty) {
+      Seq.empty
+    } else {
+      incrementalSpanRecordFilters
+    }
+  }
+
   private def filterFileSlices(fileSlices: Seq[FileSlice], pathGlobPattern: String): Seq[FileSlice] = {
     val filteredFileSlices = if (!StringUtils.isNullOrEmpty(pathGlobPattern)) {
       val globMatcher = new GlobPattern("*" + pathGlobPattern)
@@ -140,7 +183,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
 
   protected def endTimestamp: String = optParams.getOrElse(
     DataSourceReadOptions.END_INSTANTTIME.key,
-    if (hollowCommitHandling == USE_TRANSITION_TIME) super.timeline.lastInstant().get.getStateTransitionTime
+    if (hollowCommitHandling == USE_TRANSITION_TIME) super.timeline.lastInstant().get.getCompletionTime
     else super.timeline.lastInstant().get.getTimestamp)
 
   protected def startInstantArchived: Boolean = super.timeline.isBeforeTimelineStarts(startTimestamp)
@@ -152,8 +195,8 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   //   2. the end commit is archived
   //   3. there are files in metadata be deleted
   protected lazy val fullTableScan: Boolean = {
-    val fallbackToFullTableScan = optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.key,
-      DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES.defaultValue).toBoolean
+    val fallbackToFullTableScan = optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.key,
+      DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.defaultValue).toBoolean
 
     fallbackToFullTableScan && (startInstantArchived || endInstantArchived || affectedFilesInCommits.exists(fileStatus => !metaClient.getFs.exists(fileStatus.getPath)))
   }
@@ -163,7 +206,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
       // If endTimestamp commit is not archived, will filter instants
       // before endTimestamp.
       if (hollowCommitHandling == USE_TRANSITION_TIME) {
-        super.timeline.findInstantsInRangeByStateTransitionTime(startTimestamp, endTimestamp).getInstants.asScala.toList
+        super.timeline.findInstantsInRangeByCompletionTime(startTimestamp, endTimestamp).getInstants.asScala.toList
       } else {
         super.timeline.findInstantsInRange(startTimestamp, endTimestamp).getInstants.asScala.toList
       }
@@ -175,7 +218,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   protected lazy val commitsMetadata = includedCommits.map(getCommitMetadata(_, super.timeline)).asJava
 
   protected lazy val affectedFilesInCommits: Array[FileStatus] = {
-    listAffectedFilesForCommits(conf, new Path(metaClient.getBasePath), commitsMetadata)
+    listAffectedFilesForCommits(conf, metaClient.getBasePathV2, commitsMetadata)
   }
 
   protected lazy val (includeStartTime, startTs) = if (startInstantArchived) {

@@ -56,7 +56,8 @@ class RunClusteringProcedure extends BaseProcedure
     // params => key=value, key2=value2
     ProcedureParameter.optional(7, "options", DataTypes.StringType),
     ProcedureParameter.optional(8, "instants", DataTypes.StringType),
-    ProcedureParameter.optional(9, "selected_partitions", DataTypes.StringType)
+    ProcedureParameter.optional(9, "selected_partitions", DataTypes.StringType),
+    ProcedureParameter.optional(10, "limit", DataTypes.IntegerType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -83,6 +84,7 @@ class RunClusteringProcedure extends BaseProcedure
     val options = getArgValueOrDefault(args, PARAMETERS(7))
     val specificInstants = getArgValueOrDefault(args, PARAMETERS(8))
     val parts = getArgValueOrDefault(args, PARAMETERS(9))
+    val limit = getArgValueOrDefault(args, PARAMETERS(10))
 
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
@@ -149,7 +151,7 @@ class RunClusteringProcedure extends BaseProcedure
       .iterator().asScala.map(_.getLeft.getTimestamp).toSeq.sortBy(f => f)
 
     var (filteredPendingClusteringInstants, operation) = HoodieProcedureUtils.filterPendingInstantsAndGetOperation(
-      pendingClusteringInstants, specificInstants.asInstanceOf[Option[String]], op.asInstanceOf[Option[String]])
+      pendingClusteringInstants, specificInstants.asInstanceOf[Option[String]], op.asInstanceOf[Option[String]], limit.asInstanceOf[Option[Int]])
 
     var client: SparkRDDWriteClient[_] = null
     try {
@@ -157,7 +159,7 @@ class RunClusteringProcedure extends BaseProcedure
         tableName.asInstanceOf[Option[String]])
 
       if (operation.isSchedule) {
-        val instantTime = HoodieActiveTimeline.createNewInstantTime
+        val instantTime = client.createNewInstantTime()
         if (client.scheduleClusteringAtInstant(instantTime, HOption.empty())) {
           filteredPendingClusteringInstants = Seq(instantTime)
         }

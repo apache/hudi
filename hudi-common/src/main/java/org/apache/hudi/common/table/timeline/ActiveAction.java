@@ -27,8 +27,8 @@ import javax.annotation.Nullable;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
-import java.util.Objects;
 
 /**
  * A combination of instants covering action states: requested, inflight, completed.
@@ -36,32 +36,36 @@ import java.util.Objects;
 public class ActiveAction implements Serializable, Comparable<ActiveAction> {
   private final HoodieInstant requested;
   private final HoodieInstant inflight;
-  private final HoodieInstant completed;
+  private final List<HoodieInstant> completed;
 
   /**
    * The constructor.
    */
-  protected ActiveAction(@Nullable HoodieInstant requested, @Nullable HoodieInstant inflight, HoodieInstant completed) {
+  protected ActiveAction(@Nullable HoodieInstant requested, @Nullable HoodieInstant inflight, List<HoodieInstant> completed) {
     this.requested = requested;
     this.inflight = inflight;
     this.completed = completed;
   }
 
   public static ActiveAction fromInstants(List<HoodieInstant> instants) {
-    ValidationUtils.checkArgument(instants.size() <= 3);
+    ValidationUtils.checkArgument(instants != null, "Instants should not be null");
     HoodieInstant requested = null;
     HoodieInstant inflight = null;
-    HoodieInstant completed = null;
+    // there could be multiple completed cleaning instants for one instant time,
+    // currently we do not force explicit lock guard for cleaning.
+    List<HoodieInstant> completed = new ArrayList<>();
     for (HoodieInstant instant : instants) {
       if (instant.isRequested()) {
         requested = instant;
       } else if (instant.isInflight()) {
         inflight = instant;
       } else {
-        completed = instant;
+        completed.add(instant);
       }
     }
-    return new ActiveAction(requested, inflight, Objects.requireNonNull(completed));
+    ValidationUtils.checkState(!completed.isEmpty(), "The instants to archive must be completed: " + instants);
+    completed.sort(Comparator.comparing(HoodieInstant::getCompletionTime).reversed());
+    return new ActiveAction(requested, inflight, completed);
   }
 
   public List<HoodieInstant> getPendingInstants() {
@@ -75,31 +79,35 @@ public class ActiveAction implements Serializable, Comparable<ActiveAction> {
     return instants;
   }
 
-  public HoodieInstant getCompleted() {
+  public List<HoodieInstant> getCompletedInstants() {
     return completed;
   }
 
+  private HoodieInstant getCompleted() {
+    return completed.get(0);
+  }
+
   public String getAction() {
-    return this.completed.getAction();
+    return getCompleted().getAction();
   }
 
   /**
    * A COMPACTION action eventually becomes COMMIT when completed.
    */
   public String getPendingAction() {
-    return getPendingInstant().getAction();
+    return getPendingInstant().map(HoodieInstant::getAction).orElse("null");
   }
 
   public String getInstantTime() {
-    return this.completed.getTimestamp();
+    return getCompleted().getTimestamp();
   }
 
   public String getCompletionTime() {
-    return this.completed.getStateTransitionTime();
+    return getCompleted().getCompletionTime();
   }
 
   public Option<byte[]> getCommitMetadata(HoodieTableMetaClient metaClient) {
-    Option<byte[]> content = metaClient.getActiveTimeline().getInstantDetails(this.completed);
+    Option<byte[]> content = metaClient.getActiveTimeline().getInstantDetails(getCompleted());
     if (content.isPresent() && content.get().length == 0) {
       return Option.empty();
     }
@@ -132,35 +140,45 @@ public class ActiveAction implements Serializable, Comparable<ActiveAction> {
     }
   }
 
-  public byte[] getCleanPlan(HoodieTableMetaClient metaClient) {
-    return metaClient.getActiveTimeline().readCleanerInfoAsBytes(getPendingInstant()).get();
+  public Option<byte[]> getCleanPlan(HoodieTableMetaClient metaClient) {
+    Option<HoodieInstant> pendingInstant = getPendingInstant();
+    if (!pendingInstant.isPresent()) {
+      return Option.empty();
+    }
+    return metaClient.getActiveTimeline().readCleanerInfoAsBytes(pendingInstant.get());
   }
 
-  public byte[] getCompactionPlan(HoodieTableMetaClient metaClient) {
-    return metaClient.getActiveTimeline().readCompactionPlanAsBytes(HoodieTimeline.getCompactionRequestedInstant(getInstantTime())).get();
+  public Option<byte[]> getCompactionPlan(HoodieTableMetaClient metaClient) {
+    if (this.requested != null) {
+      return metaClient.getActiveTimeline().readCompactionPlanAsBytes(this.requested);
+    }
+    return Option.empty();
   }
 
-  public byte[] getLogCompactionPlan(HoodieTableMetaClient metaClient) {
-    return metaClient.getActiveTimeline().readCompactionPlanAsBytes(HoodieTimeline.getLogCompactionRequestedInstant(getInstantTime())).get();
+  public Option<byte[]> getLogCompactionPlan(HoodieTableMetaClient metaClient) {
+    if (this.requested != null) {
+      return metaClient.getActiveTimeline().readCompactionPlanAsBytes(this.requested);
+    }
+    return Option.empty();
   }
 
-  protected HoodieInstant getPendingInstant() {
+  protected Option<HoodieInstant> getPendingInstant() {
     if (requested != null) {
-      return requested;
+      return Option.of(requested);
     } else if (inflight != null) {
-      return inflight;
+      return Option.of(inflight);
     } else {
-      throw new AssertionError("Pending instant does not exist.");
+      return Option.empty();
     }
   }
 
   @Override
   public int compareTo(ActiveAction other) {
-    return this.completed.getTimestamp().compareTo(other.completed.getTimestamp());
+    return this.getCompleted().getTimestamp().compareTo(other.getCompleted().getTimestamp());
   }
 
   @Override
   public String toString() {
-    return getCompleted().getTimestamp() + "__" + getCompleted().getAction();
+    return getInstantTime() + "__" + getAction();
   }
 }

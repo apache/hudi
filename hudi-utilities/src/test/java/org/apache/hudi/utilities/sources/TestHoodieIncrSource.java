@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -45,6 +46,7 @@ import org.apache.hudi.utilities.sources.helpers.TestSnapshotQuerySplitterImpl;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -70,6 +72,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
+
+  @Override
+  public SparkConf conf() {
+    return conf(SparkClientFunctionalTestHarness.getSparkSqlConf());
+  }
 
   private HoodieTestDataGenerator dataGen;
   private HoodieTableMetaClient metaClient;
@@ -153,7 +160,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       List<Pair<String, List<HoodieRecord>>> inserts = new ArrayList<>();
 
       for (int i = 0; i < 6; i++) {
-        inserts.add(writeRecords(writeClient, INSERT, null, HoodieActiveTimeline.createNewInstantTime()));
+        inserts.add(writeRecords(writeClient, INSERT, null, writeClient.createNewInstantTime()));
       }
 
       // Emulates a scenario where an inflight commit is before a completed commit
@@ -254,7 +261,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       for (int i = 0; i < 6; i++) {
         WriteOperationType opType = i < 4 ? BULK_INSERT : UPSERT;
         List<HoodieRecord> recordsForUpdate = i < 4 ? null : dataBatches.get(3).getRight();
-        dataBatches.add(writeRecords(writeClient, opType, recordsForUpdate, HoodieActiveTimeline.createNewInstantTime()));
+        dataBatches.add(writeRecords(writeClient, opType, recordsForUpdate, writeClient.createNewInstantTime()));
         if (tableType == COPY_ON_WRITE) {
           if (i == 2) {
             writeClient.scheduleClustering(Option.empty());
@@ -268,7 +275,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
           }
         }
       }
-      dataBatches.add(writeRecords(writeClient, BULK_INSERT, null, HoodieActiveTimeline.createNewInstantTime()));
+      dataBatches.add(writeRecords(writeClient, BULK_INSERT, null, writeClient.createNewInstantTime()));
 
       String latestCommitTimestamp = dataBatches.get(dataBatches.size() - 1).getKey();
       // Pending clustering exists
@@ -332,6 +339,8 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     Properties properties = new Properties();
     properties.setProperty("hoodie.deltastreamer.source.hoodieincr.path", basePath());
     properties.setProperty("hoodie.deltastreamer.source.hoodieincr.missing.checkpoint.strategy", missingCheckpointStrategy.name());
+    // TODO: [HUDI-7081] get rid of this
+    properties.setProperty(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false");
     snapshotCheckPointImplClassOpt.map(className ->
         properties.setProperty(SnapshotLoadQuerySplitter.Config.SNAPSHOT_LOAD_QUERY_SPLITTER_CLASS_NAME, className));
     TypedProperties typedProperties = new TypedProperties(properties);

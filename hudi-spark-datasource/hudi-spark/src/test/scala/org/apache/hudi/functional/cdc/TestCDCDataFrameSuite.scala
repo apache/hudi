@@ -20,12 +20,15 @@ package org.apache.hudi.functional.cdc
 
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.DataSourceWriteOptions.{MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY}
+import org.apache.hudi.QuickstartUtils.getQuickstartWriteConfigs
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils.schemaBySupplementalLoggingMode
 import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplementalLoggingMode}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.spark.sql.{Row, SaveMode}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
@@ -688,4 +691,160 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
 
     assertEquals(spark.read.format("org.apache.hudi").load(basePath).count(), 2)
   }
+
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieCDCSupplementalLoggingMode])
+  def testCDCCleanRetain(loggingMode: HoodieCDCSupplementalLoggingMode): Unit = {
+    val options = Map(
+      "hoodie.table.cdc.enabled" -> "true",
+      "hoodie.table.cdc.supplemental.logging.mode" -> loggingMode.name(),
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      "hoodie.bulkinsert.shuffle.parallelism" -> "2",
+      "hoodie.delete.shuffle.parallelism" -> "1",
+      "hoodie.datasource.write.recordkey.field" -> "_row_key",
+      "hoodie.datasource.write.precombine.field" -> "timestamp",
+      "hoodie.table.name" -> ("hoodie_test" + loggingMode.name()),
+      "hoodie.clean.automatic" -> "true",
+      "hoodie.cleaner.commits.retained" -> "1"
+    )
+
+    // Insert Operation
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(options)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(spark.sessionState.newHadoopConf)
+      .build()
+
+    // Upsert Operation
+    val hoodieRecords2 = dataGen.generateUniqueUpdates("001", 50)
+    val records2 = recordsToStrings(hoodieRecords2).toList
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
+    inputDF2.write.format("org.apache.hudi")
+      .options(options)
+      .option("hoodie.datasource.write.operation", "upsert")
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val instant2 = metaClient.reloadActiveTimeline.lastInstant().get()
+    val cdcLogFiles2 = getCDCLogFile(instant2)
+    assertTrue(isFilesExistInFileSystem(cdcLogFiles2))
+
+    // Upsert Operation
+    val hoodieRecords3 = dataGen.generateUniqueUpdates("002", 50)
+    val records3 = recordsToStrings(hoodieRecords3).toList
+    val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 2))
+    inputDF3.write.format("org.apache.hudi")
+      .options(options)
+      .option("hoodie.datasource.write.operation", "upsert")
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // Upsert Operation
+    val hoodieRecords4 = dataGen.generateUniqueUpdates("003", 50)
+    val records4 = recordsToStrings(hoodieRecords4).toList
+    val inputDF4 = spark.read.json(spark.sparkContext.parallelize(records4, 2))
+    inputDF4.write.format("org.apache.hudi")
+      .options(options)
+      .option("hoodie.datasource.write.operation", "upsert")
+      .mode(SaveMode.Append)
+      .save(basePath)
+    assertFalse(isFilesExistInFileSystem(cdcLogFiles2))
+  }
+
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieCDCSupplementalLoggingMode])
+  def testCDCWhenFirstWriteContainsUpsertAndDelete(loggingMode: HoodieCDCSupplementalLoggingMode): Unit = {
+      val schema = StructType(List(
+        StructField("_id", StringType, nullable = true),
+        StructField("Op", StringType, nullable = true),
+        StructField("replicadmstimestamp", StringType, nullable = true),
+        StructField("code", StringType, nullable = true),
+        StructField("partition", StringType, nullable = true)
+      ))
+
+      val rdd1 = spark.sparkContext.parallelize(Seq(
+        Row("1", "I", "2023-06-14 15:46:06.953746", "A", "A"),
+        Row("1", "U", "2023-06-20 15:46:06.953746", "A", "A"),
+        Row("2", "I", "2023-06-14 15:46:06.953746", "A", "A"),
+        Row("2", "D", "2023-06-20 15:46:06.953746", "A", "A")
+      ))
+      val df1 = spark.createDataFrame(rdd1, schema)
+      df1.write.format("hudi")
+        .option(DataSourceWriteOptions.TABLE_TYPE.key(), MOR_TABLE_TYPE_OPT_VAL)
+        .options(getQuickstartWriteConfigs)
+        .option(RECORDKEY_FIELD_OPT_KEY, "_id")
+        .option(PRECOMBINE_FIELD_OPT_KEY, "replicadmstimestamp")
+        .option(PARTITIONPATH_FIELD_OPT_KEY, "partition")
+        .option(HoodieWriteConfig.TBL_NAME.key(), tableName + loggingMode.name())
+        .option("hoodie.datasource.write.operation", "upsert")
+        .option("hoodie.datasource.write.keygenerator.class", "org.apache.hudi.keygen.ComplexKeyGenerator")
+        .option("hoodie.datasource.write.payload.class", "org.apache.hudi.common.model.AWSDmsAvroPayload")
+        .option("hoodie.table.cdc.enabled", "true")
+        .option("hoodie.table.cdc.supplemental.logging.mode", loggingMode.name())
+        .mode(SaveMode.Append).save(basePath)
+
+      val rdd2 = spark.sparkContext.parallelize(Seq(
+        Row("1", "U", "2023-06-14 15:46:06.953746", "A", "A"),
+        Row("2", "U", "2023-06-20 15:46:06.953746", "A", "A"),
+        Row("3", "I", "2023-06-20 15:46:06.953746", "A", "A")
+      ))
+      val df2 = spark.createDataFrame(rdd2, schema)
+      df2.write.format("hudi")
+        .option(DataSourceWriteOptions.TABLE_TYPE.key(), MOR_TABLE_TYPE_OPT_VAL)
+        .options(getQuickstartWriteConfigs)
+        .option(RECORDKEY_FIELD_OPT_KEY, "_id")
+        .option(PRECOMBINE_FIELD_OPT_KEY, "replicadmstimestamp")
+        .option(PARTITIONPATH_FIELD_OPT_KEY, "partition")
+        .option(HoodieWriteConfig.TBL_NAME.key(), tableName + loggingMode.name())
+        .option("hoodie.datasource.write.operation", "upsert")
+        .option("hoodie.datasource.write.keygenerator.class", "org.apache.hudi.keygen.ComplexKeyGenerator")
+        .option("hoodie.datasource.write.payload.class", "org.apache.hudi.common.model.AWSDmsAvroPayload")
+        .option("hoodie.table.cdc.enabled", "true")
+        .option("hoodie.table.cdc.supplemental.logging.mode", loggingMode.name())
+        .mode(SaveMode.Append).save(basePath)
+
+      val hadoopConf = spark.sessionState.newHadoopConf()
+      val metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(basePath)
+        .setConf(hadoopConf)
+        .build()
+      val startTimeStamp = metaClient.reloadActiveTimeline().firstInstant().get.getTimestamp
+      val latestTimeStamp = metaClient.reloadActiveTimeline().lastInstant().get.getTimestamp
+
+      val result1 = spark.read.format("hudi")
+        .option("hoodie.datasource.query.type", "incremental")
+        .option("hoodie.datasource.read.begin.instanttime", "0")
+        .option("hoodie.datasource.read.end.instanttime", startTimeStamp)
+        .option("hoodie.datasource.query.incremental.format", "cdc")
+        .load(basePath)
+      result1.show(false)
+      assertCDCOpCnt(result1, 1, 0, 0)
+      assertEquals(result1.count(), 1)
+
+      val result2 = spark.read.format("hudi")
+        .option("hoodie.datasource.query.type", "incremental")
+        .option("hoodie.datasource.read.begin.instanttime", startTimeStamp)
+        .option("hoodie.datasource.read.end.instanttime", latestTimeStamp)
+        .option("hoodie.datasource.query.incremental.format", "cdc")
+        .load(basePath)
+      result2.show(false)
+      assertCDCOpCnt(result2, 2, 1, 0)
+      assertEquals(result2.count(), 3)
+
+      val result3 = spark.read.format("hudi")
+        .option("hoodie.datasource.query.type", "incremental")
+        .option("hoodie.datasource.read.begin.instanttime", "0")
+        .option("hoodie.datasource.read.end.instanttime", latestTimeStamp)
+        .option("hoodie.datasource.query.incremental.format", "cdc")
+        .load(basePath)
+      result3.show(false)
+      assertCDCOpCnt(result3, 3, 1, 0)
+      assertEquals(result3.count(), 4)
+    }
 }

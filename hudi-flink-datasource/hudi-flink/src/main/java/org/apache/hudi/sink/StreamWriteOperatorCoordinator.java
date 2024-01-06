@@ -202,7 +202,7 @@ public class StreamWriteOperatorCoordinator
       initHiveSync();
     }
     // start client id heartbeats for optimistic concurrency control
-    if (OptionsResolver.isOptimisticConcurrencyControl(conf)) {
+    if (OptionsResolver.isMultiWriter(conf)) {
       initClientIds(conf);
     }
   }
@@ -301,9 +301,7 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public void subtaskFailed(int i, @Nullable Throwable throwable) {
-    // reset the event
-    this.eventBuffer[i] = null;
-    LOG.warn("Reset the event for task [" + i + "]", throwable);
+    // no operation
   }
 
   @Override
@@ -378,7 +376,8 @@ public class StreamWriteOperatorCoordinator
   }
 
   private void addEventToBuffer(WriteMetadataEvent event) {
-    if (this.eventBuffer[event.getTaskID()] != null) {
+    if (this.eventBuffer[event.getTaskID()] != null
+        && this.eventBuffer[event.getTaskID()].getInstantTime().equals(event.getInstantTime())) {
       this.eventBuffer[event.getTaskID()].mergeWith(event);
     } else {
       this.eventBuffer[event.getTaskID()] = event;
@@ -387,7 +386,7 @@ public class StreamWriteOperatorCoordinator
 
   private void startInstant() {
     // refresh the last txn metadata
-    this.writeClient.preTxn(this.metaClient);
+    this.writeClient.preTxn(tableState.operationType, this.metaClient);
     // put the assignment in front of metadata generation,
     // because the instant request from write task is asynchronous.
     this.instant = this.writeClient.startCommit(tableState.commitAction, this.metaClient);
@@ -409,23 +408,25 @@ public class StreamWriteOperatorCoordinator
    */
   private void initInstant(String instant) {
     HoodieTimeline completedTimeline = this.metaClient.getActiveTimeline().filterCompletedInstants();
-    executor.execute(() -> {
-      if (instant.equals(WriteMetadataEvent.BOOTSTRAP_INSTANT) || completedTimeline.containsInstant(instant)) {
-        // the last instant committed successfully
-        reset();
-      } else {
-        LOG.info("Recommit instant {}", instant);
-        // Recommit should start heartbeat for lazy failed writes clean policy to avoid aborting for heartbeat expired.
-        if (writeClient.getConfig().getFailedWritesCleanPolicy().isLazy()) {
-          writeClient.getHeartbeatClient().start(instant);
-        }
-        commitInstant(instant);
+    if (instant.equals(WriteMetadataEvent.BOOTSTRAP_INSTANT) || completedTimeline.containsInstant(instant)) {
+      // the last instant committed successfully
+      reset();
+    } else {
+      LOG.info("Recommit instant {}", instant);
+      // Recommit should start heartbeat for lazy failed writes clean policy to avoid aborting for heartbeat expired.
+      if (writeClient.getConfig().getFailedWritesCleanPolicy().isLazy()) {
+        writeClient.getHeartbeatClient().start(instant);
       }
-      // starts a new instant
-      startInstant();
-      // upgrade downgrade
-      this.writeClient.upgradeDowngrade(this.instant, this.metaClient);
-    }, "initialize instant %s", instant);
+      commitInstant(instant);
+    }
+    // stop the heartbeat for old instant
+    if (writeClient.getConfig().getFailedWritesCleanPolicy().isLazy() && !WriteMetadataEvent.BOOTSTRAP_INSTANT.equals(this.instant)) {
+      writeClient.getHeartbeatClient().stop(this.instant);
+    }
+    // starts a new instant
+    startInstant();
+    // upgrade downgrade
+    this.writeClient.upgradeDowngrade(this.instant, this.metaClient);
   }
 
   private void handleBootstrapEvent(WriteMetadataEvent event) {
@@ -460,7 +461,7 @@ public class StreamWriteOperatorCoordinator
   private void scheduleTableServices(Boolean committed) {
     // if compaction is on, schedule the compaction
     if (tableState.scheduleCompaction) {
-      CompactionUtil.scheduleCompaction(metaClient, writeClient, tableState.isDeltaTimeCompaction, committed);
+      CompactionUtil.scheduleCompaction(writeClient, tableState.isDeltaTimeCompaction, committed);
     }
     // if clustering is on, schedule the clustering
     if (tableState.scheduleClustering) {

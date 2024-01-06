@@ -80,6 +80,10 @@ trait HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
   override def createMITJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType, condition: Option[Expression], hint: String): LogicalPlan = {
     Join(left, right, joinType, condition, JoinHint.NONE)
   }
+
+  override def produceSameOutput(a: LogicalPlan, b: LogicalPlan): Boolean = {
+    a.sameOutput(b)
+  }
 }
 
 object HoodieSpark3CatalystPlanUtils extends SparkAdapterSupport {

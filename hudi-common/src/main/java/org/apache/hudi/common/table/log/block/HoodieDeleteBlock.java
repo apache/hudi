@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.util.Lazy;
 
@@ -37,6 +38,8 @@ import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.hadoop.fs.FSDataInputStream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -51,11 +54,13 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
+import static org.apache.hudi.common.model.HoodieRecordLocation.isPositionValid;
 
 /**
  * Delete block contains a list of keys to be deleted from scanning the blocks so far.
  */
 public class HoodieDeleteBlock extends HoodieLogBlock {
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieDeleteBlock.class);
   /**
    * These static builders are added to avoid performance issue in Avro 1.10.
    * You can find more details in HoodieAvroUtils, HUDI-3834, and AVRO-3048.
@@ -65,17 +70,44 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
   private static final Lazy<HoodieDeleteRecord.Builder> HOODIE_DELETE_RECORD_BUILDER_STUB =
       Lazy.lazily(HoodieDeleteRecord::newBuilder);
 
+  private final boolean shouldWriteRecordPositions;
+  // Records to delete, sorted based on the record position if writing record position to the log block header
   private DeleteRecord[] recordsToDelete;
 
-  public HoodieDeleteBlock(DeleteRecord[] recordsToDelete, Map<HeaderMetadataType, String> header) {
-    this(Option.empty(), null, false, Option.empty(), header, new HashMap<>());
-    this.recordsToDelete = recordsToDelete;
+  public HoodieDeleteBlock(List<Pair<DeleteRecord, Long>> recordsToDelete,
+                           boolean shouldWriteRecordPositions,
+                           Map<HeaderMetadataType, String> header) {
+    this(Option.empty(), null, false, Option.empty(), header, new HashMap<>(), shouldWriteRecordPositions);
+    if (shouldWriteRecordPositions && !recordsToDelete.isEmpty()) {
+      recordsToDelete.sort((o1, o2) -> {
+        long v1 = o1.getRight();
+        long v2 = o2.getRight();
+        return Long.compare(v1, v2);
+      });
+      if (isPositionValid(recordsToDelete.get(0).getRight())) {
+        addRecordPositionsToHeader(
+            recordsToDelete.stream().map(Pair::getRight).collect(Collectors.toSet()),
+            recordsToDelete.size());
+      } else {
+        LOG.warn("There are delete records without valid positions. "
+            + "Skip writing record positions to the delete block header.");
+      }
+    }
+    this.recordsToDelete = recordsToDelete.stream().map(Pair::getLeft).toArray(DeleteRecord[]::new);
   }
 
   public HoodieDeleteBlock(Option<byte[]> content, FSDataInputStream inputStream, boolean readBlockLazily,
                            Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
                            Map<HeaderMetadataType, String> footer) {
+    // Setting `shouldWriteRecordPositions` to false as this constructor is only used by the reader
+    this(content, inputStream, readBlockLazily, blockContentLocation, header, footer, false);
+  }
+
+  HoodieDeleteBlock(Option<byte[]> content, FSDataInputStream inputStream, boolean readBlockLazily,
+                    Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
+                    Map<HeaderMetadataType, String> footer, boolean shouldWriteRecordPositions) {
     super(header, footer, blockContentLocation, content, inputStream, readBlockLazily);
+    this.shouldWriteRecordPositions = shouldWriteRecordPositions;
   }
 
   @Override

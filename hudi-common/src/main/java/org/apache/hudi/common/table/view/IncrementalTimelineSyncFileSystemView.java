@@ -95,6 +95,9 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
         TimelineDiffResult diffResult = TimelineDiffHelper.getNewInstantsForIncrementalSync(oldTimeline, newTimeline);
         if (diffResult.canSyncIncrementally()) {
           LOG.info("Doing incremental sync");
+          // need to refresh the completion time query view
+          // before amending existing file groups.
+          refreshCompletionTimeQueryView();
           runIncrementalSync(newTimeline, diffResult);
           LOG.info("Finished incremental sync");
           // Reset timeline to latest

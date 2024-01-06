@@ -64,7 +64,7 @@ public final class ErrorTableUtils {
 
   public static HoodieErrorTableConfig.ErrorWriteFailureStrategy getErrorWriteFailureStrategy(
       TypedProperties props) {
-    String writeFailureStrategy = props.getString(ERROR_TABLE_WRITE_FAILURE_STRATEGY.key());
+    String writeFailureStrategy = props.getString(ERROR_TABLE_WRITE_FAILURE_STRATEGY.key(), ERROR_TABLE_WRITE_FAILURE_STRATEGY.defaultValue());
     return HoodieErrorTableConfig.ErrorWriteFailureStrategy.valueOf(writeFailureStrategy);
   }
 

@@ -20,6 +20,7 @@ package org.apache.spark.sql.hudi.command
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.util.ConfigUtils
+import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, CatalogTableType, HoodieCatalogTable}
@@ -103,7 +104,7 @@ case class CreateHoodieTableLikeCommand(targetTable: TableIdentifier,
       CreateHoodieTableCommand.createTableInCatalog(sparkSession, hoodieCatalogTable, ignoreIfExists, queryAsProp)
     } catch {
       case NonFatal(e) =>
-        logWarning("Failed to create catalog table in metastore", e)
+        throw new HoodieException("Failed to create catalog table in metastore", e)
     }
     Seq.empty[Row]
   }

@@ -46,6 +46,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
@@ -175,7 +176,12 @@ public class CompactionTestBase extends HoodieClientTestBase {
   protected void executeCompaction(String compactionInstantTime, SparkRDDWriteClient client, HoodieTable table,
                                  HoodieWriteConfig cfg, int expectedNumRecs, boolean hasDeltaCommitAfterPendingCompaction) throws IOException {
 
-    client.compact(compactionInstantTime);
+    HoodieWriteMetadata<?> compactionMetadata = client.compact(compactionInstantTime);
+    if (!cfg.shouldAutoCommit()) {
+      if (compactionMetadata.getCommitMetadata().isPresent()) {
+        client.commitCompaction(compactionInstantTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
+      }
+    }
     assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), table, compactionInstantTime).doesMarkerDirExist());
     List<FileSlice> fileSliceList = getCurrentLatestFileSlices(table);
     assertTrue(fileSliceList.stream().findAny().isPresent(), "Ensure latest file-slices are not empty");
@@ -264,7 +270,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
 
   protected List<FileSlice> getCurrentLatestFileSlices(HoodieTable table) {
     HoodieTableFileSystemView view = new HoodieTableFileSystemView(table.getMetaClient(),
-        table.getMetaClient().getActiveTimeline().reload().getWriteTimeline());
+        table.getMetaClient().reloadActiveTimeline().getWriteTimeline());
     return Arrays.stream(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS)
         .flatMap(view::getLatestFileSlices).collect(Collectors.toList());
   }

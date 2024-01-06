@@ -26,12 +26,15 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.UnaryOperator;
 
 /**
  * An abstract reader context class for {@code HoodieFileGroupReader} to use, containing APIs for
@@ -52,6 +55,7 @@ public abstract class HoodieReaderContext<T> {
   public static final String INTERNAL_META_ORDERING_FIELD = "_2";
   public static final String INTERNAL_META_OPERATION = "_3";
   public static final String INTERNAL_META_INSTANT_TIME = "_4";
+  public static final String INTERNAL_META_SCHEMA = "_5";
 
   /**
    * Gets the file system based on the file path and configuration.
@@ -75,7 +79,15 @@ public abstract class HoodieReaderContext<T> {
    * @return {@link ClosableIterator<T>} that can return all records through iteration.
    */
   public abstract ClosableIterator<T> getFileRecordIterator(
-      Path filePath, long start, long length, Schema dataSchema, Schema requiredSchema, Configuration conf);
+      Path filePath, long start, long length, Schema dataSchema, Schema requiredSchema, Configuration conf) throws IOException;
+
+  /**
+   * Converts an Avro record, e.g., serialized in the log files, to an engine-specific record.
+   *
+   * @param avroRecord The Avro record.
+   * @return An engine-specific record in Type {@link T}.
+   */
+  public abstract T convertAvroRecord(IndexedRecord avroRecord);
 
   /**
    * @param mergerStrategy Merger strategy UUID.
@@ -121,12 +133,10 @@ public abstract class HoodieReaderContext<T> {
    *
    * @param recordOption An option of the record in engine-specific type if exists.
    * @param metadataMap  The record metadata.
-   * @param schema       The Avro schema of the record.
    * @return A new instance of {@link HoodieRecord}.
    */
   public abstract HoodieRecord<T> constructHoodieRecord(Option<T> recordOption,
-                                                        Map<String, Object> metadataMap,
-                                                        Schema schema);
+                                                        Map<String, Object> metadataMap);
 
   /**
    * Seals the engine-specific record to make sure the data referenced in memory do not change.
@@ -163,6 +173,50 @@ public abstract class HoodieReaderContext<T> {
   public Map<String, Object> generateMetadataForRecord(T record, Schema schema) {
     Map<String, Object> meta = new HashMap<>();
     meta.put(INTERNAL_META_RECORD_KEY, getRecordKey(record, schema));
+    meta.put(INTERNAL_META_SCHEMA, schema);
     return meta;
+  }
+
+  /**
+   * Updates the schema and reset the ordering value in existing metadata mapping of a record.
+   *
+   * @param meta   Metadata in a mapping.
+   * @param schema New schema to set.
+   * @return The input metadata mapping.
+   */
+  public Map<String, Object> updateSchemaAndResetOrderingValInMetadata(Map<String, Object> meta,
+                                                                       Schema schema) {
+    meta.remove(INTERNAL_META_ORDERING_FIELD);
+    meta.put(INTERNAL_META_SCHEMA, schema);
+    return meta;
+  }
+
+  /**
+   * Merge the skeleton file and data file iterators into a single iterator that will produce rows that contain all columns from the
+   * skeleton file iterator, followed by all columns in the data file iterator
+   *
+   * @param skeletonFileIterator iterator over bootstrap skeleton files that contain hudi metadata columns
+   * @param dataFileIterator iterator over data files that were bootstrapped into the hudi table
+   * @return iterator that concatenates the skeletonFileIterator and dataFileIterator
+   */
+  public abstract ClosableIterator<T> mergeBootstrapReaders(ClosableIterator<T> skeletonFileIterator, ClosableIterator<T> dataFileIterator);
+
+  /**
+   * Creates a function that will reorder records of schema "from" to schema of "to"
+   * all fields in "to" must be in "from", but not all fields in "from" must be in "to"
+   *
+   * @param from the schema of records to be passed into UnaryOperator
+   * @param to the schema of records produced by UnaryOperator
+   * @return a function that takes in a record and returns the record with reordered columns
+   */
+  public abstract UnaryOperator<T> projectRecord(Schema from, Schema to);
+
+  /**
+   * Extracts the record position value from the record itself.
+   *
+   * @return the record position in the base file.
+   */
+  public long extractRecordPosition(T record, Schema schema, String fieldName, long providedPositionIfNeeded) {
+    return providedPositionIfNeeded;
   }
 }

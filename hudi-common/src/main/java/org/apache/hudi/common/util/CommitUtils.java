@@ -24,6 +24,8 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -121,6 +123,20 @@ public class CommitUtils {
     LOG.info("Creating  metadata for " + operationType + " numWriteStats:" + writeStats.size()
         + " numReplaceFileIds:" + partitionToReplaceFileIds.values().stream().mapToInt(e -> e.size()).sum());
     return commitMetadata;
+  }
+
+  public static Option<HoodieCommitMetadata> buildMetadataFromInstant(HoodieDefaultTimeline timeline, HoodieInstant instant) {
+    try {
+      HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
+          timeline.getInstantDetails(instant).get(),
+          HoodieCommitMetadata.class);
+
+      return Option.of(commitMetadata);
+    } catch (IOException e) {
+      LOG.info("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
+    }
+
+    return Option.empty();
   }
 
   public static Set<Pair<String, String>> getPartitionAndFileIdWithoutSuffixFromSpecificRecord(Map<String, List<org.apache.hudi.avro.model.HoodieWriteStat>>

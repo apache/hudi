@@ -30,7 +30,6 @@ import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -140,7 +139,7 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
     setup(maxFileSize);
     config.setValue("hoodie.datasource.write.row.writer.enable", String.valueOf(rowWriterEnable));
     config.setValue("hoodie.metadata.enable", "false");
-    writeData(HoodieActiveTimeline.createNewInstantTime(), 2000, true);
+    writeData(writeClient.createNewInstantTime(), 2000, true);
     String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
     writeClient.cluster(clusteringTime, true);
 
@@ -174,15 +173,15 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
     writeClient.getConfig().setValue(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "4");
     writeClient.getConfig().setValue(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "5");
     writeClient.getConfig().setValue("hoodie.datasource.write.row.writer.enable", String.valueOf(rowWriterEnable));
-    writeData(HoodieActiveTimeline.createNewInstantTime(), 2000, true);
+    writeData(writeClient.createNewInstantTime(), 2000, true);
     String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
     writeClient.cluster(clusteringTime, true);
-    writeData(HoodieActiveTimeline.createNewInstantTime(), 10, true);
-    writeData(HoodieActiveTimeline.createNewInstantTime(), 10, true);
-    writeData(HoodieActiveTimeline.createNewInstantTime(), 10, true);
-    writeData(HoodieActiveTimeline.createNewInstantTime(), 10, true);
-    writeData(HoodieActiveTimeline.createNewInstantTime(), 10, true);
-    writeData(HoodieActiveTimeline.createNewInstantTime(), 10, true);
+    writeData(writeClient.createNewInstantTime(), 10, true);
+    writeData(writeClient.createNewInstantTime(), 10, true);
+    writeData(writeClient.createNewInstantTime(), 10, true);
+    writeData(writeClient.createNewInstantTime(), 10, true);
+    writeData(writeClient.createNewInstantTime(), 10, true);
+    writeData(writeClient.createNewInstantTime(), 10, true);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     final HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
     writeClient.clean();
@@ -209,8 +208,8 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
       HoodieConsistentHashingMetadata metadata = ConsistentBucketIndexUtils.loadMetadata(table, p).get();
       Assertions.assertEquals(targetBucketNum, metadata.getNodes().size());
     });
-    writeData(HoodieActiveTimeline.createNewInstantTime(), 10, true);
-    writeData(HoodieActiveTimeline.createNewInstantTime(), 10, true);
+    writeData(writeClient.createNewInstantTime(), 10, true);
+    writeData(writeClient.createNewInstantTime(), 10, true);
     Assertions.assertEquals(2080, readRecords().size());
   }
 
@@ -234,8 +233,8 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
     options.put("hoodie.datasource.write.row.writer.enable", String.valueOf(false));
     setup(128 * 1024 * 1024, options);
 
-    writeData(HoodieActiveTimeline.createNewInstantTime(), 500, true);
-    writeData(HoodieActiveTimeline.createNewInstantTime(), 500, true);
+    writeData(writeClient.createNewInstantTime(), 500, true);
+    writeData(writeClient.createNewInstantTime(), 500, true);
     String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
     writeClient.cluster(clusteringTime, true);
 
@@ -277,7 +276,7 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
   @Test
   public void testConcurrentClustering() throws IOException {
     setup(5120);
-    writeData(HoodieActiveTimeline.createNewInstantTime(), 2000, true);
+    writeData(writeClient.createNewInstantTime(), 2000, true);
     String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
     // Schedule again, it should not be scheduled as the previous one are doing clustering to all partitions
     Assertions.assertFalse(writeClient.scheduleClustering(Option.empty()).isPresent());
@@ -302,7 +301,7 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
   public void testConcurrentWrite(boolean rowWriterEnable) throws IOException {
     setup(5120);
     config.setValue("hoodie.datasource.write.row.writer.enable", String.valueOf(rowWriterEnable));
-    String writeTime = HoodieActiveTimeline.createNewInstantTime();
+    String writeTime = writeClient.createNewInstantTime();
     List<WriteStatus> writeStatues = writeData(writeTime, 2000, false);
     // Cannot schedule clustering if there is in-flight writer
     Assertions.assertFalse(writeClient.scheduleClustering(Option.empty()).isPresent());
@@ -313,7 +312,7 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
     // Schedule clustering
     String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
     // Concurrent is not blocked by the clustering
-    writeData(HoodieActiveTimeline.createNewInstantTime(), 2000, true);
+    writeData(writeClient.createNewInstantTime(), 2000, true);
     // The records are immediately visible when the writer completes
     Assertions.assertEquals(4000, readRecords().size());
     // Clustering finished, check the number of records (there will be file group switch in the background)

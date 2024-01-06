@@ -169,9 +169,12 @@ object HoodieWriterUtils {
       val resolver = spark.sessionState.conf.resolver
       val diffConfigs = StringBuilder.newBuilder
       params.foreach { case (key, value) =>
-        val existingValue = getStringFromTableConfigWithAlternatives(tableConfig, key)
-        if (null != existingValue && !resolver(existingValue, value)) {
-          diffConfigs.append(s"$key:\t$value\t${tableConfig.getString(key)}\n")
+        // Base file format can change between writes, so ignore it.
+        if (!HoodieTableConfig.BASE_FILE_FORMAT.key.equals(key)) {
+          val existingValue = getStringFromTableConfigWithAlternatives(tableConfig, key)
+          if (null != existingValue && !resolver(existingValue, value)) {
+            diffConfigs.append(s"$key:\t$value\t${tableConfig.getString(key)}\n")
+          }
         }
       }
 
@@ -200,10 +203,11 @@ object HoodieWriterUtils {
         }
 
         val datasourcePartitionFields = params.getOrElse(PARTITIONPATH_FIELD.key(), null)
+        val currentPartitionFields = if (datasourcePartitionFields == null) null else SparkKeyGenUtils.getPartitionColumns(TypedProperties.fromMap(params))
         val tableConfigPartitionFields = tableConfig.getString(HoodieTableConfig.PARTITION_FIELDS)
         if (null != datasourcePartitionFields && null != tableConfigPartitionFields
-          && datasourcePartitionFields != tableConfigPartitionFields) {
-          diffConfigs.append(s"PartitionPath:\t$datasourcePartitionFields\t$tableConfigPartitionFields\n")
+          && currentPartitionFields != tableConfigPartitionFields) {
+          diffConfigs.append(s"PartitionPath:\t$currentPartitionFields\t$tableConfigPartitionFields\n")
         }
       }
 

@@ -76,7 +76,7 @@ public class SparkUpsertDeltaCommitPartitioner<T> extends UpsertPartitioner<T> {
         smallFileLocations.add(sf);
       } else {
         HoodieLogFile logFile = smallFileSlice.getLogFiles().findFirst().get();
-        sf.location = new HoodieRecordLocation(logFile.getBaseCommitTime(),
+        sf.location = new HoodieRecordLocation(logFile.getDeltaCommitTime(),
             logFile.getFileId());
         sf.sizeBytes = getTotalFileSize(smallFileSlice);
         smallFileLocations.add(sf);

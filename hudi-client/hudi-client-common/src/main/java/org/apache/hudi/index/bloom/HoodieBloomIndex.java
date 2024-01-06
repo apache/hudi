@@ -212,7 +212,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
     // also obtain file ranges, if range pruning is enabled
     context.setJobStatus(this.getClass().getName(), "Load meta index key ranges for file slices: " + config.getTableName());
 
-    String keyField = hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
+    String keyField = HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName();
 
     List<Pair<String, HoodieBaseFile>> baseFilesForAllPartitions = HoodieIndexUtils.getLatestBaseFilesForAllPartitions(partitions, context, hoodieTable);
     // Partition and file name pairs

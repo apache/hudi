@@ -23,6 +23,8 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -242,10 +244,14 @@ public abstract class TestHoodieReaderWriterBase {
   private void verifyFilterRowKeys(HoodieAvroFileReader hoodieReader) {
     Set<String> candidateRowKeys = IntStream.range(40, NUM_RECORDS * 2)
         .mapToObj(i -> "key" + String.format("%02d", i)).collect(Collectors.toCollection(TreeSet::new));
-    List<String> expectedKeys = IntStream.range(40, NUM_RECORDS)
-        .mapToObj(i -> "key" + String.format("%02d", i)).sorted().collect(Collectors.toList());
-    assertEquals(expectedKeys, hoodieReader.filterRowKeys(candidateRowKeys)
-        .stream().sorted().collect(Collectors.toList()));
+    Set<Pair<String, Long>> expectedKeys = IntStream.range(40, NUM_RECORDS)
+        .mapToObj(i -> {
+          // record position is not written for HFile format
+          long position = hoodieReader instanceof HoodieAvroHFileReader ? HoodieRecordLocation.INVALID_POSITION : (long) i;
+          String key = "key" + String.format("%02d", i);
+          return Pair.of(key, position);
+        }).collect(Collectors.toSet());
+    assertEquals(expectedKeys, hoodieReader.filterRowKeys(candidateRowKeys));
   }
 
   private void verifyReaderWithSchema(String schemaPath, HoodieAvroFileReader hoodieReader) throws IOException {

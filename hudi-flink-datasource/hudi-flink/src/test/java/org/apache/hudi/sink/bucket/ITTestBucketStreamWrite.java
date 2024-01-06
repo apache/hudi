@@ -112,17 +112,14 @@ public class ITTestBucketStreamWrite {
     Path path = new Path(metaClient.getMetaPath() + Path.SEPARATOR + filename);
     fs.delete(path);
 
-    // marker types are different for COW and MOR
-    IOType ioType = isCow ? IOType.CREATE : IOType.APPEND;
-
     commitMetadata.getFileIdAndRelativePaths().forEach((fileId, relativePath) -> {
       // hacky way to reconstruct markers ¯\_(ツ)_/¯
       String[] partitionFileNameSplit = relativePath.split("/");
-      String fileInstant = FSUtils.getCommitTime(partitionFileNameSplit[1]);
       String partition = partitionFileNameSplit[0];
-      String writeToken = isCow ? getWriteToken(partitionFileNameSplit[1]) : FSUtils.getWriteTokenFromLogPath(new Path(relativePath));
+      String fileName = partitionFileNameSplit[1];
       try {
-        FileCreateUtils.createMarkerFile(tablePath, partition, commitInstant, fileInstant, fileId, ioType, writeToken);
+        String markerFileName = FileCreateUtils.markerFileName(fileName, IOType.CREATE);
+        FileCreateUtils.createMarkerFile(tablePath, partition, commitInstant, markerFileName);
       } catch (IOException e) {
         throw new RuntimeException(e);
       }

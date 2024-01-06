@@ -132,7 +132,7 @@ public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
     HoodieRecordLocation location = groupedRecords.get(0).getCurrentLocation();
     try (HoodieLogFormat.Writer logWriter = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(basePath, partitionPath))
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(location.getFileId())
-        .overBaseCommit(location.getInstantTime()).withFs(fs).build()) {
+        .withDeltaCommit(location.getInstantTime()).withFs(fs).build()) {
       Map<HeaderMetadataType, String> header = new java.util.HashMap<>();
       header.put(HeaderMetadataType.INSTANT_TIME, location.getInstantTime());
       header.put(HeaderMetadataType.SCHEMA, schema.toString());
@@ -145,7 +145,7 @@ public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
           LOG.warn("Failed to convert record " + r.toString(), e);
           return null;
         }
-      }).map(HoodieAvroIndexedRecord::new).collect(Collectors.toList()), header, HoodieRecord.RECORD_KEY_METADATA_FIELD));
+      }).map(HoodieAvroIndexedRecord::new).collect(Collectors.toList()), false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD));
       return Pair.of(partitionPath, logWriter.getLogFile());
     }
   }

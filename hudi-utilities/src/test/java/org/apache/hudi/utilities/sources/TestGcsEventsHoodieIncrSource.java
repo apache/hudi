@@ -40,6 +40,7 @@ import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.CloudDataFetcher;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
+import org.apache.hudi.utilities.sources.helpers.QueryInfo;
 import org.apache.hudi.utilities.sources.helpers.QueryRunner;
 import org.apache.hudi.utilities.sources.helpers.gcs.GcsObjectMetadataFetcher;
 
@@ -56,6 +57,8 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
@@ -93,6 +96,8 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
 
   @Mock
   QueryRunner queryRunner;
+  @Mock
+  QueryInfo queryInfo;
 
   protected Option<SchemaProvider> schemaProvider;
   private HoodieTableMetaClient metaClient;
@@ -142,7 +147,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     filePathSizeAndCommitTime.add(Triple.of("path/to/file3.json", 200L, "1"));
     Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);
 
-    when(queryRunner.run(Mockito.any())).thenReturn(inputDs);
+    setMockQueryRunner(inputDs);
 
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(commitTimeForReads), 100L, "1#path/to/file1.json");
   }
@@ -160,7 +165,8 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     filePathSizeAndCommitTime.add(Triple.of("path/to/file3.json", 200L, "1"));
 
     Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);
-    when(queryRunner.run(Mockito.any())).thenReturn(inputDs);
+
+    setMockQueryRunner(inputDs);
 
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(commitTimeForReads), 250L, "1#path/to/file2.json");
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("1#path/to/file2.json"), 250L, "1#path/to/file3.json");
@@ -183,7 +189,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
 
     Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);
 
-    when(queryRunner.run(Mockito.any())).thenReturn(inputDs);
+    setMockQueryRunner(inputDs);
 
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(commitTimeForReads), 250L, "1#path/to/file10006.json");
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("1#path/to/file10006.json"), 250L, "1#path/to/file10007.json");
@@ -205,7 +211,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
 
     Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);
 
-    when(queryRunner.run(Mockito.any())).thenReturn(inputDs);
+    setMockQueryRunner(inputDs);
 
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(commitTimeForReads), 100L, "1#path/to/file1.json");
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("1#path/to/file1.json"), 100L, "1#path/to/file2.json");
@@ -213,10 +219,68 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(commitTimeForReads), 100L, "1#path/to/file1.json");
   }
 
+  @ParameterizedTest
+  @CsvSource({
+      "1,1#path/to/file2.json,3#path/to/file4.json,1#path/to/file1.json,1",
+      "2,1#path/to/file2.json,3#path/to/file4.json,1#path/to/file1.json,2",
+      "3,3#path/to/file5.json,3,1#path/to/file1.json,3"
+  })
+  public void testSplitSnapshotLoad(String snapshotCheckPoint, String exptected1, String exptected2, String exptected3, String exptected4) throws IOException {
+
+    writeGcsMetadataRecords("1");
+    writeGcsMetadataRecords("2");
+    writeGcsMetadataRecords("3");
+
+    List<Triple<String, Long, String>> filePathSizeAndCommitTime = new ArrayList<>();
+    // Add file paths and sizes to the list
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file1.json", 50L, "1"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file2.json", 50L, "1"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/skip1.json", 50L, "2"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/skip2.json", 50L, "2"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file5.json", 50L, "3"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file4.json", 50L, "3"));
+
+    Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);
+
+    setMockQueryRunner(inputDs, Option.of(snapshotCheckPoint));
+    TypedProperties typedProperties = setProps(READ_UPTO_LATEST_COMMIT);
+    typedProperties.setProperty("hoodie.deltastreamer.source.cloud.data.ignore.relpath.prefix", "path/to/skip");
+    //1. snapshot query, read all records
+    readAndAssert(READ_UPTO_LATEST_COMMIT, Option.empty(), 50000L, exptected1, typedProperties);
+    //2. incremental query, as commit is present in timeline
+    readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(exptected1), 10L, exptected2, typedProperties);
+    //3. snapshot query with source limit less than first commit size
+    readAndAssert(READ_UPTO_LATEST_COMMIT, Option.empty(), 50L, exptected3, typedProperties);
+    typedProperties.setProperty("hoodie.deltastreamer.source.cloud.data.ignore.relpath.prefix", "path/to");
+    //4. As snapshotQuery will return 1 -> same would be return as nextCheckpoint (dataset is empty due to ignore prefix).
+    readAndAssert(READ_UPTO_LATEST_COMMIT, Option.empty(), 50L, exptected4, typedProperties);
+  }
+
+  private void setMockQueryRunner(Dataset<Row> inputDs) {
+    setMockQueryRunner(inputDs, Option.empty());
+  }
+
+  private void setMockQueryRunner(Dataset<Row> inputDs, Option<String> nextCheckPointOpt) {
+
+    when(queryRunner.run(Mockito.any(QueryInfo.class), Mockito.any())).thenAnswer(invocation -> {
+      QueryInfo queryInfo = invocation.getArgument(0);
+      QueryInfo updatedQueryInfo = nextCheckPointOpt.map(nextCheckPoint ->
+              queryInfo.withUpdatedEndInstant(nextCheckPoint))
+          .orElse(queryInfo);
+      if (updatedQueryInfo.isSnapshot()) {
+        return Pair.of(updatedQueryInfo,
+            inputDs.filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+                    updatedQueryInfo.getStartInstant()))
+                .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+                    updatedQueryInfo.getEndInstant())));
+      }
+      return Pair.of(updatedQueryInfo, inputDs);
+    });
+  }
+
   private void readAndAssert(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy,
-                             Option<String> checkpointToPull, long sourceLimit, String expectedCheckpoint) {
-    TypedProperties typedProperties = setProps(missingCheckpointStrategy);
-    typedProperties.put("hoodie.deltastreamer.source.hoodieincr.file.format", "json");
+                             Option<String> checkpointToPull, long sourceLimit, String expectedCheckpoint,
+                             TypedProperties typedProperties) {
 
     GcsEventsHoodieIncrSource incrSource = new GcsEventsHoodieIncrSource(typedProperties, jsc(),
         spark(), schemaProvider.orElse(null), new GcsObjectMetadataFetcher(typedProperties, "json"), gcsObjectDataFetcher, queryRunner);
@@ -228,6 +292,13 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
 
     Assertions.assertNotNull(nextCheckPoint);
     Assertions.assertEquals(expectedCheckpoint, nextCheckPoint);
+  }
+
+  private void readAndAssert(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy,
+                             Option<String> checkpointToPull, long sourceLimit, String expectedCheckpoint) {
+    TypedProperties typedProperties = setProps(missingCheckpointStrategy);
+    typedProperties.put("hoodie.deltastreamer.source.hoodieincr.file.format", "json");
+    readAndAssert(missingCheckpointStrategy, checkpointToPull, sourceLimit, expectedCheckpoint, typedProperties);
   }
 
   private HoodieRecord getGcsMetadataRecord(String commitTime, String filename, String bucketName, String generation) {

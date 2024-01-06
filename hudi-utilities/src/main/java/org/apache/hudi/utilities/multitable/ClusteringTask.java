@@ -20,6 +20,7 @@
 package org.apache.hudi.utilities.multitable;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.utilities.HoodieClusteringJob;
 
 import org.apache.spark.api.java.JavaSparkContext;
@@ -43,13 +44,18 @@ class ClusteringTask extends TableServiceTask {
    */
   private String clusteringMode;
 
+  /**
+   * Meta Client.
+   */
+  private HoodieTableMetaClient metaClient;
+
   @Override
   void run() {
     HoodieClusteringJob.Config clusteringConfig = new HoodieClusteringJob.Config();
     clusteringConfig.basePath = basePath;
     clusteringConfig.parallelism = parallelism;
     clusteringConfig.runningMode = clusteringMode;
-    new HoodieClusteringJob(jsc, clusteringConfig, props).cluster(retry);
+    new HoodieClusteringJob(jsc, clusteringConfig, props, metaClient).cluster(retry);
   }
 
   /**
@@ -98,6 +104,11 @@ class ClusteringTask extends TableServiceTask {
      */
     private int retry;
 
+    /**
+     * Meta Client.
+     */
+    private HoodieTableMetaClient metaClient;
+
     private Builder() {
     }
 
@@ -131,6 +142,11 @@ class ClusteringTask extends TableServiceTask {
       return this;
     }
 
+    public Builder withMetaclient(HoodieTableMetaClient metaClient) {
+      this.metaClient = metaClient;
+      return this;
+    }
+
     public ClusteringTask build() {
       ClusteringTask clusteringTask = new ClusteringTask();
       clusteringTask.jsc = this.jsc;
@@ -139,6 +155,7 @@ class ClusteringTask extends TableServiceTask {
       clusteringTask.retry = this.retry;
       clusteringTask.basePath = this.basePath;
       clusteringTask.props = this.props;
+      clusteringTask.metaClient = this.metaClient;
       return clusteringTask;
     }
   }

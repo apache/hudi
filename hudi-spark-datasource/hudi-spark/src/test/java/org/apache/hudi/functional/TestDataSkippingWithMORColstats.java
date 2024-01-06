@@ -25,7 +25,6 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -59,6 +58,7 @@ import static org.apache.hudi.common.testutils.RawTripTestPayload.recordToString
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS;
 import static org.apache.spark.sql.SaveMode.Append;
 import static org.apache.spark.sql.SaveMode.Overwrite;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -244,7 +244,13 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
       //Corrupt to prove that colstats does not exclude filegroup
       filesToCorrupt.forEach(TestDataSkippingWithMORColstats::corruptFile);
       assertEquals(1, filesToCorrupt.size());
-      assertThrows(SparkException.class, () -> readMatchingRecords().count());
+      if (shouldRollback) {
+        // the update log files got deleted during rollback,
+        // so the cols tats does not include the file groups with corrupt files.
+        assertDoesNotThrow(() -> readMatchingRecords().count(), "The non match file group got rollback correctly");
+      } else {
+        assertThrows(SparkException.class, () -> readMatchingRecords().count(), "The corrupt parquets are not excluded");
+      }
     }
   }
 
@@ -338,7 +344,7 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
         .withKeyGenerator("org.apache.hudi.keygen.NonpartitionedKeyGenerator")
         .build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
-      client.scheduleCompactionAtInstant(HoodieActiveTimeline.createNewInstantTime(), Option.empty());
+      client.scheduleCompactionAtInstant(client.createNewInstantTime(), Option.empty());
     }
   }
 

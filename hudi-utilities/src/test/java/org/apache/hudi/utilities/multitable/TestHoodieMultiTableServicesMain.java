@@ -29,7 +29,7 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -38,6 +38,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLayoutConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
@@ -68,6 +69,8 @@ import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
+import static org.apache.hudi.utilities.multitable.MultiTableServiceUtils.Constants.TABLES_SKIP_WRONG_PATH;
+import static org.apache.hudi.utilities.multitable.MultiTableServiceUtils.Constants.TABLES_TO_BE_SERVED_PROP;
 
 /**
  * Tests for HoodieMultiTableServicesMain
@@ -166,14 +169,57 @@ class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implement
     Assertions.assertEquals(4, metaClient2.reloadActiveTimeline().getCommitsTimeline().countInstants());
   }
 
+  @Test
+  public void testRunMultiTableServicesWithOneWrongPath() throws IOException {
+    // batch run table service
+    HoodieMultiTableServicesMain.Config cfg = getHoodieMultiServiceConfig();
+    cfg.autoDiscovery = false;
+    cfg.batch = true;
+    HoodieTableMetaClient metaClient1 = getMetaClient("table1");
+    cfg.configs.add(String.format("%s=%s", TABLES_SKIP_WRONG_PATH, "true"));
+    cfg.configs.add(String.format("%s=%s", TABLES_TO_BE_SERVED_PROP, metaClient1.getBasePathV2() + ",file:///fakepath"));
+    HoodieMultiTableServicesMain main = new HoodieMultiTableServicesMain(jsc, cfg);
+    try {
+      main.startServices();
+    } catch (Exception e) {
+      Assertions.assertFalse(e instanceof TableNotFoundException);
+    }
+
+    // stream run table service
+    cfg.batch = false;
+    new Thread(() -> {
+      try {
+        Thread.sleep(10000);
+        LOG.info("Shutdown the table services");
+        main.cancel();
+      } catch (InterruptedException e) {
+        LOG.warn("InterruptedException: ", e);
+      }
+    }).start();
+    try {
+      main.startServices();
+    } catch (Exception e) {
+      Assertions.assertFalse(e instanceof TableNotFoundException);
+    }
+
+    // When we disable the skip wrong path, throw the exception.
+    cfg.batch = true;
+    cfg.configs.add(String.format("%s=%s", TABLES_SKIP_WRONG_PATH, "false"));
+    try {
+      main.startServices();
+    } catch (Exception e) {
+      Assertions.assertTrue(e instanceof TableNotFoundException);
+    }
+  }
+
   private void prepareData() throws IOException {
     initTestDataGenerator();
     HoodieTableMetaClient metaClient1 = getMetaClient("table1");
     HoodieTableMetaClient metaClient2 = getMetaClient("table2");
-    String instant1 = HoodieInstantTimeGenerator.createNewInstantTime(0);
+    String instant1 = InProcessTimeGenerator.createNewInstantTime(0);
     writeToTable(metaClient1.getBasePath(), instant1, false);
     writeToTable(metaClient2.getBasePath(), instant1, false);
-    String instant2 = HoodieInstantTimeGenerator.createNewInstantTime(1);
+    String instant2 = InProcessTimeGenerator.createNewInstantTime(1);
     writeToTable(metaClient1.getBasePath(), instant2, true);
     writeToTable(metaClient2.getBasePath(), instant2, true);
     Assertions.assertEquals(0, metaClient1.reloadActiveTimeline().getCleanerTimeline().countInstants());

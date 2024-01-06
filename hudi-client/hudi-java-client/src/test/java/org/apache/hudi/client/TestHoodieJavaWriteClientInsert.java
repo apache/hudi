@@ -116,9 +116,7 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
 
     HoodieJavaWriteClient writeClient;
     if (passInTimelineServer) {
-      EmbeddedTimelineService timelineService =
-          new EmbeddedTimelineService(context, null, writeConfig);
-      timelineService.startServer();
+      EmbeddedTimelineService timelineService = EmbeddedTimelineService.getOrStartEmbeddedTimelineService(context, null, writeConfig);
       writeConfig.setViewStorageConfig(timelineService.getRemoteFileSystemViewConfig());
       writeClient = new HoodieJavaWriteClient(context, writeConfig, true, Option.of(timelineService));
       // Both the write client and the table service client should use the same passed-in
@@ -127,7 +125,7 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
       assertEquals(timelineService, writeClient.getTableServiceClient().getTimelineServer().get());
       // Write config should not be changed
       assertEquals(writeConfig, writeClient.getConfig());
-      timelineService.stop();
+      timelineService.stopForBasePath(writeConfig.getBasePath());
     } else {
       writeClient = new HoodieJavaWriteClient(context, writeConfig);
       // Only one timeline server should be instantiated, and the same timeline server
@@ -148,7 +146,7 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
 
     HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    BaseFileUtils fileUtils = BaseFileUtils.getInstance(metaClient);
+    BaseFileUtils fileUtils = getFileUtilsInstance(metaClient);
 
     // Get some records belong to the same partition (2021/09/11)
     String insertRecordStr1 = "{\"_row_key\":\"1\","
@@ -222,7 +220,7 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
 
     HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    BaseFileUtils fileUtils = BaseFileUtils.getInstance(metaClient);
+    BaseFileUtils fileUtils = getFileUtilsInstance(metaClient);
 
     String partitionPath = "2021/09/11";
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[]{partitionPath});

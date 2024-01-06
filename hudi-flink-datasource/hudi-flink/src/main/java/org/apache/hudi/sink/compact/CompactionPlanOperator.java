@@ -72,12 +72,12 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
   @Override
   public void open() throws Exception {
     super.open();
+    registerMetrics();
     this.table = FlinkTables.createTable(conf, getRuntimeContext());
     // when starting up, rolls back all the inflight compaction instants if there exists,
     // these instants are in priority for scheduling task because the compaction instants are
     // scheduled from earliest(FIFO sequence).
     CompactionUtil.rollbackCompaction(table);
-    registerMetrics();
   }
 
   @Override

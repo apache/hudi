@@ -34,6 +34,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.utils.BucketStreamWriteFunctionWrapper;
+import org.apache.hudi.sink.utils.BulkInsertFunctionWrapper;
 import org.apache.hudi.sink.utils.ConsistentBucketStreamWriteFunctionWrapper;
 import org.apache.hudi.sink.utils.InsertFunctionWrapper;
 import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
@@ -116,6 +117,11 @@ public class TestData {
           TimestampData.fromEpochMillis(7), StringData.fromString("par4")),
       insertRow(StringData.fromString("id8"), StringData.fromString("Han"), 56,
           TimestampData.fromEpochMillis(8), StringData.fromString("par4"))
+  );
+
+  public static List<RowData> DATA_SET_INSERT_PARTITION_IS_NULL = Arrays.asList(
+      insertRow(StringData.fromString("idNull"), StringData.fromString("He"), 30,
+          TimestampData.fromEpochMillis(9), null)
   );
 
   public static List<RowData> DATA_SET_UPDATE_INSERT = Arrays.asList(
@@ -553,7 +559,9 @@ public class TestData {
    * Initializes a writing pipeline with given configuration.
    */
   public static TestFunctionWrapper<RowData> getWritePipeline(String basePath, Configuration conf) throws Exception {
-    if (OptionsResolver.isAppendMode(conf)) {
+    if (OptionsResolver.isBulkInsertOperation(conf)) {
+      return new BulkInsertFunctionWrapper<>(basePath, conf);
+    } else if (OptionsResolver.isAppendMode(conf)) {
       return new InsertFunctionWrapper<>(basePath, conf);
     } else if (OptionsResolver.isBucketIndexType(conf)) {
       if (OptionsResolver.isConsistentHashingBucketIndexType(conf)) {
@@ -964,14 +972,22 @@ public class TestData {
    */
   private static String filterOutVariables(GenericRecord genericRecord) {
     List<String> fields = new ArrayList<>();
-    fields.add(genericRecord.get("_hoodie_record_key").toString());
-    fields.add(genericRecord.get("_hoodie_partition_path").toString());
-    fields.add(genericRecord.get("uuid").toString());
-    fields.add(genericRecord.get("name").toString());
-    fields.add(genericRecord.get("age").toString());
+    fields.add(getFieldValue(genericRecord, "_hoodie_record_key"));
+    fields.add(getFieldValue(genericRecord, "_hoodie_partition_path"));
+    fields.add(getFieldValue(genericRecord, "uuid"));
+    fields.add(getFieldValue(genericRecord, "name"));
+    fields.add(getFieldValue(genericRecord, "age"));
     fields.add(genericRecord.get("ts").toString());
     fields.add(genericRecord.get("partition").toString());
     return String.join(",", fields);
+  }
+
+  private static String getFieldValue(GenericRecord genericRecord, String fieldName) {
+    if (genericRecord.get(fieldName) != null) {
+      return genericRecord.get(fieldName).toString();
+    } else {
+      return null;
+    }
   }
 
   public static BinaryRowData insertRow(Object... fields) {

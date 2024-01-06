@@ -20,6 +20,7 @@
 package org.apache.hudi.utilities.multitable;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.utilities.HoodieCompactor;
 
 import org.apache.spark.api.java.JavaSparkContext;
@@ -48,6 +49,11 @@ class CompactionTask extends TableServiceTask {
    */
   private int parallelism;
 
+  /**
+   * Meta Client.
+   */
+  private HoodieTableMetaClient metaClient;
+
   @Override
   void run() {
     HoodieCompactor.Config compactionCfg = new HoodieCompactor.Config();
@@ -56,7 +62,7 @@ class CompactionTask extends TableServiceTask {
     compactionCfg.runningMode = compactionRunningMode;
     compactionCfg.parallelism = parallelism;
     compactionCfg.retry = retry;
-    new HoodieCompactor(jsc, compactionCfg, props).compact(retry);
+    new HoodieCompactor(jsc, compactionCfg, props, metaClient).compact(retry);
   }
 
   /**
@@ -109,6 +115,11 @@ class CompactionTask extends TableServiceTask {
      */
     private JavaSparkContext jsc;
 
+    /**
+     * Meta Client.
+     */
+    private HoodieTableMetaClient metaClient;
+
     public Builder withProps(TypedProperties props) {
       this.props = props;
       return this;
@@ -144,6 +155,11 @@ class CompactionTask extends TableServiceTask {
       return this;
     }
 
+    public Builder withMetaclient(HoodieTableMetaClient metaClient) {
+      this.metaClient = metaClient;
+      return this;
+    }
+
     public CompactionTask build() {
       CompactionTask compactionTask = new CompactionTask();
       compactionTask.basePath = this.basePath;
@@ -153,6 +169,7 @@ class CompactionTask extends TableServiceTask {
       compactionTask.compactionStrategyName = this.compactionStrategyName;
       compactionTask.retry = this.retry;
       compactionTask.props = this.props;
+      compactionTask.metaClient = this.metaClient;
       return compactionTask;
     }
   }

@@ -40,12 +40,18 @@ public final class HoodieRecordGlobalLocation extends HoodieRecordLocation {
     this.partitionPath = partitionPath;
   }
 
+  public HoodieRecordGlobalLocation(String partitionPath, String instantTime, String fileId, long position) {
+    super(instantTime, fileId, position);
+    this.partitionPath = partitionPath;
+  }
+
   @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder("HoodieGlobalRecordLocation {");
     sb.append("partitionPath=").append(partitionPath).append(", ");
     sb.append("instantTime=").append(instantTime).append(", ");
-    sb.append("fileId=").append(fileId);
+    sb.append("fileId=").append(fileId).append(", ");
+    sb.append("position=").append(position);
     sb.append('}');
     return sb.toString();
   }
@@ -61,7 +67,8 @@ public final class HoodieRecordGlobalLocation extends HoodieRecordLocation {
     HoodieRecordGlobalLocation otherLoc = (HoodieRecordGlobalLocation) o;
     return Objects.equals(partitionPath, otherLoc.partitionPath)
         && Objects.equals(instantTime, otherLoc.instantTime)
-        && Objects.equals(fileId, otherLoc.fileId);
+        && Objects.equals(fileId, otherLoc.fileId)
+        && Objects.equals(position, otherLoc.position);
   }
 
   @Override
@@ -88,14 +95,14 @@ public final class HoodieRecordGlobalLocation extends HoodieRecordLocation {
    * Returns the record location as local.
    */
   public HoodieRecordLocation toLocal(String instantTime) {
-    return new HoodieRecordLocation(instantTime, fileId);
+    return new HoodieRecordLocation(instantTime, fileId, position);
   }
 
   /**
    * Copy the location with given partition path.
    */
   public HoodieRecordGlobalLocation copy(String partitionPath) {
-    return new HoodieRecordGlobalLocation(partitionPath, instantTime, fileId);
+    return new HoodieRecordGlobalLocation(partitionPath, instantTime, fileId, position);
   }
 
   @Override

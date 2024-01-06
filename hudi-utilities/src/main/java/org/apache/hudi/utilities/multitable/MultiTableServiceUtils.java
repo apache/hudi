@@ -22,14 +22,19 @@ package org.apache.hudi.utilities.multitable;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.utilities.UtilHelpers;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -44,22 +49,49 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME
  * Utils for executing multi-table services.
  */
 public class MultiTableServiceUtils {
+  private static final Logger LOG = LoggerFactory.getLogger(MultiTableServiceUtils.class);
 
   public static class Constants {
     public static final String TABLES_TO_BE_SERVED_PROP = "hoodie.tableservice.tablesToServe";
+
+    public static final String TABLES_SKIP_WRONG_PATH = "hoodie.tableservice.skipNonHudiTable";
 
     public static final String COMMA_SEPARATOR = ",";
 
     private static final int DEFAULT_LISTING_PARALLELISM = 1500;
   }
 
-  public static List<String> getTablesToBeServedFromProps(TypedProperties properties) {
+  public static List<String> getTablesToBeServedFromProps(JavaSparkContext jsc, TypedProperties properties) {
+    SerializableConfiguration conf = new SerializableConfiguration(jsc.hadoopConfiguration());
     String combinedTablesString = properties.getString(Constants.TABLES_TO_BE_SERVED_PROP);
+    boolean skipWrongPath = properties.getBoolean(Constants.TABLES_SKIP_WRONG_PATH, false);
     if (combinedTablesString == null) {
       return new ArrayList<>();
     }
     String[] tablesArray = combinedTablesString.split(Constants.COMMA_SEPARATOR);
-    return Arrays.asList(tablesArray);
+
+    List<String> tablePaths;
+    if (skipWrongPath) {
+      tablePaths = Arrays.stream(tablesArray)
+          .filter(tablePath -> {
+            if (isHoodieTable(new Path(tablePath), conf.get())) {
+              return true;
+            } else {
+              // Log the wrong path in console.
+              LOG.warn("Hoodie table not found in path {}, skip", tablePath);
+              return false;
+            }
+          }).collect(Collectors.toList());
+    } else {
+      tablePaths = Arrays.asList(tablesArray);
+      tablePaths.stream()
+          .filter(tablePath -> !isHoodieTable(new Path(tablePath), conf.get()))
+          .findFirst()
+          .ifPresent(tablePath -> {
+            throw new TableNotFoundException("Table not found: " + tablePath);
+          });
+    }
+    return tablePaths;
   }
 
   /**
@@ -136,6 +168,10 @@ public class MultiTableServiceUtils {
                                                                HoodieMultiTableServicesMain.Config cfg,
                                                                TypedProperties props) {
     TableServicePipeline pipeline = new TableServicePipeline();
+    HoodieTableMetaClient metaClient = UtilHelpers.createMetaClient(jsc, basePath, true);
+    TypedProperties propsWithTableConfig = new TypedProperties(metaClient.getTableConfig().getProps());
+    propsWithTableConfig.putAll(props);
+
     if (cfg.enableCompaction) {
       pipeline.add(CompactionTask.newBuilder()
           .withJsc(jsc)
@@ -143,8 +179,9 @@ public class MultiTableServiceUtils {
           .withParallelism(cfg.parallelism)
           .withCompactionRunningMode(cfg.compactionRunningMode)
           .withCompactionStrategyName(cfg.compactionStrategyClassName)
-          .withProps(props)
+          .withProps(propsWithTableConfig)
           .withRetry(cfg.retry)
+          .withMetaclient(metaClient)
           .build());
     }
     if (cfg.enableClustering) {
@@ -153,8 +190,9 @@ public class MultiTableServiceUtils {
           .withJsc(jsc)
           .withParallelism(cfg.parallelism)
           .withClusteringRunningMode(cfg.clusteringRunningMode)
-          .withProps(props)
+          .withProps(propsWithTableConfig)
           .withRetry(cfg.retry)
+          .withMetaclient(metaClient)
           .build());
     }
     if (cfg.enableClean) {
@@ -162,14 +200,14 @@ public class MultiTableServiceUtils {
           .withBasePath(basePath)
           .withJsc(jsc)
           .withRetry(cfg.retry)
-          .withProps(props)
+          .withProps(propsWithTableConfig)
           .build());
     }
     if (cfg.enableArchive) {
       pipeline.add(ArchiveTask.newBuilder()
           .withBasePath(basePath)
           .withJsc(jsc)
-          .withProps(props)
+          .withProps(propsWithTableConfig)
           .withRetry(cfg.retry)
           .build());
     }

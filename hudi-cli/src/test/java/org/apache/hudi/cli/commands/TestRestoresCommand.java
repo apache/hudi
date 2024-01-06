@@ -41,6 +41,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -101,30 +102,31 @@ public class TestRestoresCommand extends CLIFunctionalTestHarness {
             .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
             .build();
 
-    HoodieTestTable hoodieTestTable = HoodieMetadataTestTable.of(metaClient, SparkHoodieBackedTableMetadataWriter.create(
-                    metaClient.getHadoopConf(), config, context), Option.of(context))
-            .withPartitionMetaFiles(DEFAULT_PARTITION_PATHS)
-            .addCommit("100")
-            .withBaseFilesInPartitions(partitionAndFileId).getLeft()
-            .addCommit("101");
+    try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(metaClient.getHadoopConf(), config, context)) {
+      HoodieTestTable hoodieTestTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context))
+          .withPartitionMetaFiles(DEFAULT_PARTITION_PATHS)
+          .addCommit("100")
+          .withBaseFilesInPartitions(partitionAndFileId).getLeft()
+          .addCommit("101");
 
-    hoodieTestTable.addCommit("102").withBaseFilesInPartitions(partitionAndFileId);
-    HoodieSavepointMetadata savepointMetadata2 = hoodieTestTable.doSavepoint("102");
-    hoodieTestTable.addSavepoint("102", savepointMetadata2);
+      hoodieTestTable.addCommit("102").withBaseFilesInPartitions(partitionAndFileId);
+      HoodieSavepointMetadata savepointMetadata2 = hoodieTestTable.doSavepoint("102");
+      hoodieTestTable.addSavepoint("102", savepointMetadata2);
 
-    hoodieTestTable.addCommit("103").withBaseFilesInPartitions(partitionAndFileId);
+      hoodieTestTable.addCommit("103").withBaseFilesInPartitions(partitionAndFileId);
 
-    try (BaseHoodieWriteClient client = new SparkRDDWriteClient(context(), config)) {
-      client.rollback("103");
-      client.restoreToSavepoint("102");
+      try (BaseHoodieWriteClient client = new SparkRDDWriteClient(context(), config)) {
+        client.rollback("103");
+        client.restoreToSavepoint("102");
 
-      hoodieTestTable.addCommit("105").withBaseFilesInPartitions(partitionAndFileId);
-      HoodieSavepointMetadata savepointMetadata = hoodieTestTable.doSavepoint("105");
-      hoodieTestTable.addSavepoint("105", savepointMetadata);
+        hoodieTestTable.addCommit("105").withBaseFilesInPartitions(partitionAndFileId);
+        HoodieSavepointMetadata savepointMetadata = hoodieTestTable.doSavepoint("105");
+        hoodieTestTable.addSavepoint("105", savepointMetadata);
 
-      hoodieTestTable.addCommit("106").withBaseFilesInPartitions(partitionAndFileId);
-      client.rollback("106");
-      client.restoreToSavepoint("105");
+        hoodieTestTable.addCommit("106").withBaseFilesInPartitions(partitionAndFileId);
+        client.rollback("106");
+        client.restoreToSavepoint("105");
+      }
     }
   }
 

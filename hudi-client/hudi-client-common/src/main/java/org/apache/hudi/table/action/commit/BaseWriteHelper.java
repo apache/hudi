@@ -27,7 +27,6 @@ import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
-
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.time.Duration;
@@ -48,12 +47,9 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
                                       BaseCommitActionExecutor<T, I, K, O, R> executor,
                                       WriteOperationType operationType) {
     try {
-      int targetParallelism =
-          deduceShuffleParallelism(inputRecords, configuredShuffleParallelism);
-
       // De-dupe/merge if needed
       I dedupedRecords =
-          combineOnCondition(shouldCombine, inputRecords, targetParallelism, table);
+          combineOnCondition(shouldCombine, inputRecords, configuredShuffleParallelism, table);
 
       Instant lookupBegin = Instant.now();
       I taggedRecords = dedupedRecords;
@@ -79,8 +75,9 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
       I dedupedRecords, HoodieEngineContext context, HoodieTable<T, I, K, O> table);
 
   public I combineOnCondition(
-      boolean condition, I records, int parallelism, HoodieTable<T, I, K, O> table) {
-    return condition ? deduplicateRecords(records, table, parallelism) : records;
+      boolean condition, I records, int configuredParallelism, HoodieTable<T, I, K, O> table) {
+    int targetParallelism = deduceShuffleParallelism(records, configuredParallelism);
+    return condition ? deduplicateRecords(records, table, targetParallelism) : records;
   }
 
   /**

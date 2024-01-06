@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.AutoRecordKeyGenerationUtils.shouldAutoGenerateRecordKeys
-import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.{DataSourceWriteOptions, HoodieFileIndex}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, TypedProperties}
@@ -32,8 +32,10 @@ import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Literal}
+import org.apache.spark.sql.execution.datasources.FileStatusCache
 import org.apache.spark.sql.hive.HiveExternalCatalog
 import org.apache.spark.sql.hudi.HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isHoodieConfigKey, isUsingHiveCatalog}
@@ -164,7 +166,8 @@ trait ProvidesHoodieConfig extends Logging {
                               isOverwritePartition: Boolean,
                               isOverwriteTable: Boolean,
                               insertPartitions: Map[String, Option[String]] = Map.empty,
-                              extraOptions: Map[String, String]): Map[String, String] = {
+                              extraOptions: Map[String, String],
+                              staticOverwritePartitionPathOpt: Option[String] = Option.empty): Map[String, String] = {
 
     if (insertPartitions.nonEmpty &&
       (insertPartitions.keys.toSet != hoodieCatalogTable.partitionFields.toSet)) {
@@ -256,6 +259,13 @@ trait ProvidesHoodieConfig extends Logging {
       Map()
     }
 
+    val staticOverwritePartitionPathOptions = staticOverwritePartitionPathOpt match {
+      case Some(staticOverwritePartitionPath) =>
+        Map(HoodieInternalConfig.STATIC_OVERWRITE_PARTITION_PATHS.key() -> staticOverwritePartitionPath)
+      case _ =>
+        Map()
+    }
+
     // try to use new insert dup policy instead of legacy insert mode to deduce payload class. If only insert mode is explicitly specified,
     // w/o specifying any value for insert dup policy, legacy configs will be honored. But on all other cases (i.e when neither of the configs is set,
     // or when both configs are set, or when only insert dup policy is set), we honor insert dup policy and ignore the insert mode.
@@ -304,7 +314,7 @@ trait ProvidesHoodieConfig extends Logging {
       RECORDKEY_FIELD.key -> recordKeyConfigValue,
       PRECOMBINE_FIELD.key -> preCombineField,
       PARTITIONPATH_FIELD.key -> partitionFieldsStr
-    ) ++ overwriteTableOpts ++ getDropDupsConfig(useLegacyInsertModeFlow, combinedOpts)
+    ) ++ overwriteTableOpts ++ getDropDupsConfig(useLegacyInsertModeFlow, combinedOpts) ++ staticOverwritePartitionPathOptions
 
     combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
       defaultOpts = defaultOpts, overridingOpts = overridingOpts)
@@ -326,42 +336,57 @@ trait ProvidesHoodieConfig extends Logging {
     }
   }
 
-  def deduceIsOverwriteTable(sparkSession: SparkSession,
-                             catalogTable: HoodieCatalogTable,
-                             partitionSpec: Map[String, Option[String]],
-                             extraOptions: Map[String, String]): Boolean = {
+  /**
+   * Deduce the overwrite config based on writeOperation and overwriteMode config.
+   * If hoodie.datasource.write.operation is insert_overwrite/insert_overwrite_table, use dynamic overwrite;
+   * else if hoodie.datasource.overwrite.mode is configured, use it;
+   * else use spark.sql.sources.partitionOverwriteMode.
+   *
+   * The returned staticOverwritePartitionPathOpt is defined only in static insert_overwrite case.
+   *
+   * @return (overwriteMode, isOverWriteTable, isOverWritePartition, staticOverwritePartitionPathOpt)
+   */
+  def deduceOverwriteConfig(sparkSession: SparkSession,
+                            catalogTable: HoodieCatalogTable,
+                            partitionSpec: Map[String, Option[String]],
+                            extraOptions: Map[String, String]): (SaveMode, Boolean, Boolean, Option[String]) = {
     val combinedOpts: Map[String, String] = combineOptions(catalogTable, catalogTable.tableConfig, sparkSession.sqlContext.conf,
       defaultOpts = Map.empty, overridingOpts = extraOptions)
     val operation = combinedOpts.getOrElse(OPERATION.key, null)
-    operation match {
-      case INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL =>
-        true
-      case INSERT_OVERWRITE_OPERATION_OPT_VAL =>
-        false
+    val isOverwriteOperation = operation != null &&
+      (operation.equals(INSERT_OVERWRITE_OPERATION_OPT_VAL) || operation.equals(INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL))
+    // If hoodie.datasource.overwrite.mode configured, respect it, otherwise respect spark.sql.sources.partitionOverwriteMode
+    val hoodieOverwriteMode = combinedOpts.getOrElse(OVERWRITE_MODE.key,
+      sparkSession.sqlContext.getConf(PARTITION_OVERWRITE_MODE.key)).toUpperCase()
+    val isStaticOverwrite = !isOverwriteOperation && (hoodieOverwriteMode match {
+      case "STATIC" => true
+      case "DYNAMIC" => false
+      case _ => throw new IllegalArgumentException("Config hoodie.datasource.overwrite.mode is illegal")
+    })
+    val isOverWriteTable = operation match {
+      case INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL => true
+      case INSERT_OVERWRITE_OPERATION_OPT_VAL => false
       case _ =>
-        // NonPartitioned table always insert overwrite whole table
-        if (catalogTable.partitionFields.isEmpty) {
-          true
-        } else {
-          // Insert overwrite partitioned table with PARTITION clause will always insert overwrite the specific partition
-          if (partitionSpec.nonEmpty) {
-            false
-          } else {
-            // If hoodie.datasource.overwrite.mode configured, respect it, otherwise respect spark.sql.sources.partitionOverwriteMode
-            val hoodieOverwriteMode = combinedOpts.getOrElse(OVERWRITE_MODE.key,
-              sparkSession.sqlContext.getConf(PARTITION_OVERWRITE_MODE.key)).toUpperCase()
-
-            hoodieOverwriteMode match {
-              case "STATIC" =>
-                true
-              case "DYNAMIC" =>
-                false
-              case _ =>
-                throw new IllegalArgumentException("Config hoodie.datasource.overwrite.mode is illegal")
-            }
-          }
-        }
+        // There are two cases where we need use insert_overwrite_table
+        // 1. NonPartitioned table always insert overwrite whole table
+        // 2. static mode and no partition values specified
+        catalogTable.partitionFields.isEmpty || (isStaticOverwrite && partitionSpec.isEmpty)
     }
+    val overwriteMode = if (isOverWriteTable) SaveMode.Overwrite else SaveMode.Append
+    val staticPartitions = if (isStaticOverwrite && !isOverWriteTable) {
+      val fileIndex = HoodieFileIndex(sparkSession, catalogTable.metaClient, None, combinedOpts, FileStatusCache.getOrCreate(sparkSession))
+      val partitionNameToType = catalogTable.partitionSchema.fields.map(field => (field.name, field.dataType)).toMap
+      val staticPartitionValues = partitionSpec.filter(p => p._2.isDefined).mapValues(_.get)
+      val predicates = staticPartitionValues.map { case (k, v) =>
+        val partition = AttributeReference(k, partitionNameToType(k))()
+        val value = Literal(v)
+        EqualTo(partition, value)
+      }.toSeq
+      Option(fileIndex.getPartitionPaths(predicates).map(_.getPath).mkString(","))
+    } else {
+      Option.empty
+    }
+    (overwriteMode, isOverWriteTable, !isOverWriteTable, staticPartitions)
   }
 
   def buildHoodieDropPartitionsConfig(sparkSession: SparkSession,
@@ -448,7 +473,7 @@ trait ProvidesHoodieConfig extends Logging {
     hiveSyncConfig.setValue(HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key, enableHive.toString)
     hiveSyncConfig.setValue(HiveSyncConfigHolder.HIVE_SYNC_MODE.key, props.getString(HiveSyncConfigHolder.HIVE_SYNC_MODE.key, HiveSyncMode.HMS.name()))
     hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_BASE_PATH, hoodieCatalogTable.tableLocation)
-    hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT, hoodieCatalogTable.baseFileFormat)
+    hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT, props.getString(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT.key, HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT.defaultValue))
     hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_DATABASE_NAME, hoodieCatalogTable.table.identifier.database.getOrElse("default"))
     hiveSyncConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_TABLE_NAME, hoodieCatalogTable.table.identifier.table)
     if (props.get(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key) != null) {

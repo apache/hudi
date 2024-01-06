@@ -19,7 +19,9 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
@@ -65,7 +67,9 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.startsWith;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -144,6 +148,35 @@ public class TestStreamWriteOperatorCoordinator {
   }
 
   @Test
+  public void testEventReset() {
+    CompletableFuture<byte[]> future = new CompletableFuture<>();
+    coordinator.checkpointCoordinator(1, future);
+    OperatorEvent event1 = WriteMetadataEvent.builder()
+        .taskID(0)
+        .instantTime("001")
+        .writeStatus(Collections.emptyList())
+        .build();
+    coordinator.handleEventFromOperator(0, event1);
+    coordinator.subtaskFailed(0, null);
+    assertNotNull(coordinator.getEventBuffer()[0], "Events should not be cleared by subTask failure");
+
+    OperatorEvent event2 = createOperatorEvent(0, "001", "par1", false, 0.1);
+    coordinator.handleEventFromOperator(0, event2);
+    coordinator.subtaskFailed(0, null);
+    assertNotNull(coordinator.getEventBuffer()[0], "Events should not be cleared by subTask failure");
+
+    OperatorEvent event3 = createOperatorEvent(0, "001", "par1", false, 0.1);
+    coordinator.handleEventFromOperator(0, event3);
+    assertThat("Multiple events of same instant should be merged",
+        coordinator.getEventBuffer()[0].getWriteStatuses().size(), is(2));
+
+    OperatorEvent event4 = createOperatorEvent(0, "002", "par1", false, 0.1);
+    coordinator.handleEventFromOperator(0, event4);
+    assertThat("The new event should override the old event",
+        coordinator.getEventBuffer()[0].getWriteStatuses().size(), is(1));
+  }
+
+  @Test
   public void testCheckpointCompleteWithPartialEvents() {
     final CompletableFuture<byte[]> future = new CompletableFuture<>();
     coordinator.checkpointCoordinator(1, future);
@@ -183,6 +216,40 @@ public class TestStreamWriteOperatorCoordinator {
     coordinator.handleEventFromOperator(1, event2);
     lastCompleted = TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath());
     assertThat("Recommits the instant with partial uncommitted events", lastCompleted, is(instant));
+  }
+
+  @Test
+  public void testStopHeartbeatForUncommittedEventWithLazyCleanPolicy() throws Exception {
+    // reset
+    reset();
+    // override the default configuration
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(), HoodieFailedWritesCleaningPolicy.LAZY.name());
+    OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 1);
+    coordinator = new StreamWriteOperatorCoordinator(conf, context);
+    coordinator.start();
+    coordinator.setExecutor(new MockCoordinatorExecutor(context));
+
+    assertTrue(coordinator.getWriteClient().getConfig().getFailedWritesCleanPolicy().isLazy());
+
+    final WriteMetadataEvent event0 = WriteMetadataEvent.emptyBootstrap(0);
+
+    // start one instant and not commit it
+    coordinator.handleEventFromOperator(0, event0);
+    String instant = coordinator.getInstant();
+    HoodieHeartbeatClient heartbeatClient = coordinator.getWriteClient().getHeartbeatClient();
+    assertNotNull(heartbeatClient.getHeartbeat(instant), "Heartbeat is missing");
+
+    String basePath = tempFile.getAbsolutePath();
+    HoodieWrapperFileSystem fs = coordinator.getWriteClient().getHoodieTable().getMetaClient().getFs();
+
+    assertTrue(HoodieHeartbeatClient.heartbeatExists(fs, basePath, instant), "Heartbeat is existed");
+
+    // send bootstrap event to stop the heartbeat for this instant
+    WriteMetadataEvent event1 = WriteMetadataEvent.emptyBootstrap(0);
+    coordinator.handleEventFromOperator(0, event1);
+
+    assertFalse(HoodieHeartbeatClient.heartbeatExists(fs, basePath, instant), "Heartbeat is stopped and cleared");
   }
 
   @Test
@@ -263,8 +330,7 @@ public class TestStreamWriteOperatorCoordinator {
     metadataTableMetaClient.reloadActiveTimeline();
     completedTimeline = metadataTableMetaClient.reloadActiveTimeline().filterCompletedAndCompactionInstants();
     assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(7));
-    assertThat(completedTimeline.nthFromLastInstant(1).get().getTimestamp(), is(instant + "001"));
-    assertThat(completedTimeline.nthFromLastInstant(1).get().getAction(), is(HoodieTimeline.COMMIT_ACTION));
+    assertThat(completedTimeline.nthFromLastInstant(0).get().getAction(), is(HoodieTimeline.COMMIT_ACTION));
     // write another 2 commits
     for (int i = 7; i < 8; i++) {
       instant = mockWriteWithMetadata();
@@ -280,17 +346,15 @@ public class TestStreamWriteOperatorCoordinator {
     completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
     assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(9));
 
-    // write another commit
+    // write three more commits
     mockWriteWithMetadata();
-
-    // write another commit
-    instant = mockWriteWithMetadata();
+    mockWriteWithMetadata();
+    mockWriteWithMetadata();
     // write another commit to trigger compaction
     mockWriteWithMetadata();
     metadataTableMetaClient.reloadActiveTimeline();
     completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
-    assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(13));
-    assertThat(completedTimeline.nthFromLastInstant(1).get().getTimestamp(), is(instant + "001"));
+    assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(14));
     assertThat(completedTimeline.nthFromLastInstant(1).get().getAction(), is(HoodieTimeline.COMMIT_ACTION));
   }
 

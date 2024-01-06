@@ -85,9 +85,39 @@ public class TestSparkBuildClusteringGroupsForPartition {
     assertEquals(0, groupStreamWithOutSort.count());
   }
 
+  @Test
+  public void testBuildClusteringGroupsWithLimitScan() {
+    List<FileSlice> fileSliceGroups = new ArrayList<>();
+    String partition = "par0";
+    String fileId;
+    for (int i = 1; i <= 4; i++) {
+      fileId = "fg-" + i;
+      fileSliceGroups.add(generateFileSliceWithLen(partition, fileId, String.valueOf(i), 100));
+    }
+    HoodieWriteConfig writeConfig = hoodieWriteConfigBuilder.withClusteringConfig(
+            HoodieClusteringConfig.newBuilder()
+                .withClusteringPlanPartitionFilterMode(ClusteringPlanPartitionFilterMode.NONE)
+                .withClusteringMaxNumGroups(2)
+                .withClusteringTargetFileMaxBytes(100)
+                .withClusteringMaxBytesInGroup(100)
+                .build())
+        .build();
+    PartitionAwareClusteringPlanStrategy clusteringPlanStrategy = new SparkSizeBasedClusteringPlanStrategy(table, context, writeConfig);
+    Stream<HoodieClusteringGroup> groups = clusteringPlanStrategy.buildClusteringGroupsForPartition(partition,fileSliceGroups);
+    assertEquals(2, groups.count());
+  }
+
   private FileSlice generateFileSlice(String partitionPath, String fileId, String baseInstant) {
     FileSlice fs = new FileSlice(new HoodieFileGroupId(partitionPath, fileId), baseInstant);
     fs.setBaseFile(new HoodieBaseFile(FSUtils.makeBaseFileName(baseInstant, "1-0-1", fileId)));
+    return fs;
+  }
+
+  private FileSlice generateFileSliceWithLen(String partitionPath, String fileId, String baseInstant, long fileLen) {
+    FileSlice fs = new FileSlice(new HoodieFileGroupId(partitionPath, fileId), baseInstant);
+    HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(FSUtils.makeBaseFileName(baseInstant, "1-0-1", fileId));
+    hoodieBaseFile.setFileLen(fileLen);
+    fs.setBaseFile(hoodieBaseFile);
     return fs;
   }
 }

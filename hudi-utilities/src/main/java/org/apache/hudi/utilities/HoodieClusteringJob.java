@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieSparkTable;
 
 import com.beust.jcommander.JCommander;
@@ -56,17 +57,17 @@ public class HoodieClusteringJob {
   private HoodieTableMetaClient metaClient;
 
   public HoodieClusteringJob(JavaSparkContext jsc, Config cfg) {
-    this(jsc, cfg, UtilHelpers.buildProperties(jsc.hadoopConfiguration(), cfg.propsFilePath, cfg.configs));
+    this(jsc, cfg, UtilHelpers.buildProperties(jsc.hadoopConfiguration(), cfg.propsFilePath, cfg.configs),
+        UtilHelpers.createMetaClient(jsc, cfg.basePath, true));
   }
 
-  public HoodieClusteringJob(JavaSparkContext jsc, Config cfg, TypedProperties props) {
+  public HoodieClusteringJob(JavaSparkContext jsc, Config cfg, TypedProperties props, HoodieTableMetaClient metaClient) {
     this.cfg = cfg;
     this.jsc = jsc;
     this.props = props;
-    this.metaClient = UtilHelpers.createMetaClient(jsc, cfg.basePath, true);
+    this.metaClient = metaClient;
     // Disable async cleaning, will trigger synchronous cleaning manually.
     this.props.put(HoodieCleanConfig.ASYNC_CLEAN.key(), false);
-    this.metaClient = UtilHelpers.createMetaClient(jsc, cfg.basePath, true);
     if (this.metaClient.getTableConfig().isMetadataTableAvailable()) {
       // add default lock config options if MDT is enabled.
       UtilHelpers.addLockOptions(cfg.basePath, this.props);
@@ -146,19 +147,17 @@ public class HoodieClusteringJob {
 
     if (cfg.help || args.length == 0) {
       cmd.usage();
-      System.exit(1);
+      throw new HoodieException("Clustering failed for basePath: " + cfg.basePath);
     }
 
     final JavaSparkContext jsc = UtilHelpers.buildSparkContext("clustering-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory);
-    HoodieClusteringJob clusteringJob = new HoodieClusteringJob(jsc, cfg);
-    int result = clusteringJob.cluster(cfg.retry);
+    int result = new HoodieClusteringJob(jsc, cfg).cluster(cfg.retry);
     String resultMsg = String.format("Clustering with basePath: %s, tableName: %s, runningMode: %s",
         cfg.basePath, cfg.tableName, cfg.runningMode);
-    if (result == -1) {
-      LOG.error(resultMsg + " failed");
-    } else {
-      LOG.info(resultMsg + " success");
+    if (result != 0) {
+      throw new HoodieException(resultMsg + " failed");
     }
+    LOG.info(resultMsg + " success");
     jsc.stop();
   }
 

@@ -21,7 +21,6 @@ package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -32,6 +31,7 @@ import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.read.HoodieFileGroupRecordBuffer;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -138,6 +138,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
   private final List<String> validBlockInstants = new ArrayList<>();
   // Use scanV2 method.
   private final boolean enableOptimizedLogBlocksScan;
+  protected HoodieFileGroupRecordBuffer<T> recordBuffer;
 
   protected BaseHoodieLogRecordReader(HoodieReaderContext readerContext,
                                       FileSystem fs, String basePath, List<String> logFilePaths,
@@ -148,7 +149,8 @@ public abstract class BaseHoodieLogRecordReader<T> {
                                       InternalSchema internalSchema,
                                       Option<String> keyFieldOverride,
                                       boolean enableOptimizedLogBlocksScan,
-                                      HoodieRecordMerger recordMerger) {
+                                      HoodieRecordMerger recordMerger,
+                                      HoodieFileGroupRecordBuffer<T> recordBuffer) {
     this.readerContext = readerContext;
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
@@ -198,6 +200,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
 
     this.partitionNameOverrideOpt = partitionNameOverride;
     this.recordType = recordMerger.getRecordType();
+    this.recordBuffer = recordBuffer;
   }
 
   /**
@@ -257,7 +260,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
             && !HoodieTimeline.compareTimestamps(logBlock.getLogBlockHeader().get(INSTANT_TIME), HoodieTimeline.LESSER_THAN_OR_EQUALS, this.latestInstantTime
         )) {
           // hit a block with instant time greater than should be processed, stop processing further
-          break;
+          continue;
         }
         if (logBlock.getBlockType() != CORRUPT_BLOCK && logBlock.getBlockType() != COMMAND_BLOCK) {
           if (!completedInstantsTimeline.containsOrBeforeTimelineStarts(instantTime)
@@ -270,6 +273,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
             continue;
           }
         }
+
         switch (logBlock.getBlockType()) {
           case HFILE_DATA_BLOCK:
           case AVRO_DATA_BLOCK:
@@ -732,47 +736,6 @@ public abstract class BaseHoodieLogRecordReader<T> {
   }
 
   /**
-   * Iterate over the GenericRecord in the block, read the hoodie key and partition path and call subclass processors to
-   * handle it.
-   */
-  private void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws Exception {
-    checkState(partitionNameOverrideOpt.isPresent() || partitionPathFieldOpt.isPresent(),
-        "Either partition-name override or partition-path field had to be present");
-
-    Option<Pair<String, String>> recordKeyPartitionPathFieldPair = populateMetaFields
-        ? Option.empty()
-        : Option.of(Pair.of(recordKeyField, partitionPathFieldOpt.orElse(null)));
-
-    Pair<ClosableIterator<T>, Schema> recordsIteratorSchemaPair =
-        getRecordsIterator(dataBlock, keySpecOpt);
-
-    try (ClosableIterator<T> recordIterator = recordsIteratorSchemaPair.getLeft()) {
-      while (recordIterator.hasNext()) {
-        T nextRecord = recordIterator.next();
-        processNextRecord(nextRecord,
-            readerContext.generateMetadataForRecord(nextRecord, readerSchema));
-        totalLogRecords.incrementAndGet();
-      }
-    }
-  }
-
-  /**
-   * Process next record.
-   *
-   * @param record   The next record in engine-specific representation.
-   * @param metadata The metadata of the record.
-   * @throws Exception
-   */
-  public abstract void processNextRecord(T record, Map<String, Object> metadata) throws Exception;
-
-  /**
-   * Process next deleted record.
-   *
-   * @param deleteRecord Deleted record(hoodie key and ordering value)
-   */
-  protected abstract void processNextDeletedRecord(DeleteRecord deleteRecord);
-
-  /**
    * Process the set of log blocks belonging to the last instant which is read fully.
    */
   private void processQueuedBlocksForInstant(Deque<HoodieLogBlock> logBlocks, int numLogFilesSeen,
@@ -785,10 +748,10 @@ public abstract class BaseHoodieLogRecordReader<T> {
         case AVRO_DATA_BLOCK:
         case HFILE_DATA_BLOCK:
         case PARQUET_DATA_BLOCK:
-          processDataBlock((HoodieDataBlock) lastBlock, keySpecOpt);
+          recordBuffer.processDataBlock((HoodieDataBlock) lastBlock, keySpecOpt);
           break;
         case DELETE_BLOCK:
-          Arrays.stream(((HoodieDeleteBlock) lastBlock).getRecordsToDelete()).forEach(this::processNextDeletedRecord);
+          recordBuffer.processDeleteBlock((HoodieDeleteBlock) lastBlock);
           break;
         case CORRUPT_BLOCK:
           LOG.warn("Found a corrupt block which was not rolled back");
@@ -850,59 +813,6 @@ public abstract class BaseHoodieLogRecordReader<T> {
     return payloadProps;
   }
 
-  /**
-   * Key specification with a list of column names.
-   */
-  protected interface KeySpec {
-    List<String> getKeys();
-
-    boolean isFullKey();
-
-    static KeySpec fullKeySpec(List<String> keys) {
-      return new FullKeySpec(keys);
-    }
-
-    static KeySpec prefixKeySpec(List<String> keyPrefixes) {
-      return new PrefixKeySpec(keyPrefixes);
-    }
-  }
-
-  private static class FullKeySpec implements KeySpec {
-    private final List<String> keys;
-
-    private FullKeySpec(List<String> keys) {
-      this.keys = keys;
-    }
-
-    @Override
-    public List<String> getKeys() {
-      return keys;
-    }
-
-    @Override
-    public boolean isFullKey() {
-      return true;
-    }
-  }
-
-  private static class PrefixKeySpec implements KeySpec {
-    private final List<String> keysPrefixes;
-
-    private PrefixKeySpec(List<String> keysPrefixes) {
-      this.keysPrefixes = keysPrefixes;
-    }
-
-    @Override
-    public List<String> getKeys() {
-      return keysPrefixes;
-    }
-
-    @Override
-    public boolean isFullKey() {
-      return false;
-    }
-  }
-
   public Deque<HoodieLogBlock> getCurrentInstantLogBlocks() {
     return currentInstantLogBlocks;
   }
@@ -933,7 +843,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
 
     public abstract Builder withBasePath(String basePath);
 
-    public abstract Builder withLogFilePaths(List<String> logFilePaths);
+    public abstract Builder withLogFiles(List<HoodieLogFile> hoodieLogFiles);
 
     public abstract Builder withReaderSchema(Schema schema);
 

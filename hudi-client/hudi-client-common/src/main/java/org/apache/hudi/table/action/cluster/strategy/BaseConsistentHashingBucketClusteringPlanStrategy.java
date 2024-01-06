@@ -329,12 +329,12 @@ public abstract class BaseConsistentHashingBucketClusteringPlanStrategy<T extend
   }
 
   private long getSplitSize() {
-    HoodieFileFormat format = getHoodieTable().getMetaClient().getTableConfig().getBaseFileFormat();
+    HoodieFileFormat format = getHoodieTable().getBaseFileFormat();
     return (long) (getWriteConfig().getMaxFileSize(format) * getWriteConfig().getBucketSplitThreshold());
   }
 
   private long getMergeSize() {
-    HoodieFileFormat format = getHoodieTable().getMetaClient().getTableConfig().getBaseFileFormat();
+    HoodieFileFormat format = getHoodieTable().getBaseFileFormat();
     return (long) (getWriteConfig().getMaxFileSize(format) * getWriteConfig().getBucketMergeThreshold());
   }
 }

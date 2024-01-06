@@ -14,7 +14,7 @@
 # limitations under the License.
 
 # NOTE:
-# This config file defines how Azure CI runs tests with Spark 2.4 and Flink 1.17 profiles.
+# This config file defines how Azure CI runs tests with Spark 2.4 and Flink 1.18 profiles.
 # PRs will need to keep in sync with master's version to trigger the CI runs.
 
 trigger:
@@ -32,15 +32,16 @@ parameters:
       - 'hudi-common'
       - 'hudi-flink-datasource'
       - 'hudi-flink-datasource/hudi-flink'
-      - 'hudi-flink-datasource/hudi-flink1.13.x'
       - 'hudi-flink-datasource/hudi-flink1.14.x'
       - 'hudi-flink-datasource/hudi-flink1.15.x'
       - 'hudi-flink-datasource/hudi-flink1.16.x'
       - 'hudi-flink-datasource/hudi-flink1.17.x'
+      - 'hudi-flink-datasource/hudi-flink1.18.x'
   - name: job2Modules
     type: object
     default:
       - 'hudi-client/hudi-spark-client'
+      - 'hudi-spark-datasource/hudi-spark'
   - name: job3UTModules
     type: object
     default:
@@ -64,11 +65,11 @@ parameters:
       - '!hudi-examples/hudi-examples-spark'
       - '!hudi-flink-datasource'
       - '!hudi-flink-datasource/hudi-flink'
-      - '!hudi-flink-datasource/hudi-flink1.13.x'
       - '!hudi-flink-datasource/hudi-flink1.14.x'
       - '!hudi-flink-datasource/hudi-flink1.15.x'
       - '!hudi-flink-datasource/hudi-flink1.16.x'
       - '!hudi-flink-datasource/hudi-flink1.17.x'
+      - '!hudi-flink-datasource/hudi-flink1.18.x'
       - '!hudi-spark-datasource'
       - '!hudi-spark-datasource/hudi-spark'
       - '!hudi-spark-datasource/hudi-spark3.2.x'
@@ -87,14 +88,15 @@ parameters:
       - '!hudi-examples/hudi-examples-spark'
       - '!hudi-flink-datasource'
       - '!hudi-flink-datasource/hudi-flink'
-      - '!hudi-flink-datasource/hudi-flink1.13.x'
       - '!hudi-flink-datasource/hudi-flink1.14.x'
       - '!hudi-flink-datasource/hudi-flink1.15.x'
       - '!hudi-flink-datasource/hudi-flink1.16.x'
       - '!hudi-flink-datasource/hudi-flink1.17.x'
+      - '!hudi-flink-datasource/hudi-flink1.18.x'
+      - '!hudi-spark-datasource/hudi-spark'
 
 variables:
-  BUILD_PROFILES: '-Dscala-2.12 -Dspark3.2 -Dflink1.17'
+  BUILD_PROFILES: '-Dscala-2.12 -Dspark3.2 -Dflink1.18'
   PLUGIN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn'
   MVN_OPTS_INSTALL: '-Phudi-platform-service -DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS) -Dmaven.wagon.httpconnectionManager.ttlSeconds=25 -Dmaven.wagon.http.retryHandler.count=5'
   MVN_OPTS_TEST: '-fae -Pwarn-log $(BUILD_PROFILES) $(PLUGIN_OPTS)'
@@ -141,7 +143,7 @@ stages:
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
       - job: UT_FT_2
-        displayName: FT client/spark-client
+        displayName: FT client/spark-client & hudi-spark-datasource/hudi-spark
         timeoutInMinutes: '150'
         steps:
           - task: Maven@4
@@ -153,7 +155,7 @@ stages:
               publishJUnitResults: false
               jdkVersionOption: '1.8'
           - task: Maven@4
-            displayName: FT client/spark-client
+            displayName: FT client/spark-client & hudi-spark-datasource/hudi-spark
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'

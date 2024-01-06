@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.data.HoodieJavaRDD;
@@ -90,7 +89,7 @@ public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
 
   public Option<String> startCommit() {
     if (cfg.useDeltaStreamer) {
-      return Option.of(HoodieActiveTimeline.createNewInstantTime());
+      return Option.of(writeClient.createNewInstantTime());
     } else {
       return Option.of(writeClient.startCommit());
     }

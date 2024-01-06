@@ -53,7 +53,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -86,7 +86,6 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
     initPath();
     initSparkContexts();
     initFileSystem();
-    initTimelineService();
     dataGen = new HoodieTestDataGenerator(0x1f86);
   }
 
@@ -129,30 +128,46 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
     }
   }
 
+  private enum TestCase {
+    USE_EXISTING_TIMELINE_SERVER(true, false),
+    EMBEDDED_TIMELINE_SERVER_PER_TABLE(false, false),
+    SINGLE_EMBEDDED_TIMELINE_SERVER(false, true);
+
+    private final boolean useExistingTimelineServer;
+    private final boolean reuseTimelineServer;
+
+    TestCase(boolean useExistingTimelineServer, boolean reuseTimelineServer) {
+      this.useExistingTimelineServer = useExistingTimelineServer;
+      this.reuseTimelineServer = reuseTimelineServer;
+    }
+  }
+
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testMORGetLatestFileSliceWithMetadataTable(boolean useExistingTimelineServer) throws IOException {
+  @EnumSource(value = TestCase.class)
+  public void testMORGetLatestFileSliceWithMetadataTable(TestCase testCase) throws IOException {
+    if (testCase.useExistingTimelineServer) {
+      initTimelineService();
+    }
     // This test utilizes the `HoodieBackedTestDelayedTableMetadata` to make sure the
     // synced file system view is always served.
 
     // Create two tables to guarantee the timeline server can properly handle multiple base paths with metadata table enabled
     String basePathStr1 = initializeTable("dataset1");
     String basePathStr2 = initializeTable("dataset2");
-    try (SparkRDDWriteClient writeClient1 = createWriteClient(basePathStr1, "test_mor_table1",
-        useExistingTimelineServer ? Option.of(timelineService) : Option.empty());
-         SparkRDDWriteClient writeClient2 = createWriteClient(basePathStr2, "test_mor_table2",
-             useExistingTimelineServer ? Option.of(timelineService) : Option.empty())) {
+    try (SparkRDDWriteClient writeClient1 = createWriteClient(basePathStr1, "test_mor_table1", testCase.reuseTimelineServer,
+        testCase.useExistingTimelineServer ? Option.of(timelineService) : Option.empty());
+         SparkRDDWriteClient writeClient2 = createWriteClient(basePathStr2, "test_mor_table2", testCase.reuseTimelineServer,
+             testCase.useExistingTimelineServer ? Option.of(timelineService) : Option.empty())) {
       for (int i = 0; i < 3; i++) {
         writeToTable(i, writeClient1);
       }
-
 
       for (int i = 0; i < 3; i++) {
         writeToTable(i, writeClient2);
       }
 
-      runAssertionsForBasePath(useExistingTimelineServer, basePathStr1, writeClient1);
-      runAssertionsForBasePath(useExistingTimelineServer, basePathStr2, writeClient2);
+      runAssertionsForBasePath(testCase.useExistingTimelineServer, basePathStr1, writeClient1);
+      runAssertionsForBasePath(testCase.useExistingTimelineServer, basePathStr2, writeClient2);
     }
   }
 
@@ -229,7 +244,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
     return HoodieTableType.MERGE_ON_READ;
   }
 
-  private SparkRDDWriteClient createWriteClient(String basePath, String tableName, Option<TimelineService> timelineService) {
+  private SparkRDDWriteClient createWriteClient(String basePath, String tableName, boolean reuseTimelineServer, Option<TimelineService> timelineService) {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
@@ -247,6 +262,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
             .withRemoteServerPort(timelineService.isPresent()
                 ? timelineService.get().getServerPort() : REMOTE_PORT_NUM.defaultValue())
             .build())
+        .withEmbeddedTimelineServerReuseEnabled(reuseTimelineServer)
         .withAutoCommit(false)
         .forTable(tableName)
         .build();
@@ -254,7 +270,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
   }
 
   private void writeToTable(int round, SparkRDDWriteClient writeClient) throws IOException {
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    String instantTime = writeClient.createNewInstantTime();
     writeClient.startCommitWithTime(instantTime);
     List<HoodieRecord> records = round == 0
         ? dataGen.generateInserts(instantTime, 100)

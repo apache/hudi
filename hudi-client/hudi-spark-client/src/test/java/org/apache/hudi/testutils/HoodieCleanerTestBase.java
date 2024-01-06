@@ -136,7 +136,7 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
             .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath()))
             .setConf(metaClient.getHadoopConf())
             .build();
-        HoodieInstant deltaCommit = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, cleanInstantTs);
+        HoodieInstant deltaCommit = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, cleanInstantTs);
         metadataMetaClient.reloadActiveTimeline().revertToInflight(deltaCommit);
       }
 

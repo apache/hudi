@@ -18,8 +18,6 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.config.ConfigProperty;
@@ -38,6 +36,9 @@ import org.apache.hudi.table.action.rollback.BaseRollbackHelper;
 import org.apache.hudi.table.action.rollback.ListingBasedRollbackStrategy;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 
 import java.util.Collections;
 import java.util.List;
@@ -58,8 +59,8 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
     HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterPendingExcludingMajorAndMinorCompaction();
     List<String> commits = inflightTimeline.getReverseOrderedInstants().map(HoodieInstant::getTimestamp)
         .collect(Collectors.toList());
-    if (commits.size() > 0 && instantTime != null) {
-      // ignore the latest inflight commit since a new commit would have been started and we need to fix any pending commits from previous launch
+    if (!commits.isEmpty() && instantTime != null) {
+      // ignore the latest inflight commit since a new commit would have been started, and we need to fix any pending commits from previous launch
       commits.remove(instantTime);
     }
     for (String commit : commits) {
@@ -124,8 +125,8 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
 
   /**
    * Curates file name for marker from existing log file path.
-   * log file format     : partitionpath/.fileid_baseInstant.log.writetoken
-   * marker file format  : partitionpath/fileId_writetoken_baseinstant.basefileExtn.marker.APPEND
+   * log file format     : partitionPath/.fileid_baseInstant.log.writeToken
+   * marker file format  : partitionPath/fileId_writeToken_baseInstant.baseFileExtn.marker.APPEND
    *
    * @param logFilePath log file path for which marker file name needs to be generated.
    * @param table       {@link HoodieTable} instance to use
@@ -134,9 +135,9 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
   private static String getFileNameForMarkerFromLogFile(String logFilePath, HoodieTable<?, ?, ?, ?> table) {
     Path logPath = new Path(table.getMetaClient().getBasePath(), logFilePath);
     String fileId = FSUtils.getFileIdFromLogPath(logPath);
-    String baseInstant = FSUtils.getBaseCommitTimeFromLogPath(logPath);
+    String deltaInstant = FSUtils.getDeltaCommitTimeFromLogPath(logPath);
     String writeToken = FSUtils.getWriteTokenFromLogPath(logPath);
 
-    return FSUtils.makeBaseFileName(baseInstant, writeToken, fileId, table.getBaseFileFormat().getFileExtension());
+    return FSUtils.makeBaseFileName(deltaInstant, writeToken, fileId, table.getBaseFileExtension());
   }
 }

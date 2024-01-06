@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table;
 
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
+import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FileSystemRetryConfig;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -59,10 +60,11 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
   private final transient HoodieMetaserverClient metaserverClient;
 
   public HoodieTableMetaserverClient(Configuration conf, String basePath, ConsistencyGuardConfig consistencyGuardConfig,
-                                     String mergerStrategy, FileSystemRetryConfig fileSystemRetryConfig,
+                                     String mergerStrategy, HoodieTimeGeneratorConfig timeGeneratorConfig,
+                                     FileSystemRetryConfig fileSystemRetryConfig,
                                      Option<String> databaseName, Option<String> tableName, HoodieMetaserverConfig config) {
     super(conf, basePath, false, consistencyGuardConfig, Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION),
-        config.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME), mergerStrategy, fileSystemRetryConfig);
+        config.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME), mergerStrategy, timeGeneratorConfig, fileSystemRetryConfig);
     this.databaseName = databaseName.isPresent() ? databaseName.get() : tableConfig.getDatabaseName();
     this.tableName = tableName.isPresent() ? tableName.get() : tableConfig.getTableName();
     this.metaserverConfig = config;

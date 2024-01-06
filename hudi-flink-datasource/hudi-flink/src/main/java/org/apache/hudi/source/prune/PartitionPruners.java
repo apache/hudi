@@ -94,7 +94,7 @@ public class PartitionPruners {
       Map<String, ColumnStats> partStats = new LinkedHashMap<>();
       for (int idx = 0; idx < partitionKeys.length; idx++) {
         String partKey = partitionKeys[idx];
-        Object partVal = partKey.equals(defaultParName)
+        Object partVal = partStrArray[idx].equals(defaultParName)
             ? null : DataTypeUtils.resolvePartition(partStrArray[idx], partitionTypes.get(idx));
         ColumnStats columnStats = new ColumnStats(partVal, partVal, partVal == null ? 1 : 0);
         partStats.put(partKey, columnStats);

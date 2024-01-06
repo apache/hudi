@@ -23,6 +23,8 @@ import org.apache.hudi.common.util.collection.ClosableIterator
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
+import java.io.Closeable
+
 /**
  * A [[ClosableIterator]] returning [[InternalRow]] by iterating through the entries returned
  * by a Spark reader.
@@ -37,7 +39,10 @@ class CloseableInternalRowIterator(iterator: Iterator[_]) extends ClosableIterat
   private var seqInBatch: Int = -1
 
   override def close(): Unit = {
-    // No op
+    iterator match {
+      case iterator: Iterator[_] with Closeable => iterator.close()
+      case _ =>
+    }
   }
 
   override def hasNext: Boolean = {
@@ -46,6 +51,7 @@ class CloseableInternalRowIterator(iterator: Iterator[_]) extends ClosableIterat
 
   override def next: InternalRow = {
     if (!entryTypeKnown) {
+      entryTypeKnown = true
       // First entry
       val nextVal = iterator.next
       seqInBatch = 0

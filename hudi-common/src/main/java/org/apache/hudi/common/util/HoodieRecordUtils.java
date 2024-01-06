@@ -20,6 +20,7 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -108,5 +109,12 @@ public class HoodieRecordUtils {
 
   public static HoodieRecordMerger mergerToPreCombineMode(HoodieRecordMerger merger) {
     return merger instanceof OperationModeAwareness ? ((OperationModeAwareness) merger).asPreCombiningMode() : merger;
+  }
+
+  public static String getCurrentLocationInstant(HoodieRecord<?> record) {
+    if (record.getCurrentLocation() != null) {
+      return record.getCurrentLocation().getInstantTime();
+    }
+    return null;
   }
 }

@@ -47,6 +47,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -140,15 +141,19 @@ public class HoodieSnapshotCopier implements Serializable {
       // Also copy the .commit files
       LOG.info(String.format("Copying .commit files which are no-late-than %s.", latestCommitTimestamp));
       FileStatus[] commitFilesToCopy =
-          fs.listStatus(new Path(baseDir + "/" + HoodieTableMetaClient.METAFOLDER_NAME), (commitFilePath) -> {
-            if (commitFilePath.getName().equals(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
-              return true;
-            } else {
-              String instantTime = FSUtils.getCommitFromCommitFile(commitFilePath.getName());
-              return HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.LESSER_THAN_OR_EQUALS, latestCommitTimestamp
-              );
-            }
-          });
+          Arrays.stream(fs.listStatus(new Path(baseDir + "/" + HoodieTableMetaClient.METAFOLDER_NAME)))
+              .filter(fileStatus -> {
+                Path path = fileStatus.getPath();
+                if (path.getName().equals(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
+                  return true;
+                } else {
+                  if (fileStatus.isDirectory()) {
+                    return false;
+                  }
+                  String instantTime = FSUtils.getCommitFromCommitFile(path.getName());
+                  return HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.LESSER_THAN_OR_EQUALS, latestCommitTimestamp);
+                }
+              }).toArray(FileStatus[]::new);
       for (FileStatus commitStatus : commitFilesToCopy) {
         Path targetFilePath =
             new Path(outputDir + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitStatus.getPath().getName());

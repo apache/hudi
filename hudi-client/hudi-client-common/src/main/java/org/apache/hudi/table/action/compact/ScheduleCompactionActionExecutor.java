@@ -19,7 +19,6 @@
 package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -47,9 +46,7 @@ import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.text.ParseException;
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.CollectionUtils.nonEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
@@ -88,27 +85,6 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
     ValidationUtils.checkArgument(this.table.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ,
         "Can only compact table of type " + HoodieTableType.MERGE_ON_READ + " and not "
             + this.table.getMetaClient().getTableType().name());
-    if (!config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()
-        && !config.getFailedWritesCleanPolicy().isLazy()) {
-      // TODO(yihua): this validation is removed for Java client used by kafka-connect.  Need to revisit this.
-      if (config.getEngineType() == EngineType.SPARK) {
-        // if there are inflight writes, their instantTime must not be less than that of compaction instant time
-        table.getActiveTimeline().getCommitsTimeline().filterPendingExcludingMajorAndMinorCompaction().firstInstant()
-            .ifPresent(earliestInflight -> ValidationUtils.checkArgument(
-                HoodieTimeline.compareTimestamps(earliestInflight.getTimestamp(), HoodieTimeline.GREATER_THAN, instantTime),
-                "Earliest write inflight instant time must be later than compaction time. Earliest :" + earliestInflight
-                    + ", Compaction scheduled at " + instantTime));
-      }
-      // Committed and pending compaction instants should have strictly lower timestamps
-      List<HoodieInstant> conflictingInstants = table.getActiveTimeline()
-          .getWriteTimeline().filterCompletedAndCompactionInstants().getInstantsAsStream()
-          .filter(instant -> HoodieTimeline.compareTimestamps(
-              instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS, instantTime))
-          .collect(Collectors.toList());
-      ValidationUtils.checkArgument(conflictingInstants.isEmpty(),
-          "Following instants have timestamps >= compactionInstant (" + instantTime + ") Instants :"
-              + conflictingInstants);
-    }
 
     HoodieCompactionPlan plan = scheduleCompaction();
     Option<HoodieCompactionPlan> option = Option.empty();
@@ -144,7 +120,7 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
       LOG.info("Generating compaction plan for merge on read table " + config.getBasePath());
       try {
         context.setJobStatus(this.getClass().getSimpleName(), "Compaction: generating compaction plan");
-        return planGenerator.generateCompactionPlan();
+        return planGenerator.generateCompactionPlan(instantTime);
       } catch (IOException e) {
         throw new HoodieCompactionException("Could not schedule compaction " + config.getBasePath(), e);
       }

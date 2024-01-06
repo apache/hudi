@@ -20,7 +20,6 @@ package org.apache.hudi.client.functional;
 
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
@@ -60,20 +59,20 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
 
     // Do insert and updates thrice one after the other.
     // Insert
-    String commitTime = HoodieActiveTimeline.createNewInstantTime();
+    String commitTime = client.createNewInstantTime();
     insertBatch(config, client, commitTime, "000", 100, HoodieJavaWriteClient::insert,
         false, false, 100, 100, 1, Option.empty());
 
     // Update
     String commitTimeBetweenPrevAndNew = commitTime;
-    commitTime = HoodieActiveTimeline.createNewInstantTime();
+    commitTime = client.createNewInstantTime();
     updateBatch(config, client, commitTime, commitTimeBetweenPrevAndNew,
         Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), "000", 50, HoodieJavaWriteClient::upsert,
         false, false, 50, 100, 2, config.populateMetaFields());
 
     // Delete 5 records
     String prevCommitTime = commitTime;
-    commitTime = HoodieActiveTimeline.createNewInstantTime();
+    commitTime = client.createNewInstantTime();
     deleteBatch(config, client, commitTime, prevCommitTime, "000", 25, false, false,
         0, 100);
 
@@ -93,13 +92,13 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
 
     // Do insert and updates thrice one after the other.
     // Insert
-    String commitTime = HoodieActiveTimeline.createNewInstantTime();
+    String commitTime = client.createNewInstantTime();
     insertBatch(config, client, commitTime, "000", 100, HoodieJavaWriteClient::insert,
         false, false, 100, 100, 1, Option.empty());
 
     // Update
     String commitTimeBetweenPrevAndNew = commitTime;
-    commitTime = HoodieActiveTimeline.createNewInstantTime();
+    commitTime = client.createNewInstantTime();
     updateBatch(config, client, commitTime, commitTimeBetweenPrevAndNew,
         Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), "000", 50, HoodieJavaWriteClient::upsert,
         false, false, 5, 100, 2, config.populateMetaFields());
@@ -124,13 +123,13 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
 
     // Do insert and updates thrice one after the other.
     // Insert
-    String commitTime = HoodieActiveTimeline.createNewInstantTime();
+    String commitTime = client.createNewInstantTime();
     insertBatch(config, client, commitTime, "000", 100, HoodieJavaWriteClient::insert,
         false, false, 100, 100, 1, Option.empty());
 
     // Update
     String commitTimeBetweenPrevAndNew = commitTime;
-    commitTime = HoodieActiveTimeline.createNewInstantTime();
+    commitTime = client.createNewInstantTime();
     updateBatch(config, client, commitTime, commitTimeBetweenPrevAndNew,
         Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), "000", 50, HoodieJavaWriteClient::upsert,
         false, false, 5, 100, 2, config.populateMetaFields());
@@ -140,7 +139,7 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
     assertTrue(timeStamp.isPresent());
 
     commitTimeBetweenPrevAndNew = commitTime;
-    commitTime = HoodieActiveTimeline.createNewInstantTime();
+    commitTime = client.createNewInstantTime();
     updateBatch(config, client, commitTime, commitTimeBetweenPrevAndNew,
         Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), "000", 50, HoodieJavaWriteClient::upsert,
         false, false, 5, 150, 2, config.populateMetaFields());
@@ -155,7 +154,7 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
     assertDataInMORTable(config, commitTime, timeStamp.get(), hadoopConf, Arrays.asList(dataGen.getPartitionPaths()));
 
     commitTimeBetweenPrevAndNew = commitTime;
-    commitTime = HoodieActiveTimeline.createNewInstantTime();
+    commitTime = client.createNewInstantTime();
     updateBatch(config, client, commitTime, commitTimeBetweenPrevAndNew,
         Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), "000", 50, HoodieJavaWriteClient::upsert,
         false, false, 5, 200, 2, config.populateMetaFields());

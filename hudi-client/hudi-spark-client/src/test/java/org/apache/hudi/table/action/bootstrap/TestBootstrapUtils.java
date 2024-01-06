@@ -67,18 +67,14 @@ public class TestBootstrapUtils extends HoodieClientTestBase {
       }
     });
 
-    List<Pair<String, List<HoodieFileStatus>>> collected = BootstrapUtils.getAllLeafFoldersWithFiles(metaClient,
+    List<Pair<String, List<HoodieFileStatus>>> collected = BootstrapUtils.getAllLeafFoldersWithFiles(metaClient.getTableConfig().getBaseFileFormat(),
             metaClient.getFs(), basePath, context);
     assertEquals(3, collected.size());
-    collected.stream().forEach(k -> {
-      assertEquals(2, k.getRight().size());
-    });
+    collected.forEach(k -> assertEquals(2, k.getRight().size()));
 
     // Simulate reading from un-partitioned dataset
-    collected = BootstrapUtils.getAllLeafFoldersWithFiles(metaClient, metaClient.getFs(), basePath + "/" + folders.get(0), context);
+    collected = BootstrapUtils.getAllLeafFoldersWithFiles(metaClient.getTableConfig().getBaseFileFormat(), metaClient.getFs(), basePath + "/" + folders.get(0), context);
     assertEquals(1, collected.size());
-    collected.stream().forEach(k -> {
-      assertEquals(2, k.getRight().size());
-    });
+    collected.forEach(k -> assertEquals(2, k.getRight().size()));
   }
 }

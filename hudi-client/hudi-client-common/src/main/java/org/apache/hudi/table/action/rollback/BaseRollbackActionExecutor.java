@@ -261,7 +261,10 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
       // If publish the rollback to the timeline, we finally transition the inflight rollback
       // to complete in the data table timeline
       if (!skipTimelinePublish) {
-        table.getActiveTimeline().transitionRollbackInflightToComplete(inflightInstant,
+        // NOTE: no need to lock here, since !skipTimelinePublish is always true,
+        // when skipLocking is false, txnManager above-mentioned should lock it.
+        // when skipLocking is true, the caller should have already held the lock.
+        table.getActiveTimeline().transitionRollbackInflightToComplete(false, inflightInstant,
             TimelineMetadataUtils.serializeRollbackMetadata(rollbackMetadata));
         LOG.info("Rollback of Commits " + rollbackMetadata.getCommitsRollback() + " is complete");
       }

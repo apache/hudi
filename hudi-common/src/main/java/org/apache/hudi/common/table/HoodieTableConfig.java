@@ -35,7 +35,7 @@ import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.BinaryUtil;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -71,6 +71,8 @@ import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAM
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT;
+import static org.apache.hudi.common.util.ConfigUtils.fetchConfigs;
+import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
@@ -91,7 +93,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> DATABASE_NAME = ConfigProperty
       .key("hoodie.database.name")
-      .noDefaultValue()
+      .noDefaultValue("Database name can't have default value as it's used to toggle Hive incremental query feature. See HUDI-2837")
       .withDocumentation("Database name that will be used for incremental query.If different databases have the same table name during incremental query, "
           + "we can set it to limit the table name under a specific database");
 
@@ -244,6 +246,12 @@ public class HoodieTableConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("When set to true, will not write the partition columns into hudi. By default, false.");
 
+  public static final ConfigProperty<Boolean> MULTIPLE_BASE_FILE_FORMATS_ENABLE = ConfigProperty
+      .key("hoodie.table.multiple.base.file.formats.enable")
+      .defaultValue(false)
+      .sinceVersion("1.0.0")
+      .withDocumentation("When set to true, the table can support reading and writing multiple base file formats.");
+
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
 
@@ -284,19 +292,20 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("0.13.0")
       .withDocumentation("The metadata of secondary indexes");
 
-  private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
+  public static final ConfigProperty<String> INDEX_DEFINITION_PATH = ConfigProperty
+      .key("hoodie.table.index.defs.path")
+      .noDefaultValue()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Absolute path where the index definitions are stored");
 
-  // Number of retries while reading the properties file to deal with parallel updates
-  private static final int MAX_READ_RETRIES = 5;
-  // Delay between retries while reading the properties file
-  private static final int READ_RETRY_DELAY_MSEC = 1000;
+  private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
   public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName, String recordMergerStrategyId) {
     super();
     Path propertyPath = new Path(metaPath, HOODIE_PROPERTIES_FILE);
     LOG.info("Loading table properties from " + propertyPath);
     try {
-      this.props = fetchConfigs(fs, metaPath);
+      this.props = fetchConfigs(fs, metaPath, HOODIE_PROPERTIES_FILE, HOODIE_PROPERTIES_FILE_BACKUP, MAX_READ_RETRIES, READ_RETRY_DELAY_MSEC);
       boolean needStore = false;
       if (contains(PAYLOAD_CLASS_NAME) && payloadClassName != null
           && !getString(PAYLOAD_CLASS_NAME).equals(payloadClassName)) {
@@ -363,69 +372,10 @@ public class HoodieTableConfig extends HoodieConfig {
     super();
   }
 
-  private static TypedProperties fetchConfigs(FileSystem fs, String metaPath) throws IOException {
-    Path cfgPath = new Path(metaPath, HOODIE_PROPERTIES_FILE);
-    Path backupCfgPath = new Path(metaPath, HOODIE_PROPERTIES_FILE_BACKUP);
-    int readRetryCount = 0;
-    boolean found = false;
-
-    TypedProperties props = new TypedProperties();
-    while (readRetryCount++ < MAX_READ_RETRIES) {
-      for (Path path : Arrays.asList(cfgPath, backupCfgPath)) {
-        // Read the properties and validate that it is a valid file
-        try (FSDataInputStream is = fs.open(path)) {
-          props.clear();
-          props.load(is);
-          found = true;
-          ValidationUtils.checkArgument(validateChecksum(props));
-          return props;
-        } catch (IOException e) {
-          LOG.warn(String.format("Could not read properties from %s: %s", path, e));
-        } catch (IllegalArgumentException e) {
-          LOG.warn(String.format("Invalid properties file %s: %s", path, props));
-        }
-      }
-
-      // Failed to read all files so wait before retrying. This can happen in cases of parallel updates to the properties.
-      try {
-        Thread.sleep(READ_RETRY_DELAY_MSEC);
-      } catch (InterruptedException e) {
-        LOG.warn("Interrupted while waiting");
-      }
-    }
-
-    // If we are here then after all retries either no hoodie.properties was found or only an invalid file was found.
-    if (found) {
-      throw new IllegalArgumentException("hoodie.properties file seems invalid. Please check for left over `.updated` files if any, manually copy it to hoodie.properties and retry");
-    } else {
-      throw new HoodieIOException("Could not load Hoodie properties from " + cfgPath);
-    }
-  }
-
   public static void recover(FileSystem fs, Path metadataFolder) throws IOException {
     Path cfgPath = new Path(metadataFolder, HOODIE_PROPERTIES_FILE);
     Path backupCfgPath = new Path(metadataFolder, HOODIE_PROPERTIES_FILE_BACKUP);
     recoverIfNeeded(fs, cfgPath, backupCfgPath);
-  }
-
-  static void recoverIfNeeded(FileSystem fs, Path cfgPath, Path backupCfgPath) throws IOException {
-    if (!fs.exists(cfgPath)) {
-      // copy over from backup
-      try (FSDataInputStream in = fs.open(backupCfgPath);
-           FSDataOutputStream out = fs.create(cfgPath, false)) {
-        FileIOUtils.copy(in, out);
-      }
-    }
-    // regardless, we don't need the backup anymore.
-    fs.delete(backupCfgPath, false);
-  }
-
-  private static void upsertProperties(Properties current, Properties updated) {
-    updated.forEach((k, v) -> current.setProperty(k.toString(), v.toString()));
-  }
-
-  private static void deleteProperties(Properties current, Properties deleted) {
-    deleted.forEach((k, v) -> current.remove(k.toString()));
   }
 
   private static void modify(FileSystem fs, Path metadataFolder, Properties modifyProps, BiConsumer<Properties, Properties> modifyFn) {
@@ -436,7 +386,7 @@ public class HoodieTableConfig extends HoodieConfig {
       recoverIfNeeded(fs, cfgPath, backupCfgPath);
 
       // 1. Read the existing config
-      TypedProperties props = fetchConfigs(fs, metadataFolder.toString());
+      TypedProperties props = fetchConfigs(fs, metadataFolder.toString(), HOODIE_PROPERTIES_FILE, HOODIE_PROPERTIES_FILE_BACKUP, MAX_READ_RETRIES, READ_RETRY_DELAY_MSEC);
 
       // 2. backup the existing properties.
       try (FSDataOutputStream out = fs.create(backupCfgPath, false)) {
@@ -477,13 +427,13 @@ public class HoodieTableConfig extends HoodieConfig {
    * here for safely updating with recovery and also ensuring the table config continues to be readable.
    */
   public static void update(FileSystem fs, Path metadataFolder, Properties updatedProps) {
-    modify(fs, metadataFolder, updatedProps, HoodieTableConfig::upsertProperties);
+    modify(fs, metadataFolder, updatedProps, ConfigUtils::upsertProperties);
   }
 
   public static void delete(FileSystem fs, Path metadataFolder, Set<String> deletedProps) {
     Properties props = new Properties();
     deletedProps.forEach(p -> props.setProperty(p, ""));
-    modify(fs, metadataFolder, props, HoodieTableConfig::deleteProperties);
+    modify(fs, metadataFolder, props, ConfigUtils::deleteProperties);
   }
 
   /**
@@ -747,6 +697,10 @@ public class HoodieTableConfig extends HoodieConfig {
     return getBooleanOrDefault(DROP_PARTITION_COLUMNS);
   }
 
+  public boolean isMultipleBaseFileFormatsEnabled() {
+    return getBooleanOrDefault(MULTIPLE_BASE_FILE_FORMATS_ENABLE);
+  }
+
   /**
    * Read the table checksum.
    */
@@ -764,6 +718,13 @@ public class HoodieTableConfig extends HoodieConfig {
     return new HashSet<>(
         StringUtils.split(getStringOrDefault(TABLE_METADATA_PARTITIONS, StringUtils.EMPTY_STRING),
             CONFIG_VALUES_DELIMITER));
+  }
+
+  /**
+   * @returns the index definition path.
+   */
+  public Option<String> getIndexDefinitionPath() {
+    return Option.ofNullable(getString(INDEX_DEFINITION_PATH));
   }
 
   /**

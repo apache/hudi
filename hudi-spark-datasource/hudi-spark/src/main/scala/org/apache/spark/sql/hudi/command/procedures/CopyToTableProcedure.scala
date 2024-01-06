@@ -34,7 +34,8 @@ class CopyToTableProcedure extends BaseProcedure with ProcedureBuilder with Logg
     ProcedureParameter.optional(3, "begin_instance_time", DataTypes.StringType, ""),
     ProcedureParameter.optional(4, "end_instance_time", DataTypes.StringType, ""),
     ProcedureParameter.optional(5, "as_of_instant", DataTypes.StringType, ""),
-    ProcedureParameter.optional(6, "save_mode", DataTypes.StringType, "overwrite")
+    ProcedureParameter.optional(6, "save_mode", DataTypes.StringType, "overwrite"),
+    ProcedureParameter.optional(7, "columns", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -55,6 +56,7 @@ class CopyToTableProcedure extends BaseProcedure with ProcedureBuilder with Logg
     val endInstance = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String]
     val asOfInstant = getArgValueOrDefault(args, PARAMETERS(5)).get.asInstanceOf[String]
     val saveModeStr = getArgValueOrDefault(args, PARAMETERS(6)).get.asInstanceOf[String]
+    val columns = getArgValueOrDefault(args, PARAMETERS(7)).get.asInstanceOf[String]
 
     assert(saveModeStr.nonEmpty, "save_mode(append,overwrite) can not be null.")
 
@@ -102,11 +104,17 @@ class CopyToTableProcedure extends BaseProcedure with ProcedureBuilder with Logg
         .mode(saveMode.toString)
         .saveAsTable(newTableName)
     } else {
-      sourceDataFrame.write
+      var selectColumns = Seq[String]()
+      if (!columns.eq("")) {
+        selectColumns = columns.split(",").toStream
+      } else {
+        selectColumns = sparkSession.read.table(tableName.get.asInstanceOf[String]).schema.fields.toStream.map(_.name)
+      }
+      sourceDataFrame.selectExpr(selectColumns: _*)
+        .write
         .mode(saveMode.toString)
         .saveAsTable(newTableName)
     }
-
 
     Seq(Row(0))
   }

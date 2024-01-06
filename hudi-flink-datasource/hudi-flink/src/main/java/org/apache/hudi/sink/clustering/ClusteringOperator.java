@@ -128,7 +128,8 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   private transient NonThrownExecutor executor;
 
   public ClusteringOperator(Configuration conf, RowType rowType) {
-    this.conf = conf;
+    // copy a conf let following modification not to impact the global conf
+    this.conf = new Configuration(conf);
     this.rowType = BulkInsertWriterHelper.addMetadataFields(rowType, false);
     this.asyncClustering = OptionsResolver.needsAsyncClustering(conf);
     this.sortClusteringEnabled = OptionsResolver.sortClusteringEnabled(conf);
@@ -282,7 +283,8 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
             .build();
 
         HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
-        HoodieFileSliceReader<? extends IndexedRecord> hoodieFileSliceReader = HoodieFileSliceReader.getFileSliceReader(baseFileReader, scanner, readerSchema,
+        HoodieFileSliceReader<? extends IndexedRecord> hoodieFileSliceReader = new HoodieFileSliceReader(baseFileReader, scanner, readerSchema,
+            tableConfig.getPreCombineField(),writeConfig.getRecordMerger(),
             tableConfig.getProps(),
             tableConfig.populateMetaFields() ? Option.empty() : Option.of(Pair.of(tableConfig.getRecordKeyFieldProp(),
                 tableConfig.getPartitionFieldProp())));

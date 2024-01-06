@@ -21,11 +21,13 @@ package org.apache.hudi.common.fs;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -84,6 +86,8 @@ public class FSUtils {
   public static final Pattern PREFIX_BY_FILE_ID_PATTERN = Pattern.compile("^(.+)-(\\d+)");
   private static final int MAX_ATTEMPTS_RECOVER_LEASE = 10;
   private static final String HOODIE_ENV_PROPS_PREFIX = "HOODIE_ENV_";
+
+  private static final String LOG_FILE_EXTENSION = ".log";
 
   private static final PathFilter ALLOW_ALL_FILTER = file -> true;
 
@@ -187,7 +191,7 @@ public class FSUtils {
   }
 
   public static String getCommitFromCommitFile(String commitFileName) {
-    return commitFileName.split("\\.")[0];
+    return HoodieInstant.extractTimestamp(commitFileName);
   }
 
   public static String getCommitTime(String fullFileName) {
@@ -380,10 +384,9 @@ public class FSUtils {
   }
 
   /**
-   * Get the first part of the file name in the log file. That will be the fileId. Log file do not have instantTime in
-   * the file name.
+   * Get the second part of the file name in the log file. That will be the delta commit time.
    */
-  public static String getBaseCommitTimeFromLogPath(Path path) {
+  public static String getDeltaCommitTimeFromLogPath(Path path) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
     if (!matcher.find()) {
       throw new InvalidHoodiePathException(path, "LogFile");
@@ -453,11 +456,11 @@ public class FSUtils {
     return Integer.parseInt(matcher.group(4));
   }
 
-  public static String makeLogFileName(String fileId, String logFileExtension, String baseCommitTime, int version,
+  public static String makeLogFileName(String fileId, String logFileExtension, String deltaCommitTime, int version,
       String writeToken) {
     String suffix = (writeToken == null)
-        ? String.format("%s_%s%s.%d", fileId, baseCommitTime, logFileExtension, version)
-        : String.format("%s_%s%s.%d_%s", fileId, baseCommitTime, logFileExtension, version, writeToken);
+        ? String.format("%s_%s%s.%d", fileId, deltaCommitTime, logFileExtension, version)
+        : String.format("%s_%s%s.%d_%s", fileId, deltaCommitTime, logFileExtension, version, writeToken);
     return HoodieLogFile.LOG_FILE_PREFIX + suffix;
   }
 
@@ -467,12 +470,17 @@ public class FSUtils {
   }
 
   public static boolean isLogFile(Path logPath) {
-    return isLogFile(logPath.getName());
+    String scheme = logPath.toUri().getScheme();
+    return isLogFile(InLineFileSystem.SCHEME.equals(scheme)
+        ? InLineFSUtils.getOuterFilePathFromInlinePath(logPath).getName() : logPath.getName());
   }
 
   public static boolean isLogFile(String fileName) {
-    Matcher matcher = LOG_FILE_PATTERN.matcher(fileName);
-    return fileName.contains(".log") && matcher.find();
+    if (fileName.contains(LOG_FILE_EXTENSION)) {
+      Matcher matcher = LOG_FILE_PATTERN.matcher(fileName);
+      return matcher.find();
+    }
+    return false;
   }
 
   /**
@@ -509,20 +517,20 @@ public class FSUtils {
    * Get the latest log file for the passed in file-id in the partition path
    */
   public static Option<HoodieLogFile> getLatestLogFile(FileSystem fs, Path partitionPath, String fileId,
-                                                       String logFileExtension, String baseCommitTime) throws IOException {
-    return getLatestLogFile(getAllLogFiles(fs, partitionPath, fileId, logFileExtension, baseCommitTime));
+                                                       String logFileExtension, String deltaCommitTime) throws IOException {
+    return getLatestLogFile(getAllLogFiles(fs, partitionPath, fileId, logFileExtension, deltaCommitTime));
   }
 
   /**
    * Get all the log files for the passed in file-id in the partition path.
    */
   public static Stream<HoodieLogFile> getAllLogFiles(FileSystem fs, Path partitionPath, final String fileId,
-      final String logFileExtension, final String baseCommitTime) throws IOException {
+      final String logFileExtension, final String deltaCommitTime) throws IOException {
     try {
       PathFilter pathFilter = path -> path.getName().startsWith("." + fileId) && path.getName().contains(logFileExtension);
       return Arrays.stream(fs.listStatus(partitionPath, pathFilter))
           .map(HoodieLogFile::new)
-          .filter(s -> s.getBaseCommitTime().equals(baseCommitTime));
+          .filter(s -> s.getDeltaCommitTime().equals(deltaCommitTime));
     } catch (FileNotFoundException e) {
       return Stream.of();
     }
@@ -532,26 +540,14 @@ public class FSUtils {
    * Get the latest log version for the fileId in the partition path.
    */
   public static Option<Pair<Integer, String>> getLatestLogVersion(FileSystem fs, Path partitionPath,
-      final String fileId, final String logFileExtension, final String baseCommitTime) throws IOException {
+      final String fileId, final String logFileExtension, final String deltaCommitTime) throws IOException {
     Option<HoodieLogFile> latestLogFile =
-        getLatestLogFile(getAllLogFiles(fs, partitionPath, fileId, logFileExtension, baseCommitTime));
+        getLatestLogFile(getAllLogFiles(fs, partitionPath, fileId, logFileExtension, deltaCommitTime));
     if (latestLogFile.isPresent()) {
       return Option
           .of(Pair.of(latestLogFile.get().getLogVersion(), latestLogFile.get().getLogWriteToken()));
     }
     return Option.empty();
-  }
-
-  /**
-   * computes the next log version for the specified fileId in the partition path.
-   */
-  public static int computeNextLogVersion(FileSystem fs, Path partitionPath, final String fileId,
-      final String logFileExtension, final String baseCommitTime) throws IOException {
-    Option<Pair<Integer, String>> currentVersionWithWriteToken =
-        getLatestLogVersion(fs, partitionPath, fileId, logFileExtension, baseCommitTime);
-    // handle potential overflow
-    return (currentVersionWithWriteToken.isPresent()) ? currentVersionWithWriteToken.get().getKey() + 1
-        : HoodieLogFile.LOGFILE_BASE_VERSION;
   }
 
   public static int getDefaultBufferSize(final FileSystem fs) {
@@ -711,7 +707,7 @@ public class FSUtils {
             pairOfSubPathAndConf -> deleteSubPath(
                 pairOfSubPathAndConf.getKey(), pairOfSubPathAndConf.getValue(), true)
         );
-        boolean result = fs.delete(dirPath, false);
+        boolean result = fs.delete(dirPath, true);
         LOG.info("Removed directory at " + dirPath);
         return result;
       }
@@ -834,6 +830,20 @@ public class FSUtils {
       }
     }
     return result;
+  }
+
+  public static List<FileStatus> getAllDataFileStatus(FileSystem fs, Path path) throws IOException {
+    List<FileStatus> statuses = new ArrayList<>();
+    for (FileStatus status : fs.listStatus(path)) {
+      if (!status.getPath().toString().contains(HoodieTableMetaClient.METAFOLDER_NAME)) {
+        if (status.isDirectory()) {
+          statuses.addAll(getAllDataFileStatus(fs, status.getPath()));
+        } else {
+          statuses.add(status);
+        }
+      }
+    }
+    return statuses;
   }
 
   public static Map<String, Boolean> deleteFilesParallelize(

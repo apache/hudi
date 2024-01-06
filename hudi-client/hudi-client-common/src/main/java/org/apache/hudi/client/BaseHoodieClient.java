@@ -29,6 +29,9 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.TimeGenerator;
+import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -69,6 +72,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   protected final String basePath;
   protected final HoodieHeartbeatClient heartbeatClient;
   protected final TransactionManager txnManager;
+  private final TimeGenerator timeGenerator;
 
   /**
    * Timeline Server has the same lifetime as that of Client. Any operations done on the same timeline service will be
@@ -95,6 +99,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
         clientConfig.getHoodieClientHeartbeatIntervalInMs(), clientConfig.getHoodieClientHeartbeatTolerableMisses());
     this.metrics = new HoodieMetrics(config);
     this.txnManager = new TransactionManager(config, fs);
+    this.timeGenerator = TimeGenerators.getTimeGenerator(config.getTimeGeneratorConfig(), hadoopConf);
     startEmbeddedServerView();
     initWrapperFSMetrics();
     runClientInitCallbacks();
@@ -115,7 +120,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     if (timelineServer.isPresent() && shouldStopTimelineServer) {
       // Stop only if owner
       LOG.info("Stopping Timeline service !!");
-      timelineServer.get().stop();
+      timelineServer.get().stopForBasePath(basePath);
     }
 
     timelineServer = Option.empty();
@@ -174,8 +179,34 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     return HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(config.getBasePath())
         .setLoadActiveTimelineOnLoad(loadActiveTimelineOnLoad).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
         .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
+        .setTimeGeneratorConfig(config.getTimeGeneratorConfig())
         .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
         .setMetaserverConfig(config.getProps()).build();
+  }
+
+  /**
+   * Returns next instant time in milliseconds. An explicit Lock is enabled in the context.
+   *
+   * @param milliseconds Milliseconds to add to current time while generating the new instant time.
+   */
+  public String createNewInstantTime(long milliseconds) {
+    return HoodieActiveTimeline.createNewInstantTime(true, timeGenerator, milliseconds);
+  }
+
+  /**
+   * Returns next instant time in the correct format. An explicit Lock is enabled in the context.
+   */
+  public String createNewInstantTime() {
+    return HoodieActiveTimeline.createNewInstantTime(true, timeGenerator);
+  }
+
+  /**
+   * Returns next instant time in the correct format.
+   *
+   * @param shouldLock Whether to lock the context to get the instant time.
+   */
+  public String createNewInstantTime(boolean shouldLock) {
+    return HoodieActiveTimeline.createNewInstantTime(shouldLock, timeGenerator);
   }
 
   public Option<EmbeddedTimelineService> getTimelineServer() {

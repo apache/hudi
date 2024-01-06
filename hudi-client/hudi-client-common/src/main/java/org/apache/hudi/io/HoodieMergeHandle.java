@@ -310,8 +310,15 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     }
     try {
       if (combineRecord.isPresent() && !combineRecord.get().isDelete(schema, config.getProps()) && !isDelete) {
-        writeToFile(newRecord.getKey(), combineRecord.get(), schema, prop, preserveMetadata && useWriterSchemaForCompaction);
-        recordsWritten++;
+        // Last-minute check.
+        boolean decision = recordMerger.shouldFlush(combineRecord.get(), schema, config.getProps());
+
+        if (decision) { // CASE (1): Flush the merged record.
+          writeToFile(newRecord.getKey(), combineRecord.get(), schema, prop, preserveMetadata && useWriterSchemaForCompaction);
+          recordsWritten++;
+        } else {  // CASE (2): A delete operation.
+          recordsDeleted++;
+        }
       } else {
         recordsDeleted++;
         // Clear the new location as the record was deleted

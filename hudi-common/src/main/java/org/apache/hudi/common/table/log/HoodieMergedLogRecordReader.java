@@ -20,16 +20,15 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
+import org.apache.hudi.common.table.read.HoodieFileGroupRecordBuffer;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -41,8 +40,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
-import java.io.IOException;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -63,8 +60,6 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMergedLogRecordReader.class);
   // A timer for calculating elapsed time in millis
   public final HoodieTimer timer = HoodieTimer.create();
-  // Map of compacted/merged records with metadata
-  private final Map<String, Pair<Option<T>, Map<String, Object>>> records;
   // Set of already scanned prefixes allowing us to avoid scanning same prefixes again
   private final Set<String> scannedPrefixes;
   // count of merged records in log
@@ -81,11 +76,14 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
                                       Option<String> partitionName,
                                       InternalSchema internalSchema,
                                       Option<String> keyFieldOverride,
-                                      boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger) {
+                                      boolean enableOptimizedLogBlocksScan,
+                                      HoodieRecordMerger recordMerger,
+                                      HoodieFileGroupRecordBuffer<T> recordBuffer) {
     super(readerContext, fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
-        instantRange, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger);
-    this.records = new HashMap<>();
+        instantRange, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, enableOptimizedLogBlocksScan,
+        recordMerger, recordBuffer);
     this.scannedPrefixes = new HashSet<>();
+
     if (forceFullScan) {
       performScan();
     }
@@ -122,7 +120,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     }
 
     List<String> missingKeys = keys.stream()
-        .filter(key -> !records.containsKey(key))
+        .filter(key -> !recordBuffer.containsLogRecord(key))
         .collect(Collectors.toList());
 
     if (missingKeys.isEmpty()) {
@@ -174,19 +172,19 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     scanInternal(Option.empty(), false);
 
     this.totalTimeTakenToReadAndMergeBlocks = timer.endTimer();
-    this.numMergedRecordsInLog = records.size();
+    this.numMergedRecordsInLog = recordBuffer.size();
 
     LOG.info("Number of log files scanned => " + logFilePaths.size());
-    LOG.info("Number of entries in Map => " + records.size());
+    LOG.info("Number of entries in Map => " + recordBuffer.size());
   }
 
   @Override
   public Iterator<Pair<Option<T>, Map<String, Object>>> iterator() {
-    return records.values().iterator();
+    return recordBuffer.getLogRecordIterator();
   }
 
-  public Map<String, Pair<Option<T>, Map<String, Object>>> getRecords() {
-    return records;
+  public Map<Object, Pair<Option<T>, Map<String, Object>>> getRecords() {
+    return recordBuffer.getLogRecords();
   }
 
   public HoodieRecord.HoodieRecordType getRecordType() {
@@ -204,69 +202,13 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     return new Builder();
   }
 
-  @Override
-  public void processNextRecord(T record, Map<String, Object> metadata) throws IOException {
-    String key = (String) metadata.get(HoodieReaderContext.INTERNAL_META_RECORD_KEY);
-    Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(key);
-
-    if (existingRecordMetadataPair != null) {
-      // Merge and store the combined record
-      // Note that the incoming `record` is from an older commit, so it should be put as
-      // the `older` in the merge API
-      HoodieRecord<T> combinedRecord = (HoodieRecord<T>) recordMerger.merge(
-          readerContext.constructHoodieRecord(Option.of(record), metadata, readerSchema), readerSchema,
-          readerContext.constructHoodieRecord(existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(), readerSchema),
-          readerSchema, this.getPayloadProps()).get().getLeft();
-      // If pre-combine returns existing record, no need to update it
-      if (combinedRecord.getData() != existingRecordMetadataPair.getLeft().get()) {
-        records.put(key, Pair.of(Option.ofNullable(readerContext.seal(combinedRecord.getData())), metadata));
-      }
-    } else {
-      // Put the record as is
-      // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
-      //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
-      //       it since these records will be put into records(Map).
-      records.put(key, Pair.of(Option.of(readerContext.seal(record)), metadata));
-    }
-  }
-
-  @Override
-  protected void processNextDeletedRecord(DeleteRecord deleteRecord) {
-    String key = deleteRecord.getRecordKey();
-    Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(key);
-    if (existingRecordMetadataPair != null) {
-      // Merge and store the merged record. The ordering val is taken to decide whether the same key record
-      // should be deleted or be kept. The old record is kept only if the DELETE record has smaller ordering val.
-      // For same ordering values, uses the natural order(arrival time semantics).
-
-      Comparable existingOrderingVal = readerContext.getOrderingValue(
-          existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(), readerSchema,
-          this.hoodieTableMetaClient.getTableConfig().getProps());
-      Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
-      // Checks the ordering value does not equal to 0
-      // because we use 0 as the default value which means natural order
-      boolean chooseExisting = !deleteOrderingVal.equals(0)
-          && ReflectionUtils.isSameClass(existingOrderingVal, deleteOrderingVal)
-          && existingOrderingVal.compareTo(deleteOrderingVal) > 0;
-      if (chooseExisting) {
-        // The DELETE message is obsolete if the old message has greater orderingVal.
-        return;
-      }
-    }
-    // Put the DELETE record
-    records.put(key, Pair.of(Option.empty(),
-        readerContext.generateMetadataForRecord(key, deleteRecord.getPartitionPath(), deleteRecord.getOrderingValue())));
-  }
-
   public long getTotalTimeTakenToReadAndMergeBlocks() {
     return totalTimeTakenToReadAndMergeBlocks;
   }
 
   @Override
   public void close() {
-    if (records != null) {
-      records.clear();
-    }
+    // No op.
   }
 
   /**
@@ -296,6 +238,8 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     private boolean enableOptimizedLogBlocksScan = false;
     private HoodieRecordMerger recordMerger = HoodiePreCombineAvroRecordMerger.INSTANCE;
 
+    private HoodieFileGroupRecordBuffer<T> recordBuffer;
+
     @Override
     public Builder<T> withHoodieReaderContext(HoodieReaderContext<T> readerContext) {
       this.readerContext = readerContext;
@@ -315,9 +259,10 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     }
 
     @Override
-    public Builder<T> withLogFilePaths(List<String> logFilePaths) {
-      this.logFilePaths = logFilePaths.stream()
-          .filter(p -> !p.endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
+    public Builder<T> withLogFiles(List<HoodieLogFile> hoodieLogFiles) {
+      this.logFilePaths = hoodieLogFiles.stream()
+          .filter(l -> !l.isCDC())
+          .map(l -> l.getPath().toString())
           .collect(Collectors.toList());
       return this;
     }
@@ -397,18 +342,28 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
       return this;
     }
 
+    public Builder<T> withRecordBuffer(HoodieFileGroupRecordBuffer<T> recordBuffer) {
+      this.recordBuffer = recordBuffer;
+      return this;
+    }
+
     @Override
     public HoodieMergedLogRecordReader<T> build() {
       if (this.partitionName == null && CollectionUtils.nonEmpty(this.logFilePaths)) {
         this.partitionName = getRelativePartitionPath(new Path(basePath), new Path(this.logFilePaths.get(0)).getParent());
       }
       ValidationUtils.checkArgument(recordMerger != null);
+      ValidationUtils.checkArgument(recordBuffer != null);
 
-      return new HoodieMergedLogRecordReader<>(readerContext, fs, basePath, logFilePaths, readerSchema,
+      return new HoodieMergedLogRecordReader<>(
+          readerContext, fs, basePath, logFilePaths, readerSchema,
           latestInstantTime, readBlocksLazily, reverseReader,
           bufferSize, instantRange,
           withOperationField, forceFullScan,
-          Option.ofNullable(partitionName), internalSchema, Option.ofNullable(keyFieldOverride), enableOptimizedLogBlocksScan, recordMerger);
+          Option.ofNullable(partitionName), internalSchema,
+          Option.ofNullable(keyFieldOverride),
+          enableOptimizedLogBlocksScan, recordMerger,
+          recordBuffer);
     }
   }
 }
