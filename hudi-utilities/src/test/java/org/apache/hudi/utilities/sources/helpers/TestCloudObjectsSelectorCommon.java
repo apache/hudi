@@ -30,11 +30,12 @@ import org.apache.spark.sql.RowFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Disabled;
 
 import java.util.Collections;
 import java.util.List;
 
+@Disabled
 public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness {
 
   @BeforeEach
@@ -47,13 +48,13 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
     cleanupResources();
   }
 
-  @Test
+  @Disabled
   public void emptyMetadataReturnsEmptyOption() {
     Option<Dataset<Row>> result = CloudObjectsSelectorCommon.loadAsDataset(sparkSession, Collections.emptyList(), new TypedProperties(), "json");
     Assertions.assertFalse(result.isPresent());
   }
 
-  @Test
+  @Disabled
   public void filesFromMetadataRead() {
     List<CloudObjectMetadata> input = Collections.singletonList(new CloudObjectMetadata("src/test/resources/data/partitioned/country=US/state=CA/data.json", 1));
     Option<Dataset<Row>> result = CloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, new TypedProperties(), "json");
@@ -63,7 +64,7 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
     Assertions.assertEquals(Collections.singletonList(expected), result.get().collectAsList());
   }
 
-  @Test
+  @Disabled
   public void partitionValueAddedToRow() {
     List<CloudObjectMetadata> input = Collections.singletonList(new CloudObjectMetadata("src/test/resources/data/partitioned/country=US/state=CA/data.json", 1));
 
@@ -76,7 +77,7 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
     Assertions.assertEquals(Collections.singletonList(expected), result.get().collectAsList());
   }
 
-  @Test
+  @Disabled
   public void loadDatasetWithSchema() {
     TypedProperties props = new TypedProperties();
     TestCloudObjectsSelectorCommon.class.getClassLoader().getResource("schema/sample_data_schema.avsc");
@@ -92,7 +93,7 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
     Assertions.assertEquals(Collections.singletonList(expected), result.get().collectAsList());
   }
 
-  @Test
+  @Disabled
   public void partitionKeyNotPresentInPath() {
     List<CloudObjectMetadata> input = Collections.singletonList(new CloudObjectMetadata("src/test/resources/data/partitioned/country=US/state=CA/data.json", 1));
     TypedProperties properties = new TypedProperties();

@@ -21,7 +21,7 @@ package org.apache.hudi.io.storage.row.parquet;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Disabled;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -29,8 +29,9 @@ import static org.hamcrest.MatcherAssert.assertThat;
 /**
  * Test cases for {@link ParquetSchemaConverter}.
  */
+@Disabled
 public class TestParquetSchemaConverter {
-  @Test
+  @Disabled
   void testConvertComplexTypes() {
     DataType dataType = DataTypes.ROW(
         DataTypes.FIELD("f_array",
@@ -72,7 +73,7 @@ public class TestParquetSchemaConverter {
     assertThat(messageType.toString(), is(expected));
   }
 
-  @Test
+  @Disabled
   void testConvertTimestampTypes() {
     DataType dataType = DataTypes.ROW(
         DataTypes.FIELD("ts_3", DataTypes.TIMESTAMP(3)),

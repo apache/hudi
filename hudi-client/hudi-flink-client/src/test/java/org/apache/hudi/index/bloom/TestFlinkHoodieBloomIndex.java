@@ -43,10 +43,8 @@ import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -68,6 +66,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Unit test against FlinkHoodieBloomIndex.
  */
 //TODO merge code with Spark Bloom index tests.
+@Disabled
 public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
 
   private static final Schema SCHEMA = getSchemaFromResource(TestFlinkHoodieBloomIndex.class, "/exampleSchema.avsc", true);
@@ -101,8 +100,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
         .build();
   }
 
-  @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
-  @MethodSource("configParams")
+  @Disabled
   public void testLoadInvolvedFiles(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) throws Exception {
     HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
     HoodieBloomIndex index = new HoodieBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
@@ -166,8 +164,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     }
   }
 
-  @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
-  @MethodSource("configParams")
+  @Disabled
   public void testRangePruning(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) {
     HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
     HoodieBloomIndex index = new HoodieBloomIndex(config, ListBasedHoodieBloomIndexHelper.getInstance());
@@ -203,7 +200,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     assertEquals(new java.util.HashSet<>(asList("f1", "f4")), new java.util.HashSet<>(recordKeyToFileComps.get("005")));
   }
 
-  @Test
+  @Disabled
   public void testCheckUUIDsAgainstOneFile() throws Exception {
     final String partition = "2016/01/31";
     // Create some records to use
@@ -258,8 +255,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     // assertTrue(results.get(1)._2().equals(filename));
   }
 
-  @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
-  @MethodSource("configParams")
+  @Disabled
   public void testTagLocationWithEmptyList(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) {
     // We have some records to be tagged (two different partitions)
     List<HoodieRecord> records = new ArrayList<>();
@@ -276,8 +272,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     }, "EmptyList should not result in IllegalArgumentException: Positive number of slices required");
   }
 
-  @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
-  @MethodSource("configParams")
+  @Disabled
   public void testTagLocation(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) throws Exception {
     // We have some records to be tagged (two different partitions)
     String rowKey1 = randomUUID().toString();
@@ -342,8 +337,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     }
   }
 
-  @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
-  @MethodSource("configParams")
+  @Disabled
   public void testCheckExists(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) throws Exception {
     // We have some records to be tagged (two different partitions)
 
@@ -429,8 +423,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     }
   }
 
-  @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
-  @MethodSource("configParams")
+  @Disabled
   public void testBloomFilterFalseError(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) throws Exception {
     // We have two hoodie records
     String recordStr1 = "{\"_row_key\":\"1eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","

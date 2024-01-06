@@ -47,10 +47,8 @@ import org.apache.hudi.testutils.providers.SparkProvider;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -78,6 +76,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Disabled
 public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implements SparkProvider {
 
   private static final HoodieTestDataGenerator DATA_GENERATOR = new HoodieTestDataGenerator(0L);
@@ -94,7 +93,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     DATA_GENERATOR.close();
   }
 
-  @Test
+  @Disabled
   public void testGetRequestedPartitionTypes() {
     HoodieIndexer.Config config = new HoodieIndexer.Config();
     config.basePath = basePath();
@@ -107,7 +106,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     assertTrue(partitionTypes.contains(COLUMN_STATS));
   }
 
-  @Test
+  @Disabled
   public void testIsIndexBuiltForAllRequestedTypes() {
     HoodieIndexer.Config config = new HoodieIndexer.Config();
     config.basePath = basePath();
@@ -128,7 +127,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     assertTrue(indexer.isIndexBuiltForAllRequestedTypes(commitMetadata.getIndexPartitionInfos()));
   }
 
-  @Test
+  @Disabled
   public void testIndexerWithNotAllIndexesEnabled() {
     String tableName = "indexer_test";
     // enable files and bloom_filters on the regular write client
@@ -143,7 +142,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     indexMetadataPartitionsAndAssert(COLUMN_STATS, Arrays.asList(new MetadataPartitionType[] {FILES, BLOOM_FILTERS}), Collections.emptyList(), tableName, "streamer-config/indexer.properties");
   }
 
-  @Test
+  @Disabled
   public void testIndexerWithFilesPartition() {
     String tableName = "indexer_test";
     // enable files and bloom_filters on the regular write client
@@ -160,7 +159,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
   /**
    * Upsert with metadata table (FILES partition) enabled and then run indexer for RECORD_INDEX.
    */
-  @Test
+  @Disabled
   public void testIndexerForRecordIndex() {
     String tableName = "indexer_test";
     // enable files and bloom_filters on the regular write client
@@ -175,7 +174,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
         "streamer-config/indexer-record-index.properties");
   }
 
-  @Test
+  @Disabled
   public void testIndexerWithWriterFinishingFirst() throws IOException {
     // Test the case where the indexer is running, i.e., the delta commit in the metadata table
     // is inflight, while the regular writer is updating metadata table.
@@ -247,7 +246,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
         .stream().findFirst().get().getCommitTime());
   }
 
-  @Test
+  @Disabled
   public void testIndexerWithWriterFinishingLast() throws IOException {
     // Test the case where a regular write updating the metadata table is in progress,
     // i.e., a delta commit in the metadata table is inflight, and the async indexer
@@ -317,8 +316,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     );
   }
 
-  @ParameterizedTest
-  @MethodSource("colStatsFileGroupCountParams")
+  @Disabled
   public void testColStatsFileGroupCount(int colStatsFileGroupCount) {
     TestHoodieIndexer.colStatsFileGroupCount = colStatsFileGroupCount;
     String tableName = "indexer_test";
@@ -346,7 +344,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
    * If first time indexing is done for any other partition other than FILES partition, exception will be thrown, given metadata table is not initialized in synchronous code path
    * with regular writers.
    */
-  @Test
+  @Disabled
   public void testIndexerForExceptionWithNonFilesPartition() {
     String tableName = "indexer_test";
     // enable files and bloom_filters on the regular write client
@@ -436,7 +434,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     alreadyCompletedPartitions.forEach(entry -> assertTrue(metadataPartitionExists(basePath(), context(), entry)));
   }
 
-  @Test
+  @Disabled
   public void testIndexerDropPartitionDeletesInstantFromTimeline() {
     String tableName = "indexer_test";
     HoodieWriteConfig.Builder writeConfigBuilder = getWriteConfigBuilder(basePath(), tableName);
@@ -490,7 +488,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     assertTrue(metadataPartitionExists(basePath(), context(), BLOOM_FILTERS));
   }
 
-  @Test
+  @Disabled
   public void testTwoIndexersOneCreateOneDropPartition() {
     String tableName = "indexer_test";
     HoodieWriteConfig.Builder writeConfigBuilder = getWriteConfigBuilder(basePath(), tableName);

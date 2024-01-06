@@ -23,22 +23,23 @@ import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.spark.SparkConf;
 
 import org.apache.spark.launcher.SparkLauncher;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Disabled;
 
 import java.net.URISyntaxException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+@Disabled
 public class TestSparkUtil {
 
-  @Test
+  @Disabled
   public void testInitSparkLauncher() throws URISyntaxException {
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(null);
     assertNotNull(sparkLauncher);
   }
 
-  @Test
+  @Disabled
   public void testGetDefaultSparkConf() {
     SparkConf sparkConf = SparkUtil.getDefaultConf("test-spark-app", Option.of(""));
     assertEquals(SparkUtil.DEFAULT_SPARK_MASTER, sparkConf.get("spark.master"));

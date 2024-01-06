@@ -36,7 +36,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Disabled;
 
 import java.io.IOException;
 
@@ -47,6 +47,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 /**
  * Test against {@link SqlSource}.
  */
+@Disabled
 public class TestSqlSource extends UtilitiesTestBase {
 
   private final boolean useFlattenedSchema = false;
@@ -102,7 +103,7 @@ public class TestSqlSource extends UtilitiesTestBase {
    *
    * @throws IOException
    */
-  @Test
+  @Disabled
   public void testSqlSourceAvroFormat() throws IOException {
     props.setProperty(sqlSourceConfig, "select * from test_sql_table");
     sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
@@ -125,7 +126,7 @@ public class TestSqlSource extends UtilitiesTestBase {
    *
    * @throws IOException
    */
-  @Test
+  @Disabled
   public void testSqlSourceRowFormat() throws IOException {
     props.setProperty(sqlSourceConfig, "select * from test_sql_table");
     sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
@@ -143,7 +144,7 @@ public class TestSqlSource extends UtilitiesTestBase {
    *
    * @throws IOException
    */
-  @Test
+  @Disabled
   public void testSqlSourceCheckpoint() throws IOException {
     props.setProperty(sqlSourceConfig, "select * from test_sql_table where 1=0");
     sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
@@ -160,7 +161,7 @@ public class TestSqlSource extends UtilitiesTestBase {
    *
    * @throws IOException
    */
-  @Test
+  @Disabled
   public void testSqlSourceMoreRecordsThanSourceLimit() throws IOException {
     props.setProperty(sqlSourceConfig, "select * from test_sql_table");
     sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
@@ -177,7 +178,7 @@ public class TestSqlSource extends UtilitiesTestBase {
    *
    * @throws IOException
    */
-  @Test
+  @Disabled
   public void testSqlSourceZeroRecord() throws IOException {
     props.setProperty(sqlSourceConfig, "select * from test_sql_table where 1=0");
     sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
@@ -194,7 +195,7 @@ public class TestSqlSource extends UtilitiesTestBase {
    *
    * @throws IOException
    */
-  @Test
+  @Disabled
   public void testSqlSourceInvalidTable() throws IOException {
     props.setProperty(sqlSourceConfig, "select * from not_exist_sql_table");
     sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);

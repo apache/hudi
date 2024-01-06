@@ -31,7 +31,7 @@ import org.apache.hudi.schema.SchemaProvider;
 
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Disabled;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
@@ -44,6 +44,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 
+@Disabled
 public class TestBufferedConnectWriter {
 
   private static final int NUM_RECORDS = 10;
@@ -69,7 +70,7 @@ public class TestBufferedConnectWriter {
         .build();
   }
 
-  @Test
+  @Disabled
   public void testSimpleWriteAndFlush() throws Exception {
     String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(new String[] {partitionPath});

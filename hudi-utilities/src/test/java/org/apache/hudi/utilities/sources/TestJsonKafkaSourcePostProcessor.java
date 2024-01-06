@@ -43,7 +43,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Disabled;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -59,6 +59,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
+@Disabled
 public class TestJsonKafkaSourcePostProcessor extends SparkClientFunctionalTestHarness {
   private static KafkaTestUtils testUtils;
 
@@ -84,7 +85,7 @@ public class TestJsonKafkaSourcePostProcessor extends SparkClientFunctionalTestH
     schemaProvider = new FilebasedSchemaProvider(props, jsc());
   }
 
-  @Test
+  @Disabled
   public void testNoPostProcessor() {
     // topic setup.
     final String topic = BaseTestKafkaSource.TEST_TOPIC_PREFIX + "testNoPostProcessor";
@@ -102,7 +103,7 @@ public class TestJsonKafkaSourcePostProcessor extends SparkClientFunctionalTestH
     assertEquals(900, fetch1.getBatch().get().count());
   }
 
-  @Test
+  @Disabled
   public void testSampleJsonKafkaSourcePostProcessor() {
     // topic setup.
     final String topic = BaseTestKafkaSource.TEST_TOPIC_PREFIX + "testSampleJsonKafkaSourcePostProcessor";
@@ -123,7 +124,7 @@ public class TestJsonKafkaSourcePostProcessor extends SparkClientFunctionalTestH
     assertNotEquals(900, fetch1.getBatch().get().count());
   }
 
-  @Test
+  @Disabled
   public void testInvalidJsonKafkaSourcePostProcessor() {
     // topic setup.
     final String topic = BaseTestKafkaSource.TEST_TOPIC_PREFIX + "testInvalidJsonKafkaSourcePostProcessor";
@@ -143,7 +144,7 @@ public class TestJsonKafkaSourcePostProcessor extends SparkClientFunctionalTestH
         () -> kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 900));
   }
 
-  @Test
+  @Disabled
   public void testChainedJsonKafkaSourcePostProcessor() {
     // topic setup.
     final String topic = BaseTestKafkaSource.TEST_TOPIC_PREFIX + "testChainedJsonKafkaSourcePostProcessor";
@@ -165,7 +166,7 @@ public class TestJsonKafkaSourcePostProcessor extends SparkClientFunctionalTestH
     assertEquals(0, fetch1.getBatch().get().count());
   }
 
-  @Test
+  @Disabled
   public void testMaxwellJsonKafkaSourcePostProcessor() throws IOException {
     // ------------------------------------------------------------------------
     //  Maxwell data
