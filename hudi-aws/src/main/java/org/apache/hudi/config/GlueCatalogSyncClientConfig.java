@@ -32,7 +32,7 @@ import java.util.Properties;
         groupName = ConfigGroups.Names.META_SYNC,
         subGroupName = ConfigGroups.SubGroupNames.NONE,
         description = "Configs that control Glue catalog sync based client.")
-public class GlueSyncConfig extends HiveSyncConfig {
+public class GlueCatalogSyncClientConfig extends HiveSyncConfig {
 
   public static final String GLUE_CLIENT_PROPERTY_PREFIX = "hoodie.datasource.meta.sync.glue.";
 
@@ -61,7 +61,7 @@ public class GlueSyncConfig extends HiveSyncConfig {
           .withDocumentation("Maximum number of open HTTP connections to glue at any given point in time. AWS allows 50 connections by default."
                   + "The maximum quota of such connections by default is set as 1000. Please refer the link for more - https://docs.aws.amazon.com/general/latest/gr/glue.html");
 
-  public GlueSyncConfig(Properties properties) {
+  public GlueCatalogSyncClientConfig(Properties properties) {
     super(properties);
   }
 

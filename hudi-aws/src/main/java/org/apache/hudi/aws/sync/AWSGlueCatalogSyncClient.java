@@ -23,7 +23,7 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.config.GlueSyncConfig;
+import org.apache.hudi.config.GlueCatalogSyncClientConfig;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.model.FieldSchema;
@@ -77,7 +77,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.aws.utils.S3Utils.s3aToS3;
 import static org.apache.hudi.common.util.MapUtils.containsAll;
 import static org.apache.hudi.common.util.MapUtils.isNullOrEmpty;
-import static org.apache.hudi.config.GlueSyncConfig.GLUE_METADATA_FILE_LISTING;
+import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_METADATA_FILE_LISTING;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
 import static org.apache.hudi.hive.util.HiveSchemaUtil.getPartitionKeyType;
@@ -112,8 +112,8 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   public AWSGlueCatalogSyncClient(HiveSyncConfig config) {
     super(config);
-    String regionValue = config.getString(GlueSyncConfig.GLUE_AWS_REGION);
-    NettyNioAsyncHttpClient.Builder httpClientBuilder = NettyNioAsyncHttpClient.builder().maxConcurrency(config.getIntOrDefault(GlueSyncConfig.GLUE_MAX_CONNECTIONS));
+    String regionValue = config.getString(GlueCatalogSyncClientConfig.GLUE_AWS_REGION);
+    NettyNioAsyncHttpClient.Builder httpClientBuilder = NettyNioAsyncHttpClient.builder().maxConcurrency(config.getIntOrDefault(GlueCatalogSyncClientConfig.GLUE_MAX_CONNECTIONS));
     GlueAsyncClientBuilder glueAsyncClientBuilder = GlueAsyncClient.builder()
             .credentialsProvider(HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(config.getProps()))
             .httpClientBuilder(httpClientBuilder);
@@ -122,7 +122,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     }
     this.awsGlue = glueAsyncClientBuilder.build();
     this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
-    this.skipTableArchive = config.getBooleanOrDefault(GlueSyncConfig.GLUE_SKIP_TABLE_ARCHIVE);
+    this.skipTableArchive = config.getBooleanOrDefault(GlueCatalogSyncClientConfig.GLUE_SKIP_TABLE_ARCHIVE);
     this.enableMetadataTable = Boolean.toString(config.getBoolean(GLUE_METADATA_FILE_LISTING)).toUpperCase();
   }
 

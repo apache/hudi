@@ -37,7 +37,7 @@ import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_REGIO
 import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME;
 import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_WRITE_CAPACITY;
 
-import static org.apache.hudi.config.GlueSyncConfig.GLUE_SKIP_TABLE_ARCHIVE;
+import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_SKIP_TABLE_ARCHIVE;
 
 /**
  * Configurations used by the AWS credentials and AWS DynamoDB based lock.
