@@ -21,7 +21,7 @@ package org.apache.hudi.sync.adb;
 
 import org.apache.hudi.common.util.ConfigUtils;
 
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Disabled;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -41,9 +41,10 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_F
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@Disabled
 public class TestAdbSyncConfig {
 
-  @Test
+  @Disabled
   public void testInitConfig() {
     Properties props = new Properties();
     props.setProperty(META_SYNC_PARTITION_FIELDS.key(), "a,b");

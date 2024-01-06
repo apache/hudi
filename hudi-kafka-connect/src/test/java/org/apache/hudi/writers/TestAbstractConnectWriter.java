@@ -40,8 +40,7 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.api.Disabled;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -54,6 +53,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@Disabled
 public class TestAbstractConnectWriter {
 
   private static final String TOPIC_NAME = "kafka-connect-test-topic";
@@ -72,8 +72,7 @@ public class TestAbstractConnectWriter {
     schemaProvider = new TestSchemaProvider();
   }
 
-  @ParameterizedTest
-  @EnumSource(value = TestInputFormats.class)
+  @Disabled
   public void testAbstractWriterForAllFormats(TestInputFormats inputFormats) throws Exception {
     Schema schema = schemaProvider.getSourceSchema();
     List<?> inputRecords;

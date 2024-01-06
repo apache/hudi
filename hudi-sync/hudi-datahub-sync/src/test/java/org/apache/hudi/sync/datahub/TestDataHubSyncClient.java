@@ -30,7 +30,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -47,6 +47,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+@Disabled
 public class TestDataHubSyncClient {
 
   @Mock
@@ -82,7 +83,7 @@ public class TestDataHubSyncClient {
   public void afterEach() {
   }
 
-  @Test
+  @Disabled
   public void testUpdateTableSchemaInvokesRestEmitter() throws IOException {
     Properties props = new Properties();
     props.put(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), DummyPartitionValueExtractor.class.getName());

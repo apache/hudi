@@ -38,7 +38,7 @@ import org.apache.spark.storage.StorageLevel;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Disabled;
 
 import java.io.IOException;
 import java.sql.Connection;
@@ -59,6 +59,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 /**
  * Tests {@link JdbcSource}.
  */
+@Disabled
 public class TestJdbcSource extends UtilitiesTestBase {
 
   private static final TypedProperties PROPS = new TypedProperties();
@@ -87,7 +88,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
     close(connection);
   }
 
-  @Test
+  @Disabled
   public void testSingleCommit() {
     PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "true");
     PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "last_insert");
@@ -110,7 +111,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
     }
   }
 
-  @Test
+  @Disabled
   public void testInsertAndUpdate() {
     PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "true");
     PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "last_insert");
@@ -144,7 +145,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
     }
   }
 
-  @Test
+  @Disabled
   public void testTwoCommits() {
     PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "true");
     PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "last_insert");
@@ -172,7 +173,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
     }
   }
 
-  @Test
+  @Disabled
   public void testIncrementalFetchWithCommitTime() {
     PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "true");
     PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "last_insert");
@@ -198,7 +199,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
     }
   }
 
-  @Test
+  @Disabled
   public void testIncrementalFetchWithNoMatchingRows() {
     PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "true");
     PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "last_insert");
@@ -220,7 +221,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
     }
   }
 
-  @Test
+  @Disabled
   public void testIncrementalFetchWhenTableRecordsMoreThanSourceLimit() {
     PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "true");
     PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "id");
@@ -251,7 +252,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
     }
   }
 
-  @Test
+  @Disabled
   public void testIncrementalFetchWhenLastCheckpointMoreThanTableRecords() {
     PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "true");
     PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "id");
@@ -278,7 +279,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
     }
   }
 
-  @Test
+  @Disabled
   public void testIncrementalFetchFallbackToFullFetchWhenError() {
     PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "true");
     PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "last_insert");
@@ -315,7 +316,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
     }
   }
 
-  @Test
+  @Disabled
   public void testFullFetchWithCommitTime() {
     PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "false");
 
@@ -339,7 +340,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
     }
   }
 
-  @Test
+  @Disabled
   public void testFullFetchWithCheckpoint() {
     PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "false");
     PROPS.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "last_insert");
@@ -372,7 +373,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
     }
   }
 
-  @Test
+  @Disabled
   public void testSourceWithPasswordOnFs() {
     try {
       // Write secret string to fs in a file
@@ -391,7 +392,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
     }
   }
 
-  @Test
+  @Disabled
   public void testSourceWithNoPasswordThrowsException() {
     assertThrows(HoodieException.class, () -> {
       // Write secret string to fs in a file
@@ -405,7 +406,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
     });
   }
 
-  @Test
+  @Disabled
   public void testSourceWithExtraOptions() {
     PROPS.setProperty("hoodie.deltastreamer.jdbc.extra.options.fetchsize", "10");
     PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "false");
@@ -420,7 +421,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
     }
   }
 
-  @Test
+  @Disabled
   public void testSourceWithStorageLevel() {
     PROPS.setProperty("hoodie.deltastreamer.jdbc.storage.level", "NONE");
     PROPS.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "false");

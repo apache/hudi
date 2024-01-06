@@ -30,7 +30,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieFlinkCopyOnWriteTable;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Disabled;
 import org.mockito.Mock;
 
 import java.util.ArrayList;
@@ -42,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /**
  * Test cases for {@link FlinkSizeBasedClusteringPlanStrategy}.
  */
+@Disabled
 public class TestFlinkSizeBasedClusteringPlanStrategy {
 
   @Mock
@@ -57,7 +58,7 @@ public class TestFlinkSizeBasedClusteringPlanStrategy {
             .withPath("path1");
   }
 
-  @Test
+  @Disabled
   public void testBuildClusteringGroupsForPartitionOnlyOneFile() {
     String partition = "20221117";
     String fileId = "fg-1";

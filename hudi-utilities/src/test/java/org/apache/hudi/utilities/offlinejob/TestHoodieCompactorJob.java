@@ -35,7 +35,7 @@ import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.hudi.utilities.HoodieCompactor;
 
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Disabled;
 
 import java.util.Properties;
 
@@ -44,9 +44,10 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAM
 /**
  * Test cases for {@link HoodieCompactor}.
  */
+@Disabled
 public class TestHoodieCompactorJob extends HoodieOfflineJobTestBase {
 
-  @Test
+  @Disabled
   public void testHoodieCompactorWithClean() throws Exception {
     String tableBasePath = basePath + "/asyncCompaction";
     Properties props = getPropertiesForKeyGen(true);

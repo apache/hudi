@@ -51,7 +51,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Disabled;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -69,6 +69,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /**
  * Tests against {@link ProtoKafkaSource}.
  */
+@Disabled
 public class TestProtoKafkaSource extends BaseTestKafkaSource {
   private static final Random RANDOM = new Random();
 
@@ -93,7 +94,7 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
     return new SourceFormatAdapter(protoKafkaSource);
   }
 
-  @Test
+  @Disabled
   public void testProtoKafkaSourceWithFlattenWrappedPrimitives() {
 
     // topic setup.

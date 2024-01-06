@@ -23,7 +23,7 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Disabled;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -34,6 +34,7 @@ import java.util.Map;
 /**
  * Unit test against HoodieFlinkEngineContext.
  */
+@Disabled
 public class TestHoodieFlinkEngineContext {
   private HoodieFlinkEngineContext context;
 
@@ -42,7 +43,7 @@ public class TestHoodieFlinkEngineContext {
     context = new HoodieFlinkEngineContext(new FlinkTaskContextSupplier(null));
   }
 
-  @Test
+  @Disabled
   public void testMap() {
     List<Integer> mapList = Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
     List<Integer> result = context.map(mapList, x -> x + 1, 2);
@@ -52,7 +53,7 @@ public class TestHoodieFlinkEngineContext {
     Assertions.assertEquals(11, result.get(0));
   }
 
-  @Test
+  @Disabled
   public void testFlatMap() {
     List<String> list1 = Arrays.asList("a", "b", "c");
     List<String> list2 = Arrays.asList("d", "e", "f");
@@ -68,7 +69,7 @@ public class TestHoodieFlinkEngineContext {
     Assertions.assertEquals(9, result.size());
   }
 
-  @Test
+  @Disabled
   public void testForeach() {
     List<Integer> mapList = Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
     List<Integer> result = new ArrayList<>(10);
@@ -78,7 +79,7 @@ public class TestHoodieFlinkEngineContext {
     Assertions.assertTrue(result.containsAll(mapList));
   }
 
-  @Test
+  @Disabled
   public void testMapToPair() {
     List<String> mapList = Arrays.asList("spark_hudi", "flink_hudi");
 

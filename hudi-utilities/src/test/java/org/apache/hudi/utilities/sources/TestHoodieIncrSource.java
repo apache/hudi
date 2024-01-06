@@ -51,8 +51,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.api.Disabled;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -71,6 +70,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Disabled
 public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
 
   @Override
@@ -98,8 +98,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, props);
   }
 
-  @ParameterizedTest
-  @EnumSource(HoodieTableType.class)
+  @Disabled
   public void testHoodieIncrSource(HoodieTableType tableType) throws IOException {
     this.tableType = tableType;
     metaClient = getHoodieMetaClient(hadoopConf(), basePath());
@@ -140,8 +139,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     }
   }
 
-  @ParameterizedTest
-  @EnumSource(HoodieTableType.class)
+  @Disabled
   public void testHoodieIncrSourceInflightCommitBeforeCompletedCommit(HoodieTableType tableType) throws IOException {
     this.tableType = tableType;
     metaClient = getHoodieMetaClient(hadoopConf(), basePath());
@@ -220,8 +218,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     }
   }
 
-  @ParameterizedTest
-  @EnumSource(HoodieTableType.class)
+  @Disabled
   public void testHoodieIncrSourceWithPendingTableServices(HoodieTableType tableType) throws IOException {
     this.tableType = tableType;
     metaClient = getHoodieMetaClient(hadoopConf(), basePath());

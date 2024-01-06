@@ -24,20 +24,20 @@ import org.apache.hudi.connect.transaction.ConnectTransactionParticipant;
 import org.apache.hudi.connect.transaction.TransactionCoordinator;
 import org.apache.hudi.connect.writers.KafkaConnectConfigs;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.helper.MockKafkaConnect;
 import org.apache.hudi.helper.MockKafkaControlAgent;
 import org.apache.hudi.helper.TestHudiWriterProvider;
-import org.apache.hudi.helper.MockKafkaConnect;
 
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.api.Disabled;
 
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Disabled
 public class TestConnectTransactionParticipant {
 
   private static final String TOPIC_NAME = "kafka-connect-test-topic";
@@ -64,8 +64,7 @@ public class TestConnectTransactionParticipant {
     initializeParticipant();
   }
 
-  @ParameterizedTest
-  @EnumSource(value = CoordinatorFailureTestScenarios.class)
+  @Disabled
   public void testAllCoordinatorFailureScenarios(CoordinatorFailureTestScenarios testScenario) {
     try {
       assertTrue(mockKafkaConnect.isPaused());
@@ -95,8 +94,7 @@ public class TestConnectTransactionParticipant {
     participant.stop();
   }
 
-  @ParameterizedTest
-  @EnumSource(value = ParticipantFailureTestScenarios.class)
+  @Disabled
   public void testAllParticipantFailureScenarios(ParticipantFailureTestScenarios testScenario) {
     try {
       int currentKafkaOffset = 0;

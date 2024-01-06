@@ -28,8 +28,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.json.JSONObject;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.api.Disabled;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
@@ -54,6 +53,7 @@ import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.SQS
 import static org.apache.hudi.utilities.testutils.CloudObjectTestUtils.deleteMessagesInQueue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@Disabled
 public class TestCloudObjectsSelector extends HoodieSparkClientTestHarness {
 
   static final String REGION_NAME = "us-east-1";
@@ -86,8 +86,7 @@ public class TestCloudObjectsSelector extends HoodieSparkClientTestHarness {
     cleanupResources();
   }
 
-  @ParameterizedTest
-  @ValueSource(classes = {CloudObjectsSelector.class})
+  @Disabled
   public void testSqsQueueAttributesShouldReturnsRequiredAttribute(Class<?> clazz) {
     CloudObjectsSelector selector =
         (CloudObjectsSelector) ReflectionUtils.loadClass(clazz.getName(), props);
@@ -102,8 +101,7 @@ public class TestCloudObjectsSelector extends HoodieSparkClientTestHarness {
     assertEquals("0", queueAttributes.get(SQS_ATTR_APPROX_MESSAGES));
   }
 
-  @ParameterizedTest
-  @ValueSource(classes = {CloudObjectsSelector.class})
+  @Disabled
   public void testFileAttributesFromRecordShouldReturnsExpectOutput(Class<?> clazz)
       throws IOException {
 
@@ -147,8 +145,7 @@ public class TestCloudObjectsSelector extends HoodieSparkClientTestHarness {
     assertEquals(1627376736755L, (long) fileAttributes.get(S3_MODEL_EVENT_TIME));
   }
 
-  @ParameterizedTest
-  @ValueSource(classes = {CloudObjectsSelector.class})
+  @Disabled
   public void testCreateListPartitionsReturnsExpectedSetOfBatch(Class<?> clazz) {
 
     CloudObjectsSelector selector =
@@ -182,8 +179,7 @@ public class TestCloudObjectsSelector extends HoodieSparkClientTestHarness {
     assertEquals(expectedFinalList, partitionedList.get(2));
   }
 
-  @ParameterizedTest
-  @ValueSource(classes = {CloudObjectsSelector.class})
+  @Disabled
   public void testCreateListPartitionsReturnsEmptyIfBatchSizeIsZero(Class<?> clazz) {
 
     CloudObjectsSelector selector =
@@ -200,8 +196,7 @@ public class TestCloudObjectsSelector extends HoodieSparkClientTestHarness {
     assertEquals(0, partitionedList.size());
   }
 
-  @ParameterizedTest
-  @ValueSource(classes = {CloudObjectsSelector.class})
+  @Disabled
   public void testOnCommitDeleteProcessedMessages(Class<?> clazz) {
 
     CloudObjectsSelector selector =

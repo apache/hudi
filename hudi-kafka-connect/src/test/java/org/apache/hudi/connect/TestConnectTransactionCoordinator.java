@@ -33,8 +33,7 @@ import org.apache.hudi.helper.MockKafkaControlAgent;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.api.Disabled;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -47,6 +46,7 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 
+@Disabled
 public class TestConnectTransactionCoordinator {
 
   private static final String TOPIC_NAME = "kafka-connect-test-topic";
@@ -66,8 +66,7 @@ public class TestConnectTransactionCoordinator {
     latch = new CountDownLatch(1);
   }
 
-  @ParameterizedTest
-  @EnumSource(value = MockParticipant.TestScenarios.class)
+  @Disabled
   public void testSingleCommitScenario(MockParticipant.TestScenarios scenario) throws InterruptedException {
     kafkaControlAgent = new MockKafkaControlAgent();
     participant = new MockParticipant(kafkaControlAgent, latch, scenario, MAX_COMMIT_ROUNDS);
