@@ -1076,7 +1076,9 @@ public class StreamSync implements Serializable, Closeable {
     final Schema returnSchema;
     if (requireSchemaInConfig) {
       returnSchema = getSchemaForWriteConfig(schema);
-      builder.withSchema(returnSchema.toString());
+      if (returnSchema != null) {
+        builder.withSchema(returnSchema.toString());
+      }
     } else {
       returnSchema = schema;
     }
