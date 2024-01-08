@@ -357,12 +357,14 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.write.buffer.record.sampling.rate")
       .defaultValue(String.valueOf(64))
       .markAdvanced()
+      .sinceVersion("1.0.0")
       .withDocumentation("Sampling rate of in-memory buffer used to estimate object size. Higher value lead to lower CPU usage.");
 
   public static final ConfigProperty<String> WRITE_BUFFER_RECORD_CACHE_LIMIT = ConfigProperty
       .key("hoodie.write.buffer.record.cache.limit")
       .defaultValue(String.valueOf(128 * 1024))
       .markAdvanced()
+      .sinceVersion("1.0.0")
       .withDocumentation("Maximum queue size of in-memory buffer for parallelizing network reads and lake storage writes.");
 
   public static final ConfigProperty<String> WRITE_EXECUTOR_DISRUPTOR_BUFFER_LIMIT_BYTES = ConfigProperty
