@@ -57,7 +57,8 @@ module.exports = {
                         'syncing_aws_glue_data_catalog',
                         'syncing_datahub',
                         'syncing_metastore',
-                        "gcp_bigquery"
+                        'gcp_bigquery',
+                        'syncing_onetable'
                     ],
                 }
             ],
