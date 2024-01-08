@@ -40,6 +40,13 @@ public class GlueCatalogSyncClientConfig extends HoodieConfig {
       .sinceVersion("0.14.0")
       .withDocumentation("Glue catalog sync based client will skip archiving the table version if this config is set to true");
 
+  public static final ConfigProperty<Integer> GLUE_SEGMENTS = ConfigProperty
+      .key(GLUE_CLIENT_PROPERTY_PREFIX + "partition_segments")
+      .defaultValue(5)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Parallelism to read existing partitions from Glue catalog");
+
   public static final ConfigProperty<Boolean> GLUE_METADATA_FILE_LISTING = ConfigProperty
       .key(GLUE_CLIENT_PROPERTY_PREFIX + "metadata_file_listing")
       .defaultValue(false)

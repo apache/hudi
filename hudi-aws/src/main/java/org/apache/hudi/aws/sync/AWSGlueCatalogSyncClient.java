@@ -50,6 +50,7 @@ import software.amazon.awssdk.services.glue.model.GetPartitionsResponse;
 import software.amazon.awssdk.services.glue.model.GetTableRequest;
 import software.amazon.awssdk.services.glue.model.PartitionInput;
 import software.amazon.awssdk.services.glue.model.PartitionValueList;
+import software.amazon.awssdk.services.glue.model.Segment;
 import software.amazon.awssdk.services.glue.model.SerDeInfo;
 import software.amazon.awssdk.services.glue.model.StorageDescriptor;
 import software.amazon.awssdk.services.glue.model.Table;
@@ -68,12 +69,16 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.aws.utils.S3Utils.s3aToS3;
 import static org.apache.hudi.common.util.MapUtils.containsAll;
 import static org.apache.hudi.common.util.MapUtils.isNullOrEmpty;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_METADATA_FILE_LISTING;
+import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_SEGMENTS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
 import static org.apache.hudi.hive.util.HiveSchemaUtil.getPartitionKeyType;
@@ -101,10 +106,12 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
    * see https://docs.aws.amazon.com/athena/latest/ug/querying-hudi.html
    */
   private static final String ENABLE_MDT_LISTING = "hudi.metadata-listing-enabled";
+  private static final String EXECUTOR_POOL_NAME_FORMAT = "hudi-aws-glue-catalog-sync-client-%d";
   private final String databaseName;
 
   private final Boolean skipTableArchive;
   private final String enableMetadataTable;
+  private final int numberOfSegments;
 
   public AWSGlueCatalogSyncClient(HiveSyncConfig config) {
     super(config);
@@ -114,10 +121,10 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
     this.skipTableArchive = config.getBooleanOrDefault(GlueCatalogSyncClientConfig.GLUE_SKIP_TABLE_ARCHIVE);
     this.enableMetadataTable = Boolean.toString(config.getBoolean(GLUE_METADATA_FILE_LISTING)).toUpperCase();
+    this.numberOfSegments = config.getIntOrDefault(GLUE_SEGMENTS);
   }
 
-  @Override
-  public List<Partition> getAllPartitions(String tableName) {
+  private List<Partition> getPartitionsSegment(Segment segment, String tableName) {
     try {
       List<Partition> partitions = new ArrayList<>();
       String nextToken = null;
@@ -125,6 +132,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
         GetPartitionsResponse result = awsGlue.getPartitions(GetPartitionsRequest.builder()
             .databaseName(databaseName)
             .tableName(tableName)
+            .segment(segment)
             .nextToken(nextToken)
             .build()).get();
         partitions.addAll(result.partitions().stream()
@@ -135,6 +143,33 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       return partitions;
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Failed to get all partitions for table " + tableId(databaseName, tableName), e);
+    }
+  }
+
+  @Override
+  public List<Partition> getAllPartitions(String tableName) {
+    ExecutorService executorService = Executors.newFixedThreadPool(numberOfSegments);
+    try {
+      List<Segment> segments = new ArrayList<>();
+      for (int i = 0; i < numberOfSegments; i++) {
+        segments.add(Segment.builder()
+            .segmentNumber(i)
+            .totalSegments(numberOfSegments).build());
+      }
+      List<Future<List<Partition>>> futures = segments.stream()
+          .map(segment -> executorService.submit(() -> this.getPartitionsSegment(segment, tableName)))
+          .collect(Collectors.toList());
+
+      List<Partition> partitions = new ArrayList<>();
+      for (Future<List<Partition>> future : futures) {
+        partitions.addAll(future.get());
+      }
+
+      return partitions;
+    } catch (Exception e) {
+      throw new HoodieGlueSyncException("Failed to get all partitions for table " + tableId(databaseName, tableName), e);
+    } finally {
+      executorService.shutdownNow();
     }
   }
 
