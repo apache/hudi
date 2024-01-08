@@ -19,7 +19,7 @@
 package org.apache.hudi.table.catalog;
 
 import org.apache.hudi.adapter.HiveCatalogConstants.AlterHiveDatabaseOp;
-import org.apache.hudi.adapter.HoodieHiveCatalogAdapter;
+import org.apache.hudi.adapter.Utils;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.fs.FSUtils;
@@ -109,6 +109,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 import static org.apache.hudi.adapter.HiveCatalogConstants.ALTER_DATABASE_OP;
 import static org.apache.hudi.adapter.HiveCatalogConstants.DATABASE_LOCATION_URI;
@@ -128,7 +129,7 @@ import static org.apache.flink.util.StringUtils.isNullOrWhitespaceOnly;
 /**
  * A catalog implementation for Hoodie based on MetaStore.
  */
-public class HoodieHiveCatalog extends AbstractCatalog implements HoodieHiveCatalogAdapter {
+public class HoodieHiveCatalog extends AbstractCatalog {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieHiveCatalog.class);
 
   private final HiveConf hiveConf;
@@ -751,6 +752,27 @@ public class HoodieHiveCatalog extends AbstractCatalog implements HoodieHiveCata
     refreshHMSTable(tablePath, newCatalogTable);
   }
 
+  public void alterTable(ObjectPath tablePath, CatalogBaseTable newCatalogTable, List tableChanges,
+      boolean ignoreIfNotExists) throws TableNotExistException, CatalogException {
+    checkNotNull(tablePath, "Table path cannot be null");
+    checkNotNull(newCatalogTable, "New catalog table cannot be null");
+
+    if (!isUpdatePermissible(tablePath, newCatalogTable, ignoreIfNotExists)) {
+      return;
+    }
+    CatalogBaseTable oldTable = getTable(tablePath);
+    HoodieFlinkWriteClient<?> writeClient = createWriteClient(tablePath, oldTable);
+    Pair<InternalSchema, HoodieTableMetaClient> pair = writeClient.getInternalSchemaAndMetaClient();
+    InternalSchema oldSchema = pair.getLeft();
+    Function<LogicalType, Type> convertFunc = (LogicalType logicalType) -> AvroInternalSchemaConverter.convertToField(AvroSchemaConverter.convertToSchema(logicalType));
+    InternalSchema newSchema = Utils.applyTableChange(oldSchema, tableChanges, convertFunc);
+    if (!oldSchema.equals(newSchema)) {
+      writeClient.setOperationType(WriteOperationType.ALTER_SCHEMA);
+      writeClient.commitTableChange(newSchema, pair.getRight());
+    }
+    refreshHMSTable(tablePath, newCatalogTable);
+  }
+
   @Override
   public List<CatalogPartitionSpec> listPartitions(ObjectPath tablePath)
       throws TableNotExistException, TableNotPartitionedException, CatalogException {
@@ -952,7 +974,7 @@ public class HoodieHiveCatalog extends AbstractCatalog implements HoodieHiveCata
     throw new HoodieCatalogException("Not supported.");
   }
 
-  public boolean isUpdatePermissible(ObjectPath tablePath, CatalogBaseTable newCatalogTable, boolean ignoreIfNotExists) throws TableNotExistException {
+  private boolean isUpdatePermissible(ObjectPath tablePath, CatalogBaseTable newCatalogTable, boolean ignoreIfNotExists) throws TableNotExistException {
     if (!newCatalogTable.getOptions().getOrDefault(CONNECTOR.key(), "").equalsIgnoreCase("hudi")) {
       throw new HoodieCatalogException(String.format("The %s is not hoodie table", tablePath.getObjectName()));
     }
@@ -975,13 +997,7 @@ public class HoodieHiveCatalog extends AbstractCatalog implements HoodieHiveCata
     }
   }
 
-  public InternalSchema getInternalSchema(ObjectPath tablePath) throws TableNotExistException, CatalogException {
-    CatalogBaseTable oldTable = getTable(tablePath);
-    HoodieFlinkWriteClient<?> writeClient = createWriteClient(tablePath, oldTable);
-    return writeClient.getInternalSchemaAndMetaClient().getLeft();
-  }
-
-  public void refreshHMSTable(ObjectPath tablePath, CatalogBaseTable newCatalogTable) {
+  private void refreshHMSTable(ObjectPath tablePath, CatalogBaseTable newCatalogTable) {
     try {
       boolean isMorTable = OptionsResolver.isMorTable(newCatalogTable.getOptions());
       Table hiveTable = instantiateHiveTable(tablePath, newCatalogTable, inferTablePath(tablePath, newCatalogTable), isMorTable);
@@ -991,18 +1007,6 @@ public class HoodieHiveCatalog extends AbstractCatalog implements HoodieHiveCata
       LOG.error("Failed to alter table {}", tablePath.getObjectName(), e);
       throw new HoodieCatalogException(String.format("Failed to alter table %s", tablePath.getObjectName()), e);
     }
-  }
-
-  public void alterHoodieTableSchema(ObjectPath tablePath, InternalSchema newSchema) throws TableNotExistException, CatalogException {
-    CatalogBaseTable oldTable = getTable(tablePath);
-    HoodieFlinkWriteClient<?> writeClient = createWriteClient(tablePath, oldTable);
-    writeClient.setOperationType(WriteOperationType.ALTER_SCHEMA);
-    HoodieTableMetaClient metaClient = createMetaClient(tablePath, oldTable);
-    writeClient.commitTableChange(newSchema, metaClient);
-  }
-
-  public Type convert(LogicalType logicalType) {
-    return AvroInternalSchemaConverter.convertToField(AvroSchemaConverter.convertToSchema(logicalType));
   }
 
   private Map<String, String> supplementOptions(
@@ -1033,14 +1037,8 @@ public class HoodieHiveCatalog extends AbstractCatalog implements HoodieHiveCata
         Configuration.fromMap(options)
             .set(FlinkOptions.TABLE_NAME, tablePath.getObjectName())
             .set(FlinkOptions.SOURCE_AVRO_SCHEMA,
-                createMetaClient(tablePath, table)
+                StreamerUtil.createMetaClient(inferTablePath(tablePath, table), hiveConf)
                     .getTableConfig().getTableCreateSchema().get().toString()));
-  }
-
-  private HoodieTableMetaClient createMetaClient(
-      ObjectPath tablePath,
-      CatalogBaseTable table) {
-    return StreamerUtil.createMetaClient(inferTablePath(tablePath, table), hiveConf);
   }
 
   @VisibleForTesting

@@ -18,6 +18,9 @@
 
 package org.apache.hudi.adapter;
 
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.Type;
+
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.runtime.io.disk.iomanager.IOManager;
@@ -31,6 +34,10 @@ import org.apache.flink.table.runtime.generated.RecordComparator;
 import org.apache.flink.table.runtime.operators.sort.BinaryExternalSorter;
 import org.apache.flink.table.runtime.typeutils.AbstractRowDataSerializer;
 import org.apache.flink.table.runtime.typeutils.BinaryRowDataSerializer;
+import org.apache.flink.table.types.logical.LogicalType;
+
+import java.util.List;
+import java.util.function.Function;
 
 /**
  * Adapter utils.
@@ -56,5 +63,9 @@ public class Utils {
       Configuration conf) {
     return new BinaryExternalSorter(owner, memoryManager, reservedMemorySize,
         ioManager, inputSerializer, serializer, normalizedKeyComputer, comparator, conf);
+  }
+
+  public static InternalSchema applyTableChange(InternalSchema oldSchema, List changes, Function<LogicalType, Type> convertFunc) {
+    throw new RuntimeException("There is no possible to hit this method!");
   }
 }

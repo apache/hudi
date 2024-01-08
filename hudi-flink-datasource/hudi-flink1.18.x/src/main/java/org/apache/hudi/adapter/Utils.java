@@ -40,8 +40,11 @@ import org.apache.flink.table.runtime.generated.RecordComparator;
 import org.apache.flink.table.runtime.operators.sort.BinaryExternalSorter;
 import org.apache.flink.table.runtime.typeutils.AbstractRowDataSerializer;
 import org.apache.flink.table.runtime.typeutils.BinaryRowDataSerializer;
+import org.apache.flink.table.types.logical.LogicalType;
 
 import java.util.Collections;
+import java.util.List;
+import java.util.function.Function;
 
 import static org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType.AFTER;
 import static org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType.FIRST;
@@ -78,14 +81,23 @@ public class Utils {
         conf.get(ExecutionConfigOptions.TABLE_EXEC_SORT_ASYNC_MERGE_ENABLED));
   }
 
-  public static InternalSchema applyTableChange(InternalSchema oldSchema, TableChange change, FlinkTypeConverter converter) {
+  public static InternalSchema applyTableChange(InternalSchema oldSchema, List changes, Function<LogicalType, Type> convertFunc) {
+    InternalSchema newSchema = oldSchema;
+    for (Object change : changes) {
+      TableChange tableChange = (TableChange) change;
+      newSchema = applyTableChange(newSchema, tableChange, convertFunc);
+    }
+    return newSchema;
+  }
+
+  private static InternalSchema applyTableChange(InternalSchema oldSchema, TableChange change, Function<LogicalType, Type> convertFunc) {
     InternalSchemaChangeApplier changeApplier = new InternalSchemaChangeApplier(oldSchema);
     if (change instanceof TableChange.AddColumn) {
       if (((TableChange.AddColumn) change).getColumn().isPhysical()) {
         TableChange.AddColumn add = (TableChange.AddColumn) change;
         Column column = add.getColumn();
         String colName = column.getName();
-        Type colType = converter.convert(column.getDataType().getLogicalType());
+        Type colType = convertFunc.apply(column.getDataType().getLogicalType());
         String comment = column.getComment().orElse(null);
         Pair<org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType, String> colPositionPair =
             parseColumnPosition(add.getPosition());
@@ -105,7 +117,7 @@ public class Utils {
     } else if (change instanceof TableChange.ModifyPhysicalColumnType) {
       TableChange.ModifyPhysicalColumnType modify = (TableChange.ModifyPhysicalColumnType) change;
       String colName = modify.getOldColumn().getName();
-      Type newColType = converter.convert(modify.getNewType().getLogicalType());
+      Type newColType = convertFunc.apply(modify.getNewType().getLogicalType());
       return changeApplier.applyColumnTypeChange(colName, newColType);
     } else if (change instanceof TableChange.ModifyColumnPosition) {
       TableChange.ModifyColumnPosition modify = (TableChange.ModifyColumnPosition) change;
