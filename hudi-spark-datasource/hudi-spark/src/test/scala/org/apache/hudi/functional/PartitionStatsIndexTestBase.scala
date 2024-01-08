@@ -44,17 +44,17 @@ import scala.collection.JavaConverters._
 import scala.collection.{JavaConverters, mutable}
 
 /**
- * Tests for partition stats index.
+ * Common test setup and validation methods for partition stats index testing.
  */
 class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
 
   var spark: SparkSession = _
   var instantTime: AtomicInteger = _
-  val metadataOpts = Map(
+  val metadataOpts: Map[String, String] = Map(
     HoodieMetadataConfig.ENABLE.key -> "true",
     HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true"
   )
-  val commonOpts = Map(
+  val commonOpts: Map[String, String] = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
     "hoodie.upsert.shuffle.parallelism" -> "4",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
@@ -66,7 +66,7 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
   var mergedDfList: List[DataFrame] = List.empty
 
   @BeforeEach
-  override def setUp() {
+  override def setUp(): Unit = {
     initPath()
     initSparkContexts()
     initFileSystem()
@@ -81,9 +81,8 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
   }
 
   @AfterEach
-  override def tearDown() = {
-    cleanupFileSystem()
-    cleanupSparkContexts()
+  override def tearDown(): Unit = {
+    cleanupResources()
   }
 
   protected def getLatestMetaClient(enforce: Boolean): HoodieTableMetaClient = {
@@ -100,7 +99,7 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
     val lastInstant = getLatestMetaClient(false).getActiveTimeline
       .filter(JavaConversions.getPredicate(instant => instant.getAction != ActionType.rollback.name()))
       .lastInstant().get()
-    if (getLatestCompactionInstant() != getLatestMetaClient(false).getActiveTimeline.lastInstant()
+    if (getLatestCompactionInstant != getLatestMetaClient(false).getActiveTimeline.lastInstant()
       && lastInstant.getAction != ActionType.replacecommit.name()
       && lastInstant.getAction != ActionType.clean.name()) {
       mergedDfList = mergedDfList.take(mergedDfList.size - 1)
@@ -116,7 +115,7 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
   }
 
   protected def executeFunctionNTimes[T](function0: Function0[T], n: Int): Unit = {
-    for (i <- 1 to n) {
+    for (_ <- 1 to n) {
       function0.apply()
     }
   }
@@ -142,7 +141,7 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
     getHoodieTable(metaClient, getWriteConfig(hudiOpts)).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata].getMetadataMetaClient
   }
 
-  protected def getLatestCompactionInstant(): org.apache.hudi.common.util.Option[HoodieInstant] = {
+  protected def getLatestCompactionInstant: org.apache.hudi.common.util.Option[HoodieInstant] = {
     getLatestMetaClient(false).getActiveTimeline
       .filter(JavaConversions.getPredicate(s => Option(
         try {
@@ -157,7 +156,7 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
       .lastInstant()
   }
 
-  protected def getLatestClusteringInstant(): org.apache.hudi.common.util.Option[HoodieInstant] = {
+  protected def getLatestClusteringInstant: org.apache.hudi.common.util.Option[HoodieInstant] = {
     getLatestMetaClient(false).getActiveTimeline.getCompletedReplaceTimeline.lastInstant()
   }
 
@@ -167,15 +166,15 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
                                                         validate: Boolean = true): DataFrame = {
     var latestBatch: mutable.Buffer[String] = null
     if (operation == UPSERT_OPERATION_OPT_VAL) {
-      val instantTime = getInstantTime()
-      val records = recordsToStrings(dataGen.generateUniqueUpdates(instantTime, 1))
-      records.addAll(recordsToStrings(dataGen.generateInserts(instantTime, 1)))
+      val instantTime = getInstantTime
+      val records = recordsToStrings(dataGen.generateUniqueUpdates(instantTime, 5))
+      records.addAll(recordsToStrings(dataGen.generateInserts(instantTime, 5)))
       latestBatch = records.asScala
     } else if (operation == INSERT_OVERWRITE_OPERATION_OPT_VAL) {
       latestBatch = recordsToStrings(dataGen.generateInsertsForPartition(
-        getInstantTime(), 5, dataGen.getPartitionPaths.last)).asScala
+        getInstantTime, 5, dataGen.getPartitionPaths.last)).asScala
     } else {
-      latestBatch = recordsToStrings(dataGen.generateInserts(getInstantTime(), 5)).asScala
+      latestBatch = recordsToStrings(dataGen.generateInserts(getInstantTime, 5)).asScala
     }
     val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch, 2))
     latestBatchDf.cache()
@@ -187,7 +186,7 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
     val deletedDf = calculateMergedDf(latestBatchDf, operation)
     deletedDf.cache()
     if (validate) {
-      validateDataAndPartitionStats(hudiOpts, deletedDf)
+      validateDataAndPartitionStats(deletedDf)
     }
     deletedDf.unpersist()
     latestBatchDf
@@ -228,7 +227,7 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
     }
   }
 
-  private def getInstantTime(): String = {
+  private def getInstantTime: String = {
     String.format("%03d", new Integer(instantTime.incrementAndGet()))
   }
 
@@ -240,13 +239,9 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
       .build()
   }
 
-  protected def validateDataAndPartitionStats(hudiOpts: Map[String, String],
-                                              inputDf: DataFrame = sparkSession.emptyDataFrame): Unit = {
+  protected def validateDataAndPartitionStats(inputDf: DataFrame = sparkSession.emptyDataFrame): Unit = {
     metaClient = HoodieTableMetaClient.reload(metaClient)
-    val writeConfig = getWriteConfig(hudiOpts)
-    val metadata = metadataWriter(writeConfig).getTableMetadata
     val readDf = spark.read.format("hudi").load(basePath)
-    val rowArr = readDf.collect()
     val partitionStatsIndex = new PartitionStatsIndexSupport(
       spark,
       inputDf.schema,
