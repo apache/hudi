@@ -138,6 +138,13 @@ public class HoodieHiveCatalog extends AbstractCatalog {
   // optional catalog base path: used for db/table path inference.
   private final String catalogPath;
   private final boolean external;
+  private static final Map<String, ConfigOption<String>> IMMUTABLE_CONFS = new HashMap<>();
+  {
+    IMMUTABLE_CONFS.put("table type", FlinkOptions.TABLE_TYPE);
+    IMMUTABLE_CONFS.put("index type", FlinkOptions.INDEX_TYPE);
+    IMMUTABLE_CONFS.put("primary key", FlinkOptions.RECORD_KEY_FIELD);
+    IMMUTABLE_CONFS.put("precombine key", FlinkOptions.PRECOMBINE_FIELD);
+  }
 
   public HoodieHiveCatalog(String catalogName, Configuration options) {
     this(catalogName, options, HoodieCatalogUtil.createHiveConf(options.getString(CatalogOptions.HIVE_CONF_DIR), options), false);
@@ -984,9 +991,15 @@ public class HoodieHiveCatalog extends AbstractCatalog {
 
     try {
       Table hiveTable = getHiveTable(tablePath);
-      if (!sameOptions(hiveTable.getParameters(), newCatalogTable.getOptions(), FlinkOptions.TABLE_TYPE)
-          || !sameOptions(hiveTable.getParameters(), newCatalogTable.getOptions(), FlinkOptions.INDEX_TYPE)) {
-        throw new HoodieCatalogException("Hoodie catalog does not support to alter table type and index type");
+      List<String> oldPartitionKeys = HiveSchemaUtils.getFieldNames(hiveTable.getPartitionKeys());
+      List<String> newPartitionKeys = HoodieCatalogUtil.getPartitionKeys((CatalogTable) newCatalogTable);
+      if (!oldPartitionKeys.equals(newPartitionKeys)) {
+        throw new HoodieCatalogException("Hoodie catalog does not support to alter table partition keys");
+      }
+      for (Map.Entry<String, ConfigOption<String>> item : IMMUTABLE_CONFS.entrySet()) {
+        if (!sameOptions(hiveTable.getParameters(), newCatalogTable.getOptions(), item.getValue())) {
+          throw new HoodieCatalogException("Hoodie catalog does not support to alter " + item.getKey());
+        }
       }
       return true;
     } catch (TableNotExistException e) {
