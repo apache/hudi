@@ -102,11 +102,6 @@ public class PrometheusReporter extends MetricsReporter {
   @Override
   public void stop() {
     collectorRegistry.unregister(metricExports);
-    HTTPServer httpServer = PORT_TO_SERVER.remove(serverPort);
-    if (httpServer != null) {
-      httpServer.stop();
-    }
-    PORT_TO_COLLECTOR_REGISTRY.remove(serverPort);
   }
 
   private static class LabeledSampleBuilder implements SampleBuilder {
