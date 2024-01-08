@@ -51,7 +51,7 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
       String instantTime, Path path, Configuration conf, HoodieConfig config, Schema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
-    boolean enableBloomFilter = populateMetaFields;
+    boolean enableBloomFilter = populateMetaFields && config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_WITH_BLOOM_FILTER_ENABLED);
     HoodieAvroWriteSupport writeSupport = getHoodieAvroWriteSupport(conf, schema, config, enableBloomFilter);
 
     String compressionCodecName = config.getStringOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME);
