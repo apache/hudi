@@ -332,7 +332,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_PARTITION_STATS = ConfigProperty
       .key(METADATA_PREFIX + ".index.partition.stats.enable")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("1.0.0")
       .withDocumentation("Enable aggregating stats for each column at the storage partition level. ");
 
