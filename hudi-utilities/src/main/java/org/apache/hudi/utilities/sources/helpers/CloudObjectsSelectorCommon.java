@@ -204,8 +204,7 @@ public class CloudObjectsSelectorCommon {
     } else {
       dataset = reader.load(paths.toArray(new String[cloudObjectMetadata.size()]));
     }
-    dataset = dataset.coalesce(numPartitions);
-
+    dataset = coalesceOrRepartition(dataset, numPartitions);
     // add partition column from source path if configured
     if (containsConfigProperty(props, PATH_BASED_PARTITION_FIELDS)) {
       String[] partitionKeysToAdd = getStringWithAltKeys(props, PATH_BASED_PARTITION_FIELDS).split(",");
@@ -217,6 +216,17 @@ public class CloudObjectsSelectorCommon {
       }
     }
     return Option.of(dataset);
+  }
+
+  private static Dataset<Row> coalesceOrRepartition(Dataset dataset, int numPartitions) {
+    int existingNumPartitions = dataset.rdd().getNumPartitions();
+    LOG.info(String.format("existing number of partitions=%d, required number of partitions=%d", existingNumPartitions, numPartitions));
+    if (existingNumPartitions < numPartitions) {
+      dataset = dataset.repartition(numPartitions);
+    } else {
+      dataset = dataset.coalesce(numPartitions);
+    }
+    return dataset;
   }
 
   public static Option<Dataset<Row>> loadAsDataset(SparkSession spark, List<CloudObjectMetadata> cloudObjectMetadata, TypedProperties props, String fileFormat) {
