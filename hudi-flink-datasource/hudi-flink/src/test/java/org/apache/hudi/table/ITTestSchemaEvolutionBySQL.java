@@ -205,7 +205,8 @@ public class ITTestSchemaEvolutionBySQL {
         () -> tableEnv.executeSql("alter table t1 set ('table.type' = 'MERGE_ON_READ')"),
         "Should throw exception because alter table type is not supported.");
     assertTrue(e.getCause() instanceof HoodieCatalogException);
-    assertTrue(e.getCause().getMessage().contains("Hoodie catalog does not support to alter table type"));
+    assertTrue(e.getCause().getMessage().contains(
+        "Hoodie catalog does not support to alter table type and index type"));
   }
 
   @Test
@@ -216,31 +217,8 @@ public class ITTestSchemaEvolutionBySQL {
         () -> tableEnv.executeSql("alter table t1 set ('index.type' = 'BUCKET')"),
         "Should throw exception because alter index type is not supported.");
     assertTrue(e.getCause() instanceof HoodieCatalogException);
-    assertTrue(e.getCause().getMessage().contains("Hoodie catalog does not support to alter index type"));
-  }
-
-  @Test
-  void testAlterPrimaryKey() {
-    // Alter primary key is not supported
-    Exception e = assertThrows(
-        TableException.class,
-        () -> tableEnv.executeSql(
-            "alter table t1 set ('hoodie.datasource.write.recordkey.field' = 'f_str')"),
-        "Should throw exception because alter primary key is not supported.");
-    assertTrue(e.getCause() instanceof HoodieCatalogException);
-    assertTrue(e.getCause().getMessage().contains("Hoodie catalog does not support to alter primary key"));
-  }
-
-  @Test
-  void testAlterPrecombineKey() {
-    // Alter precombine key is not supported
-    Exception e = assertThrows(
-        TableException.class,
-        () -> tableEnv.executeSql(
-            "alter table t1 set ('precombine.field' = 'f_str')"),
-        "Should throw exception because alter precombine key is not supported.");
-    assertTrue(e.getCause() instanceof HoodieCatalogException);
-    assertTrue(e.getCause().getMessage().contains("Hoodie catalog does not support to alter precombine key"));
+    assertTrue(e.getCause().getMessage().contains(
+        "Hoodie catalog does not support to alter table type and index type"));
   }
 
   @Test

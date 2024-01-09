@@ -66,6 +66,6 @@ public class Utils {
   }
 
   public static InternalSchema applyTableChange(InternalSchema oldSchema, List changes, Function<LogicalType, Type> convertFunc) {
-    throw new RuntimeException("There is no possible to hit this method!");
+    throw new AssertionError("Unexpected");
   }
 }
