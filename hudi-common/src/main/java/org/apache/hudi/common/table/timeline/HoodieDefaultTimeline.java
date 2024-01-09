@@ -26,6 +26,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.io.Serializable;
 import java.security.MessageDigest;
@@ -49,6 +52,8 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
  * @see HoodieTimeline
  */
 public class HoodieDefaultTimeline implements HoodieTimeline {
+
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieDefaultTimeline.class);
 
   private static final long serialVersionUID = 1L;
 
@@ -504,6 +509,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
             HoodieCommitMetadata metadata = TimelineUtils.getCommitMetadata(i, this);
             return metadata.getOperationType().equals(WriteOperationType.CLUSTER);
           } catch (IOException e) {
+            LOG.warn("Unable to read commit metadata for " + i + " due to " + e.getMessage());
             return false;
           }
         }).findFirst());
@@ -522,6 +528,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
               return false;
             }
           } catch (IOException e) {
+            LOG.warn("Unable to read commit metadata for " + i + " due to " + e.getMessage());
             return false;
           }
         }).findFirst());
