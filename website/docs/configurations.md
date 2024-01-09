@@ -1792,6 +1792,16 @@ Configurations controlling the behavior of Kafka source in Hudi Streamer.
 | [hoodie.streamer.source.kafka.value.deserializer.class](#hoodiestreamersourcekafkavaluedeserializerclass)   | io.confluent.kafka.serializers.KafkaAvroDeserializer  | This class is used by kafka client to deserialize the records.<br />`Config Param: KAFKA_AVRO_VALUE_DESERIALIZER_CLASS`<br />`Since Version: 0.9.0`                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 ---
 
+#### Parquet DFS Source Configs {#Parquet-DFS-Source-Configs}
+Configurations controlling the behavior of Parquet DFS source in Hudi Streamer.
+
+[**Advanced Configs**](#Parquet-DFS-Source-Configs-advanced-configs)
+
+
+| Config Name                                                                               | Default | Description                                                                                                            |
+|-------------------------------------------------------------------------------------------|---------|------------------------------------------------------------------------------------------------------------------------|
+| [hoodie.streamer.source.parquet.dfs.mergeSchema](#hoodiestreamersourceparquetMergeSchema) | true    | Control whether to merge schema across parquet files in a single commit.<br />`Config Param: PARQUET_DFS_MERGE_SCHEMA` |
+---
 
 #### Pulsar Source Configs {#Pulsar-Source-Configs}
 Configurations controlling the behavior of Pulsar source in Hudi Streamer.
