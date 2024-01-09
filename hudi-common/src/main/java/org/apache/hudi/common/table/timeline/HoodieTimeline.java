@@ -402,7 +402,7 @@ public interface HoodieTimeline extends Serializable {
   public Option<HoodieInstant> getLastClusterCommit();
 
   /**
-   * get the most recent cluster commit if present
+   * get the most recent pending cluster commit if present
    *
    */
   public Option<HoodieInstant> getLastPendingClusterCommit();
