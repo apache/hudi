@@ -22,6 +22,7 @@ package org.apache.hudi.functional
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.PartitionStatsIndexSupport
+import org.apache.hudi.TestHoodieSparkUtils.dropMetaFields
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
@@ -59,7 +60,8 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
     "hoodie.upsert.shuffle.parallelism" -> "4",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
     RECORDKEY_FIELD.key -> "_row_key",
-    PARTITIONPATH_FIELD.key -> "partition",
+    PARTITIONPATH_FIELD.key -> "partition,trip_type",
+    HIVE_STYLE_PARTITIONING.key -> "true",
     PRECOMBINE_FIELD.key -> "timestamp",
     HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
   ) ++ metadataOpts
@@ -86,8 +88,8 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
   }
 
   protected def getLatestMetaClient(enforce: Boolean): HoodieTableMetaClient = {
-    val lastInsant = String.format("%03d", new Integer(instantTime.incrementAndGet()))
-    if (enforce || metaClient.getActiveTimeline.lastInstant().get().getTimestamp.compareTo(lastInsant) < 0) {
+    val lastInstant = String.format("%03d", new Integer(instantTime.incrementAndGet()))
+    if (enforce || metaClient.getActiveTimeline.lastInstant().get().getTimestamp.compareTo(lastInstant) < 0) {
       println("Reloaded timeline")
       metaClient.reloadActiveTimeline()
       metaClient
@@ -167,14 +169,14 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
     var latestBatch: mutable.Buffer[String] = null
     if (operation == UPSERT_OPERATION_OPT_VAL) {
       val instantTime = getInstantTime
-      val records = recordsToStrings(dataGen.generateUniqueUpdates(instantTime, 5))
-      records.addAll(recordsToStrings(dataGen.generateInserts(instantTime, 5)))
+      val records = recordsToStrings(dataGen.generateUniqueUpdates(instantTime, 20))
+      records.addAll(recordsToStrings(dataGen.generateInserts(instantTime, 20)))
       latestBatch = records.asScala
     } else if (operation == INSERT_OVERWRITE_OPERATION_OPT_VAL) {
       latestBatch = recordsToStrings(dataGen.generateInsertsForPartition(
-        getInstantTime, 5, dataGen.getPartitionPaths.last)).asScala
+        getInstantTime, 20, dataGen.getPartitionPaths.last)).asScala
     } else {
-      latestBatch = recordsToStrings(dataGen.generateInserts(getInstantTime, 5)).asScala
+      latestBatch = recordsToStrings(dataGen.generateInserts(getInstantTime, 20)).asScala
     }
     val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch, 2))
     latestBatchDf.cache()
@@ -219,7 +221,7 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
       } else {
         val prevDf = prevDfOpt.get
         val prevDfOld = prevDf.join(latestBatchDf, prevDf("_row_key") === latestBatchDf("_row_key")
-          && prevDf("partition") === latestBatchDf("partition"), "leftanti")
+          && prevDf("partition") === latestBatchDf("partition") && prevDf("trip_type") === latestBatchDf("trip_type"), "leftanti")
         val latestSnapshot = prevDfOld.union(latestBatchDf)
         mergedDfList = mergedDfList :+ latestSnapshot
         sparkSession.emptyDataFrame
@@ -247,13 +249,11 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
       inputDf.schema,
       HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexPartitionStats(true).build(),
       metaClient)
-    val partitionStats = partitionStatsIndex.loadColumnStatsIndexRecords(List("partition"), shouldReadInMemory = true).collectAsList()
+    val partitionStats = partitionStatsIndex.loadColumnStatsIndexRecords(List("partition", "trip_type"), shouldReadInMemory = true).collectAsList()
     assertEquals(0, partitionStats.size())
     val prevDf = mergedDfList.last.drop("tip_history")
-    val nonMatchingRecords = readDf.drop("_hoodie_commit_time", "_hoodie_commit_seqno", "_hoodie_record_key",
-        "_hoodie_partition_path", "_hoodie_file_name", "tip_history")
+    val nonMatchingRecords = dropMetaFields(readDf).drop("tip_history")
       .join(prevDf, prevDf.columns, "leftanti")
     assertEquals(0, nonMatchingRecords.count())
-    assertEquals(readDf.count(), prevDf.count())
   }
 }

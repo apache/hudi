@@ -19,6 +19,7 @@
 package org.apache.hudi
 
 import org.apache.avro.generic.GenericRecord
+import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
 import org.apache.spark.sql.types.{ArrayType, StructField, StructType}
@@ -232,5 +233,14 @@ object TestHoodieSparkUtils {
     val newSchema = setNullableRec(schema, columnName.split('.'), 0)
     // apply new schema
     df.sqlContext.createDataFrame(df.rdd, newSchema)
+  }
+
+  /**
+   * Utility method for dropping all hoodie meta related columns.
+   */
+  def dropMetaFields(df: DataFrame): DataFrame = {
+    df.drop(HoodieRecord.HOODIE_META_COLUMNS.get(0)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(1))
+      .drop(HoodieRecord.HOODIE_META_COLUMNS.get(2)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(3))
+      .drop(HoodieRecord.HOODIE_META_COLUMNS.get(4))
   }
 }

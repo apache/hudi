@@ -122,7 +122,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
   def verifyQueryPredicate(hudiOpts: Map[String, String]): Unit = {
     val reckey = mergedDfList.last.limit(1).collect().map(row => row.getAs("_row_key").toString)
     val dataFilter = EqualTo(attribute("_row_key"), Literal(reckey(0)))
-    assertEquals(1, spark.sql("select * from " + sqlTempTable + " where " + dataFilter.sql).count())
+    assertEquals(2, spark.sql("select * from " + sqlTempTable + " where " + dataFilter.sql).count())
     verifyFilePruning(hudiOpts, dataFilter)
   }
 

@@ -68,6 +68,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -1949,14 +1950,14 @@ public class HoodieTableMetadataUtil {
     if (columnsToIndex.isEmpty()) {
       return engineContext.emptyHoodieData();
     }
-    LOG.info(String.format("Indexing %d columns for partition stats index", columnsToIndex.size()));
+    LOG.debug(String.format("Indexing %d columns for partition stats index", columnsToIndex.size()));
     // Create records for MDT
     int parallelism = Math.max(Math.min(partitionInfoList.size(), recordsGenerationParams.getPartitionStatsIndexParallelism()), 1);
     return engineContext.parallelize(partitionInfoList, parallelism).flatMap(partitionFiles -> {
       final String partitionName = partitionFiles.getRelativePath();
       Stream<HoodieColumnRangeMetadata<Comparable>> partitionStatsRangeMetadata = partitionFiles.getFileNameToSizeMap().keySet().stream()
           .map(fileName -> getFileStatsRangeMetadata(partitionName, partitionName + "/" + fileName, dataTableMetaClient, columnsToIndex, false))
-          .map(partitionRangeMetadata -> new ParquetUtils().<Comparable>getColumnRangeInPartition(partitionRangeMetadata));
+          .map(BaseFileUtils::getColumnRangeInPartition);
       return HoodieMetadataPayload.createPartitionStatsRecords(partitionName, partitionStatsRangeMetadata.collect(toList()), false).iterator();
     });
   }
@@ -2012,7 +2013,7 @@ public class HoodieTableMetadataUtil {
         final String partitionName = partitionedWriteStat.get(0).getPartitionPath();
         Stream<HoodieColumnRangeMetadata<Comparable>> partitionStatsRangeMetadata = partitionedWriteStat.stream()
             .map(writeStat -> translateWriteStatToPartitionStats(writeStat, dataTableMetaClient, columnsToIndex))
-            .map(partitionRangeMetadata -> new ParquetUtils().<Comparable>getColumnRangeInPartition(partitionRangeMetadata));
+            .map(BaseFileUtils::getColumnRangeInPartition);
         return HoodieMetadataPayload.createPartitionStatsRecords(partitionName, partitionStatsRangeMetadata.collect(toList()), false).iterator();
       });
     } catch (Exception e) {
