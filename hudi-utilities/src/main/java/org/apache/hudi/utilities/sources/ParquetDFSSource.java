@@ -55,7 +55,7 @@ public class ParquetDFSSource extends RowSource {
   }
 
   private Dataset<Row> fromFiles(String pathStr) {
-    boolean mergeSchemaOption = getBooleanWithAltKeys(this.props, ParquetDFSSourceConfig.PARQUET_MERGE_SCHEMA);
+    boolean mergeSchemaOption = getBooleanWithAltKeys(this.props, ParquetDFSSourceConfig.PARQUET_DFS_MERGE_SCHEMA);
     return sparkSession.read().option("mergeSchema", mergeSchemaOption).parquet(pathStr.split(","));
   }
 }

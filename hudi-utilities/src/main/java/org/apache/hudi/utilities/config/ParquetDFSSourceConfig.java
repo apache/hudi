@@ -35,14 +35,14 @@ import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
 @Immutable
 @ConfigClassProperty(name = "Parquet DFS Source Configs",
         groupName = ConfigGroups.Names.HUDI_STREAMER,
-        subGroupName = ConfigGroups.SubGroupNames.SCHEMA_PROVIDER,
+        subGroupName = ConfigGroups.SubGroupNames.DELTA_STREAMER_SOURCE,
         description = "Configurations controlling the behavior of Parquet DFS source in Hudi Streamer.")
 public class ParquetDFSSourceConfig extends HoodieConfig {
 
-    public static final ConfigProperty<Boolean> PARQUET_MERGE_SCHEMA = ConfigProperty
-            .key(STREAMER_CONFIG_PREFIX + "parquet.dfs.mergeschema")
+    public static final ConfigProperty<Boolean> PARQUET_DFS_MERGE_SCHEMA = ConfigProperty
+            .key(STREAMER_CONFIG_PREFIX + "source.parquet.dfs.mergeSchema")
             .defaultValue(true)
-            .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "parquet.dfs.mergeschema")
+            .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.parquet.dfs.mergeSchema")
             .markAdvanced()
             .withDocumentation("Merge schema across parquet files within a single write");
 }
