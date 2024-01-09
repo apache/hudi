@@ -495,6 +495,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
     return this.firstNonSavepointCommit;
   }
 
+  @Override
   public Option<HoodieInstant> getLastClusterCommit() {
     return  Option.fromJavaOptional(getCommitsTimeline().filter(s -> s.getAction().equalsIgnoreCase(HoodieTimeline.REPLACE_COMMIT_ACTION))
         .getReverseOrderedInstants()
@@ -502,6 +503,20 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
           try {
             HoodieCommitMetadata metadata = TimelineUtils.getCommitMetadata(i, this);
             return metadata.getOperationType().equals(WriteOperationType.CLUSTER);
+          } catch (IOException e) {
+            return false;
+          }
+        }).findFirst());
+  }
+
+  @Override
+  public Option<HoodieInstant> getLastPendingClusterCommit() {
+    return  Option.fromJavaOptional(getCommitsTimeline().filter(s -> s.getAction().equalsIgnoreCase(HoodieTimeline.REPLACE_COMMIT_ACTION))
+        .getReverseOrderedInstants()
+        .filter(i -> {
+          try {
+            HoodieCommitMetadata metadata = TimelineUtils.getCommitMetadata(i, this);
+            return metadata.getOperationType().equals(WriteOperationType.CLUSTER) && !i.isCompleted();
           } catch (IOException e) {
             return false;
           }
