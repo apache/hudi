@@ -515,8 +515,12 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
         .getReverseOrderedInstants()
         .filter(i -> {
           try {
-            HoodieCommitMetadata metadata = TimelineUtils.getCommitMetadata(i, this);
-            return metadata.getOperationType().equals(WriteOperationType.CLUSTER) && !i.isCompleted();
+            if (!i.isCompleted()) {
+              HoodieCommitMetadata metadata = TimelineUtils.getCommitMetadata(i, this);
+              return metadata.getOperationType().equals(WriteOperationType.CLUSTER);
+            } else {
+              return false;
+            }
           } catch (IOException e) {
             return false;
           }
