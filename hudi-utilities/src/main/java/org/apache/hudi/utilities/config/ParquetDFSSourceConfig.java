@@ -26,8 +26,8 @@ import org.apache.hudi.common.config.HoodieConfig;
 
 import javax.annotation.concurrent.Immutable;
 
-import static org.apache.hudi.common.util.ConfigUtils.OLD_SCHEMAPROVIDER_CONFIG_PREFIX;
-import static org.apache.hudi.common.util.ConfigUtils.SCHEMAPROVIDER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.ConfigUtils.DELTA_STREAMER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
 
 /**
  * Parquet DFS Source Configs
@@ -40,9 +40,9 @@ import static org.apache.hudi.common.util.ConfigUtils.SCHEMAPROVIDER_CONFIG_PREF
 public class ParquetDFSSourceConfig extends HoodieConfig {
 
     public static final ConfigProperty<Boolean> PARQUET_MERGE_SCHEMA = ConfigProperty
-            .key(SCHEMAPROVIDER_CONFIG_PREFIX + "source.schema.parquet.mergeschema")
+            .key(STREAMER_CONFIG_PREFIX + "parquet.dfs.mergeschema")
             .defaultValue(true)
-            .withAlternatives(OLD_SCHEMAPROVIDER_CONFIG_PREFIX + "source.schema.parquet.mergeschema")
+            .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "parquet.dfs.mergeschema")
             .markAdvanced()
             .withDocumentation("Merge schema across parquet files within a single write");
 }
