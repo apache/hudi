@@ -74,9 +74,4 @@ public class HFileRootIndexBlock extends HFileBlock {
     }
     return blockIndexEntryMap;
   }
-
-  @Override
-  public HFileBlock cloneForUnpack() {
-    return new HFileRootIndexBlock(context, allocateBuffer(), 0);
-  }
 }

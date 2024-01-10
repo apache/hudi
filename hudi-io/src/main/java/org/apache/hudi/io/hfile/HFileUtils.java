@@ -20,6 +20,7 @@
 package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.io.compress.CompressionCodec;
+import org.apache.hudi.io.util.IOUtils;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -57,6 +58,19 @@ public class HFileUtils {
     int ch2 = bytes[offset + 1] & 0xFF;
     int ch3 = bytes[offset + 2] & 0xFF;
     return ((ch1 << 16) + (ch2 << 8) + ch3);
+  }
+
+  /**
+   * Compares two HFile {@link Key}.
+   *
+   * @param key1 left operand key.
+   * @param key2 right operand key.
+   * @return 0 if equal, < 0 if left is less than right, > 0 otherwise.
+   */
+  public static int compareKeys(Key key1, Key key2) {
+    return IOUtils.compareTo(
+        key1.getBytes(), key1.getContentOffset(), key1.getContentLength(),
+        key2.getBytes(), key2.getContentOffset(), key2.getContentLength());
   }
 
   /**

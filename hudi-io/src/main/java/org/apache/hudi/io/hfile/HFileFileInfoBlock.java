@@ -63,9 +63,4 @@ public class HFileFileInfoBlock extends HFileBlock {
     }
     return new HFileInfo(fileInfoMap);
   }
-
-  @Override
-  public HFileBlock cloneForUnpack() {
-    return new HFileFileInfoBlock(context, allocateBuffer(), 0);
-  }
 }

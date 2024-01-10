@@ -19,6 +19,9 @@
 
 package org.apache.hudi.io.util;
 
+import java.io.IOException;
+import java.io.InputStream;
+
 /**
  * Util methods on I/O.
  */
@@ -174,7 +177,7 @@ public class IOUtils {
    * @param offset2 where to start comparing in the right buffer.
    * @param length1 how much to compare from the left buffer.
    * @param length2 how much to compare from the right buffer.
-   * @return 0 if equal, < 0 if left is less than right, etc.
+   * @return 0 if equal, < 0 if left is less than right, > 0 otherwise.
    */
   public static int compareTo(byte[] bytes1, int offset1, int length1,
                               byte[] bytes2, int offset2, int length2) {
@@ -219,5 +222,31 @@ public class IOUtils {
       hash = (31 * hash) + bytes[i];
     }
     return hash;
+  }
+
+  /**
+   * Reads the data fully from the {@link InputStream} to the byte array.
+   *
+   * @param inputStream     {@link InputStream} containing the data.
+   * @param targetByteArray target byte array.
+   * @param offset          offset in the target byte array to start to write data.
+   * @param length          maximum amount of data to write.
+   * @return size of bytes read.
+   * @throws IOException upon error.
+   */
+  public static int readFully(InputStream inputStream,
+                              byte[] targetByteArray,
+                              int offset,
+                              int length) throws IOException {
+    int totalBytesRead = 0;
+    int bytesRead;
+    while (totalBytesRead < length) {
+      bytesRead = inputStream.read(targetByteArray, offset + totalBytesRead, length - totalBytesRead);
+      if (bytesRead < 0) {
+        break;
+      }
+      totalBytesRead += bytesRead;
+    }
+    return totalBytesRead;
   }
 }

@@ -96,25 +96,15 @@ public class TestIOUtils {
     byte[] bytes1 = new byte[] {(byte) 0x9b, 0, 0x18, 0x65, 0x2e, (byte) 0xf3};
     byte[] bytes2 = new byte[] {(byte) 0x9b, 0, 0x18, 0x65, 0x1c, 0x38, (byte) 0x53};
 
-    assertEquals(0, IOUtils.compareTo(
-        bytes1, 0, 4, bytes1, 0, 4));
-    assertEquals(-2, IOUtils.compareTo(
-        bytes1, 0, 4, bytes1, 0, 6));
-    assertEquals(1, IOUtils.compareTo(
-        bytes1, 0, 5, bytes1, 0, 4));
-    assertEquals(0, IOUtils.compareTo(
-        bytes1, 0, 4, bytes2, 0, 4));
-    assertEquals(-2, IOUtils.compareTo(
-        bytes1, 0, 4, bytes2, 0, 6));
-    assertEquals(2, IOUtils.compareTo(
-        bytes1, 0, 6, bytes1, 0, 4));
-    assertEquals(18, IOUtils.compareTo(
-        bytes1, 0, 5, bytes2, 0, 5));
-    assertEquals(18, IOUtils.compareTo(
-        bytes1, 0, 6, bytes2, 0, 6));
-    assertEquals(-155, IOUtils.compareTo(
-        bytes1, 1, 4, bytes2, 0, 5));
-    assertEquals(22, IOUtils.compareTo(
-        bytes1, 4, 2, bytes2, 2, 4));
+    assertEquals(0, IOUtils.compareTo(bytes1, 0, 4, bytes1, 0, 4));
+    assertEquals(-2, IOUtils.compareTo(bytes1, 0, 4, bytes1, 0, 6));
+    assertEquals(1, IOUtils.compareTo(bytes1, 0, 5, bytes1, 0, 4));
+    assertEquals(0, IOUtils.compareTo(bytes1, 0, 4, bytes2, 0, 4));
+    assertEquals(-2, IOUtils.compareTo(bytes1, 0, 4, bytes2, 0, 6));
+    assertEquals(2, IOUtils.compareTo(bytes1, 0, 6, bytes1, 0, 4));
+    assertEquals(18, IOUtils.compareTo(bytes1, 0, 5, bytes2, 0, 5));
+    assertEquals(18, IOUtils.compareTo(bytes1, 0, 6, bytes2, 0, 6));
+    assertEquals(-155, IOUtils.compareTo(bytes1, 1, 4, bytes2, 0, 5));
+    assertEquals(22, IOUtils.compareTo(bytes1, 4, 2, bytes2, 2, 4));
   }
 }

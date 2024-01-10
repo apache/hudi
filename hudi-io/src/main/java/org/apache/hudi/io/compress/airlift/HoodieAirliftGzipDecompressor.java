@@ -28,6 +28,8 @@ import io.airlift.compress.hadoop.HadoopInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
+import static org.apache.hudi.io.util.IOUtils.readFully;
+
 /**
  * Implementation of {@link HoodieDecompressor} for {@link CompressionCodec#GZIP} compression
  * codec using airlift aircompressor's GZIP decompressor.
@@ -44,17 +46,8 @@ public class HoodieAirliftGzipDecompressor implements HoodieDecompressor {
                         byte[] targetByteArray,
                         int offset,
                         int length) throws IOException {
-    int totalBytesRead = 0;
     try (HadoopInputStream stream = gzipStreams.createInputStream(compressedInput)) {
-      int bytesRead;
-      while (totalBytesRead < length) {
-        bytesRead = stream.read(targetByteArray, offset + totalBytesRead, length - totalBytesRead);
-        if (bytesRead < 0) {
-          break;
-        }
-        totalBytesRead += bytesRead;
-      }
+      return readFully(stream, targetByteArray, offset, length);
     }
-    return totalBytesRead;
   }
 }

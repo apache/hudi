@@ -78,7 +78,8 @@ public class HFileBlockReader {
       read = true;
     }
 
-    HFileBlock block = HFileBlock.parse(context, byteBuff, offset).unpack();
+    HFileBlock block = HFileBlock.parse(context, byteBuff, offset);
+    block.unpack();
 
     if (block.getBlockType() != expectedBlockType) {
       throw new IOException("Unexpected block type: " + block.getBlockType()

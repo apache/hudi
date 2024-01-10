@@ -20,7 +20,6 @@
 package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.io.util.IOUtils;
 
 import java.io.IOException;
 
@@ -33,8 +32,7 @@ public class HFileDataBlock extends HFileBlock {
   // Hudi does not use HFile MVCC timestamp version so the version
   // is always 0, thus the byte length of the version is always 1.
   private static final long ZERO_TS_VERSION_BYTE_LENGTH = 1;
-
-
+  
   protected final int uncompressContentEndOffset;
 
   protected HFileDataBlock(HFileContext context,
@@ -58,9 +56,7 @@ public class HFileDataBlock extends HFileBlock {
     while (offset + HFILEBLOCK_HEADER_SIZE < endOffset) {
       // Full length is not known yet until parsing
       KeyValue kv = readKeyValue(offset);
-      int comp =
-          IOUtils.compareTo(kv.getBytes(), kv.getKeyContentOffset(), kv.getKeyContentLength(),
-              key.getBytes(), key.getContentOffset(), key.getContentLength());
+      int comp = kv.getKey().compareTo(key);
       if (comp == 0) {
         return Option.of(kv);
       } else if (comp > 0) {
@@ -129,10 +125,5 @@ public class HFileDataBlock extends HFileBlock {
     position.increment((long) KEY_OFFSET + (long) keyValue.get().getKeyLength()
         + (long) keyValue.get().getValueLength() + ZERO_TS_VERSION_BYTE_LENGTH);
     return position.getOffset() - blockStartOffsetInFile < uncompressContentEndOffset;
-  }
-
-  @Override
-  public HFileBlock cloneForUnpack() {
-    return new HFileDataBlock(context, allocateBuffer(), 0);
   }
 }

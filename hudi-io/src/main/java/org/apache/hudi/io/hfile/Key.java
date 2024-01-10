@@ -22,6 +22,7 @@ package org.apache.hudi.io.hfile;
 import org.apache.hudi.io.util.IOUtils;
 
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
+import static org.apache.hudi.io.hfile.HFileUtils.compareKeys;
 import static org.apache.hudi.io.util.IOUtils.readShort;
 
 /**
@@ -80,9 +81,7 @@ public class Key implements Comparable<Key> {
 
   @Override
   public int compareTo(Key o) {
-    return IOUtils.compareTo(
-        getBytes(), getContentOffset(), getContentLength(),
-        o.getBytes(), o.getContentOffset(), o.getContentLength());
+    return compareKeys(this, o);
   }
 
   @Override

@@ -25,6 +25,8 @@ import org.apache.hudi.io.compress.HoodieDecompressor;
 import java.io.IOException;
 import java.io.InputStream;
 
+import static org.apache.hudi.io.util.IOUtils.readFully;
+
 /**
  * Implementation of {@link HoodieDecompressor} for {@link CompressionCodec#NONE} compression
  * codec (no compression) by directly reading the input stream.
@@ -35,6 +37,6 @@ public class HoodieNoneDecompressor implements HoodieDecompressor {
                         byte[] targetByteArray,
                         int offset,
                         int length) throws IOException {
-    return compressedInput.read(targetByteArray, offset, length);
+    return readFully(compressedInput, targetByteArray, offset, length);
   }
 }

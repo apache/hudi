@@ -20,7 +20,6 @@
 package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.io.util.IOUtils;
 
 /**
  * Represents the index entry of a data block in the Data Index stored in the
@@ -64,10 +63,7 @@ public class BlockIndexEntry implements Comparable<BlockIndexEntry> {
 
   @Override
   public int compareTo(BlockIndexEntry o) {
-    return IOUtils.compareTo(
-        key.getBytes(), key.getContentOffset(), key.getContentLength(),
-        o.getKey().getBytes(), o.getKey().getContentOffset(),
-        o.getKey().getContentLength());
+    return key.compareTo(o.getKey());
   }
 
   @Override

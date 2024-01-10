@@ -21,7 +21,6 @@ package org.apache.hudi.io.compress;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 
 /**
  * Provides decompression on input data.
@@ -29,7 +28,7 @@ import java.io.OutputStream;
 public interface HoodieDecompressor {
   /**
    * Decompresses the data from {@link InputStream} and writes the decompressed data to the target
-   * {@link OutputStream}.
+   * byte array.
    *
    * @param compressedInput compressed data in {@link InputStream}.
    * @param targetByteArray target byte array to store the decompressed data.

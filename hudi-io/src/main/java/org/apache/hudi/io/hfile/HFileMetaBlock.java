@@ -33,9 +33,4 @@ public class HFileMetaBlock extends HFileBlock {
         getByteBuff(),
         startOffsetInBuff + HFILEBLOCK_HEADER_SIZE, uncompressedSizeWithoutHeader);
   }
-
-  @Override
-  public HFileBlock cloneForUnpack() {
-    return new HFileMetaBlock(context, allocateBuffer(), 0);
-  }
 }
