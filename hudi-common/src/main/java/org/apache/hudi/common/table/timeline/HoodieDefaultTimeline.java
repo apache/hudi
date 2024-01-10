@@ -516,22 +516,39 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
+  public Option<HoodieInstant> getFirstPendingClusterCommit() {
+    return getLastOrFirstPendingClusterCommit(false);
+  }
+
+  @Override
   public Option<HoodieInstant> getLastPendingClusterCommit() {
-    return  Option.fromJavaOptional(getCommitsTimeline().filter(s -> s.getAction().equalsIgnoreCase(HoodieTimeline.REPLACE_COMMIT_ACTION))
-        .getReverseOrderedInstants()
+    return getLastOrFirstPendingClusterCommit(true);
+  }
+
+  private Option<HoodieInstant> getLastOrFirstPendingClusterCommit(boolean getLast) {
+    HoodieTimeline replaceTimeline = getCommitsTimeline().filter(s -> s.getAction().equalsIgnoreCase(HoodieTimeline.REPLACE_COMMIT_ACTION));
+    Stream<HoodieInstant> replaceStream;
+    if (getLast) {
+      replaceStream = replaceTimeline.getReverseOrderedInstants();
+    } else {
+      replaceStream = replaceTimeline.getInstantsAsStream();
+    }
+    return Option.fromJavaOptional(replaceStream
+        .filter(i -> !i.isCompleted())
         .filter(i -> {
           try {
-            if (!i.isCompleted()) {
-              HoodieCommitMetadata metadata = TimelineUtils.getCommitMetadata(i, this);
-              return metadata.getOperationType().equals(WriteOperationType.CLUSTER);
-            } else {
-              return false;
-            }
+            HoodieCommitMetadata metadata = TimelineUtils.getCommitMetadata(i, this);
+            return metadata.getOperationType().equals(WriteOperationType.CLUSTER);
           } catch (IOException e) {
             LOG.warn("Unable to read commit metadata for " + i + " due to " + e.getMessage());
             return false;
           }
         }).findFirst());
+  }
+
+  @Override
+  public boolean isPendingClusterInstant(String instantTime) {
+    return getCommitsTimeline().filter(i -> i.getTimestamp().equals(instantTime)).getLastPendingClusterCommit().isPresent();
   }
 
   @Override

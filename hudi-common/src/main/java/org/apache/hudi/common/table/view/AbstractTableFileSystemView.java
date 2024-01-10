@@ -552,10 +552,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param baseFile base File
    */
   protected boolean isBaseFileDueToPendingClustering(HoodieBaseFile baseFile) {
-    List<String> pendingReplaceInstants =
-        metaClient.getActiveTimeline().filterPendingReplaceTimeline().getInstantsAsStream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
-
-    return !pendingReplaceInstants.isEmpty() && pendingReplaceInstants.contains(baseFile.getCommitTime());
+    return metaClient.getActiveTimeline().isPendingClusterInstant(baseFile.getCommitTime());
   }
 
   /**

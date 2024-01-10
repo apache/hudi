@@ -43,6 +43,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -446,8 +447,17 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     HoodieTimeline pendingClusteringTimeline = table.getActiveTimeline().filterPendingReplaceTimeline();
     HoodieInstant inflightInstant = HoodieTimeline.getReplaceCommitInflightInstant(clusteringInstant);
     if (pendingClusteringTimeline.containsInstant(inflightInstant)) {
-      table.rollbackInflightClustering(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
-      table.getMetaClient().reloadActiveTimeline();
+      try {
+        HoodieCommitMetadata metadata = TimelineUtils.getCommitMetadata(inflightInstant, pendingClusteringTimeline);
+        if (metadata.getOperationType().equals(WriteOperationType.CLUSTER)) {
+          table.rollbackInflightClustering(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
+          table.getMetaClient().reloadActiveTimeline();
+        } else {
+          throw new HoodieClusteringException("Non clustering replace-commit inflight at timestamp " + clusteringInstant);
+        }
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
     }
     clusteringTimer = metrics.getClusteringCtx();
     LOG.info("Starting clustering at " + clusteringInstant);
@@ -566,7 +576,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
     // if just inline schedule is enabled
     if (!config.inlineClusteringEnabled() && config.scheduleInlineClustering()
-        && table.getActiveTimeline().filterPendingReplaceTimeline().empty()) {
+        && !table.getActiveTimeline().getLastPendingClusterCommit().isPresent()) {
       // proceed only if there are no pending clustering
       metadata.addMetadata(HoodieClusteringConfig.SCHEDULE_INLINE_CLUSTERING.key(), "true");
       inlineScheduleClustering(extraMetadata);
