@@ -19,7 +19,7 @@
 
 package org.apache.hudi.io.hfile;
 
-import org.apache.hudi.io.util.Option;
+import org.apache.hudi.common.util.Option;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -113,8 +113,8 @@ public class TestHFileReader {
 
       key = new UTF8StringKey("key-00001000");
       r = reader.seekTo(key);
-      assertEquals(1, r);
-      assertEquals(new UTF8StringKey("key-00000999"), reader.getKeyValue().get().getKey());
+      assertEquals(2, r);
+      assertFalse(reader.getKeyValue().isPresent());
 
       assertEquals(false, reader.next());
       assertEquals(false, reader.next());

@@ -19,7 +19,7 @@
 
 package org.apache.hudi.io.hfile;
 
-import org.apache.hudi.io.util.Option;
+import org.apache.hudi.common.util.Option;
 
 import java.io.Closeable;
 import java.io.IOException;

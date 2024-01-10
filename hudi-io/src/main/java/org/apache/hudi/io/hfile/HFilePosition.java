@@ -19,7 +19,7 @@
 
 package org.apache.hudi.io.hfile;
 
-import org.apache.hudi.io.util.Option;
+import org.apache.hudi.common.util.Option;
 
 /**
  * Stores the current position and {@link KeyValue} at the position in the HFile.

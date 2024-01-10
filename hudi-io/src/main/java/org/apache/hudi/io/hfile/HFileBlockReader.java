@@ -29,8 +29,10 @@ import java.io.IOException;
  */
 public class HFileBlockReader {
   private final HFileContext context;
+  private final FSDataInputStream stream;
   private final byte[] byteBuff;
   private int offset;
+  private boolean read = false;
 
   /**
    * Instantiates the {@link HFileBlockReader}.
@@ -46,6 +48,7 @@ public class HFileBlockReader {
                           long startOffset,
                           long endOffset) throws IOException {
     this.context = context;
+    this.stream = stream;
     this.offset = 0;
     stream.seek(startOffset);
     long length = endOffset - startOffset;
@@ -56,7 +59,6 @@ public class HFileBlockReader {
           "The range of bytes is too large or invalid: ["
               + startOffset + ", " + endOffset + "], length=" + length);
     }
-    stream.readFully(byteBuff);
   }
 
   /**
@@ -69,6 +71,11 @@ public class HFileBlockReader {
   public HFileBlock nextBlock(HFileBlockType expectedBlockType) throws IOException {
     if (offset >= byteBuff.length) {
       throw new EOFException("No more data to read");
+    }
+
+    if (!read) {
+      stream.readFully(byteBuff);
+      read = true;
     }
 
     HFileBlock block = HFileBlock.parse(context, byteBuff, offset).unpack();

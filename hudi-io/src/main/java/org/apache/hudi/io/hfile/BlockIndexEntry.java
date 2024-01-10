@@ -19,8 +19,8 @@
 
 package org.apache.hudi.io.hfile;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.util.IOUtils;
-import org.apache.hudi.io.util.Option;
 
 /**
  * Represents the index entry of a data block in the Data Index stored in the

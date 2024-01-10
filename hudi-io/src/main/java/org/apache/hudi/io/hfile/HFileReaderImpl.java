@@ -19,7 +19,7 @@
 
 package org.apache.hudi.io.hfile;
 
-import org.apache.hudi.io.util.Option;
+import org.apache.hudi.common.util.Option;
 
 import org.apache.hadoop.fs.FSDataInputStream;
 
@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.TreeMap;
 
 import static org.apache.hudi.io.hfile.HFileBlock.HFILEBLOCK_HEADER_SIZE;
+import static org.apache.hudi.io.hfile.HFileUtils.readMajorVersion;
 
 /**
  * An implementation a {@link HFileReader}.
@@ -152,6 +153,17 @@ public class HFileReaderImpl implements HFileReader {
           currentPos.setOffset(
               (int) currentDataBlockEntry.get().getOffset() + HFILEBLOCK_HEADER_SIZE);
         }
+      } else {
+        // This is the last data block.  Check against the last key.
+        if (fileInfo.getLastKey().isPresent()) {
+          int comparedLastKey = key.compareTo(fileInfo.getLastKey().get());
+          if (comparedLastKey > 0) {
+            currentDataBlockEntry = Option.empty();
+            currentDataBlock = Option.empty();
+            currentPos.setEof();
+            return 2;
+          }
+        }
       }
 
       if (!currentDataBlock.isPresent()) {
@@ -232,20 +244,6 @@ public class HFileReaderImpl implements HFileReader {
   @Override
   public void close() throws IOException {
     stream.close();
-  }
-
-  /**
-   * Reads the HFile major version from the input.
-   *
-   * @param bytes  Input data.
-   * @param offset Offset to start reading.
-   * @return Major version of the file.
-   */
-  public static int readMajorVersion(byte[] bytes, int offset) {
-    int ch1 = bytes[offset] & 0xFF;
-    int ch2 = bytes[offset + 1] & 0xFF;
-    int ch3 = bytes[offset + 2] & 0xFF;
-    return ((ch1 << 16) + (ch2 << 8) + ch3);
   }
 
   /**

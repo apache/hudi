@@ -454,6 +454,8 @@
           <!-- common to all bundles -->
           <artifactSet>
             <includes>
+              <include>org.apache.hudi:hudi-io</include>
+              <include>io.airlift:aircompressor</include>
               <!-- org.apache.httpcomponents -->
               <include>org.apache.httpcomponents:httpclient</include>
               <include>org.apache.httpcomponents:httpcore</include>
