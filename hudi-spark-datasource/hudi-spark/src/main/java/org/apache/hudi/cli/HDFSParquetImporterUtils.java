@@ -277,7 +277,7 @@ public class HDFSParquetImporterUtils implements Serializable {
     HoodieCompactionConfig compactionConfig = compactionStrategyClass
         .map(strategy -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false)
             .withCompactionStrategy(ReflectionUtils.loadClass(strategy)).build())
-        .orElse(HoodieCompactionConfig.newBuilder().withInlineCompaction(false).build());
+        .orElseGet(() -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false).build());
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder().withPath(basePath)
             .withParallelism(parallelism, parallelism)

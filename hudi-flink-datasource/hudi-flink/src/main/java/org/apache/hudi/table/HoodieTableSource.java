@@ -176,12 +176,12 @@ public class HoodieTableSource implements
     this.dataPruner = dataPruner;
     this.partitionPruner = partitionPruner;
     this.dataBucket = dataBucket;
-    this.requiredPos = Optional.ofNullable(requiredPos).orElse(IntStream.range(0, this.tableRowType.getFieldCount()).toArray());
+    this.requiredPos = Optional.ofNullable(requiredPos).orElseGet(() -> IntStream.range(0, this.tableRowType.getFieldCount()).toArray());
     this.limit = Optional.ofNullable(limit).orElse(NO_LIMIT_CONSTANT);
     this.hadoopConf = HadoopConfigurations.getHadoopConf(conf);
-    this.metaClient = Optional.ofNullable(metaClient).orElse(StreamerUtil.metaClientForReader(conf, hadoopConf));
+    this.metaClient = Optional.ofNullable(metaClient).orElseGet(() -> StreamerUtil.metaClientForReader(conf, hadoopConf));
     this.maxCompactionMemoryInBytes = StreamerUtil.getMaxCompactionMemoryInBytes(conf);
-    this.internalSchemaManager = Optional.ofNullable(internalSchemaManager).orElse(InternalSchemaManager.get(this.conf, this.metaClient));
+    this.internalSchemaManager = Optional.ofNullable(internalSchemaManager).orElseGet(() -> InternalSchemaManager.get(this.conf, this.metaClient));
   }
 
   @Override
