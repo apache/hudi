@@ -108,14 +108,14 @@ public class PartialBindVisitor extends BindVisitor {
       Predicates.IsNull isNull = (Predicates.IsNull) predicate;
       return Option.ofNullable(isNull.child.accept(this))
           .map(expr -> (Expression)Predicates.isNull(expr))
-          .orElse(alwaysTrue());
+          .orElseGet(this::alwaysTrue);
     }
 
     if (predicate instanceof Predicates.IsNotNull) {
       Predicates.IsNotNull isNotNull = (Predicates.IsNotNull) predicate;
       return Option.ofNullable(isNotNull.child.accept(this))
           .map(expr -> (Expression)Predicates.isNotNull(expr))
-          .orElse(alwaysTrue());
+          .orElseGet(this::alwaysTrue);
     }
 
     if (predicate instanceof Predicates.StringStartsWith) {

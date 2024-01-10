@@ -124,12 +124,8 @@ public class ChainedTransformer implements Transformer {
       throw new HoodieTransformPlanException("Either source schema or source dataset should be available to fetch the schema");
     }
     StructType incomingStruct = incomingStructOpt
-        .orElse(sourceSchemaOpt.isPresent() ? AvroConversionUtils.convertAvroSchemaToStructType(sourceSchemaOpt.get()) : rowDatasetOpt.get().schema());
-    try {
-      return transformerInfo.getTransformer().transformedSchema(jsc, sparkSession, incomingStruct, properties).asNullable();
-    } catch (Exception e) {
-      throw e;
-    }
+        .orElseGet(() -> sourceSchemaOpt.isPresent() ? AvroConversionUtils.convertAvroSchemaToStructType(sourceSchemaOpt.get()) : rowDatasetOpt.get().schema());
+    return transformerInfo.getTransformer().transformedSchema(jsc, sparkSession, incomingStruct, properties).asNullable();
   }
 
   @Override

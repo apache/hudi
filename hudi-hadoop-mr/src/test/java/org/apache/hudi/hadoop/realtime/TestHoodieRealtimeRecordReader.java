@@ -288,7 +288,7 @@ public class TestHoodieRealtimeRecordReader {
     return Arrays.stream(new File("/tmp").listFiles())
         .filter(f -> f.isDirectory() && f.getName().startsWith("hudi-" + diskType) && f.lastModified() > startTime && f.lastModified() < endTime)
         .findFirst()
-        .orElse(new File(""));
+        .orElseGet(() -> new File(""));
   }
 
   @Test

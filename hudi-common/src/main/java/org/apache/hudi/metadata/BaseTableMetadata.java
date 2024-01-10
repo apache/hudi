@@ -358,7 +358,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
         throw new HoodieIOException("Failed to extract file-statuses from the payload", e);
       }
     })
-        .orElse(new FileStatus[0]);
+        .orElseGet(() -> new FileStatus[0]);
 
     LOG.info("Listed file in partition from metadata: partition=" + relativePartitionPath + ", #files=" + statuses.length);
     return statuses;
