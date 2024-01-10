@@ -610,6 +610,19 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   }
 
   @Test
+  public void testAllZeroTimestampParsing() throws ParseException {
+    String allZeroTs = "00000000000000";
+    Date allZeroDate = HoodieActiveTimeline.parseDateFromInstantTime(allZeroTs);
+    assertEquals(allZeroDate, new Date(0), "Parsing of all zero timestamp should succeed");
+
+    // MDT uses timestamps which add suffixes to the instant time. These should also be parsable for all zero case.
+    for (int index = 0; index < 10; ++index) {
+      allZeroDate = HoodieActiveTimeline.parseDateFromInstantTime(allZeroTs + "00" + index);
+      assertEquals(allZeroDate, new Date(0), "Parsing of all zero timestamp should succeed");
+    }
+  }
+
+  @Test
   public void testMetadataCompactionInstantDateParsing() throws ParseException {
     // default second granularity instant ID
     String secondGranularityInstant = "20210101120101123";
