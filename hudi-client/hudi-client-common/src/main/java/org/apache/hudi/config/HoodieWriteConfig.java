@@ -2759,6 +2759,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withPartialSchema(String partialSchemaStr) {
+      writeConfig.setValue(WRITE_PARTIAL_UPDATE_SCHEMA, partialSchemaStr);
+      return this;
+    }
+
     public Builder withSchemaEvolutionEnable(boolean enable) {
       writeConfig.setValue(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE, String.valueOf(enable));
       return this;

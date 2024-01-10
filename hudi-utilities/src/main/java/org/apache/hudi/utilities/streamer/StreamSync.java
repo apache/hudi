@@ -415,13 +415,18 @@ public class StreamSync implements Serializable, Closeable {
       } else {
         Schema newSourceSchema = inputBatch.getSchemaProvider().getSourceSchema();
         Schema newTargetSchema = inputBatch.getSchemaProvider().getTargetSchema();
+        Schema partialTargetSchema = inputBatch.getSchemaProvider().getPartialTargetSchema();
         if ((newSourceSchema != null && !processedSchema.isSchemaPresent(newSourceSchema))
             || (newTargetSchema != null && !processedSchema.isSchemaPresent(newTargetSchema))) {
           String sourceStr = newSourceSchema == null ? NULL_PLACEHOLDER : newSourceSchema.toString(true);
           String targetStr = newTargetSchema == null ? NULL_PLACEHOLDER : newTargetSchema.toString(true);
           LOG.info("Seeing new schema. Source: {0}, Target: {1}", sourceStr, targetStr);
           // We need to recreate write client with new schema and register them.
-          reInitWriteClient(newSourceSchema, newTargetSchema, inputBatch.getBatch());
+          reInitWriteClient(
+              newSourceSchema,
+              newTargetSchema,
+              partialTargetSchema,
+              inputBatch.getBatch());
           if (newSourceSchema != null) {
             processedSchema.addSchema(newSourceSchema);
           }
@@ -438,7 +443,11 @@ public class StreamSync implements Serializable, Closeable {
           HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata = writeClient.compact(pendingCompactionInstant.get());
           writeClient.commitCompaction(pendingCompactionInstant.get(), writeMetadata.getCommitMetadata().get(), Option.empty());
           refreshTimeline();
-          reInitWriteClient(schemaProvider.getSourceSchema(), schemaProvider.getTargetSchema(), null);
+          reInitWriteClient(
+              schemaProvider.getSourceSchema(),
+              schemaProvider.getTargetSchema(),
+              schemaProvider.getPartialTargetSchema(),
+              null);
         }
       } else if (cfg.retryLastPendingInlineClusteringJob && getHoodieClientConfig(this.schemaProvider).inlineClusteringEnabled()) {
         // complete the pending clustering before writing to sink
@@ -997,21 +1006,29 @@ public class StreamSync implements Serializable, Closeable {
    * SchemaProvider creation is a precursor to HoodieWriteClient and AsyncCompactor creation. This method takes care of
    * this constraint.
    */
-  private void setupWriteClient(Option<JavaRDD<HoodieRecord>> recordsOpt) throws IOException {
+  private void setupWriteClient(
+      Option<JavaRDD<HoodieRecord>> recordsOpt
+  ) throws IOException {
     if ((null != schemaProvider)) {
       Schema sourceSchema = schemaProvider.getSourceSchema();
       Schema targetSchema = schemaProvider.getTargetSchema();
-      reInitWriteClient(sourceSchema, targetSchema, recordsOpt);
+      Schema partialTargetSchema = schemaProvider.getPartialTargetSchema();
+      reInitWriteClient(sourceSchema, targetSchema, partialTargetSchema, recordsOpt);
     }
   }
 
-  private void reInitWriteClient(Schema sourceSchema, Schema targetSchema, Option<JavaRDD<HoodieRecord>> recordsOpt) throws IOException {
+  private void reInitWriteClient(
+      Schema sourceSchema,
+      Schema targetSchema,
+      Schema partialTargetSchema,
+      Option<JavaRDD<HoodieRecord>> recordsOpt
+  ) throws IOException {
     LOG.info("Setting up new Hoodie Write Client");
     if (HoodieStreamerUtils.isDropPartitionColumns(props)) {
       targetSchema = HoodieAvroUtils.removeFields(targetSchema, HoodieStreamerUtils.getPartitionColumns(props));
     }
-    registerAvroSchemas(sourceSchema, targetSchema);
-    final HoodieWriteConfig initialWriteConfig = getHoodieClientConfig(targetSchema);
+    registerAvroSchemas(sourceSchema, targetSchema, partialTargetSchema);
+    final HoodieWriteConfig initialWriteConfig = getHoodieClientConfig(targetSchema, partialTargetSchema);
     final HoodieWriteConfig writeConfig = SparkSampleWritesUtils
         .getWriteConfigWithRecordSizeEstimate(hoodieSparkContext.jsc(), recordsOpt, initialWriteConfig)
         .orElse(initialWriteConfig);
@@ -1038,7 +1055,12 @@ public class StreamSync implements Serializable, Closeable {
    * @param schemaProvider Schema Provider
    */
   private HoodieWriteConfig getHoodieClientConfig(SchemaProvider schemaProvider) {
-    return getHoodieClientConfig(schemaProvider != null ? schemaProvider.getTargetSchema() : null);
+    if (schemaProvider == null) {
+      return getHoodieClientConfig(null, null);
+    }
+    return getHoodieClientConfig(
+        schemaProvider.getTargetSchema(),
+        schemaProvider.getPartialTargetSchema());
   }
 
   /**
@@ -1046,7 +1068,7 @@ public class StreamSync implements Serializable, Closeable {
    *
    * @param schema Schema
    */
-  private HoodieWriteConfig getHoodieClientConfig(Schema schema) {
+  private HoodieWriteConfig getHoodieClientConfig(Schema schema, Schema partialSchema) {
     final boolean combineBeforeUpsert = true;
     final boolean autoCommit = false;
 
@@ -1074,6 +1096,9 @@ public class StreamSync implements Serializable, Closeable {
 
     if (schema != null) {
       builder.withSchema(getSchemaForWriteConfig(schema).toString());
+    }
+    if (partialSchema != null) {
+      builder.withPartialSchema(partialSchema.toString());
     }
 
     HoodieWriteConfig config = builder.build();
@@ -1145,7 +1170,10 @@ public class StreamSync implements Serializable, Closeable {
    */
   private void registerAvroSchemas(SchemaProvider schemaProvider) {
     if (null != schemaProvider) {
-      registerAvroSchemas(schemaProvider.getSourceSchema(), schemaProvider.getTargetSchema());
+      registerAvroSchemas(
+          schemaProvider.getSourceSchema(),
+          schemaProvider.getTargetSchema(),
+          schemaProvider.getTargetSchema());
     }
   }
 
@@ -1155,7 +1183,7 @@ public class StreamSync implements Serializable, Closeable {
    * @param sourceSchema Source Schema
    * @param targetSchema Target Schema
    */
-  private void registerAvroSchemas(Schema sourceSchema, Schema targetSchema) {
+  private void registerAvroSchemas(Schema sourceSchema, Schema targetSchema, Schema partialTargetSchema) {
     // register the schemas, so that shuffle does not serialize the full schemas
     List<Schema> schemas = new ArrayList<>();
     if (sourceSchema != null) {
@@ -1163,6 +1191,9 @@ public class StreamSync implements Serializable, Closeable {
     }
     if (targetSchema != null) {
       schemas.add(targetSchema);
+    }
+    if (partialTargetSchema != null) {
+      schemas.add(partialTargetSchema);
     }
     if (!schemas.isEmpty()) {
       if (LOG.isDebugEnabled()) {
