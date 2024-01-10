@@ -133,4 +133,24 @@ class TestSchemaRegistryProvider {
           .toString();
     }
   }
+
+  // The SR is checked when cachedSchema is empty, when not empty, the cachedSchema is used.
+  @Test
+  public void testGetSourceSchemaUsesCachedSchema() throws IOException {
+    TypedProperties props = getProps();
+    SchemaRegistryProvider spyUnderTest = getUnderTest(props);
+
+    // Call when cachedSchema is empty
+    Schema actual = spyUnderTest.getSourceSchema();
+    assertNotNull(actual);
+    verify(spyUnderTest, times(1)).parseSchemaFromRegistry(Mockito.any());
+
+    assert spyUnderTest.cachedSourceSchema != null;
+
+    Schema actualTwo = spyUnderTest.getSourceSchema();
+    
+    // cachedSchema should now be set, a subsequent call should not call parseSchemaFromRegistry
+    // Assuming this verify() has the scope of the whole test? so it should still be 1 from previous call?
+    verify(spyUnderTest, times(1)).parseSchemaFromRegistry(Mockito.any());
+  }
 }
