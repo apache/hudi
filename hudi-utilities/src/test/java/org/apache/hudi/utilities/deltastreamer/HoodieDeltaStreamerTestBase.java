@@ -248,6 +248,11 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
   }
 
   @AfterAll
+  public static void tearDown() {
+    cleanupKafkaTestUtils();
+    UtilitiesTestBase.cleanUpUtilitiesTestServices();
+  }
+
   public static void cleanupKafkaTestUtils() {
     if (testUtils != null) {
       testUtils.teardown();

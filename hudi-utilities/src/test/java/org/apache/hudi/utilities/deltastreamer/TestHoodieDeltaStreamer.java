@@ -2302,7 +2302,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       testCsvDFSSource(false, '\t', false, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
     }, "Should error out when doing the transformation.");
     LOG.debug("Expected error during transformation", e);
-    assertTrue(e.getMessage().contains("cannot resolve 'begin_lat' given input columns:"));
+    // first version for Spark >= 3.3, the second one is for Spark < 3.3
+    assertTrue(e.getMessage().contains("Column 'begin_lat' does not exist. Did you mean one of the following?")
+        || e.getMessage().contains("cannot resolve 'begin_lat' given input columns:"));
   }
 
   @Test
