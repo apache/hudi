@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -204,14 +205,24 @@ public class HoodieTableSource implements
               conf, FilePathUtils.toFlinkPath(path), tableRowType, maxCompactionMemoryInBytes, partitionPruner);
           InputFormat<RowData, ?> inputFormat = getInputFormat(true);
           OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory((MergeOnReadInputFormat) inputFormat);
-          SingleOutputStreamOperator<RowData> source = execEnv.addSource(monitoringFunction, getSourceOperatorName("split_monitor"))
+          DataStream<MergeOnReadInputSplit> monitorOperatorStream = execEnv.addSource(monitoringFunction, getSourceOperatorName("split_monitor"))
               .uid(Pipelines.opUID("split_monitor", conf))
               .setParallelism(1)
-              .setMaxParallelism(1)
-              .keyBy(MergeOnReadInputSplit::getFileId)
-              .transform("split_reader", typeInfo, factory)
-              .uid(Pipelines.opUID("split_reader", conf))
-              .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
+              .setMaxParallelism(1);
+          SingleOutputStreamOperator<RowData> source;
+          if (HoodieTableSource.this.conf.containsKey(FlinkOptions.OPERATION.key())
+              && WriteOperationType.INSERT.value().equals(HoodieTableSource.this.conf.getString(FlinkOptions.OPERATION))) {
+            source = monitorOperatorStream
+                .transform("split_reader", typeInfo, factory)
+                .uid(Pipelines.opUID("split_reader", conf))
+                .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
+          } else {
+            source = monitorOperatorStream
+                .keyBy(MergeOnReadInputSplit::getFileId)
+                .transform("split_reader", typeInfo, factory)
+                .uid(Pipelines.opUID("split_reader", conf))
+                .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
+          }
           return new DataStreamSource<>(source);
         } else {
           InputFormatSourceFunction<RowData> func = new InputFormatSourceFunction<>(getInputFormat(), typeInfo);
