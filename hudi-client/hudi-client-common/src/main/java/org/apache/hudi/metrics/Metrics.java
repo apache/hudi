@@ -49,6 +49,7 @@ public class Metrics {
   private final MetricRegistry registry;
   private final List<MetricsReporter> reporters;
   private final String commonMetricPrefix;
+  private final String basePath;
   private boolean initialized = false;
 
   public Metrics(HoodieWriteConfig metricConfig) {
@@ -64,6 +65,7 @@ public class Metrics {
       throw new RuntimeException("Cannot initialize Reporters.");
     }
     reporters.forEach(MetricsReporter::start);
+    basePath = metricConfig.getBasePath();
 
     Runtime.getRuntime().addShutdownHook(new Thread(this::shutdown));
     this.initialized = true;
@@ -122,6 +124,7 @@ public class Metrics {
       LOG.warn("Error while closing reporter", e);
     } finally {
       initialized = false;
+      METRICS_INSTANCE_PER_BASEPATH.remove(basePath);
     }
   }
 
