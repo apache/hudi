@@ -41,7 +41,9 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.util.FileIOUtils.readAsByteArray;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_BACKWARDS;
+import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_EOF;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_FOUND;
+import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_IN_RANGE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -77,41 +79,54 @@ public class TestHFileReader {
                 // key in the block 0
                 new KeyLookUpInfo("hudi-key-000000100", SEEK_TO_FOUND, "hudi-key-000000100", "hudi-value-000000100"),
                 // backward seek not supported
-                new KeyLookUpInfo("hudi-key-000000099", -1, "", ""),
+                new KeyLookUpInfo("hudi-key-000000099", SEEK_TO_BACKWARDS, "", ""),
                 // prefix lookup, the pointer should not move
-                new KeyLookUpInfo("hudi-key-000000100a", 1, "hudi-key-000000100", "hudi-value-000000100"),
-                new KeyLookUpInfo("hudi-key-000000100b", 1, "hudi-key-000000100", "hudi-value-000000100"),
+                new KeyLookUpInfo("hudi-key-000000100a", SEEK_TO_IN_RANGE, "hudi-key-000000100",
+                    "hudi-value-000000100"),
+                new KeyLookUpInfo("hudi-key-000000100b", SEEK_TO_IN_RANGE, "hudi-key-000000100",
+                    "hudi-value-000000100"),
                 // prefix lookup with a jump, the pointer should not go beyond the lookup key
-                new KeyLookUpInfo("hudi-key-000000200a", 1, "hudi-key-000000200", "hudi-value-000000200"),
-                new KeyLookUpInfo("hudi-key-000000200b", 1, "hudi-key-000000200", "hudi-value-000000200"),
+                new KeyLookUpInfo("hudi-key-000000200a", SEEK_TO_IN_RANGE, "hudi-key-000000200",
+                    "hudi-value-000000200"),
+                new KeyLookUpInfo("hudi-key-000000200b", SEEK_TO_IN_RANGE, "hudi-key-000000200",
+                    "hudi-value-000000200"),
                 // last key of the block 0
-                new KeyLookUpInfo("hudi-key-000000277", 0, "hudi-key-000000277", "hudi-value-000000277"),
-                new KeyLookUpInfo("hudi-key-000000277a", 1, "hudi-key-000000277", "hudi-value-000000277"),
-                new KeyLookUpInfo("hudi-key-000000277b", 1, "hudi-key-000000277", "hudi-value-000000277"),
+                new KeyLookUpInfo("hudi-key-000000277", SEEK_TO_FOUND, "hudi-key-000000277", "hudi-value-000000277"),
+                new KeyLookUpInfo("hudi-key-000000277a", SEEK_TO_IN_RANGE, "hudi-key-000000277",
+                    "hudi-value-000000277"),
+                new KeyLookUpInfo("hudi-key-000000277b", SEEK_TO_IN_RANGE, "hudi-key-000000277",
+                    "hudi-value-000000277"),
                 // first key of the block 1
-                new KeyLookUpInfo("hudi-key-000000278", 0, "hudi-key-000000278", "hudi-value-000000278"),
+                new KeyLookUpInfo("hudi-key-000000278", SEEK_TO_FOUND, "hudi-key-000000278", "hudi-value-000000278"),
                 // prefix before the first key of the block 9
-                new KeyLookUpInfo("hudi-key-000002501a", 1, "hudi-key-000002501", "hudi-value-000002501"),
-                new KeyLookUpInfo("hudi-key-000002501b", 1, "hudi-key-000002501", "hudi-value-000002501"),
+                new KeyLookUpInfo("hudi-key-000002501a", SEEK_TO_IN_RANGE, "hudi-key-000002501",
+                    "hudi-value-000002501"),
+                new KeyLookUpInfo("hudi-key-000002501b", SEEK_TO_IN_RANGE, "hudi-key-000002501",
+                    "hudi-value-000002501"),
                 // first key of the block 30
-                new KeyLookUpInfo("hudi-key-000008340", 0, "hudi-key-000008340", "hudi-value-000008340"),
+                new KeyLookUpInfo("hudi-key-000008340", SEEK_TO_FOUND, "hudi-key-000008340", "hudi-value-000008340"),
                 // last key of the block 49
-                new KeyLookUpInfo("hudi-key-000013899", 0, "hudi-key-000013899", "hudi-value-000013899"),
+                new KeyLookUpInfo("hudi-key-000013899", SEEK_TO_FOUND, "hudi-key-000013899", "hudi-value-000013899"),
                 // seeking again should not move the pointer
-                new KeyLookUpInfo("hudi-key-000013899", 0, "hudi-key-000013899", "hudi-value-000013899"),
+                new KeyLookUpInfo("hudi-key-000013899", SEEK_TO_FOUND, "hudi-key-000013899", "hudi-value-000013899"),
+                // adjacent keys
+                new KeyLookUpInfo("hudi-key-000013900", SEEK_TO_FOUND, "hudi-key-000013900", "hudi-value-000013900"),
+                new KeyLookUpInfo("hudi-key-000013901", SEEK_TO_FOUND, "hudi-key-000013901", "hudi-value-000013901"),
+                new KeyLookUpInfo("hudi-key-000013902", SEEK_TO_FOUND, "hudi-key-000013902", "hudi-value-000013902"),
                 // key in the block 70
-                new KeyLookUpInfo("hudi-key-000019500", 0, "hudi-key-000019500", "hudi-value-000019500"),
+                new KeyLookUpInfo("hudi-key-000019500", SEEK_TO_FOUND, "hudi-key-000019500", "hudi-value-000019500"),
                 // prefix lookups
-                new KeyLookUpInfo("hudi-key-0000196", 1, "hudi-key-000019599", "hudi-value-000019599"),
-                new KeyLookUpInfo("hudi-key-00001960", 1, "hudi-key-000019599", "hudi-value-000019599"),
-                new KeyLookUpInfo("hudi-key-000019600a", 1, "hudi-key-000019600", "hudi-value-000019600"),
+                new KeyLookUpInfo("hudi-key-0000196", SEEK_TO_IN_RANGE, "hudi-key-000019599", "hudi-value-000019599"),
+                new KeyLookUpInfo("hudi-key-00001960", SEEK_TO_IN_RANGE, "hudi-key-000019599", "hudi-value-000019599"),
+                new KeyLookUpInfo("hudi-key-000019600a", SEEK_TO_IN_RANGE, "hudi-key-000019600",
+                    "hudi-value-000019600"),
                 // second to last key
-                new KeyLookUpInfo("hudi-key-000019998", 0, "hudi-key-000019998", "hudi-value-000019998"),
+                new KeyLookUpInfo("hudi-key-000019998", SEEK_TO_FOUND, "hudi-key-000019998", "hudi-value-000019998"),
                 // last key
-                new KeyLookUpInfo("hudi-key-000019999", 0, "hudi-key-000019999", "hudi-value-000019999"),
+                new KeyLookUpInfo("hudi-key-000019999", SEEK_TO_FOUND, "hudi-key-000019999", "hudi-value-000019999"),
                 // after last key
-                new KeyLookUpInfo("hudi-key-000019999a", 2, "", ""),
-                new KeyLookUpInfo("hudi-key-000019999b", 2, "", "")
+                new KeyLookUpInfo("hudi-key-000019999a", SEEK_TO_EOF, "", ""),
+                new KeyLookUpInfo("hudi-key-000019999b", SEEK_TO_EOF, "", "")
             )
         ),
         Arguments.of(
@@ -119,27 +134,32 @@ public class TestHFileReader {
             20000,
             Arrays.asList(
                 // before first key
-                new KeyLookUpInfo("", -1, "", ""),
-                new KeyLookUpInfo("a", -1, "", ""),
-                new KeyLookUpInfo("hudi-key-0000000", -1, "", ""),
+                new KeyLookUpInfo("", SEEK_TO_BACKWARDS, "", ""),
+                new KeyLookUpInfo("a", SEEK_TO_BACKWARDS, "", ""),
+                new KeyLookUpInfo("hudi-key-0000000", SEEK_TO_BACKWARDS, "", ""),
                 // first key
-                new KeyLookUpInfo("hudi-key-000000000", 0, "hudi-key-000000000", "hudi-value-000000000"),
+                new KeyLookUpInfo("hudi-key-000000000", SEEK_TO_FOUND, "hudi-key-000000000", "hudi-value-000000000"),
                 // last key of block 0
-                new KeyLookUpInfo("hudi-key-000008886", 0, "hudi-key-000008886", "hudi-value-000008886"),
+                new KeyLookUpInfo("hudi-key-000008886", SEEK_TO_FOUND, "hudi-key-000008886", "hudi-value-000008886"),
                 // prefix lookup
-                new KeyLookUpInfo("hudi-key-000008886a", 1, "hudi-key-000008886", "hudi-value-000008886"),
-                new KeyLookUpInfo("hudi-key-000008886b", 1, "hudi-key-000008886", "hudi-value-000008886"),
-                // key in block 1
-                new KeyLookUpInfo("hudi-key-000008888", 0, "hudi-key-000008888", "hudi-value-000008888"),
+                new KeyLookUpInfo("hudi-key-000008886a", SEEK_TO_IN_RANGE, "hudi-key-000008886",
+                    "hudi-value-000008886"),
+                new KeyLookUpInfo("hudi-key-000008886b", SEEK_TO_IN_RANGE, "hudi-key-000008886",
+                    "hudi-value-000008886"),
+                // keys in block 1
+                new KeyLookUpInfo("hudi-key-000008888", SEEK_TO_FOUND, "hudi-key-000008888", "hudi-value-000008888"),
+                new KeyLookUpInfo("hudi-key-000008889", SEEK_TO_FOUND, "hudi-key-000008889", "hudi-value-000008889"),
+                new KeyLookUpInfo("hudi-key-000008890", SEEK_TO_FOUND, "hudi-key-000008890", "hudi-value-000008890"),
                 // prefix lookup
-                new KeyLookUpInfo("hudi-key-0000090", 1, "hudi-key-000008999", "hudi-value-000008999"),
-                new KeyLookUpInfo("hudi-key-00000900", 1, "hudi-key-000008999", "hudi-value-000008999"),
-                new KeyLookUpInfo("hudi-key-000009000a", 1, "hudi-key-000009000", "hudi-value-000009000"),
+                new KeyLookUpInfo("hudi-key-0000090", SEEK_TO_IN_RANGE, "hudi-key-000008999", "hudi-value-000008999"),
+                new KeyLookUpInfo("hudi-key-00000900", SEEK_TO_IN_RANGE, "hudi-key-000008999", "hudi-value-000008999"),
+                new KeyLookUpInfo("hudi-key-000009000a", SEEK_TO_IN_RANGE, "hudi-key-000009000",
+                    "hudi-value-000009000"),
                 // last key in block 1
-                new KeyLookUpInfo("hudi-key-000017773", 0, "hudi-key-000017773", "hudi-value-000017773"),
+                new KeyLookUpInfo("hudi-key-000017773", SEEK_TO_FOUND, "hudi-key-000017773", "hudi-value-000017773"),
                 // after last key
-                new KeyLookUpInfo("hudi-key-000020000", 2, "", ""),
-                new KeyLookUpInfo("hudi-key-000020001", 2, "", "")
+                new KeyLookUpInfo("hudi-key-000020000", SEEK_TO_EOF, "", ""),
+                new KeyLookUpInfo("hudi-key-000020001", SEEK_TO_EOF, "", "")
             )
         ),
         Arguments.of(
@@ -147,49 +167,60 @@ public class TestHFileReader {
             5000,
             Arrays.asList(
                 // before first key
-                new KeyLookUpInfo("", -1, "", ""),
-                new KeyLookUpInfo("a", -1, "", ""),
-                new KeyLookUpInfo("hudi-key-0000000", -1, "", ""),
+                new KeyLookUpInfo("", SEEK_TO_BACKWARDS, "", ""),
+                new KeyLookUpInfo("a", SEEK_TO_BACKWARDS, "", ""),
+                new KeyLookUpInfo("hudi-key-0000000", SEEK_TO_BACKWARDS, "", ""),
                 // first key
-                new KeyLookUpInfo("hudi-key-000000000", 0, "hudi-key-000000000", "hudi-value-000000000"),
+                new KeyLookUpInfo("hudi-key-000000000", SEEK_TO_FOUND, "hudi-key-000000000", "hudi-value-000000000"),
                 // key in the block 0
-                new KeyLookUpInfo("hudi-key-000000100", 0, "hudi-key-000000100", "hudi-value-000000100"),
+                new KeyLookUpInfo("hudi-key-000000100", SEEK_TO_FOUND, "hudi-key-000000100", "hudi-value-000000100"),
                 // backward seek not supported
-                new KeyLookUpInfo("hudi-key-000000099", -1, "", ""),
+                new KeyLookUpInfo("hudi-key-000000099", SEEK_TO_BACKWARDS, "", ""),
                 // prefix lookup, the pointer should not move
-                new KeyLookUpInfo("hudi-key-000000100a", 1, "hudi-key-000000100", "hudi-value-000000100"),
-                new KeyLookUpInfo("hudi-key-000000100b", 1, "hudi-key-000000100", "hudi-value-000000100"),
+                new KeyLookUpInfo("hudi-key-000000100a", SEEK_TO_IN_RANGE, "hudi-key-000000100",
+                    "hudi-value-000000100"),
+                new KeyLookUpInfo("hudi-key-000000100b", SEEK_TO_IN_RANGE, "hudi-key-000000100",
+                    "hudi-value-000000100"),
                 // prefix lookup with a jump, the pointer should not go beyond the lookup key
-                new KeyLookUpInfo("hudi-key-000000200a", 1, "hudi-key-000000200", "hudi-value-000000200"),
-                new KeyLookUpInfo("hudi-key-000000200b", 1, "hudi-key-000000200", "hudi-value-000000200"),
+                new KeyLookUpInfo("hudi-key-000000200a", SEEK_TO_IN_RANGE, "hudi-key-000000200",
+                    "hudi-value-000000200"),
+                new KeyLookUpInfo("hudi-key-000000200b", SEEK_TO_IN_RANGE, "hudi-key-000000200",
+                    "hudi-value-000000200"),
                 // last key of the block 0
-                new KeyLookUpInfo("hudi-key-000000277", 0, "hudi-key-000000277", "hudi-value-000000277"),
-                new KeyLookUpInfo("hudi-key-000000277a", 1, "hudi-key-000000277", "hudi-value-000000277"),
-                new KeyLookUpInfo("hudi-key-000000277b", 1, "hudi-key-000000277", "hudi-value-000000277"),
+                new KeyLookUpInfo("hudi-key-000000277", SEEK_TO_FOUND, "hudi-key-000000277", "hudi-value-000000277"),
+                new KeyLookUpInfo("hudi-key-000000277a", SEEK_TO_IN_RANGE, "hudi-key-000000277",
+                    "hudi-value-000000277"),
+                new KeyLookUpInfo("hudi-key-000000277b", SEEK_TO_IN_RANGE, "hudi-key-000000277",
+                    "hudi-value-000000277"),
                 // first key of the block 1
-                new KeyLookUpInfo("hudi-key-000000278", 0, "hudi-key-000000278", "hudi-value-000000278"),
+                new KeyLookUpInfo("hudi-key-000000278", SEEK_TO_FOUND, "hudi-key-000000278", "hudi-value-000000278"),
                 // prefix before the first key of the block 9
-                new KeyLookUpInfo("hudi-key-000002501a", 1, "hudi-key-000002501", "hudi-value-000002501"),
-                new KeyLookUpInfo("hudi-key-000002501b", 1, "hudi-key-000002501", "hudi-value-000002501"),
+                new KeyLookUpInfo("hudi-key-000002501a", SEEK_TO_IN_RANGE, "hudi-key-000002501",
+                    "hudi-value-000002501"),
+                new KeyLookUpInfo("hudi-key-000002501b", SEEK_TO_IN_RANGE, "hudi-key-000002501",
+                    "hudi-value-000002501"),
                 // first key of the block 12
-                new KeyLookUpInfo("hudi-key-000003336", 0, "hudi-key-000003336", "hudi-value-000003336"),
+                new KeyLookUpInfo("hudi-key-000003336", SEEK_TO_FOUND, "hudi-key-000003336", "hudi-value-000003336"),
                 // last key of the block 14
-                new KeyLookUpInfo("hudi-key-000004169", 0, "hudi-key-000004169", "hudi-value-000004169"),
+                new KeyLookUpInfo("hudi-key-000004169", SEEK_TO_FOUND, "hudi-key-000004169", "hudi-value-000004169"),
                 // seeking again should not move the pointer
-                new KeyLookUpInfo("hudi-key-000004169", 0, "hudi-key-000004169", "hudi-value-000004169"),
-                // key in the block 16
-                new KeyLookUpInfo("hudi-key-000004600", 0, "hudi-key-000004600", "hudi-value-000004600"),
+                new KeyLookUpInfo("hudi-key-000004169", SEEK_TO_FOUND, "hudi-key-000004169", "hudi-value-000004169"),
+                // keys in the block 16
+                new KeyLookUpInfo("hudi-key-000004600", SEEK_TO_FOUND, "hudi-key-000004600", "hudi-value-000004600"),
+                new KeyLookUpInfo("hudi-key-000004601", SEEK_TO_FOUND, "hudi-key-000004601", "hudi-value-000004601"),
+                new KeyLookUpInfo("hudi-key-000004602", SEEK_TO_FOUND, "hudi-key-000004602", "hudi-value-000004602"),
                 // prefix lookups
-                new KeyLookUpInfo("hudi-key-0000047", 1, "hudi-key-000004699", "hudi-value-000004699"),
-                new KeyLookUpInfo("hudi-key-00000470", 1, "hudi-key-000004699", "hudi-value-000004699"),
-                new KeyLookUpInfo("hudi-key-000004700a", 1, "hudi-key-000004700", "hudi-value-000004700"),
+                new KeyLookUpInfo("hudi-key-0000047", SEEK_TO_IN_RANGE, "hudi-key-000004699", "hudi-value-000004699"),
+                new KeyLookUpInfo("hudi-key-00000470", SEEK_TO_IN_RANGE, "hudi-key-000004699", "hudi-value-000004699"),
+                new KeyLookUpInfo("hudi-key-000004700a", SEEK_TO_IN_RANGE, "hudi-key-000004700",
+                    "hudi-value-000004700"),
                 // second to last key
-                new KeyLookUpInfo("hudi-key-000004998", 0, "hudi-key-000004998", "hudi-value-000004998"),
+                new KeyLookUpInfo("hudi-key-000004998", SEEK_TO_FOUND, "hudi-key-000004998", "hudi-value-000004998"),
                 // last key
-                new KeyLookUpInfo("hudi-key-000004999", 0, "hudi-key-000004999", "hudi-value-000004999"),
+                new KeyLookUpInfo("hudi-key-000004999", SEEK_TO_FOUND, "hudi-key-000004999", "hudi-value-000004999"),
                 // after last key
-                new KeyLookUpInfo("hudi-key-000004999a", 2, "", ""),
-                new KeyLookUpInfo("hudi-key-000004999b", 2, "", "")
+                new KeyLookUpInfo("hudi-key-000004999a", SEEK_TO_EOF, "", ""),
+                new KeyLookUpInfo("hudi-key-000004999b", SEEK_TO_EOF, "", "")
             )
         ),
         Arguments.of(
@@ -197,27 +228,32 @@ public class TestHFileReader {
             5000,
             Arrays.asList(
                 // before first key
-                new KeyLookUpInfo("", -1, "", ""),
-                new KeyLookUpInfo("a", -1, "", ""),
-                new KeyLookUpInfo("hudi-key-0000000", -1, "", ""),
+                new KeyLookUpInfo("", SEEK_TO_BACKWARDS, "", ""),
+                new KeyLookUpInfo("a", SEEK_TO_BACKWARDS, "", ""),
+                new KeyLookUpInfo("hudi-key-0000000", SEEK_TO_BACKWARDS, "", ""),
                 // first key
-                new KeyLookUpInfo("hudi-key-000000000", 0, "hudi-key-000000000", "hudi-value-000000000"),
+                new KeyLookUpInfo("hudi-key-000000000", SEEK_TO_FOUND, "hudi-key-000000000", "hudi-value-000000000"),
                 // last key of block 0
-                new KeyLookUpInfo("hudi-key-000001110", 0, "hudi-key-000001110", "hudi-value-000001110"),
+                new KeyLookUpInfo("hudi-key-000001110", SEEK_TO_FOUND, "hudi-key-000001110", "hudi-value-000001110"),
                 // prefix lookup
-                new KeyLookUpInfo("hudi-key-000001110a", 1, "hudi-key-000001110", "hudi-value-000001110"),
-                new KeyLookUpInfo("hudi-key-000001110b", 1, "hudi-key-000001110", "hudi-value-000001110"),
-                // key in block 1
-                new KeyLookUpInfo("hudi-key-000001688", 0, "hudi-key-000001688", "hudi-value-000001688"),
+                new KeyLookUpInfo("hudi-key-000001110a", SEEK_TO_IN_RANGE, "hudi-key-000001110",
+                    "hudi-value-000001110"),
+                new KeyLookUpInfo("hudi-key-000001110b", SEEK_TO_IN_RANGE, "hudi-key-000001110",
+                    "hudi-value-000001110"),
+                // keys in block 1
+                new KeyLookUpInfo("hudi-key-000001688", SEEK_TO_FOUND, "hudi-key-000001688", "hudi-value-000001688"),
+                new KeyLookUpInfo("hudi-key-000001689", SEEK_TO_FOUND, "hudi-key-000001689", "hudi-value-000001689"),
+                new KeyLookUpInfo("hudi-key-000001690", SEEK_TO_FOUND, "hudi-key-000001690", "hudi-value-000001690"),
                 // prefix lookup
-                new KeyLookUpInfo("hudi-key-0000023", 1, "hudi-key-000002299", "hudi-value-000002299"),
-                new KeyLookUpInfo("hudi-key-00000230", 1, "hudi-key-000002299", "hudi-value-000002299"),
-                new KeyLookUpInfo("hudi-key-000002300a", 1, "hudi-key-000002300", "hudi-value-000002300"),
+                new KeyLookUpInfo("hudi-key-0000023", SEEK_TO_IN_RANGE, "hudi-key-000002299", "hudi-value-000002299"),
+                new KeyLookUpInfo("hudi-key-00000230", SEEK_TO_IN_RANGE, "hudi-key-000002299", "hudi-value-000002299"),
+                new KeyLookUpInfo("hudi-key-000002300a", SEEK_TO_IN_RANGE, "hudi-key-000002300",
+                    "hudi-value-000002300"),
                 // last key in block 2
-                new KeyLookUpInfo("hudi-key-000003332", 0, "hudi-key-000003332", "hudi-value-000003332"),
+                new KeyLookUpInfo("hudi-key-000003332", SEEK_TO_FOUND, "hudi-key-000003332", "hudi-value-000003332"),
                 // after last key
-                new KeyLookUpInfo("hudi-key-000020000", 2, "", ""),
-                new KeyLookUpInfo("hudi-key-000020001", 2, "", "")
+                new KeyLookUpInfo("hudi-key-000020000", SEEK_TO_EOF, "", ""),
+                new KeyLookUpInfo("hudi-key-000020001", SEEK_TO_EOF, "", "")
             )
         )
     );
@@ -229,6 +265,131 @@ public class TestHFileReader {
                                                 int numEntries,
                                                 List<KeyLookUpInfo> keyLookUpInfoList) throws IOException {
     verifyHFileRead(filename, numEntries, KEY_CREATOR, VALUE_CREATOR, keyLookUpInfoList);
+  }
+
+  @Test
+  public void testReadHFileWithNonUniqueKeys() throws IOException {
+    try (HFileReader reader = getHFileReader("/hfile/hudi_1_0_hbase_2_4_9_16KB_GZ_200_20_non_unique.hfile")) {
+      reader.initializeMetadata();
+      verifyHFileMetadata(reader, 4200);
+
+      assertFalse(reader.isSeeked());
+      assertFalse(reader.next());
+      assertTrue(reader.seekTo());
+
+      int numKeys = 200;
+      // Calling reader.next()
+      for (int i = 0; i < numKeys; i++) {
+        Option<KeyValue> keyValue = reader.getKeyValue();
+        assertTrue(keyValue.isPresent());
+        Key expectedKey = new UTF8StringKey(KEY_CREATOR.apply(i));
+        String value = VALUE_CREATOR.apply(i);
+        assertEquals(expectedKey, keyValue.get().getKey());
+        assertEquals(value, getValue(keyValue.get()));
+        assertTrue(reader.next());
+
+        for (int j = 0; j < 20; j++) {
+          keyValue = reader.getKeyValue();
+          assertTrue(keyValue.isPresent());
+          assertEquals(expectedKey, keyValue.get().getKey());
+          assertEquals(value + "_" + j, getValue(keyValue.get()));
+          if (i == numKeys - 1 && j == 19) {
+            assertFalse(reader.next());
+          } else {
+            assertTrue(reader.next());
+          }
+        }
+      }
+
+      assertTrue(reader.seekTo());
+      // Calling reader.seekTo(key) on each key
+      for (int i = 0; i < numKeys; i++) {
+        Key expectedKey = new UTF8StringKey(KEY_CREATOR.apply(i));
+
+        for (int j = 0; j < 1; j++) {
+          // seekTo twice and the results should be the same
+          assertEquals(SEEK_TO_FOUND, reader.seekTo(expectedKey));
+          Option<KeyValue> keyValue = reader.getKeyValue();
+          assertTrue(keyValue.isPresent());
+          String value = VALUE_CREATOR.apply(i);
+          assertEquals(expectedKey, keyValue.get().getKey());
+          assertEquals(value, getValue(keyValue.get()));
+        }
+
+        assertTrue(reader.next());
+        for (int j = 0; j < 1; j++) {
+          // seekTo twice and the results should be the same
+          assertEquals(SEEK_TO_FOUND, reader.seekTo(expectedKey));
+          Option<KeyValue> keyValue = reader.getKeyValue();
+          assertTrue(keyValue.isPresent());
+          String value = VALUE_CREATOR.apply(i);
+          assertEquals(expectedKey, keyValue.get().getKey());
+          assertEquals(value + "_0", getValue(keyValue.get()));
+        }
+      }
+
+      verifyHFileSeekToReads(
+          reader,
+          // point and prefix lookups
+          Arrays.asList(
+              // before first key
+              new KeyLookUpInfo("", SEEK_TO_BACKWARDS, "", ""),
+              new KeyLookUpInfo("a", SEEK_TO_BACKWARDS, "", ""),
+              new KeyLookUpInfo("hudi-key-0000000", SEEK_TO_BACKWARDS, "", ""),
+              // first key
+              new KeyLookUpInfo("hudi-key-000000000", SEEK_TO_FOUND, "hudi-key-000000000", "hudi-value-000000000"),
+              // key in the block 0
+              new KeyLookUpInfo("hudi-key-000000005", SEEK_TO_FOUND, "hudi-key-000000005", "hudi-value-000000005"),
+              // backward seek not supported
+              new KeyLookUpInfo("hudi-key-000000004", SEEK_TO_BACKWARDS, "", ""),
+              // prefix lookup, the pointer should move to the entry before
+              new KeyLookUpInfo("hudi-key-000000006a", SEEK_TO_IN_RANGE, "hudi-key-000000006",
+                  "hudi-value-000000006_19"),
+              new KeyLookUpInfo("hudi-key-000000006b", SEEK_TO_IN_RANGE, "hudi-key-000000006",
+                  "hudi-value-000000006_19"),
+              // prefix lookup with a jump, the pointer should not go beyond the lookup key
+              new KeyLookUpInfo("hudi-key-000000008a", SEEK_TO_IN_RANGE, "hudi-key-000000008",
+                  "hudi-value-000000008_19"),
+              new KeyLookUpInfo("hudi-key-000000008b", SEEK_TO_IN_RANGE, "hudi-key-000000008",
+                  "hudi-value-000000008_19"),
+              // last key of the block 0
+              new KeyLookUpInfo("hudi-key-000000012", SEEK_TO_FOUND, "hudi-key-000000012", "hudi-value-000000012"),
+              new KeyLookUpInfo("hudi-key-000000012a", SEEK_TO_IN_RANGE, "hudi-key-000000012",
+                  "hudi-value-000000012_19"),
+              new KeyLookUpInfo("hudi-key-000000012b", SEEK_TO_IN_RANGE, "hudi-key-000000012",
+                  "hudi-value-000000012_19"),
+              // first key of the block 1
+              new KeyLookUpInfo("hudi-key-000000013", SEEK_TO_FOUND, "hudi-key-000000013", "hudi-value-000000013"),
+              // prefix before the first key of the block 5
+              new KeyLookUpInfo("hudi-key-000000064a", SEEK_TO_IN_RANGE, "hudi-key-000000064",
+                  "hudi-value-000000064_19"),
+              new KeyLookUpInfo("hudi-key-000000064b", SEEK_TO_IN_RANGE, "hudi-key-000000064",
+                  "hudi-value-000000064_19"),
+              // first key of the block 8
+              new KeyLookUpInfo("hudi-key-000000104", SEEK_TO_FOUND, "hudi-key-000000104", "hudi-value-000000104"),
+              // last key of the block 11
+              new KeyLookUpInfo("hudi-key-000000155", SEEK_TO_FOUND, "hudi-key-000000155", "hudi-value-000000155"),
+              // seeking again should not move the pointer
+              new KeyLookUpInfo("hudi-key-000000155", SEEK_TO_FOUND, "hudi-key-000000155", "hudi-value-000000155"),
+              // adjacent keys
+              new KeyLookUpInfo("hudi-key-000000156", SEEK_TO_FOUND, "hudi-key-000000156", "hudi-value-000000156"),
+              new KeyLookUpInfo("hudi-key-000000157", SEEK_TO_FOUND, "hudi-key-000000157", "hudi-value-000000157"),
+              new KeyLookUpInfo("hudi-key-000000158", SEEK_TO_FOUND, "hudi-key-000000158", "hudi-value-000000158"),
+              // prefix lookups in the block 14
+              new KeyLookUpInfo("hudi-key-00000019", SEEK_TO_IN_RANGE, "hudi-key-000000189",
+                  "hudi-value-000000189_19"),
+              new KeyLookUpInfo("hudi-key-000000190a", SEEK_TO_IN_RANGE, "hudi-key-000000190",
+                  "hudi-value-000000190_19"),
+              // second to last key
+              new KeyLookUpInfo("hudi-key-000000198", SEEK_TO_FOUND, "hudi-key-000000198", "hudi-value-000000198"),
+              // last key
+              new KeyLookUpInfo("hudi-key-000000199", SEEK_TO_FOUND, "hudi-key-000000199", "hudi-value-000000199"),
+              // after last key
+              new KeyLookUpInfo("hudi-key-000000199a", SEEK_TO_EOF, "", ""),
+              new KeyLookUpInfo("hudi-key-000000199b", SEEK_TO_EOF, "", "")
+          )
+      );
+    }
   }
 
   @Test
@@ -359,7 +520,7 @@ public class TestHFileReader {
       // Calling reader.seekTo(key) on each key
       for (int i = 0; i < numEntries; i++) {
         Key expecedKey = new UTF8StringKey(keyCreator.get().apply(i));
-        assertEquals(0, reader.seekTo(expecedKey));
+        assertEquals(SEEK_TO_FOUND, reader.seekTo(expecedKey));
         Option<KeyValue> keyValue = reader.getKeyValue();
         assertTrue(keyValue.isPresent());
         assertEquals(expecedKey, keyValue.get().getKey());
@@ -379,16 +540,16 @@ public class TestHFileReader {
           reader.seekTo(new UTF8StringKey(keyLookUpInfo.getLookUpKey())),
           String.format("Unexpected seekTo result for lookup key %s", keyLookUpInfo.getLookUpKey()));
       switch (keyLookUpInfo.getExpectedSeekToResult()) {
-        case -1:
+        case SEEK_TO_BACKWARDS:
           break;
-        case 0:
-        case 1:
+        case SEEK_TO_FOUND:
+        case SEEK_TO_IN_RANGE:
           assertTrue(reader.getKeyValue().isPresent());
           assertEquals(new UTF8StringKey(keyLookUpInfo.getExpectedKey()),
               reader.getKeyValue().get().getKey());
           assertEquals(keyLookUpInfo.getExpectedValue(), getValue(reader.getKeyValue().get()));
           break;
-        case 2:
+        case SEEK_TO_EOF:
           assertFalse(reader.getKeyValue().isPresent());
           assertFalse(reader.next());
           break;

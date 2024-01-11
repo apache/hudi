@@ -460,12 +460,14 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
   @Disabled("This is used for generating testing HFile only")
   @ParameterizedTest
   @CsvSource({
-      "512,GZ,20000", "16,GZ,20000",
-      "64,NONE,5000", "16,NONE,5000"
+      "512,GZ,20000,true", "16,GZ,20000,true",
+      "64,NONE,5000,true", "16,NONE,5000,true",
+      "16,GZ,200,false"
   })
   void generateHFileForTesting(int blockSizeKB,
                                String compressionCodec,
-                               int numEntries) throws IOException {
+                               int numEntries,
+                               boolean uniqueKeys) throws IOException {
     writeHFileForTesting(
         String.format("/tmp/hudi_1_0_hbase_2_4_9_%sKB_%s_%s.hfile",
             blockSizeKB, compressionCodec, numEntries),
@@ -473,7 +475,8 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
         Compression.Algorithm.valueOf(compressionCodec),
         numEntries,
         KEY_CREATOR,
-        VALUE_CREATOR);
+        VALUE_CREATOR,
+        uniqueKeys);
   }
 
   private Set<String> getRandomKeys(int count, List<String> keys) {
@@ -508,7 +511,8 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
                                     Compression.Algorithm compressionAlgo,
                                     int numEntries,
                                     Function<Integer, String> keyCreator,
-                                    Function<Integer, String> valueCreator) throws IOException {
+                                    Function<Integer, String> valueCreator,
+                                    boolean uniqueKeys) throws IOException {
     HFileContext context = new HFileContextBuilder()
         .withBlockSize(blockSize)
         .withCompression(compressionAlgo)
@@ -522,9 +526,14 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
         .withFileContext(context)
         .create()) {
       for (int i = 0; i < numEntries; i++) {
-        KeyValue kv = new KeyValue(
-            getUTF8Bytes(keyCreator.apply(i)), null, null, getUTF8Bytes(valueCreator.apply(i)));
-        writer.append(kv);
+        byte[] keyBytes = getUTF8Bytes(keyCreator.apply(i));
+        writer.append(new KeyValue(keyBytes, null, null, getUTF8Bytes(valueCreator.apply(i))));
+        if (!uniqueKeys) {
+          for (int j = 0; j < 20; j++) {
+            writer.append(new KeyValue(
+                keyBytes, null, null, getUTF8Bytes(valueCreator.apply(i) + "_" + j)));
+          }
+        }
       }
       writer.appendFileInfo(getUTF8Bytes(CUSTOM_META_KEY), getUTF8Bytes(CUSTOM_META_VALUE));
       writer.appendMetaBlock(HoodieAvroHFileReader.KEY_BLOOM_FILTER_META_BLOCK, new Writable() {
