@@ -175,6 +175,7 @@ public abstract class TestHoodieReaderWriterBase {
   protected void writeFileWithSimpleSchema() throws Exception {
     Schema avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
     HoodieAvroFileWriter writer = createWriter(avroSchema, true);
+    /*
     for (int i = 0; i < NUM_RECORDS; i++) {
       GenericRecord record = new GenericData.Record(avroSchema);
       String key = "key" + String.format("%02d", i);
@@ -183,7 +184,7 @@ public abstract class TestHoodieReaderWriterBase {
       record.put("number", i);
       HoodieRecord avroRecord = new HoodieAvroIndexedRecord(record);
       writer.write(key, avroRecord, avroSchema);
-    }
+    }*/
     writer.close();
   }
 

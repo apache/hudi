@@ -38,16 +38,24 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.CellComparatorImpl;
+import org.apache.hadoop.hbase.KeyValue;
+import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
+import org.apache.hadoop.hbase.io.hfile.HFileContext;
+import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
+import org.apache.hadoop.io.Writable;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
+import java.io.DataInput;
+import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -62,6 +70,7 @@ import java.util.Set;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.TreeMap;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -74,7 +83,12 @@ import static org.apache.hudi.common.util.CollectionUtils.toStream;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.io.hfile.TestHFileReader.BOOTSTRAP_INDEX_HFILE_SUFFIX;
 import static org.apache.hudi.io.hfile.TestHFileReader.COMPLEX_SCHEMA_HFILE_SUFFIX;
+import static org.apache.hudi.io.hfile.TestHFileReader.CUSTOM_META_KEY;
+import static org.apache.hudi.io.hfile.TestHFileReader.CUSTOM_META_VALUE;
+import static org.apache.hudi.io.hfile.TestHFileReader.DUMMY_BLOOM_FILTER;
+import static org.apache.hudi.io.hfile.TestHFileReader.KEY_CREATOR;
 import static org.apache.hudi.io.hfile.TestHFileReader.SIMPLE_SCHEMA_HFILE_SUFFIX;
+import static org.apache.hudi.io.hfile.TestHFileReader.VALUE_CREATOR;
 import static org.apache.hudi.io.hfile.TestHFileReader.readHFileFromResources;
 import static org.apache.hudi.io.storage.HoodieAvroHFileReader.SCHEMA_KEY;
 import static org.apache.hudi.io.storage.HoodieHFileConfig.HFILE_COMPARATOR;
@@ -432,7 +446,8 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     verifyHFileReader(HoodieHFileUtils.createHFileReader(fs, new Path(DUMMY_BASE_PATH), content),
         hfilePrefix, true, HFILE_COMPARATOR.getClass(), NUM_RECORDS_FIXTURE);
     hfileReader =
-        new HoodieAvroHFileReader(hadoopConf, new Path(DUMMY_BASE_PATH), new CacheConfig(hadoopConf), fs, content, Option.empty());
+        new HoodieAvroHFileReader(hadoopConf, new Path(DUMMY_BASE_PATH), new CacheConfig(hadoopConf), fs, content,
+            Option.empty());
     avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchemaWithUDT.avsc");
     assertEquals(NUM_RECORDS_FIXTURE, hfileReader.getTotalRecords());
     verifySimpleRecords(hfileReader.getRecordIterator(avroSchema));
@@ -440,6 +455,30 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     content = readHFileFromResources(bootstrapIndexFile);
     verifyHFileReader(HoodieHFileUtils.createHFileReader(fs, new Path(DUMMY_BASE_PATH), content),
         hfilePrefix, false, HFileBootstrapIndex.HoodieKVComparator.class, 4);
+  }
+
+  @Disabled("This is used for generating testing HFile only")
+  @ParameterizedTest
+  @CsvSource({
+      //"512,LZO,20000", "16,LZO,20000",
+      "512,GZ,20000", "16,GZ,20000",
+      "64,NONE,5000", "16,NONE,5000",
+      //"512,SNAPPY,20000", "16,SNAPPY,20000",
+      //"512,LZ4,20000", "16,LZ4,20000",
+      //"512,BZIP2,20000", "16,BZIP2,20000",
+      //"512,ZSTD,20000", "16,ZSTD,20000"
+  })
+  void generateHFileForTesting(int blockSizeKB,
+                               String compressionCodec,
+                               int numEntries) throws IOException {
+    writeHFileForTesting(
+        String.format("/tmp/hudi_1_0_hbase_2_4_9_%sKB_%s_%s.hfile",
+            blockSizeKB, compressionCodec, numEntries),
+        blockSizeKB * 1024,
+        Compression.Algorithm.valueOf(compressionCodec),
+        numEntries,
+        KEY_CREATOR,
+        VALUE_CREATOR);
   }
 
   private Set<String> getRandomKeys(int count, List<String> keys) {
@@ -467,5 +506,42 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       assertEquals(clazz, reader.getComparator().getClass());
     }
     assertEquals(count, reader.getEntries());
+  }
+
+  private void writeHFileForTesting(String fileLocation,
+                                    int blockSize,
+                                    Compression.Algorithm compressionAlgo,
+                                    int numEntries,
+                                    Function<Integer, String> keyCreator,
+                                    Function<Integer, String> valueCreator) throws IOException {
+    HFileContext context = new HFileContextBuilder()
+        .withBlockSize(blockSize)
+        .withCompression(compressionAlgo)
+        .build();
+    Configuration conf = new Configuration();
+    CacheConfig cacheConfig = new CacheConfig(conf);
+    Path filePath = new Path(fileLocation);
+    FileSystem fs = filePath.getFileSystem(conf);
+    try (HFile.Writer writer = HFile.getWriterFactory(conf, cacheConfig)
+        .withPath(fs, filePath)
+        .withFileContext(context)
+        .create()) {
+      for (int i = 0; i < numEntries; i++) {
+        KeyValue kv = new KeyValue(
+            getUTF8Bytes(keyCreator.apply(i)), null, null, getUTF8Bytes(valueCreator.apply(i)));
+        writer.append(kv);
+      }
+      writer.appendFileInfo(getUTF8Bytes(CUSTOM_META_KEY), getUTF8Bytes(CUSTOM_META_VALUE));
+      writer.appendMetaBlock(HoodieAvroHFileReader.KEY_BLOOM_FILTER_META_BLOCK, new Writable() {
+        @Override
+        public void write(DataOutput out) throws IOException {
+          out.write(getUTF8Bytes(DUMMY_BLOOM_FILTER));
+        }
+
+        @Override
+        public void readFields(DataInput in) throws IOException {
+        }
+      });
+    }
   }
 }

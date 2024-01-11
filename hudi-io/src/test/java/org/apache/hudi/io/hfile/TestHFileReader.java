@@ -22,146 +22,223 @@ package org.apache.hudi.io.hfile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PositionedReadable;
 import org.apache.hadoop.fs.Seekable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.List;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.util.FileIOUtils.readAsByteArray;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Tests {@link HFileReader}
+ */
 public class TestHFileReader {
   public static final String SIMPLE_SCHEMA_HFILE_SUFFIX = "_simple.hfile";
   public static final String COMPLEX_SCHEMA_HFILE_SUFFIX = "_complex.hfile";
   public static final String BOOTSTRAP_INDEX_HFILE_SUFFIX = "_bootstrap_index_partitions.hfile";
+  // Custom information added to file info block
+  public static final String CUSTOM_META_KEY = "hudi_hfile_testing.custom_key";
+  public static final String CUSTOM_META_VALUE = "hudi_custom_value";
+  // Dummy Bloom filter bytes
+  public static final String DUMMY_BLOOM_FILTER =
+      "/////wAAABQBAAABID797Rg6cC9QEnS/mT3C01cdQGaLYH2jbOCLtMA0RWppEH1HQg==";
+  public static final Function<Integer, String> KEY_CREATOR = i -> String.format("hudi-key-%09d", i);
+  public static final Function<Integer, String> VALUE_CREATOR = i -> String.format("hudi-value-%09d", i);
 
-  @Test
-  public void testReadHFile() throws IOException {
-    int bufSize = 16 * 1024 * 1024;
-    Path path = new Path("file:/Users/ethan/Work/tmp/hfile-reader/hfile_keyed.hfile");
-    Configuration conf = new Configuration();
-    FileSystem fs = path.getFileSystem(conf);
-    FileStatus fileStatus = fs.getFileStatus(path);
-    try (FSDataInputStream stream = fs.open(path, bufSize)) {
-      HFileReaderImpl reader = new HFileReaderImpl(stream, fileStatus.getLen());
-      reader.initializeMetadata();
-      reader.seekTo();
-      assertTrue(reader.getKeyValue().isPresent());
-      int count = 1;
-      while (reader.next()) {
-        Option<KeyValue> keyValueOption = reader.getKeyValue();
-        assertTrue(keyValueOption.isPresent());
-        count++;
-      }
-
-      assertEquals(1000, count);
-    }
+  static Stream<Arguments> testArgsReadHFilePointAndPrefixLookup() {
+    return Stream.of(
+        Arguments.of(
+            "/hfile/hudi_1_0_hbase_2_4_9_16KB_GZ_20000.hfile",
+            20000,
+            Arrays.asList(
+                // before first key
+                new KeyLookUpInfo("", -1, "", ""),
+                new KeyLookUpInfo("a", -1, "", ""),
+                new KeyLookUpInfo("hudi-key-0000000", -1, "", ""),
+                // first key
+                new KeyLookUpInfo("hudi-key-000000000", 0, "hudi-key-000000000", "hudi-value-000000000"),
+                // key in the block 0
+                new KeyLookUpInfo("hudi-key-000000100", 0, "hudi-key-000000100", "hudi-value-000000100"),
+                // backward seek not supported
+                new KeyLookUpInfo("hudi-key-000000099", -1, "", ""),
+                // prefix lookup, the pointer should not move
+                new KeyLookUpInfo("hudi-key-000000100a", 1, "hudi-key-000000100", "hudi-value-000000100"),
+                new KeyLookUpInfo("hudi-key-000000100b", 1, "hudi-key-000000100", "hudi-value-000000100"),
+                // prefix lookup with a jump, the pointer should not go beyond the lookup key
+                new KeyLookUpInfo("hudi-key-000000200a", 1, "hudi-key-000000200", "hudi-value-000000200"),
+                new KeyLookUpInfo("hudi-key-000000200b", 1, "hudi-key-000000200", "hudi-value-000000200"),
+                // last key of the block 0
+                new KeyLookUpInfo("hudi-key-000000277", 0, "hudi-key-000000277", "hudi-value-000000277"),
+                new KeyLookUpInfo("hudi-key-000000277a", 1, "hudi-key-000000277", "hudi-value-000000277"),
+                new KeyLookUpInfo("hudi-key-000000277b", 1, "hudi-key-000000277", "hudi-value-000000277"),
+                // first key of the block 1
+                new KeyLookUpInfo("hudi-key-000000278", 0, "hudi-key-000000278", "hudi-value-000000278"),
+                // prefix before the first key of the block 9
+                new KeyLookUpInfo("hudi-key-000002501a", 1, "hudi-key-000002501", "hudi-value-000002501"),
+                new KeyLookUpInfo("hudi-key-000002501b", 1, "hudi-key-000002501", "hudi-value-000002501"),
+                // first key of the block 30
+                new KeyLookUpInfo("hudi-key-000008340", 0, "hudi-key-000008340", "hudi-value-000008340"),
+                // last key of the block 49
+                new KeyLookUpInfo("hudi-key-000013899", 0, "hudi-key-000013899", "hudi-value-000013899"),
+                // seeking again should not move the pointer
+                new KeyLookUpInfo("hudi-key-000013899", 0, "hudi-key-000013899", "hudi-value-000013899"),
+                // key in the block 70
+                new KeyLookUpInfo("hudi-key-000019500", 0, "hudi-key-000019500", "hudi-value-000019500"),
+                // prefix lookups
+                new KeyLookUpInfo("hudi-key-0000196", 1, "hudi-key-000019599", "hudi-value-000019599"),
+                new KeyLookUpInfo("hudi-key-00001960", 1, "hudi-key-000019599", "hudi-value-000019599"),
+                new KeyLookUpInfo("hudi-key-000019600a", 1, "hudi-key-000019600", "hudi-value-000019600"),
+                // second to last key
+                new KeyLookUpInfo("hudi-key-000019998", 0, "hudi-key-000019998", "hudi-value-000019998"),
+                // last key
+                new KeyLookUpInfo("hudi-key-000019999", 0, "hudi-key-000019999", "hudi-value-000019999"),
+                // after last key
+                new KeyLookUpInfo("hudi-key-000019999a", 2, "", ""),
+                new KeyLookUpInfo("hudi-key-000019999b", 2, "", "")
+            )
+        ),
+        Arguments.of(
+            "/hfile/hudi_1_0_hbase_2_4_9_512KB_GZ_20000.hfile",
+            20000,
+            Arrays.asList(
+                // before first key
+                new KeyLookUpInfo("", -1, "", ""),
+                new KeyLookUpInfo("a", -1, "", ""),
+                new KeyLookUpInfo("hudi-key-0000000", -1, "", ""),
+                // first key
+                new KeyLookUpInfo("hudi-key-000000000", 0, "hudi-key-000000000", "hudi-value-000000000"),
+                // last key of block 0
+                new KeyLookUpInfo("hudi-key-000008886", 0, "hudi-key-000008886", "hudi-value-000008886"),
+                // prefix lookup
+                new KeyLookUpInfo("hudi-key-000008886a", 1, "hudi-key-000008886", "hudi-value-000008886"),
+                new KeyLookUpInfo("hudi-key-000008886b", 1, "hudi-key-000008886", "hudi-value-000008886"),
+                // key in block 1
+                new KeyLookUpInfo("hudi-key-000008888", 0, "hudi-key-000008888", "hudi-value-000008888"),
+                // prefix lookup
+                new KeyLookUpInfo("hudi-key-0000090", 1, "hudi-key-000008999", "hudi-value-000008999"),
+                new KeyLookUpInfo("hudi-key-00000900", 1, "hudi-key-000008999", "hudi-value-000008999"),
+                new KeyLookUpInfo("hudi-key-000009000a", 1, "hudi-key-000009000", "hudi-value-000009000"),
+                // last key in block 1
+                new KeyLookUpInfo("hudi-key-000017773", 0, "hudi-key-000017773", "hudi-value-000017773"),
+                // after last key
+                new KeyLookUpInfo("hudi-key-000020000", 2, "", ""),
+                new KeyLookUpInfo("hudi-key-000020001", 2, "", "")
+            )
+        ),
+        Arguments.of(
+            "/hfile/hudi_1_0_hbase_2_4_9_16KB_NONE_5000.hfile",
+            5000,
+            Arrays.asList(
+                // before first key
+                new KeyLookUpInfo("", -1, "", ""),
+                new KeyLookUpInfo("a", -1, "", ""),
+                new KeyLookUpInfo("hudi-key-0000000", -1, "", ""),
+                // first key
+                new KeyLookUpInfo("hudi-key-000000000", 0, "hudi-key-000000000", "hudi-value-000000000"),
+                // key in the block 0
+                new KeyLookUpInfo("hudi-key-000000100", 0, "hudi-key-000000100", "hudi-value-000000100"),
+                // backward seek not supported
+                new KeyLookUpInfo("hudi-key-000000099", -1, "", ""),
+                // prefix lookup, the pointer should not move
+                new KeyLookUpInfo("hudi-key-000000100a", 1, "hudi-key-000000100", "hudi-value-000000100"),
+                new KeyLookUpInfo("hudi-key-000000100b", 1, "hudi-key-000000100", "hudi-value-000000100"),
+                // prefix lookup with a jump, the pointer should not go beyond the lookup key
+                new KeyLookUpInfo("hudi-key-000000200a", 1, "hudi-key-000000200", "hudi-value-000000200"),
+                new KeyLookUpInfo("hudi-key-000000200b", 1, "hudi-key-000000200", "hudi-value-000000200"),
+                // last key of the block 0
+                new KeyLookUpInfo("hudi-key-000000277", 0, "hudi-key-000000277", "hudi-value-000000277"),
+                new KeyLookUpInfo("hudi-key-000000277a", 1, "hudi-key-000000277", "hudi-value-000000277"),
+                new KeyLookUpInfo("hudi-key-000000277b", 1, "hudi-key-000000277", "hudi-value-000000277"),
+                // first key of the block 1
+                new KeyLookUpInfo("hudi-key-000000278", 0, "hudi-key-000000278", "hudi-value-000000278"),
+                // prefix before the first key of the block 9
+                new KeyLookUpInfo("hudi-key-000002501a", 1, "hudi-key-000002501", "hudi-value-000002501"),
+                new KeyLookUpInfo("hudi-key-000002501b", 1, "hudi-key-000002501", "hudi-value-000002501"),
+                // first key of the block 12
+                new KeyLookUpInfo("hudi-key-000003336", 0, "hudi-key-000003336", "hudi-value-000003336"),
+                // last key of the block 14
+                new KeyLookUpInfo("hudi-key-000004169", 0, "hudi-key-000004169", "hudi-value-000004169"),
+                // seeking again should not move the pointer
+                new KeyLookUpInfo("hudi-key-000004169", 0, "hudi-key-000004169", "hudi-value-000004169"),
+                // key in the block 16
+                new KeyLookUpInfo("hudi-key-000004600", 0, "hudi-key-000004600", "hudi-value-000004600"),
+                // prefix lookups
+                new KeyLookUpInfo("hudi-key-0000047", 1, "hudi-key-000004699", "hudi-value-000004699"),
+                new KeyLookUpInfo("hudi-key-00000470", 1, "hudi-key-000004699", "hudi-value-000004699"),
+                new KeyLookUpInfo("hudi-key-000004700a", 1, "hudi-key-000004700", "hudi-value-000004700"),
+                // second to last key
+                new KeyLookUpInfo("hudi-key-000004998", 0, "hudi-key-000004998", "hudi-value-000004998"),
+                // last key
+                new KeyLookUpInfo("hudi-key-000004999", 0, "hudi-key-000004999", "hudi-value-000004999"),
+                // after last key
+                new KeyLookUpInfo("hudi-key-000004999a", 2, "", ""),
+                new KeyLookUpInfo("hudi-key-000004999b", 2, "", "")
+            )
+        ),
+        Arguments.of(
+            "/hfile/hudi_1_0_hbase_2_4_9_64KB_NONE_5000.hfile",
+            5000,
+            Arrays.asList(
+                // before first key
+                new KeyLookUpInfo("", -1, "", ""),
+                new KeyLookUpInfo("a", -1, "", ""),
+                new KeyLookUpInfo("hudi-key-0000000", -1, "", ""),
+                // first key
+                new KeyLookUpInfo("hudi-key-000000000", 0, "hudi-key-000000000", "hudi-value-000000000"),
+                // last key of block 0
+                new KeyLookUpInfo("hudi-key-000001110", 0, "hudi-key-000001110", "hudi-value-000001110"),
+                // prefix lookup
+                new KeyLookUpInfo("hudi-key-000001110a", 1, "hudi-key-000001110", "hudi-value-000001110"),
+                new KeyLookUpInfo("hudi-key-000001110b", 1, "hudi-key-000001110", "hudi-value-000001110"),
+                // key in block 1
+                new KeyLookUpInfo("hudi-key-000001688", 0, "hudi-key-000001688", "hudi-value-000001688"),
+                // prefix lookup
+                new KeyLookUpInfo("hudi-key-0000023", 1, "hudi-key-000002299", "hudi-value-000002299"),
+                new KeyLookUpInfo("hudi-key-00000230", 1, "hudi-key-000002299", "hudi-value-000002299"),
+                new KeyLookUpInfo("hudi-key-000002300a", 1, "hudi-key-000002300", "hudi-value-000002300"),
+                // last key in block 2
+                new KeyLookUpInfo("hudi-key-000003332", 0, "hudi-key-000003332", "hudi-value-000003332"),
+                // after last key
+                new KeyLookUpInfo("hudi-key-000020000", 2, "", ""),
+                new KeyLookUpInfo("hudi-key-000020001", 2, "", "")
+            )
+        )
+    );
   }
 
-  @Test
-  public void testReadHFilePointLookup() throws IOException {
-    int bufSize = 16 * 1024 * 1024;
-    Path path = new Path("file:/Users/ethan/Work/tmp/hfile-reader/hfile_keyed.hfile");
-    Configuration conf = new Configuration();
-    FileSystem fs = path.getFileSystem(conf);
-    FileStatus fileStatus = fs.getFileStatus(path);
-    try (FSDataInputStream stream = fs.open(path, bufSize)) {
-      HFileReaderImpl reader = new HFileReaderImpl(stream, fileStatus.getLen());
-      reader.initializeMetadata();
-      reader.seekTo();
-      Key key = new UTF8StringKey("abc-00000030");
-      int r = reader.seekTo(key);
-      assertEquals(-1, r);
-
-      key = new UTF8StringKey("key-00000000");
-      r = reader.seekTo(key);
-      assertEquals(0, r);
-      assertEquals(key, reader.getKeyValue().get().getKey());
-
-      key = new UTF8StringKey("key-00000050");
-      r = reader.seekTo(key);
-      assertEquals(0, r);
-      assertEquals(key, reader.getKeyValue().get().getKey());
-
-      key = new UTF8StringKey("key-000000501");
-      r = reader.seekTo(key);
-      assertEquals(1, r);
-      assertEquals(new UTF8StringKey("key-00000050"), reader.getKeyValue().get().getKey());
-
-      key = new UTF8StringKey("key-000000502");
-      r = reader.seekTo(key);
-      assertEquals(1, r);
-      assertEquals(new UTF8StringKey("key-00000050"), reader.getKeyValue().get().getKey());
-
-      key = new UTF8StringKey("key-00000051");
-      r = reader.seekTo(key);
-      assertEquals(0, r);
-      assertEquals(key, reader.getKeyValue().get().getKey());
-
-
-      key = new UTF8StringKey("key-00000651");
-      r = reader.seekTo(key);
-      assertEquals(0, r);
-      assertEquals(key, reader.getKeyValue().get().getKey());
-
-      key = new UTF8StringKey("key-00000999");
-      r = reader.seekTo(key);
-      assertEquals(0, r);
-      assertEquals(key, reader.getKeyValue().get().getKey());
-
-      key = new UTF8StringKey("key-00001000");
-      r = reader.seekTo(key);
-      assertEquals(2, r);
-      assertFalse(reader.getKeyValue().isPresent());
-
-      assertEquals(false, reader.next());
-      assertEquals(false, reader.next());
-      key = new UTF8StringKey("key-00001003");
-      r = reader.seekTo(key);
-      assertEquals(2, r);
-      assertFalse(reader.getKeyValue().isPresent());
-
-      //Option<KeyValue> kv0 = reader.seekTo(new UTF8StringKey("abc-00000000"));
-      //assertFalse(kv0.isPresent());
-      //Option<KeyValue> kv1 = reader.seekTo(new UTF8StringKey("key-00000000"));
-      //assertEquals("val-00000000", getValue(kv1.get()));
-      //Option<KeyValue> kv2 = reader.seekTo(new UTF8StringKey("key-00000050"));
-      //assertEquals("val-00000050", getValue(kv2.get()));
-      //Option<KeyValue> kv3 = reader.seekTo(new UTF8StringKey("key-00000536"));
-      //assertEquals("val-00000536", getValue(kv3.get()));
-      //Option<KeyValue> kv4 = reader.seekTo(new UTF8StringKey("key-10000000"));
-      //assertFalse(kv4.isPresent());
-      //Option<KeyValue> kv5 = reader.seekTo(new UTF8StringKey("key-00000684"));
-      //assertEquals("val-00000684", getValue(kv5.get()));
-      //Option<KeyValue> kv6 = reader.seekTo(new UTF8StringKey("key-00000690"));
-      //assertEquals("val-00000690", getValue(kv6.get()));
-    }
+  @ParameterizedTest
+  @MethodSource("testArgsReadHFilePointAndPrefixLookup")
+  public void testReadHFilePointAndPrefixLookup(String filename,
+                                                int numEntries,
+                                                List<KeyLookUpInfo> keyLookUpInfoList) throws IOException {
+    verifyHFileRead(filename, numEntries, KEY_CREATOR, VALUE_CREATOR, keyLookUpInfoList);
   }
 
   @Test
   public void testReadHFileWithoutKeyValueEntries() throws IOException {
-    int bufSize = 16 * 1024 * 1024;
-    Path path = new Path(
-        "file:/Users/ethan/Work/tmp/20231215-hfile-ci-logs/record-index-0006-0_3-108-262_20231219054341404.hfile");
-    Configuration conf = new Configuration();
-    FileSystem fs = path.getFileSystem(conf);
-    FileStatus fileStatus = fs.getFileStatus(path);
-    try (FSDataInputStream stream = fs.open(path, bufSize)) {
-      HFileReaderImpl reader = new HFileReaderImpl(stream, fileStatus.getLen());
+    try (HFileReader reader = getHFileReader("/hfile/hudi_1_0_hbase_2_4_9_no_entry.hfile")) {
       reader.initializeMetadata();
+      verifyHFileMetadataCompatibility(reader, 0);
+      assertFalse(reader.isSeeked());
+      assertFalse(reader.next());
       assertFalse(reader.seekTo());
-      assertEquals(2, reader.seekTo(new UTF8StringKey("xyz")));
+      assertFalse(reader.next());
+      assertEquals(2, reader.seekTo(new UTF8StringKey("random")));
       assertFalse(reader.next());
     }
   }
@@ -199,17 +276,44 @@ public class TestHFileReader {
         new FSDataInputStream(new SeekableByteArrayInputStream(content)), content.length);
   }
 
+  private static void verifyHFileRead(String filename,
+                                      int numEntries,
+                                      Function<Integer, String> keyCreator,
+                                      Function<Integer, String> valueCreator,
+                                      List<KeyLookUpInfo> keyLookUpInfoList) throws IOException {
+    try (HFileReader reader = getHFileReader(filename)) {
+      reader.initializeMetadata();
+      verifyHFileMetadata(reader, numEntries);
+      verifyHFileValuesInSequentialReads(reader, numEntries, Option.of(keyCreator), Option.of(valueCreator));
+      verifyHFileSeekToReads(reader, keyLookUpInfoList);
+    }
+  }
+
+  private static void verifyHFileMetadata(HFileReader reader, int numEntries) throws IOException {
+    assertEquals(numEntries, reader.getNumKeyValueEntries());
+
+    Option<byte[]> customValue = reader.getMetaInfo(new UTF8StringKey(CUSTOM_META_KEY));
+    assertTrue(customValue.isPresent());
+    assertEquals(CUSTOM_META_VALUE, new String(customValue.get(), StandardCharsets.UTF_8));
+
+    Option<ByteBuffer> bloomFilter = reader.getMetaBlock("bloomFilter");
+    assertTrue(bloomFilter.isPresent());
+    assertEquals(DUMMY_BLOOM_FILTER, new String(
+        bloomFilter.get().array(), bloomFilter.get().position(), bloomFilter.get().remaining(),
+        StandardCharsets.UTF_8));
+  }
+
   private static void verifyHFileReadCompatibility(String filename,
                                                    int numEntries,
                                                    Option<Function<Integer, String>> keyCreator) throws IOException {
     try (HFileReader reader = getHFileReader(filename)) {
       reader.initializeMetadata();
-      verifyHFileMetadata(reader, numEntries);
+      verifyHFileMetadataCompatibility(reader, numEntries);
       verifyHFileValuesInSequentialReads(reader, numEntries, keyCreator);
     }
   }
 
-  private static void verifyHFileMetadata(HFileReader reader, int numEntries) {
+  private static void verifyHFileMetadataCompatibility(HFileReader reader, int numEntries) {
     assertEquals(numEntries, reader.getNumKeyValueEntries());
   }
 
@@ -229,10 +333,12 @@ public class TestHFileReader {
     assertFalse(reader.next());
     boolean result = reader.seekTo();
     assertEquals(numEntries > 0, result);
+
+    // Calling reader.next()
     for (int i = 0; i < numEntries; i++) {
       Option<KeyValue> keyValue = reader.getKeyValue();
       assertTrue(keyValue.isPresent());
-      if (valueCreator.isPresent()) {
+      if (keyCreator.isPresent()) {
         assertEquals(new UTF8StringKey(keyCreator.get().apply(i)), keyValue.get().getKey());
       }
       if (valueCreator.isPresent()) {
@@ -244,10 +350,88 @@ public class TestHFileReader {
         assertFalse(reader.next());
       }
     }
+
+    if (keyCreator.isPresent()) {
+      result = reader.seekTo();
+      assertEquals(numEntries > 0, result);
+      // Calling reader.seekTo(key) on each key
+      for (int i = 0; i < numEntries; i++) {
+        Key expecedKey = new UTF8StringKey(keyCreator.get().apply(i));
+        assertEquals(0, reader.seekTo(expecedKey));
+        Option<KeyValue> keyValue = reader.getKeyValue();
+        assertTrue(keyValue.isPresent());
+        assertEquals(expecedKey, keyValue.get().getKey());
+        if (valueCreator.isPresent()) {
+          assertEquals(valueCreator.get().apply(i), getValue(keyValue.get()));
+        }
+      }
+    }
+  }
+
+  private static void verifyHFileSeekToReads(HFileReader reader,
+                                             List<KeyLookUpInfo> keyLookUpInfoList) throws IOException {
+    assertTrue(reader.seekTo());
+
+    for (KeyLookUpInfo keyLookUpInfo : keyLookUpInfoList) {
+      assertEquals(keyLookUpInfo.getExpectedSeekToResult(),
+          reader.seekTo(new UTF8StringKey(keyLookUpInfo.getLookUpKey())),
+          String.format("Unexpected seekTo result for lookup key %s", keyLookUpInfo.getLookUpKey()));
+      switch (keyLookUpInfo.getExpectedSeekToResult()) {
+        case -1:
+          break;
+        case 0:
+        case 1:
+          assertTrue(reader.getKeyValue().isPresent());
+          assertEquals(new UTF8StringKey(keyLookUpInfo.getExpectedKey()),
+              reader.getKeyValue().get().getKey());
+          assertEquals(keyLookUpInfo.getExpectedValue(), getValue(reader.getKeyValue().get()));
+          break;
+        case 2:
+          assertFalse(reader.getKeyValue().isPresent());
+          assertFalse(reader.next());
+          break;
+        default:
+          throw new IllegalArgumentException(
+              "SeekTo result not allowed: " + keyLookUpInfo.expectedSeekToResult);
+      }
+    }
   }
 
   private static String getValue(KeyValue kv) {
     return new String(kv.getBytes(), kv.getValueOffset(), kv.getValueLength());
+  }
+
+  static class KeyLookUpInfo {
+    private final String lookUpKey;
+    private final int expectedSeekToResult;
+    private final String expectedKey;
+    private final String expectedValue;
+
+    public KeyLookUpInfo(String lookUpKey,
+                         int expectedSeekToResult,
+                         String expectedKey,
+                         String expectedValue) {
+      this.lookUpKey = lookUpKey;
+      this.expectedSeekToResult = expectedSeekToResult;
+      this.expectedKey = expectedKey;
+      this.expectedValue = expectedValue;
+    }
+
+    public String getLookUpKey() {
+      return lookUpKey;
+    }
+
+    public int getExpectedSeekToResult() {
+      return expectedSeekToResult;
+    }
+
+    public String getExpectedKey() {
+      return expectedKey;
+    }
+
+    public String getExpectedValue() {
+      return expectedValue;
+    }
   }
 
   static class SeekableByteArrayInputStream extends ByteBufferBackedInputStream implements Seekable,

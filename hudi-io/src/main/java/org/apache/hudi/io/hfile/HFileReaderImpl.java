@@ -142,7 +142,8 @@ public class HFileReaderImpl implements HFileReader {
           currentPos.setOffset(
               (int) currentDataBlockEntry.get().getOffset() + HFILEBLOCK_HEADER_SIZE);
         }
-      } else {
+      }
+      if (!currentDataBlockEntry.get().getNextBlockKey().isPresent()) {
         // This is the last data block.  Check against the last key.
         if (fileInfo.getLastKey().isPresent()) {
           int comparedLastKey = key.compareTo(fileInfo.getLastKey().get());
