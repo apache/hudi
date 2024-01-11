@@ -225,7 +225,6 @@ case class HoodieFileIndex(spark: SparkSession,
       .map(fileSlice => fileSlice.getBaseFile.get().getFileName)
       .toSet
 
-
     // If there are no data filters, return all the file slices.
     // If there are no file slices, return empty list.
     if (prunedPartitionsAndFileSlices.isEmpty || dataFilters.isEmpty) {
