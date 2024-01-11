@@ -119,7 +119,7 @@ public class HFileReaderImpl implements HFileReader {
   public int seekTo(Key key) throws IOException {
     Option<KeyValue> currentKeyValue = getKeyValue();
     if (!currentKeyValue.isPresent()) {
-      return 2;
+      return SEEK_TO_EOF;
     }
     int compareCurrent = key.compareTo(currentKeyValue.get().getKey());
     if (compareCurrent > 0) {
@@ -135,7 +135,7 @@ public class HFileReaderImpl implements HFileReader {
           Map.Entry<Key, BlockIndexEntry> floorEntry = dataBlockIndexEntryMap.floorEntry(key);
           if (floorEntry == null) {
             // Key smaller than the start key of the first block
-            return -1;
+            return SEEK_TO_BACKWARDS;
           }
           currentDataBlockEntry = Option.of(floorEntry.getValue());
           currentDataBlock = Option.empty();
@@ -151,7 +151,7 @@ public class HFileReaderImpl implements HFileReader {
             currentDataBlockEntry = Option.empty();
             currentDataBlock = Option.empty();
             currentPos.setEof();
-            return 2;
+            return SEEK_TO_EOF;
           }
         }
       }
@@ -164,10 +164,10 @@ public class HFileReaderImpl implements HFileReader {
           .seekTo(currentPos, key, (int) currentDataBlockEntry.get().getOffset());
     }
     if (compareCurrent == 0) {
-      return 0;
+      return SEEK_TO_FOUND;
     }
     // Backward seek not supported
-    return -1;
+    return SEEK_TO_BACKWARDS;
   }
 
   @Override

@@ -29,6 +29,12 @@ import java.nio.ByteBuffer;
  * HFile reader that supports seeks.
  */
 public interface HFileReader extends Closeable {
+  // Return code of seekTo(Key)
+  int SEEK_TO_BACKWARDS = -1;
+  int SEEK_TO_FOUND = 0;
+  int SEEK_TO_IN_RANGE = 1;
+  int SEEK_TO_EOF = 2;
+
   /**
    * Initializes metadata based on a HFile before other read operations.
    *

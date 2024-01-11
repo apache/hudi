@@ -21,6 +21,8 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.Option;
 
+import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_FOUND;
+import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_IN_RANGE;
 import static org.apache.hudi.io.hfile.KeyValue.KEY_OFFSET;
 
 /**
@@ -67,14 +69,14 @@ public class HFileDataBlock extends HFileBlock {
       int comp = kv.getKey().compareTo(key);
       if (comp == 0) {
         position.set(offset + blockStartOffsetInFile, kv);
-        return 0;
+        return SEEK_TO_FOUND;
       } else if (comp > 0) {
         if (lastKeyValue.isPresent()) {
           position.set(lastOffset + blockStartOffsetInFile, lastKeyValue.get());
         } else {
           position.setOffset(lastOffset + blockStartOffsetInFile);
         }
-        return 1;
+        return SEEK_TO_IN_RANGE;
       }
       long increment =
           (long) KEY_OFFSET + (long) kv.getKeyLength() + (long) kv.getValueLength()
@@ -88,7 +90,7 @@ public class HFileDataBlock extends HFileBlock {
     } else {
       position.setOffset(lastOffset + blockStartOffsetInFile);
     }
-    return 1;
+    return SEEK_TO_IN_RANGE;
   }
 
   /**

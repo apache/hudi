@@ -40,6 +40,8 @@ import java.util.function.Function;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.util.FileIOUtils.readAsByteArray;
+import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_BACKWARDS;
+import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_FOUND;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -67,13 +69,13 @@ public class TestHFileReader {
             20000,
             Arrays.asList(
                 // before first key
-                new KeyLookUpInfo("", -1, "", ""),
-                new KeyLookUpInfo("a", -1, "", ""),
-                new KeyLookUpInfo("hudi-key-0000000", -1, "", ""),
+                new KeyLookUpInfo("", SEEK_TO_BACKWARDS, "", ""),
+                new KeyLookUpInfo("a", SEEK_TO_BACKWARDS, "", ""),
+                new KeyLookUpInfo("hudi-key-0000000", SEEK_TO_BACKWARDS, "", ""),
                 // first key
-                new KeyLookUpInfo("hudi-key-000000000", 0, "hudi-key-000000000", "hudi-value-000000000"),
+                new KeyLookUpInfo("hudi-key-000000000", SEEK_TO_FOUND, "hudi-key-000000000", "hudi-value-000000000"),
                 // key in the block 0
-                new KeyLookUpInfo("hudi-key-000000100", 0, "hudi-key-000000100", "hudi-value-000000100"),
+                new KeyLookUpInfo("hudi-key-000000100", SEEK_TO_FOUND, "hudi-key-000000100", "hudi-value-000000100"),
                 // backward seek not supported
                 new KeyLookUpInfo("hudi-key-000000099", -1, "", ""),
                 // prefix lookup, the pointer should not move
