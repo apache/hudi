@@ -116,7 +116,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
           // NOTE: In order to ensure that testing and unexpected logic are normal, judgment logic is added.
           loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory)
         } else {
-          loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory).filter(r => prunedFileSlices.contains(r.getFileName))
+          loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory).filter((r: HoodieMetadataColumnStats) => prunedFileSlices.contains(r.getFileName))
         }
 
         withPersistedData(colStatsRecords, StorageLevel.MEMORY_ONLY) {
