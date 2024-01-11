@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -523,6 +524,18 @@ public class HoodieInputFormatUtils {
     return metadataList.stream()
         .map(HoodieCommitMetadata::getWritePartitionPaths)
         .flatMap(Collection::stream)
+        .collect(Collectors.toSet());
+  }
+
+  /**
+   * Returns all partition paths as a set with the given write stats.
+   *
+   * @param writeStats All write stats
+   * @return the partition path set
+   */
+  public static Set<String> getAffectedPartitionPaths(List<HoodieWriteStat> writeStats) {
+    return writeStats.stream()
+        .map(HoodieWriteStat::getPartitionPath)
         .collect(Collectors.toSet());
   }
 

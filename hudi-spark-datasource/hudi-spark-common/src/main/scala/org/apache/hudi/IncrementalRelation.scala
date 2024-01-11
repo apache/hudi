@@ -24,11 +24,11 @@ import org.apache.hudi.HoodieBaseRelation.isSchemaEvolutionEnabledOnRead
 import org.apache.hudi.HoodieSparkConfUtils.getHollowCommitHandling
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
-import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFileFormat, HoodieRecord, HoodieReplaceCommitMetadata}
+import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFileFormat, HoodieRecord}
+import org.apache.hudi.common.table.timeline.InstantOffsetRange.InstantOffset
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
 import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, handleHollowCommitIfNeeded}
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, InstantOffsetRange}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{HoodieTimer, InternalSchemaCache}
 import org.apache.hudi.config.HoodieWriteConfig
@@ -45,7 +45,7 @@ import org.apache.spark.sql.{AnalysisException, DataFrame, Row, SQLContext}
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConversions._
-import scala.collection.mutable
+import scala.jdk.CollectionConverters.iterableAsScalaIterableConverter
 
 /**
  * Relation, that implements the Hoodie incremental view.
@@ -91,16 +91,15 @@ class IncrementalRelation(val sqlContext: SQLContext,
     INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.defaultValue).toBoolean
 
   private val lastInstant = commitTimeline.lastInstant().get()
+  private val startOffset = InstantOffset.fromString(optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key))
+  private val endOffset = InstantOffset.fromString(optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(),
+    lastInstant.getCompletionTime))
 
   private val commitsTimelineToReturn = {
     if (hollowCommitHandling == USE_TRANSITION_TIME) {
-      commitTimeline.findInstantsInRangeByCompletionTime(
-        optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key),
-        optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getCompletionTime))
+      commitTimeline.findInstantsInRangeByCompletionTime(startOffset, endOffset)
     } else {
-      commitTimeline.findInstantsInRange(
-        optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key),
-        optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getTimestamp))
+      commitTimeline.findInstantsInRange(startOffset, endOffset)
     }
   }
   private val commitsToReturn = commitsTimelineToReturn.getInstantsAsStream.iterator().toList
@@ -148,41 +147,28 @@ class IncrementalRelation(val sqlContext: SQLContext,
       // if first commit in a table is an empty commit without schema, return empty RDD here
       sqlContext.sparkContext.emptyRDD[Row]
     } else {
-      val regularFileIdToFullPath = mutable.HashMap[String, String]()
-      var metaBootstrapFileIdToFullPath = mutable.HashMap[String, String]()
+      val affectedFilesFullPath = InstantOffsetRange.newBuilder()
+        .withCompletionTimeEnabled(hollowCommitHandling == USE_TRANSITION_TIME)
+        .build(startOffset, endOffset, commitsTimelineToReturn)
+        .getWriteStatsBetween
+        .asScala
+        .map(stat => new Path(metaClient.getBasePathV2, stat.getPath).toString)
 
-      // create Replaced file group
-      val replacedTimeline = commitsTimelineToReturn.getCompletedReplaceTimeline
-      val replacedFile = replacedTimeline.getInstants.flatMap { instant =>
-        val replaceMetadata = HoodieReplaceCommitMetadata.
-          fromBytes(metaClient.getActiveTimeline.getInstantDetails(instant).get, classOf[HoodieReplaceCommitMetadata])
-        replaceMetadata.getPartitionToReplaceFileIds.entrySet().flatMap { entry =>
-          entry.getValue.map { e =>
-            val fullPath = FSUtils.getPartitionPath(basePath, entry.getKey).toString
-            (e, fullPath)
-          }
-        }
-      }.toMap
+      val metaBootstrapFilesFullPath: Set[String] = commitsToReturn
+        .find(instant => instant.getTimestamp == HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS)
+        .map(instant => {
+          val metadata: HoodieCommitMetadata = HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(instant)
+            .get, classOf[HoodieCommitMetadata])
+          val allBootstrapPaths = metadata.getFileIdAndFullPaths(basePath).values().toSet
+          affectedFilesFullPath.filter(allBootstrapPaths.contains).toSet
+        })
+        .getOrElse(Set())
 
-      for (commit <- commitsToReturn) {
-        val metadata: HoodieCommitMetadata = HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commit)
-          .get, classOf[HoodieCommitMetadata])
-
-        if (HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS == commit.getTimestamp) {
-          metaBootstrapFileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).toMap.filterNot { case (k, v) =>
-            replacedFile.contains(k) && v.startsWith(replacedFile(k))
-          }
-        } else {
-          regularFileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).toMap.filterNot { case (k, v) =>
-            replacedFile.contains(k) && v.startsWith(replacedFile(k))
-          }
-        }
-      }
-
-      if (metaBootstrapFileIdToFullPath.nonEmpty) {
-        // filer out meta bootstrap files that have had more commits since metadata bootstrap
-        metaBootstrapFileIdToFullPath = metaBootstrapFileIdToFullPath
-          .filterNot(fileIdFullPath => regularFileIdToFullPath.contains(fileIdFullPath._1))
+      // Filter bootstrapped files from regular files
+      val regularFilesFullPath = if (metaBootstrapFilesFullPath.nonEmpty) {
+        affectedFilesFullPath.filter(!metaBootstrapFilesFullPath.contains(_))
+      } else {
+        affectedFilesFullPath
       }
 
       val pathGlobPattern = optParams.getOrElse(
@@ -191,10 +177,10 @@ class IncrementalRelation(val sqlContext: SQLContext,
       val (filteredRegularFullPaths, filteredMetaBootstrapFullPaths) = {
         if (!pathGlobPattern.equals(DataSourceReadOptions.INCR_PATH_GLOB.defaultValue)) {
           val globMatcher = new GlobPattern("*" + pathGlobPattern)
-          (regularFileIdToFullPath.filter(p => globMatcher.matches(p._2)).values,
-            metaBootstrapFileIdToFullPath.filter(p => globMatcher.matches(p._2)).values)
+          (regularFilesFullPath.filter(p => globMatcher.matches(p)),
+            metaBootstrapFilesFullPath.filter(p => globMatcher.matches(p)))
         } else {
-          (regularFileIdToFullPath.values, metaBootstrapFileIdToFullPath.values)
+          (regularFilesFullPath, metaBootstrapFilesFullPath)
         }
       }
       // pass internalSchema to hadoopConf, so it can be used in executors.
@@ -256,7 +242,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
           if (doFullTableScan) {
             fullTableScanDataFrame(startInstantTime, endInstantTime)
           } else {
-            if (metaBootstrapFileIdToFullPath.nonEmpty) {
+            if (metaBootstrapFilesFullPath.nonEmpty) {
               df = sqlContext.sparkSession.read
                 .format("hudi_v1")
                 .schema(usedSchema)
@@ -266,7 +252,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
                 .load()
             }
 
-            if (regularFileIdToFullPath.nonEmpty) {
+            if (affectedFilesFullPath.nonEmpty) {
               try {
                 df = df.union(sqlContext.read.options(sOpts)
                   .schema(usedSchema).format(formatClassName)
@@ -285,7 +271,6 @@ class IncrementalRelation(val sqlContext: SQLContext,
                     throw e
                   }
               }
-
             }
             df
           }

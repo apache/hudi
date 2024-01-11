@@ -34,6 +34,7 @@ import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
+import org.apache.spark.sql.execution.streaming.Source
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.{DataType, Metadata, StructType}
@@ -188,6 +189,14 @@ trait SparkAdapter extends Serializable {
                      schema: Schema,
                      globPaths: Array[Path],
                      parameters: java.util.Map[String, String]): BaseRelation
+
+  /**
+   * Create Hoodie stream source
+   */
+  def createStreamSource(sqlContext: SQLContext,
+                         metadataPath: String,
+                         schemaOption: Option[StructType],
+                         parameters: Map[String, String]): Source
 
   /**
    * Create instance of [[HoodieFileScanRDD]]

@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.streaming
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT
+import org.apache.hudi.DataSourceReadOptions.{INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT, START_OFFSET}
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils
@@ -47,11 +47,20 @@ class HoodieStreamSource(
     sqlContext: SQLContext,
     metadataPath: String,
     schemaOption: Option[StructType],
-    parameters: Map[String, String],
-    offsetRangeLimit: HoodieOffsetRangeLimit)
+    parameters: Map[String, String])
   extends Source with Logging with Serializable with SparkAdapterSupport {
 
   @transient private val hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
+
+  private val offsetRangeLimit: HoodieOffsetRangeLimit =
+    parameters.getOrElse(START_OFFSET.key(), START_OFFSET.defaultValue()) match {
+      case offset if offset.equalsIgnoreCase("earliest") =>
+        HoodieEarliestOffsetRangeLimit
+      case offset if offset.equalsIgnoreCase("latest") =>
+        HoodieLatestOffsetRangeLimit
+      case instantTime =>
+        HoodieSpecifiedOffsetRangeLimit(instantTime)
+    }
 
   private lazy val tablePath: Path = {
     val path = new Path(parameters.getOrElse("path", "Missing 'path' option"))
@@ -150,7 +159,7 @@ class HoodieStreamSource(
       if (isCDCQuery) {
         val cdcOptions = Map(
           DataSourceReadOptions.BEGIN_INSTANTTIME.key()-> startCommitTime(startOffset),
-          DataSourceReadOptions.END_INSTANTTIME.key() -> endOffset.commitTime
+          DataSourceReadOptions.END_INSTANTTIME.key() -> endOffset.instantOffset
         )
         val rdd = CDCRelation.getCDCRelation(sqlContext, metaClient, cdcOptions)
           .buildScan0(HoodieCDCUtils.CDC_COLUMNS, Array.empty)
@@ -161,7 +170,7 @@ class HoodieStreamSource(
         val incParams = parameters ++ Map(
           DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
           DataSourceReadOptions.BEGIN_INSTANTTIME.key -> startCommitTime(startOffset),
-          DataSourceReadOptions.END_INSTANTTIME.key -> endOffset.commitTime,
+          DataSourceReadOptions.END_INSTANTTIME.key -> endOffset.instantOffset,
           INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key -> hollowCommitHandling.name
         )
 
@@ -185,9 +194,9 @@ class HoodieStreamSource(
 
   private def startCommitTime(startOffset: HoodieSourceOffset): String = {
     startOffset match {
-      case INIT_OFFSET => startOffset.commitTime
-      case HoodieSourceOffset(commitTime) =>
-        commitTime
+      case INIT_OFFSET => startOffset.instantOffset
+      case HoodieSourceOffset(instantOffset) =>
+        instantOffset
       case _=> throw new IllegalStateException("UnKnow offset type.")
     }
   }

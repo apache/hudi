@@ -224,6 +224,13 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
+  public HoodieTimeline findInstantsInClosedRangeByCompletionTime(String startTs, String endTs) {
+    return new HoodieDefaultTimeline(
+        getInstantsAsStream().filter(s -> s.getCompletionTime() != null && HoodieTimeline.isInClosedRange(s.getCompletionTime(), startTs, endTs)),
+        details);
+  }
+
+  @Override
   public HoodieDefaultTimeline findInstantsInRangeByCompletionTime(String startTs, String endTs) {
     return new HoodieDefaultTimeline(
         getInstantsAsStream().filter(s -> s.getCompletionTime() != null && HoodieTimeline.isInRange(s.getCompletionTime(), startTs, endTs)),
@@ -250,6 +257,31 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   public HoodieTimeline findInstantsAfter(String instantTime) {
     return new HoodieDefaultTimeline(getInstantsAsStream()
         .filter(s -> compareTimestamps(s.getTimestamp(), GREATER_THAN, instantTime)), details);
+  }
+
+  @Override
+  public HoodieTimeline findInstantsAfterOrEqualsCompletionTime(String completionTime, int numCommits) {
+    return new HoodieDefaultTimeline(getInstantsOrderedByCompletionTime()
+        .filter(s -> compareTimestamps(s.getCompletionTime(), GREATER_THAN_OR_EQUALS, completionTime))
+        .limit(numCommits), details);
+  }
+
+  @Override
+  public HoodieTimeline findInstantsInRange(InstantOffsetRange.InstantOffset startOffset,
+                                            InstantOffsetRange.InstantOffset endOffset) {
+    if (startOffset.instantTimeOnly()) {
+      return findInstantsInRange(startOffset.instantTime, endOffset.instantTime);
+    }
+    return findInstantsInClosedRange(startOffset.instantTime, endOffset.instantTime);
+  }
+
+  @Override
+  public HoodieTimeline findInstantsInRangeByCompletionTime(InstantOffsetRange.InstantOffset startOffset,
+                                                            InstantOffsetRange.InstantOffset endOffset) {
+    if (startOffset.instantTimeOnly()) {
+      return findInstantsInRangeByCompletionTime(startOffset.instantTime, endOffset.instantTime);
+    }
+    return findInstantsInClosedRangeByCompletionTime(startOffset.instantTime, endOffset.instantTime);
   }
 
   @Override

@@ -29,7 +29,9 @@ import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSch
 import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
 import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.execution.streaming.Source
 import org.apache.spark.sql.hudi.SparkAdapter
+import org.apache.spark.sql.hudi.streaming.HoodieSpark3StreamSource
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
@@ -88,6 +90,13 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
                               parameters: java.util.Map[String, String]): BaseRelation = {
     val dataSchema = Option(schema).map(AvroConversionUtils.convertAvroSchemaToStructType).orNull
     DefaultSource.createRelation(sqlContext, metaClient, dataSchema, globPaths, parameters.asScala.toMap)
+  }
+
+  override def createStreamSource(sqlContext: SQLContext,
+                                  metadataPath: String,
+                                  schemaOption: Option[StructType],
+                                  parameters: Map[String, String]): Source = {
+    new HoodieSpark3StreamSource(sqlContext, metadataPath, schemaOption, parameters)
   }
 
   override def convertStorageLevelToString(level: StorageLevel): String
