@@ -72,6 +72,10 @@ import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.io.hfile.TestHFileReader.BOOTSTRAP_INDEX_HFILE_SUFFIX;
+import static org.apache.hudi.io.hfile.TestHFileReader.COMPLEX_SCHEMA_HFILE_SUFFIX;
+import static org.apache.hudi.io.hfile.TestHFileReader.SIMPLE_SCHEMA_HFILE_SUFFIX;
+import static org.apache.hudi.io.hfile.TestHFileReader.readHFileFromResources;
 import static org.apache.hudi.io.storage.HoodieAvroHFileReader.SCHEMA_KEY;
 import static org.apache.hudi.io.storage.HoodieHFileConfig.HFILE_COMPARATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -83,9 +87,6 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
   private static final String DUMMY_BASE_PATH = "dummy_base_path";
   // Number of records in HFile fixtures for compatibility tests
   private static final int NUM_RECORDS_FIXTURE = 50;
-  private static final String SIMPLE_SCHEMA_HFILE_SUFFIX = "_simple.hfile";
-  private static final String COMPLEX_SCHEMA_HFILE_SUFFIX = "_complex.hfile";
-  private static final String BOOTSTRAP_INDEX_HFILE_SUFFIX = "_bootstrap_index_partitions.hfile";
 
   @Override
   protected Path getFilePath() {
@@ -402,7 +403,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
 
   @ParameterizedTest
   @ValueSource(strings = {
-      "/hudi_0_9_hbase_1_2_3", "/hudi_0_10_hbase_1_2_3", "/hudi_0_11_hbase_2_4_9"})
+      "/hfile/hudi_0_9_hbase_1_2_3", "/hfile/hudi_0_10_hbase_1_2_3", "/hfile/hudi_0_11_hbase_2_4_9"})
   public void testHoodieHFileCompatibility(String hfilePrefix) throws IOException {
     // This fixture is generated from TestHoodieReaderWriterBase#testWriteReadPrimitiveRecord()
     // using different Hudi releases
@@ -451,13 +452,6 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       }
     }
     return rowKeys;
-  }
-
-  private byte[] readHFileFromResources(String filename) throws IOException {
-    long size = TestHoodieHFileReaderWriter.class
-        .getResource(filename).openConnection().getContentLength();
-    return FileIOUtils.readAsByteArray(
-        TestHoodieHFileReaderWriter.class.getResourceAsStream(filename), (int) size);
   }
 
   private void verifyHFileReader(
