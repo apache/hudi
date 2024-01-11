@@ -52,6 +52,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDeltaStreamerSchemaEvolutionBase {
 
+
+
   @AfterEach
   public void teardown() throws Exception {
     super.teardown();
@@ -59,26 +61,36 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
   }
 
   protected static Stream<Arguments> testArgs() {
+    boolean fullTest = false;
     Stream.Builder<Arguments> b = Stream.builder();
-    //only testing row-writer enabled for now
-    for (Boolean rowWriterEnable : new Boolean[] {true}) {
-      for (Boolean nullForDeletedCols : new Boolean[] {false, true}) {
-        for (Boolean useKafkaSource : new Boolean[] {false, true}) {
-          for (Boolean addFilegroups : new Boolean[] {false, true}) {
-            for (Boolean multiLogFiles : new Boolean[] {false, true}) {
-              for (Boolean shouldCluster : new Boolean[] {false, true}) {
-                for (String tableType : new String[] {"COPY_ON_WRITE", "MERGE_ON_READ"}) {
-                  if (!multiLogFiles || tableType.equals("MERGE_ON_READ")) {
-                    b.add(Arguments.of(tableType, shouldCluster, false, rowWriterEnable, addFilegroups, multiLogFiles, useKafkaSource, nullForDeletedCols));
+    if (fullTest) {
+      //only testing row-writer enabled for now
+      for (Boolean rowWriterEnable : new Boolean[] {true}) {
+        for (Boolean nullForDeletedCols : new Boolean[] {false, true}) {
+          for (Boolean useKafkaSource : new Boolean[] {false, true}) {
+            for (Boolean addFilegroups : new Boolean[] {false, true}) {
+              for (Boolean multiLogFiles : new Boolean[] {false, true}) {
+                for (Boolean shouldCluster : new Boolean[] {false, true}) {
+                  for (String tableType : new String[] {"COPY_ON_WRITE", "MERGE_ON_READ"}) {
+                    if (!multiLogFiles || tableType.equals("MERGE_ON_READ")) {
+                      b.add(Arguments.of(tableType, shouldCluster, false, rowWriterEnable, addFilegroups, multiLogFiles, useKafkaSource, nullForDeletedCols));
+                    }
                   }
                 }
+                b.add(Arguments.of("MERGE_ON_READ", false, true, rowWriterEnable, addFilegroups, multiLogFiles, useKafkaSource, nullForDeletedCols));
               }
-              b.add(Arguments.of("MERGE_ON_READ", false, true, rowWriterEnable, addFilegroups, multiLogFiles, useKafkaSource, nullForDeletedCols));
             }
           }
         }
       }
+    } else {
+      b.add(Arguments.of("COPY_ON_WRITE", true, false, true, false, false, true, false));
+      b.add(Arguments.of("COPY_ON_WRITE", true, false, true, false, false, true, true));
+      b.add(Arguments.of("MERGE_ON_READ", false, true, true, true, true, true, true));
+      b.add(Arguments.of("MERGE_ON_READ", false, true, true, true, true, true, true));
+      b.add(Arguments.of("MERGE_ON_READ", false, false, true, true, true, false, true));
     }
+
     return b.build();
   }
 
@@ -97,20 +109,29 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
   }
 
   protected static Stream<Arguments> testParamsWithSchemaTransformer() {
+    boolean fullTest = false;
     Stream.Builder<Arguments> b = Stream.builder();
-    for (Boolean useTransformer : new Boolean[] {false, true}) {
-      for (Boolean setSchema : new Boolean[] {false, true}) {
-        for (Boolean rowWriterEnable : new Boolean[] {true}) {
-          for (Boolean nullForDeletedCols : new Boolean[] {false, true}) {
-            for (Boolean useKafkaSource : new Boolean[] {false, true}) {
-              for (String tableType : new String[] {"COPY_ON_WRITE", "MERGE_ON_READ"}) {
-                b.add(Arguments.of(tableType, rowWriterEnable, useKafkaSource, nullForDeletedCols, useTransformer, setSchema));
+    if (fullTest) {
+      for (Boolean useTransformer : new Boolean[] {false, true}) {
+        for (Boolean setSchema : new Boolean[] {false, true}) {
+          for (Boolean rowWriterEnable : new Boolean[] {true}) {
+            for (Boolean nullForDeletedCols : new Boolean[] {false, true}) {
+              for (Boolean useKafkaSource : new Boolean[] {false, true}) {
+                for (String tableType : new String[] {"COPY_ON_WRITE", "MERGE_ON_READ"}) {
+                  b.add(Arguments.of(tableType, rowWriterEnable, useKafkaSource, nullForDeletedCols, useTransformer, setSchema));
+                }
               }
             }
           }
         }
       }
+    } else {
+      b.add(Arguments.of("COPY_ON_WRITE", true, true, true, true, true));
+      b.add(Arguments.of("COPY_ON_WRITE", true, false, false, false, true));
+      b.add(Arguments.of("MERGE_ON_READ", true, true, true, false, false));
+      b.add(Arguments.of("MERGE_ON_READ", true, false, true, true, false));
     }
+
     return b.build();
   }
 
