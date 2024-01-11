@@ -39,13 +39,14 @@ import static org.apache.hudi.io.hfile.HFileUtils.readMajorVersion;
 public class HFileReaderImpl implements HFileReader {
   private final FSDataInputStream stream;
   private final long fileSize;
+
+  private final HFilePosition currentPos;
   private boolean isMetadataInitialized = false;
   private HFileTrailer trailer;
   private HFileContext context;
   private TreeMap<Key, BlockIndexEntry> dataBlockIndexEntryMap;
   private TreeMap<Key, BlockIndexEntry> metaBlockIndexEntryMap;
   private HFileInfo fileInfo;
-  private HFilePosition currentPos;
   private Option<BlockIndexEntry> currentDataBlockEntry;
   private Option<HFileDataBlock> currentDataBlock;
 
@@ -57,11 +58,6 @@ public class HFileReaderImpl implements HFileReader {
     this.currentDataBlock = Option.empty();
   }
 
-  /**
-   * Initializes the metadata by reading the "Load-on-open" section.
-   *
-   * @throws IOException upon error.
-   */
   @Override
   public synchronized void initializeMetadata() throws IOException {
     if (this.isMetadataInitialized) {
@@ -119,14 +115,7 @@ public class HFileReaderImpl implements HFileReader {
     }
   }
 
-  /**
-   * Seeks to the key to look up.
-   *
-   * @param key Key to look up.
-   * @return The {@link KeyValue} instance in the block that contains the exact same key as the
-   * lookup key; or empty {@link Option} if the lookup key does not exist.
-   * @throws IOException upon error.
-   */
+  @Override
   public int seekTo(Key key) throws IOException {
     Option<KeyValue> currentKeyValue = getKeyValue();
     if (!currentKeyValue.isPresent()) {
@@ -238,7 +227,7 @@ public class HFileReaderImpl implements HFileReader {
 
   @Override
   public boolean isSeeked() {
-    return currentPos.isValid();
+    return currentPos.isSeeked();
   }
   
   @Override
@@ -274,18 +263,6 @@ public class HFileReaderImpl implements HFileReader {
     HFileTrailer trailer = new HFileTrailer(majorVersion, minorVersion);
     trailer.deserialize(new DataInputStream(new ByteArrayInputStream(byteBuff)));
     return trailer;
-  }
-
-  /**
-   * Seeks to the lookup key inside a {@link HFileDataBlock}.
-   *
-   * @param dataBlock The data block to seek.
-   * @param key       The key to lookup.
-   * @return The {@link KeyValue} instance in the block that contains the exact same key as the
-   * lookup key; or empty {@link Option} if the lookup key does not exist.
-   */
-  private Option<KeyValue> seekToKeyInBlock(HFileDataBlock dataBlock, Key key) {
-    return dataBlock.seekTo(key);
   }
 
   private Option<BlockIndexEntry> getNextBlockIndexEntry(BlockIndexEntry entry) {

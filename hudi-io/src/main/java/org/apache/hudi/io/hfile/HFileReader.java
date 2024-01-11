@@ -25,50 +25,77 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+/**
+ * HFile reader that supports seeks.
+ */
 public interface HFileReader extends Closeable {
+  /**
+   * Initializes metadata based on a HFile before other read operations.
+   *
+   * @throws IOException upon read errors.
+   */
   void initializeMetadata() throws IOException;
 
+  /**
+   * Gets info entry from file info block of a HFile.
+   *
+   * @param key meta key.
+   * @return the content in bytes if present.
+   * @throws IOException upon read errors.
+   */
   Option<byte[]> getMetaInfo(UTF8StringKey key) throws IOException;
 
+  /**
+   * Gets the content of a meta block from HFile.
+   *
+   * @param metaBlockName meta block name.
+   * @return the content in bytes if present.
+   * @throws IOException upon read errors.
+   */
   Option<ByteBuffer> getMetaBlock(String metaBlockName) throws IOException;
 
+  /**
+   * @return total number of key value entries in the HFile.
+   */
   long getNumKeyValueEntries();
 
   /**
-   * SeekTo or just before the passed {@link Key}.  Examine the return
-   * code to figure whether we found the key or not.
-   * Consider the cell stream of all the cells in the file,
-   * <code>c[0] .. c[n]</code>, where there are n cells in the file.
+   * seekTo or just before the passed {@link Key}. Examine the return code to figure whether we
+   * found the key or not. Consider the key-value pairs in the file,
+   * <code>kv[0] .. kv[n-1]</code>, where there are n KV pairs in the file.
    * <p>
-   * The position only moves forward so the caller has to make sure the
-   * keys are sorted before making multiple calls of this method.
+   * The position only moves forward so the caller has to make sure the keys are sorted before
+   * making multiple calls of this method.
    * <p>
+   *
    * @param key {@link Key} to seek to.
-   * @return -1, if cell &lt; c[0], no position;
-   * 0, such that c[i] = cell and scanner is left in position i; and
-   * 1, such that c[i] &lt; cell, and scanner is left in position i.
-   * The scanner will position itself between c[i] and c[i+1] where
-   * c[i] &lt; cell &lt;= c[i+1].
-   * If there is no cell c[i+1] greater than or equal to the input cell, then the
-   * scanner will position itself at the end of the file and next() will return
-   * false when it is called.
-   * @throws IOException
+   * @return -1, if cell &lt; kv[0], no position;
+   * 0, such that kv[i].key = key and the reader is left in position i; and
+   * 1, such that kv[i].key &lt; key if there is no exact match, and the reader is left in
+   * position i.
+   * The reader will position itself between kv[i] and kv[i+1] where
+   * kv[i].key &lt; key &lt;= kv[i+1].key;
+   * 2, if there is no KV greater than or equal to the input key, and the reader positions
+   * itself at the end of the file and next() will return {@code false} when it is called.
+   * @throws IOException upon read errors.
    */
   int seekTo(Key key) throws IOException;
 
   /**
-   * Positions this scanner at the start of the file.
-   * @return False if empty file; i.e. a call to next would return false and
+   * Positions this reader at the start of the file.
+   *
+   * @return {@code false} if empty file; i.e. a call to next would return false and
    * the current key and value are undefined.
-   * @throws IOException
+   * @throws IOException upon read errors.
    */
   boolean seekTo() throws IOException;
 
   /**
    * Scans to the next entry in the file.
    *
-   * @return Returns false if you are at the end otherwise true if more in file.
-   * @throws IOException
+   * @return {@code false} if the current position is at the end;
+   * otherwise {@code true} if more in file.
+   * @throws IOException upon read errors.
    */
   boolean next() throws IOException;
 
@@ -78,9 +105,9 @@ public interface HFileReader extends Closeable {
   Option<KeyValue> getKeyValue() throws IOException;
 
   /**
-   * @return True is scanner has had one of the seek calls invoked; i.e.
+   * @return {@code true} if the reader has had one of the seek calls invoked; i.e.
    * {@link #seekTo()} or {@link #seekTo(Key)}.
-   * Otherwise returns false.
+   * Otherwise, {@code false}.
    */
   boolean isSeeked();
 }

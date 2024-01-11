@@ -21,6 +21,9 @@ package org.apache.hudi.io.hfile;
 
 import java.nio.ByteBuffer;
 
+/**
+ * Represents a {@link HFileBlockType#META} block.
+ */
 public class HFileMetaBlock extends HFileBlock {
   protected HFileMetaBlock(HFileContext context,
                            byte[] byteBuff,

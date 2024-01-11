@@ -24,6 +24,9 @@ import org.apache.hudi.io.util.IOUtils;
 
 import java.util.Map;
 
+/**
+ * Represents the HFile info read from {@link HFileBlockType#FILE_INFO} block.
+ */
 public class HFileInfo {
   private static final String RESERVED_PREFIX = "hfile.";
   private static final UTF8StringKey LAST_KEY =

@@ -50,42 +50,42 @@ public class KeyValue {
   }
 
   /**
-   * @return Row offset
+   * @return key content offset.
    */
   public int getKeyContentOffset() {
     return key.getContentOffset();
   }
 
   /**
-   * @return Length of key portion.
+   * @return length of key portion.
    */
   public int getKeyLength() {
     return key.getLength();
   }
 
   /**
-   * @return Key offset in backing buffer..
+   * @return key offset in backing buffer.
    */
   public int getKeyOffset() {
     return key.getOffset();
   }
 
   /**
-   * @return Row length
+   * @return key content length.
    */
   public int getKeyContentLength() {
     return key.getContentLength();
   }
 
   /**
-   * @return the value offset
+   * @return the value offset.
    */
   public int getValueOffset() {
     return getKeyOffset() + getKeyLength();
   }
 
   /**
-   * @return Value length
+   * @return value length.
    */
   public int getValueLength() {
     return readInt(this.bytes, this.offset + SIZEOF_INT32);

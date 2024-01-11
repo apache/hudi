@@ -31,11 +31,7 @@ import java.util.Map;
  * Represents a {@link HFileBlockType#FILE_INFO} block in the "Load-on-open" section.
  */
 public class HFileFileInfoBlock extends HFileBlock {
-  /**
-   * Magic we put ahead of a serialized protobuf message.
-   * For example, all znode content is protobuf messages with the below magic
-   * for preamble.
-   */
+  // Magic we put ahead of a serialized protobuf message
   public static final byte[] PB_MAGIC = new byte[] {'P', 'B', 'U', 'F'};
 
   public HFileFileInfoBlock(HFileContext context,

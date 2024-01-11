@@ -45,8 +45,8 @@ public class HFileRootIndexBlock extends HFileBlock {
    * Reads the index block and returns the block index entry to an in-memory {@link TreeMap}
    * for searches.
    *
-   * @param numEntries The number of entries in the block.
-   * @return A {@link TreeMap} of block index entries.
+   * @param numEntries the number of entries in the block.
+   * @return a {@link TreeMap} of block index entries.
    */
   public TreeMap<Key, BlockIndexEntry> readBlockIndex(int numEntries, boolean contentKeyOnly) {
     TreeMap<Key, BlockIndexEntry> blockIndexEntryMap = new TreeMap<>();

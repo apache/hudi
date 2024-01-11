@@ -29,28 +29,28 @@ import java.io.IOException;
  */
 public class HFileBlockReader {
   private final HFileContext context;
+  private final long streamStartOffset;
   private final FSDataInputStream stream;
   private final byte[] byteBuff;
   private int offset;
-  private boolean read = false;
+  private boolean isReadFully = false;
 
   /**
    * Instantiates the {@link HFileBlockReader}.
    *
    * @param context     HFile context.
-   * @param stream      Input data.
-   * @param startOffset Start offset to read from.
-   * @param endOffset   End offset to stop at.
-   * @throws IOException
+   * @param stream      input data.
+   * @param startOffset start offset to read from.
+   * @param endOffset   end offset to stop at.
    */
   public HFileBlockReader(HFileContext context,
                           FSDataInputStream stream,
                           long startOffset,
-                          long endOffset) throws IOException {
+                          long endOffset) {
     this.context = context;
     this.stream = stream;
+    this.streamStartOffset = startOffset;
     this.offset = 0;
-    stream.seek(startOffset);
     long length = endOffset - startOffset;
     if (length >= 0 && length <= Integer.MAX_VALUE) {
       this.byteBuff = new byte[(int) length];
@@ -64,18 +64,20 @@ public class HFileBlockReader {
   /**
    * Reads the next block based on the expected block type.
    *
-   * @param expectedBlockType Expected block type.
+   * @param expectedBlockType expected block type.
    * @return {@link HFileBlock} instance matching the expected block type.
-   * @throws IOException if the type of next block does not match the expeced type.
+   * @throws IOException if the type of next block does not match the expected type.
    */
   public HFileBlock nextBlock(HFileBlockType expectedBlockType) throws IOException {
     if (offset >= byteBuff.length) {
       throw new EOFException("No more data to read");
     }
 
-    if (!read) {
+    if (!isReadFully) {
+      // Full range of bytes are read fully into a byte array
+      stream.seek(streamStartOffset);
       stream.readFully(byteBuff);
-      read = true;
+      isReadFully = true;
     }
 
     HFileBlock block = HFileBlock.parse(context, byteBuff, offset);

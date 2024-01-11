@@ -29,10 +29,12 @@ import static org.apache.hudi.io.hfile.DataSize.MAGIC_LENGTH;
 
 /**
  * Represents the HFile block type.
+ * These types are copied from HBase HFile definition to maintain compatibility.
+ * Do not delete or reorder the enums as the ordinal is used as the block type ID.
  */
 public enum HFileBlockType {
   /**
-   * Data block, both versions
+   * Data block
    */
   DATA("DATABLK*", BlockCategory.DATA),
 
@@ -56,7 +58,7 @@ public enum HFileBlockType {
    */
   BLOOM_CHUNK("BLMFBLK2", BlockCategory.BLOOM),
 
-  // Non-scanned block section
+  // Non-scanned block section: these blocks may be skipped for sequential reads.
 
   /**
    * Meta blocks
@@ -68,7 +70,8 @@ public enum HFileBlockType {
    */
   INTERMEDIATE_INDEX("IDXINTE2", BlockCategory.INDEX),
 
-  // Load-on-open section.
+  // Load-on-open section: these blocks must be read upon HFile opening to understand
+  // the file structure.
 
   /**
    * Root index block, also used for the single-level meta index, version 2
@@ -120,9 +123,9 @@ public enum HFileBlockType {
   /**
    * Parses the block type from the block magic.
    *
-   * @param buf    Input data.
-   * @param offset Offset to start reading.
-   * @return The block type.
+   * @param buf    input data.
+   * @param offset offset to start reading.
+   * @return the block type.
    * @throws IOException if the block magic is invalid.
    */
   public static HFileBlockType parse(byte[] buf, int offset)
@@ -139,11 +142,11 @@ public enum HFileBlockType {
   }
 
   /**
-   * Use this instead of {@link #ordinal()}. They work exactly the same, except
+   * Uses this instead of {@link #ordinal()}. They work exactly the same, except
    * DATA and ENCODED_DATA get the same id using this method (overridden for
    * {@link #ENCODED_DATA}).
    *
-   * @return block type id from 0 to the number of block types - 1
+   * @return block type id from 0 to the number of block types - 1.
    */
   public int getId() {
     // Default implementation, can be overridden for individual enum members.
@@ -153,6 +156,9 @@ public enum HFileBlockType {
   /**
    * Reads a magic record of the length {@link DataSize#MAGIC_LENGTH} from the given
    * stream and expects it to match this block type.
+   *
+   * @param in input data.
+   * @throws IOException when the magic is invalid.
    */
   public void readAndCheckMagic(DataInputStream in) throws IOException {
     byte[] buf = new byte[MAGIC_LENGTH];

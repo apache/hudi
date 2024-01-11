@@ -39,79 +39,44 @@ public class HFileTrailer {
   public static final int TRAILER_SIZE = 1024 * 4;
   private static final int NOT_PB_SIZE = MAGIC_LENGTH + SIZEOF_INT32;
 
-
-  /**
-   * Offset to the fileinfo data, a small block of vitals. Necessary in v1 but
-   * only potentially useful for pretty-printing in v2.
-   */
+  // Offset to the fileinfo data, a small block of vitals
   private long fileInfoOffset;
 
-  /**
-   * In version 1, the offset to the data block index. Starting from version 2,
-   * the meaning of this field is the offset to the section of the file that
-   * should be loaded at the time the file is being opened: i.e. on open we load
-   * the root index, file info, etc. See http://hbase.apache.org/book.html#_hfile_format_2
-   * in the reference guide.
-   */
+  // The offset to the section of the file that should be loaded at the time the file is
+  // being opened: i.e. on open we load the root index, file info, etc.
   private long loadOnOpenDataOffset;
 
-  /**
-   * The number of entries in the root data index.
-   */
+  // The number of entries in the root data index
   private int dataIndexCount;
 
-  /**
-   * Total uncompressed size of all blocks of the data index
-   */
+  // Total uncompressed size of all blocks of the data index
   private long uncompressedDataIndexSize;
 
-  /**
-   * The number of entries in the meta index
-   */
+  // The number of entries in the meta index
   private int metaIndexCount;
 
-  /**
-   * The total uncompressed size of keys/values stored in the file.
-   */
+  // The total uncompressed size of keys/values stored in the file
   private long totalUncompressedBytes;
 
-  /**
-   * The number of key/value pairs in the file. This field was int in version 1,
-   * but is now long.
-   */
+  // The number of key/value pairs in the file
   private long keyValueEntryCount;
 
-  /**
-   * The compression codec used for all blocks.
-   */
+  // The compression codec used for all blocks.
   private CompressionCodec compressionCodec = CompressionCodec.NONE;
 
-  /**
-   * The number of levels in the potentially multi-level data index. Used from
-   * version 2 onwards.
-   */
+  // The number of levels in the potentially multi-level data index.
   private int numDataIndexLevels;
 
-  /**
-   * The offset of the first data block.
-   */
+  // The offset of the first data block.
   private long firstDataBlockOffset;
 
-  /**
-   * It is guaranteed that no key/value data blocks start after this offset in
-   * the file.
-   */
+  // It is guaranteed that no key/value data blocks start after this offset in the file
   private long lastDataBlockOffset;
 
-  /**
-   * Raw key comparator class name in version 3
-   */
-  // We could write the actual class name from 2.0 onwards and handle BC
-  private String comparatorClassName = "CellComparator.getInstance().getClass().getName()";
+  // The comparator class name. We don't use this but for reference we still it
+  private String comparatorClassName = "";
 
-  /**
-   * The encryption key
-   */
+  // The encryption key
   private byte[] encryptionKey;
 
   private final int majorVersion;

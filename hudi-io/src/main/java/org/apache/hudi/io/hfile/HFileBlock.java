@@ -44,9 +44,7 @@ public abstract class HFileBlock {
   public static final int HFILEBLOCK_HEADER_SIZE =
       HFILEBLOCK_HEADER_SIZE_NO_CHECKSUM + SIZEOF_BYTE + 2 * SIZEOF_INT32;
 
-  /**
-   * Each checksum value is an integer that can be stored in 4 bytes.
-   */
+  // Each checksum value is an integer that can be stored in 4 bytes.
   static final int CHECKSUM_SIZE = SIZEOF_INT32;
 
   static class Header {
@@ -179,6 +177,8 @@ public abstract class HFileBlock {
 
   /**
    * Decodes and decompresses the block content if the block content is compressed.
+   * <p>
+   * This must be called for an encoded and compressed block before any reads.
    *
    * @throws IOException upon decoding and decompression error.
    */
@@ -206,7 +206,7 @@ public abstract class HFileBlock {
   /**
    * Allocates new byte buffer for the uncompressed bytes.
    *
-   * @return A new byte array based on the size of uncompressed data, holding the same header
+   * @return a new byte array based on the size of uncompressed data, holding the same header
    * bytes.
    */
   protected byte[] allocateBufferForUnpacking() {

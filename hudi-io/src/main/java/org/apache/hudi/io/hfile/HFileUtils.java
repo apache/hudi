@@ -49,9 +49,9 @@ public class HFileUtils {
   /**
    * Reads the HFile major version from the input.
    *
-   * @param bytes  Input data.
-   * @param offset Offset to start reading.
-   * @return Major version of the file.
+   * @param bytes  input data.
+   * @param offset offset to start reading.
+   * @return major version of the file.
    */
   public static int readMajorVersion(byte[] bytes, int offset) {
     int ch1 = bytes[offset] & 0xFF;
@@ -78,7 +78,7 @@ public class HFileUtils {
    * even the ones that are not compressed! (They use the NONE algorithm)
    * This is because HFile stores the ID to indicate which compression codec is used.
    *
-   * @return The mapping of ID to compression codec.
+   * @return the mapping of ID to compression codec.
    */
   private static Map<Integer, CompressionCodec> createCompressionCodecMap() {
     Map<Integer, CompressionCodec> result = new HashMap<>();
