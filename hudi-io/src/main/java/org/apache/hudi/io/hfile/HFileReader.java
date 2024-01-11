@@ -75,7 +75,7 @@ public interface HFileReader extends Closeable {
    * <p>
    *
    * @param key {@link Key} to seek to.
-   * @return -1, if cell &lt; kv[0], no position;
+   * @return -1, if key &lt; kv[0], no position;
    * 0, such that kv[i].key = key and the reader is left in position i; and
    * 1, such that kv[i].key &lt; key if there is no exact match, and the reader is left in
    * position i.

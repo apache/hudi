@@ -32,7 +32,7 @@ import static org.apache.hudi.io.util.IOUtils.readLong;
 import static org.apache.hudi.io.util.IOUtils.readVarLong;
 
 /**
- * Represents a {@link HFileBlockType#ROOT_INDEX} block in the "Load-on-open" section.
+ * Represents a {@link HFileBlockType#ROOT_INDEX} block.
  */
 public class HFileRootIndexBlock extends HFileBlock {
   public HFileRootIndexBlock(HFileContext context,

@@ -460,13 +460,8 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
   @Disabled("This is used for generating testing HFile only")
   @ParameterizedTest
   @CsvSource({
-      //"512,LZO,20000", "16,LZO,20000",
       "512,GZ,20000", "16,GZ,20000",
-      "64,NONE,5000", "16,NONE,5000",
-      //"512,SNAPPY,20000", "16,SNAPPY,20000",
-      //"512,LZ4,20000", "16,LZ4,20000",
-      //"512,BZIP2,20000", "16,BZIP2,20000",
-      //"512,ZSTD,20000", "16,ZSTD,20000"
+      "64,NONE,5000", "16,NONE,5000"
   })
   void generateHFileForTesting(int blockSizeKB,
                                String compressionCodec,

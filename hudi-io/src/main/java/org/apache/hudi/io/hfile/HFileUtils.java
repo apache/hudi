@@ -27,7 +27,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Util methods for reading and writing HFile
+ * Util methods for reading and writing HFile.
  */
 public class HFileUtils {
   private static final Map<Integer, CompressionCodec> HFILE_COMPRESSION_CODEC_MAP = createCompressionCodecMap();

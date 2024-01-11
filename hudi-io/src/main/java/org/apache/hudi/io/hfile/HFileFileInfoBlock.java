@@ -28,7 +28,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Represents a {@link HFileBlockType#FILE_INFO} block in the "Load-on-open" section.
+ * Represents a {@link HFileBlockType#FILE_INFO} block.
  */
 public class HFileFileInfoBlock extends HFileBlock {
   // Magic we put ahead of a serialized protobuf message
