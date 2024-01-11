@@ -106,14 +106,18 @@ class ColumnStatsIndexSupport(spark: SparkSession,
    *
    * Please check out scala-doc of the [[transpose]] method explaining this view in more details
    */
-  def loadTransposed[T](targetColumns: Seq[String], shouldReadInMemory: Boolean, prunedFileSlices: Set[String])(block: DataFrame => T): T = {
+  def loadTransposed[T](targetColumns: Seq[String], shouldReadInMemory: Boolean, prunedFileSlices: Set[String] = Set.empty)(block: DataFrame => T): T = {
     cachedColumnStatsIndexViews.get(targetColumns) match {
       case Some(cachedDF) =>
         block(cachedDF)
 
       case None =>
-        val colStatsRecords: HoodieData[HoodieMetadataColumnStats] =
+        val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = if (prunedFileSlices.isEmpty) {
+          // NOTE: In order to ensure that testing and unexpected logic are normal, judgment logic is added.
+          loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory)
+        } else {
           loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory).filter(r => prunedFileSlices.contains(r.getFileName))
+        }
 
         withPersistedData(colStatsRecords, StorageLevel.MEMORY_ONLY) {
           val (transposedRows, indexSchema) = transpose(colStatsRecords, targetColumns)
