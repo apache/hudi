@@ -52,8 +52,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDeltaStreamerSchemaEvolutionBase {
 
-
-
   @AfterEach
   public void teardown() throws Exception {
     super.teardown();
@@ -90,7 +88,6 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
       b.add(Arguments.of("MERGE_ON_READ", false, true, true, true, true, true, true));
       b.add(Arguments.of("MERGE_ON_READ", false, false, true, true, true, false, true));
     }
-
     return b.build();
   }
 
@@ -131,7 +128,6 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
       b.add(Arguments.of("MERGE_ON_READ", true, true, true, false, false));
       b.add(Arguments.of("MERGE_ON_READ", true, false, true, true, false));
     }
-
     return b.build();
   }
 
