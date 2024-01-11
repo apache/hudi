@@ -26,6 +26,7 @@ import org.apache.hudi.avro.model._
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieData
+import org.apache.hudi.common.function.SerializableFunction
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.BinaryUtil.toBytes
@@ -116,8 +117,12 @@ class ColumnStatsIndexSupport(spark: SparkSession,
           // NOTE: In order to ensure that testing and unexpected logic are normal, judgment logic is added.
           loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory)
         } else {
-          loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory).filter(
-            (r: HoodieMetadataColumnStats) => prunedFileSlices.contains(r.getFileName): java.lang.Boolean)
+          val filterFunction = new SerializableFunction[HoodieMetadataColumnStats, java.lang.Boolean] {
+            override def apply(r: HoodieMetadataColumnStats): java.lang.Boolean = {
+              prunedFileSlices.contains(r.getFileName)
+            }
+          }
+          loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory).filter(filterFunction)
         }
 
         withPersistedData(colStatsRecords, StorageLevel.MEMORY_ONLY) {
