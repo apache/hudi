@@ -26,6 +26,7 @@ import org.apache.hudi.avro.model._
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieData
+import org.apache.hudi.common.function.SerializableFunction
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.BinaryUtil.toBytes
@@ -106,14 +107,23 @@ class ColumnStatsIndexSupport(spark: SparkSession,
    *
    * Please check out scala-doc of the [[transpose]] method explaining this view in more details
    */
-  def loadTransposed[T](targetColumns: Seq[String], shouldReadInMemory: Boolean)(block: DataFrame => T): T = {
+  def loadTransposed[T](targetColumns: Seq[String], shouldReadInMemory: Boolean, prunedPartitionFileNames: Set[String] = Set.empty)(block: DataFrame => T): T = {
     cachedColumnStatsIndexViews.get(targetColumns) match {
       case Some(cachedDF) =>
         block(cachedDF)
 
       case None =>
-        val colStatsRecords: HoodieData[HoodieMetadataColumnStats] =
+        val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = if (prunedPartitionFileNames.isEmpty) {
+          // NOTE: In order to ensure that testing and unexpected logic are normal, judgment logic is added.
           loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory)
+        } else {
+          val filterFunction = new SerializableFunction[HoodieMetadataColumnStats, java.lang.Boolean] {
+            override def apply(r: HoodieMetadataColumnStats): java.lang.Boolean = {
+              prunedPartitionFileNames.contains(r.getFileName)
+            }
+          }
+          loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory).filter(filterFunction)
+        }
 
         withPersistedData(colStatsRecords, StorageLevel.MEMORY_ONLY) {
           val (transposedRows, indexSchema) = transpose(colStatsRecords, targetColumns)
