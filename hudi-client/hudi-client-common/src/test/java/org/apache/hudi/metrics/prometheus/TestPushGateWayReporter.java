@@ -71,6 +71,7 @@ public class TestPushGateWayReporter {
   @Test
   public void testRegisterGauge() {
     when(config.isMetricsOn()).thenReturn(true);
+    configureDefaultReporter();
 
     assertDoesNotThrow(() -> {
       hoodieMetrics = new HoodieMetrics(config);
@@ -85,18 +86,15 @@ public class TestPushGateWayReporter {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testMultiReporter(boolean addDefaultReporter) throws IOException, InterruptedException, URISyntaxException {
-
     String propPrometheusPath = Objects.requireNonNull(PROP_FILE_PROMETHEUS_URL).toURI().getPath();
     String propDatadogPath = Objects.requireNonNull(PROP_FILE_DATADOG_URL).toURI().getPath();
+    when(config.isMetricsOn()).thenReturn(true);
     if (addDefaultReporter) {
-      when(config.isMetricsOn()).thenReturn(true);
-      when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.PROMETHEUS_PUSHGATEWAY);
-      when(config.getPushGatewayReportPeriodSeconds()).thenReturn(30);
+      configureDefaultReporter();
     } else {
       when(config.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
       when(config.getMetricReporterMetricsNamePrefix()).thenReturn(TestPushGateWayReporter.class.getSimpleName());
       when(config.getMetricReporterFileBasedConfigs()).thenReturn(propPrometheusPath + "," + propDatadogPath);
-      when(config.isMetricsOn()).thenReturn(true);
     }
 
     hoodieMetrics = new HoodieMetrics(config);
@@ -159,5 +157,11 @@ public class TestPushGateWayReporter {
     } catch (IllegalStateException e) {
       assertTrue(e.getMessage().contains("Multiple values {prometheus, prom} for same key"));
     }
+  }
+
+  private void configureDefaultReporter() {
+    when(config.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
+    when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.PROMETHEUS_PUSHGATEWAY);
+    when(config.getPushGatewayReportPeriodSeconds()).thenReturn(30);
   }
 }
