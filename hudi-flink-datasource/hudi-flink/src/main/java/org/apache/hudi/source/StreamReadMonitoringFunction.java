@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source;
 
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -218,9 +219,17 @@ public class StreamReadMonitoringFunction
       return;
     }
 
-    for (MergeOnReadInputSplit split : result.getInputSplits()) {
+    List<MergeOnReadInputSplit> inputSplits = result.getInputSplits();
+    inputSplits.sort((f, s) -> {
+      String fMinTime = getInputSplitInstantTime(f);
+      String sMinTime = getInputSplitInstantTime(s);
+      return fMinTime.compareTo(sMinTime);
+    });
+
+    for (MergeOnReadInputSplit split : inputSplits) {
       context.collect(split);
     }
+
     // update the issues instant time
     this.issuedInstant = result.getEndInstant();
     this.issuedOffset = result.getOffset();
@@ -280,5 +289,29 @@ public class StreamReadMonitoringFunction
     MetricGroup metrics = getRuntimeContext().getMetricGroup();
     readMetrics = new FlinkStreamReadMetrics(metrics);
     readMetrics.registerMetrics();
+  }
+
+  private String getInputSplitInstantTime(MergeOnReadInputSplit split) {
+    if (split.getBasePath().isPresent()) {
+      return getTimeFromFile(split.getBasePath().get());
+    }
+
+    if (split.getLogPaths().isPresent()
+        && !split.getLogPaths().get().isEmpty()
+        && split.getLogPaths().get().stream().findFirst().isPresent()) {
+      return getTimeFromFile(
+          split.getLogPaths().get()
+              .stream()
+              .findFirst()
+              .get());
+    }
+    throw new IllegalArgumentException("Input Split: " + split + " did not find instant time");
+  }
+
+  private String getTimeFromFile(String file) {
+    if (file.contains("/")) {
+      file = file.substring(file.lastIndexOf("/") + 1);
+    }
+    return FSUtils.getCommitTime(file);
   }
 }
