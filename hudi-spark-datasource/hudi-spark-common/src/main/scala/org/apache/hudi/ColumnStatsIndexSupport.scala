@@ -26,7 +26,7 @@ import org.apache.hudi.avro.model._
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieData
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.BinaryUtil.toBytes
 import org.apache.hudi.common.util.ValidationUtils.checkState
@@ -106,14 +106,14 @@ class ColumnStatsIndexSupport(spark: SparkSession,
    *
    * Please check out scala-doc of the [[transpose]] method explaining this view in more details
    */
-  def loadTransposed[T](targetColumns: Seq[String], shouldReadInMemory: Boolean)(block: DataFrame => T): T = {
+  def loadTransposed[T](targetColumns: Seq[String], shouldReadInMemory: Boolean, prunedFileSlices: Set[String])(block: DataFrame => T): T = {
     cachedColumnStatsIndexViews.get(targetColumns) match {
       case Some(cachedDF) =>
         block(cachedDF)
 
       case None =>
         val colStatsRecords: HoodieData[HoodieMetadataColumnStats] =
-          loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory)
+          loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory).filter(r => prunedFileSlices.contains(r.getFileName))
 
         withPersistedData(colStatsRecords, StorageLevel.MEMORY_ONLY) {
           val (transposedRows, indexSchema) = transpose(colStatsRecords, targetColumns)

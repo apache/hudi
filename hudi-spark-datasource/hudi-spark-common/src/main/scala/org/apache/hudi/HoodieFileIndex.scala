@@ -218,6 +218,14 @@ case class HoodieFileIndex(spark: SparkSession,
 
     val prunedPartitionsAndFileSlices = getFileSlicesForPrunedPartitions(partitionFilters)
 
+    val prunedFileSlices: Set[String] = prunedPartitionsAndFileSlices
+      .flatMap {
+        case (_, fileSlices) => fileSlices
+      }
+      .map(fileSlice => fileSlice.getBaseFile.get().getFileName)
+      .toSet
+
+
     // If there are no data filters, return all the file slices.
     // If there are no file slices, return empty list.
     if (prunedPartitionsAndFileSlices.isEmpty || dataFilters.isEmpty) {
@@ -229,7 +237,7 @@ case class HoodieFileIndex(spark: SparkSession,
       //    - Record-level Index is present
       //    - List of predicates (filters) is present
       val candidateFilesNamesOpt: Option[Set[String]] =
-      lookupCandidateFilesInMetadataTable(dataFilters) match {
+      lookupCandidateFilesInMetadataTable(dataFilters, prunedFileSlices) match {
         case Success(opt) => opt
         case Failure(e) =>
           logError("Failed to lookup candidate files in File Index", e)
@@ -328,7 +336,7 @@ case class HoodieFileIndex(spark: SparkSession,
    * @param queryFilters list of original data filters passed down from querying engine
    * @return list of pruned (data-skipped) candidate base-files and log files' names
    */
-  private def lookupCandidateFilesInMetadataTable(queryFilters: Seq[Expression]): Try[Option[Set[String]]] = Try {
+  private def lookupCandidateFilesInMetadataTable(queryFilters: Seq[Expression], prunedFileSlices: Set[String]): Try[Option[Set[String]]] = Try {
     // NOTE: For column stats, Data Skipping is only effective when it references columns that are indexed w/in
     //       the Column Stats Index (CSI). Following cases could not be effectively handled by Data Skipping:
     //          - Expressions on top-level column's fields (ie, for ex filters like "struct.field > 0", since
@@ -350,7 +358,7 @@ case class HoodieFileIndex(spark: SparkSession,
     } else if (functionalIndex.isIndexAvailable && !queryFilters.isEmpty) {
       val shouldReadInMemory = functionalIndex.shouldReadInMemory(this, queryReferencedColumns)
       val indexDf = functionalIndex.loadFunctionalIndexDataFrame("", shouldReadInMemory)
-      Some(getCandidateFiles(indexDf, queryFilters))
+      Some(getCandidateFiles(indexDf, queryFilters, prunedFileSlices))
     } else if (!columnStatsIndex.isIndexAvailable || queryFilters.isEmpty || queryReferencedColumns.isEmpty) {
       validateConfig()
       Option.empty
@@ -362,13 +370,13 @@ case class HoodieFileIndex(spark: SparkSession,
       //       on-cluster: total number of rows of the expected projected portion of the index has to be below the
       //       threshold (of 100k records)
       val shouldReadInMemory = columnStatsIndex.shouldReadInMemory(this, queryReferencedColumns)
-      columnStatsIndex.loadTransposed(queryReferencedColumns, shouldReadInMemory) { transposedColStatsDF =>
-        Some(getCandidateFiles(transposedColStatsDF, queryFilters))
+      columnStatsIndex.loadTransposed(queryReferencedColumns, shouldReadInMemory, prunedFileSlices) { transposedColStatsDF =>
+        Some(getCandidateFiles(transposedColStatsDF, queryFilters, prunedFileSlices))
       }
     }
   }
 
-  private def getCandidateFiles(indexDf: DataFrame, queryFilters: Seq[Expression]): Set[String] = {
+  private def getCandidateFiles(indexDf: DataFrame, queryFilters: Seq[Expression], prunedFileSlices: Set[String]): Set[String] = {
     val indexSchema = indexDf.schema
     val indexFilter = queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexSchema)).reduce(And)
     val prunedCandidateFileNames =
@@ -390,7 +398,7 @@ case class HoodieFileIndex(spark: SparkSession,
       .collect()
       .map(_.getString(0))
       .toSet
-    val notIndexedFileNames = lookupFileNamesMissingFromIndex(allIndexedFileNames)
+    val notIndexedFileNames = prunedFileSlices -- allIndexedFileNames
 
     prunedCandidateFileNames ++ notIndexedFileNames
   }
