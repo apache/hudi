@@ -33,9 +33,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * This is the main class of the metrics system.
@@ -44,7 +44,7 @@ public class Metrics {
 
   private static final Logger LOG = LoggerFactory.getLogger(Metrics.class);
 
-  private static final Map<String, Metrics> METRICS_INSTANCE_PER_BASEPATH = new HashMap<>();
+  private static final Map<String, Metrics> METRICS_INSTANCE_PER_BASEPATH = new ConcurrentHashMap<>();
 
   private final MetricRegistry registry;
   private final List<MetricsReporter> reporters;
