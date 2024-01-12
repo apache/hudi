@@ -25,6 +25,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.metrics.FlinkStreamReadMetrics;
 import org.apache.hudi.source.prune.PartitionPruners;
+import org.apache.hudi.table.format.cdc.CdcInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -292,6 +293,11 @@ public class StreamReadMonitoringFunction
   }
 
   private String getInputSplitInstantTime(MergeOnReadInputSplit split) {
+    if (split instanceof CdcInputSplit) {
+      CdcInputSplit cdcSplit = (CdcInputSplit) split;
+      assert cdcSplit.getChanges().length > 0;
+      return cdcSplit.getChanges()[0].getInstant();
+    }
     if (split.getBasePath().isPresent()) {
       return getTimeFromFile(split.getBasePath().get());
     }
