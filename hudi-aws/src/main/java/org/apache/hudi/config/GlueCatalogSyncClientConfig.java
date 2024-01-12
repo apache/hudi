@@ -62,7 +62,7 @@ public class GlueCatalogSyncClientConfig extends HoodieConfig {
       .withInferFunction(cfg -> Option.ofNullable(cfg.getString(HoodieTableConfig.PARTITION_FIELDS))
           .or(() -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME))))
       .sinceVersion("1.0.0")
-      .withDocumentation(String.join(" ", "Specify the partitions fields to index on aws glue. Separate the fields by comma.",
+      .withDocumentation(String.join(" ", "Specify the partitions fields to index on aws glue. Separate the fields by semicolon.",
           "By default, when the feature is enabled, all the partition will be indexed.",
-          "You can create up to three indexes, separate them by semicolon. Eg: col1,col2,col3;col2;col3"));
+          "You can create up to three indexes, separate them by comma. Eg: col1;col2;col3,col2,col3"));
 }

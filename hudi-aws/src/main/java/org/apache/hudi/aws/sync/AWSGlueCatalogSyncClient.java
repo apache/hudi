@@ -108,6 +108,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   private final GlueAsyncClient awsGlue;
   private static final String GLUE_PARTITION_INDEX_ENABLE = "partition_filtering.enabled";
   private static final long INDEX_CREATION_REQUEST_SLEEP_MILLIS = 15_000L;
+  private static final int PARTITION_INDEX_MAX_NUMBER = 3;
   /**
    * athena v2/v3 table property
    * see https://docs.aws.amazon.com/athena/latest/ug/querying-hudi.html
@@ -541,9 +542,13 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   protected List<List<String>> parsePartitionsIndexConfig() {
     String rawPartitionIndex = config.getStringOrDefault(META_SYNC_PARTITION_INDEX_FIELDS);
-    List<List<String>> indexes = Arrays.stream(rawPartitionIndex.split(";"))
-                                       .map(idx -> Arrays.stream(idx.split(","))
+    List<List<String>> indexes = Arrays.stream(rawPartitionIndex.split(","))
+                                       .map(idx -> Arrays.stream(idx.split(";"))
                                                          .collect(Collectors.toList())).collect(Collectors.toList());
+    if (indexes.size() > PARTITION_INDEX_MAX_NUMBER) {
+      LOG.warn(String.format("Only considering first %s indexes", PARTITION_INDEX_MAX_NUMBER));
+      return indexes.subList(0, PARTITION_INDEX_MAX_NUMBER);
+    }
     return indexes;
   }
 
