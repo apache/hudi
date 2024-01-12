@@ -53,7 +53,7 @@ public class GlueCatalogSyncClientConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> META_SYNC_PARTITION_INDEX_FIELDS_ENABLE = ConfigProperty
       .key(GLUE_CLIENT_PROPERTY_PREFIX + "partition_index_fields.enable")
       .defaultValue(false)
-      .sinceVersion("0.15.0")
+      .sinceVersion("1.0.0")
       .withDocumentation("Enable aws glue partition index feature, to speedup partition based query pattern");
 
   public static final ConfigProperty<String> META_SYNC_PARTITION_INDEX_FIELDS = ConfigProperty
@@ -61,7 +61,7 @@ public class GlueCatalogSyncClientConfig extends HoodieConfig {
       .defaultValue("")
       .withInferFunction(cfg -> Option.ofNullable(cfg.getString(HoodieTableConfig.PARTITION_FIELDS))
           .or(() -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME))))
-      .sinceVersion("0.15.0")
+      .sinceVersion("1.0.0")
       .withDocumentation(String.join(" ", "Specify the partitions fields to index on aws glue. Separate the fields by comma.",
           "By default, when the feature is enabled, all the partition will be indexed.",
           "You can create up to three indexes, separate them by semicolon. Eg: col1,col2,col3;col2;col3"));

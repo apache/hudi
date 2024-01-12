@@ -106,7 +106,6 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   private static final int MAX_PARTITIONS_PER_REQUEST = 100;
   private static final int MAX_DELETE_PARTITIONS_PER_REQUEST = 25;
   private final GlueAsyncClient awsGlue;
-  private static final long BATCH_REQUEST_SLEEP_MILLIS = 1000L;
   private static final String GLUE_PARTITION_INDEX_ENABLE = "partition_filtering.enabled";
   private static final long INDEX_CREATION_REQUEST_SLEEP_MILLIS = 15_000L;
   /**
