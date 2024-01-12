@@ -29,32 +29,7 @@ import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 
 import software.amazon.awssdk.services.glue.GlueAsyncClient;
-import software.amazon.awssdk.services.glue.model.AlreadyExistsException;
-import software.amazon.awssdk.services.glue.model.BatchCreatePartitionRequest;
-import software.amazon.awssdk.services.glue.model.BatchCreatePartitionResponse;
-import software.amazon.awssdk.services.glue.model.BatchDeletePartitionRequest;
-import software.amazon.awssdk.services.glue.model.BatchDeletePartitionResponse;
-import software.amazon.awssdk.services.glue.model.BatchUpdatePartitionRequest;
-import software.amazon.awssdk.services.glue.model.BatchUpdatePartitionRequestEntry;
-import software.amazon.awssdk.services.glue.model.BatchUpdatePartitionResponse;
-import software.amazon.awssdk.services.glue.model.Column;
-import software.amazon.awssdk.services.glue.model.CreateDatabaseRequest;
-import software.amazon.awssdk.services.glue.model.CreateDatabaseResponse;
-import software.amazon.awssdk.services.glue.model.CreateTableRequest;
-import software.amazon.awssdk.services.glue.model.CreateTableResponse;
-import software.amazon.awssdk.services.glue.model.DatabaseInput;
-import software.amazon.awssdk.services.glue.model.EntityNotFoundException;
-import software.amazon.awssdk.services.glue.model.GetDatabaseRequest;
-import software.amazon.awssdk.services.glue.model.GetPartitionsRequest;
-import software.amazon.awssdk.services.glue.model.GetPartitionsResponse;
-import software.amazon.awssdk.services.glue.model.GetTableRequest;
-import software.amazon.awssdk.services.glue.model.PartitionInput;
-import software.amazon.awssdk.services.glue.model.PartitionValueList;
-import software.amazon.awssdk.services.glue.model.SerDeInfo;
-import software.amazon.awssdk.services.glue.model.StorageDescriptor;
-import software.amazon.awssdk.services.glue.model.Table;
-import software.amazon.awssdk.services.glue.model.TableInput;
-import software.amazon.awssdk.services.glue.model.UpdateTableRequest;
+import software.amazon.awssdk.services.glue.model.*;
 import org.apache.parquet.schema.MessageType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -453,16 +428,16 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
         LOG.warn("Deactivating partition indexing");
         updatePartitionIndexEnable(tableName, false);
       }
-
       // also drop all existing indexes
-      GetPartitionIndexesRequest indexesRequest = new GetPartitionIndexesRequest()
-          .withDatabaseName(databaseName).withTableName(tableName);
-      GetPartitionIndexesResult existingIdxs = awsGlue.getPartitionIndexes(indexesRequest);
-      existingIdxs.getPartitionIndexDescriptorList().forEach(existingIdx -> {
-        LOG.warn("Dropping partition index: " + existingIdx.getIndexName());
-        DeletePartitionIndexRequest idxToDelete = new DeletePartitionIndexRequest()
-            .withDatabaseName(databaseName).withTableName(tableName).withIndexName(existingIdx.getIndexName());
+      GetPartitionIndexesRequest indexesRequest = GetPartitionIndexesRequest.builder().databaseName(databaseName).tableName(tableName).build();
+      CompletableFuture<GetPartitionIndexesResponse> existingIdxsResp = awsGlue.getPartitionIndexes(indexesRequest);
+      existingIdxsResp.whenComplete((response, error) -> {
+        for (PartitionIndexDescriptor idsToDelete : response.partitionIndexDescriptorList()) {
+        LOG.warn("Dropping partition index: " + idsToDelete.indexName());
+        DeletePartitionIndexRequest idxToDelete = DeletePartitionIndexRequest.builder()
+                .databaseName(databaseName).tableName(tableName).indexName(idsToDelete.indexName()).build();
         awsGlue.deletePartitionIndex(idxToDelete);
+        }
       });
     } else {
       // activate indexing usage if disabled
@@ -474,59 +449,61 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       // get indexes to be created
       List<List<String>> partitionsIndexNeeded = parsePartitionsIndexConfig();
       // get existing indexes
-      GetPartitionIndexesRequest indexesRequest = new GetPartitionIndexesRequest()
-          .withDatabaseName(databaseName).withTableName(tableName);
-      GetPartitionIndexesResult existingIdxs = awsGlue.getPartitionIndexes(indexesRequest);
+      GetPartitionIndexesRequest indexesRequest = GetPartitionIndexesRequest.builder()
+          .databaseName(databaseName).tableName(tableName).build();
+      CompletableFuture<GetPartitionIndexesResponse> existingIdxsResp = awsGlue.getPartitionIndexes(indexesRequest);
 
       // for each existing index
       // remove if not relevant anymore
-      existingIdxs.getPartitionIndexDescriptorList().forEach(existingIdx -> {
-        List<String> idxColumns = existingIdx.getKeys().stream().map(key -> key.getName()).collect(Collectors.toList());
-        Boolean toBeRemoved = true;
-        for (List<String> neededIdx : partitionsIndexNeeded) {
-          if (neededIdx.equals(idxColumns)) {
-            toBeRemoved = false;
+      existingIdxsResp.whenComplete((response, error) -> {
+        for (PartitionIndexDescriptor existingIdx: response.partitionIndexDescriptorList()) {
+          List<String> idxColumns = existingIdx.keys().stream().map(key -> key.name()).collect(Collectors.toList());
+          Boolean toBeRemoved = true;
+          for (List<String> neededIdx : partitionsIndexNeeded) {
+            if (neededIdx.equals(idxColumns)) {
+              toBeRemoved = false;
+            }
+          }
+          if (toBeRemoved) {
+            DeletePartitionIndexRequest idxToDelete = DeletePartitionIndexRequest.builder()
+                    .databaseName(databaseName).tableName(tableName).indexName(existingIdx.indexName()).build();
+            LOG.warn("Dropping irrelevant index: " + existingIdx.indexName());
+            awsGlue.deletePartitionIndex(idxToDelete);
           }
         }
-        if (toBeRemoved) {
-          DeletePartitionIndexRequest idxToDelete = new DeletePartitionIndexRequest()
-              .withDatabaseName(databaseName).withTableName(tableName).withIndexName(existingIdx.getIndexName());
-          LOG.warn("Dropping irrelevant index: " + existingIdx.getIndexName());
-          awsGlue.deletePartitionIndex(idxToDelete);
-        }
-      });
 
-      // for each needed index
-      // create if not exist
-      for (List<String> neededIdx : partitionsIndexNeeded) {
-        Boolean toBeCreated = true;
-        for (PartitionIndexDescriptor existingIdx : existingIdxs.getPartitionIndexDescriptorList()) {
-          List<String> collect = existingIdx.getKeys().stream().map(key -> key.getName()).collect(Collectors.toList());
-          if (collect.equals(neededIdx)) {
-            toBeCreated = false;
+        // for each needed index
+        // create if not exist
+        for (List<String> neededIdx : partitionsIndexNeeded) {
+          Boolean toBeCreated = true;
+          for (PartitionIndexDescriptor existingIdx: response.partitionIndexDescriptorList()) {
+            List<String> collect = existingIdx.keys().stream().map(key -> key.name()).collect(Collectors.toList());
+            if (collect.equals(neededIdx)) {
+              toBeCreated = false;
+            }
           }
-        }
-        if (toBeCreated) {
-          String newIdxName = String.format("hudi_managed_index_%s", neededIdx.toString());
-          PartitionIndex newIdx = new PartitionIndex()
-              .withIndexName(newIdxName)
-              .withKeys(neededIdx);
-          LOG.warn("Creating new partition index: " + newIdxName);
-          CreatePartitionIndexRequest creationRequest = new CreatePartitionIndexRequest()
-              .withDatabaseName(databaseName).withTableName(tableName).withPartitionIndex(newIdx);
-          // now create indexes one by one
-          // until an index is not created subsequent call will raise an exception
-          while (true) {
-            try {
-              awsGlue.createPartitionIndex(creationRequest);
-              break;
-            } catch (ResourceNumberLimitExceededException e) {
-              LOG.warn("Waiting until the indexation process is done...");
-              Thread.sleep(INDEX_CREATION_REQUEST_SLEEP_MILLIS);
+          if (toBeCreated) {
+            String newIdxName = String.format("hudi_managed_index_%s", neededIdx.toString());
+            PartitionIndex newIdx = PartitionIndex.builder()
+                    .indexName(newIdxName)
+                    .keys(neededIdx).build();
+            LOG.warn("Creating new partition index: " + newIdxName);
+            CreatePartitionIndexRequest creationRequest = CreatePartitionIndexRequest.builder()
+                    .databaseName(databaseName).tableName(tableName).partitionIndex(newIdx).build();
+            // now create indexes one by one
+            // until an index is not created subsequent call will raise an exception
+            while (true) {
+              try {
+                awsGlue.createPartitionIndex(creationRequest);
+                Thread.sleep(INDEX_CREATION_REQUEST_SLEEP_MILLIS);
+                break;
+              } catch (ResourceNumberLimitExceededException | InterruptedException e) {
+                LOG.warn("Waiting until the indexation process is done...");
+              }
             }
           }
         }
-      }
+      });
     }
   }
 
@@ -541,7 +518,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   public Boolean getPartitionIndexEnable(String tableName) {
     try {
       Table table = getTable(awsGlue, databaseName, tableName);
-      return Boolean.valueOf(table.getParameters().get(GLUE_PARTITION_INDEX_ENABLE));
+      return Boolean.valueOf(table.parameters().get(GLUE_PARTITION_INDEX_ENABLE));
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to get parameter " + GLUE_PARTITION_INDEX_ENABLE + " time for " + tableId(databaseName, tableName), e);
     }
