@@ -238,6 +238,8 @@ public class TableSchemaResolver {
       Schema schema = new Schema.Parser().parse(schemaStr);
       if (includeMetadataFields) {
         schema = HoodieAvroUtils.addMetadataFields(schema, hasOperationField.get());
+      } else {
+        schema = HoodieAvroUtils.removeMetadataFields(schema);
       }
       return Option.of(schema);
     } else {
@@ -257,6 +259,8 @@ public class TableSchemaResolver {
       Schema schema = new Schema.Parser().parse(existingSchemaStr);
       if (includeMetadataFields) {
         schema = HoodieAvroUtils.addMetadataFields(schema, hasOperationField.get());
+      } else {
+        schema = HoodieAvroUtils.removeMetadataFields(schema);
       }
       return Option.of(schema);
     } catch (Exception e) {
