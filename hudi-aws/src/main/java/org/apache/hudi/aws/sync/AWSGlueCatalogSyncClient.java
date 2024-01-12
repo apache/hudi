@@ -29,7 +29,13 @@ import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 
 import software.amazon.awssdk.services.glue.GlueAsyncClient;
-import software.amazon.awssdk.services.glue.model.*;
+import software.amazon.awssdk.services.glue.model.CreatePartitionIndexRequest;
+import software.amazon.awssdk.services.glue.model.GetPartitionIndexesResponse;
+import software.amazon.awssdk.services.glue.model.GetPartitionIndexesRequest;
+import software.amazon.awssdk.services.glue.model.PartitionIndexDescriptor;
+import software.amazon.awssdk.services.glue.model.DeletePartitionIndexRequest;
+import software.amazon.awssdk.services.glue.model.PartitionIndex;
+
 import org.apache.parquet.schema.MessageType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,6 +66,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NA
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 import org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory;
+import software.amazon.awssdk.services.glue.model.ResourceNumberLimitExceededException;
 
 /**
  * This class implements all the AWS APIs to enable syncing of a Hudi Table with the
@@ -421,7 +428,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
    *
    * @param tableName
    */
-  public void managePartitionIndexes(String tableName) throws InterruptedException {
+  public void managePartitionIndexes(String tableName) {
     if (!config.getBooleanOrDefault(META_SYNC_PARTITION_INDEX_FIELDS_ENABLE)) {
       // deactivate indexing if enabled
       if (getPartitionIndexEnable(tableName)) {
@@ -433,10 +440,10 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       CompletableFuture<GetPartitionIndexesResponse> existingIdxsResp = awsGlue.getPartitionIndexes(indexesRequest);
       existingIdxsResp.whenComplete((response, error) -> {
         for (PartitionIndexDescriptor idsToDelete : response.partitionIndexDescriptorList()) {
-        LOG.warn("Dropping partition index: " + idsToDelete.indexName());
-        DeletePartitionIndexRequest idxToDelete = DeletePartitionIndexRequest.builder()
-                .databaseName(databaseName).tableName(tableName).indexName(idsToDelete.indexName()).build();
-        awsGlue.deletePartitionIndex(idxToDelete);
+          LOG.warn("Dropping partition index: " + idsToDelete.indexName());
+          DeletePartitionIndexRequest idxToDelete = DeletePartitionIndexRequest.builder()
+                  .databaseName(databaseName).tableName(tableName).indexName(idsToDelete.indexName()).build();
+          awsGlue.deletePartitionIndex(idxToDelete);
         }
       });
     } else {
