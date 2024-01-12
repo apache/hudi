@@ -69,6 +69,8 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.spark.SparkConf;
+import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
@@ -81,6 +83,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -191,11 +194,21 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     }
 
     // Initialize a local spark env
-    jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest(appName + "#" + testMethodName));
+    SparkConf sc = HoodieClientTestUtils.getSparkConfForTest(appName + "#" + testMethodName);
+    SparkContext sparkContext = new SparkContext(sc);
+    try {
+      // Clean the default Hadoop configurations since in our Hudi tests they are not used.
+      Field hadoopConfigurationField = sparkContext.getClass().getDeclaredField("_hadoopConfiguration");
+      hadoopConfigurationField.setAccessible(true);
+      Configuration testHadoopConfig = new Configuration(false);
+      hadoopConfigurationField.set(sparkContext, testHadoopConfig);
+    } catch (NoSuchFieldException | IllegalAccessException e) {
+      LOG.warn(e.getMessage());
+    }
+
+    jsc = new JavaSparkContext(sparkContext);
     jsc.setLogLevel("ERROR");
-
     hadoopConf = jsc.hadoopConfiguration();
-
     sparkSession = SparkSession.builder()
         .withExtensions(JFunction.toScala(sparkSessionExtensions -> {
           sparkSessionExtensionsInjector.ifPresent(injector -> injector.accept(sparkSessionExtensions));

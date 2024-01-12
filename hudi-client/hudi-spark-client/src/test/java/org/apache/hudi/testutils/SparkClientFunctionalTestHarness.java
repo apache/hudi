@@ -62,6 +62,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.HoodieSparkKryoRegistrar$;
 import org.apache.spark.SparkConf;
+import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -74,6 +75,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -201,6 +203,18 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
       SparkRDDReadClient.addHoodieSupport(sparkConf);
       spark = SparkSession.builder().config(sparkConf).getOrCreate();
       sqlContext = spark.sqlContext();
+
+      try {
+        // Clean the default Hadoop configurations since in our Hudi tests they are not used.
+        SparkContext sparkContext = spark.sparkContext();
+        Field hadoopConfigurationField = sparkContext.getClass().getDeclaredField("_hadoopConfiguration");
+        hadoopConfigurationField.setAccessible(true);
+        Configuration testHadoopConfig = new Configuration(false);
+        hadoopConfigurationField.set(sparkContext, testHadoopConfig);
+      } catch (NoSuchFieldException | IllegalAccessException e) {
+        // Ignore the exceptions.
+      }
+
       jsc = new JavaSparkContext(spark.sparkContext());
       context = new HoodieSparkEngineContext(jsc);
       timelineService = HoodieClientTestUtils.initTimelineService(
