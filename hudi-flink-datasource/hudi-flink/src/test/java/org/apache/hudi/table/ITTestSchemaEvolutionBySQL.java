@@ -21,8 +21,6 @@ package org.apache.hudi.table;
 import org.apache.hudi.adapter.TestHoodieCatalogs;
 import org.apache.hudi.exception.HoodieCatalogException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.table.catalog.HoodieCatalogTestUtils;
-import org.apache.hudi.table.catalog.HoodieHiveCatalog;
 import org.apache.hudi.utils.FlinkMiniCluster;
 import org.apache.hudi.utils.TestTableEnvs;
 
@@ -30,10 +28,12 @@ import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.TableException;
 import org.apache.flink.table.api.TableResult;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
+import org.apache.flink.table.catalog.Catalog;
 import org.apache.flink.table.catalog.CatalogBaseTable;
 import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.CollectionUtil;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
@@ -49,13 +49,15 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * IT cases for schema evolution by alter table SQL using {@link HoodieHiveCatalog}.
+ * IT cases for schema evolution by alter table SQL using catalog.
  */
 @EnabledIf("supportAdvancedAlterTableSyntax")
 @ExtendWith(FlinkMiniCluster.class)
-public class ITTestSchemaEvolutionBySQL {
+public abstract class ITTestSchemaEvolutionBySQL {
+  protected static final String CATALOG_NAME = "hudi_catalog";
+  protected static final String DB_NAME = "hudi";
   private TableEnvironment tableEnv;
-  private HoodieHiveCatalog hoodieCatalog;
+  protected Catalog catalog;
 
   private static final String CREATE_TABLE_DDL = ""
       + "create table t1("
@@ -84,13 +86,20 @@ public class ITTestSchemaEvolutionBySQL {
     tableEnv = TestTableEnvs.getBatchTableEnv();
     tableEnv.getConfig().getConfiguration()
         .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 4);
-    hoodieCatalog = HoodieCatalogTestUtils.createHiveCatalog("hudi_catalog");
-    tableEnv.registerCatalog("hudi_catalog", hoodieCatalog);
-    tableEnv.executeSql("use catalog hudi_catalog");
-    String dbName = "hudi";
-    tableEnv.executeSql("create database " + dbName);
-    tableEnv.executeSql("use " + dbName);
+    catalog = createCatalog();
+    catalog.open();
+    tableEnv.registerCatalog(CATALOG_NAME, catalog);
+    tableEnv.executeSql("use catalog " + CATALOG_NAME);
+    tableEnv.executeSql("create database if not exists " + DB_NAME);
+    tableEnv.executeSql("use " + DB_NAME);
     tableEnv.executeSql(CREATE_TABLE_DDL);
+  }
+
+  @AfterEach
+  void afterEach() {
+    if (catalog != null) {
+      catalog.close();
+    }
   }
 
   @Test
@@ -189,11 +198,11 @@ public class ITTestSchemaEvolutionBySQL {
   @Test
   void testSetAndResetProperty() throws Exception {
     tableEnv.executeSql("alter table t1 set ('k' = 'v')");
-    CatalogBaseTable table = hoodieCatalog.getTable(new ObjectPath("hudi", "t1"));
+    CatalogBaseTable table = catalog.getTable(new ObjectPath("hudi", "t1"));
     assertEquals(table.getOptions().get("k"), "v");
 
     tableEnv.executeSql("alter table t1 reset ('k')");
-    table = hoodieCatalog.getTable(new ObjectPath("hudi", "t1"));
+    table = catalog.getTable(new ObjectPath("hudi", "t1"));
     assertFalse(table.getOptions().containsKey("k"));
   }
 
@@ -266,4 +275,6 @@ public class ITTestSchemaEvolutionBySQL {
       // ignored
     }
   }
+
+  protected abstract Catalog createCatalog();
 }
