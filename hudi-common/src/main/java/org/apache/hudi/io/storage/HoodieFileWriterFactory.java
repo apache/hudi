@@ -128,4 +128,14 @@ public class HoodieFileWriterFactory {
         config.getIntOrDefault(HoodieStorageConfig.BLOOM_FILTER_DYNAMIC_MAX_ENTRIES),
         config.getStringOrDefault(HoodieStorageConfig.BLOOM_FILTER_TYPE));
   }
+
+  /**
+   * Check if need to enable bloom filter.
+   */
+  public static boolean enableBloomFilter(boolean populateMetaFields, HoodieConfig config) {
+    return populateMetaFields && (config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_WITH_BLOOM_FILTER_ENABLED)
+        // HoodieIndexConfig is located in the package hudi-client-common, and the package hudi-client-common depends on the package hudi-common,
+        // so the class HoodieIndexConfig cannot be accessed in hudi-common, otherwise there will be a circular dependency problem
+        || (config.contains("hoodie.index.type") && config.getString("hoodie.index.type").contains("BLOOM")));
+  }
 }
