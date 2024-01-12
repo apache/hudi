@@ -18,14 +18,12 @@
 
 package org.apache.hudi.source;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.metrics.FlinkStreamReadMetrics;
 import org.apache.hudi.source.prune.PartitionPruners;
-import org.apache.hudi.table.format.cdc.CdcInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -220,17 +218,9 @@ public class StreamReadMonitoringFunction
       return;
     }
 
-    List<MergeOnReadInputSplit> inputSplits = result.getInputSplits();
-    inputSplits.sort((f, s) -> {
-      String fMinTime = getInputSplitInstantTime(f);
-      String sMinTime = getInputSplitInstantTime(s);
-      return fMinTime.compareTo(sMinTime);
-    });
-
-    for (MergeOnReadInputSplit split : inputSplits) {
+    for (MergeOnReadInputSplit split : result.getInputSplits()) {
       context.collect(split);
     }
-
     // update the issues instant time
     this.issuedInstant = result.getEndInstant();
     this.issuedOffset = result.getOffset();
@@ -290,34 +280,5 @@ public class StreamReadMonitoringFunction
     MetricGroup metrics = getRuntimeContext().getMetricGroup();
     readMetrics = new FlinkStreamReadMetrics(metrics);
     readMetrics.registerMetrics();
-  }
-
-  private String getInputSplitInstantTime(MergeOnReadInputSplit split) {
-    if (split instanceof CdcInputSplit) {
-      CdcInputSplit cdcSplit = (CdcInputSplit) split;
-      assert cdcSplit.getChanges().length > 0;
-      return cdcSplit.getChanges()[0].getInstant();
-    }
-    if (split.getBasePath().isPresent()) {
-      return getTimeFromFile(split.getBasePath().get());
-    }
-
-    if (split.getLogPaths().isPresent()
-        && !split.getLogPaths().get().isEmpty()
-        && split.getLogPaths().get().stream().findFirst().isPresent()) {
-      return getTimeFromFile(
-          split.getLogPaths().get()
-              .stream()
-              .findFirst()
-              .get());
-    }
-    throw new IllegalArgumentException("Input Split: " + split + " did not find instant time");
-  }
-
-  private String getTimeFromFile(String file) {
-    if (file.contains("/")) {
-      file = file.substring(file.lastIndexOf("/") + 1);
-    }
-    return FSUtils.getCommitTime(file);
   }
 }

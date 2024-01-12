@@ -448,6 +448,7 @@ public class IncrementalInputSplits implements Serializable {
     final String mergeType = this.conf.getString(FlinkOptions.MERGE_TYPE);
     return readPartitions.stream()
         .map(relPartitionPath -> getFileSlices(fsView, relPartitionPath, maxQueryInstantTime, skipBaseFiles)
+            .sorted((Comparator.comparing(FileSlice::getBaseInstantTime)))
             .map(fileSlice -> {
               Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
                   .sorted(HoodieLogFile.getLogFileComparator())
