@@ -20,11 +20,11 @@ package org.apache.spark.sql.hudi.command
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sql.InsertMode
-import org.apache.hudi.sync.common.util.ConfigUtils
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable.needFilterProps
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.plans.QueryPlan
@@ -115,8 +115,11 @@ case class CreateHoodieTableAsSelectCommand(
         clearTablePath(tablePath, hadoopConf)
       }
     } catch {
-      case e: Throwable => // failed to insert data, clear table path
-        clearTablePath(tablePath, hadoopConf)
+      case e: Throwable =>
+        // clear the hoodie table path only if it did not exist previously.
+        if (!hoodieCatalogTable.hoodieTableExists) {
+          clearTablePath(tablePath, hadoopConf)
+        }
         throw e
     }
     Seq.empty[Row]

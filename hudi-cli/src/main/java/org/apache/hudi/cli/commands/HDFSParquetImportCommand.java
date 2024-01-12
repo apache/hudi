@@ -23,19 +23,21 @@ import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.utilities.HDFSParquetImporter.FormatValidator;
 import org.apache.hudi.utilities.UtilHelpers;
-import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
+import org.apache.hudi.utilities.streamer.HoodieStreamer;
+
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
+
 import scala.collection.JavaConverters;
 
 /**
  * CLI command for importing parquet table to hudi table.
  *
- * @see HoodieDeltaStreamer
- * @deprecated This utility is deprecated in 0.10.0 and will be removed in 0.11.0. Use {@link HoodieDeltaStreamer.Config#runBootstrap} instead.
+ * @see HoodieStreamer
+ * @deprecated This utility is deprecated in 0.10.0 and will be removed in 0.11.0. Use {@link HoodieStreamer.Config#runBootstrap} instead.
  */
 @ShellComponent
 public class HDFSParquetImportCommand {

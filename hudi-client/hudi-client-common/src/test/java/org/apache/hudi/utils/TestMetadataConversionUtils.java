@@ -18,9 +18,43 @@
 
 package org.apache.hudi.utils;
 
-import static org.apache.hudi.common.util.CleanerUtils.convertCleanMetadata;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import org.apache.hudi.avro.model.HoodieActionInstant;
+import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.avro.model.HoodieClusteringGroup;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.avro.model.HoodieInstantInfo;
+import org.apache.hudi.avro.model.HoodieLSMTimelineInstant;
+import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
+import org.apache.hudi.avro.model.HoodieSliceInfo;
+import org.apache.hudi.common.HoodieCleanStat;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.timeline.ActiveAction;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstant.State;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.MetadataConversionUtils;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.CleanerUtils;
+import org.apache.hudi.common.util.CompactionUtils;
+import org.apache.hudi.common.util.Option;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -30,36 +64,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import org.apache.hudi.avro.model.HoodieActionInstant;
-import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
-import org.apache.hudi.avro.model.HoodieCleanMetadata;
-import org.apache.hudi.avro.model.HoodieCleanerPlan;
-import org.apache.hudi.avro.model.HoodieClusteringGroup;
-import org.apache.hudi.avro.model.HoodieClusteringPlan;
-import org.apache.hudi.avro.model.HoodieInstantInfo;
-import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
-import org.apache.hudi.avro.model.HoodieRollbackMetadata;
-import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
-import org.apache.hudi.avro.model.HoodieSliceInfo;
-import org.apache.hudi.client.utils.MetadataConversionUtils;
-import org.apache.hudi.common.HoodieCleanStat;
-import org.apache.hudi.common.model.HoodieCleaningPolicy;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
-import org.apache.hudi.common.model.HoodieWriteStat;
-import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieInstant.State;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
-import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
-import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.testutils.HoodieTestTable;
-import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.common.util.Option;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.CleanerUtils.convertCleanMetadata;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
 
@@ -74,8 +84,8 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     createCleanMetadata(newCommitTime);
     HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
         new HoodieInstant(State.COMPLETED, HoodieTimeline.CLEAN_ACTION, newCommitTime), metaClient);
-    assertEquals(metaEntry.getActionState(), State.COMPLETED.toString());
-    assertEquals(metaEntry.getHoodieCleanMetadata().getStartCleanTime(), newCommitTime);
+    assertEquals(State.COMPLETED.toString(), metaEntry.getActionState());
+    assertEquals(newCommitTime, metaEntry.getHoodieCleanMetadata().getStartCleanTime());
   }
 
   @Test
@@ -152,6 +162,10 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
   public void testCompletedCompaction() throws Exception {
     String newCommitTime = HoodieTestTable.makeNewCommitTime();
     createCompactionMetadata(newCommitTime);
+    // Creating compaction commits would initialize timeline(see HoodieTestTable.addRequestedCompaction)
+    // Because of HUDI-6885, now HUDI have to iterator instants to get the correct completion time.
+    // So we have to reload here to get all commits written before.
+    metaClient.reloadActiveTimeline();
     HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
         new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, newCommitTime), metaClient);
     assertEquals(metaEntry.getActionState(), State.COMPLETED.toString());
@@ -162,10 +176,127 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
   public void testConvertCommitMetadata() {
     HoodieCommitMetadata hoodieCommitMetadata = new HoodieCommitMetadata();
     hoodieCommitMetadata.setOperationType(WriteOperationType.INSERT);
-    org.apache.hudi.avro.model.HoodieCommitMetadata expectedCommitMetadata = MetadataConversionUtils
-        .convertCommitMetadata(hoodieCommitMetadata);
+    org.apache.hudi.avro.model.HoodieCommitMetadata expectedCommitMetadata = MetadataConversionUtils.convertCommitMetadata(hoodieCommitMetadata);
     assertEquals(expectedCommitMetadata.getOperationType(), WriteOperationType.INSERT.toString());
   }
+
+  // -------------------------------------------------------------------------
+  //  BEGIN: test cases for HoodieArchivedInstant conversion.
+  // -------------------------------------------------------------------------
+
+  @Test
+  public void testArchivedClean() throws Exception {
+    String newCommitTime = HoodieTestTable.makeNewCommitTime();
+    createCleanMetadata(newCommitTime);
+    // test conversion to archived instant
+    HoodieLSMTimelineInstant archived = MetadataConversionUtils.createLSMTimelineInstant(getActiveInstant(newCommitTime), metaClient);
+    assertEquals(newCommitTime, archived.getInstantTime());
+    assertEquals(HoodieTimeline.CLEAN_ACTION, archived.getAction());
+    assertDoesNotThrow(() -> CleanerUtils.getCleanerMetadata(metaClient, archived.getMetadata().array()));
+    assertDoesNotThrow(() -> TimelineMetadataUtils.deserializeCleanerPlan(archived.getPlan().array()));
+  }
+
+  @Test
+  public void testArchivedReplace() throws Exception {
+    String newCommitTime = HoodieTestTable.makeNewCommitTime();
+    createReplace(newCommitTime, WriteOperationType.INSERT_OVERWRITE, true);
+    // test conversion to archived instant
+    HoodieLSMTimelineInstant archived = MetadataConversionUtils.createLSMTimelineInstant(getActiveInstant(newCommitTime), metaClient);
+    assertEquals(newCommitTime, archived.getInstantTime());
+    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, archived.getAction());
+    assertDoesNotThrow(() -> HoodieReplaceCommitMetadata.fromBytes(archived.getMetadata().array(), HoodieReplaceCommitMetadata.class));
+    assertDoesNotThrow(() -> TimelineMetadataUtils.deserializeRequestedReplaceMetadata(archived.getPlan().array()));
+  }
+
+  @Test
+  public void testArchivedInsertOverwriteWithoutClustering() throws Exception {
+    String newCommitTime = HoodieTestTable.makeNewCommitTime();
+    createReplace(newCommitTime, WriteOperationType.INSERT_OVERWRITE, false);
+    // test conversion to archived instant
+    HoodieLSMTimelineInstant archived = MetadataConversionUtils.createLSMTimelineInstant(getActiveInstant(newCommitTime), metaClient);
+    assertEquals(newCommitTime, archived.getInstantTime());
+    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, archived.getAction());
+    assertDoesNotThrow(() -> HoodieReplaceCommitMetadata.fromBytes(archived.getMetadata().array(), HoodieReplaceCommitMetadata.class));
+    assertDoesNotThrow(() -> HoodieCommitMetadata.fromBytes(archived.getPlan().array(), HoodieCommitMetadata.class),
+        "Insert overwrite without clustering should have a plan");
+
+    String newCommitTime2 = HoodieTestTable.makeNewCommitTime();
+    createReplace(newCommitTime2, WriteOperationType.INSERT_OVERWRITE_TABLE, false);
+    // test conversion to archived instant
+    HoodieLSMTimelineInstant archived2 = MetadataConversionUtils.createLSMTimelineInstant(getActiveInstant(newCommitTime2), metaClient);
+    assertEquals(newCommitTime2, archived2.getInstantTime());
+    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, archived2.getAction());
+    assertDoesNotThrow(() -> HoodieReplaceCommitMetadata.fromBytes(archived2.getMetadata().array(), HoodieReplaceCommitMetadata.class));
+    assertDoesNotThrow(() -> HoodieCommitMetadata.fromBytes(archived2.getPlan().array(), HoodieCommitMetadata.class),
+        "Insert overwrite table without clustering should have a plan");
+  }
+
+  @Test
+  public void testArchivedInsertOverwriteWithClustering() throws Exception {
+    String newCommitTime = HoodieTestTable.makeNewCommitTime();
+    createReplace(newCommitTime, WriteOperationType.INSERT_OVERWRITE, true);
+    // test conversion to archived instant
+    HoodieLSMTimelineInstant archived = MetadataConversionUtils.createLSMTimelineInstant(getActiveInstant(newCommitTime), metaClient);
+    assertEquals(newCommitTime, archived.getInstantTime());
+    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, archived.getAction());
+    assertDoesNotThrow(() -> HoodieReplaceCommitMetadata.fromBytes(archived.getMetadata().array(), HoodieReplaceCommitMetadata.class));
+    assertDoesNotThrow(() -> TimelineMetadataUtils.deserializeRequestedReplaceMetadata(archived.getPlan().array()));
+
+    String newCommitTime2 = HoodieTestTable.makeNewCommitTime();
+    createReplace(newCommitTime2, WriteOperationType.INSERT_OVERWRITE_TABLE, true);
+    // test conversion to archived instant
+    HoodieLSMTimelineInstant archived2 = MetadataConversionUtils.createLSMTimelineInstant(getActiveInstant(newCommitTime2), metaClient);
+    assertEquals(newCommitTime2, archived2.getInstantTime());
+    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, archived2.getAction());
+    assertDoesNotThrow(() -> HoodieReplaceCommitMetadata.fromBytes(archived2.getMetadata().array(), HoodieReplaceCommitMetadata.class));
+    assertDoesNotThrow(() -> TimelineMetadataUtils.deserializeRequestedReplaceMetadata(archived2.getPlan().array()));
+  }
+
+  @Test
+  public void testArchivedCommit() throws Exception {
+    String newCommitTime = HoodieTestTable.makeNewCommitTime();
+    createCommitMetadata(newCommitTime);
+    HoodieLSMTimelineInstant archived = MetadataConversionUtils.createLSMTimelineInstant(getActiveInstant(newCommitTime), metaClient);
+    assertEquals(newCommitTime, archived.getInstantTime());
+    assertEquals(HoodieTimeline.COMMIT_ACTION, archived.getAction());
+    assertDoesNotThrow(() -> HoodieCommitMetadata.fromBytes(archived.getMetadata().array(), HoodieCommitMetadata.class));
+  }
+
+  @Test
+  public void testArchivedDeltaCommit() throws Exception {
+    String newCommitTime = HoodieTestTable.makeNewCommitTime();
+    createDeltaCommitMetadata(newCommitTime);
+    HoodieLSMTimelineInstant archived = MetadataConversionUtils.createLSMTimelineInstant(getActiveInstant(newCommitTime), metaClient);
+    assertEquals(newCommitTime, archived.getInstantTime());
+    assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, archived.getAction());
+    assertNull(archived.getMetadata());
+  }
+
+  @Test
+  public void testArchivedRollback() throws Exception {
+    String newCommitTime = HoodieTestTable.makeNewCommitTime();
+    createRollbackMetadata(newCommitTime);
+    HoodieLSMTimelineInstant archived = MetadataConversionUtils.createLSMTimelineInstant(getActiveInstant(newCommitTime), metaClient);
+    assertEquals(newCommitTime, archived.getInstantTime());
+    assertEquals(HoodieTimeline.ROLLBACK_ACTION, archived.getAction());
+    assertDoesNotThrow(() -> TimelineMetadataUtils.deserializeHoodieRollbackMetadata(archived.getMetadata().array()));
+    assertNull(archived.getPlan());
+  }
+
+  @Test
+  public void testArchivedCompaction() throws Exception {
+    String newCommitTime = HoodieTestTable.makeNewCommitTime();
+    createCompactionMetadata(newCommitTime);
+    HoodieLSMTimelineInstant archived = MetadataConversionUtils.createLSMTimelineInstant(getActiveInstant(newCommitTime), metaClient);
+    assertEquals(newCommitTime, archived.getInstantTime());
+    assertEquals(HoodieTimeline.COMMIT_ACTION, archived.getAction());
+    assertDoesNotThrow(() -> HoodieCommitMetadata.fromBytes(archived.getMetadata().array(), HoodieCommitMetadata.class));
+    assertDoesNotThrow(() -> CompactionUtils.getCompactionPlan(metaClient, Option.of(archived.getPlan().array())));
+  }
+
+  // -------------------------------------------------------------------------
+  //  END: test cases for HoodieArchivedInstant conversion.
+  // -------------------------------------------------------------------------
 
   private void createCompactionMetadata(String instantTime) throws Exception {
     String fileId1 = "file-" + instantTime + "-1";
@@ -176,7 +307,7 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     commitMetadata.setOperationType(WriteOperationType.COMPACT);
     commitMetadata.setCompacted(true);
     HoodieTestTable.of(metaClient)
-        .addCommit(instantTime, Option.of(commitMetadata))
+        .addCompaction(instantTime, commitMetadata)
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
@@ -194,7 +325,9 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     rollbackMetadata.setPartitionMetadata(partitionMetadataMap);
     rollbackMetadata.setInstantsRollback(Arrays.asList(new HoodieInstantInfo("1", HoodieTimeline.COMMIT_ACTION)));
     HoodieTestTable.of(metaClient)
-        .addRollback(instantTime, rollbackMetadata);
+        .addRollback(instantTime, rollbackMetadata, null);
+    HoodieTestTable.of(metaClient)
+        .addRollbackCompleted(instantTime, rollbackMetadata, false);
   }
 
   private void createCommitMetadata(String instantTime) throws Exception {
@@ -270,5 +403,11 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
         "");
     HoodieCleanMetadata cleanMetadata = convertCleanMetadata(instantTime, Option.of(0L), Collections.singletonList(cleanStats));
     HoodieTestTable.of(metaClient).addClean(instantTime, cleanerPlan, cleanMetadata);
+  }
+
+  private ActiveAction getActiveInstant(String instantTime) {
+    HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
+    List<HoodieInstant> instants = rawActiveTimeline.getInstantsAsStream().filter(instant -> instant.getTimestamp().equals(instantTime)).collect(Collectors.toList());
+    return ActiveAction.fromInstants(instants);
   }
 }

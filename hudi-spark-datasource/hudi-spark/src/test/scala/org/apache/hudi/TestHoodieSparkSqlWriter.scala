@@ -23,6 +23,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkUtils.gteqSpark3_0
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.model._
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieIndexConfig, HoodieWriteConfig}
@@ -38,8 +39,8 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertNull, assertTrue, fail}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
 import org.junit.jupiter.params.provider._
@@ -49,8 +50,10 @@ import org.scalatest.Assertions.assertThrows
 import org.scalatest.Matchers.{be, convertToAnyShouldWrapper, intercept}
 
 import java.io.IOException
-import java.time.Instant
-import java.util.{Collections, Date, UUID}
+import java.time.format.DateTimeFormatterBuilder
+import java.time.temporal.ChronoField
+import java.time.{Instant, ZoneId}
+import java.util.{Collections, Date, TimeZone, UUID}
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters
 
@@ -362,6 +365,52 @@ class TestHoodieSparkSqlWriter {
     testBulkInsertWithSortMode(BulkInsertSortMode.NONE, populateMetaFields)
   }
 
+@Test
+def testBulkInsertForDropPartitionColumn(): Unit = {
+  //create a new table
+  val tableName = "trips_table"
+  val basePath = "file:///tmp/trips_table"
+  val columns = Seq("ts", "uuid", "rider", "driver", "fare", "city")
+  val data =
+    Seq((1695159649087L, "334e26e9-8355-45cc-97c6-c31daf0df330", "rider-A", "driver-K", 19.10, "san_francisco"),
+      (1695091554788L, "e96c4396-3fad-413a-a942-4cb36106d721", "rider-C", "driver-M", 27.70, "san_francisco"),
+      (1695046462179L, "9909a8b1-2d15-4d3d-8ec9-efc48c536a00", "rider-D", "driver-L", 33.90, "san_francisco"),
+      (1695516137016L, "e3cf430c-889d-4015-bc98-59bdce1e530c", "rider-F", "driver-P", 34.15, "sao_paulo"),
+      (1695115999911L, "c8abbe79-8d89-47ea-b4ce-4d224bae5bfa", "rider-J", "driver-T", 17.85, "chennai"));
+
+  var inserts = spark.createDataFrame(data).toDF(columns: _*)
+  inserts.write.format("hudi").
+    option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), "city").
+    option(HoodieWriteConfig.TABLE_NAME, tableName).
+    option("hoodie.datasource.write.recordkey.field", "uuid").
+    option("hoodie.datasource.write.precombine.field", "rider").
+    option("hoodie.datasource.write.operation", "bulk_insert").
+    option("hoodie.datasource.write.hive_style_partitioning", "true").
+    option("hoodie.populate.meta.fields", "false").
+    option("hoodie.datasource.write.drop.partition.columns", "true").
+    mode(SaveMode.Overwrite).
+    save(basePath)
+
+  // Ensure the partition column (i.e 'city') can be read back
+  val tripsDF = spark.read.format("hudi").load(basePath)
+  tripsDF.show()
+  tripsDF.select("city").foreach(row => {
+    assertNotNull(row)
+  })
+
+  // Peek into the raw parquet file and ensure partition column is not written to the file
+  val partitions = Seq("city=san_francisco", "city=chennai", "city=sao_paulo")
+  val partitionPaths = new Array[String](3)
+  for (i <- partitionPaths.indices) {
+    partitionPaths(i) = String.format("%s/%s/*", basePath, partitions(i))
+  }
+  val rawFileDf = spark.sqlContext.read.parquet(partitionPaths(0), partitionPaths(1), partitionPaths(2))
+  rawFileDf.show()
+  rawFileDf.select("city").foreach(row => {
+    assertNull(row.get(0))
+  })
+}
+
   /**
    * Test case for disable and enable meta fields.
    */
@@ -467,7 +516,7 @@ class TestHoodieSparkSqlWriter {
     val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
 
     // try write to Hudi
-    assertThrows[IllegalArgumentException] {
+    assertThrows[IOException] {
       HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, tableOpts - DataSourceWriteOptions.PARTITIONPATH_FIELD.key, df)
     }
   }
@@ -604,13 +653,13 @@ class TestHoodieSparkSqlWriter {
         mapAsJavaMap(fooTableParams)).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]])
 
       HoodieSparkSqlWriter.bootstrap(sqlContext, SaveMode.Append, fooTableModifier, spark.emptyDataFrame, Option.empty,
-        Option(client))
+        Option.empty, Option(client))
 
       // Verify that HoodieWriteClient is closed correctly
       verify(client, times(1)).close()
 
       val ignoreResult = HoodieSparkSqlWriter.bootstrap(sqlContext, SaveMode.Ignore, fooTableModifier, spark.emptyDataFrame, Option.empty,
-        Option(client))
+        Option.empty, Option(client))
       assertFalse(ignoreResult)
       verify(client, times(2)).close()
 
@@ -1287,6 +1336,53 @@ class TestHoodieSparkSqlWriter {
         .mode(SaveMode.Overwrite).save(tablePath1)
     }
     assert(exc.getMessage.contains("Consistent hashing bucket index does not work with COW table. Use simple bucket index or an MOR table."))
+  }
+
+  /*
+   * Test case for instant is generated with commit timezone when TIMELINE_TIMEZONE set to UTC
+   * related to HUDI-5978
+   * Issue [HUDI-7275] is tracking this test being disabled
+   */
+  @Disabled
+  def testInsertDatasetWithTimelineTimezoneUTC(): Unit = {
+    val defaultTimezone = TimeZone.getDefault
+    try {
+      val fooTableModifier = commonTableModifier.updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+        .updated(DataSourceWriteOptions.INSERT_DROP_DUPS.key, "false")
+        .updated(HoodieTableConfig.TIMELINE_TIMEZONE.key, "UTC") // utc timezone
+
+      // generate the inserts
+      val schema = DataSourceTestUtils.getStructTypeExampleSchema
+      val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+      val records = DataSourceTestUtils.generateRandomRows(100)
+      val recordsSeq = convertRowListToSeq(records)
+      val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
+
+      // get UTC instant before write
+      val beforeWriteInstant = Instant.now()
+
+      // set local timezone to America/Los_Angeles(UTC-7)
+      TimeZone.setDefault(TimeZone.getTimeZone("America/Los_Angeles"))
+
+      // write to Hudi
+      val (success, writeInstantTimeOpt, _, _, _, hoodieTableConfig) = HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, df)
+      assertTrue(success)
+      val hoodieTableTimelineTimezone = HoodieTimelineTimeZone.valueOf(hoodieTableConfig.getString(HoodieTableConfig.TIMELINE_TIMEZONE))
+      assertEquals(hoodieTableTimelineTimezone, HoodieTimelineTimeZone.UTC)
+
+      val utcFormatter = new DateTimeFormatterBuilder()
+        .appendPattern(HoodieInstantTimeGenerator.SECS_INSTANT_TIMESTAMP_FORMAT)
+        .appendValue(ChronoField.MILLI_OF_SECOND, 3)
+        .toFormatter
+        .withZone(ZoneId.of("UTC"))
+      // instant parsed by UTC timezone
+      val writeInstant = Instant.from(utcFormatter.parse(writeInstantTimeOpt.get()))
+
+      assertTrue(beforeWriteInstant.toEpochMilli < writeInstant.toEpochMilli,
+        s"writeInstant(${writeInstant.toEpochMilli}) must always be greater than beforeWriteInstant(${beforeWriteInstant.toEpochMilli}) if writeInstant was generated with UTC timezone")
+    } finally {
+      TimeZone.setDefault(defaultTimezone)
+    }
   }
 
   private def fetchActualSchema(): Schema = {

@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.config;
 
+import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+
 import javax.annotation.concurrent.Immutable;
 
 import java.io.File;
@@ -150,6 +152,12 @@ public class HoodieStorageConfig extends HoodieConfig {
       .withDocumentation("Would only be effective with Spark 3.3+. Sets spark.sql.parquet.fieldId.write.enabled. "
           + "If enabled, Spark will write out parquet native field ids that are stored inside StructField's metadata as parquet.field.id to parquet files.");
 
+  public static final ConfigProperty<Boolean> PARQUET_WITH_BLOOM_FILTER_ENABLED = ConfigProperty
+      .key("hoodie.parquet.bloom.filter.enabled")
+      .defaultValue(true)
+      .withDocumentation("Control whether to write bloom filter or not. Default true. "
+          + "We can set to false in non bloom index cases for CPU resource saving.");
+
   public static final ConfigProperty<String> HFILE_COMPRESSION_ALGORITHM_NAME = ConfigProperty
       .key("hoodie.hfile.compression.algorithm")
       .defaultValue("GZ")
@@ -169,6 +177,45 @@ public class HoodieStorageConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Expected additional compression as records move from log files to parquet. Used for merge_on_read "
           + "table to send inserts into log files & control the size of compacted parquet file.");
+
+  // Configs that control the bloom filter that is written to the file footer
+  public static final ConfigProperty<String> BLOOM_FILTER_TYPE = ConfigProperty
+      .key("hoodie.bloom.index.filter.type")
+      .defaultValue(BloomFilterTypeCode.DYNAMIC_V0.name())
+      .withValidValues(BloomFilterTypeCode.SIMPLE.name(), BloomFilterTypeCode.DYNAMIC_V0.name())
+      .markAdvanced()
+      .withDocumentation(BloomFilterTypeCode.class);
+
+  public static final ConfigProperty<String> BLOOM_FILTER_NUM_ENTRIES_VALUE = ConfigProperty
+      .key("hoodie.index.bloom.num_entries")
+      .defaultValue("60000")
+      .markAdvanced()
+      .withDocumentation("Only applies if index type is BLOOM. "
+          + "This is the number of entries to be stored in the bloom filter. "
+          + "The rationale for the default: Assume the maxParquetFileSize is 128MB and averageRecordSize is 1kb and "
+          + "hence we approx a total of 130K records in a file. The default (60000) is roughly half of this approximation. "
+          + "Warning: Setting this very low, will generate a lot of false positives and index lookup "
+          + "will have to scan a lot more files than it has to and setting this to a very high number will "
+          + "increase the size every base file linearly (roughly 4KB for every 50000 entries). "
+          + "This config is also used with DYNAMIC bloom filter which determines the initial size for the bloom.");
+
+  public static final ConfigProperty<String> BLOOM_FILTER_FPP_VALUE = ConfigProperty
+      .key("hoodie.index.bloom.fpp")
+      .defaultValue("0.000000001")
+      .markAdvanced()
+      .withDocumentation("Only applies if index type is BLOOM. "
+          + "Error rate allowed given the number of entries. This is used to calculate how many bits should be "
+          + "assigned for the bloom filter and the number of hash functions. This is usually set very low (default: 0.000000001), "
+          + "we like to tradeoff disk space for lower false positives. "
+          + "If the number of entries added to bloom filter exceeds the configured value (hoodie.index.bloom.num_entries), "
+          + "then this fpp may not be honored.");
+
+  public static final ConfigProperty<String> BLOOM_FILTER_DYNAMIC_MAX_ENTRIES = ConfigProperty
+      .key("hoodie.bloom.index.filter.dynamic.max.entries")
+      .defaultValue("100000")
+      .markAdvanced()
+      .withDocumentation("The threshold for the maximum number of keys to record in a dynamic Bloom filter row. "
+          + "Only applies if filter type is BloomFilterTypeCode.DYNAMIC_V0.");
 
   public static final ConfigProperty<String> HOODIE_AVRO_WRITE_SUPPORT_CLASS = ConfigProperty
       .key("hoodie.avro.write.support.class")
@@ -339,6 +386,11 @@ public class HoodieStorageConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder logFileDataBlockFormat(String format) {
+      storageConfig.setValue(LOGFILE_DATA_BLOCK_FORMAT, format);
+      return this;
+    }
+
     public Builder logFileDataBlockMaxSize(long dataBlockSize) {
       storageConfig.setValue(LOGFILE_DATA_BLOCK_MAX_SIZE, String.valueOf(dataBlockSize));
       return this;
@@ -371,6 +423,11 @@ public class HoodieStorageConfig extends HoodieConfig {
 
     public Builder parquetFieldIdWrite(String parquetFieldIdWrite) {
       storageConfig.setValue(PARQUET_FIELD_ID_WRITE_ENABLED, parquetFieldIdWrite);
+      return this;
+    }
+
+    public Builder parquetBloomFilterEnable(boolean parquetBloomFilterEnable) {
+      storageConfig.setValue(PARQUET_WITH_BLOOM_FILTER_ENABLED, String.valueOf(parquetBloomFilterEnable));
       return this;
     }
 

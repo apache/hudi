@@ -51,6 +51,11 @@ public class SparkTaskContextSupplier extends TaskContextSupplier implements Ser
   }
 
   @Override
+  public Supplier<Integer> getAttemptNumberSupplier() {
+    return () -> TaskContext.get().attemptNumber();
+  }
+
+  @Override
   public Option<String> getProperty(EngineProperty prop) {
     if (prop == EngineProperty.TOTAL_MEMORY_AVAILABLE) {
       // This is hard-coded in spark code {@link
@@ -89,4 +94,5 @@ public class SparkTaskContextSupplier extends TaskContextSupplier implements Ser
     }
     throw new HoodieException("Unknown engine property :" + prop);
   }
+
 }

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -28,11 +27,13 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.Map;
 
 /**
@@ -46,9 +47,18 @@ public class FiveToSixUpgradeHandler implements UpgradeHandler {
 
   @Override
   public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
-    HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
+    final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
+
+    deleteCompactionRequestedFileFromAuxiliaryFolder(table);
+
+    return Collections.emptyMap();
+  }
+
+  /**
+   * See HUDI-6040.
+   */
+  private void deleteCompactionRequestedFileFromAuxiliaryFolder(HoodieTable table) {
     HoodieTableMetaClient metaClient = table.getMetaClient();
-    // delete compaction file from .aux
     HoodieTimeline compactionTimeline = metaClient.getActiveTimeline().filterPendingCompactionTimeline()
         .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
     compactionTimeline.getInstantsAsStream().forEach(
@@ -65,6 +75,6 @@ public class FiveToSixUpgradeHandler implements UpgradeHandler {
           }
         }
     );
-    return new HashMap<>();
   }
+
 }

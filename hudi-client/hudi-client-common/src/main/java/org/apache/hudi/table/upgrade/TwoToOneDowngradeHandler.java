@@ -70,7 +70,7 @@ public class TwoToOneDowngradeHandler implements DowngradeHandler {
         throw new HoodieException("Converting marker files to DIRECT style failed during downgrade", e);
       }
     }
-    return Collections.EMPTY_MAP;
+    return Collections.emptyMap();
   }
 
   /**

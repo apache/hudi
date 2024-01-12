@@ -37,7 +37,7 @@ class TestDeleteFromTable extends HoodieSparkSqlTestBase {
              |    tableType = '$tableType'
              | )
              | PARTITIONED BY (dt)
-             | LOCATION '${tmp.getCanonicalPath}'
+             | LOCATION '${tmp.getCanonicalPath}/$tableName'
          """.stripMargin)
 
         // NOTE: Do not write the field alias, the partition field must be placed last.

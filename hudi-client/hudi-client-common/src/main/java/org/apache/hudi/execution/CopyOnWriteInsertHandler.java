@@ -19,7 +19,6 @@
 package org.apache.hudi.execution;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
@@ -28,7 +27,10 @@ import org.apache.hudi.execution.HoodieLazyInsertIterable.HoodieInsertValueGenRe
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.HoodieTable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -42,6 +44,8 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 public class CopyOnWriteInsertHandler<T>
     implements HoodieConsumer<HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> {
 
+  private static final Logger LOG = LoggerFactory.getLogger(CopyOnWriteInsertHandler.class);
+
   private final HoodieWriteConfig config;
   private final String instantTime;
   private final boolean areRecordsSorted;
@@ -49,6 +53,9 @@ public class CopyOnWriteInsertHandler<T>
   private final String idPrefix;
   private final TaskContextSupplier taskContextSupplier;
   private final WriteHandleFactory writeHandleFactory;
+
+  // Tracks number of skipped records seen by this instance
+  private int numSkippedRecords = 0;
 
   private final List<WriteStatus> statuses = new ArrayList<>();
   // Stores the open HoodieWriteHandle for each table partition path
@@ -73,6 +80,15 @@ public class CopyOnWriteInsertHandler<T>
   public void consume(HoodieInsertValueGenResult<HoodieRecord> genResult) {
     final HoodieRecord record = genResult.getResult();
     String partitionPath = record.getPartitionPath();
+    // just skip the ignored record，do not make partitions on fs
+    try {
+      if (record.shouldIgnore(genResult.schema, config.getProps())) {
+        numSkippedRecords++;
+        return;
+      }
+    } catch (IOException e) {
+      LOG.warn("Writing record should be ignore " + record, e);
+    }
     HoodieWriteHandle<?,?,?,?> handle = handles.get(partitionPath);
     if (handle == null) {
       // If the records are sorted, this means that we encounter a new partition path
@@ -95,13 +111,13 @@ public class CopyOnWriteInsertHandler<T>
           record.getPartitionPath(), idPrefix, taskContextSupplier);
       handles.put(partitionPath, handle);
     }
-    handle.write(record, genResult.schema, new TypedProperties(genResult.props));
+    handle.write(record, genResult.schema, config.getProps());
   }
 
   @Override
   public List<WriteStatus> finish() {
     closeOpenHandles();
-    checkState(statuses.size() > 0);
+    checkState(statuses.size() + numSkippedRecords > 0);
     return statuses;
   }
 

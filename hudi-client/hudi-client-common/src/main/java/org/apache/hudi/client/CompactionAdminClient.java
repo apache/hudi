@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -39,7 +38,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.action.compact.OperationResult;
 
@@ -53,11 +51,11 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN_OR_EQUALS;
 
 /**
  * Client to perform admin operations related to compaction.
@@ -99,10 +97,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
   }
 
   /**
-   * Un-schedules compaction plan. Remove All compaction operation scheduled and re-arrange delta-files that were
-   * created after the compaction was scheduled.
-   *
-   * This operation MUST be executed with compactions and writer turned OFF.
+   * Un-schedules compaction plan. Remove All compaction operation scheduled.
    *
    * @param compactionInstant Compaction Instant
    * @param skipValidation Skip validation step
@@ -112,17 +107,9 @@ public class CompactionAdminClient extends BaseHoodieClient {
   public List<RenameOpResult> unscheduleCompactionPlan(String compactionInstant, boolean skipValidation,
       int parallelism, boolean dryRun) throws Exception {
     HoodieTableMetaClient metaClient = createMetaClient(false);
-    List<Pair<HoodieLogFile, HoodieLogFile>> renameActions = getRenamingActionsForUnschedulingCompactionPlan(metaClient,
-        compactionInstant, parallelism, Option.empty(), skipValidation);
-
-    List<RenameOpResult> res = runRenamingOps(metaClient, renameActions, parallelism, dryRun);
-
-    Option<Boolean> success =
-        Option.fromJavaOptional(res.stream().map(r -> (r.isExecuted() && r.isSuccess())).reduce(Boolean::logicalAnd));
-    Option<Boolean> allSuccess = success.isPresent() ? Option.of(success.get()) : Option.empty();
 
     // Only if all operations are successfully executed
-    if (!dryRun && allSuccess.isPresent() && allSuccess.get()) {
+    if (!dryRun) {
       // Overwrite compaction request with empty compaction operations
       HoodieInstant inflight = new HoodieInstant(State.INFLIGHT, COMPACTION_ACTION, compactionInstant);
       Path inflightPath = new Path(metaClient.getMetaPath(), inflight.getFileName());
@@ -136,7 +123,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
       boolean deleted = metaClient.getFs().delete(new Path(metaClient.getMetaPath(), instant.getFileName()), false);
       ValidationUtils.checkArgument(deleted, "Unable to delete compaction instant.");
     }
-    return res;
+    return new ArrayList<>();
   }
 
   /**
@@ -152,12 +139,8 @@ public class CompactionAdminClient extends BaseHoodieClient {
   public List<RenameOpResult> unscheduleCompactionFileId(HoodieFileGroupId fgId, boolean skipValidation, boolean dryRun)
       throws Exception {
     HoodieTableMetaClient metaClient = createMetaClient(false);
-    List<Pair<HoodieLogFile, HoodieLogFile>> renameActions =
-        getRenamingActionsForUnschedulingCompactionForFileId(metaClient, fgId, Option.empty(), skipValidation);
 
-    List<RenameOpResult> res = runRenamingOps(metaClient, renameActions, 1, dryRun);
-
-    if (!dryRun && !res.isEmpty() && res.get(0).isExecuted() && res.get(0).isSuccess()) {
+    if (!dryRun) {
       // Ready to remove this file-Id from compaction request
       Pair<String, HoodieCompactionOperation> compactionOperationWithInstant =
           CompactionUtils.getAllPendingCompactionOperations(metaClient).get(fgId);
@@ -166,6 +149,9 @@ public class CompactionAdminClient extends BaseHoodieClient {
       List<HoodieCompactionOperation> newOps = plan.getOperations().stream().filter(
           op -> (!op.getFileId().equals(fgId.getFileId())) && (!op.getPartitionPath().equals(fgId.getPartitionPath())))
           .collect(Collectors.toList());
+      if (newOps.size() == plan.getOperations().size()) {
+        return new ArrayList<>();
+      }
       HoodieCompactionPlan newPlan =
           HoodieCompactionPlan.newBuilder().setOperations(newOps).setExtraMetadata(plan.getExtraMetadata()).build();
       HoodieInstant inflight =
@@ -180,7 +166,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
           new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, compactionOperationWithInstant.getLeft()),
           TimelineMetadataUtils.serializeCompactionPlan(newPlan), true);
     }
-    return res;
+    return new ArrayList<>();
   }
 
   /**
@@ -195,19 +181,9 @@ public class CompactionAdminClient extends BaseHoodieClient {
   public List<RenameOpResult> repairCompaction(String compactionInstant, int parallelism, boolean dryRun)
       throws Exception {
     HoodieTableMetaClient metaClient = createMetaClient(false);
-    List<ValidationOpResult> validationResults = validateCompactionPlan(metaClient, compactionInstant, parallelism);
-    List<ValidationOpResult> failed =
-        validationResults.stream().filter(v -> !v.isSuccess()).collect(Collectors.toList());
-    if (failed.isEmpty()) {
-      return new ArrayList<>();
-    }
+    validateCompactionPlan(metaClient, compactionInstant, parallelism);
 
-    final HoodieTableFileSystemView fsView =
-        new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
-    List<Pair<HoodieLogFile, HoodieLogFile>> renameActions =
-        failed.stream().flatMap(v -> getRenamingActionsToAlignWithCompactionOperation(metaClient, compactionInstant,
-            v.getOperation(), Option.of(fsView)).stream()).collect(Collectors.toList());
-    return runRenamingOps(metaClient, renameActions, parallelism, dryRun);
+    return new ArrayList<>();
   }
 
   /**
@@ -218,37 +194,6 @@ public class CompactionAdminClient extends BaseHoodieClient {
     return TimelineMetadataUtils.deserializeCompactionPlan(
             metaClient.getActiveTimeline().readCompactionPlanAsBytes(
                     HoodieTimeline.getCompactionRequestedInstant(compactionInstant)).get());
-  }
-
-  /**
-   * Get Renaming actions to ensure the log-files of merged file-slices is aligned with compaction operation. This
-   * method is used to recover from failures during unschedule compaction operations.
-   *
-   * @param metaClient Hoodie Table Meta Client
-   * @param compactionInstant Compaction Instant
-   * @param op Compaction Operation
-   * @param fsViewOpt File System View
-   */
-  protected static List<Pair<HoodieLogFile, HoodieLogFile>> getRenamingActionsToAlignWithCompactionOperation(
-      HoodieTableMetaClient metaClient, String compactionInstant, CompactionOperation op,
-      Option<HoodieTableFileSystemView> fsViewOpt) {
-    HoodieTableFileSystemView fileSystemView = fsViewOpt.isPresent() ? fsViewOpt.get()
-        : new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
-    HoodieInstant lastInstant = metaClient.getCommitsAndCompactionTimeline().lastInstant().get();
-    FileSlice merged =
-        fileSystemView.getLatestMergedFileSlicesBeforeOrOn(op.getPartitionPath(), lastInstant.getTimestamp())
-            .filter(fs -> fs.getFileId().equals(op.getFileId())).findFirst().get();
-    final int maxVersion = op.getDeltaFileNames().stream().map(lf -> FSUtils.getFileVersionFromLog(new Path(lf)))
-        .reduce((x, y) -> x > y ? x : y).orElse(0);
-    List<HoodieLogFile> logFilesToBeMoved =
-        merged.getLogFiles().filter(lf -> lf.getLogVersion() > maxVersion).collect(Collectors.toList());
-    return logFilesToBeMoved.stream().map(lf -> {
-      ValidationUtils.checkArgument(lf.getLogVersion() - maxVersion > 0, "Expect new log version to be sane");
-      HoodieLogFile newLogFile = new HoodieLogFile(new Path(lf.getPath().getParent(),
-          FSUtils.makeLogFileName(lf.getFileId(), "." + FSUtils.getFileExtensionFromLog(lf.getPath()),
-              compactionInstant, lf.getLogVersion() - maxVersion, HoodieLogFormat.UNKNOWN_WRITE_TOKEN)));
-      return Pair.of(lf, newLogFile);
-    }).collect(Collectors.toList());
   }
 
   /**
@@ -321,7 +266,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
                   + logFilesInCompactionOp + ", Got :" + logFilesInFileSlice);
           Set<HoodieLogFile> diff = logFilesInFileSlice.stream().filter(lf -> !logFilesInCompactionOp.contains(lf))
               .collect(Collectors.toSet());
-          ValidationUtils.checkArgument(diff.stream().allMatch(lf -> lf.getBaseCommitTime().equals(compactionInstant)),
+          ValidationUtils.checkArgument(diff.stream().allMatch(lf -> HoodieTimeline.compareTimestamps(lf.getDeltaCommitTime(), GREATER_THAN_OR_EQUALS, compactionInstant)),
               "There are some log-files which are neither specified in compaction plan "
                   + "nor present after compaction request instant. Some of these :" + diff);
         } else {
@@ -361,7 +306,7 @@ public class CompactionAdminClient extends BaseHoodieClient {
           } catch (IOException e) {
             LOG.error("Error renaming log file", e);
             LOG.error("\n\n\n***NOTE Compaction is in inconsistent state. Try running \"compaction repair "
-                + lfPair.getLeft().getBaseCommitTime() + "\" to recover from failure ***\n\n\n");
+                + lfPair.getLeft().getDeltaCommitTime() + "\" to recover from failure ***\n\n\n");
             return new RenameOpResult(lfPair, false, Option.of(e));
           }
         }, parallelism);
@@ -371,115 +316,6 @@ public class CompactionAdminClient extends BaseHoodieClient {
             .collect(Collectors.toList());
       }
     }
-  }
-
-  /**
-   * Generate renaming actions for unscheduling a pending compaction plan. NOTE: Can only be used safely when no writer
-   * (ingestion/compaction) is running.
-   *
-   * @param metaClient Hoodie Table MetaClient
-   * @param compactionInstant Compaction Instant to be unscheduled
-   * @param fsViewOpt Cached File System View
-   * @param skipValidation Skip Validation
-   * @return list of pairs of log-files (old, new) and for each pair, rename must be done to successfully unschedule
-   *         compaction.
-   */
-  public List<Pair<HoodieLogFile, HoodieLogFile>> getRenamingActionsForUnschedulingCompactionPlan(
-      HoodieTableMetaClient metaClient, String compactionInstant, int parallelism,
-      Option<HoodieTableFileSystemView> fsViewOpt, boolean skipValidation) throws IOException {
-    HoodieTableFileSystemView fsView = fsViewOpt.isPresent() ? fsViewOpt.get()
-        : new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
-    HoodieCompactionPlan plan = getCompactionPlan(metaClient, compactionInstant);
-    if (plan.getOperations() != null) {
-      LOG.info(
-          "Number of Compaction Operations :" + plan.getOperations().size() + " for instant :" + compactionInstant);
-      List<CompactionOperation> ops = plan.getOperations().stream()
-          .map(CompactionOperation::convertFromAvroRecordInstance).collect(Collectors.toList());
-      context.setJobStatus(this.getClass().getSimpleName(), "Generate compaction unscheduling operations: " + config.getTableName());
-      return context.flatMap(ops, op -> {
-        try {
-          return getRenamingActionsForUnschedulingCompactionOperation(metaClient, compactionInstant, op,
-              Option.of(fsView), skipValidation).stream();
-        } catch (IOException ioe) {
-          throw new HoodieIOException(ioe.getMessage(), ioe);
-        } catch (CompactionValidationException ve) {
-          throw new HoodieException(ve);
-        }
-      }, parallelism);
-    }
-    LOG.warn("No operations for compaction instant : " + compactionInstant);
-    return new ArrayList<>();
-  }
-
-  /**
-   * Generate renaming actions for unscheduling a compaction operation NOTE: Can only be used safely when no writer
-   * (ingestion/compaction) is running.
-   *
-   * @param metaClient Hoodie Table MetaClient
-   * @param compactionInstant Compaction Instant
-   * @param operation Compaction Operation
-   * @param fsViewOpt Cached File System View
-   * @param skipValidation Skip Validation
-   * @return list of pairs of log-files (old, new) and for each pair, rename must be done to successfully unschedule
-   *         compaction.
-   */
-  public List<Pair<HoodieLogFile, HoodieLogFile>> getRenamingActionsForUnschedulingCompactionOperation(
-      HoodieTableMetaClient metaClient, String compactionInstant, CompactionOperation operation,
-      Option<HoodieTableFileSystemView> fsViewOpt, boolean skipValidation) throws IOException {
-    List<Pair<HoodieLogFile, HoodieLogFile>> result = new ArrayList<>();
-    HoodieTableFileSystemView fileSystemView = fsViewOpt.isPresent() ? fsViewOpt.get()
-        : new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
-    if (!skipValidation) {
-      validateCompactionOperation(metaClient, compactionInstant, operation, Option.of(fileSystemView));
-    }
-    HoodieInstant lastInstant = metaClient.getCommitsAndCompactionTimeline().lastInstant().get();
-    FileSlice merged =
-        fileSystemView.getLatestMergedFileSlicesBeforeOrOn(operation.getPartitionPath(), lastInstant.getTimestamp())
-            .filter(fs -> fs.getFileId().equals(operation.getFileId())).findFirst().get();
-    List<HoodieLogFile> logFilesToRepair =
-        merged.getLogFiles().filter(lf -> lf.getBaseCommitTime().equals(compactionInstant))
-            .sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
-    FileSlice fileSliceForCompaction =
-        fileSystemView.getLatestFileSlicesBeforeOrOn(operation.getPartitionPath(), operation.getBaseInstantTime(), true)
-            .filter(fs -> fs.getFileId().equals(operation.getFileId())).findFirst().get();
-    int maxUsedVersion = fileSliceForCompaction.getLogFiles().findFirst().map(HoodieLogFile::getLogVersion)
-        .orElse(HoodieLogFile.LOGFILE_BASE_VERSION - 1);
-    String logExtn = fileSliceForCompaction.getLogFiles().findFirst().map(lf -> "." + lf.getFileExtension())
-        .orElse(HoodieLogFile.DELTA_EXTENSION);
-    String parentPath = fileSliceForCompaction.getBaseFile().map(df -> new Path(df.getPath()).getParent().toString())
-        .orElse(fileSliceForCompaction.getLogFiles().findFirst().map(lf -> lf.getPath().getParent().toString()).get());
-    for (HoodieLogFile toRepair : logFilesToRepair) {
-      int version = maxUsedVersion + 1;
-      HoodieLogFile newLf = new HoodieLogFile(new Path(parentPath, FSUtils.makeLogFileName(operation.getFileId(),
-          logExtn, operation.getBaseInstantTime(), version, HoodieLogFormat.UNKNOWN_WRITE_TOKEN)));
-      result.add(Pair.of(toRepair, newLf));
-      maxUsedVersion = version;
-    }
-    return result;
-  }
-
-  /**
-   * Generate renaming actions for unscheduling a fileId from pending compaction. NOTE: Can only be used safely when no
-   * writer (ingestion/compaction) is running.
-   *
-   * @param metaClient Hoodie Table MetaClient
-   * @param fgId FileGroupId to remove compaction
-   * @param fsViewOpt Cached File System View
-   * @param skipValidation Skip Validation
-   * @return list of pairs of log-files (old, new) and for each pair, rename must be done to successfully unschedule
-   *         compaction.
-   */
-  public List<Pair<HoodieLogFile, HoodieLogFile>> getRenamingActionsForUnschedulingCompactionForFileId(
-      HoodieTableMetaClient metaClient, HoodieFileGroupId fgId, Option<HoodieTableFileSystemView> fsViewOpt,
-      boolean skipValidation) throws IOException {
-    Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> allPendingCompactions =
-        CompactionUtils.getAllPendingCompactionOperations(metaClient);
-    if (allPendingCompactions.containsKey(fgId)) {
-      Pair<String, HoodieCompactionOperation> opWithInstant = allPendingCompactions.get(fgId);
-      return getRenamingActionsForUnschedulingCompactionOperation(metaClient, opWithInstant.getKey(),
-          CompactionOperation.convertFromAvroRecordInstance(opWithInstant.getValue()), fsViewOpt, skipValidation);
-    }
-    throw new HoodieException("FileGroupId " + fgId + " not in pending compaction");
   }
 
   /**

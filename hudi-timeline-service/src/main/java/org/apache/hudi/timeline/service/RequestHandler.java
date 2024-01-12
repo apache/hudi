@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.dto.CompactionOpDTO;
 import org.apache.hudi.common.table.timeline.dto.FileGroupDTO;
 import org.apache.hudi.common.table.timeline.dto.FileSliceDTO;
 import org.apache.hudi.common.table.timeline.dto.InstantDTO;
+import org.apache.hudi.common.table.timeline.dto.InstantStateDTO;
 import org.apache.hudi.common.table.timeline.dto.TimelineDTO;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView;
@@ -38,11 +39,13 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.timeline.service.handlers.BaseFileHandler;
 import org.apache.hudi.timeline.service.handlers.FileSliceHandler;
+import org.apache.hudi.timeline.service.handlers.InstantStateHandler;
 import org.apache.hudi.timeline.service.handlers.MarkerHandler;
 import org.apache.hudi.timeline.service.handlers.TimelineHandler;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
 import io.javalin.Javalin;
 import io.javalin.http.BadRequestResponse;
 import io.javalin.http.Context;
@@ -67,7 +70,7 @@ import java.util.concurrent.ScheduledExecutorService;
  */
 public class RequestHandler {
 
-  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().registerModule(new AfterburnerModule());
   private static final Logger LOG = LoggerFactory.getLogger(RequestHandler.class);
 
   private final TimelineService.Config timelineServiceConfig;
@@ -77,6 +80,7 @@ public class RequestHandler {
   private final FileSliceHandler sliceHandler;
   private final BaseFileHandler dataFileHandler;
   private final MarkerHandler markerHandler;
+  private final InstantStateHandler instantStateHandler;
   private final Registry metricsRegistry = Registry.getRegistry("TimelineService");
   private ScheduledExecutorService asyncResultService = Executors.newSingleThreadScheduledExecutor();
 
@@ -94,6 +98,11 @@ public class RequestHandler {
           conf, timelineServiceConfig, hoodieEngineContext, fileSystem, viewManager, metricsRegistry);
     } else {
       this.markerHandler = null;
+    }
+    if (timelineServiceConfig.enableInstantStateRequests) {
+      this.instantStateHandler = new InstantStateHandler(conf, timelineServiceConfig, fileSystem, viewManager);
+    } else {
+      this.instantStateHandler = null;
     }
     if (timelineServiceConfig.async) {
       asyncResultService = Executors.newSingleThreadScheduledExecutor();
@@ -139,6 +148,9 @@ public class RequestHandler {
     if (markerHandler != null) {
       registerMarkerAPI();
     }
+    if (instantStateHandler != null) {
+      registerInstantStateAPI();
+    }
   }
 
   public void stop() {
@@ -160,7 +172,7 @@ public class RequestHandler {
     if (LOG.isDebugEnabled()) {
       LOG.debug("Client [ LastTs=" + lastKnownInstantFromClient + ", TimelineHash=" + timelineHashFromClient
           + "], localTimeline=" + localTimeline.getInstants());
-    } 
+    }
 
     if ((!localTimeline.getInstantsAsStream().findAny().isPresent())
         && HoodieTimeline.INVALID_INSTANT_TS.equals(lastKnownInstantFromClient)) {
@@ -325,6 +337,14 @@ public class RequestHandler {
       writeValueAsString(ctx, dtos);
     }, true));
 
+    app.get(RemoteHoodieTableFileSystemView.LATEST_PARTITION_SLICES_STATELESS_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("LATEST_PARTITION_SLICES_STATELESS", 1);
+      List<FileSliceDTO> dtos = sliceHandler.getLatestFileSlicesStateless(
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""));
+      writeValueAsString(ctx, dtos);
+    }, true));
+
     app.get(RemoteHoodieTableFileSystemView.LATEST_PARTITION_SLICE_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("LATEST_PARTITION_SLICE", 1);
       List<FileSliceDTO> dtos = sliceHandler.getLatestFileSlice(
@@ -404,6 +424,14 @@ public class RequestHandler {
     app.get(RemoteHoodieTableFileSystemView.ALL_FILEGROUPS_FOR_PARTITION_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("ALL_FILEGROUPS_FOR_PARTITION", 1);
       List<FileGroupDTO> dtos = sliceHandler.getAllFileGroups(
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
+          ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""));
+      writeValueAsString(ctx, dtos);
+    }, true));
+
+    app.get(RemoteHoodieTableFileSystemView.ALL_FILEGROUPS_FOR_PARTITION_STATELESS_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("ALL_FILEGROUPS_FOR_PARTITION_STATELESS", 1);
+      List<FileGroupDTO> dtos = sliceHandler.getAllFileGroupsStateless(
           ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.BASEPATH_PARAM, String.class).getOrThrow(e -> new HoodieException("Basepath is invalid")),
           ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.PARTITION_PARAM, String.class).getOrDefault(""));
       writeValueAsString(ctx, dtos);
@@ -501,6 +529,24 @@ public class RequestHandler {
       metricsRegistry.add("DELETE_MARKER_DIR", 1);
       boolean success = markerHandler.deleteMarkers(
           ctx.queryParamAsClass(MarkerOperation.MARKER_DIR_PATH_PARAM, String.class).getOrDefault(""));
+      writeValueAsString(ctx, success);
+    }, false));
+  }
+
+  private void registerInstantStateAPI() {
+    app.get(InstantStateHandler.ALL_INSTANT_STATE_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("ALL_INSTANT_STATE", 1);
+      List<InstantStateDTO> instantStates = instantStateHandler.getAllInstantStates(
+          ctx.queryParam(InstantStateHandler.INSTANT_STATE_DIR_PATH_PARAM)
+      );
+      writeValueAsString(ctx, instantStates);
+    }, false));
+
+    app.post(InstantStateHandler.REFRESH_INSTANT_STATE, new ViewHandler(ctx -> {
+      metricsRegistry.add("REFRESH_INSTANT_STATE", 1);
+      boolean success = instantStateHandler.refresh(
+          ctx.queryParam(InstantStateHandler.INSTANT_STATE_DIR_PATH_PARAM)
+      );
       writeValueAsString(ctx, success);
     }, false));
   }

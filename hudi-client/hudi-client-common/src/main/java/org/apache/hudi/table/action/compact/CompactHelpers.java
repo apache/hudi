@@ -36,9 +36,10 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Set;
+
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 
 /**
  * Base class helps to perform compact.
@@ -81,9 +82,10 @@ public class CompactHelpers<T, I, K, O> {
   public void completeInflightCompaction(HoodieTable table, String compactionCommitTime, HoodieCommitMetadata commitMetadata) {
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     try {
-      activeTimeline.transitionCompactionInflightToComplete(
+      // Callers should already guarantee the lock.
+      activeTimeline.transitionCompactionInflightToComplete(false,
           HoodieTimeline.getCompactionInflightInstant(compactionCommitTime),
-          Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+          serializeCommitMetadata(commitMetadata));
     } catch (IOException e) {
       throw new HoodieCompactionException(
           "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + compactionCommitTime, e);
@@ -93,9 +95,10 @@ public class CompactHelpers<T, I, K, O> {
   public void completeInflightLogCompaction(HoodieTable table, String logCompactionCommitTime, HoodieCommitMetadata commitMetadata) {
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     try {
-      activeTimeline.transitionLogCompactionInflightToComplete(
+      // Callers should already guarantee the lock.
+      activeTimeline.transitionLogCompactionInflightToComplete(false,
           HoodieTimeline.getLogCompactionInflightInstant(logCompactionCommitTime),
-          Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+          serializeCommitMetadata(commitMetadata));
     } catch (IOException e) {
       throw new HoodieCompactionException(
           "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + logCompactionCommitTime, e);
@@ -103,7 +106,7 @@ public class CompactHelpers<T, I, K, O> {
   }
 
   public Option<InstantRange> getInstantRange(HoodieTableMetaClient metaClient) {
-    return HoodieTableMetadata.isMetadataTable(metaClient.getBasePathV2().toString())
+    return metaClient.isMetadataTable()
         ? Option.of(getMetadataLogReaderInstantRange(metaClient)) : Option.empty();
   }
 

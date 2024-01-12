@@ -23,6 +23,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
 
@@ -55,7 +56,7 @@ public abstract class HoodieBootstrapFileReader<T> implements HoodieFileReader<T
   }
 
   @Override
-  public Set<String> filterRowKeys(Set<String> candidateRowKeys) {
+  public Set<Pair<String, Long>> filterRowKeys(Set<String> candidateRowKeys) {
     return skeletonFileReader.filterRowKeys(candidateRowKeys);
   }
 
@@ -78,6 +79,29 @@ public abstract class HoodieBootstrapFileReader<T> implements HoodieFileReader<T
       @Override
       protected void setPartitionPathField(int position, Object fieldValue, T row) {
         setPartitionField(position, fieldValue, row);
+      }
+    };
+  }
+
+  @Override
+  public ClosableIterator<String> getRecordKeyIterator() throws IOException {
+    Schema schema = HoodieAvroUtils.getRecordKeySchema();
+    ClosableIterator<HoodieRecord<T>> skeletonIterator = skeletonFileReader.getRecordIterator(schema, schema);
+    return new ClosableIterator<String>() {
+      @Override
+      public void close() {
+        skeletonIterator.close();
+      }
+
+      @Override
+      public boolean hasNext() {
+        return skeletonIterator.hasNext();
+      }
+
+      @Override
+      public String next() {
+        HoodieRecord<T> skeletonRecord = skeletonIterator.next();
+        return skeletonRecord.getRecordKey(schema, HoodieRecord.RECORD_KEY_METADATA_FIELD);
       }
     };
   }

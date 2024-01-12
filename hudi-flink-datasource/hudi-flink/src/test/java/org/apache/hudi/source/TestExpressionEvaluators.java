@@ -35,10 +35,14 @@ import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.source.prune.DataPruner.convertColumnStats;
 import static org.apache.hudi.source.ExpressionEvaluators.fromExpression;
@@ -388,6 +392,23 @@ public class TestExpressionEvaluators {
       // always return false if the literal value is null
       assertFalse(fromExpression(expr).eval(stats));
     }
+  }
+
+  @ParameterizedTest
+  @MethodSource("twelveObjects")
+  void testAllNumericDataTypes(Object twelve) {
+    ExpressionEvaluators.GreaterThan greaterThan = ExpressionEvaluators.GreaterThan.getInstance();
+    FieldReferenceExpression rExpr = new FieldReferenceExpression("f_int", DataTypes.INT(), 2, 2);
+    ValueLiteralExpression vExpr = new ValueLiteralExpression(twelve);
+
+    RowData indexRow = intIndexRow(11, 13);
+    greaterThan.bindVal(vExpr).bindFieldReference(rExpr);
+    Map<String, ColumnStats> stats = convertColumnStats(indexRow, queryFields(2));
+    assertTrue(greaterThan.eval(stats), "12 < 13");
+  }
+
+  public static Stream<Object> twelveObjects() {
+    return Stream.of((byte) 12, (short) 12, 12, 12L, new BigDecimal(12), 12f, 12d);
   }
 
   private static RowData intIndexRow(Integer minVal, Integer maxVal) {

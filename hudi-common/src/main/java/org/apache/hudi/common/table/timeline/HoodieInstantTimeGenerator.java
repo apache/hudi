@@ -19,11 +19,11 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.exception.HoodieException;
 
 import java.text.ParseException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.DateTimeParseException;
@@ -60,20 +60,23 @@ public class HoodieInstantTimeGenerator {
   private static HoodieTimelineTimeZone commitTimeZone = HoodieTimelineTimeZone.LOCAL;
 
   /**
-   * Returns next instant time that adds N milliseconds to the current time.
-   * Ensures each instant time is atleast 1 second apart since we create instant times at second granularity
+   * Returns next instant time in the correct format.
+   * Ensures each instant time is at least 1 millisecond apart since we create instant times at millisecond granularity.
    *
-   * @param milliseconds Milliseconds to add to current time while generating the new instant time
+   * @param shouldLock    Whether the lock should be enabled to get the instant time.
+   * @param timeGenerator TimeGenerator used to generate the instant time.
+   * @param milliseconds  Milliseconds to add to current time while generating the new instant time
    */
-  public static String createNewInstantTime(long milliseconds) {
+  public static String createNewInstantTime(boolean shouldLock, TimeGenerator timeGenerator, long milliseconds) {
     return lastInstantTime.updateAndGet((oldVal) -> {
       String newCommitTime;
       do {
+        Date d = new Date(timeGenerator.currentTimeMillis(!shouldLock) + milliseconds);
+
         if (commitTimeZone.equals(HoodieTimelineTimeZone.UTC)) {
-          LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
-          newCommitTime = now.format(MILLIS_INSTANT_TIME_FORMATTER);
+          newCommitTime = d.toInstant().atZone(HoodieTimelineTimeZone.UTC.getZoneId())
+              .toLocalDateTime().format(MILLIS_INSTANT_TIME_FORMATTER);
         } else {
-          Date d = new Date(System.currentTimeMillis() + milliseconds);
           newCommitTime = MILLIS_INSTANT_TIME_FORMATTER.format(convertDateToTemporalAccessor(d));
         }
       } while (HoodieTimeline.compareTimestamps(newCommitTime, HoodieActiveTimeline.LESSER_THAN_OR_EQUALS, oldVal));
@@ -83,20 +86,46 @@ public class HoodieInstantTimeGenerator {
 
   public static Date parseDateFromInstantTime(String timestamp) throws ParseException {
     try {
-      // Enables backwards compatibility with non-millisecond granularity instants
-      String timestampInMillis = timestamp;
-      if (isSecondGranularity(timestamp)) {
-        // Add milliseconds to the instant in order to parse successfully
-        timestampInMillis = timestamp + DEFAULT_MILLIS_EXT;
-      } else if (timestamp.length() > MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH) {
-        // compaction and cleaning in metadata has special format. handling it by trimming extra chars and treating it with ms granularity
-        timestampInMillis = timestamp.substring(0, MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH);
-      }
-
+      String timestampInMillis = fixInstantTimeCompatibility(timestamp);
       LocalDateTime dt = LocalDateTime.parse(timestampInMillis, MILLIS_INSTANT_TIME_FORMATTER);
       return Date.from(dt.atZone(ZoneId.systemDefault()).toInstant());
     } catch (DateTimeParseException e) {
       throw new ParseException(e.getMessage(), e.getErrorIndex());
+    }
+  }
+
+  public static String instantTimePlusMillis(String timestamp, long milliseconds) {
+    try {
+      String timestampInMillis = fixInstantTimeCompatibility(timestamp);
+      LocalDateTime dt = LocalDateTime.parse(timestampInMillis, MILLIS_INSTANT_TIME_FORMATTER);
+      ZoneId zoneId = HoodieTimelineTimeZone.UTC.equals(commitTimeZone) ? ZoneId.of("UTC") : ZoneId.systemDefault();
+      return MILLIS_INSTANT_TIME_FORMATTER.format(dt.atZone(zoneId).toInstant().plusMillis(milliseconds).atZone(zoneId).toLocalDateTime());
+    } catch (DateTimeParseException e) {
+      throw new HoodieException(e);
+    }
+  }
+
+  public static String instantTimeMinusMillis(String timestamp, long milliseconds) {
+    try {
+      String timestampInMillis = fixInstantTimeCompatibility(timestamp);
+      LocalDateTime dt = LocalDateTime.parse(timestampInMillis, MILLIS_INSTANT_TIME_FORMATTER);
+      ZoneId zoneId = HoodieTimelineTimeZone.UTC.equals(commitTimeZone) ? ZoneId.of("UTC") : ZoneId.systemDefault();
+      return MILLIS_INSTANT_TIME_FORMATTER.format(dt.atZone(zoneId).toInstant().minusMillis(milliseconds).atZone(zoneId).toLocalDateTime());
+    } catch (DateTimeParseException e) {
+      throw new HoodieException(e);
+    }
+  }
+
+  private static String fixInstantTimeCompatibility(String instantTime) {
+    // Enables backwards compatibility with non-millisecond granularity instants
+    if (isSecondGranularity(instantTime)) {
+      // Add milliseconds to the instant in order to parse successfully
+      return instantTime + DEFAULT_MILLIS_EXT;
+    } else if (instantTime.length() > MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH) {
+      // compaction and cleaning in metadata has special format. handling it by trimming extra chars and treating it with ms granularity
+      return instantTime.substring(0, MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH);
+    } else {
+      return instantTime;
     }
   }
 
@@ -114,7 +143,7 @@ public class HoodieInstantTimeGenerator {
 
   /**
    * Creates an instant string given a valid date-time string.
-   * @param dateString A date-time string in the format yyyy-MM-dd HH:mm:ss[:SSS]
+   * @param dateString A date-time string in the format yyyy-MM-dd HH:mm:ss[.SSS]
    * @return A timeline instant
    * @throws ParseException If we cannot parse the date string
    */
@@ -124,7 +153,7 @@ public class HoodieInstantTimeGenerator {
     } catch (Exception e) {
       // Attempt to add the milliseconds in order to complete parsing
       return getInstantFromTemporalAccessor(LocalDateTime.parse(
-          String.format("%s:%s", dateString, DEFAULT_MILLIS_EXT), MILLIS_GRANULARITY_DATE_FORMATTER));
+          String.format("%s.%s", dateString, DEFAULT_MILLIS_EXT), MILLIS_GRANULARITY_DATE_FORMATTER));
     }
   }
 

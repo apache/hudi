@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.analysis
 
 import org.apache.spark.sql.catalyst.FunctionIdentifier
 import org.apache.spark.sql.catalyst.expressions.{Expression, ExpressionInfo}
-import org.apache.spark.sql.catalyst.plans.logcal.HoodieQuery
+import org.apache.spark.sql.catalyst.plans.logcal.{HoodieFileSystemViewTableValuedFunction, HoodieQuery, HoodieTableChanges, HoodieTimelineTableValuedFunction}
 
 object TableValuedFunctions {
 
@@ -28,6 +28,21 @@ object TableValuedFunctions {
       FunctionIdentifier(HoodieQuery.FUNC_NAME),
       new ExpressionInfo(HoodieQuery.getClass.getCanonicalName, HoodieQuery.FUNC_NAME),
       (args: Seq[Expression]) => new HoodieQuery(args)
+    ),
+    (
+      FunctionIdentifier(HoodieTableChanges.FUNC_NAME),
+      new ExpressionInfo(HoodieTableChanges.getClass.getCanonicalName, HoodieTableChanges.FUNC_NAME),
+      (args: Seq[Expression]) => new HoodieTableChanges(args)
+    ),
+    (
+      FunctionIdentifier(HoodieTimelineTableValuedFunction.FUNC_NAME),
+      new ExpressionInfo(HoodieTimelineTableValuedFunction.getClass.getCanonicalName, HoodieTimelineTableValuedFunction.FUNC_NAME),
+      (args: Seq[Expression]) => new HoodieTimelineTableValuedFunction(args)
+    ),
+    (
+      FunctionIdentifier(HoodieFileSystemViewTableValuedFunction.FUNC_NAME),
+      new ExpressionInfo(HoodieFileSystemViewTableValuedFunction.getClass.getCanonicalName, HoodieFileSystemViewTableValuedFunction.FUNC_NAME),
+      (args: Seq[Expression]) => new HoodieFileSystemViewTableValuedFunction(args)
     )
   )
 }

@@ -18,13 +18,14 @@
 
 package org.apache.hudi.hive.util;
 
-import org.apache.hudi.hive.expression.AttributeReferenceExpression;
-import org.apache.hudi.hive.expression.BinaryOperator;
-import org.apache.hudi.hive.expression.Expression;
-import org.apache.hudi.hive.expression.ExpressionVisitor;
-import org.apache.hudi.hive.expression.Literal;
-
-import java.util.Locale;
+import org.apache.hudi.expression.NameReference;
+import org.apache.hudi.expression.BoundReference;
+import org.apache.hudi.expression.Expression;
+import org.apache.hudi.expression.ExpressionVisitor;
+import org.apache.hudi.expression.Literal;
+import org.apache.hudi.expression.Predicate;
+import org.apache.hudi.expression.Predicates;
+import org.apache.hudi.internal.schema.Types;
 
 public class FilterGenVisitor implements ExpressionVisitor<String> {
 
@@ -42,9 +43,10 @@ public class FilterGenVisitor implements ExpressionVisitor<String> {
     }
   }
 
-  private String visitAnd(Expression left, Expression right) {
-    String leftResult = left.accept(this);
-    String rightResult = right.accept(this);
+  @Override
+  public String visitAnd(Predicates.And and) {
+    String leftResult = and.getLeft().accept(this);
+    String rightResult = and.getRight().accept(this);
 
     if (leftResult.isEmpty()) {
       if (rightResult.isEmpty()) {
@@ -59,9 +61,10 @@ public class FilterGenVisitor implements ExpressionVisitor<String> {
     return "(" + makeBinaryOperatorString(leftResult, Expression.Operator.AND, rightResult) + ")";
   }
 
-  private String visitOr(Expression left, Expression right) {
-    String leftResult = left.accept(this);
-    String rightResult = right.accept(this);
+  @Override
+  public String visitOr(Predicates.Or or) {
+    String leftResult = or.getLeft().accept(this);
+    String rightResult = or.getRight().accept(this);
 
     if (!leftResult.isEmpty() && !rightResult.isEmpty()) {
       return "(" + makeBinaryOperatorString(leftResult, Expression.Operator.OR, rightResult) + ")";
@@ -81,39 +84,46 @@ public class FilterGenVisitor implements ExpressionVisitor<String> {
   }
 
   @Override
-  public String visitBinaryOperator(BinaryOperator expr) {
-    switch (expr.getOperator()) {
-      case AND:
-        return visitAnd(expr.getLeft(), expr.getRight());
-      case OR:
-        return visitOr(expr.getLeft(), expr.getRight());
-      case EQ:
-      case GT:
-      case LT:
-      case GT_EQ:
-      case LT_EQ:
-        return visitBinaryComparator(expr.getLeft(), expr.getOperator(), expr.getRight());
-      default:
-        return "";
+  public String visitPredicate(Predicate predicate) {
+    if (predicate instanceof Predicates.BinaryComparison) {
+      Predicates.BinaryComparison expr = (Predicates.BinaryComparison) predicate;
+      return visitBinaryComparator(expr.getLeft(), expr.getOperator(), expr.getRight());
     }
+
+    return "";
+  }
+
+  @Override
+  public String alwaysTrue() {
+    return "";
+  }
+
+  @Override
+  public String alwaysFalse() {
+    return "";
   }
 
   @Override
   public String visitLiteral(Literal literalExpr) {
-    switch (literalExpr.getType().toLowerCase(Locale.ROOT)) {
-      case HiveSchemaUtil.STRING_TYPE_NAME:
-        return quoteStringLiteral(literalExpr.getValue());
-      case HiveSchemaUtil.INT_TYPE_NAME:
-      case HiveSchemaUtil.BIGINT_TYPE_NAME:
-      case HiveSchemaUtil.DATE_TYPE_NAME:
-        return literalExpr.getValue();
-      default:
-        return "";
+    if (literalExpr.getDataType() instanceof Types.StringType) {
+      return quoteStringLiteral(((Literal<String>)literalExpr).getValue());
     }
+
+    if (literalExpr.getDataType() instanceof Types.IntType || literalExpr.getDataType() instanceof Types.LongType
+        || literalExpr.getDataType() instanceof Types.DateType) {
+      return literalExpr.getValue().toString();
+    }
+
+    return "";
   }
 
   @Override
-  public String visitAttribute(AttributeReferenceExpression attribute) {
+  public String visitNameReference(NameReference attribute) {
     return attribute.getName();
+  }
+
+  @Override
+  public String visitBoundReference(BoundReference boundReference) {
+    throw new UnsupportedOperationException("BoundReference cannot be used to build filter string");
   }
 }

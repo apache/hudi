@@ -36,13 +36,14 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieBackedTestDelayedTableMetadata;
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.hadoop.conf.Configuration;
@@ -52,14 +53,16 @@ import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -75,7 +78,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Tests the {@link RemoteHoodieTableFileSystemView} with metadata table enabled, using
  * {@link HoodieMetadataFileSystemView} on the timeline server.
  */
-public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestHarness {
+public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClientTestHarness {
   private static final Logger LOG = LoggerFactory.getLogger(TestRemoteFileSystemViewWithMetadataTable.class);
 
   @BeforeEach
@@ -83,8 +86,6 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
     initPath();
     initSparkContexts();
     initFileSystem();
-    initMetaClient();
-    initTimelineService();
     dataGen = new HoodieTestDataGenerator(0x1f86);
   }
 
@@ -102,7 +103,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
   @Override
   public void initTimelineService() {
     // Start a timeline server that are running across multiple commits
-    HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
+    HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(hadoopConf);
 
     try {
       HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
@@ -117,9 +118,8 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
           FileSystemViewManager.createViewManager(
               context, config.getMetadataConfig(), config.getViewStorageConfig(),
               config.getCommonConfig(),
-              () -> new HoodieBackedTestDelayedTableMetadata(
-                  context, config.getMetadataConfig(), basePath,
-                  config.getViewStorageConfig().getSpillableDir(), true)));
+              metaClient -> new HoodieBackedTestDelayedTableMetadata(
+                  context, config.getMetadataConfig(), metaClient.getBasePathV2().toString(), true)));
       timelineService.startService();
       timelineServicePort = timelineService.getServerPort();
       LOG.info("Started timeline server on port: " + timelineServicePort);
@@ -128,28 +128,60 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
     }
   }
 
+  private enum TestCase {
+    USE_EXISTING_TIMELINE_SERVER(true, false),
+    EMBEDDED_TIMELINE_SERVER_PER_TABLE(false, false),
+    SINGLE_EMBEDDED_TIMELINE_SERVER(false, true);
+
+    private final boolean useExistingTimelineServer;
+    private final boolean reuseTimelineServer;
+
+    TestCase(boolean useExistingTimelineServer, boolean reuseTimelineServer) {
+      this.useExistingTimelineServer = useExistingTimelineServer;
+      this.reuseTimelineServer = reuseTimelineServer;
+    }
+  }
+
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testMORGetLatestFileSliceWithMetadataTable(boolean useExistingTimelineServer) throws IOException {
+  @EnumSource(value = TestCase.class)
+  public void testMORGetLatestFileSliceWithMetadataTable(TestCase testCase) throws IOException {
+    if (testCase.useExistingTimelineServer) {
+      initTimelineService();
+    }
     // This test utilizes the `HoodieBackedTestDelayedTableMetadata` to make sure the
     // synced file system view is always served.
 
-    SparkRDDWriteClient writeClient = createWriteClient(
-        useExistingTimelineServer ? Option.of(timelineService) : Option.empty());
+    // Create two tables to guarantee the timeline server can properly handle multiple base paths with metadata table enabled
+    String basePathStr1 = initializeTable("dataset1");
+    String basePathStr2 = initializeTable("dataset2");
+    try (SparkRDDWriteClient writeClient1 = createWriteClient(basePathStr1, "test_mor_table1", testCase.reuseTimelineServer,
+        testCase.useExistingTimelineServer ? Option.of(timelineService) : Option.empty());
+         SparkRDDWriteClient writeClient2 = createWriteClient(basePathStr2, "test_mor_table2", testCase.reuseTimelineServer,
+             testCase.useExistingTimelineServer ? Option.of(timelineService) : Option.empty())) {
+      for (int i = 0; i < 3; i++) {
+        writeToTable(i, writeClient1);
+      }
 
-    for (int i = 0; i < 3; i++) {
-      writeToTable(i, writeClient);
+      for (int i = 0; i < 3; i++) {
+        writeToTable(i, writeClient2);
+      }
+
+      runAssertionsForBasePath(testCase.useExistingTimelineServer, basePathStr1, writeClient1);
+      runAssertionsForBasePath(testCase.useExistingTimelineServer, basePathStr2, writeClient2);
     }
+  }
 
+  private void runAssertionsForBasePath(boolean useExistingTimelineServer, String basePathStr, SparkRDDWriteClient writeClient) throws IOException {
     // At this point, there are three deltacommits and one compaction commit in the Hudi timeline,
     // and the file system view of timeline server is not yet synced
     HoodieTableMetaClient newMetaClient = HoodieTableMetaClient.builder()
-        .setConf(metaClient.getHadoopConf())
-        .setBasePath(basePath)
+        .setConf(hadoopConf)
+        .setBasePath(basePathStr)
         .build();
     HoodieActiveTimeline timeline = newMetaClient.getActiveTimeline();
     HoodieInstant compactionCommit = timeline.lastInstant().get();
     assertTrue(timeline.lastInstant().get().getAction().equals(COMMIT_ACTION));
+
 
     // For all the file groups compacted by the compaction commit, the file system view
     // should return the latest file slices which is written by the latest commit
@@ -176,10 +208,10 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
 
     LOG.info("Connecting to Timeline Server: " + timelineServerPort);
     RemoteHoodieTableFileSystemView view =
-        new RemoteHoodieTableFileSystemView("localhost", timelineServerPort, metaClient);
+        new RemoteHoodieTableFileSystemView("localhost", timelineServerPort, newMetaClient);
 
     List<TestViewLookUpCallable> callableList = lookupList.stream()
-        .map(pair -> new TestViewLookUpCallable(view, pair, compactionCommit.getTimestamp()))
+        .map(pair -> new TestViewLookUpCallable(view, pair, compactionCommit.getTimestamp(), basePathStr))
         .collect(Collectors.toList());
     List<Future<Boolean>> resultList = new ArrayList<>();
 
@@ -196,6 +228,15 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
         return false;
       }
     }).reduce((a, b) -> a && b).get());
+    pool.shutdown();
+  }
+
+  private String initializeTable(String dataset) throws IOException {
+    java.nio.file.Path basePath = tempDir.resolve(dataset);
+    Files.createDirectories(basePath);
+    String basePathStr = basePath.toAbsolutePath().toString();
+    HoodieTestUtils.init(hadoopConf, basePathStr, HoodieTableType.MERGE_ON_READ, new Properties());
+    return basePathStr;
   }
 
   @Override
@@ -203,7 +244,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
     return HoodieTableType.MERGE_ON_READ;
   }
 
-  private SparkRDDWriteClient createWriteClient(Option<TimelineService> timelineService) {
+  private SparkRDDWriteClient createWriteClient(String basePath, String tableName, boolean reuseTimelineServer, Option<TimelineService> timelineService) {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
@@ -221,14 +262,15 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
             .withRemoteServerPort(timelineService.isPresent()
                 ? timelineService.get().getServerPort() : REMOTE_PORT_NUM.defaultValue())
             .build())
+        .withEmbeddedTimelineServerReuseEnabled(reuseTimelineServer)
         .withAutoCommit(false)
-        .forTable("test_mor_table")
+        .forTable(tableName)
         .build();
     return new SparkRDDWriteClient(context, writeConfig, timelineService);
   }
 
   private void writeToTable(int round, SparkRDDWriteClient writeClient) throws IOException {
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    String instantTime = writeClient.createNewInstantTime();
     writeClient.startCommitWithTime(instantTime);
     List<HoodieRecord> records = round == 0
         ? dataGen.generateInserts(instantTime, 100)
@@ -249,22 +291,26 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieClientTestH
     private final RemoteHoodieTableFileSystemView view;
     private final Pair<String, String> partitionFileIdPair;
     private final String expectedCommitTime;
+    private final String expectedBasePath;
 
     public TestViewLookUpCallable(
         RemoteHoodieTableFileSystemView view,
         Pair<String, String> partitionFileIdPair,
-        String expectedCommitTime) {
+        String expectedCommitTime,
+        String expectedBasePath) {
       this.view = view;
       this.partitionFileIdPair = partitionFileIdPair;
       this.expectedCommitTime = expectedCommitTime;
+      this.expectedBasePath = expectedBasePath;
     }
 
     @Override
     public Boolean call() throws Exception {
       Option<FileSlice> latestFileSlice = view.getLatestFileSlice(
           partitionFileIdPair.getLeft(), partitionFileIdPair.getRight());
-      boolean result = latestFileSlice.isPresent() && expectedCommitTime.equals(
-          FSUtils.getCommitTime(new Path(latestFileSlice.get().getBaseFile().get().getPath()).getName()));
+      String latestBaseFilePath = latestFileSlice.get().getBaseFile().get().getPath();
+      boolean result = latestFileSlice.isPresent() && latestBaseFilePath.startsWith(expectedBasePath)
+          && expectedCommitTime.equals(FSUtils.getCommitTime(new Path(latestBaseFilePath).getName()));
       if (!result) {
         LOG.error("The timeline server does not return the correct result: latestFileSliceReturned="
             + latestFileSlice + " expectedCommitTime=" + expectedCommitTime);

@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.util.ChangelogModes;
 import org.apache.hudi.util.DataModificationInfos;
@@ -85,16 +86,24 @@ public class HoodieTableSink implements
       RowType rowType = (RowType) schema.toSinkRowDataType().notNull().getLogicalType();
 
       // bulk_insert mode
-      final String writeOperation = this.conf.get(FlinkOptions.OPERATION);
-      if (WriteOperationType.fromValue(writeOperation) == WriteOperationType.BULK_INSERT) {
+      if (OptionsResolver.isBulkInsertOperation(conf)) {
+        if (!context.isBounded()) {
+          throw new HoodieException(
+              "The bulk insert should be run in batch execution mode.");
+        }
         return Pipelines.bulkInsert(conf, rowType, dataStream);
       }
 
       // Append mode
       if (OptionsResolver.isAppendMode(conf)) {
-        DataStream<Object> pipeline = Pipelines.append(conf, rowType, dataStream, context.isBounded());
+        // close compaction for append mode
+        conf.set(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
+        DataStream<Object> pipeline = Pipelines.append(conf, rowType, dataStream);
         if (OptionsResolver.needsAsyncClustering(conf)) {
           return Pipelines.cluster(conf, rowType, pipeline);
+        } else if (OptionsResolver.isLazyFailedWritesCleanPolicy(conf)) {
+          // add clean function to rollback failed writes for lazy failed writes cleaning policy
+          return Pipelines.clean(conf, pipeline);
         } else {
           return Pipelines.dummySink(pipeline);
         }
@@ -146,7 +155,7 @@ public class HoodieTableSink implements
   @Override
   public void applyStaticPartition(Map<String, String> partitions) {
     // #applyOverwrite should have been invoked.
-    if (this.overwrite && partitions.size() > 0) {
+    if (this.overwrite && !partitions.isEmpty()) {
       this.conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT_OVERWRITE.value());
     }
   }
@@ -154,9 +163,12 @@ public class HoodieTableSink implements
   @Override
   public void applyOverwrite(boolean overwrite) {
     this.overwrite = overwrite;
-    // set up the operation as INSERT_OVERWRITE_TABLE first,
-    // if there are explicit partitions, #applyStaticPartition would overwrite the option.
-    this.conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT_OVERWRITE_TABLE.value());
+    if (OptionsResolver.overwriteDynamicPartition(conf)) {
+      this.conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT_OVERWRITE.value());
+    } else {
+      // if there are explicit partitions, #applyStaticPartition would overwrite the option.
+      this.conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT_OVERWRITE_TABLE.value());
+    }
   }
 
   @Override

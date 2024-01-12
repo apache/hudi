@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.rollback;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
@@ -42,6 +41,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
+import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,8 +70,9 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
                                     String instantTime,
                                     HoodieInstant instantToRollback,
                                     boolean deleteInstants,
-                                    boolean skipLocking) {
-    this(context, config, table, instantTime, instantToRollback, deleteInstants, false, skipLocking);
+                                    boolean skipLocking,
+                                    boolean isRestore) {
+    this(context, config, table, instantTime, instantToRollback, deleteInstants, false, skipLocking, isRestore);
   }
 
   public BaseRollbackActionExecutor(HoodieEngineContext context,
@@ -81,7 +82,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
       HoodieInstant instantToRollback,
       boolean deleteInstants,
       boolean skipTimelinePublish,
-      boolean skipLocking) {
+      boolean skipLocking, boolean isRestore) {
     super(context, config, table, instantTime);
     this.instantToRollback = instantToRollback;
     this.resolvedInstant = instantToRollback;
@@ -153,6 +154,9 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
     });
   }
 
+  /**
+   * Validate commit sequence for rollback commits.
+   */
   private void validateRollbackCommitSequence() {
     // Continue to provide the same behavior if policy is EAGER (similar to pendingRollback logic). This is required
     // since with LAZY rollback we support parallel writing which can allow a new inflight while rollback is ongoing
@@ -162,9 +166,10 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
       final String instantTimeToRollback = instantToRollback.getTimestamp();
       HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
       HoodieTimeline inflightAndRequestedCommitTimeline = table.getPendingCommitTimeline();
+      // Check validity of completed commit timeline.
       // Make sure only the last n commits are being rolled back
       // If there is a commit in-between or after that is not rolled back, then abort
-      // this condition may not hold good for metadata table. since the order of commits applied to MDT is data table commits and the ordering could be different.
+      // this condition may not hold good for metadata table. since the order of commits applied to MDT in data table commits and the ordering could be different.
       if ((instantTimeToRollback != null) && !commitTimeline.empty()
           && !commitTimeline.findInstantsAfter(instantTimeToRollback, Integer.MAX_VALUE).empty()) {
         // check if remnants are from a previous LAZY rollback config, if yes, let out of order rollback continue
@@ -244,8 +249,8 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
         this.txnManager.beginTransaction(Option.of(inflightInstant), Option.empty());
       }
 
-      // If publish the rollback to the timeline, we first write the rollback metadata
-      // to metadata table
+      // If publish the rollback to the timeline, we first write the rollback metadata to metadata table
+      // Then transition the inflight rollback to completed state.
       if (!skipTimelinePublish) {
         writeTableMetadata(rollbackMetadata);
       }
@@ -256,7 +261,10 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
       // If publish the rollback to the timeline, we finally transition the inflight rollback
       // to complete in the data table timeline
       if (!skipTimelinePublish) {
-        table.getActiveTimeline().transitionRollbackInflightToComplete(inflightInstant,
+        // NOTE: no need to lock here, since !skipTimelinePublish is always true,
+        // when skipLocking is false, txnManager above-mentioned should lock it.
+        // when skipLocking is true, the caller should have already held the lock.
+        table.getActiveTimeline().transitionRollbackInflightToComplete(false, inflightInstant,
             TimelineMetadataUtils.serializeRollbackMetadata(rollbackMetadata));
         LOG.info("Rollback of Commits " + rollbackMetadata.getCommitsRollback() + " is complete");
       }
@@ -271,14 +279,13 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
 
   /**
    * Delete Inflight instant if enabled.
-   *
    * @param deleteInstant Enable Deletion of Inflight instant
    * @param activeTimeline Hoodie active timeline
    * @param instantToBeDeleted Instant to be deleted
    */
   protected void deleteInflightAndRequestedInstant(boolean deleteInstant,
-      HoodieActiveTimeline activeTimeline,
-      HoodieInstant instantToBeDeleted) {
+                                                   HoodieActiveTimeline activeTimeline,
+                                                   HoodieInstant instantToBeDeleted) {
     // Remove the rolled back inflight commits
     if (deleteInstant) {
       LOG.info("Deleting instant=" + instantToBeDeleted);

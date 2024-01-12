@@ -24,6 +24,8 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -40,6 +42,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Helper class to generate commit metadata.
@@ -122,6 +125,20 @@ public class CommitUtils {
     return commitMetadata;
   }
 
+  public static Option<HoodieCommitMetadata> buildMetadataFromInstant(HoodieDefaultTimeline timeline, HoodieInstant instant) {
+    try {
+      HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
+          timeline.getInstantDetails(instant).get(),
+          HoodieCommitMetadata.class);
+
+      return Option.of(commitMetadata);
+    } catch (IOException e) {
+      LOG.info("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
+    }
+
+    return Option.empty();
+  }
+
   public static Set<Pair<String, String>> getPartitionAndFileIdWithoutSuffixFromSpecificRecord(Map<String, List<org.apache.hudi.avro.model.HoodieWriteStat>>
                                                                                                      partitionToWriteStats) {
     Set<Pair<String, String>> partitionToFileId = new HashSet<>();
@@ -145,6 +162,12 @@ public class CommitUtils {
     return partitionTofileId;
   }
 
+  public static Set<Pair<String, String>> flattenPartitionToReplaceFileIds(Map<String, List<String>> partitionToReplaceFileIds) {
+    return partitionToReplaceFileIds.entrySet().stream()
+        .flatMap(partitionFileIds -> partitionFileIds.getValue().stream().map(replaceFileId -> Pair.of(partitionFileIds.getKey(), replaceFileId)))
+        .collect(Collectors.toSet());
+  }
+
   /**
    * Process previous commits metadata in the timeline to determine the checkpoint given a checkpoint key.
    * NOTE: This is very similar in intent to DeltaSync#getLatestCommitMetadataWithValidCheckpointInfo except that
@@ -157,22 +180,23 @@ public class CommitUtils {
    */
   public static Option<String> getValidCheckpointForCurrentWriter(HoodieTimeline timeline, String checkpointKey,
                                                                   String keyToLookup) {
-    return (Option<String>) timeline.getWriteTimeline().getReverseOrderedInstants().map(instant -> {
-      try {
-        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-            .fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-        // process commits only with checkpoint entries
-        String checkpointValue = commitMetadata.getMetadata(checkpointKey);
-        if (StringUtils.nonEmpty(checkpointValue)) {
-          // return if checkpoint for "keyForLookup" exists.
-          return readCheckpointValue(checkpointValue, keyToLookup);
-        } else {
-          return Option.empty();
-        }
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
-      }
-    }).filter(Option::isPresent).findFirst().orElse(Option.empty());
+    return (Option<String>) timeline.getWriteTimeline().filterCompletedInstants().getReverseOrderedInstants()
+        .map(instant -> {
+          try {
+            HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+                .fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+            // process commits only with checkpoint entries
+            String checkpointValue = commitMetadata.getMetadata(checkpointKey);
+            if (StringUtils.nonEmpty(checkpointValue)) {
+              // return if checkpoint for "keyForLookup" exists.
+              return readCheckpointValue(checkpointValue, keyToLookup);
+            } else {
+              return Option.empty();
+            }
+          } catch (IOException e) {
+            throw new HoodieIOException("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
+          }
+        }).filter(Option::isPresent).findFirst().orElse(Option.empty());
   }
 
   public static Option<String> readCheckpointValue(String value, String id) {

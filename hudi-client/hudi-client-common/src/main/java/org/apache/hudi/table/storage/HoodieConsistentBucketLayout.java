@@ -39,6 +39,7 @@ public class HoodieConsistentBucketLayout extends HoodieStorageLayout {
       WriteOperationType.INSERT_OVERWRITE,
       WriteOperationType.INSERT_OVERWRITE_TABLE,
       WriteOperationType.DELETE,
+      WriteOperationType.DELETE_PREPPED,
       WriteOperationType.COMPACT,
       WriteOperationType.DELETE_PARTITION,
       WriteOperationType.CLUSTER

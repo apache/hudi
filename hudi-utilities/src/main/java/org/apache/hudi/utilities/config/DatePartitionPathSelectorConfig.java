@@ -26,44 +26,52 @@ import org.apache.hudi.common.config.HoodieConfig;
 
 import javax.annotation.concurrent.Immutable;
 
+import static org.apache.hudi.common.util.ConfigUtils.DELTA_STREAMER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
+
 /**
  * Date Partition Path Selector Configs
  */
 @Immutable
 @ConfigClassProperty(name = "Date Partition Path Selector Configs",
-    groupName = ConfigGroups.Names.DELTA_STREAMER,
+    groupName = ConfigGroups.Names.HUDI_STREAMER,
     subGroupName = ConfigGroups.SubGroupNames.DELTA_STREAMER_SOURCE,
     description = "Configurations controlling the behavior of date partition path selector "
-        + "for DFS source in Deltastreamer.")
+        + "for DFS source in Hudi Streamer.")
 public class DatePartitionPathSelectorConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> DATE_FORMAT = ConfigProperty
-      .key("hoodie.deltastreamer.source.dfs.datepartitioned.date.format")
+      .key(STREAMER_CONFIG_PREFIX + "source.dfs.datepartitioned.date.format")
       .defaultValue("yyyy-MM-dd")
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.dfs.datepartitioned.date.format")
       .markAdvanced()
       .withDocumentation("Date format.");
 
   public static final ConfigProperty<Integer> DATE_PARTITION_DEPTH = ConfigProperty
-      .key("hoodie.deltastreamer.source.dfs.datepartitioned.selector.depth")
+      .key(STREAMER_CONFIG_PREFIX + "source.dfs.datepartitioned.selector.depth")
       .defaultValue(0)
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.dfs.datepartitioned.selector.depth")
       .markAdvanced()
       .withDocumentation("Depth of the files to scan. 0 implies no (date) partition.");
 
   public static final ConfigProperty<Integer> LOOKBACK_DAYS = ConfigProperty
-      .key("hoodie.deltastreamer.source.dfs.datepartitioned.selector.lookback.days")
+      .key(STREAMER_CONFIG_PREFIX + "source.dfs.datepartitioned.selector.lookback.days")
       .defaultValue(2)
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.dfs.datepartitioned.selector.lookback.days")
       .markAdvanced()
       .withDocumentation("The maximum look-back days for scanning.");
 
   public static final ConfigProperty<String> CURRENT_DATE = ConfigProperty
-      .key("hoodie.deltastreamer.source.dfs.datepartitioned.selector.currentdate")
+      .key(STREAMER_CONFIG_PREFIX + "source.dfs.datepartitioned.selector.currentdate")
       .noDefaultValue()
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.dfs.datepartitioned.selector.currentdate")
       .markAdvanced()
       .withDocumentation("Current date.");
 
   public static final ConfigProperty<Integer> PARTITIONS_LIST_PARALLELISM = ConfigProperty
-      .key("hoodie.deltastreamer.source.dfs.datepartitioned.selector.parallelism")
+      .key(STREAMER_CONFIG_PREFIX + "source.dfs.datepartitioned.selector.parallelism")
       .defaultValue(20)
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.dfs.datepartitioned.selector.parallelism")
       .markAdvanced()
       .withDocumentation("Parallelism for listing partitions.");
 }

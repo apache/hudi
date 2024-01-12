@@ -20,7 +20,6 @@ package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.DeleteRecord;
-import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -35,18 +34,19 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,13 +60,14 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.log.block.HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK;
+import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.BLOCK_IDENTIFIER;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.COMPACTED_BLOCK_TIMES;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME;
@@ -110,8 +111,6 @@ public abstract class AbstractHoodieLogRecordReader {
   private final TypedProperties payloadProps;
   // Log File Paths
   protected final List<String> logFilePaths;
-  // Read Lazily flag
-  private final boolean readBlocksLazily;
   // Reverse reader - Not implemented yet (NA -> Why do we need ?)
   // but present here for plumbing for future implementation
   private final boolean reverseReader;
@@ -167,7 +166,7 @@ public abstract class AbstractHoodieLogRecordReader {
     this.payloadClassFQN = tableConfig.getPayloadClass();
     this.preCombineField = tableConfig.getPreCombineField();
     // Log scanner merge log with precombine
-    TypedProperties props = HoodieAvroRecordMerger.Config.withLegacyOperatingModePreCombining(new Properties());
+    TypedProperties props = new TypedProperties();
     if (this.preCombineField != null) {
       props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, this.preCombineField);
     }
@@ -176,7 +175,6 @@ public abstract class AbstractHoodieLogRecordReader {
     this.totalLogFiles.addAndGet(logFilePaths.size());
     this.logFilePaths = logFilePaths;
     this.reverseReader = reverseReader;
-    this.readBlocksLazily = readBlocksLazily;
     this.fs = fs;
     this.bufferSize = bufferSize;
     this.instantRange = instantRange;
@@ -226,6 +224,10 @@ public abstract class AbstractHoodieLogRecordReader {
 
   private void scanInternalV1(Option<KeySpec> keySpecOpt) {
     currentInstantLogBlocks = new ArrayDeque<>();
+    List<HoodieLogBlock> validLogBlockInstants = new ArrayList<>();
+    Map<String, Map<Long, List<Pair<Integer, HoodieLogBlock>>>> blockSequenceMapPerCommit = new HashMap<>();
+    AtomicBoolean blockIdentifiersPresent = new AtomicBoolean(false);
+
     progress = 0.0f;
     totalLogFiles = new AtomicLong(0);
     totalRollbacks = new AtomicLong(0);
@@ -233,14 +235,13 @@ public abstract class AbstractHoodieLogRecordReader {
     totalLogBlocks = new AtomicLong(0);
     totalLogRecords = new AtomicLong(0);
     HoodieLogFormatReader logFormatReaderWrapper = null;
-    HoodieTimeline commitsTimeline = this.hoodieTableMetaClient.getCommitsTimeline();
-    HoodieTimeline completedInstantsTimeline = commitsTimeline.filterCompletedInstants();
-    HoodieTimeline inflightInstantsTimeline = commitsTimeline.filterInflights();
     try {
       // Iterate over the paths
       logFormatReaderWrapper = new HoodieLogFormatReader(fs,
-          logFilePaths.stream().map(logFile -> new HoodieLogFile(new Path(logFile))).collect(Collectors.toList()),
-          readerSchema, readBlocksLazily, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
+          logFilePaths.stream()
+              .map(filePath -> new HoodieLogFile(new CachingPath(filePath)))
+              .collect(Collectors.toList()),
+          readerSchema, true, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
 
       Set<HoodieLogFile> scannedLogFiles = new HashSet<>();
       while (logFormatReaderWrapper.hasNext()) {
@@ -251,6 +252,14 @@ public abstract class AbstractHoodieLogRecordReader {
         // Use the HoodieLogFileReader to iterate through the blocks in the log file
         HoodieLogBlock logBlock = logFormatReaderWrapper.next();
         final String instantTime = logBlock.getLogBlockHeader().get(INSTANT_TIME);
+        final String blockIdentifier = logBlock.getLogBlockHeader().getOrDefault(BLOCK_IDENTIFIER, StringUtils.EMPTY_STRING);
+        int blockSeqNumber = -1;
+        long attemptNumber = -1L;
+        if (!StringUtils.isNullOrEmpty(blockIdentifier)) {
+          String[] parts = blockIdentifier.split(",");
+          attemptNumber = Long.parseLong(parts[0]);
+          blockSeqNumber = Integer.parseInt(parts[1]);
+        }
         totalLogBlocks.incrementAndGet();
         if (logBlock.getBlockType() != CORRUPT_BLOCK
             && !HoodieTimeline.compareTimestamps(logBlock.getLogBlockHeader().get(INSTANT_TIME), HoodieTimeline.LESSER_THAN_OR_EQUALS, this.latestInstantTime
@@ -259,11 +268,6 @@ public abstract class AbstractHoodieLogRecordReader {
           break;
         }
         if (logBlock.getBlockType() != CORRUPT_BLOCK && logBlock.getBlockType() != COMMAND_BLOCK) {
-          if (!completedInstantsTimeline.containsOrBeforeTimelineStarts(instantTime)
-              || inflightInstantsTimeline.containsInstant(instantTime)) {
-            // hit an uncommitted block possibly from a failed write, move to the next one and skip processing this one
-            continue;
-          }
           if (instantRange.isPresent() && !instantRange.get().isInRange(instantTime)) {
             // filter the log block by instant range
             continue;
@@ -273,25 +277,18 @@ public abstract class AbstractHoodieLogRecordReader {
           case HFILE_DATA_BLOCK:
           case AVRO_DATA_BLOCK:
           case PARQUET_DATA_BLOCK:
-            LOG.info("Reading a data block from file " + logFile.getPath() + " at instant "
-                + logBlock.getLogBlockHeader().get(INSTANT_TIME));
-            if (isNewInstantBlock(logBlock) && !readBlocksLazily) {
-              // If this is an avro data block belonging to a different commit/instant,
-              // then merge the last blocks and records into the main result
-              processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keySpecOpt);
-            }
+            LOG.info("Reading a data block from file " + logFile.getPath() + " at instant " + instantTime);
             // store the current block
             currentInstantLogBlocks.push(logBlock);
+            validLogBlockInstants.add(logBlock);
+            updateBlockSequenceTracker(logBlock, instantTime, blockSeqNumber, attemptNumber, blockSequenceMapPerCommit, blockIdentifiersPresent);
             break;
           case DELETE_BLOCK:
             LOG.info("Reading a delete block from file " + logFile.getPath());
-            if (isNewInstantBlock(logBlock) && !readBlocksLazily) {
-              // If this is a delete data block belonging to a different commit/instant,
-              // then merge the last blocks and records into the main result
-              processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keySpecOpt);
-            }
             // store deletes so can be rolled back
             currentInstantLogBlocks.push(logBlock);
+            validLogBlockInstants.add(logBlock);
+            updateBlockSequenceTracker(logBlock, instantTime, blockSeqNumber, attemptNumber, blockSequenceMapPerCommit, blockIdentifiersPresent);
             break;
           case COMMAND_BLOCK:
             // Consider the following scenario
@@ -336,6 +333,25 @@ public abstract class AbstractHoodieLogRecordReader {
                   return false;
                 });
 
+                // remove entire entry from blockSequenceTracker
+                blockSequenceMapPerCommit.remove(targetInstantForCommandBlock);
+
+                /// remove all matching log blocks from valid list tracked so far
+                validLogBlockInstants = validLogBlockInstants.stream().filter(block -> {
+                  // handle corrupt blocks separately since they may not have metadata
+                  if (block.getBlockType() == CORRUPT_BLOCK) {
+                    LOG.info("Rolling back the last corrupted log block read in " + logFile.getPath());
+                    return true;
+                  }
+                  if (targetInstantForCommandBlock.contentEquals(block.getLogBlockHeader().get(INSTANT_TIME))) {
+                    // rollback older data block or delete block
+                    LOG.info(String.format("Rolling back an older log block read from %s with instantTime %s",
+                        logFile.getPath(), targetInstantForCommandBlock));
+                    return false;
+                  }
+                  return true;
+                }).collect(Collectors.toList());
+
                 final int numBlocksRolledBack = instantLogBlockSizeBeforeRollback - currentInstantLogBlocks.size();
                 totalRollbacks.addAndGet(numBlocksRolledBack);
                 LOG.info("Number of applied rollback blocks " + numBlocksRolledBack);
@@ -353,6 +369,9 @@ public abstract class AbstractHoodieLogRecordReader {
             totalCorruptBlocks.incrementAndGet();
             // If there is a corrupt block - we will assume that this was the next data block
             currentInstantLogBlocks.push(logBlock);
+            validLogBlockInstants.add(logBlock);
+            // we don't need to update the block sequence tracker here, since the block sequence tracker is meant to remove additional/spurious valid logblocks.
+            // anyway, contents of corrupt blocks are not read.
             break;
           default:
             throw new UnsupportedOperationException("Block type not supported yet");
@@ -360,9 +379,25 @@ public abstract class AbstractHoodieLogRecordReader {
       }
       // merge the last read block when all the blocks are done reading
       if (!currentInstantLogBlocks.isEmpty()) {
-        LOG.info("Merging the final data blocks");
-        processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keySpecOpt);
+        boolean duplicateBlocksDetected = false;
+        if (blockIdentifiersPresent.get()) {
+          Pair<Boolean, List<HoodieLogBlock>> dedupedLogBlocksInfo = reconcileSpuriousBlocksAndGetValidOnes(validLogBlockInstants, blockSequenceMapPerCommit);
+          duplicateBlocksDetected = dedupedLogBlocksInfo.getKey();
+          if (duplicateBlocksDetected) {
+            // if there are duplicate log blocks that needs to be removed, we re-create the queue for valid log blocks from dedupedLogBlocks
+            currentInstantLogBlocks = new ArrayDeque<>();
+            dedupedLogBlocksInfo.getValue().forEach(block -> currentInstantLogBlocks.push(block));
+            LOG.info("Merging the final data blocks");
+            processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keySpecOpt);
+          }
+        }
+        if (!duplicateBlocksDetected) {
+          // if there are no dups, we can take currentInstantLogBlocks as is.
+          LOG.info("Merging the final data blocks");
+          processQueuedBlocksForInstant(currentInstantLogBlocks, scannedLogFiles.size(), keySpecOpt);
+        }
       }
+
       // Done
       progress = 1.0f;
     } catch (IOException e) {
@@ -383,6 +418,121 @@ public abstract class AbstractHoodieLogRecordReader {
     }
   }
 
+  /**
+   * There could be spurious log blocks due to spark task retries. So, we will use BLOCK_SEQUENCE_NUMBER in the log block header to deduce such spurious log blocks and return
+   * a deduped set of log blocks.
+   * @param allValidLogBlocks all valid log blocks parsed so far.
+   * @param blockSequenceMapPerCommit map containing block sequence numbers for every commit.
+   * @return a Pair of boolean and list of deduped valid block blocks, where boolean of true means, there have been dups detected.
+   */
+  private Pair<Boolean, List<HoodieLogBlock>> reconcileSpuriousBlocksAndGetValidOnes(List<HoodieLogBlock> allValidLogBlocks,
+                                                                      Map<String, Map<Long, List<Pair<Integer, HoodieLogBlock>>>> blockSequenceMapPerCommit) {
+
+    boolean dupsFound = blockSequenceMapPerCommit.values().stream().anyMatch(perCommitBlockList -> perCommitBlockList.size() > 1);
+    if (dupsFound) {
+      if (LOG.isDebugEnabled()) {
+        logBlockSequenceMapping(blockSequenceMapPerCommit);
+      }
+
+      // duplicates are found. we need to remove duplicate log blocks.
+      for (Map.Entry<String, Map<Long, List<Pair<Integer, HoodieLogBlock>>>> entry: blockSequenceMapPerCommit.entrySet()) {
+        Map<Long, List<Pair<Integer, HoodieLogBlock>>> perCommitBlockSequences = entry.getValue();
+        if (perCommitBlockSequences.size() > 1) {
+          // only those that have more than 1 sequence needs deduping.
+          int maxSequenceCount = -1;
+          int maxAttemptNo = -1;
+          for (Map.Entry<Long, List<Pair<Integer, HoodieLogBlock>>> perAttemptEntries : perCommitBlockSequences.entrySet()) {
+            Long attemptNo = perAttemptEntries.getKey();
+            int size = perAttemptEntries.getValue().size();
+            if (maxSequenceCount <= size) {
+              maxSequenceCount = size;
+              maxAttemptNo = Math.toIntExact(attemptNo);
+            }
+          }
+          // for other sequences (!= maxSequenceIndex), we need to remove the corresponding logBlocks from allValidLogBlocks
+          for (Map.Entry<Long, List<Pair<Integer, HoodieLogBlock>>> perAttemptEntries : perCommitBlockSequences.entrySet()) {
+            Long attemptNo = perAttemptEntries.getKey();
+            if (maxAttemptNo != attemptNo) {
+              List<HoodieLogBlock> logBlocksToRemove = perCommitBlockSequences.get(attemptNo).stream().map(pair -> pair.getValue()).collect(Collectors.toList());
+              logBlocksToRemove.forEach(logBlockToRemove -> {
+                allValidLogBlocks.remove(logBlockToRemove);
+              });
+            }
+          }
+        }
+      }
+      return Pair.of(true, allValidLogBlocks);
+    } else {
+      return Pair.of(false, allValidLogBlocks);
+    }
+  }
+
+  private void logBlockSequenceMapping(Map<String, Map<Long, List<Pair<Integer, HoodieLogBlock>>>> blockSequenceMapPerCommit) {
+    LOG.warn("Duplicate log blocks found ");
+    for (Map.Entry<String, Map<Long, List<Pair<Integer, HoodieLogBlock>>>> entry : blockSequenceMapPerCommit.entrySet()) {
+      if (entry.getValue().size() > 1) {
+        LOG.warn("\tCommit time " + entry.getKey());
+        Map<Long, List<Pair<Integer, HoodieLogBlock>>> value = entry.getValue();
+        for (Map.Entry<Long, List<Pair<Integer, HoodieLogBlock>>> attemptsSeq : value.entrySet()) {
+          LOG.warn("\t\tAttempt number " + attemptsSeq.getKey());
+          attemptsSeq.getValue().forEach(entryValue -> LOG.warn("\t\t\tLog block sequence no : " + entryValue.getKey() + ", log file "
+              + entryValue.getValue().getBlockContentLocation().get().getLogFile().getPath().toString()));
+        }
+      }
+    }
+  }
+
+  /**
+   * Updates map tracking block seq no.
+   * Here is the map structure.
+   * Map<String, Map<Long, List<Pair<Integer, HoodieLogBlock>>>> blockSequenceMapPerCommit
+   * Key: Commit time.
+   * Value: Map<Long, List<Pair<Integer, HoodieLogBlock>>>>
+   *   Value refers to a Map of different attempts for the commit of interest. List contains the block seq number and the resp HoodieLogBlock.
+   *
+   *  For eg, if there were two attempts for a file slice while writing(due to spark task retries), here is how the map might look like
+   *  key: commit1
+   *  value : {
+   *    0L = List = { {0, lb1}, {1, lb2} },
+   *    1L = List = { {0, lb3}, {1, lb4}, {2, lb5}}
+   *  }
+   *  Meaning: for commit1, there was two attempts with Append Handle while writing. In first attempt, lb1 and lb2 was added. And in 2nd attempt lb3, lb4 and lb5 was added.
+   *  We keep populating this entire map and finally detect spurious log blocks and ignore them.
+   *  In most cases, we might just see one set of sequence for a given commit.
+   *
+   * @param logBlock log block of interest to be added.
+   * @param instantTime commit time of interest.
+   * @param blockSeqNumber block sequence number.
+   * @param blockSequenceMapPerCommit map tracking per commit block sequences.
+   */
+  private void updateBlockSequenceTracker(HoodieLogBlock logBlock, String instantTime, int blockSeqNumber, long attemptNumber,
+                                          Map<String, Map<Long, List<Pair<Integer, HoodieLogBlock>>>> blockSequenceMapPerCommit,
+                                          AtomicBoolean blockIdentifiersPresent) {
+    if (blockSeqNumber != -1 && attemptNumber != -1) { // update the block sequence tracker for log blocks containing the same.
+      blockIdentifiersPresent.set(true);
+      blockSequenceMapPerCommit.computeIfAbsent(instantTime, entry -> new HashMap<>());
+      Map<Long, List<Pair<Integer, HoodieLogBlock>>> curCommitBlockMap = blockSequenceMapPerCommit.get(instantTime);
+      if (curCommitBlockMap.containsKey(attemptNumber)) {
+        // append to existing map entry
+        curCommitBlockMap.get(attemptNumber).add(Pair.of(blockSeqNumber, logBlock));
+      } else {
+        // create a new map entry
+        curCommitBlockMap.put(attemptNumber, new ArrayList<>());
+        curCommitBlockMap.get(attemptNumber).add(Pair.of(blockSeqNumber, logBlock));
+      }
+      // update the latest to block sequence tracker
+      blockSequenceMapPerCommit.put(instantTime, curCommitBlockMap);
+    } else {
+      // all of older blocks are considered valid. there should be only one list for older commits where block sequence number is not present.
+      blockSequenceMapPerCommit.computeIfAbsent(instantTime, entry -> new HashMap<>());
+      Map<Long, List<Pair<Integer, HoodieLogBlock>>> curCommitBlockMap = blockSequenceMapPerCommit.get(instantTime);
+      curCommitBlockMap.computeIfAbsent(0L, entry -> new ArrayList<>());
+      curCommitBlockMap.get(0L).add(Pair.of(blockSeqNumber, logBlock));
+      // update the latest to block sequence tracker
+      blockSequenceMapPerCommit.put(instantTime, curCommitBlockMap);
+    }
+  }
+
   private void scanInternalV2(Option<KeySpec> keySpecOption, boolean skipProcessingBlocks) {
     currentInstantLogBlocks = new ArrayDeque<>();
     progress = 0.0f;
@@ -392,14 +542,13 @@ public abstract class AbstractHoodieLogRecordReader {
     totalLogBlocks = new AtomicLong(0);
     totalLogRecords = new AtomicLong(0);
     HoodieLogFormatReader logFormatReaderWrapper = null;
-    HoodieTimeline commitsTimeline = this.hoodieTableMetaClient.getCommitsTimeline();
-    HoodieTimeline completedInstantsTimeline = commitsTimeline.filterCompletedInstants();
-    HoodieTimeline inflightInstantsTimeline = commitsTimeline.filterInflights();
     try {
       // Iterate over the paths
       logFormatReaderWrapper = new HoodieLogFormatReader(fs,
-          logFilePaths.stream().map(logFile -> new HoodieLogFile(new Path(logFile))).collect(Collectors.toList()),
-          readerSchema, readBlocksLazily, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
+          logFilePaths.stream()
+              .map(logFile -> new HoodieLogFile(new CachingPath(logFile)))
+              .collect(Collectors.toList()),
+          readerSchema, true, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
 
       /**
        * Scanning log blocks and placing the compacted blocks at the right place require two traversals.
@@ -465,11 +614,6 @@ public abstract class AbstractHoodieLogRecordReader {
           break;
         }
         if (logBlock.getBlockType() != COMMAND_BLOCK) {
-          if (!completedInstantsTimeline.containsOrBeforeTimelineStarts(instantTime)
-              || inflightInstantsTimeline.containsInstant(instantTime)) {
-            // hit an uncommitted block possibly from a failed write, move to the next one and skip processing this one
-            continue;
-          }
           if (instantRange.isPresent() && !instantRange.get().isInRange(instantTime)) {
             // filter the log block by instant range
             continue;
@@ -479,6 +623,7 @@ public abstract class AbstractHoodieLogRecordReader {
         switch (logBlock.getBlockType()) {
           case HFILE_DATA_BLOCK:
           case AVRO_DATA_BLOCK:
+          case PARQUET_DATA_BLOCK:
           case DELETE_BLOCK:
             List<HoodieLogBlock> logBlocksList = instantToBlocksMap.getOrDefault(instantTime, new ArrayList<>());
             if (logBlocksList.size() == 0) {
@@ -499,6 +644,8 @@ public abstract class AbstractHoodieLogRecordReader {
               String targetInstantForCommandBlock =
                   logBlock.getLogBlockHeader().get(TARGET_INSTANT_TIME);
               targetRollbackInstants.add(targetInstantForCommandBlock);
+              orderedInstantsList.remove(targetInstantForCommandBlock);
+              instantToBlocksMap.remove(targetInstantForCommandBlock);
             } else {
               throw new UnsupportedOperationException("Command type not yet supported.");
             }
@@ -527,13 +674,6 @@ public abstract class AbstractHoodieLogRecordReader {
        */
       for (int i = orderedInstantsList.size() - 1; i >= 0; i--) {
         String instantTime = orderedInstantsList.get(i);
-
-        // Exclude the blocks which are included in targetRollbackInstants set.
-        // Here, rollback can include instants affiliated to deltacommits or log compaction commits.
-        if (targetRollbackInstants.contains(instantTime)) {
-          numBlocksRolledBack += instantToBlocksMap.get(instantTime).size();
-          continue;
-        }
         List<HoodieLogBlock> instantsBlocks = instantToBlocksMap.get(instantTime);
         if (instantsBlocks.size() == 0) {
           throw new HoodieException("Data corrupted while writing. Found zero blocks for an instant " + instantTime);
@@ -648,7 +788,7 @@ public abstract class AbstractHoodieLogRecordReader {
    *
    * @param hoodieRecord Hoodie Record to process
    */
-  protected abstract <T> void processNextRecord(HoodieRecord<T> hoodieRecord) throws Exception;
+  public abstract <T> void processNextRecord(HoodieRecord<T> hoodieRecord) throws Exception;
 
   /**
    * Process next deleted record.
@@ -816,7 +956,7 @@ public abstract class AbstractHoodieLogRecordReader {
             .orElse(Function.identity());
 
     Schema schema = schemaEvolutionTransformerOpt.map(Pair::getRight)
-        .orElse(dataBlock.getSchema());
+        .orElseGet(dataBlock::getSchema);
 
     return Pair.of(new CloseableMappingIterator<>(blockRecordsIterator, transformer), schema);
   }

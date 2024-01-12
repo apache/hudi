@@ -18,16 +18,19 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.keygen.BaseKeyGenerator;
+
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.KryoSerializable;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.keygen.BaseKeyGenerator;
+
+import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -132,6 +135,11 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   protected HoodieRecordLocation newLocation;
 
   /**
+   * If set, not update index after written.
+   */
+  protected boolean ignoreIndexUpdate;
+
+  /**
    * Indicates whether the object is sealed.
    */
   private boolean sealed;
@@ -156,6 +164,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     this.currentLocation = null;
     this.newLocation = null;
     this.sealed = false;
+    this.ignoreIndexUpdate = false;
     this.operation = operation;
     this.metaData = metaData;
   }
@@ -178,6 +187,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     this.currentLocation = record.currentLocation;
     this.newLocation = record.newLocation;
     this.sealed = record.sealed;
+    this.ignoreIndexUpdate = record.ignoreIndexUpdate;
   }
 
   public HoodieRecord() {}
@@ -223,6 +233,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     return this;
   }
 
+  @Nullable
   public HoodieRecordLocation getCurrentLocation() {
     return currentLocation;
   }
@@ -230,19 +241,37 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   /**
    * Sets the new currentLocation of the record, after being written. This again should happen exactly-once.
    */
-  public HoodieRecord setNewLocation(HoodieRecordLocation location) {
+  public void setNewLocation(HoodieRecordLocation location) {
     checkState();
     assert newLocation == null;
     this.newLocation = location;
-    return this;
   }
 
-  public Option<HoodieRecordLocation> getNewLocation() {
-    return Option.ofNullable(this.newLocation);
+  @Nullable
+  public HoodieRecordLocation getNewLocation() {
+    return this.newLocation;
   }
 
   public boolean isCurrentLocationKnown() {
     return this.currentLocation != null;
+  }
+
+  public long getCurrentPosition() {
+    if (isCurrentLocationKnown()) {
+      return this.currentLocation.getPosition();
+    }
+    return HoodieRecordLocation.INVALID_POSITION;
+  }
+
+  /**
+   * Sets the ignore flag.
+   */
+  public void setIgnoreIndexUpdate(boolean ignoreFlag) {
+    this.ignoreIndexUpdate = ignoreFlag;
+  }
+
+  public boolean getIgnoreIndexUpdate() {
+    return this.ignoreIndexUpdate;
   }
 
   @Override
@@ -255,7 +284,8 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     }
     HoodieRecord that = (HoodieRecord) o;
     return Objects.equals(key, that.key) && Objects.equals(data, that.data)
-        && Objects.equals(currentLocation, that.currentLocation) && Objects.equals(newLocation, that.newLocation);
+        && Objects.equals(currentLocation, that.currentLocation) && Objects.equals(newLocation, that.newLocation)
+        && Objects.equals(ignoreIndexUpdate, that.ignoreIndexUpdate);
   }
 
   @Override
@@ -308,6 +338,16 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   protected abstract T readRecordPayload(Kryo kryo, Input input);
 
   /**
+   * Clears the new currentLocation of the record. 
+   *
+   * This is required in the delete path so that Index can track that this record was deleted.
+   */
+  public void clearNewLocation() {
+    checkState();
+    this.newLocation = null;
+  }
+
+  /**
    * NOTE: This method is declared final to make sure there's no polymorphism and therefore
    *       JIT compiler could perform more aggressive optimizations
    */
@@ -322,6 +362,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     // NOTE: Writing out actual record payload is relegated to the actual
     //       implementation
     writeRecordPayload(data, kryo, output);
+    kryo.writeObjectOrNull(output, ignoreIndexUpdate, Boolean.class);
   }
 
   /**
@@ -337,6 +378,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     // NOTE: Reading out actual record payload is relegated to the actual
     //       implementation
     this.data = readRecordPayload(kryo, input);
+    this.ignoreIndexUpdate = kryo.readObjectOrNull(input, Boolean.class);
 
     // NOTE: We're always seal object after deserialization
     this.sealed = true;

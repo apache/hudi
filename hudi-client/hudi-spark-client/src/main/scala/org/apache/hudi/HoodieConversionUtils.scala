@@ -21,8 +21,7 @@ package org.apache.hudi
 import org.apache.hudi.common.config.TypedProperties
 
 import java.{util => ju}
-import scala.collection.JavaConverters
-import scala.jdk.CollectionConverters.dictionaryAsScalaMapConverter
+import scala.collection.JavaConverters._
 
 object HoodieConversionUtils {
 
@@ -53,5 +52,4 @@ object HoodieConversionUtils {
       case (k, v) => (k.toString, v.toString)
     }.toMap
   }
-
 }

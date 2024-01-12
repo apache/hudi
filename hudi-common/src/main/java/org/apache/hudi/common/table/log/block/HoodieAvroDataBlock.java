@@ -18,13 +18,15 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.SizeAwareDataInputStream;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 
@@ -60,6 +62,8 @@ import java.util.Properties;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 
+import static org.apache.hudi.avro.HoodieAvroUtils.recordNeedsRewriteForExtendedAvroTypePromotion;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -82,10 +86,11 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
   }
 
   public HoodieAvroDataBlock(@Nonnull List<HoodieRecord> records,
-      @Nonnull Map<HeaderMetadataType, String> header,
-      @Nonnull String keyField
+                             boolean shouldWriteRecordPositions,
+                             @Nonnull Map<HeaderMetadataType, String> header,
+                             @Nonnull String keyField
   ) {
-    super(records, header, new HashMap<>(), keyField);
+    super(records, shouldWriteRecordPositions, header, new HashMap<>(), keyField);
   }
 
   @Override
@@ -143,12 +148,19 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     return new CloseableMappingIterator<>(iterator, data -> (HoodieRecord<T>) new HoodieAvroIndexedRecord(data));
   }
 
+  @Override
+  protected <T> ClosableIterator<T> deserializeRecords(HoodieReaderContext<T> readerContext, byte[] content) throws IOException {
+    checkState(this.readerSchema != null, "Reader's schema has to be non-null");
+    RecordIterator iterator = RecordIterator.getInstance(this, content);
+    return new CloseableMappingIterator<>(iterator, data -> readerContext.convertAvroRecord(data));
+  }
+
   private static class RecordIterator implements ClosableIterator<IndexedRecord> {
     private byte[] content;
     private final SizeAwareDataInputStream dis;
     private final GenericDatumReader<IndexedRecord> reader;
     private final ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
-
+    private Option<Schema> promotedSchema = Option.empty();
     private int totalRecords = 0;
     private int readRecords = 0;
 
@@ -163,7 +175,12 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
         this.totalRecords = this.dis.readInt();
       }
 
-      this.reader = new GenericDatumReader<>(writerSchema, readerSchema);
+      if (recordNeedsRewriteForExtendedAvroTypePromotion(writerSchema, readerSchema)) {
+        this.reader = new GenericDatumReader<>(writerSchema, writerSchema);
+        this.promotedSchema = Option.of(readerSchema);
+      } else {
+        this.reader = new GenericDatumReader<>(writerSchema, readerSchema);
+      }
     }
 
     public static RecordIterator getInstance(HoodieAvroDataBlock dataBlock, byte[] content) throws IOException {
@@ -196,6 +213,9 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
         IndexedRecord record = this.reader.read(null, decoder);
         this.dis.skipBytes(recordLength);
         this.readRecords++;
+        if (this.promotedSchema.isPresent()) {
+          return  HoodieAvroUtils.rewriteRecordWithNewSchema(record, this.promotedSchema.get());
+        }
         return record;
       } catch (IOException e) {
         throw new HoodieIOException("Unable to convert bytes to record.", e);
@@ -216,7 +236,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
    */
   @Deprecated
   public HoodieAvroDataBlock(List<HoodieRecord> records, Schema schema) {
-    super(records, Collections.singletonMap(HeaderMetadataType.SCHEMA, schema.toString()), new HashMap<>(), HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    super(records, false, Collections.singletonMap(HeaderMetadataType.SCHEMA, schema.toString()), new HashMap<>(), HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 
   public static HoodieAvroDataBlock getBlock(byte[] content, Schema readerSchema) throws IOException {
@@ -267,7 +287,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     try {
       OutputStream out = new DeflaterOutputStream(baos);
-      out.write(text.getBytes(StandardCharsets.UTF_8));
+      out.write(getUTF8Bytes(text));
       out.close();
     } catch (IOException e) {
       throw new HoodieIOException("IOException while compressing text " + text, e);

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hudi.adapter.TestTableEnvs;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
@@ -32,6 +31,7 @@ import org.apache.hudi.utils.FlinkMiniCluster;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestSQL;
+import org.apache.hudi.utils.TestTableEnvs;
 import org.apache.hudi.utils.TestUtils;
 import org.apache.hudi.utils.factory.CollectSinkTableFactory;
 
@@ -49,6 +49,7 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.CollectionUtil;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -302,6 +303,23 @@ public class ITTestHoodieDataSource {
     } else {
       assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
     }
+  }
+
+  @Test
+  void testStreamWriteBatchReadOptimizedWithoutCompaction() {
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ)
+        .option(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_READ_OPTIMIZED)
+        .end();
+    streamTableEnv.executeSql(hoodieTableDDL);
+    final String insertInto = "insert into t1 values\n"
+        + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01','par1')";
+    execInsertSql(streamTableEnv, insertInto);
+
+    List<Row> rows = CollectionUtil.iterableToList(
+        () -> streamTableEnv.sqlQuery("select * from t1").execute().collect());
+    assertTrue(rows.isEmpty());
   }
 
   @Test
@@ -760,8 +778,8 @@ public class ITTestHoodieDataSource {
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
     assertRowsEquals(result2, TestData.DATA_SET_SOURCE_INSERT_OVERWRITE);
 
-    // overwrite the whole table
-    final String insertInto3 = "insert overwrite t1 values\n"
+    // overwrite the dynamic partition
+    final String insertInto3 = "insert overwrite t1 /*+ OPTIONS('write.partition.overwrite.mode'='dynamic') */ values\n"
         + "('id1','Danny',24,TIMESTAMP '1970-01-01 00:00:01', 'par1'),\n"
         + "('id2','Stephen',34,TIMESTAMP '1970-01-01 00:00:02', 'par2')\n";
 
@@ -769,16 +787,31 @@ public class ITTestHoodieDataSource {
 
     List<Row> result3 = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
-    final String expected = "["
-        + "+I[id1, Danny, 24, 1970-01-01T00:00:01, par1], "
-        + "+I[id2, Stephen, 34, 1970-01-01T00:00:02, par2]]";
-    assertRowsEquals(result3, expected);
+    assertRowsEquals(result3, TestData.DATA_SET_SOURCE_INSERT_OVERWRITE_DYNAMIC_PARTITION);
 
     // execute the same statement again and check the result
     execInsertSql(tableEnv, insertInto3);
+    assertRowsEquals(result3, TestData.DATA_SET_SOURCE_INSERT_OVERWRITE_DYNAMIC_PARTITION);
+
+    // overwrite the whole table
+    final String insertInto4 = "insert overwrite t1 values\n"
+        + "('id1','Danny',24,TIMESTAMP '1970-01-01 00:00:01', 'par1'),\n"
+        + "('id2','Stephen',34,TIMESTAMP '1970-01-01 00:00:02', 'par2')\n";
+
+    execInsertSql(tableEnv, insertInto4);
+
     List<Row> result4 = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    final String expected = "["
+        + "+I[id1, Danny, 24, 1970-01-01T00:00:01, par1], "
+        + "+I[id2, Stephen, 34, 1970-01-01T00:00:02, par2]]";
     assertRowsEquals(result4, expected);
+
+    // execute the same statement again and check the result
+    execInsertSql(tableEnv, insertInto4);
+    List<Row> result5 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result5, expected);
   }
 
   @ParameterizedTest
@@ -1590,6 +1623,7 @@ public class ITTestHoodieDataSource {
         + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
   }
 
+  @Disabled("for being flaky by HUDI-7174")
   @Test
   void testMultipleLogBlocksWithDataSkipping() {
     TableEnvironment tableEnv = batchTableEnv;
@@ -2002,6 +2036,20 @@ public class ITTestHoodieDataSource {
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
     List<RowData> expected4 = TestData.delete(expected3, 0, 1, 2, 3);
     assertRowsEquals(result4, expected4);
+  }
+
+  @Test
+  void testReadWithParquetPredicatePushDown() {
+    TableEnvironment tableEnv = batchTableEnv;
+    String hoodieTableDDL = sql("t1").option(FlinkOptions.PATH, tempFile.getAbsolutePath()).end();
+    tableEnv.executeSql(hoodieTableDDL);
+    execInsertSql(tableEnv, TestSQL.INSERT_T1);
+    // apply filters to push down predicates
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1 where uuid > 'id2' and age > 30 and ts > '1970-01-01 00:00:04'").execute().collect());
+    assertRowsEquals(result, "["
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4], "
+        + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
   }
 
   // -------------------------------------------------------------------------

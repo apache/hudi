@@ -22,8 +22,9 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.BaseFileUtils;
-import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.OrcReaderIterator;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
@@ -37,13 +38,12 @@ import org.apache.orc.RecordReader;
 import org.apache.orc.TypeDescription;
 
 import java.io.IOException;
+import java.util.Iterator;
 import java.util.Objects;
 import java.util.Set;
 
 /**
  * {@link HoodieFileReader} implementation for ORC format.
- *
- * @param <R> Record implementation that permits field access by integer index.
  */
 public class HoodieAvroOrcReader extends HoodieAvroFileReaderBase {
 
@@ -68,18 +68,17 @@ public class HoodieAvroOrcReader extends HoodieAvroFileReaderBase {
   }
 
   @Override
-  public Set<String> filterRowKeys(Set candidateRowKeys) {
+  public Set<Pair<String, Long>> filterRowKeys(Set candidateRowKeys) {
     return orcUtils.filterRowKeys(conf, path, candidateRowKeys);
   }
 
   @Override
-  protected ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
+  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) {
     if (!Objects.equals(readerSchema, requestedSchema)) {
       throw new UnsupportedOperationException("Schema projections are not supported in HFile reader");
     }
 
-    try {
-      Reader reader = OrcFile.createReader(path, OrcFile.readerOptions(conf));
+    try (Reader reader = OrcFile.createReader(path, OrcFile.readerOptions(conf))) {
       TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(readerSchema);
       RecordReader recordReader = reader.rows(new Options(conf).schema(orcSchema));
       return new OrcReaderIterator<>(recordReader, readerSchema, orcSchema);
@@ -89,12 +88,33 @@ public class HoodieAvroOrcReader extends HoodieAvroFileReaderBase {
   }
 
   @Override
+  public ClosableIterator<String> getRecordKeyIterator() {
+    final Iterator<String> iterator = orcUtils.readRowKeys(conf, path).iterator();
+    return new ClosableIterator<String>() {
+      @Override
+      public boolean hasNext() {
+        return iterator.hasNext();
+      }
+
+      @Override
+      public String next() {
+        return iterator.next();
+      }
+
+      @Override
+      public void close() {
+      }
+    };
+  }
+
+  @Override
   public Schema getSchema() {
     return orcUtils.readAvroSchema(conf, path);
   }
 
   @Override
-  public void close() {}
+  public void close() {
+  }
 
   @Override
   public long getTotalRecords() {

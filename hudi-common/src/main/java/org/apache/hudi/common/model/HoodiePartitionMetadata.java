@@ -50,6 +50,8 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+
 /**
  * The metadata that goes into the meta file in each partition.
  */
@@ -171,7 +173,7 @@ public class HoodiePartitionMetadata {
               .setSchema(AvroOrcUtils.createOrcSchema(schema));
           try (Writer writer = OrcFile.createWriter(filePath, writerOptions)) {
             for (String key : props.stringPropertyNames()) {
-              writer.addUserMetadata(key, ByteBuffer.wrap(props.getProperty(key).getBytes()));
+              writer.addUserMetadata(key, ByteBuffer.wrap(getUTF8Bytes(props.getProperty(key))));
             }
           }
           break;

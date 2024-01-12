@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
@@ -27,10 +28,12 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
+import org.apache.hudi.sink.meta.CkpMetadataFactory;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestUtils;
@@ -144,7 +147,8 @@ public class TestWriteBase {
       this.pipeline = TestData.getWritePipeline(this.basePath, conf);
       // open the function and ingest data
       this.pipeline.openFunction();
-      this.ckpMetadata = CkpMetadata.getInstance(conf);
+      HoodieWriteConfig writeConfig = this.pipeline.getCoordinator().getWriteClient().getConfig();
+      this.ckpMetadata = CkpMetadataFactory.getCkpMetadata(writeConfig, conf);
       return this;
     }
 
@@ -260,6 +264,15 @@ public class TestWriteBase {
       return this;
     }
 
+    /**
+     * Stop the timeline server.
+     */
+    public TestHarness stopTimelineServer() {
+      HoodieFlinkWriteClient<?> client = pipeline.getCoordinator().getWriteClient();
+      client.getTimelineServer().ifPresent(embeddedTimelineService -> embeddedTimelineService.stopForBasePath(client.getConfig().getBasePath()));
+      return this;
+    }
+
     public TestHarness allDataFlushed() {
       Map<String, List<HoodieRecord>> dataBuffer = this.pipeline.getDataBuffer();
       assertThat("All data should be flushed out", dataBuffer.size(), is(0));
@@ -290,6 +303,31 @@ public class TestWriteBase {
       checkInstantState(HoodieInstant.State.COMPLETED, lastPending);
       this.lastComplete = lastPending;
       this.lastPending = newInflight; // refresh last pending instant
+      return this;
+    }
+
+    /**
+     * Flush data and commit using endInput. Asserts the commit would fail.
+     */
+    public void endInputThrows(Class<?> cause, String msg) {
+      // this triggers the data write and event send
+      this.pipeline.endInput();
+      final OperatorEvent nextEvent = this.pipeline.getNextEvent();
+      this.pipeline.getCoordinator().handleEventFromOperator(0, nextEvent);
+      assertTrue(this.pipeline.getCoordinatorContext().isJobFailed(), "Job should have been failed");
+      Throwable throwable = this.pipeline.getCoordinatorContext().getJobFailureReason().getCause();
+      assertThat(throwable, instanceOf(cause));
+      assertThat(throwable.getMessage(), containsString(msg));
+    }
+
+    /**
+     * Flush data and commit using endInput.
+     */
+    public TestHarness endInput() {
+      // this triggers the data write and event send
+      this.pipeline.endInput();
+      final OperatorEvent nextEvent = this.pipeline.getNextEvent();
+      this.pipeline.getCoordinator().handleEventFromOperator(0, nextEvent);
       return this;
     }
 
@@ -484,6 +522,7 @@ public class TestWriteBase {
 
     public void end() throws Exception {
       this.pipeline.close();
+      this.pipeline = null;
     }
 
     private String lastPendingInstant() {
@@ -512,9 +551,16 @@ public class TestWriteBase {
     }
 
     protected String lastCompleteInstant() {
-      return OptionsResolver.isMorTable(conf)
-          ? TestUtils.getLastDeltaCompleteInstant(basePath)
-          : TestUtils.getLastCompleteInstant(basePath, HoodieTimeline.COMMIT_ACTION);
+      // If using optimistic concurrency control, fetch last complete instant of current writer from ckp metadata
+      // because there are multiple write clients commit to the timeline.
+      if (OptionsResolver.isMultiWriter(conf)) {
+        return this.ckpMetadata.lastCompleteInstant();
+      } else {
+        // fetch the instant from timeline.
+        return OptionsResolver.isMorTable(conf)
+            ? TestUtils.getLastDeltaCompleteInstant(basePath)
+            : TestUtils.getLastCompleteInstant(basePath, HoodieTimeline.COMMIT_ACTION);
+      }
     }
 
     public TestHarness checkCompletedInstantCount(int count) {

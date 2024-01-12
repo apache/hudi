@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -38,6 +37,7 @@ import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.util.Utf8;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
@@ -48,11 +48,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -136,17 +139,55 @@ public final class SchemaTestUtil {
     return fs.getPath(array[1]);
   }
 
+  /**
+   * Generates a list of random UUIDs
+   *
+   * @param size          Number of UUIDs to return.
+   * @param existingUUIDs Existing UUIDs to include.
+   * @return A list of UUIDs.
+   */
+  public List<String> genRandomUUID(int size, List<String> existingUUIDs) {
+    Set<String> uuidSet = new HashSet<>(existingUUIDs);
+    while (uuidSet.size() < size) {
+      uuidSet.add(genRandomUUID());
+    }
+    return new ArrayList<>(uuidSet);
+  }
+
   public List<IndexedRecord> generateHoodieTestRecords(int from, int limit)
       throws IOException, URISyntaxException {
-    List<IndexedRecord> records = generateTestRecords(from, limit);
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    String instantTime = InProcessTimeGenerator.createNewInstantTime();
+    List<String> recorKeyList = genRandomUUID(limit, Collections.emptyList());
+    return generateHoodieTestRecords(from, recorKeyList, "0000/00/00", instantTime);
+  }
+
+  /**
+   * Generates test records.
+   *
+   * @param from          Offset to start picking records.
+   * @param recordKeyList Record keys to use.
+   * @param partitionPath Partition path to use.
+   * @param instantTime   Hudi instant time.
+   * @return A list of {@link IndexedRecord}.
+   * @throws IOException
+   * @throws URISyntaxException
+   */
+  public List<IndexedRecord> generateHoodieTestRecords(int from,
+                                                       List<String> recordKeyList,
+                                                       String partitionPath,
+                                                       String instantTime)
+      throws IOException, URISyntaxException {
+    List<IndexedRecord> records = generateTestRecords(from, recordKeyList.size());
     Schema hoodieFieldsSchema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
-    return records.stream().map(s -> HoodieAvroUtils.rewriteRecord((GenericRecord) s, hoodieFieldsSchema)).map(p -> {
-      p.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, genRandomUUID());
-      p.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, "0000/00/00");
-      p.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, instantTime);
-      return p;
-    }).collect(Collectors.toList());
+    List<IndexedRecord> recordsWithMetaFields = new ArrayList<>();
+    for (int i = 0; i < recordKeyList.size(); i++) {
+      GenericRecord newRecord = HoodieAvroUtils.rewriteRecord((GenericRecord) records.get(i), hoodieFieldsSchema);
+      newRecord.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recordKeyList.get(i));
+      newRecord.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, partitionPath);
+      newRecord.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, instantTime);
+      recordsWithMetaFields.add(newRecord);
+    }
+    return recordsWithMetaFields;
   }
 
   public List<HoodieRecord> generateHoodieTestRecords(int from, int limit, Schema schema)
@@ -231,8 +272,8 @@ public final class SchemaTestUtil {
   }
 
   public static Schema getSchemaFromResource(Class<?> clazz, String name, boolean withHoodieMetadata) {
-    try {
-      Schema schema = new Schema.Parser().parse(clazz.getResourceAsStream(name));
+    try (InputStream schemaInputStream = clazz.getResourceAsStream(name)) {
+      Schema schema = new Schema.Parser().parse(schemaInputStream);
       return withHoodieMetadata ? HoodieAvroUtils.addMetadataFields(schema) : schema;
     } catch (IOException e) {
       throw new RuntimeException(String.format("Failed to get schema from resource `%s` for class `%s`", name, clazz.getName()));

@@ -19,11 +19,14 @@
 package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.ResolvedTable
-import org.apache.spark.sql.catalyst.expressions.{AttributeSet, Expression, ProjectionOverSchema}
-import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, MergeIntoTable}
+import org.apache.spark.sql.catalyst.analysis.{AnalysisErrorAt, ResolvedTable}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression, ProjectionOverSchema}
+import org.apache.spark.sql.catalyst.planning.ScanOperation
+import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
 import org.apache.spark.sql.execution.command.RepairTableCommand
+import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, ParquetFileFormat}
+import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.types.StructType
 
 object HoodieSpark34CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
@@ -42,6 +45,17 @@ object HoodieSpark34CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
     }
   }
 
+  override def maybeApplyForNewFileFormat(plan: LogicalPlan): LogicalPlan = {
+    plan match {
+      case s@ScanOperation(_, _, _,
+      l@LogicalRelation(fs: HadoopFsRelation, _, _, _))
+        if fs.fileFormat.isInstanceOf[ParquetFileFormat with HoodieFormatTrait]
+          && !fs.fileFormat.asInstanceOf[ParquetFileFormat with HoodieFormatTrait].isProjected =>
+        FileFormatUtilsForFileGroupReader.applyNewFileFormatChanges(s, l, fs)
+      case _ => plan
+    }
+  }
+
   override def projectOverSchema(schema: StructType, output: AttributeSet): ProjectionOverSchema =
     ProjectionOverSchema(schema, output)
 
@@ -53,6 +67,50 @@ object HoodieSpark34CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
     plan match {
       case rtc: RepairTableCommand =>
         Some((rtc.tableName, rtc.enableAddPartitions, rtc.enableDropPartitions, rtc.cmd))
+      case _ =>
+        None
+    }
+  }
+
+  override def failAnalysisForMIT(a: Attribute, cols: String): Unit = {
+    a.failAnalysis(
+      errorClass = "_LEGACY_ERROR_TEMP_2309",
+      messageParameters = Map(
+        "sqlExpr" -> a.sql,
+        "cols" -> cols))
+  }
+
+  override def unapplyCreateIndex(plan: LogicalPlan): Option[(LogicalPlan, String, String, Boolean, Seq[(Seq[String], Map[String, String])], Map[String, String])] = {
+    plan match {
+      case ci@CreateIndex(table, indexName, indexType, ignoreIfExists, columns, properties) =>
+        Some((table, indexName, indexType, ignoreIfExists, columns.map(col => (col._1.name, col._2)), properties))
+      case _ =>
+        None
+    }
+  }
+
+  override def unapplyDropIndex(plan: LogicalPlan): Option[(LogicalPlan, String, Boolean)] = {
+    plan match {
+      case ci@DropIndex(table, indexName, ignoreIfNotExists) =>
+        Some((table, indexName, ignoreIfNotExists))
+      case _ =>
+        None
+    }
+  }
+
+  override def unapplyShowIndexes(plan: LogicalPlan): Option[(LogicalPlan, Seq[Attribute])] = {
+    plan match {
+      case ci@ShowIndexes(table, output) =>
+        Some((table, output))
+      case _ =>
+        None
+    }
+  }
+
+  override def unapplyRefreshIndex(plan: LogicalPlan): Option[(LogicalPlan, String)] = {
+    plan match {
+      case ci@RefreshIndex(table, indexName) =>
+        Some((table, indexName))
       case _ =>
         None
     }

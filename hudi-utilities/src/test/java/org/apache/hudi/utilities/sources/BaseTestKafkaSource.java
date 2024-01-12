@@ -24,10 +24,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
-import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
-import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
+import org.apache.hudi.utilities.exception.HoodieStreamerException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -262,14 +262,14 @@ abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarness {
 
     // wait for the checkpoint to expire
     Thread.sleep(30000);
-    Throwable t = assertThrows(HoodieDeltaStreamerException.class, () -> {
+    Throwable t = assertThrows(HoodieStreamerException.class, () -> {
       kafkaSource.fetchNewDataInAvroFormat(Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
     });
     assertEquals(
         "Some data may have been lost because they are not available in Kafka any more;"
             + " either the data was aged out by Kafka or the topic may have been deleted before all the data in the topic was processed.",
         t.getMessage());
-    t = assertThrows(HoodieDeltaStreamerException.class, () -> {
+    t = assertThrows(HoodieStreamerException.class, () -> {
       kafkaSource.fetchNewDataInRowFormat(Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
     });
     assertEquals(

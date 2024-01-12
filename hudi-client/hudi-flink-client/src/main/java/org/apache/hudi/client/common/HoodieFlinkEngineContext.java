@@ -181,6 +181,16 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
     return Collections.emptyList();
   }
 
+  @Override
+  public void cancelJob(String jobId) {
+    // no operation for now
+  }
+
+  @Override
+  public void cancelAllJobs() {
+    // no operation for now
+  }
+
   /**
    * Override the flink context supplier to return constant write token.
    */

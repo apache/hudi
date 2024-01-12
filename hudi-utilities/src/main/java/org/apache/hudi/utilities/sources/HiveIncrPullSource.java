@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.sources;
 
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
@@ -47,6 +46,9 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * Source to read deltas produced by {@link HiveIncrementalPuller}, commit by commit and apply to the target table
@@ -79,8 +81,8 @@ public class HiveIncrPullSource extends AvroSource {
   public HiveIncrPullSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
-    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(HiveIncrPullSourceConfig.ROOT_INPUT_PATH.key()));
-    this.incrPullRootPath = props.getString(HiveIncrPullSourceConfig.ROOT_INPUT_PATH.key());
+    checkRequiredConfigProperties(props, Collections.singletonList(HiveIncrPullSourceConfig.ROOT_INPUT_PATH));
+    this.incrPullRootPath = getStringWithAltKeys(props, HiveIncrPullSourceConfig.ROOT_INPUT_PATH);
     this.fs = FSUtils.getFs(incrPullRootPath, sparkContext.hadoopConfiguration());
   }
 

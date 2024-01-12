@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -136,7 +137,7 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
   }
 
   private void init(HoodieWriteConfig config) {
-    this.multiPutBatchSize = config.getHbaseIndexGetBatchSize();
+    this.multiPutBatchSize = config.getHbaseIndexPutBatchSize();
     this.maxQpsPerRegionServer = config.getHbaseIndexMaxQPSPerRegionServer();
     this.putBatchSizeCalculator = new HBasePutBatchSizeCalculator();
     this.hBaseIndexQPSResourceAllocator = createQPSResourceAllocator(this.config);
@@ -287,6 +288,7 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
                   new EmptyHoodieRecordPayload());
               emptyRecord.unseal();
               emptyRecord.setCurrentLocation(new HoodieRecordLocation(commitTs, fileId));
+              emptyRecord.setIgnoreIndexUpdate(true);
               emptyRecord.seal();
               // insert partition new data record
               currentRecord = new HoodieAvroRecord(new HoodieKey(currentRecord.getRecordKey(), currentRecord.getPartitionPath()),
@@ -356,22 +358,25 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
             LOG.info("multiPutBatchSize for this job: " + this.multiPutBatchSize);
             // Create a rate limiter that allows `multiPutBatchSize` operations per second
             // Any calls beyond `multiPutBatchSize` within a second will be rate limited
-            for (HoodieRecord rec : writeStatus.getWrittenRecords()) {
-              if (!writeStatus.isErrored(rec.getKey())) {
-                Option<HoodieRecordLocation> loc = rec.getNewLocation();
+            for (HoodieRecordDelegate recordDelegate : writeStatus.getWrittenRecordDelegates()) {
+              if (!writeStatus.isErrored(recordDelegate.getHoodieKey())) {
+                if (recordDelegate.getIgnoreIndexUpdate()) {
+                  continue;
+                }
+                Option<HoodieRecordLocation> loc = recordDelegate.getNewLocation();
                 if (loc.isPresent()) {
-                  if (rec.getCurrentLocation() != null) {
+                  if (recordDelegate.getCurrentLocation().isPresent()) {
                     // This is an update, no need to update index
                     continue;
                   }
-                  Put put = new Put(Bytes.toBytes(getHBaseKey(rec.getRecordKey())));
+                  Put put = new Put(Bytes.toBytes(getHBaseKey(recordDelegate.getRecordKey())));
                   put.addColumn(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN, Bytes.toBytes(loc.get().getInstantTime()));
                   put.addColumn(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN, Bytes.toBytes(loc.get().getFileId()));
-                  put.addColumn(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN, Bytes.toBytes(rec.getPartitionPath()));
+                  put.addColumn(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN, Bytes.toBytes(recordDelegate.getPartitionPath()));
                   mutations.add(put);
                 } else {
                   // Delete existing index for a deleted record
-                  Delete delete = new Delete(Bytes.toBytes(getHBaseKey(rec.getRecordKey())));
+                  Delete delete = new Delete(Bytes.toBytes(getHBaseKey(recordDelegate.getRecordKey())));
                   mutations.add(delete);
                 }
               }

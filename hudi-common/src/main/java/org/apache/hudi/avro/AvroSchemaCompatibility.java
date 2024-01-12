@@ -43,6 +43,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.avro.HoodieAvroUtils.isTypeNumeric;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
@@ -62,10 +63,15 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 public class AvroSchemaCompatibility {
   private static final Logger LOG = LoggerFactory.getLogger(AvroSchemaCompatibility.class);
 
-  /** Utility class cannot be instantiated. */
-  private AvroSchemaCompatibility() {}
+  /**
+   * Utility class cannot be instantiated.
+   */
+  private AvroSchemaCompatibility() {
+  }
 
-  /** Message to annotate reader/writer schema pairs that are compatible. */
+  /**
+   * Message to annotate reader/writer schema pairs that are compatible.
+   */
   public static final String READER_WRITER_COMPATIBLE_MESSAGE = "Reader schema can always successfully decode data written using the writer schema.";
 
   /**
@@ -161,7 +167,7 @@ public class AvroSchemaCompatibility {
 
   /**
    * Reader/writer schema pair that can be used as a key in a hash map.
-   *
+   * <p>
    * This reader/writer pair differentiates Schema objects based on their system
    * hash code.
    */
@@ -180,13 +186,17 @@ public class AvroSchemaCompatibility {
       mWriter = writer;
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public int hashCode() {
       return System.identityHashCode(mReader) ^ System.identityHashCode(mWriter);
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean equals(Object obj) {
       if (!(obj instanceof ReaderWriter)) {
@@ -197,7 +207,9 @@ public class AvroSchemaCompatibility {
       return (this.mReader == that.mReader) && (this.mWriter == that.mWriter);
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String toString() {
       return String.format("ReaderWriter{reader:%s, writer:%s}", mReader, mWriter);
@@ -279,8 +291,8 @@ public class AvroSchemaCompatibility {
      * {@link #getCompatibility(Schema, Schema)}.
      * </p>
      *
-     * @param reader   Reader schema to test.
-     * @param writer   Writer schema to test.
+     * @param reader    Reader schema to test.
+     * @param writer    Writer schema to test.
      * @param locations Stack with which to track the location within the schema.
      * @return the compatibility of the reader/writer schema pair.
      */
@@ -372,7 +384,8 @@ public class AvroSchemaCompatibility {
             return (writer.getType() == Type.STRING) ? result : result.mergedWith(typeMismatch(reader, writer, locations));
           }
           case STRING: {
-            return (writer.getType() == Type.BYTES) ? result : result.mergedWith(typeMismatch(reader, writer, locations));
+            return (isTypeNumeric(writer.getType()) || (writer.getType() == Schema.Type.BYTES)
+                ? result : result.mergedWith(typeMismatch(reader, writer, locations)));
           }
 
           case ARRAY:
@@ -535,12 +548,14 @@ public class AvroSchemaCompatibility {
   }
 
   /**
-   * Identifies the type of a schema compatibility result.
+   * Identifies the type of schema compatibility result.
    */
   public enum SchemaCompatibilityType {
     COMPATIBLE, INCOMPATIBLE,
 
-    /** Used internally to tag a reader/writer schema pair and prevent recursion. */
+    /**
+     * Used internally to tag a reader/writer schema pair and prevent recursion.
+     */
     RECURSION_IN_PROGRESS;
   }
 
@@ -565,7 +580,7 @@ public class AvroSchemaCompatibility {
      * @param toMerge The {@code SchemaCompatibilityResult} to merge with the
      *                current instance.
      * @return A {@code SchemaCompatibilityResult} that combines the state of the
-     *         current and supplied instances.
+     * current and supplied instances.
      */
     public SchemaCompatibilityResult mergedWith(SchemaCompatibilityResult toMerge) {
       List<Incompatibility> mergedIncompatibilities = new ArrayList<>(mIncompatibilities);
@@ -595,7 +610,7 @@ public class AvroSchemaCompatibility {
      * Returns a details object representing a compatible schema pair.
      *
      * @return a SchemaCompatibilityDetails object with COMPATIBLE
-     *         SchemaCompatibilityType, and no other state.
+     * SchemaCompatibilityType, and no other state.
      */
     public static SchemaCompatibilityResult compatible() {
       return COMPATIBLE;
@@ -606,7 +621,7 @@ public class AvroSchemaCompatibility {
      * progress.
      *
      * @return a SchemaCompatibilityDetails object with RECURSION_IN_PROGRESS
-     *         SchemaCompatibilityType, and no other state.
+     * SchemaCompatibilityType, and no other state.
      */
     public static SchemaCompatibilityResult recursionInProgress() {
       return RECURSION_IN_PROGRESS;
@@ -617,7 +632,7 @@ public class AvroSchemaCompatibility {
      * error details.
      *
      * @return a SchemaCompatibilityDetails object with INCOMPATIBLE
-     *         SchemaCompatibilityType, and state representing the violating part.
+     * SchemaCompatibilityType, and state representing the violating part.
      */
     public static SchemaCompatibilityResult incompatible(SchemaIncompatibilityType incompatibilityType,
                                                          Schema readerFragment, Schema writerFragment, String message, List<String> location) {
@@ -641,13 +656,15 @@ public class AvroSchemaCompatibility {
      * Incompatibilities} found, otherwise an empty list.
      *
      * @return a list of {@link Incompatibility Incompatibilities}, may be empty,
-     *         never null.
+     * never null.
      */
     public List<Incompatibility> getIncompatibilities() {
       return mIncompatibilities;
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public int hashCode() {
       final int prime = 31;
@@ -657,7 +674,9 @@ public class AvroSchemaCompatibility {
       return result;
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean equals(Object obj) {
       if (this == obj) {
@@ -680,7 +699,9 @@ public class AvroSchemaCompatibility {
       return mCompatibilityType == other.mCompatibilityType;
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String toString() {
       return String.format("SchemaCompatibilityResult{compatibility:%s, incompatibilities:%s}", mCompatibilityType,
@@ -737,8 +758,8 @@ public class AvroSchemaCompatibility {
      * Returns a human-readable message with more details about what failed. Syntax
      * depends on the SchemaIncompatibilityType.
      *
-     * @see #getType()
      * @return a String with details about the incompatibility.
+     * @see #getType()
      */
     public String getMessage() {
       return mMessage;
@@ -768,7 +789,9 @@ public class AvroSchemaCompatibility {
       return s.toString();
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public int hashCode() {
       final int prime = 31;
@@ -781,7 +804,9 @@ public class AvroSchemaCompatibility {
       return result;
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean equals(Object obj) {
       if (this == obj) {
@@ -825,7 +850,9 @@ public class AvroSchemaCompatibility {
       }
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String toString() {
       return String.format("Incompatibility{type:%s, location:%s, message:%s, reader:%s, writer:%s}", mType,
@@ -837,21 +864,29 @@ public class AvroSchemaCompatibility {
   /**
    * Provides information about the compatibility of a single reader and writer
    * schema pair.
-   *
+   * <p>
    * Note: This class represents a one-way relationship from the reader to the
    * writer schema.
    */
   public static final class SchemaPairCompatibility {
-    /** The details of this result. */
+    /**
+     * The details of this result.
+     */
     private final SchemaCompatibilityResult mResult;
 
-    /** Validated reader schema. */
+    /**
+     * Validated reader schema.
+     */
     private final Schema mReader;
 
-    /** Validated writer schema. */
+    /**
+     * Validated writer schema.
+     */
     private final Schema mWriter;
 
-    /** Human readable description of this result. */
+    /**
+     * Human-readable description of this result.
+     */
     private final String mDescription;
 
     /**
@@ -907,22 +942,26 @@ public class AvroSchemaCompatibility {
     }
 
     /**
-     * Gets a human readable description of this validation result.
+     * Gets a human-readable description of this validation result.
      *
-     * @return a human readable description of this validation result.
+     * @return a human-readable description of this validation result.
      */
     public String getDescription() {
       return mDescription;
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String toString() {
       return String.format("SchemaPairCompatibility{result:%s, readerSchema:%s, writerSchema:%s, description:%s}",
           mResult, mReader, mWriter, mDescription);
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean equals(Object other) {
       if ((other instanceof SchemaPairCompatibility)) {
@@ -934,14 +973,18 @@ public class AvroSchemaCompatibility {
       }
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public int hashCode() {
-      return Arrays.hashCode(new Object[] { mResult, mReader, mWriter, mDescription });
+      return Arrays.hashCode(new Object[] {mResult, mReader, mWriter, mDescription});
     }
   }
 
-  /** Borrowed from Guava's Objects.equal(a, b) */
+  /**
+   * Borrowed from Guava's Objects.equal(a, b)
+   */
   private static boolean objectsEqual(Object obj1, Object obj2) {
     return Objects.equals(obj1, obj2);
   }

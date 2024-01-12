@@ -51,8 +51,7 @@ class ShowMetadataTablePartitionsProcedure() extends BaseProcedure with Procedur
 
     val basePath = getBasePath(table)
     val config = HoodieMetadataConfig.newBuilder.enable(true).build
-    val metadata = new HoodieBackedTableMetadata(new HoodieSparkEngineContext(jsc),
-      config, basePath, "/tmp")
+    val metadata = new HoodieBackedTableMetadata(new HoodieSparkEngineContext(jsc), config, basePath)
     if (!metadata.enabled){
       throw new HoodieException(s"Metadata Table not enabled/initialized.")
     }

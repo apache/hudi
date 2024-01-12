@@ -46,6 +46,9 @@ public class EventTimeAvroPayload extends DefaultHoodieRecordPayload {
 
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema, Properties properties) throws IOException {
+    /*
+     * Check if the incoming record is a delete record.
+     */
     if (recordBytes.length == 0 || isDeletedRecord) {
       return Option.empty();
     }
@@ -58,9 +61,6 @@ public class EventTimeAvroPayload extends DefaultHoodieRecordPayload {
       return Option.of(currentValue);
     }
 
-    /*
-     * Now check if the incoming record is a delete record.
-     */
     return Option.of(incomingRecord);
   }
 

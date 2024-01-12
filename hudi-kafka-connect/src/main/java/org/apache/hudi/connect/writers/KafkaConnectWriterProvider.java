@@ -93,6 +93,7 @@ public class KafkaConnectWriterProvider implements ConnectWriterProvider<WriteSt
           .withCleanConfig(HoodieCleanConfig.newBuilder().withAutoClean(false).build())
           .withCompactionConfig(HoodieCompactionConfig.newBuilder().withInlineCompaction(false).build())
           .withClusteringConfig(HoodieClusteringConfig.newBuilder().withInlineClustering(false).build())
+          .withWritesFileIdEncoding(1)
           .build();
 
       context = new HoodieJavaEngineContext(hadoopConf);

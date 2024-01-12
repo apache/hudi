@@ -44,7 +44,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_USE_FILE_LISTING_FROM_METADATA;
@@ -81,6 +80,10 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
 
   public boolean isBootstrap() {
     return metaClient.getTableConfig().getBootstrapBasePath().isPresent();
+  }
+
+  public HoodieTableMetaClient getMetaClient() {
+    return metaClient;
   }
 
   /**
@@ -122,8 +125,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
     HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
     return FSUtils.getAllPartitionPaths(engineContext,
         config.getString(META_SYNC_BASE_PATH),
-        config.getBoolean(META_SYNC_USE_FILE_LISTING_FROM_METADATA),
-        config.getBoolean(META_SYNC_ASSUME_DATE_PARTITION));
+        config.getBoolean(META_SYNC_USE_FILE_LISTING_FROM_METADATA));
   }
 
   public List<String> getWrittenPartitionsSince(Option<String> lastCommitTimeSynced, Option<String> lastCommitCompletionTimeSynced) {

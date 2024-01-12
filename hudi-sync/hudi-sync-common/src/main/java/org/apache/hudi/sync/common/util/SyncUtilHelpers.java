@@ -23,7 +23,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetaSyncException;
-import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.sync.common.HoodieSyncTool;
 
 import org.apache.hadoop.conf.Configuration;
@@ -33,22 +32,34 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 
 /**
  * Helper class for syncing Hudi commit data with external metastores.
  */
 public class SyncUtilHelpers {
   private static final Logger LOG = LoggerFactory.getLogger(SyncUtilHelpers.class);
+
+  // Locks for each table (base path) to avoid concurrent modification of the same underneath meta storage.
+  // Meta store such as Hive may encounter {@code ConcurrentModificationException} for #alter_table.
+  private static final ConcurrentHashMap<String, Lock> TABLE_LOCKS = new ConcurrentHashMap<>();
+
   /**
    * Create an instance of an implementation of {@link HoodieSyncTool} that will sync all the relevant meta information
    * with an external metastore such as Hive etc. to ensure Hoodie tables can be queried or read via external systems.
    *
-   * @param syncToolClassName   Class name of the {@link HoodieSyncTool} implementation.
-   * @param props               property map.
-   * @param hadoopConfig        Hadoop confs.
-   * @param fs                  Filesystem used.
-   * @param targetBasePath      The target base path that contains the hoodie table.
-   * @param baseFileFormat      The file format used by the hoodie table (defaults to PARQUET).
+   * @param syncToolClassName Class name of the {@link HoodieSyncTool} implementation.
+   * @param props             property map.
+   * @param hadoopConfig      Hadoop confs.
+   * @param fs                Filesystem used.
+   * @param targetBasePath    The target base path that contains the hoodie table.
+   * @param baseFileFormat    The file format used by the hoodie table (defaults to PARQUET).
    */
   public static void runHoodieMetaSync(String syncToolClassName,
                                        TypedProperties props,
@@ -56,10 +67,21 @@ public class SyncUtilHelpers {
                                        FileSystem fs,
                                        String targetBasePath,
                                        String baseFileFormat) {
-    try (HoodieSyncTool syncTool = instantiateMetaSyncTool(syncToolClassName, props, hadoopConfig, fs, targetBasePath, baseFileFormat)) {
-      syncTool.syncHoodieTable();
-    } catch (Throwable e) {
-      throw new HoodieMetaSyncException("Could not sync using the meta sync class " + syncToolClassName, e);
+    if (targetBasePath == null) {
+      throw new IllegalArgumentException("Target base path must not be null");
+    }
+
+    // Get or create a lock for the specific table
+    Lock tableLock = TABLE_LOCKS.computeIfAbsent(targetBasePath, k -> new ReentrantLock());
+    tableLock.lock();
+    try {
+      try (HoodieSyncTool syncTool = instantiateMetaSyncTool(syncToolClassName, props, hadoopConfig, fs, targetBasePath, baseFileFormat)) {
+        syncTool.syncHoodieTable();
+      } catch (Throwable e) {
+        throw new HoodieMetaSyncException("Could not sync using the meta sync class " + syncToolClassName, e);
+      }
+    } finally {
+      tableLock.unlock();
     }
   }
 
@@ -71,10 +93,10 @@ public class SyncUtilHelpers {
                                                 String baseFileFormat) {
     TypedProperties properties = new TypedProperties();
     properties.putAll(props);
-    properties.put(HoodieSyncConfig.META_SYNC_BASE_PATH.key(), targetBasePath);
-    properties.put(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT.key(), baseFileFormat);
-    if (properties.containsKey(HoodieSyncConfig.META_SYNC_TABLE_NAME.key())) {
-      String tableName = properties.getString(HoodieSyncConfig.META_SYNC_TABLE_NAME.key());
+    properties.put(META_SYNC_BASE_PATH.key(), targetBasePath);
+    properties.put(META_SYNC_BASE_FILE_FORMAT.key(), baseFileFormat);
+    if (properties.containsKey(META_SYNC_TABLE_NAME.key())) {
+      String tableName = properties.getString(META_SYNC_TABLE_NAME.key());
       if (!tableName.equals(tableName.toLowerCase())) {
         LOG.warn(
             "Table name \"" + tableName + "\" contains capital letters. Your metastore may automatically convert this to lower case and can cause table not found errors during subsequent syncs.");
@@ -107,7 +129,7 @@ public class SyncUtilHelpers {
     }
   }
 
-  public static HoodieException getHoodieMetaSyncException(Map<String,HoodieException> failedMetaSyncs) {
+  public static HoodieException getHoodieMetaSyncException(Map<String, HoodieException> failedMetaSyncs) {
     if (failedMetaSyncs.size() == 1) {
       return failedMetaSyncs.values().stream().findFirst().get();
     }
@@ -119,6 +141,10 @@ public class SyncUtilHelpers {
       sb.append(failedMetaSyncs.get(impl).getMessage());
       sb.append("\n");
     }
-    return new HoodieMetaSyncException(sb.toString(),failedMetaSyncs);
+    return new HoodieMetaSyncException(sb.toString(), failedMetaSyncs);
+  }
+
+  static int getNumberOfLocks() {
+    return TABLE_LOCKS.size();
   }
 }

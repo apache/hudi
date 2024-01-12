@@ -35,8 +35,9 @@ import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
-import org.apache.spark.sql.sources.BaseRelation
+import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.{DataType, Metadata, StructType}
+import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import org.apache.spark.storage.StorageLevel
 
 import java.util.{Locale, TimeZone}
@@ -149,11 +150,11 @@ trait SparkAdapter extends Serializable {
   }
 
   def isHoodieTable(map: java.util.Map[String, String]): Boolean = {
-    map.getOrDefault("provider", "").equals("hudi")
+    isHoodieTable(map.getOrDefault("provider", ""))
   }
 
   def isHoodieTable(table: CatalogTable): Boolean = {
-    table.provider.map(_.toLowerCase(Locale.ROOT)).orNull == "hudi"
+    isHoodieTable(table.provider.map(_.toLowerCase(Locale.ROOT)).orNull)
   }
 
   def isHoodieTable(tableId: TableIdentifier, spark: SparkSession): Boolean = {
@@ -161,10 +162,16 @@ trait SparkAdapter extends Serializable {
     isHoodieTable(table)
   }
 
+  def isHoodieTable(provider: String): Boolean = {
+    "hudi".equalsIgnoreCase(provider)
+  }
+
   /**
    * Create instance of [[ParquetFileFormat]]
    */
-  def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat]
+  def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat]
+
+  def makeColumnarBatch(vectors: Array[ColumnVector], numRows: Int): ColumnarBatch
 
   /**
    * Create instance of [[InterpretedPredicate]]
@@ -202,4 +209,9 @@ trait SparkAdapter extends Serializable {
    * Converts instance of [[StorageLevel]] to a corresponding string
    */
   def convertStorageLevelToString(level: StorageLevel): String
+
+  /**
+   * Tries to translate a Catalyst Expression into data source Filter
+   */
+  def translateFilter(predicate: Expression, supportNestedPredicatePushdown: Boolean = false): Option[Filter]
 }

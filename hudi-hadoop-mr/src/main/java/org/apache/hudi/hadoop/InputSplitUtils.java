@@ -23,10 +23,12 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+
 public class InputSplitUtils {
 
   public static void writeString(String str, DataOutput out) throws IOException {
-    byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
+    byte[] bytes = getUTF8Bytes(str);
     out.writeInt(bytes.length);
     out.write(bytes);
   }

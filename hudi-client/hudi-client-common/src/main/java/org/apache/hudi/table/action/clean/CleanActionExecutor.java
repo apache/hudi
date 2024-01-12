@@ -54,6 +54,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+
 public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieCleanMetadata> {
 
   private static final long serialVersionUID = 1L;
@@ -144,10 +146,14 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
     Map<String, PartitionCleanStat> partitionCleanStatsMap = partitionCleanStats
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
-    List<String> partitionsToBeDeleted = cleanerPlan.getPartitionsToBeDeleted() != null ? cleanerPlan.getPartitionsToBeDeleted() : new ArrayList<>();
+    List<String> partitionsToBeDeleted = table.getMetaClient().getTableConfig().isTablePartitioned() && cleanerPlan.getPartitionsToBeDeleted() != null
+        ? cleanerPlan.getPartitionsToBeDeleted()
+        : new ArrayList<>();
     partitionsToBeDeleted.forEach(entry -> {
       try {
-        deleteFileAndGetResult(table.getMetaClient().getFs(), table.getMetaClient().getBasePath() + "/" + entry);
+        if (!isNullOrEmpty(entry)) {
+          deleteFileAndGetResult(table.getMetaClient().getFs(), table.getMetaClient().getBasePath() + "/" + entry);
+        }
       } catch (IOException e) {
         LOG.warn("Partition deletion failed " + entry);
       }
@@ -219,8 +225,8 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
         this.txnManager.beginTransaction(Option.of(inflightInstant), Option.empty());
       }
       writeTableMetadata(metadata, inflightInstant.getTimestamp());
-      table.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant,
-          TimelineMetadataUtils.serializeCleanMetadata(metadata));
+      table.getActiveTimeline().transitionCleanInflightToComplete(false,
+          inflightInstant, TimelineMetadataUtils.serializeCleanMetadata(metadata));
       LOG.info("Marked clean started on " + inflightInstant.getTimestamp() + " as complete");
       return metadata;
     } catch (IOException e) {
@@ -255,13 +261,15 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
           LOG.info("Finishing previously unfinished cleaner instant=" + hoodieInstant);
           try {
             cleanMetadataList.add(runPendingClean(table, hoodieInstant));
+          } catch (HoodieIOException e) {
+            checkIfOtherWriterCommitted(hoodieInstant, e);
           } catch (Exception e) {
-            LOG.warn("Failed to perform previous clean operation, instant: " + hoodieInstant, e);
+            LOG.error("Failed to perform previous clean operation, instant: " + hoodieInstant, e);
             throw e;
           }
         }
         table.getMetaClient().reloadActiveTimeline();
-        if (config.isMetadataTableEnabled()) {
+        if (table.getMetaClient().getTableConfig().isMetadataTableAvailable()) {
           table.getHoodieView().sync();
         }
       }
@@ -271,5 +279,15 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
     // TODO (NA) : Clean only the earliest pending clean just like how we do for other table services
     // This requires the CleanActionExecutor to be refactored as BaseCommitActionExecutor
     return cleanMetadataList.size() > 0 ? cleanMetadataList.get(cleanMetadataList.size() - 1) : null;
+  }
+
+  private void checkIfOtherWriterCommitted(HoodieInstant hoodieInstant, HoodieIOException e) {
+    table.getMetaClient().reloadActiveTimeline();
+    if (table.getCleanTimeline().filterCompletedInstants().containsInstant(hoodieInstant.getTimestamp())) {
+      LOG.warn("Clean operation was completed by another writer for instant: " + hoodieInstant);
+    } else {
+      LOG.error("Failed to perform previous clean operation, instant: " + hoodieInstant, e);
+      throw e;
+    }
   }
 }

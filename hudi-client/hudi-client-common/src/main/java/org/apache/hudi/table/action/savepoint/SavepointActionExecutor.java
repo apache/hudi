@@ -90,7 +90,7 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
         } catch (IOException e) {
           throw new HoodieSavepointException("Failed to savepoint " + instantTime, e);
         }
-      }).orElse(table.getCompletedCommitsTimeline().firstInstant().get().getTimestamp());
+      }).orElseGet(() -> table.getCompletedCommitsTimeline().firstInstant().get().getTimestamp());
 
       // Cannot allow savepoint time on a commit that could have been cleaned
       ValidationUtils.checkArgument(HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.GREATER_THAN_OR_EQUALS, lastCommitRetained),
@@ -108,7 +108,7 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       // (2) using direct file system listing:  we parallelize the partition listing so that
       // each partition can be listed on the file system concurrently through Spark.
       // Note that
-      if (shouldUseBatchLookup(config)) {
+      if (shouldUseBatchLookup(table.getMetaClient().getTableConfig(), config)) {
         latestFilesMap = view.getAllLatestFileSlicesBeforeOrOn(instantTime).entrySet().stream()
             .collect(Collectors.toMap(
                 Map.Entry::getKey,

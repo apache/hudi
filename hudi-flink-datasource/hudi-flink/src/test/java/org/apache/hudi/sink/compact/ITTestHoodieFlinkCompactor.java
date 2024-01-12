@@ -20,6 +20,10 @@ package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -39,12 +43,15 @@ import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestSQL;
 
+import org.apache.flink.api.common.restartstrategy.RestartStrategies;
+import org.apache.flink.api.common.time.Time;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
+import org.apache.flink.table.api.config.TableConfigOptions;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -55,14 +62,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -140,36 +152,36 @@ public class ITTestHoodieFlinkCompactor {
     // infer changelog mode
     CompactionUtil.inferChangelogMode(conf, metaClient);
 
-    HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf);
+    try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
+      HoodieFlinkTable<?> table = writeClient.getHoodieTable();
 
-    String compactionInstantTime = scheduleCompactionPlan(metaClient, writeClient);
+      String compactionInstantTime = scheduleCompactionPlan(writeClient);
 
-    HoodieFlinkTable<?> table = writeClient.getHoodieTable();
-    // generate compaction plan
-    // should support configurable commit metadata
-    HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(
-        table.getMetaClient(), compactionInstantTime);
+      // generate compaction plan
+      // should support configurable commit metadata
+      HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(
+          table.getMetaClient(), compactionInstantTime);
 
-    HoodieInstant instant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
-    // Mark instant as compaction inflight
-    table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
+      HoodieInstant instant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
+      // Mark instant as compaction inflight
+      table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
 
-    env.addSource(new CompactionPlanSourceFunction(Collections.singletonList(Pair.of(compactionInstantTime, compactionPlan))))
-        .name("compaction_source")
-        .uid("uid_compaction_source")
-        .rebalance()
-        .transform("compact_task",
-            TypeInformation.of(CompactionCommitEvent.class),
-            new CompactOperator(conf))
-        .setParallelism(FlinkMiniCluster.DEFAULT_PARALLELISM)
-        .addSink(new CompactionCommitSink(conf))
-        .name("clean_commits")
-        .uid("uid_clean_commits")
-        .setParallelism(1);
+      env.addSource(new CompactionPlanSourceFunction(Collections.singletonList(Pair.of(compactionInstantTime, compactionPlan)), conf))
+          .name("compaction_source")
+          .uid("uid_compaction_source")
+          .rebalance()
+          .transform("compact_task",
+              TypeInformation.of(CompactionCommitEvent.class),
+              new CompactOperator(conf))
+          .setParallelism(FlinkMiniCluster.DEFAULT_PARALLELISM)
+          .addSink(new CompactionCommitSink(conf))
+          .name("compaction_commit")
+          .uid("uid_compaction_commit")
+          .setParallelism(1);
 
-    env.execute("flink_hudi_compaction");
-    writeClient.close();
-    TestData.checkWrittenDataCOW(tempFile, EXPECTED1);
+      env.execute("flink_hudi_compaction");
+      TestData.checkWrittenDataCOW(tempFile, EXPECTED1);
+    }
   }
 
   @ParameterizedTest
@@ -211,46 +223,45 @@ public class ITTestHoodieFlinkCompactor {
     // infer changelog mode
     CompactionUtil.inferChangelogMode(conf, metaClient);
 
-    HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf);
+    try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
+      HoodieFlinkTable<?> table = writeClient.getHoodieTable();
 
-    String compactionInstantTime = scheduleCompactionPlan(metaClient, writeClient);
+      String compactionInstantTime = scheduleCompactionPlan(writeClient);
 
-    HoodieFlinkTable<?> table = writeClient.getHoodieTable();
+      // try to upgrade or downgrade
+      if (upgrade) {
+        metaClient.getTableConfig().setTableVersion(HoodieTableVersion.FIVE);
+        new UpgradeDowngrade(metaClient, writeClient.getConfig(), writeClient.getEngineContext(), FlinkUpgradeDowngradeHelper.getInstance()).run(HoodieTableVersion.SIX, "none");
+      } else {
+        metaClient.getTableConfig().setTableVersion(HoodieTableVersion.SIX);
+        new UpgradeDowngrade(metaClient, writeClient.getConfig(), writeClient.getEngineContext(), FlinkUpgradeDowngradeHelper.getInstance()).run(HoodieTableVersion.FIVE, "none");
+      }
 
-    // try to upgrade or downgrade
-    if (upgrade) {
-      metaClient.getTableConfig().setTableVersion(HoodieTableVersion.FIVE);
-      new UpgradeDowngrade(metaClient, writeClient.getConfig(), writeClient.getEngineContext(), FlinkUpgradeDowngradeHelper.getInstance()).run(HoodieTableVersion.SIX, "none");
-    } else {
-      metaClient.getTableConfig().setTableVersion(HoodieTableVersion.SIX);
-      new UpgradeDowngrade(metaClient, writeClient.getConfig(), writeClient.getEngineContext(), FlinkUpgradeDowngradeHelper.getInstance()).run(HoodieTableVersion.FIVE, "none");
+      // generate compaction plan
+      // should support configurable commit metadata
+      HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(
+          table.getMetaClient(), compactionInstantTime);
+
+      HoodieInstant instant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
+      // Mark instant as compaction inflight
+      table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
+
+      env.addSource(new CompactionPlanSourceFunction(Collections.singletonList(Pair.of(compactionInstantTime, compactionPlan)), conf))
+          .name("compaction_source")
+          .uid("uid_compaction_source")
+          .rebalance()
+          .transform("compact_task",
+              TypeInformation.of(CompactionCommitEvent.class),
+              new CompactOperator(conf))
+          .setParallelism(FlinkMiniCluster.DEFAULT_PARALLELISM)
+          .addSink(new CompactionCommitSink(conf))
+          .name("compaction_commit")
+          .uid("uid_compaction_commit")
+          .setParallelism(1);
+
+      env.execute("flink_hudi_compaction");
+      TestData.checkWrittenDataCOW(tempFile, EXPECTED1);
     }
-
-    // generate compaction plan
-    // should support configurable commit metadata
-    HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(
-        table.getMetaClient(), compactionInstantTime);
-
-    HoodieInstant instant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
-    // Mark instant as compaction inflight
-    table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
-
-    env.addSource(new CompactionPlanSourceFunction(Collections.singletonList(Pair.of(compactionInstantTime, compactionPlan))))
-        .name("compaction_source")
-        .uid("uid_compaction_source")
-        .rebalance()
-        .transform("compact_task",
-            TypeInformation.of(CompactionCommitEvent.class),
-            new CompactOperator(conf))
-        .setParallelism(FlinkMiniCluster.DEFAULT_PARALLELISM)
-        .addSink(new CompactionCommitSink(conf))
-        .name("clean_commits")
-        .uid("uid_clean_commits")
-        .setParallelism(1);
-
-    env.execute("flink_hudi_compaction");
-    writeClient.close();
-    TestData.checkWrittenDataCOW(tempFile, EXPECTED1);
   }
 
   @ParameterizedTest
@@ -326,7 +337,7 @@ public class ITTestHoodieFlinkCompactor {
 
     HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf);
 
-    compactionInstantTimeList.add(scheduleCompactionPlan(metaClient, writeClient));
+    compactionInstantTimeList.add(scheduleCompactionPlan(writeClient));
 
     // insert a new record to new partition, so that we can generate a new compaction plan
     String insertT1ForNewPartition = "insert into t1 values\n"
@@ -340,10 +351,8 @@ public class ITTestHoodieFlinkCompactor {
     // the reader metadata view is not complete
     writeClient = FlinkWriteClients.createWriteClient(conf);
 
-    metaClient.reloadActiveTimeline();
-    compactionInstantTimeList.add(scheduleCompactionPlan(metaClient, writeClient));
-
     HoodieFlinkTable<?> table = writeClient.getHoodieTable();
+    compactionInstantTimeList.add(scheduleCompactionPlan(writeClient));
 
     List<Pair<String, HoodieCompactionPlan>> compactionPlans = new ArrayList<>(2);
     for (String compactionInstantTime : compactionInstantTimeList) {
@@ -358,7 +367,7 @@ public class ITTestHoodieFlinkCompactor {
     }
     table.getMetaClient().reloadActiveTimeline();
 
-    env.addSource(new CompactionPlanSourceFunction(compactionPlans))
+    env.addSource(new CompactionPlanSourceFunction(compactionPlans, conf))
         .name("compaction_source")
         .uid("uid_compaction_source")
         .rebalance()
@@ -393,14 +402,115 @@ public class ITTestHoodieFlinkCompactor {
     TestData.checkWrittenDataCOW(tempFile, EXPECTED2);
   }
 
-  private String scheduleCompactionPlan(HoodieTableMetaClient metaClient, HoodieFlinkWriteClient<?> writeClient) {
-    boolean scheduled = false;
-    // judge whether there are any compaction operations.
-    Option<String> compactionInstantTimeOption = CompactionUtil.getCompactionInstantTime(metaClient);
-    if (compactionInstantTimeOption.isPresent()) {
-      scheduled = writeClient.scheduleCompactionAtInstant(compactionInstantTimeOption.get(), Option.empty());
+  @Test
+  public void testOfflineCompactFailoverAfterCommit() {
+    TableEnvironment tableEnv = prepareEnvAndTable();
+
+    tableEnv.executeSql(TestSQL.INSERT_T1);
+
+    FlinkCompactionConfig cfg = new FlinkCompactionConfig();
+    cfg.path = tempFile.getAbsolutePath();
+    Configuration conf = FlinkCompactionConfig.toFlinkConfig(cfg);
+
+    assertDoesNotThrow(() -> runOfflineCompact(tableEnv, conf));
+    assertNoDuplicateFile(conf);
+  }
+
+  private void assertNoDuplicateFile(Configuration conf) {
+    Set<Pair<String, String>> fileIdCommitTimeSet = new HashSet<>();
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    HoodieWrapperFileSystem fs = metaClient.getFs();
+    FSUtils.getAllPartitionPaths(HoodieFlinkEngineContext.DEFAULT, metaClient.getBasePath(), false).forEach(
+        partition -> {
+          try {
+            Arrays.stream(fs.listStatus(FSUtils.getPartitionPath(metaClient.getBasePathV2(), partition)))
+                .filter(f -> FSUtils.isBaseFile(f.getPath()))
+                .forEach(f -> {
+                  HoodieBaseFile baseFile = new HoodieBaseFile(f);
+                  assertFalse(fileIdCommitTimeSet.contains(Pair.of(baseFile.getFileId(), baseFile.getCommitTime())));
+                  fileIdCommitTimeSet.add(Pair.of(baseFile.getFileId(), baseFile.getCommitTime()));
+                });
+          } catch (IOException e) {
+            throw new RuntimeException(e);
+          }
+        });
+    assertFalse(fileIdCommitTimeSet.isEmpty());
+  }
+
+  private TableEnvironment prepareEnvAndTable() {
+    EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
+    TableEnvironment tableEnv = TableEnvironmentImpl.create(settings);
+    tableEnv.getConfig().getConfiguration().setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 4);
+    tableEnv.getConfig().getConfiguration().set(TableConfigOptions.TABLE_DML_SYNC, true);
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.METADATA_ENABLED.key(), "false"); // to archive compaction instant
+    options.put(FlinkOptions.COMPACTION_SCHEDULE_ENABLED.key(), "false");
+    options.put(FlinkOptions.COMPACTION_ASYNC_ENABLED.key(), "false");
+    options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+    options.put(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
+    String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
+    tableEnv.executeSql(hoodieTableDDL);
+    return tableEnv;
+  }
+
+  /**
+   * schedule compact, insert another batch, run compact.
+   */
+  private void runOfflineCompact(TableEnvironment tableEnv, Configuration conf) throws Exception {
+    conf.setString(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
+
+    // create metaClient
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+
+    // set the table name
+    conf.setString(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
+
+    // set table schema
+    CompactionUtil.setAvroSchema(conf, metaClient);
+
+    // infer changelog mode
+    CompactionUtil.inferChangelogMode(conf, metaClient);
+
+    try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
+      HoodieFlinkTable<?> table = writeClient.getHoodieTable();
+
+      String compactionInstantTime = scheduleCompactionPlan(writeClient);
+
+      // generate compaction plan
+      // should support configurable commit metadata
+      HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(
+          table.getMetaClient(), compactionInstantTime);
+
+      HoodieInstant instant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
+      // Mark instant as compaction inflight
+      table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
+
+      tableEnv.executeSql(TestSQL.INSERT_T1);
+
+      // Make configuration and setAvroSchema.
+      StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+      env.setRestartStrategy(RestartStrategies.fixedDelayRestart(1, Time.milliseconds(1)));
+
+      env.addSource(new CompactionPlanSourceFunction(Collections.singletonList(Pair.of(compactionInstantTime, compactionPlan)), conf))
+          .name("compaction_source")
+          .uid("uid_compaction_source")
+          .rebalance()
+          .transform("compact_task",
+              TypeInformation.of(CompactionCommitEvent.class),
+              new CompactOperator(conf))
+          .setParallelism(1)
+          .addSink(new CompactionCommitTestSink(conf))
+          .name("compaction_commit")
+          .uid("uid_compaction_commit")
+          .setParallelism(1);
+
+      env.execute("flink_hudi_compaction");
     }
-    assertTrue(scheduled, "The compaction plan should be scheduled");
-    return compactionInstantTimeOption.get();
+  }
+
+  private String scheduleCompactionPlan(HoodieFlinkWriteClient<?> writeClient) {
+    Option<String> compactionInstant = writeClient.scheduleCompaction(Option.empty());
+    assertTrue(compactionInstant.isPresent(), "The compaction plan should be scheduled");
+    return compactionInstant.get();
   }
 }

@@ -20,21 +20,23 @@ package org.apache.spark.sql.hudi.command
 import org.apache.avro.Schema
 import org.apache.hudi.AvroConversionUtils.convertStructTypeToAvroSchema
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.HoodieSparkSqlWriter.{CANONICALIZE_NULLABLE, SQL_MERGE_INTO_WRITES}
+import org.apache.hudi.HoodieSparkSqlWriter.CANONICALIZE_SCHEMA
+import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME}
+import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME, WRITE_PARTIAL_UPDATE_SCHEMA}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.JFunction.scalaFunction1Noop
-import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, SparkAdapterSupport}
+import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.{MatchCast, attributeEquals}
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReference
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
+import org.apache.spark.sql.catalyst.plans.LeftOuter
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
@@ -47,6 +49,7 @@ import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
 import org.apache.spark.sql.types.{BooleanType, StructField, StructType}
 
 import java.util.Base64
+import scala.collection.JavaConverters._
 
 /**
  * Hudi's implementation of the {@code MERGE INTO} (MIT) Spark SQL statement.
@@ -125,18 +128,63 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * expression involving [[source]] column(s), we will have to add "phony" column matching the
    * primary-key one of the target table.
    */
-  private lazy val primaryKeyAttributeToConditionExpression: Seq[(Attribute, Expression)] = {
+  private lazy val recordKeyAttributeToConditionExpression: Seq[(Attribute, Expression)] = {
+    val primaryKeyFields = hoodieCatalogTable.tableConfig.getRecordKeyFields
     val conditions = splitConjunctivePredicates(mergeInto.mergeCondition)
-    if (!conditions.forall(p => p.isInstanceOf[EqualTo])) {
-      throw new AnalysisException(s"Currently only equality predicates are supported in MERGE INTO statement " +
-        s"(provided ${mergeInto.mergeCondition.sql}")
+    if (primaryKeyFields.isPresent) {
+      //pkless tables can have more complex conditions
+      if (!conditions.forall(p => p.isInstanceOf[EqualTo])) {
+        throw new AnalysisException(s"Currently only equality predicates are supported in MERGE INTO statement on primary key table" +
+          s"(provided ${mergeInto.mergeCondition.sql}")
+      }
     }
-
     val resolver = sparkSession.sessionState.analyzer.resolver
-    val primaryKeyField = hoodieCatalogTable.tableConfig.getRecordKeyFieldProp
+    val partitionPathFields = hoodieCatalogTable.tableConfig.getPartitionFields
+    //ensure all primary key fields are part of the merge condition
+    //allow partition path to be part of the merge condition but not required
+    val targetAttr2ConditionExpressions = doCasting(conditions, primaryKeyFields.isPresent)
+    val expressionSet = scala.collection.mutable.Set[(Attribute, Expression)](targetAttr2ConditionExpressions:_*)
+    var partitionAndKeyFields: Seq[(String,String)] = Seq.empty
+    if (primaryKeyFields.isPresent) {
+     partitionAndKeyFields = partitionAndKeyFields ++ primaryKeyFields.get().map(pk => ("primaryKey", pk)).toSeq
+    }
+    if (partitionPathFields.isPresent) {
+      partitionAndKeyFields = partitionAndKeyFields ++ partitionPathFields.get().map(pp => ("partitionPath", pp)).toSeq
+    }
+    val resolvedCols = partitionAndKeyFields.map(rk => {
+      val resolving = expressionSet.collectFirst {
+        case (attr, expr) if resolver(attr.name, rk._2) =>
+          // NOTE: Here we validate that condition expression involving record-key column(s) is a simple
+          //       attribute-reference expression (possibly wrapped into a cast). This is necessary to disallow
+          //       statements like following
+          //
+          //         MERGE INTO ... AS t USING (
+          //            SELECT ... FROM ... AS s
+          //         )
+          //            ON t.id = s.id + 1
+          //            WHEN MATCHED THEN UPDATE *
+          //
+          //       Which (in the current design) could result in a primary key of the record being modified,
+          //       which is not allowed.
+          if (!resolvesToSourceAttribute(expr)) {
+            throw new AnalysisException("Only simple conditions of the form `t.id = s.id` are allowed on the " +
+              s"primary-key and partition path column. Found `${attr.sql} = ${expr.sql}`")
+          }
+          expressionSet.remove((attr, expr))
+          (attr, expr)
+      }
+      if (resolving.isEmpty && rk._1.equals("primaryKey")
+        && sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key(), "false") == "true") {
+        throw new AnalysisException(s"Hudi tables with primary key are required to match on all primary key colums. Column: '${rk._2}' not found")
+      }
+      resolving
+    }).filter(_.nonEmpty).map(_.get)
+    resolvedCols
+  }
 
+
+  private def doCasting(conditions: Seq[Expression], pkTable: Boolean): Seq[(Attribute, Expression)] = {
     val targetAttrs = mergeInto.targetTable.outputSet
-
     val exprUtils = sparkAdapter.getCatalystExpressionUtils
     // Here we're unraveling superfluous casting of expressions on both sides of the matched-on condition,
     // in case both of them are casted to the same type (which might be result of either explicit casting
@@ -146,7 +194,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // as they are w/o the ability of transforming them w/ custom expressions (unlike in vanilla Spark flow).
     //
     // Check out HUDI-4861 for more details
-    val cleanedConditions = conditions.map(_.asInstanceOf[EqualTo]).map(stripCasting)
+    val cleanedConditions = conditions.map(stripCasting)
 
     // Expressions of the following forms are supported:
     //    `target.id = <expr>` (or `<expr> = target.id`)
@@ -156,7 +204,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // target table side (since we're gonna be matching against primary-key column as is) expression
     // on the opposite side of the comparison should be cast-able to the primary-key column's data-type
     // t/h "up-cast" (ie w/o any loss in precision)
-    val targetAttr2ConditionExpressions = cleanedConditions.map {
+    cleanedConditions.collect {
       case EqualTo(CoercedAttributeReference(attr), expr) if targetAttrs.exists(f => attributeEquals(f, attr)) =>
         if (exprUtils.canUpCast(expr.dataType, attr.dataType)) {
           // NOTE: It's critical we reference output attribute here and not the one from condition
@@ -177,32 +225,10 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
             + s"can't cast ${expr.sql} (of ${expr.dataType}) to ${attr.dataType}")
         }
 
-      case expr =>
+      case expr if pkTable =>
         throw new AnalysisException(s"Invalid MERGE INTO matching condition: `${expr.sql}`: "
           + "expected condition should be 'target.id = <source-column-expr>', e.g. "
-          + "`t.id = s.id` or `t.id = cast(s.id, ...)`")
-    }
-
-    targetAttr2ConditionExpressions.collect {
-      case (attr, expr) if resolver(attr.name, primaryKeyField) =>
-        // NOTE: Here we validate that condition expression involving primary-key column(s) is a simple
-        //       attribute-reference expression (possibly wrapped into a cast). This is necessary to disallow
-        //       statements like following
-        //
-        //         MERGE INTO ... AS t USING (
-        //            SELECT ... FROM ... AS s
-        //         )
-        //            ON t.id = s.id + 1
-        //            WHEN MATCHED THEN UPDATE *
-        //
-        //       Which (in the current design) could result in a primary key of the record being modified,
-        //       which is not allowed.
-        if (!resolvesToSourceAttribute(expr)) {
-          throw new AnalysisException("Only simple conditions of the form `t.id = s.id` are allowed on the " +
-            s"primary-key column. Found `${attr.sql} = ${expr.sql}`")
-        }
-
-        (attr, expr)
+          + "`t.id = s.id` or `t.id = cast(s.id, ...)")
     }
   }
 
@@ -245,11 +271,16 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // TODO move to analysis phase
     validate
 
-    val sourceDF: DataFrame = sourceDataset
+    if (HoodieSparkUtils.isSpark2) {
+      //already enabled by default for spark 3+
+      sparkSession.conf.set("spark.sql.crossJoin.enabled","true")
+    }
+
+    val projectedJoinedDF: DataFrame = projectedJoinedDataset
     // Create the write parameters
     val props = buildMergeIntoConfig(hoodieCatalogTable)
     // Do the upsert
-    executeUpsert(sourceDF, props)
+    executeUpsert(projectedJoinedDF, props)
     // Refresh the table in the catalog
     sparkSession.catalog.refreshTable(hoodieCatalogTable.table.qualifiedName)
 
@@ -298,18 +329,33 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * <li>{@code ts = source.sts}</li>
    * </ul>
    */
-  def sourceDataset: DataFrame = {
+  def projectedJoinedDataset: DataFrame = {
     val resolver = sparkSession.sessionState.analyzer.resolver
 
-    val sourceTablePlan = mergeInto.sourceTable
-    val sourceTableOutput = sourceTablePlan.output
-
-    val requiredAttributesMap = primaryKeyAttributeToConditionExpression ++ preCombineAttributeAssociatedExpression
-
-    val (existingAttributesMap, missingAttributesMap) = requiredAttributesMap.partition {
-      case (keyAttr, _) => sourceTableOutput.exists(attr => resolver(keyAttr.name, attr.name))
+    // We want to join the source and target tables.
+    // Then we want to project the output so that we have the meta columns from the target table
+    // followed by the data columns of the source table
+    val tableMetaCols = mergeInto.targetTable.output.filter(a => isMetaField(a.name))
+    val joinData = sparkAdapter.getCatalystPlanUtils.createMITJoin(mergeInto.sourceTable, mergeInto.targetTable, LeftOuter, Some(mergeInto.mergeCondition), "NONE")
+    val incomingDataCols = joinData.output.filterNot(mergeInto.targetTable.outputSet.contains)
+    // for pkless table, we need to project the meta columns
+    val hasPrimaryKey = hoodieCatalogTable.tableConfig.getRecordKeyFields.isPresent
+    val projectedJoinPlan = if (!hasPrimaryKey || sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key(), "false") == "true") {
+      Project(tableMetaCols ++ incomingDataCols, joinData)
+    } else {
+      Project(incomingDataCols, joinData)
     }
 
+    val projectedJoinOutput = projectedJoinPlan.output
+
+    val requiredAttributesMap = recordKeyAttributeToConditionExpression ++ preCombineAttributeAssociatedExpression
+
+    val (existingAttributesMap, missingAttributesMap) = requiredAttributesMap.partition {
+      case (keyAttr, _) => projectedJoinOutput.exists(attr => resolver(keyAttr.name, attr.name))
+    }
+
+    // This is to handle the situation where condition is something like "s0.s_id = t0.id" so In the source table
+    // we add an additional column that is an alias of "s0.s_id" named "id"
     // NOTE: Primary key attribute (required) as well as Pre-combine one (optional) defined
     //       in the [[targetTable]] schema has to be present in the incoming [[sourceTable]] dataset.
     //       In cases when [[sourceTable]] doesn't bear such attributes (which, for ex, could happen
@@ -317,7 +363,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     //       them according to aforementioned heuristic) to meet Hudi's requirements
     val additionalColumns: Seq[NamedExpression] =
       missingAttributesMap.flatMap {
-        case (keyAttr, sourceExpression) if !sourceTableOutput.exists(attr => resolver(attr.name, keyAttr.name)) =>
+        case (keyAttr, sourceExpression) if !projectedJoinOutput.exists(attr => resolver(attr.name, keyAttr.name)) =>
           Seq(Alias(sourceExpression, keyAttr.name)())
 
         case _ => Seq()
@@ -327,7 +373,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // matches to that one of the target table. This is necessary b/c unlike Spark, Avro is case-sensitive
     // and therefore would fail downstream if case of corresponding columns don't match
     val existingAttributes = existingAttributesMap.map(_._1)
-    val adjustedSourceTableOutput = sourceTableOutput.map { attr =>
+    val adjustedSourceTableOutput = projectedJoinOutput.map { attr =>
       existingAttributes.find(keyAttr => resolver(keyAttr.name, attr.name)) match {
         // To align the casing we just rename the attribute to match that one of the
         // target table
@@ -336,7 +382,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       }
     }
 
-    val amendedPlan = Project(adjustedSourceTableOutput ++ additionalColumns, sourceTablePlan)
+    val amendedPlan = Project(adjustedSourceTableOutput ++ additionalColumns, projectedJoinPlan)
 
     Dataset.ofRows(sparkSession, amendedPlan)
   }
@@ -348,19 +394,45 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * expressions to the ExpressionPayload#getInsertValue.
    */
   private def executeUpsert(sourceDF: DataFrame, parameters: Map[String, String]): Unit = {
-    val operation = if (StringUtils.isNullOrEmpty(parameters.getOrElse(PRECOMBINE_FIELD.key, ""))) {
+    val operation = if (StringUtils.isNullOrEmpty(parameters.getOrElse(PRECOMBINE_FIELD.key, "")) && updatingActions.isEmpty) {
       INSERT_OPERATION_OPT_VAL
     } else {
       UPSERT_OPERATION_OPT_VAL
     }
 
-    // Append the table schema to the parameters. In the case of merge into, the schema of sourceDF
+    // Append the table schema to the parameters. In the case of merge into, the schema of projectedJoinedDF
     // may be different from the target table, because the are transform logical in the update or
     // insert actions.
+    val fullSchema = getTableSchema
     var writeParams = parameters +
       (OPERATION.key -> operation) +
-      (HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key -> getTableSchema.toString) +
+      (HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key -> fullSchema.toString) +
       (DataSourceWriteOptions.TABLE_TYPE.key -> targetTableType)
+
+    // Only enable writing partial updates to data blocks for upserts to MOR tables,
+    // when ENABLE_MERGE_INTO_PARTIAL_UPDATES is set to true,
+    // and not all fields are updated
+    val writePartialUpdates = if (targetTableType == MOR_TABLE_TYPE_OPT_VAL
+      && operation == UPSERT_OPERATION_OPT_VAL
+      && parameters.getOrElse(
+      ENABLE_MERGE_INTO_PARTIAL_UPDATES.key,
+      ENABLE_MERGE_INTO_PARTIAL_UPDATES.defaultValue.toString).toBoolean
+      && updatingActions.nonEmpty) {
+      val updatedFieldSet = getUpdatedFields(updatingActions.map(a => a.assignments))
+      // Only enable partial updates if not all fields are updated
+      if (!areAllFieldsUpdated(updatedFieldSet)) {
+        val orderedUpdatedFieldSeq = getOrderedUpdatedFields(updatedFieldSet)
+        writeParams ++= Seq(
+          WRITE_PARTIAL_UPDATE_SCHEMA.key ->
+            HoodieAvroUtils.generateProjectionSchema(fullSchema, orderedUpdatedFieldSeq.asJava).toString
+        )
+        true
+      } else {
+        false
+      }
+    } else {
+      false
+    }
 
     writeParams ++= Seq(
       // Append (encoded) updating actions
@@ -368,18 +440,21 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         // NOTE: For updating clause we allow partial assignments, where only some of the fields of the target
         //       table's records are updated (w/ the missing ones keeping their existing values)
         serializeConditionalAssignments(updatingActions.map(a => (a.condition, a.assignments)),
-          partialAssigmentMode = Some(PartialAssignmentMode.ORIGINAL_VALUE)),
+          partialAssignmentMode = Some(PartialAssignmentMode.ORIGINAL_VALUE),
+          keepUpdatedFieldsOnly = writePartialUpdates),
       // Append (encoded) inserting actions
       PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS ->
         serializeConditionalAssignments(insertingActions.map(a => (a.condition, a.assignments)),
-          partialAssigmentMode = Some(PartialAssignmentMode.NULL_VALUE),
+          partialAssignmentMode = Some(PartialAssignmentMode.NULL_VALUE),
+          keepUpdatedFieldsOnly = false,
           validator = validateInsertingAssignmentExpression)
     )
 
     // Append (encoded) deleting actions
     writeParams ++= deletingActions.headOption.map {
       case DeleteAction(condition) =>
-        PAYLOAD_DELETE_CONDITION -> serializeConditionalAssignments(Seq(condition -> Seq.empty))
+        PAYLOAD_DELETE_CONDITION -> serializeConditionalAssignments(Seq(condition -> Seq.empty),
+          keepUpdatedFieldsOnly = false)
     }.toSeq
 
     // Append
@@ -387,7 +462,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     //  - Schema of the expected "joined" output of the [[sourceTable]] and [[targetTable]]
     writeParams ++= Seq(
       PAYLOAD_RECORD_AVRO_SCHEMA ->
-        convertStructTypeToAvroSchema(sourceDF.schema, "record", "").toString,
+        HoodieAvroUtils.removeMetadataFields(convertStructTypeToAvroSchema(sourceDF.schema, "record", "")).toString,
       PAYLOAD_EXPECTED_COMBINED_SCHEMA -> encodeAsBase64String(toStructType(joinedExpectedOutput))
     )
 
@@ -405,20 +480,75 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   }
 
   /**
+   * @param conditionalAssignments Conditional assignments.
+   * @return Updated fields based on the conditional assignments in the MERGE INTO statement.
+   */
+  private def getUpdatedFields(conditionalAssignments: Seq[Seq[Assignment]]): Set[Attribute] = {
+    {
+      conditionalAssignments.flatMap {
+        case assignments =>
+          // Extract all fields that are updated through the assignments
+          if (assignments.nonEmpty) {
+            assignments.map {
+              case Assignment(attr: Attribute, _) => attr
+              case a =>
+                throw new AnalysisException(s"Only assignments of the form `t.field = ...` are supported at the moment (provided: `${a.sql}`)")
+            }
+          } else {
+            Seq.empty
+          }
+      }
+    }.toSet
+  }
+
+  /**
+   * @param updatedFieldSet Updated fields based on the conditional assignments in the MERGE INTO statement.
+   * @return {@code true} if the updated fields covers all fields in the table schema;
+   *         {@code false} otherwise.
+   */
+  private def areAllFieldsUpdated(updatedFieldSet: Set[Attribute]): Boolean = {
+    !mergeInto.targetTable.output
+      .filterNot(attr => isMetaField(attr.name)).exists { tableAttr =>
+      !updatedFieldSet.exists(attr => attributeEquals(attr, tableAttr))
+    }
+  }
+
+  /**
+   * @param updatedFieldSet Set of fields updated.
+   * @return Ordered updated fields based on the target table schema.
+   */
+  private def getOrderedUpdatedFields(updatedFieldSet: Set[Attribute]): Seq[String] = {
+    // Reorder the assignments to follow the ordering of the target table
+    mergeInto.targetTable.output
+      .filterNot(attr => isMetaField(attr.name))
+      .filter { tableAttr =>
+        updatedFieldSet.exists(attr => attributeEquals(attr, tableAttr))
+      }
+      .map(attr => attr.name)
+  }
+
+  /**
    * Binds and serializes sequence of [[(Expression, Seq[Expression])]] where
    * <ul>
-   *   <li>First [[Expression]] designates condition (in update/insert clause)</li>
-   *   <li>Second [[Seq[Expression] ]] designates individual column assignments (in update/insert clause)</li>
+   * <li>First [[Expression]] designates condition (in update/insert clause)</li>
+   * <li>Second [[Seq[Expression] ]] designates individual column assignments (in update/insert clause)</li>
    * </ul>
    *
    * Such that
    * <ol>
-   *   <li>All expressions are bound against expected payload layout (and ready to be code-gen'd)</li>
-   *   <li>Serialized into Base64 string to be subsequently passed to [[ExpressionPayload]]</li>
+   * <li>All expressions are bound against expected payload layout (and ready to be code-gen'd)</li>
+   * <li>Serialized into Base64 string to be subsequently passed to [[ExpressionPayload]]</li>
    * </ol>
+   *
+   * When [[keepUpdatedFieldsOnly]] is false, all fields in the target table schema have
+   * corresponding assignments from the generation; When [[keepUpdatedFieldsOnly]] is true,
+   * i.e., for partial updates, only the fields as the assignees of the assignments have
+   * corresponding assignments, so that the generated records for updates only contain
+   * updated fields, to be written to the log files in a MOR table.
    */
   private def serializeConditionalAssignments(conditionalAssignments: Seq[(Option[Expression], Seq[Assignment])],
-                                              partialAssigmentMode: Option[PartialAssignmentMode] = None,
+                                              partialAssignmentMode: Option[PartialAssignmentMode] = None,
+                                              keepUpdatedFieldsOnly: Boolean,
                                               validator: Expression => Unit = scalaFunction1Noop): String = {
     val boundConditionalAssignments =
       conditionalAssignments.map {
@@ -428,7 +558,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
           //       All other actions are expected to provide assignments correspondent to every field
           //       of the [[targetTable]] being assigned
           val reorderedAssignments = if (assignments.nonEmpty) {
-            alignAssignments(assignments, partialAssigmentMode)
+            alignAssignments(assignments, partialAssignmentMode, keepUpdatedFieldsOnly)
           } else {
             Seq.empty
           }
@@ -453,40 +583,53 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   /**
    * Re-orders assignment expressions to adhere to the ordering of that of [[targetTable]]
    */
-  private def alignAssignments(
-              assignments: Seq[Assignment],
-              partialAssigmentMode: Option[PartialAssignmentMode]): Seq[Assignment] = {
+  private def alignAssignments(assignments: Seq[Assignment],
+                               partialAssignmentMode: Option[PartialAssignmentMode],
+                               keepUpdatedFieldsOnly: Boolean): Seq[Assignment] = {
     val attr2Assignments = assignments.map {
-      case assign @ Assignment(attr: Attribute, _) => attr -> assign
+      case assign@Assignment(attr: Attribute, _) => attr -> assign
       case a =>
         throw new AnalysisException(s"Only assignments of the form `t.field = ...` are supported at the moment (provided: `${a.sql}`)")
     }
 
     // Reorder the assignments to follow the ordering of the target table
-    mergeInto.targetTable.output
-      .filterNot(attr => isMetaField(attr.name))
-      .map { attr =>
-        attr2Assignments.find(tuple => attributeEquals(tuple._1, attr)) match {
-          case Some((_, assignment)) => assignment
-          case None =>
-            // In case partial assignments are allowed and there's no corresponding conditional assignment,
-            // create a self-assignment for the target table's attribute
-            partialAssigmentMode match {
-              case Some(mode) =>
-                mode match {
-                  case PartialAssignmentMode.NULL_VALUE =>
-                    Assignment(attr, Literal(null))
-                  case PartialAssignmentMode.ORIGINAL_VALUE =>
-                    Assignment(attr, attr)
-                  case PartialAssignmentMode.DEFAULT_VALUE =>
-                    Assignment(attr, Literal.default(attr.dataType))
-                }
-              case _ =>
-                throw new AnalysisException(s"Assignment expressions have to assign every attribute of target table " +
-                  s"(provided: `${assignments.map(_.sql).mkString(",")}`")
-            }
+    if (keepUpdatedFieldsOnly) {
+      mergeInto.targetTable.output
+        .map(attr =>
+          attr2Assignments.find(tuple => attributeEquals(tuple._1, attr))
+        )
+        .filter(e => e.nonEmpty)
+        .map(e => e.get._2)
+    } else {
+      mergeInto.targetTable.output
+        .filterNot(attr => isMetaField(attr.name))
+        .map { attr =>
+          attr2Assignments.find(tuple => attributeEquals(tuple._1, attr)) match {
+            case Some((_, assignment)) => assignment
+            case None =>
+              // In case partial assignments are allowed and there's no corresponding conditional assignment,
+              // create a self-assignment for the target table's attribute
+              partialAssignmentMode match {
+                case Some(mode) =>
+                  mode match {
+                    case PartialAssignmentMode.NULL_VALUE =>
+                      Assignment(attr, Literal(null))
+                    case PartialAssignmentMode.ORIGINAL_VALUE =>
+                      if (targetTableType == MOR_TABLE_TYPE_OPT_VAL) {
+                        Assignment(attr, Literal(null))
+                      } else {
+                        Assignment(attr, attr)
+                      }
+                    case PartialAssignmentMode.DEFAULT_VALUE =>
+                      Assignment(attr, Literal.default(attr.dataType))
+                  }
+                case _ =>
+                  throw new AnalysisException(s"Assignment expressions have to assign every attribute of target table " +
+                    s"(provided: `${assignments.map(_.sql).mkString(",")}`)")
+              }
+          }
         }
-      }
+    }
   }
 
   /**
@@ -530,7 +673,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // NOTE: We're relying on [[sourceDataset]] here instead of [[mergeInto.sourceTable]],
     //       as it could be amended to add missing primary-key and/or pre-combine columns.
     //       Please check [[sourceDataset]] scala-doc for more details
-    sourceDataset.queryExecution.analyzed.output ++ mergeInto.targetTable.output
+    (projectedJoinedDataset.queryExecution.analyzed.output ++ mergeInto.targetTable.output).filterNot(a => isMetaField(a.name))
   }
 
   private def resolvesToSourceAttribute(expr: Expression): Boolean = {
@@ -571,18 +714,25 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // default value ("ts")
     // TODO(HUDI-3456) clean up
     val preCombineField = hoodieCatalogTable.preCombineKey.getOrElse("")
-
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
+    // for pkless tables, we need to enable optimized merge
+    val hasPrimaryKey = tableConfig.getRecordKeyFields.isPresent
+    val enableOptimizedMerge = if (!hasPrimaryKey) "true" else sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key(), "false")
+    val keyGeneratorClassName = if (enableOptimizedMerge == "true") {
+      classOf[MergeIntoKeyGenerator].getCanonicalName
+    } else {
+      classOf[SqlKeyGenerator].getCanonicalName
+    }
 
     val overridingOpts = Map(
       "path" -> path,
-      RECORDKEY_FIELD.key -> tableConfig.getRecordKeyFieldProp,
+      RECORDKEY_FIELD.key -> tableConfig.getRawRecordKeyFieldProp,
       PRECOMBINE_FIELD.key -> preCombineField,
       TBL_NAME.key -> hoodieCatalogTable.tableName,
       PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp,
       HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
       URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
-      KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
+      KEYGENERATOR_CLASS_NAME.key -> keyGeneratorClassName,
       SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME -> tableConfig.getKeyGeneratorClassName,
       HoodieSyncConfig.META_SYNC_ENABLED.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_ENABLED.key),
       HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key -> hiveSyncConfig.getString(HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key),
@@ -596,16 +746,18 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,
       RECORD_MERGER_IMPLS.key -> classOf[HoodieAvroRecordMerger].getName,
 
-        // NOTE: We have to explicitly override following configs to make sure no schema validation is performed
+      // NOTE: We have to explicitly override following configs to make sure no schema validation is performed
       //       as schema of the incoming dataset might be diverging from the table's schema (full schemas'
       //       compatibility b/w table's schema and incoming one is not necessary in this case since we can
       //       be cherry-picking only selected columns from the incoming dataset to be inserted/updated in the
       //       target table, ie partially updating)
       AVRO_SCHEMA_VALIDATE_ENABLE.key -> "false",
       RECONCILE_SCHEMA.key -> "false",
-      CANONICALIZE_NULLABLE.key -> "false",
+      CANONICALIZE_SCHEMA.key -> "false",
       SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> "true",
-      SQL_MERGE_INTO_WRITES.key -> "true"
+      HoodieSparkSqlWriter.SQL_MERGE_INTO_WRITES.key -> "true",
+      HoodieWriteConfig.SPARK_SQL_MERGE_INTO_PREPPED_KEY -> enableOptimizedMerge,
+      HoodieWriteConfig.COMBINE_BEFORE_UPSERT.key() -> (!StringUtils.isNullOrEmpty(preCombineField)).toString
     )
 
     combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
@@ -628,17 +780,19 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   private def checkInsertingActions(insertActions: Seq[InsertAction]): Unit = {
     insertActions.foreach(insert =>
       assert(insert.assignments.length <= targetTableSchema.length,
-        s"The number of insert assignments[${insert.assignments.length}] must less than or equal to the " +
+        s"The number of insert assignments[${insert.assignments.length}] must be less than or equal to the " +
           s"targetTable field size[${targetTableSchema.length}]"))
 
   }
 
   private def checkUpdatingActions(updateActions: Seq[UpdateAction]): Unit = {
-
-    //updateActions.foreach(update =>
-    //  assert(update.assignments.length == targetTableSchema.length,
-    //    s"The number of update assignments[${update.assignments.length}] must equal to the " +
-    //      s"targetTable field size[${targetTableSchema.length}]"))
+    if (hoodieCatalogTable.preCombineKey.isEmpty && updateActions.nonEmpty) {
+      logWarning(s"Updates without precombine can have nondeterministic behavior")
+    }
+    updateActions.foreach(update =>
+      assert(update.assignments.length <= targetTableSchema.length,
+        s"The number of update assignments[${update.assignments.length}] must be less than or equalequal to the " +
+          s"targetTable field size[${targetTableSchema.length}]"))
 
     // For MOR table, the target table field cannot be the right-value in the update action.
     if (targetTableType == MOR_TABLE_TYPE_OPT_VAL) {
@@ -666,7 +820,7 @@ object MergeIntoHoodieTableCommand {
     }
   }
 
-  def stripCasting(expr: EqualTo): EqualTo = expr match {
+  def stripCasting(expr: Expression): Expression = expr match {
     case EqualTo(MatchCast(leftExpr, leftTargetType, _, _), MatchCast(rightExpr, rightTargetType, _, _))
       if leftTargetType.sameType(rightTargetType) => EqualTo(leftExpr, rightExpr)
     case _ => expr

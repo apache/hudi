@@ -160,4 +160,14 @@ public final class HoodieLocalEngineContext extends HoodieEngineContext {
   public List<Integer> removeCachedDataIds(HoodieDataCacheKey cacheKey) {
     return Collections.emptyList();
   }
+
+  @Override
+  public void cancelJob(String jobId) {
+    // no operation for now
+  }
+
+  @Override
+  public void cancelAllJobs() {
+    // no operation for now
+  }
 }

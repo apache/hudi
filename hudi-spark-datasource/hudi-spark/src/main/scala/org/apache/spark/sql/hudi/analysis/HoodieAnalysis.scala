@@ -20,15 +20,17 @@ package org.apache.spark.sql.hudi.analysis
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.common.util.ReflectionUtils.loadClass
 import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
+import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.catalog.CatalogTable
+import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSeq, Expression, GenericInternalRow}
+import org.apache.spark.sql.catalyst.optimizer.ReplaceExpressions
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isMetaField, removeMetaFields}
-import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{MatchInsertIntoStatement, MatchMergeIntoTable, ResolvesToHudiTable, sparkAdapter}
+import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{MatchCreateIndex, MatchCreateTableLike, MatchDropIndex, MatchInsertIntoStatement, MatchMergeIntoTable, MatchRefreshIndex, MatchShowIndexes, ResolvesToHudiTable, sparkAdapter}
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.command.procedures.{HoodieProcedures, Procedure, ProcedureArgs}
 import org.apache.spark.sql.{AnalysisException, SparkSession}
@@ -43,24 +45,48 @@ object HoodieAnalysis extends SparkAdapterSupport {
     val rules: ListBuffer[RuleBuilder] = ListBuffer()
 
     // NOTE: This rule adjusts [[LogicalRelation]]s resolving into Hudi tables such that
-    //       meta-fields are not affecting the resolution of the target columns to be updated by Spark.
+    //       meta-fields are not affecting the resolution of the target columns to be updated by Spark (Except in the
+    //       case of MergeInto. We leave the meta columns on the target table, and use other means to ensure resolution)
     //       For more details please check out the scala-doc of the rule
-    // TODO limit adapters to only Spark < 3.2
     val adaptIngestionTargetLogicalRelations: RuleBuilder = session => AdaptIngestionTargetLogicalRelations(session)
 
-    if (HoodieSparkUtils.isSpark2) {
-      val spark2ResolveReferencesClass = "org.apache.spark.sql.catalyst.analysis.HoodieSpark2Analysis$ResolveReferences"
-      val spark2ResolveReferences: RuleBuilder =
-        session => ReflectionUtils.loadClass(spark2ResolveReferencesClass, session).asInstanceOf[Rule[LogicalPlan]]
-
-      // TODO elaborate on the ordering
-      rules += (adaptIngestionTargetLogicalRelations, spark2ResolveReferences)
+    if (!HoodieSparkUtils.gteqSpark3_2) {
+      //Add or correct resolution of MergeInto
+      // the way we load the class via reflection is diff across spark2 and spark3 and hence had to split it out.
+      if (HoodieSparkUtils.isSpark2) {
+        val resolveReferencesClass = "org.apache.spark.sql.catalyst.analysis.HoodieSpark2Analysis$ResolveReferences"
+        val sparkResolveReferences: RuleBuilder =
+          session => ReflectionUtils.loadClass(resolveReferencesClass, session).asInstanceOf[Rule[LogicalPlan]]
+        // TODO elaborate on the ordering
+        rules += (adaptIngestionTargetLogicalRelations, sparkResolveReferences)
+      } else if (HoodieSparkUtils.isSpark3_0) {
+        val resolveReferencesClass = "org.apache.spark.sql.catalyst.analysis.HoodieSpark30Analysis$ResolveReferences"
+        val sparkResolveReferences: RuleBuilder = {
+          session => instantiateKlass(resolveReferencesClass, session)
+        }
+        // TODO elaborate on the ordering
+        rules += (adaptIngestionTargetLogicalRelations, sparkResolveReferences)
+      } else if (HoodieSparkUtils.isSpark3_1) {
+        val resolveReferencesClass = "org.apache.spark.sql.catalyst.analysis.HoodieSpark31Analysis$ResolveReferences"
+        val sparkResolveReferences: RuleBuilder =
+          session => instantiateKlass(resolveReferencesClass, session)
+        // TODO elaborate on the ordering
+        rules += (adaptIngestionTargetLogicalRelations, sparkResolveReferences)
+      } else {
+        throw new IllegalStateException("Impossible to be here")
+      }
     } else {
       rules += adaptIngestionTargetLogicalRelations
-    }
-
-    if (HoodieSparkUtils.gteqSpark3_2) {
-      val dataSourceV2ToV1FallbackClass = "org.apache.spark.sql.hudi.analysis.HoodieDataSourceV2ToV1Fallback"
+      val dataSourceV2ToV1FallbackClass = if (HoodieSparkUtils.isSpark3_5)
+        "org.apache.spark.sql.hudi.analysis.HoodieSpark35DataSourceV2ToV1Fallback"
+      else if (HoodieSparkUtils.isSpark3_4)
+        "org.apache.spark.sql.hudi.analysis.HoodieSpark34DataSourceV2ToV1Fallback"
+      else if (HoodieSparkUtils.isSpark3_3)
+        "org.apache.spark.sql.hudi.analysis.HoodieSpark33DataSourceV2ToV1Fallback"
+      else {
+        // Spark 3.2.x
+        "org.apache.spark.sql.hudi.analysis.HoodieSpark32DataSourceV2ToV1Fallback"
+      }
       val dataSourceV2ToV1Fallback: RuleBuilder =
         session => instantiateKlass(dataSourceV2ToV1FallbackClass, session)
 
@@ -78,7 +104,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
 
     if (HoodieSparkUtils.isSpark3) {
       val resolveAlterTableCommandsClass =
-        if (HoodieSparkUtils.gteqSpark3_4) {
+        if (HoodieSparkUtils.gteqSpark3_5) {
+          "org.apache.spark.sql.hudi.Spark35ResolveHudiAlterTableCommand"
+        } else if (HoodieSparkUtils.gteqSpark3_4) {
           "org.apache.spark.sql.hudi.Spark34ResolveHudiAlterTableCommand"
         } else if (HoodieSparkUtils.gteqSpark3_3) {
           "org.apache.spark.sql.hudi.Spark33ResolveHudiAlterTableCommand"
@@ -132,7 +160,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
 
     if (HoodieSparkUtils.gteqSpark3_0) {
       val nestedSchemaPruningClass =
-        if (HoodieSparkUtils.gteqSpark3_4) {
+        if (HoodieSparkUtils.gteqSpark3_5) {
+          "org.apache.spark.sql.execution.datasources.Spark35NestedSchemaPruning"
+        } else if (HoodieSparkUtils.gteqSpark3_4) {
           "org.apache.spark.sql.execution.datasources.Spark34NestedSchemaPruning"
         } else if (HoodieSparkUtils.gteqSpark3_3) {
           "org.apache.spark.sql.execution.datasources.Spark33NestedSchemaPruning"
@@ -192,9 +222,8 @@ object HoodieAnalysis extends SparkAdapterSupport {
           //       the data, as such we have to make sure that we handle both of these cases
           case mit@MatchMergeIntoTable(targetTable, query, _) =>
             val updatedTargetTable = targetTable match {
-              // In the receiving side of the MIT, we can't project meta-field attributes out,
-              // and instead have to explicitly remove them
-              case ResolvesToHudiTable(_) => Some(stripMetaFieldsAttributes(targetTable))
+              //Do not remove the meta cols here anymore
+              case ResolvesToHudiTable(_) => Some(targetTable)
               case _ => None
             }
 
@@ -249,7 +278,10 @@ object HoodieAnalysis extends SparkAdapterSupport {
             }
 
           case ut @ UpdateTable(relation @ ResolvesToHudiTable(_), _, _) =>
-            ut.copy(table = projectOutResolvedMetaFieldsAttributes(relation))
+            ut.copy(table = relation)
+
+          case logicalPlan: LogicalPlan if logicalPlan.resolved =>
+            sparkAdapter.getCatalystPlanUtils.maybeApplyForNewFileFormat(logicalPlan)
         }
       }
 
@@ -330,6 +362,31 @@ object HoodieAnalysis extends SparkAdapterSupport {
       sparkAdapter.resolveHoodieTable(plan)
   }
 
+  private[sql] object MatchCreateTableLike {
+    def unapply(plan: LogicalPlan): Option[(TableIdentifier, TableIdentifier, CatalogStorageFormat, Option[String], Map[String, String], Boolean)] =
+      sparkAdapter.getCatalystPlanUtils.unapplyCreateTableLikeCommand(plan)
+  }
+
+  private[sql] object MatchCreateIndex {
+    def unapply(plan: LogicalPlan): Option[(LogicalPlan, String, String, Boolean, Seq[(Seq[String], Map[String, String])], Map[String, String])] =
+      sparkAdapter.getCatalystPlanUtils.unapplyCreateIndex(plan)
+  }
+
+  private[sql] object MatchDropIndex {
+    def unapply(plan: LogicalPlan): Option[(LogicalPlan, String, Boolean)] =
+      sparkAdapter.getCatalystPlanUtils.unapplyDropIndex(plan)
+  }
+
+  private[sql] object MatchShowIndexes {
+    def unapply(plan: LogicalPlan): Option[(LogicalPlan, Seq[Attribute])] =
+      sparkAdapter.getCatalystPlanUtils.unapplyShowIndexes(plan)
+  }
+
+  private[sql] object MatchRefreshIndex {
+    def unapply(plan: LogicalPlan): Option[(LogicalPlan, String)] =
+      sparkAdapter.getCatalystPlanUtils.unapplyRefreshIndex(plan)
+  }
+
   private[sql] def failAnalysis(msg: String): Nothing = {
     throw new AnalysisException(msg)
   }
@@ -377,63 +434,64 @@ case class ResolveImplementationsEarly() extends Rule[LogicalPlan] {
 case class ResolveImplementations() extends Rule[LogicalPlan] {
 
   override def apply(plan: LogicalPlan): LogicalPlan = {
-    plan match {
-      // Convert to MergeIntoHoodieTableCommand
-      case mit@MatchMergeIntoTable(target@ResolvesToHudiTable(_), _, _) if mit.resolved =>
-        MergeIntoHoodieTableCommand(mit.asInstanceOf[MergeIntoTable])
+    AnalysisHelper.allowInvokingTransformsInAnalyzer {
+      plan match {
+        // Convert to MergeIntoHoodieTableCommand
+        case mit@MatchMergeIntoTable(target@ResolvesToHudiTable(_), _, _) if mit.resolved =>
+          MergeIntoHoodieTableCommand(ReplaceExpressions(mit).asInstanceOf[MergeIntoTable])
 
-      // Convert to UpdateHoodieTableCommand
-      case ut@UpdateTable(plan@ResolvesToHudiTable(_), _, _) if ut.resolved =>
-        UpdateHoodieTableCommand(ut)
+        // Convert to UpdateHoodieTableCommand
+        case ut@UpdateTable(plan@ResolvesToHudiTable(_), _, _) if ut.resolved =>
+          UpdateHoodieTableCommand(ut)
 
-      // Convert to DeleteHoodieTableCommand
-      case dft@DeleteFromTable(plan@ResolvesToHudiTable(_), _) if dft.resolved =>
-        DeleteHoodieTableCommand(dft)
+        // Convert to DeleteHoodieTableCommand
+        case dft@DeleteFromTable(plan@ResolvesToHudiTable(_), _) if dft.resolved =>
+          DeleteHoodieTableCommand(dft)
 
-      // Convert to CompactionHoodieTableCommand
-      case ct @ CompactionTable(plan @ ResolvesToHudiTable(table), operation, options) if ct.resolved =>
-        CompactionHoodieTableCommand(table, operation, options)
+        // Convert to CompactionHoodieTableCommand
+        case ct @ CompactionTable(plan @ ResolvesToHudiTable(table), operation, options) if ct.resolved =>
+          CompactionHoodieTableCommand(table, operation, options)
 
-      // Convert to CompactionHoodiePathCommand
-      case cp @ CompactionPath(path, operation, options) if cp.resolved =>
-        CompactionHoodiePathCommand(path, operation, options)
+        // Convert to CompactionHoodiePathCommand
+        case cp @ CompactionPath(path, operation, options) if cp.resolved =>
+          CompactionHoodiePathCommand(path, operation, options)
 
-      // Convert to CompactionShowOnTable
-      case csot @ CompactionShowOnTable(plan @ ResolvesToHudiTable(table), limit) if csot.resolved =>
-        CompactionShowHoodieTableCommand(table, limit)
+        // Convert to CompactionShowOnTable
+        case csot @ CompactionShowOnTable(plan @ ResolvesToHudiTable(table), limit) if csot.resolved =>
+          CompactionShowHoodieTableCommand(table, limit)
 
-      // Convert to CompactionShowHoodiePathCommand
-      case csop @ CompactionShowOnPath(path, limit) if csop.resolved =>
-        CompactionShowHoodiePathCommand(path, limit)
+        // Convert to CompactionShowHoodiePathCommand
+        case csop @ CompactionShowOnPath(path, limit) if csop.resolved =>
+          CompactionShowHoodiePathCommand(path, limit)
 
-      // Convert to HoodieCallProcedureCommand
-      case c @ CallCommand(_, _) =>
-        val procedure: Option[Procedure] = loadProcedure(c.name)
-        val input = buildProcedureArgs(c.args)
-        if (procedure.nonEmpty) {
-          CallProcedureHoodieCommand(procedure.get, input)
-        } else {
-          c
-        }
+        // Convert to HoodieCallProcedureCommand
+        case c @ CallCommand(_, _) =>
+          val procedure: Option[Procedure] = loadProcedure(c.name)
+          val input = buildProcedureArgs(c.args)
+          if (procedure.nonEmpty) {
+            CallProcedureHoodieCommand(procedure.get, input)
+          } else {
+            c
+          }
 
-      // Convert to CreateIndexCommand
-      case ci @ CreateIndex(plan @ ResolvesToHudiTable(table), indexName, indexType, ignoreIfExists, columns, options, output) =>
-        // TODO need to resolve columns
-        CreateIndexCommand(table, indexName, indexType, ignoreIfExists, columns, options, output)
+        // Convert to CreateIndexCommand
+        case ci @ MatchCreateIndex(plan @ ResolvesToHudiTable(table), indexName, indexType, ignoreIfExists, columns, options) if ci.resolved =>
+          CreateIndexCommand(table, indexName, indexType, ignoreIfExists, columns, options)
 
-      // Convert to DropIndexCommand
-      case di @ DropIndex(plan @ ResolvesToHudiTable(table), indexName, ignoreIfNotExists, output) if di.resolved =>
-        DropIndexCommand(table, indexName, ignoreIfNotExists, output)
+        // Convert to DropIndexCommand
+        case di @ MatchDropIndex(plan @ ResolvesToHudiTable(table), indexName, ignoreIfNotExists) if di.resolved =>
+          DropIndexCommand(table, indexName, ignoreIfNotExists)
 
-      // Convert to ShowIndexesCommand
-      case si @ ShowIndexes(plan @ ResolvesToHudiTable(table), output) if si.resolved =>
-        ShowIndexesCommand(table, output)
+        // Convert to ShowIndexesCommand
+        case si @ MatchShowIndexes(plan @ ResolvesToHudiTable(table), output) if si.resolved =>
+          ShowIndexesCommand(table, output)
 
-      // Covert to RefreshCommand
-      case ri @ RefreshIndex(plan @ ResolvesToHudiTable(table), indexName, output) if ri.resolved =>
-        RefreshIndexCommand(table, indexName, output)
+        // Covert to RefreshCommand
+        case ri @ MatchRefreshIndex(plan @ ResolvesToHudiTable(table), indexName) if ri.resolved =>
+          RefreshIndexCommand(table, indexName)
 
-      case _ => plan
+        case _ => plan
+      }
     }
   }
 
@@ -484,16 +542,22 @@ case class HoodiePostAnalysisRule(sparkSession: SparkSession) extends Rule[Logic
       case CreateDataSourceTableCommand(table, ignoreIfExists)
         if sparkAdapter.isHoodieTable(table) =>
         CreateHoodieTableCommand(table, ignoreIfExists)
+      case MatchCreateTableLike(targetTable, sourceTable, fileFormat, provider, properties, ifNotExists)
+        if sparkAdapter.isHoodieTable(provider.orNull) =>
+        CreateHoodieTableLikeCommand(targetTable, sourceTable, fileFormat, properties, ifNotExists)
       // Rewrite the DropTableCommand to DropHoodieTableCommand
       case DropTableCommand(tableName, ifExists, false, purge)
         if sparkSession.sessionState.catalog.tableExists(tableName)
           && sparkAdapter.isHoodieTable(tableName, sparkSession) =>
         DropHoodieTableCommand(tableName, ifExists, false, purge)
+      // Rewrite the AlterTableAddPartitionCommand to AlterHoodieTableAddPartitionCommand
+      case AlterTableAddPartitionCommand(tableName, partitionSpecsAndLocs, ifNotExists)
+        if sparkAdapter.isHoodieTable(tableName, sparkSession) =>
+        AlterHoodieTableAddPartitionCommand(tableName, partitionSpecsAndLocs, ifNotExists)
       // Rewrite the AlterTableDropPartitionCommand to AlterHoodieTableDropPartitionCommand
       case AlterTableDropPartitionCommand(tableName, specs, ifExists, purge, retainData)
         if sparkAdapter.isHoodieTable(tableName, sparkSession) =>
           AlterHoodieTableDropPartitionCommand(tableName, specs, ifExists, purge, retainData)
-      // Rewrite the AlterTableRenameCommand to AlterHoodieTableRenameCommand
       // Rewrite the AlterTableAddColumnsCommand to AlterHoodieTableAddColumnsCommand
       case AlterTableAddColumnsCommand(tableId, colsToAdd)
         if sparkAdapter.isHoodieTable(tableId, sparkSession) =>

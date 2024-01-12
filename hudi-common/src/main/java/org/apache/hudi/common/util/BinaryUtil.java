@@ -19,8 +19,9 @@
 package org.apache.hudi.common.util;
 
 import java.nio.ByteBuffer;
-import java.nio.charset.Charset;
 import java.util.zip.CRC32;
+
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Utils for Java byte array.
@@ -185,7 +186,7 @@ public class BinaryUtil {
   }
 
   public static byte[] utf8To8Byte(String a) {
-    return paddingTo8Byte(a.getBytes(Charset.forName("utf-8")));
+    return paddingTo8Byte(getUTF8Bytes(a));
   }
 
   public static Long convertStringToLong(String a) {

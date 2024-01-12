@@ -22,6 +22,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.metrics.FlinkStreamReadMetrics;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.StreamerUtil;
@@ -32,6 +33,7 @@ import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.api.common.typeutils.base.StringSerializer;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
+import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
@@ -102,6 +104,8 @@ public class StreamReadMonitoringFunction
 
   private final IncrementalInputSplits incrementalInputSplits;
 
+  private transient FlinkStreamReadMetrics readMetrics;
+
   public StreamReadMonitoringFunction(
       Configuration conf,
       Path path,
@@ -128,6 +132,8 @@ public class StreamReadMonitoringFunction
 
     ValidationUtils.checkState(this.instantState == null,
         "The " + getClass().getSimpleName() + " has already been initialized.");
+
+    registerMetrics();
 
     this.instantState = context.getOperatorStateStore().getListState(
         new ListStateDescriptor<>(
@@ -220,9 +226,10 @@ public class StreamReadMonitoringFunction
     this.issuedOffset = result.getOffset();
     LOG.info("\n"
             + "------------------------------------------------------------\n"
+            + "---------- table: {}\n"
             + "---------- consumed to instant: {}\n"
             + "------------------------------------------------------------",
-        this.issuedInstant);
+        conf.getString(FlinkOptions.TABLE_NAME), this.issuedInstant);
   }
 
   @Override
@@ -262,9 +269,16 @@ public class StreamReadMonitoringFunction
     this.instantState.clear();
     if (this.issuedInstant != null) {
       this.instantState.add(this.issuedInstant);
+      this.readMetrics.setIssuedInstant(this.issuedInstant);
     }
     if (this.issuedOffset != null) {
       this.instantState.add(this.issuedOffset);
     }
+  }
+
+  private void registerMetrics() {
+    MetricGroup metrics = getRuntimeContext().getMetricGroup();
+    readMetrics = new FlinkStreamReadMetrics(metrics);
+    readMetrics.registerMetrics();
   }
 }

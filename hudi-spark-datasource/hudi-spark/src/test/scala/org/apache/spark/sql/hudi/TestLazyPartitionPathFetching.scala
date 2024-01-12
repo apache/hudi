@@ -55,6 +55,36 @@ class TestLazyPartitionPathFetching extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test querying with date column + partition pruning") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long,
+           |  grass_date date
+           |) using hudi
+           | location '${tmp.getCanonicalPath}'
+           | tblproperties (
+           |  primaryKey ='id',
+           |  type = 'cow',
+           |  preCombineField = 'ts'
+           | )
+           | PARTITIONED BY (grass_date)
+         """.stripMargin)
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, date('2023-02-27'))")
+      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, date('2023-02-28'))")
+      spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000, date('2023-03-01'))")
+
+      checkAnswer(s"select id, name, price, ts from $tableName where grass_date = date'2023-03-01' order by id")(
+        Seq(3, "a3", 10.0, 1000)
+      )
+    }
+  }
+
   test("Test querying with date column + partition pruning (multi-level partitioning)") {
     withTempDir { tmp =>
       val tableName = generateTableName

@@ -221,16 +221,13 @@ public class HoodieFlinkCompactor {
 
       // checks the compaction plan and do compaction.
       if (cfg.schedule) {
-        Option<String> compactionInstantTimeOption = CompactionUtil.getCompactionInstantTime(metaClient);
-        if (compactionInstantTimeOption.isPresent()) {
-          boolean scheduled = writeClient.scheduleCompactionAtInstant(compactionInstantTimeOption.get(), Option.empty());
-          if (!scheduled) {
-            // do nothing.
-            LOG.info("No compaction plan for this job ");
-            return;
-          }
-          table.getMetaClient().reloadActiveTimeline();
+        boolean scheduled = writeClient.scheduleCompaction(Option.empty()).isPresent();
+        if (!scheduled) {
+          // do nothing.
+          LOG.info("No compaction plan for this job ");
+          return;
         }
+        table.getMetaClient().reloadActiveTimeline();
       }
 
       // fetch the instant based on the configured execution sequence
@@ -290,7 +287,7 @@ public class HoodieFlinkCompactor {
       table.getMetaClient().reloadActiveTimeline();
 
       StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-      env.addSource(new CompactionPlanSourceFunction(compactionPlans))
+      env.addSource(new CompactionPlanSourceFunction(compactionPlans, conf))
           .name("compaction_source")
           .uid("uid_compaction_source")
           .rebalance()
@@ -301,7 +298,9 @@ public class HoodieFlinkCompactor {
           .addSink(new CompactionCommitSink(conf))
           .name("compaction_commit")
           .uid("uid_compaction_commit")
-          .setParallelism(1);
+          .setParallelism(1)
+          .getTransformation()
+          .setMaxParallelism(1);
 
       env.execute("flink_hudi_compaction_" + String.join(",", compactionInstantTimes));
     }

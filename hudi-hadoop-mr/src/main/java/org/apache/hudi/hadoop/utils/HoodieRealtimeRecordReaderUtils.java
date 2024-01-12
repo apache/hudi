@@ -18,9 +18,13 @@
 
 package org.apache.hudi.hadoop.utils;
 
+import org.apache.hudi.common.config.HoodieMemoryConfig;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
+import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.JsonProperties;
@@ -30,6 +34,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.serde2.io.DoubleWritable;
 import org.apache.hadoop.hive.serde2.io.HiveDecimalWritable;
 import org.apache.hadoop.hive.serde2.typeinfo.DecimalTypeInfo;
@@ -46,6 +51,7 @@ import org.apache.hadoop.mapred.JobConf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -69,8 +75,10 @@ public class HoodieRealtimeRecordReaderUtils {
   public static long getMaxCompactionMemoryInBytes(JobConf jobConf) {
     // jobConf.getMemoryForMapTask() returns in MB
     return (long) Math
-        .ceil(Double.parseDouble(jobConf.get(HoodieRealtimeConfig.COMPACTION_MEMORY_FRACTION_PROP,
-            HoodieRealtimeConfig.DEFAULT_COMPACTION_MEMORY_FRACTION))
+        .ceil(Double.parseDouble(
+            ConfigUtils.getRawValueWithAltKeys(
+                    jobConf, HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION)
+                .orElse(HoodieMemoryConfig.DEFAULT_MR_COMPACTION_MEMORY_FRACTION))
             * jobConf.getMemoryForMapTask() * 1024 * 1024L);
   }
 
@@ -158,7 +166,7 @@ public class HoodieRealtimeRecordReaderUtils {
       case STRING:
         return new Text(value.toString());
       case BYTES:
-        return new BytesWritable(((ByteBuffer)value).array());
+        return new BytesWritable(((ByteBuffer) value).array());
       case INT:
         if (schema.getLogicalType() != null && schema.getLogicalType().getName().equals("date")) {
           return HoodieHiveUtils.getDateWriteable((Integer) value);
@@ -295,6 +303,10 @@ public class HoodieRealtimeRecordReaderUtils {
         .filter(x -> !firstLevelFieldNames.contains(x)).collect(Collectors.toList());
 
     return appendNullSchemaFields(schema, fieldsToAdd);
+  }
+
+  public static HoodieFileReader getBaseFileReader(Path path, JobConf conf) throws IOException {
+    return HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(conf, path);
   }
 
   private static Schema appendNullSchemaFields(Schema schema, List<String> newFieldNames) {

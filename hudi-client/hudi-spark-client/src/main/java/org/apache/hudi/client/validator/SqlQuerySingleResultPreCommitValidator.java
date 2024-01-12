@@ -57,12 +57,11 @@ public class SqlQuerySingleResultPreCommitValidator<T, I, K, O extends HoodieDat
     if (queryWithExpectedResult.length != 2) {
       throw new HoodieValidationException("Invalid query format " + query);
     }
-    
+
     String queryToRun = queryWithExpectedResult[0];
     String expectedResult = queryWithExpectedResult[1];
-    LOG.info("Running query on new state: " + queryToRun);
-    String queryWithNewSnapshot = queryToRun.replaceAll(HoodiePreCommitValidatorConfig.VALIDATOR_TABLE_VARIABLE, newTableSnapshot);
-    List<Row> newRows  = sqlContext.sql(queryWithNewSnapshot).collectAsList();
+    List<Row> newRows = executeSqlQuery(
+        sqlContext, queryToRun, newTableSnapshot, "new state").collectAsList();
     if (newRows.size() != 1 && newRows.get(0).size() != 1) {
       throw new HoodieValidationException("Invalid query result. expect single value for '" + query + "'");
     }

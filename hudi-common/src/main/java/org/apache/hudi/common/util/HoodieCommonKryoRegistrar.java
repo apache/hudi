@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
@@ -82,7 +83,8 @@ public class HoodieCommonKryoRegistrar {
         HoodieMetadataPayload.class,
 
         HoodieRecordLocation.class,
-        HoodieRecordGlobalLocation.class
+        HoodieRecordGlobalLocation.class,
+        HoodieRecordDelegate.class
     })
         .forEachOrdered(kryo::register);
   }

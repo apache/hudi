@@ -20,6 +20,7 @@
 package org.apache.hudi.utilities.functional;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.exception.HoodieTransformException;
@@ -46,7 +47,7 @@ import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_ENABLED;
-import static org.apache.hudi.utilities.deltastreamer.BaseErrorTableWriter.ERROR_TABLE_CURRUPT_RECORD_COL_NAME;
+import static org.apache.hudi.utilities.streamer.BaseErrorTableWriter.ERROR_TABLE_CURRUPT_RECORD_COL_NAME;
 import static org.apache.spark.sql.types.DataTypes.IntegerType;
 import static org.apache.spark.sql.types.DataTypes.StringType;
 import static org.apache.spark.sql.types.DataTypes.createStructField;
@@ -127,7 +128,8 @@ public class TestErrorTableAwareChainedTransformer extends SparkClientFunctional
       "org.apache.hudi.utilities.transform.FlatteningTransformer,T1:org.apache.hudi.utilities.transform.FlatteningTransformer"
   })
   public void testErrorTableAwareChainedTransformerValidationFails(String transformerName) {
-    assertThrows(HoodieTransformException.class, () -> new ErrorTableAwareChainedTransformer(Arrays.asList(transformerName.split(","))));
+    assertThrows(HoodieTransformException.class,
+        () -> new ErrorTableAwareChainedTransformer(Arrays.asList(transformerName.split(",")), Option.empty()));
   }
 
   @ParameterizedTest
@@ -138,7 +140,8 @@ public class TestErrorTableAwareChainedTransformer extends SparkClientFunctional
       "org.apache.hudi.utilities.transform.FlatteningTransformer,org.apache.hudi.utilities.transform.FlatteningTransformer"
   })
   public void testErrorTableAwareChainedTransformerValidationPasses(String transformerName) {
-    ErrorTableAwareChainedTransformer transformer = new ErrorTableAwareChainedTransformer(Arrays.asList(transformerName.split(",")));
+    ErrorTableAwareChainedTransformer transformer = new ErrorTableAwareChainedTransformer(Arrays.asList(transformerName.split(",")),
+        Option.empty());
     assertNotNull(transformer);
   }
 }

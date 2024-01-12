@@ -74,6 +74,13 @@ object HoodieInternalRowUtils {
   }
 
   /**
+   * due to scala2.11 and HoodieCatalystExpressionUtils is both an object and trait,
+   * we can't directly call generateUnsafeProjection from java code
+   */
+  def generateUnsafeProjectionAlias(from: StructType, to: StructType): UnsafeProjection = {
+    generateUnsafeProjection(from, to)
+  }
+  /**
    * Provides cached instance of [[UnsafeRowWriter]] transforming provided [[InternalRow]]s from
    * one [[StructType]] and into another [[StructType]]
    *
@@ -202,7 +209,7 @@ object HoodieInternalRowUtils {
                                 renamedColumnsMap: JMap[String, String],
                                 fieldNameStack: JDeque[String]): RowFieldUpdater = {
     (newDataType, prevDataType) match {
-      case (newType, prevType) if prevType == newType =>
+      case (newType, prevType) if prevType.sql == newType.sql =>
         (fieldUpdater, ordinal, value) => fieldUpdater.set(ordinal, value)
 
       case (newStructType: StructType, prevStructType: StructType) =>

@@ -22,7 +22,6 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
@@ -49,13 +48,11 @@ public class CompactionUtil {
   /**
    * Schedules a new compaction instant.
    *
-   * @param metaClient          The metadata client
    * @param writeClient         The write client
    * @param deltaTimeCompaction Whether the compaction is trigger by elapsed delta time
    * @param committed           Whether the last instant was committed successfully
    */
   public static void scheduleCompaction(
-      HoodieTableMetaClient metaClient,
       HoodieFlinkWriteClient<?> writeClient,
       boolean deltaTimeCompaction,
       boolean committed) {
@@ -64,32 +61,7 @@ public class CompactionUtil {
     } else if (deltaTimeCompaction) {
       // if there are no new commits and the compaction trigger strategy is based on elapsed delta time,
       // schedules the compaction anyway.
-      metaClient.reloadActiveTimeline();
-      Option<String> compactionInstantTime = CompactionUtil.getCompactionInstantTime(metaClient);
-      if (compactionInstantTime.isPresent()) {
-        writeClient.scheduleCompactionAtInstant(compactionInstantTime.get(), Option.empty());
-      }
-    }
-  }
-
-  /**
-   * Gets compaction Instant time.
-   */
-  public static Option<String> getCompactionInstantTime(HoodieTableMetaClient metaClient) {
-    Option<HoodieInstant> firstPendingInstant = metaClient.getCommitsTimeline()
-        .filterPendingExcludingCompaction().firstInstant();
-    Option<HoodieInstant> lastCompleteInstant = metaClient.getActiveTimeline().getWriteTimeline()
-        .filterCompletedAndCompactionInstants().lastInstant();
-    if (firstPendingInstant.isPresent() && lastCompleteInstant.isPresent()) {
-      String firstPendingTimestamp = firstPendingInstant.get().getTimestamp();
-      String lastCompleteTimestamp = lastCompleteInstant.get().getTimestamp();
-      // Committed and pending compaction instants should have strictly lower timestamps
-      return StreamerUtil.medianInstantTime(firstPendingTimestamp, lastCompleteTimestamp);
-    } else if (!lastCompleteInstant.isPresent()) {
-      LOG.info("No instants to schedule the compaction plan");
-      return Option.empty();
-    } else {
-      return Option.of(HoodieActiveTimeline.createNewInstantTime());
+      writeClient.scheduleCompaction(Option.empty());
     }
   }
 
@@ -128,7 +100,9 @@ public class CompactionUtil {
    */
   public static void setPreCombineField(Configuration conf, HoodieTableMetaClient metaClient) {
     String preCombineField = metaClient.getTableConfig().getPreCombineField();
-    conf.setString(FlinkOptions.PRECOMBINE_FIELD, preCombineField);
+    if (preCombineField != null) {
+      conf.setString(FlinkOptions.PRECOMBINE_FIELD, preCombineField);
+    }
   }
 
   /**
@@ -139,7 +113,7 @@ public class CompactionUtil {
    * @param conf The configuration
    * @param metaClient The meta client
    */
-  public static void inferChangelogMode(Configuration conf, HoodieTableMetaClient metaClient) {
+  public static void inferChangelogMode(Configuration conf, HoodieTableMetaClient metaClient) throws Exception {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
     Schema tableAvroSchema = tableSchemaResolver.getTableAvroSchemaFromDataFile();
     if (tableAvroSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD) != null) {
@@ -201,7 +175,7 @@ public class CompactionUtil {
             instant.getState() == HoodieInstant.State.INFLIGHT).firstInstant();
     if (earliestInflight.isPresent()) {
       HoodieInstant instant = earliestInflight.get();
-      String currentTime = HoodieActiveTimeline.createNewInstantTime();
+      String currentTime = table.getMetaClient().createNewInstantTime();
       int timeout = conf.getInteger(FlinkOptions.COMPACTION_TIMEOUT_SECONDS);
       if (StreamerUtil.instantTimeDiffSeconds(currentTime, instant.getTimestamp()) >= timeout) {
         LOG.info("Rollback the inflight compaction instant: " + instant + " for timeout(" + timeout + "s)");

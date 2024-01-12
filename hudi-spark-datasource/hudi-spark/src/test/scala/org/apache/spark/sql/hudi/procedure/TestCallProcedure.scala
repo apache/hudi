@@ -196,11 +196,55 @@ class TestCallProcedure extends HoodieSparkProcedureTestBase {
         s"Argument: instant_time is required")
 
       val instantTime = "101"
-      FileCreateUtils.createLogFileMarker(tablePath, "", instantTime, "f0", IOType.APPEND)
+      FileCreateUtils.createMarkerFile(tablePath, "", instantTime, "f0", IOType.APPEND)
       assertResult(1) {
         FileCreateUtils.getTotalMarkerFileCount(tablePath, "", instantTime, IOType.APPEND)
       }
 
+      checkAnswer(s"""call delete_marker(table => '$tableName', instant_time => '$instantTime')""")(Seq(true))
+
+      assertResult(0) {
+        FileCreateUtils.getTotalMarkerFileCount(tablePath, "", instantTime, IOType.APPEND)
+      }
+    }
+  }
+
+  test("Test Call delete_marker Procedure with batch mode") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      // create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      // Check required fields
+      checkExceptionContain(s"""call delete_marker(table => '$tableName')""")(
+        s"Argument: instant_time is required")
+
+      var instantTime = "101"
+      FileCreateUtils.createMarkerFile(tablePath, "", instantTime, "f0", IOType.APPEND)
+      assertResult(1) {
+        FileCreateUtils.getTotalMarkerFileCount(tablePath, "", instantTime, IOType.APPEND)
+      }
+      instantTime = "102"
+      FileCreateUtils.createMarkerFile(tablePath, "", instantTime, "f0", IOType.APPEND)
+      assertResult(1) {
+        FileCreateUtils.getTotalMarkerFileCount(tablePath, "", instantTime, IOType.APPEND)
+      }
+
+      instantTime = "101,102"
       checkAnswer(s"""call delete_marker(table => '$tableName', instant_time => '$instantTime')""")(Seq(true))
 
       assertResult(0) {

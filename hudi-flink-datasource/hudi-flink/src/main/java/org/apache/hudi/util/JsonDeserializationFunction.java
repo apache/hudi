@@ -27,7 +27,7 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 
-import java.nio.charset.StandardCharsets;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Wrapper function that manages the lifecycle of the JSON deserialization schema.
@@ -68,6 +68,6 @@ public final class JsonDeserializationFunction
 
   @Override
   public RowData map(String record) throws Exception {
-    return deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8));
+    return deserializationSchema.deserialize(getUTF8Bytes(record));
   }
 }

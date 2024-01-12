@@ -41,23 +41,24 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
              | location '${tmp.getCanonicalPath}/$tableName1'
        """.stripMargin)
 
+        // 1st commit instant
         spark.sql(s"insert into $tableName1 values(1, 'a1', 10, 1000)")
 
         val metaClient1 = HoodieTableMetaClient.builder()
           .setBasePath(s"${tmp.getCanonicalPath}/$tableName1")
           .setConf(spark.sessionState.newHadoopConf())
           .build()
-
         val instant1 = metaClient1.getActiveTimeline.getAllCommitsTimeline
           .lastInstant().get().getTimestamp
 
+        // 2nd commit instant
         spark.sql(s"insert into $tableName1 values(1, 'a2', 20, 2000)")
 
         checkAnswer(s"select id, name, price, ts from $tableName1")(
           Seq(1, "a2", 20.0, 2000)
         )
 
-        // time travel from instant1
+        // time travel as of instant 1
         checkAnswer(
           s"select id, name, price, ts from $tableName1 TIMESTAMP AS OF '$instant1'")(
           Seq(1, "a1", 10.0, 1000)
@@ -193,11 +194,6 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
             Seq(2, "a2", 20.0, 1000)
           )
 
-          checkAnswer(s"select id, name, price, ts from $tableName1")(
-            Seq(1, "a1", 10.0, 1000),
-            Seq(2, "a2", 20.0, 1000)
-          )
-
           spark.sql(s"insert into $tableName2 values(3, 'a3', 10, 1000)")
           spark.sql(s"insert into $tableName2 values(4, 'a4', 20, 1000)")
 
@@ -271,24 +267,26 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
              | location '${tmp.getCanonicalPath}/$tableName'
        """.stripMargin)
 
+        // 1st commit instant
         spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
 
         val metaClient = HoodieTableMetaClient.builder()
           .setBasePath(s"${tmp.getCanonicalPath}/$tableName")
           .setConf(spark.sessionState.newHadoopConf())
           .build()
-
-        val instant = metaClient.getActiveTimeline.getAllCommitsTimeline
+        val instant1 = metaClient.getActiveTimeline.getAllCommitsTimeline
           .lastInstant().get().getTimestamp
+
+        // 2nd commit instant
         spark.sql(s"insert into $tableName values(1, 'a2', 20, 2000)")
 
         checkAnswer(s"select id, name, price, ts from $tableName distribute by cast(rand() * 2 as int)")(
           Seq(1, "a2", 20.0, 2000)
         )
 
-        // time travel from instant
+        // time travel as of instant 1
         checkAnswer(
-          s"select id, name, price, ts from $tableName TIMESTAMP AS OF '$instant' distribute by cast(rand() * 2 as int)")(
+          s"select id, name, price, ts from $tableName TIMESTAMP AS OF '$instant1' distribute by cast(rand() * 2 as int)")(
           Seq(1, "a1", 10.0, 1000)
         )
       })

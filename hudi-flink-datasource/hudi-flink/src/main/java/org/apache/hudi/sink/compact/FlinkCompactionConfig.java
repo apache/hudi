@@ -18,8 +18,10 @@
 
 package org.apache.hudi.sink.compact;
 
+import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.config.HoodieMemoryConfig;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.sink.compact.strategy.CompactionPlanStrategy;
@@ -76,10 +78,25 @@ public class FlinkCompactionConfig extends Configuration {
   @Parameter(names = {"--clean-async-enabled"}, description = "Whether to cleanup the old commits immediately on new commits, enabled by default")
   public Boolean cleanAsyncEnable = false;
 
+  @Parameter(names = {"--clean-policy"},
+      description = "Clean policy to manage the Hudi table. Available option: KEEP_LATEST_COMMITS, KEEP_LATEST_FILE_VERSIONS, KEEP_LATEST_BY_HOURS."
+          + "Default is KEEP_LATEST_COMMITS.")
+  public String cleanPolicy = HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name();
+
   @Parameter(names = {"--clean-retain-commits"},
       description = "Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled).\n"
           + "This also directly translates into how much you can incrementally pull on this table, default 10")
   public Integer cleanRetainCommits = 10;
+
+  @Parameter(names = {"--clean-retain-hours"},
+      description = "Number of hours for which commits need to be retained. This config provides a more flexible option as"
+          + "compared to number of commits retained for cleaning service. Setting this property ensures all the files, but the latest in a file group,"
+          + " corresponding to commits with commit times older than the configured number of hours to be retained are cleaned. default 24")
+  public Integer cleanRetainHours = 24;
+
+  @Parameter(names = {"--clean-retain-file-versions"},
+      description = "Number of file versions to retain. Each file group will be retained for this number of version. default 5")
+  public Integer cleanRetainFileVersions = 5;
 
   @Parameter(names = {"--archive-min-commits"},
       description = "Min number of commits to keep before archiving older commits into a sequential log, default 20.")
@@ -134,7 +151,7 @@ public class FlinkCompactionConfig extends Configuration {
   public String compactionPlanInstant;
 
   @Parameter(names = {"--spillable_map_path"}, description = "Default file path prefix for spillable map.")
-  public String spillableMapPath = HoodieMemoryConfig.getDefaultSpillableMapBasePath();
+  public String spillableMapPath = FileIOUtils.getDefaultSpillableMapBasePath();
 
   @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
       + "(using the CLI parameter \"--props\") can also be passed through command line using this parameter.")
@@ -165,7 +182,10 @@ public class FlinkCompactionConfig extends Configuration {
     conf.setString(FlinkOptions.COMPACTION_TRIGGER_STRATEGY, config.compactionTriggerStrategy);
     conf.setInteger(FlinkOptions.ARCHIVE_MAX_COMMITS, config.archiveMaxCommits);
     conf.setInteger(FlinkOptions.ARCHIVE_MIN_COMMITS, config.archiveMinCommits);
+    conf.setString(FlinkOptions.CLEAN_POLICY, config.cleanPolicy);
     conf.setInteger(FlinkOptions.CLEAN_RETAIN_COMMITS, config.cleanRetainCommits);
+    conf.setInteger(FlinkOptions.CLEAN_RETAIN_HOURS, config.cleanRetainHours);
+    conf.setInteger(FlinkOptions.CLEAN_RETAIN_FILE_VERSIONS, config.cleanRetainFileVersions);
     conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, config.compactionDeltaCommits);
     conf.setInteger(FlinkOptions.COMPACTION_DELTA_SECONDS, config.compactionDeltaSeconds);
     conf.setInteger(FlinkOptions.COMPACTION_MAX_MEMORY, config.compactionMaxMemory);

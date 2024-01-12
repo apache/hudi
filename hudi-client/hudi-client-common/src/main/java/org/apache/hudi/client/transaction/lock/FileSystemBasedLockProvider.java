@@ -21,6 +21,7 @@ package org.apache.hudi.client.transaction.lock;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.LockConfiguration;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.lock.LockProvider;
@@ -29,6 +30,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieLockException;
@@ -50,6 +52,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_EXPIRE_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
+import static org.apache.hudi.common.table.HoodieTableMetaClient.AUXILIARYFOLDER_NAME;
 
 /**
  * A FileSystem based lock. This {@link LockProvider} implementation allows to lock table operations
@@ -160,12 +163,10 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   }
 
   private void acquireLock() {
-    try {
+    try (FSDataOutputStream fos = fs.create(this.lockFile, false)) {
       if (!fs.exists(this.lockFile)) {
-        FSDataOutputStream fos = fs.create(this.lockFile, false);
         initLockInfo();
         fos.writeBytes(lockInfo.toString());
-        fos.close();
       }
     } catch (IOException e) {
       throw new HoodieIOException(generateLogStatement(LockState.FAILED_TO_ACQUIRE), e);
@@ -179,11 +180,9 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   }
 
   public void reloadCurrentOwnerLockInfo() {
-    try {
+    try (FSDataInputStream fis = fs.open(this.lockFile)) {
       if (fs.exists(this.lockFile)) {
-        FSDataInputStream fis = fs.open(this.lockFile);
         this.currentOwnerLockInfo = FileIOUtils.readAsUTFString(fis);
-        fis.close();
       } else {
         this.currentOwnerLockInfo = "";
       }
@@ -198,7 +197,29 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
 
   private void checkRequiredProps(final LockConfiguration config) {
     ValidationUtils.checkArgument(config.getConfig().getString(FILESYSTEM_LOCK_PATH_PROP_KEY, null) != null
-          || config.getConfig().getString(HoodieWriteConfig.BASE_PATH.key(), null) != null);
+        || config.getConfig().getString(HoodieWriteConfig.BASE_PATH.key(), null) != null);
     ValidationUtils.checkArgument(config.getConfig().getInteger(FILESYSTEM_LOCK_EXPIRE_PROP_KEY) >= 0);
+  }
+
+  /**
+   * Returns a filesystem based lock config with given table path.
+   */
+  public static TypedProperties getLockConfig(String tablePath) {
+    TypedProperties props = new TypedProperties();
+    props.put(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), FileSystemBasedLockProvider.class.getName());
+    props.put(HoodieLockConfig.LOCK_ACQUIRE_WAIT_TIMEOUT_MS.key(), "2000");
+    props.put(HoodieLockConfig.FILESYSTEM_LOCK_EXPIRE.key(), "1");
+    props.put(HoodieLockConfig.LOCK_ACQUIRE_CLIENT_NUM_RETRIES.key(), "30");
+    props.put(HoodieLockConfig.FILESYSTEM_LOCK_PATH.key(), defaultLockPath(tablePath));
+    return props;
+  }
+
+  /**
+   * Returns the default lock file root path.
+   *
+   * <p>IMPORTANT: this path should be shared especially when there is engine cooperation.
+   */
+  private static String defaultLockPath(String tablePath) {
+    return tablePath + Path.SEPARATOR + AUXILIARYFOLDER_NAME;
   }
 }

@@ -20,7 +20,9 @@ package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.api.common.functions.AbstractRichFunction;
 import org.apache.flink.configuration.Configuration;
@@ -41,8 +43,7 @@ import java.util.stream.Collectors;
  *
  * <ul>
  *   <li>If the timeline has no inflight instants,
- *   use {@link org.apache.hudi.common.table.timeline.HoodieActiveTimeline#createNewInstantTime()}
- *   as the instant time;</li>
+ *   use {@link org.apache.hudi.common.table.timeline.HoodieActiveTimeline#createNewInstantTime() as the instant time;</li>
  *   <li>If the timeline has inflight instants,
  *   use the median instant time between [last complete instant time, earliest inflight instant time]
  *   as the instant time.</li>
@@ -56,9 +57,11 @@ public class CompactionPlanSourceFunction extends AbstractRichFunction implement
    * compaction plan instant -> compaction plan
    */
   private final List<Pair<String, HoodieCompactionPlan>> compactionPlans;
+  private final Configuration conf;
 
-  public CompactionPlanSourceFunction(List<Pair<String, HoodieCompactionPlan>> compactionPlans) {
+  public CompactionPlanSourceFunction(List<Pair<String, HoodieCompactionPlan>> compactionPlans, Configuration conf) {
     this.compactionPlans = compactionPlans;
+    this.conf = conf;
   }
 
   @Override
@@ -68,7 +71,12 @@ public class CompactionPlanSourceFunction extends AbstractRichFunction implement
 
   @Override
   public void run(SourceContext sourceContext) throws Exception {
+    HoodieTimeline pendingCompactionTimeline = StreamerUtil.createMetaClient(conf).getActiveTimeline().filterPendingCompactionTimeline();
     for (Pair<String, HoodieCompactionPlan> pair : compactionPlans) {
+      if (!pendingCompactionTimeline.containsInstant(pair.getLeft())) {
+        LOG.warn(pair.getLeft() + " not found in pending compaction instants.");
+        continue;
+      }
       HoodieCompactionPlan compactionPlan = pair.getRight();
       List<CompactionOperation> operations = compactionPlan.getOperations().stream()
           .map(CompactionOperation::convertFromAvroRecordInstance).collect(Collectors.toList());

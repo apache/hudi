@@ -20,12 +20,15 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -48,13 +51,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
-public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClient<List<WriteStatus>> {
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
+
+public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClient<List<HoodieRecord<T>>, List<WriteStatus>, List<WriteStatus>> {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkTableServiceClient.class);
 
@@ -73,12 +76,6 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
   }
 
   @Override
-  public void commitCompaction(String compactionInstantTime, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
-    extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
-    completeCompaction(metadata, getHoodieTable(), compactionInstantTime);
-  }
-
-  @Override
   protected void completeCompaction(HoodieCommitMetadata metadata, HoodieTable table, String compactionCommitTime) {
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status and commit compaction: " + config.getTableName());
     List<HoodieWriteStat> writeStats = metadata.getWriteStats();
@@ -89,7 +86,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       // commit to data table after committing to metadata table.
       // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
       // single lock (single writer). Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
-      writeTableMetadata(table, compactionCommitTime, compactionInstant.getAction(), metadata);
+      writeTableMetadata(table, compactionCommitTime, metadata, context.emptyHoodieData());
       LOG.info("Committing Compaction {} finished with result {}.", compactionCommitTime, metadata);
       CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
     } finally {
@@ -114,7 +111,8 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
   protected void completeClustering(
       HoodieReplaceCommitMetadata metadata,
       HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
-      String clusteringCommitTime) {
+      String clusteringCommitTime,
+      Option<HoodieData<WriteStatus>> writeStatuses) {
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect clustering write status and commit clustering");
     HoodieInstant clusteringInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringCommitTime);
     List<HoodieWriteStat> writeStats = metadata.getPartitionToWriteStats().entrySet().stream().flatMap(e ->
@@ -127,14 +125,21 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
     try {
       this.txnManager.beginTransaction(Option.of(clusteringInstant), Option.empty());
       finalizeWrite(table, clusteringCommitTime, writeStats);
+      // Only in some cases conflict resolution needs to be performed.
+      // So, check if preCommit method that does conflict resolution needs to be triggered.
+      if (isPreCommitRequired()) {
+        preCommit(metadata);
+      }
       // commit to data table after committing to metadata table.
-      // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
-      // single lock (single writer). Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
-      writeTableMetadata(table, clusteringCommitTime, clusteringInstant.getAction(), metadata);
+      // We take the lock here to ensure all writes to metadata table happens within a single lock (single writer).
+      // Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
+      writeTableMetadata(table, clusteringCommitTime, metadata, writeStatuses.orElseGet(context::emptyHoodieData));
+
       LOG.info("Committing Clustering {} finished with result {}.", clusteringCommitTime, metadata);
       table.getActiveTimeline().transitionReplaceInflightToComplete(
+          false,
           HoodieTimeline.getReplaceCommitInflightInstant(clusteringCommitTime),
-          Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+          serializeCommitMetadata(metadata));
     } catch (IOException e) {
       throw new HoodieClusteringException(
           "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + clusteringCommitTime, e);
@@ -163,29 +168,27 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
   }
 
   @Override
-  protected HoodieTable<?, ?, ?, ?> createTable(HoodieWriteConfig config, Configuration hadoopConf) {
-    return HoodieFlinkTable.create(config, (HoodieFlinkEngineContext) context);
+  protected void validateClusteringCommit(HoodieWriteMetadata<List<WriteStatus>> clusteringMetadata, String clusteringCommitTime, HoodieTable table) {
+    throw new UnsupportedOperationException("Clustering is not supported yet.");
+  }
+
+  @Override
+  protected HoodieWriteMetadata<List<WriteStatus>> convertToOutputMetadata(HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
+    return writeMetadata;
+  }
+
+  @Override
+  protected HoodieData<WriteStatus> convertToWriteStatus(HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
+    return HoodieListData.eager(writeMetadata.getWriteStatuses());
+  }
+
+  @Override
+  protected HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> createTable(HoodieWriteConfig config, Configuration hadoopConf) {
+    return HoodieFlinkTable.create(config, context);
   }
 
   public HoodieFlinkTable<?> getHoodieTable() {
-    return HoodieFlinkTable.create(config, (HoodieFlinkEngineContext) context);
-  }
-
-  @Override
-  public void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata) {
-    try (HoodieBackedTableMetadataWriter metadataWriter = initMetadataWriter(Option.empty())) {
-      metadataWriter.update(metadata, instantTime);
-    } catch (Exception e) {
-      throw new HoodieException("Failed to update metadata", e);
-    }
-  }
-
-  @Override
-  protected void preCommit(HoodieCommitMetadata metadata) {
-    // Create a Hoodie table after startTxn which encapsulated the commits and files visible.
-    // Important to create this after the lock to ensure the latest commits show up in the timeline without need for reload
-    HoodieTable table = createTable(config, hadoopConf);
-    resolveWriteConflict(table, metadata, this.pendingInflightAndRequestedInstants);
+    return HoodieFlinkTable.create(config, context);
   }
 
   /**
@@ -194,7 +197,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
    */
   private HoodieBackedTableMetadataWriter initMetadataWriter(Option<String> latestPendingInstant) {
     return (HoodieBackedTableMetadataWriter) FlinkHoodieBackedTableMetadataWriter.create(
-        FlinkClientUtil.getHadoopConf(), this.config, HoodieFlinkEngineContext.DEFAULT, Option.empty(), latestPendingInstant);
+        FlinkClientUtil.getHadoopConf(), this.config, HoodieFlinkEngineContext.DEFAULT, latestPendingInstant);
   }
 
   public void initMetadataTable() {
@@ -220,5 +223,10 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       // delete the metadata table if it was enabled but is now disabled
       table.maybeDeleteMetadataTable();
     }
+  }
+
+  @Override
+  protected void handleWriteErrors(List<HoodieWriteStat> writeStats, TableServiceType tableServiceType) {
+    // No-op
   }
 }

@@ -43,6 +43,10 @@ import java.io.IOException;
  */
 public final class SparkHoodieIndexFactory {
   public static HoodieIndex createIndex(HoodieWriteConfig config) {
+    boolean sqlMergeIntoPrepped = config.getProps().getBoolean(HoodieWriteConfig.SPARK_SQL_MERGE_INTO_PREPPED_KEY, false);
+    if (sqlMergeIntoPrepped) {
+      return new HoodieInternalProxyIndex(config);
+    }
     // first use index class config to create index.
     if (!StringUtils.isNullOrEmpty(config.getIndexClass())) {
       return HoodieIndexUtils.createUserDefinedIndex(config);
@@ -70,6 +74,8 @@ public final class SparkHoodieIndexFactory {
           default:
             throw new HoodieIndexException("Unknown bucket index engine type: " + config.getBucketIndexEngineType());
         }
+      case RECORD_INDEX:
+        return new SparkMetadataTableRecordIndex(config);
       default:
         throw new HoodieIndexException("Index type unspecified, set " + config.getIndexType());
     }
@@ -96,6 +102,8 @@ public final class SparkHoodieIndexFactory {
         return true;
       case BUCKET:
         return false;
+      case RECORD_INDEX:
+        return true;
       default:
         return createIndex(config).isGlobal();
     }

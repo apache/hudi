@@ -31,18 +31,18 @@ import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.io.storage.HoodieAvroHFileReader;
 
 import java.io.IOException;
-import java.util.Iterator;
 
 public class HoodieHFileRecordReader implements RecordReader<NullWritable, ArrayWritable> {
 
   private long count = 0;
   private ArrayWritable valueObj;
   private HoodieAvroHFileReader reader;
-  private Iterator<HoodieRecord<IndexedRecord>> recordIterator;
+  private ClosableIterator<HoodieRecord<IndexedRecord>> recordIterator;
   private Schema schema;
 
   public HoodieHFileRecordReader(Configuration conf, InputSplit split, JobConf job) throws IOException {
@@ -92,6 +92,10 @@ public class HoodieHFileRecordReader implements RecordReader<NullWritable, Array
     if (reader != null) {
       reader.close();
       reader = null;
+    }
+    if (recordIterator != null) {
+      recordIterator.close();
+      recordIterator = null;
     }
   }
 

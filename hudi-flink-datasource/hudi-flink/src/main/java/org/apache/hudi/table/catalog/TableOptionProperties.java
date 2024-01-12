@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 import org.apache.hudi.util.AvroSchemaConverter;
 
@@ -189,7 +190,16 @@ public class TableOptionProperties {
     return properties.entrySet().stream()
         .filter(e -> KEY_MAPPING.containsKey(e.getKey()) && !catalogTable.getOptions().containsKey(KEY_MAPPING.get(e.getKey())))
         .collect(Collectors.toMap(e -> KEY_MAPPING.get(e.getKey()),
-            e -> e.getKey().equalsIgnoreCase(FlinkOptions.TABLE_TYPE.key()) ? VALUE_MAPPING.get(e.getValue()) : e.getValue()));
+            e -> {
+              if (e.getKey().equalsIgnoreCase(FlinkOptions.TABLE_TYPE.key())) {
+                  String sparkTableType = VALUE_MAPPING.get(e.getValue());
+                  if (sparkTableType == null) {
+                    throw new HoodieValidationException(String.format("%s's value is invalid", e.getKey()));
+                  }
+                  return sparkTableType;
+              }
+              return e.getValue();
+            }));
   }
 
   private static RowType supplementMetaFields(RowType rowType, boolean withOperationField) {

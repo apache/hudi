@@ -34,7 +34,8 @@ import java.util.function.Supplier
 class ShowMetadataTableFilesProcedure() extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType),
-    ProcedureParameter.optional(1, "partition", DataTypes.StringType, "")
+    ProcedureParameter.optional(1, "partition", DataTypes.StringType, ""),
+    ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 100)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -50,12 +51,12 @@ class ShowMetadataTableFilesProcedure() extends BaseProcedure with ProcedureBuil
 
     val table = getArgValueOrDefault(args, PARAMETERS(0))
     val partition = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[String]
+    val limit = getArgValueOrDefault(args, PARAMETERS(2))
 
     val basePath = getBasePath(table)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
     val config = HoodieMetadataConfig.newBuilder.enable(true).build
-    val metaReader = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(metaClient.getHadoopConf),
-      config, basePath, "/tmp")
+    val metaReader = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(metaClient.getHadoopConf), config, basePath)
     if (!metaReader.enabled){
       throw new HoodieException(s"Metadata Table not enabled/initialized.")
     }
@@ -73,7 +74,12 @@ class ShowMetadataTableFilesProcedure() extends BaseProcedure with ProcedureBuil
     statuses.toStream.sortBy(p => p.getPath.getName).foreach((f: FileStatus) => {
         rows.add(Row(f.getPath.getName))
     })
-    rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList
+    if (limit.isDefined) {
+      rows.stream().limit(limit.get.asInstanceOf[Int]).toArray().map(r => r.asInstanceOf[Row]).toList
+    } else {
+      rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList
+    }
+
   }
 
   override def build: Procedure = new ShowMetadataTableFilesProcedure()

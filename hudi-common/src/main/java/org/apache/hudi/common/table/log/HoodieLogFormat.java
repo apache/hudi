@@ -145,8 +145,8 @@ public interface HoodieLogFormat {
     private String suffix;
     // Rollover Log file write token
     private String rolloverLogWriteToken;
-    // A call back triggered with log file operation
-    private HoodieLogFileWriteCallback logFileWriteCallback;
+    // file creation hook
+    private LogFileCreationCallback fileCreationCallback;
 
     public WriterBuilder withBufferSize(int bufferSize) {
       this.bufferSize = bufferSize;
@@ -193,18 +193,13 @@ public interface HoodieLogFormat {
       return this;
     }
 
-    public WriterBuilder overBaseCommit(String baseCommit) {
-      this.instantTime = baseCommit;
+    public WriterBuilder withDeltaCommit(String deltaCommit) {
+      this.instantTime = deltaCommit;
       return this;
     }
 
     public WriterBuilder withLogVersion(int version) {
       this.logVersion = version;
-      return this;
-    }
-
-    public WriterBuilder withLogWriteCallback(HoodieLogFileWriteCallback logFileWriteCallback) {
-      this.logFileWriteCallback = logFileWriteCallback;
       return this;
     }
 
@@ -218,6 +213,11 @@ public interface HoodieLogFormat {
       return this;
     }
 
+    public WriterBuilder withFileCreationCallback(LogFileCreationCallback fileCreationCallback) {
+      this.fileCreationCallback = fileCreationCallback;
+      return this;
+    }
+
     public Writer build() throws IOException {
       LOG.info("Building HoodieLogFormat Writer");
       if (fs == null) {
@@ -227,7 +227,7 @@ public interface HoodieLogFormat {
         throw new IllegalArgumentException("FileID is not specified");
       }
       if (instantTime == null) {
-        throw new IllegalArgumentException("BaseCommitTime is not specified");
+        throw new IllegalArgumentException("Delta commit time is not specified");
       }
       if (fileExtension == null) {
         throw new IllegalArgumentException("File extension is not specified");
@@ -240,31 +240,35 @@ public interface HoodieLogFormat {
         rolloverLogWriteToken = UNKNOWN_WRITE_TOKEN;
       }
 
-      if (logFileWriteCallback == null) {
-        // use a callback do nothing here as default callback.
-        logFileWriteCallback = new HoodieLogFileWriteCallback() {};
+      if (fileCreationCallback == null) {
+        // by default does nothing.
+        fileCreationCallback = new LogFileCreationCallback() {};
       }
 
       if (logVersion == null) {
         LOG.info("Computing the next log version for " + logFileId + " in " + parentPath);
-        Option<Pair<Integer, String>> versionAndWriteToken =
-            FSUtils.getLatestLogVersion(fs, parentPath, logFileId, fileExtension, instantTime);
-        if (versionAndWriteToken.isPresent()) {
-          logVersion = versionAndWriteToken.get().getKey();
-          logWriteToken = versionAndWriteToken.get().getValue();
+        if (logWriteToken == null) {
+          // if the log write toke is null, scans the fs to fetch the latest write token.
+          Option<Pair<Integer, String>> versionAndWriteToken =
+              FSUtils.getLatestLogVersion(fs, parentPath, logFileId, fileExtension, instantTime);
+          if (versionAndWriteToken.isPresent()) {
+            logVersion = versionAndWriteToken.get().getKey();
+            logWriteToken = versionAndWriteToken.get().getValue();
+          } else {
+            logVersion = HoodieLogFile.LOGFILE_BASE_VERSION;
+            // this is the case where there is no existing log-file.
+            // Use rollover write token as write token to create new log file with tokens
+            logWriteToken = rolloverLogWriteToken;
+          }
         } else {
+          // the log format writer handles the existence check.
           logVersion = HoodieLogFile.LOGFILE_BASE_VERSION;
-          // this is the case where there is no existing log-file.
-          // Use rollover write token as write token to create new log file with tokens
-          logWriteToken = rolloverLogWriteToken;
         }
         LOG.info("Computed the next log version for " + logFileId + " in " + parentPath + " as " + logVersion
             + " with write-token " + logWriteToken);
       }
 
       if (logWriteToken == null) {
-        // This is the case where we have existing log-file with old format. rollover to avoid any conflicts
-        logVersion += 1;
         fileLen = 0L;
         logWriteToken = rolloverLogWriteToken;
       }
@@ -291,8 +295,7 @@ public interface HoodieLogFormat {
       if (sizeThreshold == null) {
         sizeThreshold = DEFAULT_SIZE_THRESHOLD;
       }
-      return new HoodieLogFormatWriter(fs, logFile, bufferSize, replication, sizeThreshold,
-          rolloverLogWriteToken, logFileWriteCallback);
+      return new HoodieLogFormatWriter(fs, logFile, bufferSize, replication, sizeThreshold, rolloverLogWriteToken, fileCreationCallback);
     }
   }
 

@@ -21,7 +21,7 @@ package org.apache.hudi.execution;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -35,7 +35,7 @@ import org.apache.hudi.common.util.queue.IteratorBasedQueueProducer;
 import org.apache.hudi.common.util.queue.WaitStrategyFactory;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.spark.TaskContext;
 import org.apache.spark.TaskContext$;
 import org.junit.jupiter.api.AfterEach;
@@ -62,9 +62,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
+public class TestDisruptorMessageQueue extends HoodieSparkClientTestHarness {
 
-  private final String instantTime = HoodieActiveTimeline.createNewInstantTime();
+  private final String instantTime = InProcessTimeGenerator.createNewInstantTime();
 
   private final HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
       .withExecutorType(ExecutorType.DISRUPTOR.name())
@@ -92,7 +92,7 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
   @SuppressWarnings("unchecked")
   @Test
   @Timeout(value = 60)
-  public void testRecordReading() throws Exception {
+  public void testRecordReading() {
 
     final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, 100);
     ArrayList<HoodieRecord> beforeRecord = new ArrayList<>();

@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilter;
@@ -34,6 +35,7 @@ import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -53,8 +55,60 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
   /**
    * Create Clustering group based on files eligible for clustering in the partition.
    */
-  protected abstract Stream<HoodieClusteringGroup> buildClusteringGroupsForPartition(String partitionPath,
-                                                                                     List<FileSlice> fileSlices);
+  protected Stream<HoodieClusteringGroup> buildClusteringGroupsForPartition(String partitionPath, List<FileSlice> fileSlices) {
+    HoodieWriteConfig writeConfig = getWriteConfig();
+
+    List<Pair<List<FileSlice>, Integer>> fileSliceGroups = new ArrayList<>();
+    List<FileSlice> currentGroup = new ArrayList<>();
+
+    // Sort fileSlices before dividing, which makes dividing more compact
+    List<FileSlice> sortedFileSlices = new ArrayList<>(fileSlices);
+    sortedFileSlices.sort((o1, o2) -> (int)
+        ((o2.getBaseFile().isPresent() ? o2.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize())
+            - (o1.getBaseFile().isPresent() ? o1.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize())));
+
+    long totalSizeSoFar = 0;
+
+    for (FileSlice currentSlice : sortedFileSlices) {
+      long currentSize = currentSlice.getBaseFile().isPresent() ? currentSlice.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize();
+      // check if max size is reached and create new group, if needed.
+      if (totalSizeSoFar + currentSize > writeConfig.getClusteringMaxBytesInGroup() && !currentGroup.isEmpty()) {
+        int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
+        LOG.info("Adding one clustering group " + totalSizeSoFar + " max bytes: "
+            + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
+        fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
+        currentGroup = new ArrayList<>();
+        totalSizeSoFar = 0;
+
+        // if fileSliceGroups's size reach the max group, stop loop
+        if (fileSliceGroups.size() >= writeConfig.getClusteringMaxNumGroups()) {
+          LOG.info("Having generated the maximum number of groups : " + writeConfig.getClusteringMaxNumGroups());
+          break;
+        }
+      }
+
+      // Add to the current file-group
+      currentGroup.add(currentSlice);
+      // assume each file group size is ~= parquet.max.file.size
+      totalSizeSoFar += currentSize;
+    }
+
+    if (!currentGroup.isEmpty()) {
+      if (currentGroup.size() > 1 || writeConfig.shouldClusteringSingleGroup()) {
+        int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
+        LOG.info("Adding final clustering group " + totalSizeSoFar + " max bytes: "
+            + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
+        fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
+      }
+    }
+
+    return fileSliceGroups.stream().map(fileSliceGroup ->
+        HoodieClusteringGroup.newBuilder()
+            .setSlices(getFileSliceInfo(fileSliceGroup.getLeft()))
+            .setNumOutputFileGroups(fileSliceGroup.getRight())
+            .setMetrics(buildMetrics(fileSliceGroup.getLeft()))
+            .build());
+  }
 
   /**
    * Return list of partition paths to be considered for clustering.
@@ -108,7 +162,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
         .collect(Collectors.toList());
 
     if (clusteringGroups.isEmpty()) {
-      LOG.info("No data available to cluster");
+      LOG.warn("No data available to cluster");
       return Option.empty();
     }
 
@@ -134,5 +188,9 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
           .collect(Collectors.toList());
     }
     return partitionPaths;
+  }
+
+  protected int getNumberOfOutputFileGroups(long groupSize, long targetFileSize) {
+    return (int) Math.ceil(groupSize / (double) targetFileSize);
   }
 }

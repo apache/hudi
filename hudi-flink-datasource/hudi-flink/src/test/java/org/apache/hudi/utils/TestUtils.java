@@ -24,7 +24,6 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
@@ -37,8 +36,10 @@ import org.apache.flink.core.fs.Path;
 
 import javax.annotation.Nullable;
 
-import java.nio.charset.StandardCharsets;
+import java.io.IOException;
+import java.nio.file.Files;
 
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -133,6 +134,14 @@ public class TestUtils {
 
   public static void saveInstantAsComplete(HoodieTableMetaClient metaClient, HoodieInstant instant, HoodieCommitMetadata metadata) throws Exception {
     metaClient.getActiveTimeline().saveAsComplete(new HoodieInstant(true, instant.getAction(), instant.getTimestamp()),
-        Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+        serializeCommitMetadata(metadata));
+  }
+
+  public static void amendCompletionTimeToLatest(HoodieTableMetaClient metaClient, java.nio.file.Path sourcePath, String instantTime) throws IOException {
+    String fileExt = sourcePath.getFileName().toString().split("\\.")[1];
+    String newFileName = instantTime + "_" + metaClient.createNewInstantTime() + "." + fileExt;
+
+    java.nio.file.Path newFilePath = sourcePath.getParent().resolve(newFileName);
+    Files.move(sourcePath, newFilePath);
   }
 }

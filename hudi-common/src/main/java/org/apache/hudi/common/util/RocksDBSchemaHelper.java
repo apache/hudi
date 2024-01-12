@@ -87,6 +87,10 @@ public class RocksDBSchemaHelper {
     return getPartitionFileIdBasedLookup(fgId);
   }
 
+  public String getPrefixForReplacedFileGroup(String partitionPath) {
+    return String.format("part=%s,id=", partitionPath);
+  }
+
   public String getKeyForFileGroupsInPendingClustering(HoodieFileGroupId fgId) {
     return getPartitionFileIdBasedLookup(fgId);
   }

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.sources;
 
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.HoodieConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
@@ -54,7 +53,15 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.common.util.ConfigUtils.getLongWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.common.util.ThreadUtils.collectActiveThreads;
+import static org.apache.hudi.utilities.config.PulsarSourceConfig.PULSAR_SOURCE_ADMIN_ENDPOINT_URL;
+import static org.apache.hudi.utilities.config.PulsarSourceConfig.PULSAR_SOURCE_MAX_RECORDS_PER_BATCH_THRESHOLD;
+import static org.apache.hudi.utilities.config.PulsarSourceConfig.PULSAR_SOURCE_OFFSET_AUTO_RESET_STRATEGY;
+import static org.apache.hudi.utilities.config.PulsarSourceConfig.PULSAR_SOURCE_SERVICE_ENDPOINT_URL;
+import static org.apache.hudi.utilities.config.PulsarSourceConfig.PULSAR_SOURCE_TOPIC_NAME;
 
 /**
  * Source fetching data from Pulsar topics
@@ -90,17 +97,15 @@ public class PulsarSource extends RowSource implements Closeable {
                       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
 
-    DataSourceUtils.checkRequiredProperties(props,
-        Arrays.asList(
-            PulsarSourceConfig.PULSAR_SOURCE_TOPIC_NAME.key(),
-            PulsarSourceConfig.PULSAR_SOURCE_SERVICE_ENDPOINT_URL.key()));
+    checkRequiredConfigProperties(props,
+        Arrays.asList(PULSAR_SOURCE_TOPIC_NAME, PULSAR_SOURCE_SERVICE_ENDPOINT_URL));
 
     // Converting to a descriptor allows us to canonicalize the topic's name properly
-    this.topicName = TopicName.get(props.getString(PulsarSourceConfig.PULSAR_SOURCE_TOPIC_NAME.key())).toString();
+    this.topicName = TopicName.get(getStringWithAltKeys(props, PULSAR_SOURCE_TOPIC_NAME)).toString();
 
     // TODO validate endpoints provided in the appropriate format
-    this.serviceEndpointURL = props.getString(PulsarSourceConfig.PULSAR_SOURCE_SERVICE_ENDPOINT_URL.key());
-    this.adminEndpointURL = props.getString(PulsarSourceConfig.PULSAR_SOURCE_ADMIN_ENDPOINT_URL.key());
+    this.serviceEndpointURL = getStringWithAltKeys(props, PULSAR_SOURCE_SERVICE_ENDPOINT_URL);
+    this.adminEndpointURL = getStringWithAltKeys(props, PULSAR_SOURCE_ADMIN_ENDPOINT_URL);
 
     this.pulsarClient = Lazy.lazily(this::initPulsarClient);
     this.pulsarConsumer = Lazy.lazily(this::subscribeToTopic);
@@ -159,8 +164,8 @@ public class PulsarSource extends RowSource implements Closeable {
         .map(lastCheckpoint -> JsonUtils.topicOffsets(lastCheckpoint).apply(topicName))
         .orElseGet(() -> {
           PulsarSourceConfig.OffsetAutoResetStrategy autoResetStrategy = PulsarSourceConfig.OffsetAutoResetStrategy.valueOf(
-              props.getString(PulsarSourceConfig.PULSAR_SOURCE_OFFSET_AUTO_RESET_STRATEGY.key(),
-                  PulsarSourceConfig.PULSAR_SOURCE_OFFSET_AUTO_RESET_STRATEGY.defaultValue().name()));
+              getStringWithAltKeys(props, PULSAR_SOURCE_OFFSET_AUTO_RESET_STRATEGY,
+                  PULSAR_SOURCE_OFFSET_AUTO_RESET_STRATEGY.defaultValue().name()));
 
           switch (autoResetStrategy) {
             case LATEST:
@@ -231,8 +236,7 @@ public class PulsarSource extends RowSource implements Closeable {
     if (sourceLimit < Long.MAX_VALUE) {
       return sourceLimit;
     } else {
-      return props.getLong(PulsarSourceConfig.PULSAR_SOURCE_MAX_RECORDS_PER_BATCH_THRESHOLD.key(),
-          PulsarSourceConfig.PULSAR_SOURCE_MAX_RECORDS_PER_BATCH_THRESHOLD.defaultValue());
+      return getLongWithAltKeys(props, PULSAR_SOURCE_MAX_RECORDS_PER_BATCH_THRESHOLD);
     }
   }
 

@@ -18,6 +18,7 @@
 package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.catalog.CatalogStorageFormat
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan}
@@ -78,10 +79,46 @@ trait HoodieCatalystPlansUtils {
   def unapplyMergeIntoTable(plan: LogicalPlan): Option[(LogicalPlan, LogicalPlan, Expression)]
 
   /**
+   * Decomposes [[MatchCreateIndex]] into its arguments with accommodation.
+   */
+  def unapplyCreateIndex(plan: LogicalPlan): Option[(LogicalPlan, String, String, Boolean, Seq[(Seq[String], Map[String, String])], Map[String, String])]
+
+  /**
+   * Decomposes [[MatchDropIndex]] into its arguments with accommodation.
+   */
+  def unapplyDropIndex(plan: LogicalPlan): Option[(LogicalPlan, String, Boolean)]
+
+  /**
+   * Decomposes [[MatchShowIndexes]] into its arguments with accommodation.
+   */
+  def unapplyShowIndexes(plan: LogicalPlan): Option[(LogicalPlan, Seq[Attribute])]
+
+  /**
+   * Decomposes [[MatchRefreshIndex]] into its arguments with accommodation.
+   */
+  def unapplyRefreshIndex(plan: LogicalPlan): Option[(LogicalPlan, String)]
+
+  /**
+   * Spark requires file formats to append the partition path fields to the end of the schema.
+   * For tables where the partition path fields are not at the end of the schema, we don't want
+   * to return the schema in the wrong order when they do a query like "select *". To fix this
+   * behavior, we apply a projection onto FileScan when the file format has HoodieFormatTrait
+   *
+   * Additionally, incremental queries require filters to be added to the plan
+   */
+  def maybeApplyForNewFileFormat(plan: LogicalPlan): LogicalPlan
+
+  /**
    * Decomposes [[InsertIntoStatement]] into its arguments allowing to accommodate for API
    * changes in Spark 3.3
    */
   def unapplyInsertIntoStatement(plan: LogicalPlan): Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)]
+
+  /**
+   * Decomposes [[CreateTableLikeCommand]] into its arguments allowing to accommodate for API
+   * changes in Spark 3
+   */
+  def unapplyCreateTableLikeCommand(plan: LogicalPlan): Option[(TableIdentifier, TableIdentifier, CatalogStorageFormat, Option[String], Map[String, String], Boolean)]
 
   /**
    * Rebases instance of {@code InsertIntoStatement} onto provided instance of {@code targetTable} and {@code query}
@@ -97,4 +134,17 @@ trait HoodieCatalystPlansUtils {
    * Get the member of the Repair Table LogicalPlan.
    */
   def getRepairTableChildren(plan: LogicalPlan): Option[(TableIdentifier, Boolean, Boolean, String)]
+
+  /**
+   * Calls fail analysis on
+   *s
+   */
+  def failAnalysisForMIT(a: Attribute, cols: String): Unit = {}
+
+  def createMITJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType, condition: Option[Expression], hint: String): LogicalPlan
+
+  /**
+   * true if both plans produce the same attributes in the the same order
+   */
+  def produceSameOutput(a: LogicalPlan, b: LogicalPlan): Boolean
 }

@@ -61,7 +61,7 @@ public class TestJdbcbasedSchemaProvider extends SparkClientFunctionalTestHarnes
     try {
       initH2Database();
       Schema sourceSchema = UtilHelpers.createSchemaProvider(JdbcbasedSchemaProvider.class.getName(), PROPS, jsc()).getSourceSchema();
-      assertEquals(sourceSchema.toString().toUpperCase(), new Schema.Parser().parse(UtilitiesTestBase.Helpers.readFile("delta-streamer-config/source-jdbc.avsc")).toString().toUpperCase());
+      assertEquals(sourceSchema.toString().toUpperCase(), new Schema.Parser().parse(UtilitiesTestBase.Helpers.readFile("streamer-config/source-jdbc.avsc")).toString().toUpperCase());
     } catch (HoodieException e) {
       LOG.error("Failed to get connection through jdbc. ", e);
     }
@@ -74,7 +74,7 @@ public class TestJdbcbasedSchemaProvider extends SparkClientFunctionalTestHarnes
    */
   private void initH2Database() throws SQLException {
     try (Connection conn = DriverManager.getConnection("jdbc:h2:mem:test_mem", "sa", "")) {
-      PreparedStatement ps = conn.prepareStatement(UtilitiesTestBase.Helpers.readFile("delta-streamer-config/triprec.sql"));
+      PreparedStatement ps = conn.prepareStatement(UtilitiesTestBase.Helpers.readFile("streamer-config/triprec.sql"));
       ps.executeUpdate();
     }
   }

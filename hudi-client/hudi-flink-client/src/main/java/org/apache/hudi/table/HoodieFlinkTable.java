@@ -39,8 +39,6 @@ import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import org.apache.avro.specific.SpecificRecordBase;
-
 import java.util.List;
 
 /**
@@ -54,17 +52,18 @@ public abstract class HoodieFlinkTable<T>
     super(config, context, metaClient);
   }
 
-  public static <T> HoodieFlinkTable<T> create(HoodieWriteConfig config, HoodieFlinkEngineContext context) {
+  public static <T> HoodieFlinkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
             .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
+            .setTimeGeneratorConfig(config.getTimeGeneratorConfig())
             .setFileSystemRetryConfig(config.getFileSystemRetryConfig()).build();
     return HoodieFlinkTable.create(config, context, metaClient);
   }
 
   public static <T> HoodieFlinkTable<T> create(HoodieWriteConfig config,
-                                               HoodieFlinkEngineContext context,
+                                               HoodieEngineContext context,
                                                HoodieTableMetaClient metaClient) {
     if (config.getSchemaEvolutionEnable()) {
       setLatestInternalSchema(config, metaClient);
@@ -99,14 +98,13 @@ public abstract class HoodieFlinkTable<T>
    * @return instance of {@link HoodieTableMetadataWriter}
    */
   @Override
-  protected <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(
+  protected Option<HoodieTableMetadataWriter> getMetadataWriter(
       String triggeringInstantTimestamp,
-      HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
-      Option<T> actionMetadata) {
-    if (config.isMetadataTableEnabled()) {
+      HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
+    if (config.isMetadataTableEnabled() || getMetaClient().getTableConfig().isMetadataTableAvailable()) {
       return Option.of(FlinkHoodieBackedTableMetadataWriter.create(
           context.getHadoopConf().get(), config, failedWritesCleaningPolicy, context,
-          actionMetadata, Option.of(triggeringInstantTimestamp)));
+          Option.of(triggeringInstantTimestamp)));
     } else {
       return Option.empty();
     }

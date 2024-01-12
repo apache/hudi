@@ -18,7 +18,7 @@
 
 package org.apache.hudi.metadata;
 
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -27,7 +27,9 @@ import java.util.List;
 public enum MetadataPartitionType {
   FILES(HoodieTableMetadataUtil.PARTITION_NAME_FILES, "files-"),
   COLUMN_STATS(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, "col-stats-"),
-  BLOOM_FILTERS(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS, "bloom-filters-");
+  BLOOM_FILTERS(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS, "bloom-filters-"),
+  RECORD_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX, "record-index-"),
+  FUNCTIONAL_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX, "func-index-");
 
   // Partition path in metadata table.
   private final String partitionPath;
@@ -47,12 +49,13 @@ public enum MetadataPartitionType {
     return fileIdPrefix;
   }
 
-  public static List<String> allPaths() {
-    return Arrays.asList(
-        FILES.getPartitionPath(),
-        COLUMN_STATS.getPartitionPath(),
-        BLOOM_FILTERS.getPartitionPath()
-    );
+  /**
+   * Returns the list of metadata table partitions which require WriteStatus to track written records.
+   * <p>
+   * These partitions need the list of written records so that they can update their metadata.
+   */
+  public static List<MetadataPartitionType> getMetadataPartitionsNeedingWriteStatusTracking() {
+    return Collections.singletonList(MetadataPartitionType.RECORD_INDEX);
   }
 
   @Override

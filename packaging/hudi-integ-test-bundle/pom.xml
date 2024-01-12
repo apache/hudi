@@ -17,7 +17,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.14.0-SNAPSHOT</version>
+    <version>1.0.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -152,7 +152,7 @@
                   <include>com.fasterxml.jackson.core:jackson-core</include>
                   <include>com.fasterxml.jackson.core:jackson-databind</include>
                   <include>com.fasterxml.jackson.dataformat:jackson-dataformat-yaml</include>
-                  <include>com.fasterxml.jackson.datatype:${fasterxml.jackson.datatype.jsr310.module}</include>
+                  <include>com.fasterxml.jackson.datatype:jackson-datatype-jsr310</include>
 
                   <include>org.apache.curator:curator-framework</include>
                   <include>org.apache.curator:curator-client</include>
@@ -319,12 +319,19 @@
     <dependency>
       <groupId>com.fasterxml.jackson.module</groupId>
       <artifactId>jackson-module-scala_${scala.binary.version}</artifactId>
+      <version>${fasterxml.jackson.module.scala.version}</version>
     </dependency>
 
     <dependency>
       <groupId>com.fasterxml.jackson.dataformat</groupId>
       <artifactId>jackson-dataformat-yaml</artifactId>
-      <version>2.7.4</version>
+      <version>${fasterxml.jackson.dataformat.yaml.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.fasterxml.jackson.datatype</groupId>
+      <artifactId>jackson-datatype-jsr310</artifactId>
+      <version>${fasterxml.version}</version>
     </dependency>
 
     <!-- Hoodie - Spark -->
@@ -437,6 +444,12 @@
       <artifactId>hive-exec</artifactId>
       <version>${hive.version}</version>
       <scope>compile</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>org.pentaho</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <dependency>

@@ -173,4 +173,143 @@ class TestShowPartitions extends HoodieSparkSqlTestBase {
       Seq("year=%s/month=%s/day=01".format(DEFAULT_PARTITION_PATH, DEFAULT_PARTITION_PATH))
     )
   }
+
+  test("Test alter table show partitions which are dropped before") {
+    Seq("true", "false").foreach { enableMetadata =>
+      withSQLConf("hoodie.metadata.enable" -> enableMetadata) {
+        withTable(generateTableName) { tableName =>
+          spark.sql(
+            s"""
+               | create table $tableName (
+               |   id int,
+               |   name string,
+               |   price double,
+               |   ts long,
+               |   year string,
+               |   month string,
+               |   day string
+               | ) using hudi
+               | partitioned by (year, month, day)
+               | tblproperties (
+               |   primaryKey = 'id',
+               |   preCombineField = 'ts'
+               | )
+             """.stripMargin)
+          spark.sql(s"alter table $tableName add partition(year='2023', month='06', day='06')")
+          checkAnswer(s"show partitions $tableName")(
+            Seq("year=2023/month=06/day=06")
+          )
+          // Lazily drop that partition
+          spark.sql(s"alter table $tableName drop partition(year='2023', month='06', day='06')")
+          checkAnswer(s"show partitions $tableName")(Seq.empty: _*)
+          // rewrite data to the dropped partition
+          spark.sql(s"insert into $tableName values (1, 'a1', 10, 1000, '2023', '06', '06')")
+          checkAnswer(s"show partitions $tableName")(
+            Seq("year=2023/month=06/day=06")
+          )
+        }
+      }
+    }
+  }
+
+  test("Test show partitions after table being overwritten") {
+    withTable(generateTableName) { tableName =>
+      spark.sql(
+        s"""
+           | create table $tableName (
+           |   id int,
+           |   name string,
+           |   price double,
+           |   ts long,
+           |   year string,
+           |   month string,
+           |   day string
+           | ) using hudi
+           | partitioned by (year, month, day)
+           | tblproperties (
+           |   primaryKey = 'id',
+           |   preCombineField = 'ts'
+           | )
+         """.stripMargin)
+
+      // Insert into dynamic partition
+      spark.sql(
+        s"""
+           | insert into $tableName
+           | values
+           |   (1, 'a1', 10, 1000, '2023', '12', '01'),
+           |   (2, 'a2', 10, 1000, '2023', '12', '02'),
+           |   (3, 'a3', 10, 1000, '2023', '12', '03')
+        """.stripMargin)
+      checkAnswer(s"show partitions $tableName")(
+        Seq("year=2023/month=12/day=01"),
+        Seq("year=2023/month=12/day=02"),
+        Seq("year=2023/month=12/day=03")
+      )
+
+      // Insert overwrite table
+      spark.sql(
+        s"""
+           | insert overwrite table $tableName
+           | values
+           |   (4, 'a4', 10, 1000, '2023', '12', '01'),
+           |   (2, 'a2', 10, 1000, '2023', '12', '04')
+        """.stripMargin)
+      checkAnswer(s"show partitions $tableName")(
+        Seq("year=2023/month=12/day=01"),
+        Seq("year=2023/month=12/day=04")
+      )
+    }
+  }
+
+  test("Test show partitions in static partition overwrite") {
+    withSQLConf("hoodie.datasource.overwrite.mode" -> "STATIC") {
+      withTable(generateTableName) { tableName =>
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |   id int,
+             |   name string,
+             |   price double,
+             |   ts long,
+             |   dt string
+             | ) using hudi
+             | partitioned by (dt)
+             | tblproperties (
+             |   primaryKey = 'id',
+             |   preCombineField = 'ts'
+             | )
+         """.stripMargin)
+
+        // Insert into dynamic partition
+        spark.sql(
+          s"""
+             | insert into $tableName
+             | values
+             |   (1, 'a1', 10, 1000, '2023-12-01'),
+             |   (2, 'a2', 10, 1000, '2023-12-02'),
+             |   (3, 'a3', 10, 1000, '2023-12-03')
+        """.stripMargin)
+        checkAnswer(s"show partitions $tableName")(
+          Seq("dt=2023-12-01"),
+          Seq("dt=2023-12-02"),
+          Seq("dt=2023-12-03")
+        )
+
+        // Insert overwrite static partitions
+        spark.sql(
+          s"""
+             | insert overwrite table $tableName partition(dt='2023-12-01')
+             | values
+             |   (4, 'a4', 10, 1000),
+             |   (2, 'a2', 10, 1000)
+        """.stripMargin)
+        checkAnswer(s"show partitions $tableName")(
+          Seq("dt=2023-12-01"),
+          Seq("dt=2023-12-02"),
+          Seq("dt=2023-12-03")
+        )
+      }
+    }
+  }
 }

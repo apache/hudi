@@ -20,9 +20,9 @@ package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.cli.utils.SparkUtil;
-import org.apache.hudi.client.HoodieTimelineArchiver;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -58,8 +58,8 @@ import org.apache.hudi.utilities.HoodieClusteringJob;
 import org.apache.hudi.utilities.HoodieCompactionAdminTool;
 import org.apache.hudi.utilities.HoodieCompactionAdminTool.Operation;
 import org.apache.hudi.utilities.HoodieCompactor;
-import org.apache.hudi.utilities.deltastreamer.BootstrapExecutor;
-import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
+import org.apache.hudi.utilities.streamer.BootstrapExecutor;
+import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -494,7 +494,7 @@ public class SparkMain {
     StructType structType = recordsToRewrite.schema();
     int partitionIndex = structType.fieldIndex(partitionFieldProp);
 
-    recordsToRewrite.withColumn(metaClient.getTableConfig().getPartitionFieldProp(), functions.lit(null).cast(structType.apply(partitionIndex).dataType()))
+    recordsToRewrite.withColumn(metaClient.getTableConfig().getPartitionFieldProp(), functions.lit(newPartition).cast(structType.apply(partitionIndex).dataType()))
         .write()
         .options(propsMap)
         .option("hoodie.datasource.write.operation", WriteOperationType.BULK_INSERT.value())
@@ -546,7 +546,7 @@ public class SparkMain {
     properties.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key(), recordKeyCols);
     properties.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), partitionFields);
 
-    HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
+    HoodieStreamer.Config cfg = new HoodieStreamer.Config();
     cfg.targetTableName = tableName;
     cfg.targetBasePath = basePath;
     cfg.tableType = tableType;

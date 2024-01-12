@@ -35,9 +35,8 @@ public class HoodieBackedTestDelayedTableMetadata extends HoodieBackedTableMetad
   public HoodieBackedTestDelayedTableMetadata(HoodieEngineContext engineContext,
                                               HoodieMetadataConfig metadataConfig,
                                               String datasetBasePath,
-                                              String spillableMapDirectory,
                                               boolean reuse) {
-    super(engineContext, metadataConfig, datasetBasePath, spillableMapDirectory, reuse);
+    super(engineContext, metadataConfig, datasetBasePath, reuse);
   }
 
   @Override

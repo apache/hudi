@@ -25,77 +25,76 @@ import java.util.Arrays;
  */
 public enum StorageSchemes {
   // Local filesystem
-  FILE("file", false, false, true),
+  FILE("file", false, true),
   // Hadoop File System
-  HDFS("hdfs", true, false, true),
+  HDFS("hdfs", false, true),
   // Baidu Advanced File System
-  AFS("afs", true, null, null),
+  AFS("afs", null, null),
   // Mapr File System
-  MAPRFS("maprfs", true, null, null),
+  MAPRFS("maprfs", null, null),
   // Apache Ignite FS
-  IGNITE("igfs", true, null, null),
+  IGNITE("igfs", null, null),
   // AWS S3
-  S3A("s3a", false, true, null), S3("s3", false, true, null),
+  S3A("s3a", true, null),
+  S3("s3", true, null),
   // Google Cloud Storage
-  GCS("gs", false, true, null),
+  GCS("gs", true, null),
   // Azure WASB
-  WASB("wasb", false, null, null), WASBS("wasbs", false, null, null),
+  WASB("wasb", null, null),
+  WASBS("wasbs", null, null),
   // Azure ADLS
-  ADL("adl", false, null, null),
+  ADL("adl", null, null),
   // Azure ADLS Gen2
-  ABFS("abfs", false, null, null), ABFSS("abfss", false, null, null),
+  ABFS("abfs", null, null),
+  ABFSS("abfss", null, null),
   // Aliyun OSS
-  OSS("oss", false, null, null),
+  OSS("oss", null, null),
   // View FS for federated setups. If federating across cloud stores, then append support is false
   // View FS support atomic creation
-  VIEWFS("viewfs", true, null, true),
+  VIEWFS("viewfs", null, true),
   //ALLUXIO
-  ALLUXIO("alluxio", false, null, null),
+  ALLUXIO("alluxio", null, null),
   // Tencent Cloud Object Storage
-  COSN("cosn", false, null, null),
+  COSN("cosn", null, null),
   // Tencent Cloud HDFS
-  CHDFS("ofs", true, null, null),
+  CHDFS("ofs", null, null),
   // Tencent Cloud CacheFileSystem
-  GOOSEFS("gfs", false, null, null),
+  GOOSEFS("gfs", null, null),
   // Databricks file system
-  DBFS("dbfs", false, null, null),
+  DBFS("dbfs", null, null),
   // IBM Cloud Object Storage
-  COS("cos", false, null, null),
+  COS("cos", null, null),
   // Huawei Cloud Object Storage
-  OBS("obs", false, null, null),
+  OBS("obs", null, null),
   // Kingsoft Standard Storage ks3
-  KS3("ks3", false, null, null),
+  KS3("ks3", null, null),
   // JuiceFileSystem
-  JFS("jfs", true, null, null),
+  JFS("jfs", null, null),
   // Baidu Object Storage
-  BOS("bos", false, null, null),
+  BOS("bos", null, null),
   // Oracle Cloud Infrastructure Object Storage
-  OCI("oci", false, null, null),
+  OCI("oci", null, null),
   // Volcengine Object Storage
-  TOS("tos", false, null, null),
+  TOS("tos", null, null),
   // Volcengine Cloud HDFS
-  CFS("cfs", true, null, null);
+  CFS("cfs", null, null),
+  // Hopsworks File System
+  HOPSFS("hopsfs", false, true);
 
   private String scheme;
-  private boolean supportsAppend;
   // null for uncertain if write is transactional, please update this for each FS
   private Boolean isWriteTransactional;
   // null for uncertain if dfs support atomic create&delete, please update this for each FS
   private Boolean supportAtomicCreation;
 
-  StorageSchemes(String scheme, boolean supportsAppend, Boolean isWriteTransactional, Boolean supportAtomicCreation) {
+  StorageSchemes(String scheme, Boolean isWriteTransactional, Boolean supportAtomicCreation) {
     this.scheme = scheme;
-    this.supportsAppend = supportsAppend;
     this.isWriteTransactional = isWriteTransactional;
     this.supportAtomicCreation = supportAtomicCreation;
   }
 
   public String getScheme() {
     return scheme;
-  }
-
-  public boolean supportsAppend() {
-    return supportsAppend;
   }
 
   public boolean isWriteTransactional() {
@@ -108,13 +107,6 @@ public enum StorageSchemes {
 
   public static boolean isSchemeSupported(String scheme) {
     return Arrays.stream(values()).anyMatch(s -> s.getScheme().equals(scheme));
-  }
-
-  public static boolean isAppendSupported(String scheme) {
-    if (!isSchemeSupported(scheme)) {
-      throw new IllegalArgumentException("Unsupported scheme :" + scheme);
-    }
-    return Arrays.stream(StorageSchemes.values()).anyMatch(s -> s.supportsAppend() && s.scheme.equals(scheme));
   }
 
   public static boolean isWriteTransactional(String scheme) {

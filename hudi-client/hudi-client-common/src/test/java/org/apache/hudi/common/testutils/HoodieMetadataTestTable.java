@@ -22,8 +22,11 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
@@ -36,6 +39,9 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.common.testutils.FileCreateUtils.createCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createDeltaCommit;
+
 /**
  * {@link HoodieTestTable} impl used for testing metadata. This class does synchronous updates to HoodieTableMetadataWriter if non null.
  */
@@ -43,18 +49,19 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
 
   private final HoodieTableMetadataWriter writer;
 
-  protected HoodieMetadataTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient, HoodieTableMetadataWriter writer) {
-    super(basePath, fs, metaClient);
+  protected HoodieMetadataTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient, HoodieTableMetadataWriter writer,
+                                    Option<HoodieEngineContext> context) {
+    super(basePath, fs, metaClient, context);
     this.writer = writer;
   }
 
   public static HoodieTestTable of(HoodieTableMetaClient metaClient) {
-    return HoodieMetadataTestTable.of(metaClient, null);
+    return HoodieMetadataTestTable.of(metaClient, null, Option.empty());
   }
 
-  public static HoodieTestTable of(HoodieTableMetaClient metaClient, HoodieTableMetadataWriter writer) {
+  public static HoodieTestTable of(HoodieTableMetaClient metaClient, HoodieTableMetadataWriter writer, Option<HoodieEngineContext> context) {
     testTableState = HoodieTestTableState.of();
-    return new HoodieMetadataTestTable(metaClient.getBasePath(), metaClient.getRawFs(), metaClient, writer);
+    return new HoodieMetadataTestTable(metaClient.getBasePath(), metaClient.getRawFs(), metaClient, writer, context);
   }
 
   /**
@@ -75,10 +82,19 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
                                                Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap,
                                                boolean bootstrap, boolean createInflightCommit) throws Exception {
     HoodieCommitMetadata commitMetadata = super.doWriteOperation(commitTime, operationType, newPartitionsToAdd,
-        partitionToFilesNameLengthMap, bootstrap, createInflightCommit);
+        partitionToFilesNameLengthMap, bootstrap, true);
     if (writer != null && !createInflightCommit) {
       writer.performTableServices(Option.of(commitTime));
-      writer.update(commitMetadata, commitTime);
+      writer.updateFromWriteStatuses(commitMetadata, context.get().emptyHoodieData(), commitTime);
+    }
+    // DT should be committed after MDT.
+    if (!createInflightCommit) {
+      if (metaClient.getTableType() == HoodieTableType.COPY_ON_WRITE) {
+        createCommit(basePath, commitTime, Option.of(commitMetadata));
+      } else {
+        createDeltaCommit(basePath, commitTime, commitMetadata);
+      }
+      this.inflightCommits().remove(commitTime);
     }
     return commitMetadata;
   }
@@ -87,7 +103,7 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
   public HoodieTestTable moveInflightCommitToComplete(String instantTime, HoodieCommitMetadata metadata) throws IOException {
     super.moveInflightCommitToComplete(instantTime, metadata);
     if (writer != null) {
-      writer.update(metadata, instantTime);
+      writer.updateFromWriteStatuses(metadata, context.get().emptyHoodieData(), instantTime);
     }
     return this;
   }
@@ -95,7 +111,7 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
   public HoodieTestTable moveInflightCommitToComplete(String instantTime, HoodieCommitMetadata metadata, boolean ignoreWriter) throws IOException {
     super.moveInflightCommitToComplete(instantTime, metadata);
     if (!ignoreWriter && writer != null) {
-      writer.update(metadata, instantTime);
+      writer.updateFromWriteStatuses(metadata, context.get().emptyHoodieData(), instantTime);
     }
     return this;
   }
@@ -104,7 +120,7 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
   public HoodieTestTable moveInflightCompactionToComplete(String instantTime, HoodieCommitMetadata metadata) throws IOException {
     super.moveInflightCompactionToComplete(instantTime, metadata);
     if (writer != null) {
-      writer.update(metadata, instantTime);
+      writer.updateFromWriteStatuses(metadata, context.get().emptyHoodieData(), instantTime);
     }
     return this;
   }
@@ -121,17 +137,18 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
   public HoodieTestTable addCompaction(String instantTime, HoodieCommitMetadata commitMetadata) throws Exception {
     super.addCompaction(instantTime, commitMetadata);
     if (writer != null) {
-      writer.update(commitMetadata, instantTime);
+      writer.updateFromWriteStatuses(commitMetadata, context.get().emptyHoodieData(), instantTime);
     }
     return this;
   }
 
   @Override
-  public HoodieTestTable addRollback(String instantTime, HoodieRollbackMetadata rollbackMetadata) throws IOException {
-    super.addRollback(instantTime, rollbackMetadata);
+  public HoodieTestTable addRollback(String instantTime, HoodieRollbackMetadata rollbackMetadata, HoodieRollbackPlan rollbackPlan) throws IOException {
+    super.addRollback(instantTime, rollbackMetadata, rollbackPlan);
     if (writer != null) {
       writer.update(rollbackMetadata, instantTime);
     }
+    super.addRollbackCompleted(instantTime, rollbackMetadata, false);
     return this;
   }
 
@@ -152,7 +169,7 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
       HoodieReplaceCommitMetadata completeReplaceMetadata) throws Exception {
     super.addReplaceCommit(instantTime, requestedReplaceMetadata, inflightReplaceMetadata, completeReplaceMetadata);
     if (writer != null) {
-      writer.update(completeReplaceMetadata, instantTime);
+      writer.updateFromWriteStatuses(completeReplaceMetadata, context.get().emptyHoodieData(), instantTime);
     }
     return this;
   }

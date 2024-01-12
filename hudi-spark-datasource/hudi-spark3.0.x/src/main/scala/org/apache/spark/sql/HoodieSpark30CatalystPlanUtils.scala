@@ -20,10 +20,13 @@ package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.ResolvedTable
-import org.apache.spark.sql.catalyst.expressions.{AttributeSet, Expression, ProjectionOverSchema}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression, ProjectionOverSchema}
+import org.apache.spark.sql.catalyst.planning.ScanOperation
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, MergeIntoTable}
 import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
 import org.apache.spark.sql.execution.command.AlterTableRecoverPartitionsCommand
+import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, ParquetFileFormat}
+import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.types.StructType
 
 object HoodieSpark30CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
@@ -42,6 +45,17 @@ object HoodieSpark30CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
     }
   }
 
+  override def maybeApplyForNewFileFormat(plan: LogicalPlan): LogicalPlan = {
+    plan match {
+      case s@ScanOperation(_, _,
+      l@LogicalRelation(fs: HadoopFsRelation, _, _, _))
+        if fs.fileFormat.isInstanceOf[ParquetFileFormat with HoodieFormatTrait]
+          && !fs.fileFormat.asInstanceOf[ParquetFileFormat with HoodieFormatTrait].isProjected =>
+        FileFormatUtilsForFileGroupReader.applyNewFileFormatChanges(s, l, fs)
+      case _ => plan
+    }
+  }
+
   override def projectOverSchema(schema: StructType, output: AttributeSet): ProjectionOverSchema = ProjectionOverSchema(schema)
 
   override def isRepairTable(plan: LogicalPlan): Boolean = {
@@ -57,4 +71,15 @@ object HoodieSpark30CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
         Some((c.tableName, true, false, c.cmd))
     }
   }
+
+  /**
+   * Commands of managing indexes are not supported for Spark3.0
+   */
+  override def unapplyCreateIndex(plan: LogicalPlan): Option[(LogicalPlan, String, String, Boolean, Seq[(Seq[String], Map[String, String])], Map[String, String])] = None
+
+  override def unapplyDropIndex(plan: LogicalPlan): Option[(LogicalPlan, String, Boolean)] = None
+
+  override def unapplyShowIndexes(plan: LogicalPlan): Option[(LogicalPlan, Seq[Attribute])] = None
+
+  override def unapplyRefreshIndex(plan: LogicalPlan): Option[(LogicalPlan, String)] = None
 }

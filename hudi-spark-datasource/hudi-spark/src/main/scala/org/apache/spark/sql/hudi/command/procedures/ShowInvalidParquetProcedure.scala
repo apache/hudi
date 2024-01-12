@@ -31,7 +31,8 @@ import java.util.function.Supplier
 
 class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "path", DataTypes.StringType)
+    ProcedureParameter.required(0, "path", DataTypes.StringType),
+    ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 100)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -46,10 +47,11 @@ class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
     super.checkArgs(PARAMETERS, args)
 
     val srcPath = getArgValueOrDefault(args, PARAMETERS(0)).get.asInstanceOf[String]
-    val partitionPaths: java.util.List[String] = FSUtils.getAllPartitionPaths(new HoodieSparkEngineContext(jsc), srcPath, false, false)
+    val limit = getArgValueOrDefault(args, PARAMETERS(1))
+    val partitionPaths: java.util.List[String] = FSUtils.getAllPartitionPaths(new HoodieSparkEngineContext(jsc), srcPath, false)
     val javaRdd: JavaRDD[String] = jsc.parallelize(partitionPaths, partitionPaths.size())
     val serHadoopConf = new SerializableConfiguration(jsc.hadoopConfiguration())
-    javaRdd.rdd.map(part => {
+    val parquetRdd = javaRdd.rdd.map(part => {
       val fs = FSUtils.getFs(new Path(srcPath), serHadoopConf.get())
       FSUtils.getAllDataFilesInPartition(fs, FSUtils.getPartitionPath(srcPath, part))
     }).flatMap(_.toList)
@@ -65,7 +67,12 @@ class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
         isInvalid
       })
       .map(status => Row(status.getPath.toString))
-      .collect()
+    if (limit.isDefined) {
+      parquetRdd.take(limit.get.asInstanceOf[Int])
+    } else {
+      parquetRdd.collect()
+    }
+
   }
 
   override def build = new ShowInvalidParquetProcedure()

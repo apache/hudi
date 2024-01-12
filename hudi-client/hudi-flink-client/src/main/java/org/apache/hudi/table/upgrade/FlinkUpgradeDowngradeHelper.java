@@ -19,6 +19,8 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.client.BaseHoodieWriteClient;
+import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -49,5 +51,10 @@ public class FlinkUpgradeDowngradeHelper implements SupportsUpgradeDowngrade {
   @Override
   public String getPartitionColumns(HoodieWriteConfig config) {
     return config.getProps().getProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
+  }
+
+  @Override
+  public BaseHoodieWriteClient getWriteClient(HoodieWriteConfig config, HoodieEngineContext context) {
+    return new HoodieFlinkWriteClient(context, config);
   }
 }

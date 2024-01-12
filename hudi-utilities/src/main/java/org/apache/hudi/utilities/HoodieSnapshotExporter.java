@@ -155,7 +155,7 @@ public class HoodieSnapshotExporter {
   }
 
   private List<String> getPartitions(HoodieEngineContext engineContext, Config cfg) {
-    return FSUtils.getAllPartitionPaths(engineContext, cfg.sourceBasePath, true, false);
+    return FSUtils.getAllPartitionPaths(engineContext, cfg.sourceBasePath, true);
   }
 
   private void createSuccessTag(FileSystem fs, Config cfg) throws IOException {
@@ -242,15 +242,19 @@ public class HoodieSnapshotExporter {
     // Also copy the .commit files
     LOG.info(String.format("Copying .commit files which are no-late-than %s.", latestCommitTimestamp));
     FileStatus[] commitFilesToCopy =
-        sourceFs.listStatus(new Path(cfg.sourceBasePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME), commitFilePath -> {
-          if (commitFilePath.getName().equals(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
-            return true;
-          } else {
-            String instantTime = FSUtils.getCommitFromCommitFile(commitFilePath.getName());
-            return HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.LESSER_THAN_OR_EQUALS, latestCommitTimestamp
-            );
-          }
-        });
+        Arrays.stream(sourceFs.listStatus(new Path(cfg.sourceBasePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME)))
+            .filter(fileStatus -> {
+              Path path = fileStatus.getPath();
+              if (path.getName().equals(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
+                return true;
+              } else {
+                if (fileStatus.isDirectory()) {
+                  return false;
+                }
+                String instantTime = FSUtils.getCommitFromCommitFile(path.getName());
+                return HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.LESSER_THAN_OR_EQUALS, latestCommitTimestamp);
+              }
+            }).toArray(FileStatus[]::new);
     context.foreach(Arrays.asList(commitFilesToCopy), commitFile -> {
       Path targetFilePath =
           new Path(cfg.targetOutputPath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitFile.getPath().getName());

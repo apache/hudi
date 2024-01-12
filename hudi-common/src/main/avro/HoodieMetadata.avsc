@@ -358,6 +358,81 @@
                 }
             ],
             "default" : null
+        },
+        {
+            "name": "recordIndexMetadata",
+            "doc": "Metadata Index that contains information about record keys and their location in the dataset",
+            "type": [
+                "null",
+                 {
+                   "type": "record",
+                   "name": "HoodieRecordIndexInfo",
+                    "fields": [
+                        {
+                            "name": "partitionName",
+                            "type": [
+                                "null",
+                                "string"
+                            ],
+                            "default": null,
+                            "doc": "Refers to the partition name the record belongs to"
+                        },
+                        {
+                            "name": "fileIdHighBits",
+                            "type": [
+                                "null",
+                                "long"
+                            ],
+                            "default": null,
+                            "doc": "Refers to high 64 bits if the fileId is based on UUID format. \nA UUID based fileId is stored as 3 pieces in RLI (fileIdHighBits, fileIdLowBits and fileIndex). \nFileID format is {UUID}-{fileIndex}."
+                        },
+                        {
+                            "name": "fileIdLowBits",
+                            "type": [
+                                "null",
+                                "long"
+                            ],
+                            "default": null,
+                            "doc": "Refers to low 64 bits if the fileId is based on UUID format. \nA UUID based fileId is stored as 3 pieces in RLI (fileIdHighBits, fileIdLowBits and fileIndex). \nFileID format is {UUID}-{fileIndex}."
+                        },
+                        {
+                            "name": "fileIndex",
+                            "type": [
+                                "null",
+                                "int"
+                            ],
+                            "default": null,
+                            "doc": "Index representing file index which is used to re-construct UUID based fileID. Applicable when the fileId is based on UUID format. \nA UUID based fileId is stored as 3 pieces in RLI (fileIdHighBits, fileIdLowBits and fileIndex). \nFileID format is {UUID}-{fileIndex}."
+                        },
+                        {
+                           "name": "fileId",
+                           "type": [
+                               "null",
+                               "string"
+                            ],
+                            "default" : null,
+                            "doc": "Represents fileId of the location where record belongs to. When the encoding is 1, fileID is stored in raw string format."
+                           },
+                        {
+                            "name": "instantTime",
+                            "type": [
+                                "null",
+                                "long"
+                            ],
+                            "default": null,
+                            "doc": "Epoch time in millisecond representing the commit time at which record was added"
+                        },
+
+                       {
+                           "name": "fileIdEncoding",
+                            "type": "int",
+                            "default" : 0,
+                            "doc": "Represents fileId encoding. Possible values are 0 and 1. O represents UUID based fileID, and 1 represents raw string format of the fileId. \nWhen the encoding is 0, reader can deduce fileID from fileIdLowBits, fileIdLowBits and fileIndex."
+                       }
+                    ]
+                }
+            ],
+            "default" : null
         }
     ]
 }

@@ -20,13 +20,21 @@ package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.UtilHelpers;
-import org.apache.hudi.utilities.config.JdbcbasedSchemaProviderConfig;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.util.HashMap;
 import java.util.Map;
+
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.utilities.config.JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_CONNECTION_URL;
+import static org.apache.hudi.utilities.config.JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_DBTABLE;
+import static org.apache.hudi.utilities.config.JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_DRIVER_TYPE;
+import static org.apache.hudi.utilities.config.JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_NULLABLE;
+import static org.apache.hudi.utilities.config.JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_PASSWORD;
+import static org.apache.hudi.utilities.config.JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_TIMEOUT;
+import static org.apache.hudi.utilities.config.JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_USERNAME;
 
 /**
  * A schema provider to get metadata through Jdbc.
@@ -37,15 +45,15 @@ public class JdbcbasedSchemaProvider extends SchemaProvider {
 
   public JdbcbasedSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
-    options.put("url", props.getString(JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_CONNECTION_URL.key()));
-    options.put("driver", props.getString(JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_DRIVER_TYPE.key()));
-    options.put("user", props.getString(JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_USERNAME.key()));
-    options.put("password", props.getString(JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_PASSWORD.key()));
-    options.put("dbtable", props.getString(JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_DBTABLE.key()));
+    options.put("url", getStringWithAltKeys(props, SOURCE_SCHEMA_JDBC_CONNECTION_URL));
+    options.put("driver", getStringWithAltKeys(props, SOURCE_SCHEMA_JDBC_DRIVER_TYPE));
+    options.put("user", getStringWithAltKeys(props, SOURCE_SCHEMA_JDBC_USERNAME));
+    options.put("password", getStringWithAltKeys(props, SOURCE_SCHEMA_JDBC_PASSWORD));
+    options.put("dbtable", getStringWithAltKeys(props, SOURCE_SCHEMA_JDBC_DBTABLE));
     // the number of seconds the driver will wait for a Statement object to execute to the given
     // number of seconds. Zero means there is no limit.
-    options.put("queryTimeout", props.getString(JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_TIMEOUT.key(), "0"));
-    options.put("nullable", props.getString(JdbcbasedSchemaProviderConfig.SOURCE_SCHEMA_JDBC_NULLABLE.key(), "true"));
+    options.put("queryTimeout", getStringWithAltKeys(props, SOURCE_SCHEMA_JDBC_TIMEOUT, "0"));
+    options.put("nullable", getStringWithAltKeys(props, SOURCE_SCHEMA_JDBC_NULLABLE, "true"));
   }
 
   @Override

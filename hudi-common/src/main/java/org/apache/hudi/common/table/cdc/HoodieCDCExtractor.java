@@ -253,7 +253,7 @@ public class HoodieCDCExtractor {
       String path = writeStat.getPath();
       if (FSUtils.isBaseFile(new Path(path))) {
         // this is a base file
-        if (operation == WriteOperationType.DELETE && writeStat.getNumWrites() == 0L
+        if (WriteOperationType.isDelete(operation) && writeStat.getNumWrites() == 0L
             && writeStat.getNumDeletes() != 0) {
           // This is a delete operation wherein all the records in this file group are deleted
           // and no records have been written out a new file.
@@ -265,9 +265,8 @@ public class HoodieCDCExtractor {
               new HoodieIOException("Can not get the previous version of the base file")
           );
           FileSlice beforeFileSlice = new FileSlice(fileGroupId, writeStat.getPrevCommit(), beforeBaseFile, Collections.emptyList());
-          cdcFileSplit = new HoodieCDCFileSplit(instantTs, BASE_FILE_DELETE, new ArrayList<>(), Option.empty(), Option.of(beforeFileSlice));
-        } else if (writeStat.getNumUpdateWrites() == 0L && writeStat.getNumDeletes() == 0
-            && writeStat.getNumWrites() == writeStat.getNumInserts()) {
+          cdcFileSplit = new HoodieCDCFileSplit(instantTs, BASE_FILE_DELETE, new ArrayList<>(), Option.of(beforeFileSlice), Option.empty());
+        } else if ((writeStat.getNumUpdateWrites() == 0L && writeStat.getNumWrites() == writeStat.getNumInserts())) {
           // all the records in this file are new.
           cdcFileSplit = new HoodieCDCFileSplit(instantTs, BASE_FILE_INSERT, path);
         } else {

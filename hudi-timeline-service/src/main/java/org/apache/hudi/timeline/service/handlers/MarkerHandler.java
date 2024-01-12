@@ -126,8 +126,8 @@ public class MarkerHandler extends Handler {
     if (dispatchingThreadFuture != null) {
       dispatchingThreadFuture.cancel(true);
     }
-    dispatchingExecutorService.shutdown();
-    batchingExecutorService.shutdown();
+    dispatchingExecutorService.shutdownNow();
+    batchingExecutorService.shutdownNow();
   }
 
   /**

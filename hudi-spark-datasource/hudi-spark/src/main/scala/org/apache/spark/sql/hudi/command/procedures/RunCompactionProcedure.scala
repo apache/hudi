@@ -22,8 +22,10 @@ import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieTimeline}
 import org.apache.hudi.common.util.{CompactionUtils, HoodieTimer, Option => HOption}
+import org.apache.hudi.config.HoodieLockConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.{HoodieCLIUtils, SparkAdapterSupport}
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
@@ -43,7 +45,9 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
     ProcedureParameter.optional(1, "table", DataTypes.StringType),
     ProcedureParameter.optional(2, "path", DataTypes.StringType),
     ProcedureParameter.optional(3, "timestamp", DataTypes.LongType),
-    ProcedureParameter.optional(4, "options", DataTypes.StringType)
+    ProcedureParameter.optional(4, "options", DataTypes.StringType),
+    ProcedureParameter.optional(5, "instants", DataTypes.StringType),
+    ProcedureParameter.optional(6, "limit", DataTypes.IntegerType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -59,7 +63,7 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
   override def call(args: ProcedureArgs): Seq[Row] = {
     super.checkArgs(PARAMETERS, args)
 
-    val operation = getArgValueOrDefault(args, PARAMETERS(0)).get.asInstanceOf[String].toLowerCase
+    var op = getArgValueOrDefault(args, PARAMETERS(0)).get.asInstanceOf[String].toLowerCase
     val tableName = getArgValueOrDefault(args, PARAMETERS(1))
     val tablePath = getArgValueOrDefault(args, PARAMETERS(2))
     val instantTimestamp = getArgValueOrDefault(args, PARAMETERS(3))
@@ -67,68 +71,63 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
     if (getArgValueOrDefault(args, PARAMETERS(4)).isDefined) {
       confs = confs ++ HoodieCLIUtils.extractOptions(getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String])
     }
+    var specificInstants = getArgValueOrDefault(args, PARAMETERS(5))
+    val limit = getArgValueOrDefault(args, PARAMETERS(6))
+
+    // For old version compatibility
+    if (op.equals("run")) {
+      op = "scheduleandexecute"
+    }
+    if (instantTimestamp.isDefined && specificInstants.isEmpty) {
+      specificInstants = Option(instantTimestamp.get.toString)
+      op = "execute"
+    }
 
     val basePath = getBasePath(tableName, tablePath)
     val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+
+    if (metaClient.getTableConfig.isMetadataTableAvailable) {
+      if (!confs.contains(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key)) {
+        confs = confs ++ HoodieCLIUtils.getLockOptions(basePath)
+        logInfo("Auto config filesystem lock provider for metadata table")
+      }
+    }
+
+    val pendingCompactionInstants = metaClient.getActiveTimeline.getWriteTimeline.getInstants.iterator().asScala
+      .filter(p => p.getAction == HoodieTimeline.COMPACTION_ACTION)
+      .map(_.getTimestamp)
+      .toSeq.sortBy(f => f)
+
+    var (filteredPendingCompactionInstants, operation) = HoodieProcedureUtils.filterPendingInstantsAndGetOperation(
+      pendingCompactionInstants, specificInstants.asInstanceOf[Option[String]], Option(op), limit.asInstanceOf[Option[Int]])
 
     var client: SparkRDDWriteClient[_] = null
     try {
       client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, confs,
         tableName.asInstanceOf[Option[String]])
-      var willCompactionInstants: Seq[String] = Seq.empty
-      operation match {
-        case "schedule" =>
-          val instantTime = instantTimestamp.map(_.toString).getOrElse(HoodieActiveTimeline.createNewInstantTime)
-          if (client.scheduleCompactionAtInstant(instantTime, HOption.empty[java.util.Map[String, String]])) {
-            willCompactionInstants = Seq(instantTime)
-          }
-        case "run" =>
-          // Do compaction
-          val timeLine = metaClient.getActiveTimeline
-          val pendingCompactionInstants = timeLine.getWriteTimeline.getInstants.iterator().asScala
-            .filter(p => p.getAction == HoodieTimeline.COMPACTION_ACTION)
-            .map(_.getTimestamp)
-            .toSeq.sortBy(f => f)
-          willCompactionInstants = if (instantTimestamp.isEmpty) {
-            if (pendingCompactionInstants.nonEmpty) {
-              pendingCompactionInstants
-            } else { // If there are no pending compaction, schedule to generate one.
-              // CompactionHoodiePathCommand will return instanceTime for SCHEDULE.
-              val instantTime = HoodieActiveTimeline.createNewInstantTime()
-              if (client.scheduleCompactionAtInstant(instantTime, HOption.empty[java.util.Map[String, String]])) {
-                Seq(instantTime)
-              } else {
-                Seq.empty
-              }
-            }
-          } else {
-            // Check if the compaction timestamp has exists in the pending compaction
-            if (pendingCompactionInstants.contains(instantTimestamp.get.toString)) {
-              Seq(instantTimestamp.get.toString)
-            } else {
-              throw new IllegalArgumentException(s"Compaction instant: ${instantTimestamp.get} is not found in " +
-                s"$basePath, Available pending compaction instants are: ${pendingCompactionInstants.mkString(",")} ")
-            }
-          }
 
-          if (willCompactionInstants.isEmpty) {
-            logInfo(s"No need to compaction on $basePath")
-          } else {
-            logInfo(s"Run compaction at instants: [${willCompactionInstants.mkString(",")}] on $basePath")
-            val timer = HoodieTimer.start
-            willCompactionInstants.foreach { compactionInstant =>
-              val writeResponse = client.compact(compactionInstant)
-              handleResponse(writeResponse.getCommitMetadata.get())
-              client.commitCompaction(compactionInstant, writeResponse.getCommitMetadata.get(), HOption.empty())
-            }
-            logInfo(s"Finish Run compaction at instants: [${willCompactionInstants.mkString(",")}]," +
-              s" spend: ${timer.endTimer()}ms")
-          }
-        case _ => throw new UnsupportedOperationException(s"Unsupported compaction operation: $operation")
+      if (operation.isSchedule) {
+        val instantTime = client.createNewInstantTime()
+        if (client.scheduleCompactionAtInstant(instantTime, HOption.empty[java.util.Map[String, String]])) {
+          filteredPendingCompactionInstants = Seq(instantTime)
+        }
+      }
+
+      logInfo(s"Compaction instants to run: ${filteredPendingCompactionInstants.mkString(",")}.")
+
+      if (operation.isExecute) {
+        val timer = HoodieTimer.start
+        filteredPendingCompactionInstants.foreach { compactionInstant =>
+          val writeResponse = client.compact(compactionInstant)
+          handleResponse(writeResponse.getCommitMetadata.get())
+          client.commitCompaction(compactionInstant, writeResponse.getCommitMetadata.get(), HOption.empty())
+        }
+        logInfo(s"Finish Run compaction at instants: [${filteredPendingCompactionInstants.mkString(",")}]," +
+          s" spend: ${timer.endTimer()}ms")
       }
 
       val compactionInstants = metaClient.reloadActiveTimeline().getInstantsAsStream.iterator().asScala
-        .filter(instant => willCompactionInstants.contains(instant.getTimestamp))
+        .filter(instant => filteredPendingCompactionInstants.contains(instant.getTimestamp))
         .toSeq
         .sortBy(p => p.getTimestamp)
         .reverse
@@ -147,10 +146,15 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
 
   private def handleResponse(metadata: HoodieCommitMetadata): Unit = {
     // Handle error
-    val writeStats = metadata.getPartitionToWriteStats.entrySet().flatMap(e => e.getValue).toList
-    val errorsCount = writeStats.map(state => state.getTotalWriteErrors).sum
-    if (errorsCount > 0) {
-      throw new HoodieException(s" Found $errorsCount when writing record")
+    val writeStatsHasErrors = metadata.getPartitionToWriteStats.entrySet()
+      .flatMap(e => e.getValue)
+      .filter(_.getTotalWriteErrors > 0)
+    if (writeStatsHasErrors.nonEmpty) {
+      val errorsCount = writeStatsHasErrors.map(_.getTotalWriteErrors).sum
+      log.error(s"Found $errorsCount when writing record.\n Printing out the top 100 file path with errors.")
+      writeStatsHasErrors.take(100).foreach(state =>
+        log.error(s"Error occurred while writing the file: ${state.getPath}."))
+      throw new HoodieException(s"Found $errorsCount when writing record")
     }
   }
 

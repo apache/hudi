@@ -26,9 +26,9 @@ object SparkConfigs {
   val SPARK_DATASOURCE_WRITER_POOL_NAME = "sparkdatasourcewrite"
 
   /*
-  When async compaction is enabled (deltastreamer or streaming sink), users might be interested to set custom
+  When async compaction is enabled (Hudi Streamer or streaming sink), users might be interested to set custom
   scheduling configs for regular writes and async table services like compaction and clustering. This is the property
-  used to set custom scheduler config file with spark. In Deltastreamer, the file is generated within hudi and set if
+  used to set custom scheduler config file with spark. In Hudi Streamer, the file is generated within hudi and set if
   necessary. Where as in case of streaming sink, users have to set this property when they invoke spark shell.
   Sample format of the file contents.
   <?xml version="1.0"?>

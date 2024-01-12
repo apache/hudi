@@ -28,9 +28,10 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
+import org.apache.spark.SparkConf;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -53,23 +54,31 @@ import static org.apache.hudi.common.testutils.HoodieAdaptablePayloadDataGenerat
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getCommitTimeAtUTC;
 import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_BLOOM;
 import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_SIMPLE;
+import static org.apache.hudi.index.HoodieIndex.IndexType.RECORD_INDEX;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctionalTestHarness {
 
+  @Override
+  public SparkConf conf() {
+    return conf(SparkClientFunctionalTestHarness.getSparkSqlConf());
+  }
+
   private static Stream<Arguments> getTableTypeAndIndexType() {
     return Stream.of(
         Arguments.of(COPY_ON_WRITE, GLOBAL_SIMPLE),
         Arguments.of(COPY_ON_WRITE, GLOBAL_BLOOM),
+        Arguments.of(COPY_ON_WRITE, RECORD_INDEX),
         Arguments.of(MERGE_ON_READ, GLOBAL_SIMPLE),
-        Arguments.of(MERGE_ON_READ, GLOBAL_BLOOM)
+        Arguments.of(MERGE_ON_READ, GLOBAL_BLOOM),
+        Arguments.of(MERGE_ON_READ, RECORD_INDEX)
     );
   }
 
   @ParameterizedTest
   @MethodSource("getTableTypeAndIndexType")
-  public void testPartitionChanges(HoodieTableType tableType, HoodieIndex.IndexType indexType) throws IOException {
+  public void testPartitionChanges(HoodieTableType tableType, IndexType indexType) throws IOException {
     final Class<?> payloadClass = DefaultHoodieRecordPayload.class;
     HoodieWriteConfig writeConfig = getWriteConfig(payloadClass, indexType);
     HoodieTableMetaClient metaClient = getHoodieMetaClient(tableType, writeConfig.getProps());
@@ -120,14 +129,13 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
       client.startCommitWithTime(commitTimeAtEpoch9);
       assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch9, 2), commitTimeAtEpoch9).collect());
       readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p1, 9);
-
     }
 
   }
 
   @ParameterizedTest
   @MethodSource("getTableTypeAndIndexType")
-  public void testUpdatePartitionsThenDelete(HoodieTableType tableType, HoodieIndex.IndexType indexType) throws IOException {
+  public void testUpdatePartitionsThenDelete(HoodieTableType tableType, IndexType indexType) throws IOException {
     final Class<?> payloadClass = DefaultHoodieRecordPayload.class;
     HoodieWriteConfig writeConfig = getWriteConfig(payloadClass, indexType);
     HoodieTableMetaClient metaClient = getHoodieMetaClient(tableType, writeConfig.getProps());
@@ -176,7 +184,6 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
       client.startCommitWithTime(commitTimeAtEpoch9);
       assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch9, 2), commitTimeAtEpoch9).collect());
       readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p1, 9);
-
     }
   }
 
@@ -202,21 +209,28 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
     df.unpersist();
   }
 
-  private HoodieWriteConfig getWriteConfig(Class<?> payloadClass, HoodieIndex.IndexType indexType) {
+  private HoodieWriteConfig getWriteConfig(Class<?> payloadClass, IndexType indexType) {
+    HoodieMetadataConfig.Builder metadataConfigBuilder = HoodieMetadataConfig.newBuilder();
+    if (indexType == IndexType.RECORD_INDEX) {
+      metadataConfigBuilder.enable(true).withEnableRecordIndex(true);
+    } else {
+      metadataConfigBuilder.enable(false);
+    }
     return getConfigBuilder(true)
         .withProperties(getKeyGenProps(payloadClass))
         .withParallelism(2, 2)
         .withBulkInsertParallelism(2)
         .withDeleteParallelism(2)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .withMetadataConfig(metadataConfigBuilder.build())
         .withIndexConfig(HoodieIndexConfig.newBuilder()
             .withIndexType(indexType)
             .bloomIndexParallelism(2)
             .withSimpleIndexParallelism(2)
             .withGlobalSimpleIndexParallelism(2)
             .withGlobalIndexReconcileParallelism(2)
-            .withBloomIndexUpdatePartitionPath(true)
-            .withGlobalSimpleIndexUpdatePartitionPath(true).build())
+            .withGlobalBloomIndexUpdatePartitionPath(true)
+            .withGlobalSimpleIndexUpdatePartitionPath(true)
+            .withRecordIndexUpdatePartitionPath(true).build())
         .withSchema(SCHEMA_STR)
         .withPayloadConfig(HoodiePayloadConfig.newBuilder()
             .fromProperties(getPayloadProps(payloadClass)).build())

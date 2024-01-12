@@ -18,9 +18,6 @@
 
 package org.apache.hudi.timeline.service.handlers;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.table.timeline.dto.ClusteringOpDTO;
 import org.apache.hudi.common.table.timeline.dto.CompactionOpDTO;
@@ -30,9 +27,12 @@ import org.apache.hudi.common.table.timeline.dto.FileSliceDTO;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.timeline.service.TimelineService;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -90,9 +90,14 @@ public class FileSliceHandler extends Handler {
         .collect(Collectors.toList());
   }
 
+  public List<FileSliceDTO> getLatestFileSlicesStateless(String basePath, String partitionPath) {
+    return viewManager.getFileSystemView(basePath).getLatestFileSlicesStateless(partitionPath).map(FileSliceDTO::fromFileSlice)
+        .collect(Collectors.toList());
+  }
+
   public List<FileSliceDTO> getLatestFileSlice(String basePath, String partitionPath, String fileId) {
     return viewManager.getFileSystemView(basePath).getLatestFileSlice(partitionPath, fileId)
-        .map(FileSliceDTO::fromFileSlice).map(Arrays::asList).orElse(new ArrayList<>());
+        .map(FileSliceDTO::fromFileSlice).map(Arrays::asList).orElse(Collections.emptyList());
   }
 
   public List<CompactionOpDTO> getPendingCompactionOperations(String basePath) {
@@ -109,6 +114,12 @@ public class FileSliceHandler extends Handler {
 
   public List<FileGroupDTO> getAllFileGroups(String basePath, String partitionPath) {
     List<HoodieFileGroup> fileGroups =  viewManager.getFileSystemView(basePath).getAllFileGroups(partitionPath)
+        .collect(Collectors.toList());
+    return DTOUtils.fileGroupDTOsfromFileGroups(fileGroups);
+  }
+
+  public List<FileGroupDTO> getAllFileGroupsStateless(String basePath, String partitionPath) {
+    List<HoodieFileGroup> fileGroups =  viewManager.getFileSystemView(basePath).getAllFileGroupsStateless(partitionPath)
         .collect(Collectors.toList());
     return DTOUtils.fileGroupDTOsfromFileGroups(fileGroups);
   }

@@ -84,7 +84,7 @@ public class CloudStoreIngestionConfig {
 
   /**
    * A JSON string passed to the Spark DataFrameReader while loading the dataset.
-   * Example: hoodie.deltastreamer.gcp.spark.datasource.options={"header":"true","encoding":"UTF-8"}
+   * Example: hoodie.streamer.gcp.spark.datasource.options={"header":"true","encoding":"UTF-8"}
    */
   @Deprecated
   public static final String SPARK_DATASOURCE_OPTIONS = CloudSourceConfig.SPARK_DATASOURCE_OPTIONS.key();

@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table;
 
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
+import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FileSystemRetryConfig;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -59,24 +60,24 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
   private final transient HoodieMetaserverClient metaserverClient;
 
   public HoodieTableMetaserverClient(Configuration conf, String basePath, ConsistencyGuardConfig consistencyGuardConfig,
-                                     String mergerStrategy, FileSystemRetryConfig fileSystemRetryConfig,
-                                     String databaseName, String tableName, HoodieMetaserverConfig config) {
+                                     String mergerStrategy, HoodieTimeGeneratorConfig timeGeneratorConfig,
+                                     FileSystemRetryConfig fileSystemRetryConfig,
+                                     Option<String> databaseName, Option<String> tableName, HoodieMetaserverConfig config) {
     super(conf, basePath, false, consistencyGuardConfig, Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION),
-        config.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME), mergerStrategy, fileSystemRetryConfig);
-    checkArgument(nonEmpty(databaseName), "database name is required.");
-    checkArgument(nonEmpty(tableName), "table name is required.");
-    this.databaseName = databaseName;
-    this.tableName = tableName;
+        config.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME), mergerStrategy, timeGeneratorConfig, fileSystemRetryConfig);
+    this.databaseName = databaseName.isPresent() ? databaseName.get() : tableConfig.getDatabaseName();
+    this.tableName = tableName.isPresent() ? tableName.get() : tableConfig.getTableName();
     this.metaserverConfig = config;
     this.metaserverClient = HoodieMetaserverClientProxy.getProxy(config);
-    this.table = initOrGetTable(databaseName, tableName, config);
+    this.table = initOrGetTable(config);
     // TODO: transfer table parameters to table config
-    this.tableConfig = new HoodieTableConfig();
     tableConfig.setTableVersion(HoodieTableVersion.current());
     tableConfig.setAll(config.getProps());
   }
 
-  private Table initOrGetTable(String db, String tb, HoodieMetaserverConfig config) {
+  private Table initOrGetTable(HoodieMetaserverConfig config) {
+    checkArgument(nonEmpty(databaseName), "database name is required.");
+    checkArgument(nonEmpty(tableName), "table name is required.");
     Table table;
     try {
       table = metaserverClient.getTable(databaseName, tableName);
@@ -88,10 +89,10 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
         } catch (IOException ioException) {
           LOG.info("Failed to get the user", ioException);
         }
-        LOG.info(String.format("Table %s.%s doesn't exist, will create it.", db, tb));
+        LOG.info(String.format("Table %s.%s doesn't exist, will create it.", databaseName, tableName));
         table = new Table();
-        table.setDatabaseName(db);
-        table.setTableName(tb);
+        table.setDatabaseName(databaseName);
+        table.setTableName(tableName);
         table.setLocation(config.getString(HoodieWriteConfig.BASE_PATH));
         table.setOwner(user);
         table.setTableType(config.getString(HoodieTableConfig.TYPE.key()));
@@ -134,12 +135,12 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
   }
 
   public List<HoodieInstant> scanHoodieInstantsFromFileSystem(Set<String> includedExtensions,
-      boolean applyLayoutVersionFilters) {
+                                                              boolean applyLayoutVersionFilters) {
     throw new HoodieException("Unsupport operation");
   }
 
   public List<HoodieInstant> scanHoodieInstantsFromFileSystem(Path timelinePath, Set<String> includedExtensions,
-      boolean applyLayoutVersionFilters) {
+                                                              boolean applyLayoutVersionFilters) {
     throw new HoodieException("Unsupport operation");
   }
 

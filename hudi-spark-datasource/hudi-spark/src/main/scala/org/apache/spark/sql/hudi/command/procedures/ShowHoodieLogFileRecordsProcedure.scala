@@ -19,20 +19,20 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.avro.generic.IndexedRecord
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.common.config.HoodieCommonConfig
+import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMemoryConfig, HoodieReaderConfig}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieLogFile, HoodieRecordPayload}
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.model.{HoodieLogFile, HoodieRecordPayload}
 import org.apache.hudi.common.table.log.block.HoodieDataBlock
 import org.apache.hudi.common.table.log.{HoodieLogFormat, HoodieMergedLogRecordScanner}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.{HoodieRecordUtils, ValidationUtils}
-import org.apache.hudi.config.{HoodieCompactionConfig, HoodieMemoryConfig}
+import org.apache.hudi.common.util.{FileIOUtils, ValidationUtils}
 import org.apache.parquet.avro.AvroSchemaConverter
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
+
 import java.util.Objects
 import java.util.function.Supplier
-import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import scala.collection.JavaConverters._
 
 class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuilder {
@@ -69,14 +69,13 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
         .withLogFilePaths(logFilePaths.asJava)
         .withReaderSchema(schema)
         .withLatestInstantTime(client.getActiveTimeline.getCommitTimeline.lastInstant.get.getTimestamp)
-        .withReadBlocksLazily(java.lang.Boolean.parseBoolean(HoodieCompactionConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE.defaultValue))
-        .withReverseReader(java.lang.Boolean.parseBoolean(HoodieCompactionConfig.COMPACTION_REVERSE_LOG_READ_ENABLE.defaultValue))
+        .withReadBlocksLazily(java.lang.Boolean.parseBoolean(HoodieReaderConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE.defaultValue))
+        .withReverseReader(java.lang.Boolean.parseBoolean(HoodieReaderConfig.COMPACTION_REVERSE_LOG_READ_ENABLE.defaultValue))
         .withBufferSize(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.defaultValue)
         .withMaxMemorySizeInBytes(HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
-        .withSpillableMapBasePath(HoodieMemoryConfig.getDefaultSpillableMapBasePath)
+        .withSpillableMapBasePath(FileIOUtils.getDefaultSpillableMapBasePath)
         .withDiskMapType(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue)
         .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue)
-        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(classOf[HoodieAvroRecordMerger].getName))
         .build
       scanner.asScala.foreach(hoodieRecord => {
         val record = hoodieRecord.getData.asInstanceOf[HoodieRecordPayload[_]].getInsertValue(schema).get()

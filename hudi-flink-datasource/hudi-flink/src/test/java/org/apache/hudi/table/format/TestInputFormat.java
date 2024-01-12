@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.source.IncrementalInputSplits;
@@ -56,11 +57,14 @@ import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -68,6 +72,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
@@ -556,7 +561,7 @@ public class TestInputFormat {
     // re-create the metadata file for c2 and c3 so that they have greater completion time than c4.
     // the completion time sequence become: c1, c4, c2, c3,
     // we will test with the same consumption sequence.
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tempFile.getAbsolutePath(), HadoopConfigurations.getHadoopConf(conf));
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
     List<HoodieInstant> oriInstants = metaClient.getCommitsTimeline().filterCompletedInstants().getInstants();
     assertThat(oriInstants.size(), is(4));
     List<HoodieCommitMetadata> metadataList = new ArrayList<>();
@@ -605,7 +610,7 @@ public class TestInputFormat {
     TestData.assertRowDataEquals(result3, TestData.dataSetInsert(3, 4));
 
     // test c2 and c4, c2 completion time > c1, so it is not a hollow instant
-    IncrementalInputSplits.Result splits4 = incrementalInputSplits.inputSplits(metaClient, oriInstants.get(0).getTimestamp(), oriInstants.get(0).getStateTransitionTime(), false);
+    IncrementalInputSplits.Result splits4 = incrementalInputSplits.inputSplits(metaClient, oriInstants.get(0).getTimestamp(), oriInstants.get(0).getCompletionTime(), false);
     assertFalse(splits4.isEmpty());
     List<RowData> result4 = readData(inputFormat, splits4.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
     TestData.assertRowDataEquals(result4, TestData.dataSetInsert(3, 4, 7, 8));
@@ -626,7 +631,7 @@ public class TestInputFormat {
 
     // test c2 and c4, c2 is recognized as a hollow instant
     // the (version_number, completion_time) pair is not consistent, just for test purpose
-    IncrementalInputSplits.Result splits7 = incrementalInputSplits.inputSplits(metaClient, oriInstants.get(2).getTimestamp(), oriInstants.get(3).getStateTransitionTime(), false);
+    IncrementalInputSplits.Result splits7 = incrementalInputSplits.inputSplits(metaClient, oriInstants.get(2).getTimestamp(), oriInstants.get(3).getCompletionTime(), false);
     assertFalse(splits7.isEmpty());
     List<RowData> result7 = readData(inputFormat, splits7.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
     TestData.assertRowDataEquals(result7, TestData.dataSetInsert(3, 4, 7, 8));
@@ -952,6 +957,36 @@ public class TestInputFormat {
     assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
     final String baseMergeLogFileResult = TestData.rowDataToString(readData(inputFormat));
     assertThat(baseMergeLogFileResult, is(expected));
+
+    // write another commit with delete messages
+    TestData.writeData(TestData.DATA_SET_SINGLE_DELETE, conf);
+    this.tableSource.reset();
+    inputFormat = this.tableSource.getInputFormat();
+    assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
+    final String baseMergeLogFileResult2 = TestData.rowDataToString(readData(inputFormat));
+    assertThat(baseMergeLogFileResult2, is("[]"));
+  }
+
+  /**
+   * This test check 2 cases of records preCombining.
+   * When the preCombine is true, the writer does an in-memory combing for incoming records,
+   * when the preCombine is false, the merged log reader does the combining while reading.
+   * With disorder deletes, we can check whether the '_hoodie_operation' is correctly set up.
+   */
+  @ParameterizedTest
+  @MethodSource("preCombiningAndChangelogModeParams")
+  void testMergeOnReadDisorderDeleteMerging(boolean preCombine, boolean changelogMode) throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.PRE_COMBINE.key(), preCombine + "");
+    options.put(FlinkOptions.CHANGELOG_ENABLED.key(), changelogMode + "");
+    beforeEach(HoodieTableType.MERGE_ON_READ, options);
+
+    // write log file with disorder deletes
+    TestData.writeData(TestData.DATA_SET_DISORDER_INSERT_DELETE, conf);
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    final String baseResult = TestData.rowDataToString(readData(inputFormat));
+    String expected = "[+I[id1, Danny, 22, 1970-01-01T00:00:00.004, par1]]";
+    assertThat(baseResult, is(expected));
   }
 
   @Test
@@ -1031,6 +1066,7 @@ public class TestInputFormat {
     List<RowData> actual4 = readData(inputFormat4);
     // final List<RowData> expected4 = TestData.dataSetInsert(3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14);
     TestData.assertRowDataEquals(actual4, Collections.emptyList());
+    writeClient.close();
   }
 
   @ParameterizedTest
@@ -1073,9 +1109,70 @@ public class TestInputFormat {
     TestData.assertRowDataEquals(actual, expected);
   }
 
+  /**
+   * Test reading file groups with non-blocking concurrency control.
+   * Delta commits started before but finished after pending compaction instant-time
+   * should also be considered valid.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testIncReadWithNonBlockingConcurrencyControl(boolean skipCompaction) throws Exception {
+    Map<String, String> options = new HashMap<>();
+    // compact for each commit
+    options.put(FlinkOptions.COMPACTION_DELTA_COMMITS.key(), "1");
+    options.put(FlinkOptions.COMPACTION_ASYNC_ENABLED.key(), "false");
+    beforeEach(HoodieTableType.MERGE_ON_READ, options);
+
+    // write three commits
+    for (int i = 0; i < 6; i += 2) {
+      List<RowData> dataset = TestData.dataSetInsert(i + 1, i + 2);
+      TestData.writeData(dataset, conf);
+    }
+
+    // now rename the first delta commit metadata file to make it finished after the scheduled compaction
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+
+    Option<HoodieInstant> firstCommit = metaClient.getActiveTimeline().filterCompletedInstants().firstInstant();
+    assertTrue(firstCommit.isPresent());
+    assertThat(firstCommit.get().getAction(), is(HoodieTimeline.DELTA_COMMIT_ACTION));
+
+    java.nio.file.Path metaFilePath = Paths.get(metaClient.getMetaPath(), firstCommit.get().getFileName());
+    TestUtils.amendCompletionTimeToLatest(metaClient, metaFilePath, firstCommit.get().getTimestamp());
+
+    String compactionInstant = metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant().map(HoodieInstant::getTimestamp).get();
+
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat(true);
+    assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
+
+    IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
+        .rowType(TestConfigurations.ROW_TYPE)
+        .conf(conf)
+        .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
+        .skipCompaction(skipCompaction)
+        .build();
+    conf.setString(FlinkOptions.READ_END_COMMIT, compactionInstant);
+    IncrementalInputSplits.Result splits2 = incrementalInputSplits.inputSplits(metaClient, null, null, false);
+    assertFalse(splits2.isEmpty());
+    List<RowData> result2 = readData(inputFormat, splits2.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
+    TestData.assertRowDataEquals(result2, TestData.dataSetInsert(1, 2));
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
+
+  /**
+   * Return test params => (preCombining, changelog mode).
+   */
+  private static Stream<Arguments> preCombiningAndChangelogModeParams() {
+    Object[][] data =
+        new Object[][] {
+            {true, true},
+            {true, false},
+            {false, true},
+            {false, false}};
+    return Stream.of(data).map(Arguments::of);
+  }
 
   private HoodieTableSource getTableSource(Configuration conf) {
     return new HoodieTableSource(

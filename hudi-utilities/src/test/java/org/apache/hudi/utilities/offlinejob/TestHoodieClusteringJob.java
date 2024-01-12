@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -72,8 +71,8 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
     metaClient =  HoodieTableMetaClient.initTableAndGetMetaClient(jsc.hadoopConfiguration(), tableBasePath, metaClientProps);
     client = new SparkRDDWriteClient(context, config);
 
-    writeData(false, HoodieActiveTimeline.createNewInstantTime(), 100, true);
-    writeData(false, HoodieActiveTimeline.createNewInstantTime(), 100, true);
+    writeData(false, client.createNewInstantTime(), 100, true);
+    writeData(false, client.createNewInstantTime(), 100, true);
 
     // offline clustering execute without clean
     HoodieClusteringJob hoodieCluster =
@@ -82,8 +81,8 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
     HoodieOfflineJobTestBase.TestHelpers.assertNClusteringCommits(1, tableBasePath, fs);
     HoodieOfflineJobTestBase.TestHelpers.assertNCleanCommits(0, tableBasePath, fs);
 
-    writeData(false, HoodieActiveTimeline.createNewInstantTime(), 100, true);
-    writeData(false, HoodieActiveTimeline.createNewInstantTime(), 100, true);
+    writeData(false, client.createNewInstantTime(), 100, true);
+    writeData(false, client.createNewInstantTime(), 100, true);
 
     // offline clustering execute with sync clean
     hoodieCluster =
@@ -99,6 +98,7 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
 
   private HoodieClusteringJob init(String tableBasePath, boolean runSchedule, String scheduleAndExecute, boolean isAutoClean) {
     HoodieClusteringJob.Config clusterConfig = buildHoodieClusteringUtilConfig(tableBasePath, runSchedule, scheduleAndExecute, isAutoClean);
+    clusterConfig.configs.add(String.format("%s=%s", "hoodie.datasource.write.row.writer.enable", "false"));
     return new HoodieClusteringJob(jsc, clusterConfig);
   }
 

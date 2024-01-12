@@ -34,6 +34,8 @@ import org.apache.spark.streaming.kafka010.OffsetRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
+
 abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
   private static final Logger LOG = LoggerFactory.getLogger(KafkaSource.class);
   // these are native kafka's config. do not change the config names.
@@ -62,10 +64,10 @@ abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
       long totalNewMsgs = KafkaOffsetGen.CheckpointUtils.totalNewMessages(offsetRanges);
       LOG.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
       if (totalNewMsgs <= 0) {
-        metrics.updateDeltaStreamerSourceNewMessageCount(METRIC_NAME_KAFKA_MESSAGE_IN_COUNT, 0);
+        metrics.updateStreamerSourceNewMessageCount(METRIC_NAME_KAFKA_MESSAGE_IN_COUNT, 0);
         return new InputBatch<>(Option.empty(), KafkaOffsetGen.CheckpointUtils.offsetsToStr(offsetRanges));
       }
-      metrics.updateDeltaStreamerSourceNewMessageCount(METRIC_NAME_KAFKA_MESSAGE_IN_COUNT, totalNewMsgs);
+      metrics.updateStreamerSourceNewMessageCount(METRIC_NAME_KAFKA_MESSAGE_IN_COUNT, totalNewMsgs);
       JavaRDD<T> newDataRDD = toRDD(offsetRanges);
       return new InputBatch<>(Option.of(newDataRDD), KafkaOffsetGen.CheckpointUtils.offsetsToStr(offsetRanges));
     } catch (org.apache.kafka.common.errors.TimeoutException e) {
@@ -77,7 +79,7 @@ abstract class KafkaSource<T> extends Source<JavaRDD<T>> {
 
   @Override
   public void onCommit(String lastCkptStr) {
-    if (this.props.getBoolean(KafkaSourceConfig.ENABLE_KAFKA_COMMIT_OFFSET.key(), KafkaSourceConfig.ENABLE_KAFKA_COMMIT_OFFSET.defaultValue())) {
+    if (getBooleanWithAltKeys(this.props, KafkaSourceConfig.ENABLE_KAFKA_COMMIT_OFFSET)) {
       offsetGen.commitOffsetToKafka(lastCkptStr);
     }
   }

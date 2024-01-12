@@ -18,13 +18,13 @@
 
 package org.apache.hudi.aws.credentials;
 
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieAWSConfig;
+import org.apache.hudi.common.util.StringUtils;
 
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.BasicAWSCredentials;
-import com.amazonaws.auth.BasicSessionCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,11 +33,11 @@ import java.util.Properties;
 /**
  * Credentials provider which fetches AWS access key from Hoodie config.
  */
-public class HoodieConfigAWSCredentialsProvider implements AWSCredentialsProvider {
+public class HoodieConfigAWSCredentialsProvider implements AwsCredentialsProvider {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieConfigAWSCredentialsProvider.class);
 
-  private AWSCredentials awsCredentials;
+  private AwsCredentials awsCredentials;
 
   public HoodieConfigAWSCredentialsProvider(Properties props) {
     String accessKey = props.getProperty(HoodieAWSConfig.AWS_ACCESS_KEY.key());
@@ -52,20 +52,15 @@ public class HoodieConfigAWSCredentialsProvider implements AWSCredentialsProvide
     }
   }
 
-  private static AWSCredentials createCredentials(String accessKey, String secretKey,
+  private static AwsCredentials createCredentials(String accessKey, String secretKey,
                                                     String sessionToken) {
     return (sessionToken == null)
-            ? new BasicAWSCredentials(accessKey, secretKey)
-            : new BasicSessionCredentials(accessKey, secretKey, sessionToken);
+            ? AwsBasicCredentials.create(accessKey, secretKey)
+            : AwsSessionCredentials.create(accessKey, secretKey, sessionToken);
   }
 
   @Override
-  public AWSCredentials getCredentials() {
+  public AwsCredentials resolveCredentials() {
     return this.awsCredentials;
-  }
-
-  @Override
-  public void refresh() {
-
   }
 }

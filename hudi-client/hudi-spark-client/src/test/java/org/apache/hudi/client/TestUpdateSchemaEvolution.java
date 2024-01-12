@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
@@ -36,7 +37,7 @@ import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieSparkTable;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -61,7 +62,7 @@ import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResou
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class TestUpdateSchemaEvolution extends HoodieClientTestHarness implements Serializable {
+public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness implements Serializable {
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -98,7 +99,8 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness implement
       return createHandle.close().get(0);
     }).collect();
 
-    final Path commitFile = new Path(config.getBasePath() + "/.hoodie/" + HoodieTimeline.makeCommitFileName("100"));
+    final Path commitFile = new Path(config.getBasePath() + "/.hoodie/"
+        + HoodieTimeline.makeCommitFileName("100" + "_" + InProcessTimeGenerator.createNewInstantTime()));
     FSUtils.getFs(basePath, HoodieTestUtils.getDefaultHadoopConf()).create(commitFile);
     return statuses.get(0);
   }

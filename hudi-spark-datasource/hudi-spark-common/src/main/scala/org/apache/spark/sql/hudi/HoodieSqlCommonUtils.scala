@@ -216,16 +216,6 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
   }
 
   /**
-   * Append the spark config and table options to the baseConfig.
-   */
-  def withSparkConf(spark: SparkSession, options: Map[String, String])
-                   (baseConfig: Map[String, String] = Map.empty): Map[String, String] = {
-    baseConfig ++ DFSPropertiesConfiguration.getGlobalProps.asScala ++ // Table options has the highest priority
-      (spark.sessionState.conf.getAllConfs ++ HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs(options))
-        .filterKeys(isHoodieConfigKey)
-  }
-
-  /**
    * Check if Sql options are Hoodie Config keys.
    *
    * TODO: standardize the key prefix so that we don't need this helper (HUDI-4935)
@@ -336,25 +326,30 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
   def getPartitionPathToDrop(
                               hoodieCatalogTable: HoodieCatalogTable,
                               normalizedSpecs: Seq[Map[String, String]]): String = {
-    val table = hoodieCatalogTable.table
-    val allPartitionPaths = hoodieCatalogTable.getPartitionPaths
-    val enableHiveStylePartitioning = isHiveStyledPartitioning(allPartitionPaths, table)
-    val enableEncodeUrl = isUrlEncodeEnabled(allPartitionPaths, table)
-    val partitionsToDrop = normalizedSpecs.map { spec =>
-      hoodieCatalogTable.partitionFields.map { partitionColumn =>
-        val encodedPartitionValue = if (enableEncodeUrl) {
-          PartitionPathEncodeUtils.escapePathName(spec(partitionColumn))
-        } else {
-          spec(partitionColumn)
-        }
-        if (enableHiveStylePartitioning) {
-          partitionColumn + "=" + encodedPartitionValue
-        } else {
-          encodedPartitionValue
-        }
-      }.mkString("/")
-    }.mkString(",")
-    partitionsToDrop
+    normalizedSpecs.map(makePartitionPath(hoodieCatalogTable, _)).mkString(",")
+  }
+
+  private def makePartitionPath(partitionFields: Seq[String],
+                                normalizedSpecs: Map[String, String],
+                                enableEncodeUrl: Boolean,
+                                enableHiveStylePartitioning: Boolean): String = {
+    partitionFields.map { partitionColumn =>
+      val encodedPartitionValue = if (enableEncodeUrl) {
+        PartitionPathEncodeUtils.escapePathName(normalizedSpecs(partitionColumn))
+      } else {
+        normalizedSpecs(partitionColumn)
+      }
+      if (enableHiveStylePartitioning) s"$partitionColumn=$encodedPartitionValue" else encodedPartitionValue
+    }.mkString("/")
+  }
+
+  def makePartitionPath(hoodieCatalogTable: HoodieCatalogTable,
+                        normalizedSpecs: Map[String, String]): String = {
+    val tableConfig = hoodieCatalogTable.tableConfig
+    val enableHiveStylePartitioning =  java.lang.Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable)
+    val enableEncodeUrl = java.lang.Boolean.parseBoolean(tableConfig.getUrlEncodePartitioning)
+
+    makePartitionPath(hoodieCatalogTable.partitionFields, normalizedSpecs, enableEncodeUrl, enableHiveStylePartitioning)
   }
 
   private def validateInstant(queryInstant: String): Unit = {

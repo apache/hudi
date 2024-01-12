@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.command
 
+import org.apache.hudi.DataSourceWriteOptions.{SPARK_SQL_WRITES_PREPPED_KEY, SPARK_SQL_OPTIMIZED_WRITES}
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.attributeEquals
 import org.apache.spark.sql._
@@ -43,7 +44,13 @@ case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableC
       case Assignment(attr: AttributeReference, value) => attr -> value
     }
 
-    val filteredOutput = removeMetaFields(ut.table.output)
+    val filteredOutput = if (sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
+      , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
+      ut.table.output
+    } else {
+      removeMetaFields(ut.table.output)
+    }
+
     val targetExprs = filteredOutput.map { targetAttr =>
       // NOTE: [[UpdateTable]] permits partial updates and therefore here we correlate assigned
       //       assigned attributes to the ones of the target table. Ones not being assigned
@@ -56,7 +63,14 @@ case class UpdateHoodieTableCommand(ut: UpdateTable) extends HoodieLeafRunnableC
     val condition = ut.condition.getOrElse(TrueLiteral)
     val filteredPlan = Filter(condition, Project(targetExprs, ut.table))
 
-    val config = buildHoodieConfig(catalogTable)
+    val config = if (sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
+      , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
+      // Set config to show that this is a prepped write.
+      buildHoodieConfig(catalogTable) + (SPARK_SQL_WRITES_PREPPED_KEY -> "true")
+    } else {
+      buildHoodieConfig(catalogTable)
+    }
+
     val df = Dataset.ofRows(sparkSession, filteredPlan)
 
     df.write.format("hudi")

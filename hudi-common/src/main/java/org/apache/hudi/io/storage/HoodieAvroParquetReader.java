@@ -18,17 +18,20 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.BaseFileUtils;
-import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
+import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -47,8 +50,6 @@ import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 
 /**
  * {@link HoodieFileReader} implementation for parquet format.
- *
- * @param <R> Record implementation that permits field access by integer index.
  */
 public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
 
@@ -85,7 +86,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
   }
 
   @Override
-  public Set<String> filterRowKeys(Set<String> candidateRowKeys) {
+  public Set<Pair<String, Long>> filterRowKeys(Set<String> candidateRowKeys) {
     return parquetUtils.filterRowKeys(conf, path, candidateRowKeys);
   }
 
@@ -95,7 +96,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
   }
 
   @Override
-  protected ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
+  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
     return getIndexedRecordIteratorInternal(readerSchema, Option.of(requestedSchema));
   }
 
@@ -169,5 +170,27 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
     ParquetReaderIterator<IndexedRecord> parquetReaderIterator = new ParquetReaderIterator<>(reader);
     readerIterators.add(parquetReaderIterator);
     return parquetReaderIterator;
+  }
+
+  @Override
+  public ClosableIterator<String> getRecordKeyIterator() throws IOException {
+    ClosableIterator<IndexedRecord> recordKeyIterator = getIndexedRecordIterator(HoodieAvroUtils.getRecordKeySchema());
+    return new ClosableIterator<String>() {
+      @Override
+      public boolean hasNext() {
+        return recordKeyIterator.hasNext();
+      }
+
+      @Override
+      public String next() {
+        Object obj = recordKeyIterator.next();
+        return ((GenericRecord) obj).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+      }
+
+      @Override
+      public void close() {
+        recordKeyIterator.close();
+      }
+    };
   }
 }

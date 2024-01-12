@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.sources;
 
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
@@ -36,12 +35,15 @@ import org.slf4j.LoggerFactory;
 import java.util.Arrays;
 import java.util.Collections;
 
+import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+
 /**
  * SQL Source that reads from any table, used mainly for backfill jobs which will process specific partition dates.
  *
  * <p>Spark SQL should be configured using this hoodie config:
  *
- * <p>hoodie.deltastreamer.source.sql.sql.query = 'select * from source_table'
+ * <p>hoodie.streamer.source.sql.sql.query = 'select * from source_table'
  *
  * <p>SQL Source is used for one time backfill scenarios, this won't update the deltastreamer.checkpoint.key to the
  * processed commit, instead it will fetch the latest successful checkpoint key and set that value as this backfill
@@ -65,9 +67,9 @@ public class SqlSource extends RowSource {
       SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
-    DataSourceUtils.checkRequiredProperties(
-        props, Collections.singletonList(SqlSourceConfig.SOURCE_SQL.key()));
-    sourceSql = props.getString(SqlSourceConfig.SOURCE_SQL.key());
+    checkRequiredConfigProperties(
+        props, Collections.singletonList(SqlSourceConfig.SOURCE_SQL));
+    sourceSql = getStringWithAltKeys(props, SqlSourceConfig.SOURCE_SQL);
     spark = sparkSession;
   }
 

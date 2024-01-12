@@ -18,13 +18,15 @@
 
 package org.apache.hudi.sink.bulk;
 
-import org.apache.hudi.client.HoodieInternalWriteStatus;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.storage.row.HoodieRowDataCreateHandle;
+import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.flink.configuration.Configuration;
@@ -43,7 +45,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Helper class for bulk insert used by Flink.
@@ -54,40 +55,49 @@ public class BulkInsertWriterHelper {
 
   protected final String instantTime;
   protected final int taskPartitionId;
-  protected final long taskId;
+  protected final long totalSubtaskNum;
   protected final long taskEpochId;
   protected final HoodieTable hoodieTable;
   protected final HoodieWriteConfig writeConfig;
   protected final RowType rowType;
   protected final boolean preserveHoodieMetadata;
   protected final Boolean isInputSorted;
-  private final List<HoodieInternalWriteStatus> writeStatusList = new ArrayList<>();
+  private final List<WriteStatus> writeStatusList = new ArrayList<>();
   protected HoodieRowDataCreateHandle handle;
   private String lastKnownPartitionPath = null;
   private final String fileIdPrefix;
   private int numFilesWritten = 0;
   protected final Map<String, HoodieRowDataCreateHandle> handles = new HashMap<>();
-  @Nullable protected final RowDataKeyGen keyGen;
+  @Nullable
+  protected final RowDataKeyGen keyGen;
+
+  protected final Option<FlinkStreamWriteMetrics> writeMetrics;
 
   public BulkInsertWriterHelper(Configuration conf, HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
-                                String instantTime, int taskPartitionId, long taskId, long taskEpochId, RowType rowType) {
-    this(conf, hoodieTable, writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, rowType, false);
+                                String instantTime, int taskPartitionId, long totalSubtaskNum, long taskEpochId, RowType rowType) {
+    this(conf, hoodieTable, writeConfig, instantTime, taskPartitionId, totalSubtaskNum, taskEpochId, rowType, false, Option.empty());
   }
 
   public BulkInsertWriterHelper(Configuration conf, HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
-                                String instantTime, int taskPartitionId, long taskId, long taskEpochId, RowType rowType,
-                                boolean preserveHoodieMetadata) {
+                                String instantTime, int taskPartitionId, long taskId, long taskEpochId, RowType rowType, boolean preserveHoodieMetadata) {
+    this(conf, hoodieTable, writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, rowType, preserveHoodieMetadata, Option.empty());
+  }
+
+  public BulkInsertWriterHelper(Configuration conf, HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
+                                String instantTime, int taskPartitionId, long totalSubtaskNum, long taskEpochId, RowType rowType,
+                                boolean preserveHoodieMetadata, Option<FlinkStreamWriteMetrics> writeMetrics) {
     this.hoodieTable = hoodieTable;
     this.writeConfig = writeConfig;
     this.instantTime = instantTime;
     this.taskPartitionId = taskPartitionId;
-    this.taskId = taskId;
+    this.totalSubtaskNum = totalSubtaskNum;
     this.taskEpochId = taskEpochId;
     this.rowType = preserveHoodieMetadata ? rowType : addMetadataFields(rowType, writeConfig.allowOperationMetadataField()); // patch up with metadata fields
     this.preserveHoodieMetadata = preserveHoodieMetadata;
-    this.isInputSorted = conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT);
+    this.isInputSorted = OptionsResolver.isBulkInsertOperation(conf) && conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT);
     this.fileIdPrefix = UUID.randomUUID().toString();
-    this.keyGen = preserveHoodieMetadata ? null : RowDataKeyGen.instance(conf, rowType);
+    this.keyGen = preserveHoodieMetadata ? null : RowDataKeyGens.instance(conf, rowType, taskPartitionId, instantTime);
+    this.writeMetrics = writeMetrics;
   }
 
   /**
@@ -109,18 +119,15 @@ public class BulkInsertWriterHelper {
       if ((lastKnownPartitionPath == null) || !lastKnownPartitionPath.equals(partitionPath) || !handle.canWrite()) {
         handle = getRowCreateHandle(partitionPath);
         lastKnownPartitionPath = partitionPath;
+        writeMetrics.ifPresent(FlinkStreamWriteMetrics::markHandleSwitch);
       }
       handle.write(recordKey, partitionPath, record);
+      writeMetrics.ifPresent(FlinkStreamWriteMetrics::markRecordIn);
     } catch (Throwable t) {
       IOException ioException = new IOException("Exception happened when bulk insert.", t);
       LOG.error("Global error thrown while trying to write records in HoodieRowCreateHandle ", ioException);
       throw new IOException(ioException);
     }
-  }
-
-  public List<HoodieInternalWriteStatus> getHoodieWriteStatuses() throws IOException {
-    close();
-    return writeStatusList;
   }
 
   private HoodieRowDataCreateHandle getRowCreateHandle(String partitionPath) throws IOException {
@@ -131,17 +138,20 @@ public class BulkInsertWriterHelper {
       }
 
       LOG.info("Creating new file for partition path " + partitionPath);
+      writeMetrics.ifPresent(FlinkStreamWriteMetrics::startHandleCreation);
       HoodieRowDataCreateHandle rowCreateHandle = new HoodieRowDataCreateHandle(hoodieTable, writeConfig, partitionPath, getNextFileId(),
-          instantTime, taskPartitionId, taskId, taskEpochId, rowType, preserveHoodieMetadata);
+          instantTime, taskPartitionId, totalSubtaskNum, taskEpochId, rowType, preserveHoodieMetadata);
       handles.put(partitionPath, rowCreateHandle);
+
+      writeMetrics.ifPresent(FlinkStreamWriteMetrics::increaseNumOfOpenHandle);
     } else if (!handles.get(partitionPath).canWrite()) {
       // even if there is a handle to the partition path, it could have reached its max size threshold. So, we close the handle here and
       // create a new one.
       LOG.info("Rolling max-size file for partition path " + partitionPath);
-      writeStatusList.add(handles.remove(partitionPath).close());
-      HoodieRowDataCreateHandle rowCreateHandle = new HoodieRowDataCreateHandle(hoodieTable, writeConfig, partitionPath, getNextFileId(),
-          instantTime, taskPartitionId, taskId, taskEpochId, rowType, preserveHoodieMetadata);
+      writeStatusList.add(closeWriteHandle(handles.remove(partitionPath)));
+      HoodieRowDataCreateHandle rowCreateHandle = createWriteHandle(partitionPath);
       handles.put(partitionPath, rowCreateHandle);
+      writeMetrics.ifPresent(FlinkStreamWriteMetrics::increaseNumOfFilesWritten);
     }
     return handles.get(partitionPath);
   }
@@ -149,7 +159,7 @@ public class BulkInsertWriterHelper {
   public void close() throws IOException {
     for (HoodieRowDataCreateHandle rowCreateHandle : handles.values()) {
       LOG.info("Closing bulk insert file " + rowCreateHandle.getFileName());
-      writeStatusList.add(rowCreateHandle.close());
+      writeStatusList.add(closeWriteHandle(rowCreateHandle));
     }
     handles.clear();
     handle = null;
@@ -196,24 +206,27 @@ public class BulkInsertWriterHelper {
 
   public List<WriteStatus> getWriteStatuses(int taskID) {
     try {
-      return getHoodieWriteStatuses().stream()
-          .map(BulkInsertWriterHelper::toWriteStatus).collect(Collectors.toList());
+      close();
+      return writeStatusList;
     } catch (IOException e) {
       throw new HoodieException("Error collect the write status for task [" + taskID + "]", e);
     }
   }
 
-  /**
-   * Tool to convert {@link HoodieInternalWriteStatus} into {@link WriteStatus}.
-   */
-  private static WriteStatus toWriteStatus(HoodieInternalWriteStatus internalWriteStatus) {
-    WriteStatus writeStatus = new WriteStatus(false, 0.1);
-    writeStatus.setStat(internalWriteStatus.getStat());
-    writeStatus.setFileId(internalWriteStatus.getFileId());
-    writeStatus.setGlobalError(internalWriteStatus.getGlobalError());
-    writeStatus.setTotalRecords(internalWriteStatus.getTotalRecords());
-    writeStatus.setTotalErrorRecords(internalWriteStatus.getTotalErrorRecords());
-    return writeStatus;
+  private HoodieRowDataCreateHandle createWriteHandle(String  partitionPath) {
+    writeMetrics.ifPresent(FlinkStreamWriteMetrics::startHandleCreation);
+    HoodieRowDataCreateHandle rowCreateHandle = new HoodieRowDataCreateHandle(hoodieTable, writeConfig, partitionPath, getNextFileId(),
+        instantTime, taskPartitionId, totalSubtaskNum, taskEpochId, rowType, preserveHoodieMetadata);
+    writeMetrics.ifPresent(FlinkStreamWriteMetrics::endHandleCreation);
+    return rowCreateHandle;
   }
+
+  private WriteStatus closeWriteHandle(HoodieRowDataCreateHandle rowCreateHandle) throws IOException {
+    writeMetrics.ifPresent(FlinkStreamWriteMetrics::startFileFlush);
+    WriteStatus status = rowCreateHandle.close();
+    writeMetrics.ifPresent(FlinkStreamWriteMetrics::endFileFlush);
+    return status;
+  }
+
 }
 

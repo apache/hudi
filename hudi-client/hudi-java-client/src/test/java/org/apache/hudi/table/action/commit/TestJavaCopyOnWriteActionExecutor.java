@@ -99,7 +99,9 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
           context.getTaskContextSupplier().getAttemptIdSupplier().get());
       HoodieCreateHandle io = new HoodieCreateHandle(config, instantTime, table, partitionPath, fileName,
           context.getTaskContextSupplier());
-      return Pair.of(io.makeNewPath(record.getPartitionPath()), writeToken);
+      Pair<Path, String> result = Pair.of(io.makeNewPath(record.getPartitionPath()), writeToken);
+      io.close();
+      return result;
     }).collect(Collectors.toList()).get(0);
 
     assertEquals(newPathWithWriteToken.getKey().toString(), Paths.get(this.basePath, partitionPath,
@@ -127,7 +129,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
     writeClient.startCommitWithTime(firstCommitTime);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    BaseFileUtils fileUtils = BaseFileUtils.getInstance(metaClient);
+    BaseFileUtils fileUtils = getFileUtilsInstance(metaClient);
 
     String partitionPath = "2016/01/31";
 
@@ -408,11 +410,10 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
 
   @Test
   public void testInsertUpsertWithHoodieAvroPayload() throws Exception {
-    Schema schema = getSchemaFromResource(TestJavaCopyOnWriteActionExecutor.class, "/testDataGeneratorSchema.txt");
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withEngineType(EngineType.JAVA)
         .withPath(basePath)
-        .withSchema(schema.toString())
+        .withSchema(TRIP_EXAMPLE_SCHEMA)
         .withStorageConfig(HoodieStorageConfig.newBuilder()
             .parquetMaxFileSize(1000 * 1024).hfileMaxFileSize(1000 * 1024).build())
         .build();
@@ -475,7 +476,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
     writeClient.startCommitWithTime(firstCommitTime);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    BaseFileUtils fileUtils = BaseFileUtils.getInstance(metaClient);
+    BaseFileUtils fileUtils = getFileUtilsInstance(metaClient);
 
     String partitionPath = "2022/04/09";
 

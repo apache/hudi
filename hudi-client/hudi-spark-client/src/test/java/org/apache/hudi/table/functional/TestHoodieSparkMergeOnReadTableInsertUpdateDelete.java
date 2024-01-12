@@ -19,9 +19,6 @@
 
 package org.apache.hudi.table.functional;
 
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.Path;
-
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.FSUtils;
@@ -38,7 +35,7 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.AppendResult;
-import org.apache.hudi.common.table.log.HoodieLogFileWriteCallback;
+import org.apache.hudi.common.table.log.LogFileCreationCallback;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
@@ -65,7 +62,9 @@ import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Tag;
@@ -248,13 +247,14 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       FileCreateUtils.deleteRollbackCommit(metaClient.getBasePath().substring(metaClient.getBasePath().indexOf(":") + 1),
           rollbackInstant.getTimestamp());
       metaClient.reloadActiveTimeline();
-      SparkRDDWriteClient client1 = getHoodieWriteClient(cfg);
-      // trigger compaction again.
-      client1.compact(compactionInstant.get());
-      metaClient.reloadActiveTimeline();
-      // verify that there is no new rollback instant generated
-      HoodieInstant newRollbackInstant = metaClient.getActiveTimeline().getRollbackTimeline().lastInstant().get();
-      assertEquals(rollbackInstant.getTimestamp(), newRollbackInstant.getTimestamp());
+      try (SparkRDDWriteClient client1 = getHoodieWriteClient(cfg)) {
+        // trigger compaction again.
+        client1.compact(compactionInstant.get());
+        metaClient.reloadActiveTimeline();
+        // verify that there is no new rollback instant generated
+        HoodieInstant newRollbackInstant = metaClient.getActiveTimeline().getRollbackTimeline().lastInstant().get();
+        assertEquals(rollbackInstant.getTimestamp(), newRollbackInstant.getTimestamp());
+      }
     }
   }
 
@@ -380,17 +380,18 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
           HoodieSparkTable.create(config, context()), newCommitTime);
       HoodieLogFormat.Writer fakeLogWriter = HoodieLogFormat.newWriterBuilder()
           .onParentPath(FSUtils.getPartitionPath(config.getBasePath(), correctWriteStat.getPartitionPath()))
-          .withFileId(correctWriteStat.getFileId()).overBaseCommit(newCommitTime)
+          .withFileId(correctWriteStat.getFileId())
+          .withDeltaCommit(newCommitTime)
           .withLogVersion(correctLogFile.getLogVersion())
           .withFileSize(0L)
           .withSizeThreshold(config.getLogFileMaxSize()).withFs(fs())
           .withRolloverLogWriteToken(fakeToken)
           .withLogWriteToken(fakeToken)
           .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-          .withLogWriteCallback(new HoodieLogFileWriteCallback() {
+          .withFileCreationCallback(new LogFileCreationCallback() {
             @Override
-            public boolean preLogFileCreate(HoodieLogFile logFileToCreate) {
-              return writeMarkers.create(correctWriteStat.getPartitionPath(), logFileToCreate.getFileName(), IOType.CREATE).isPresent();
+            public boolean preFileCreation(HoodieLogFile logFile) {
+              return writeMarkers.create(correctWriteStat.getPartitionPath(), logFile.getFileName(), IOType.CREATE).isPresent();
             }
           }).build();
       AppendResult fakeAppendResult = fakeLogWriter.appendBlock(getLogBlock());
@@ -441,7 +442,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
     List<HoodieRecord> hoodieRecords = records.stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
-    return new HoodieAvroDataBlock(hoodieRecords, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    return new HoodieAvroDataBlock(hoodieRecords, false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 
   private String generateFakeWriteToken(String correctWriteToken) {

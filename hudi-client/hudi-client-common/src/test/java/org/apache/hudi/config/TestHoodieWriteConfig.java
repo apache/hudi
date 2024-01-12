@@ -105,7 +105,7 @@ public class TestHoodieWriteConfig {
     testEngineSpecificConfig(HoodieWriteConfig::getClusteringPlanStrategyClass,
         constructConfigMap(
             EngineType.SPARK, HoodieClusteringConfig.SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY,
-            EngineType.FLINK, HoodieClusteringConfig.JAVA_SIZED_BASED_CLUSTERING_PLAN_STRATEGY,
+            EngineType.FLINK, HoodieClusteringConfig.FLINK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY,
             EngineType.JAVA, HoodieClusteringConfig.JAVA_SIZED_BASED_CLUSTERING_PLAN_STRATEGY));
   }
 
@@ -498,6 +498,68 @@ public class TestHoodieWriteConfig {
         .withLayoutConfig(HoodieLayoutConfig.newBuilder().withLayoutPartitioner("org.apache.hudi.table.action.commit.UpsertPartitioner").build())
         .build();
     assertEquals("org.apache.hudi.table.action.commit.UpsertPartitioner", overwritePartitioner.getString(HoodieLayoutConfig.LAYOUT_PARTITIONER_CLASS_NAME));
+  }
+
+  @Test
+  public void testAutoAdjustCleanPolicyForNonBlockingConcurrencyControl() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(HoodieTableConfig.TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
+    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid");
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withIndexConfig(
+            HoodieIndexConfig.newBuilder()
+                .fromProperties(props)
+                .withIndexType(HoodieIndex.IndexType.BUCKET)
+                .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.SIMPLE)
+                .build())
+        .withWriteConcurrencyMode(WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL)
+        .build();
+
+    // Verify automatically set hoodie.cleaner.policy.failed.writes=LAZY for non-blocking concurrency control
+    verifyConcurrencyControlRelatedConfigs(writeConfig,
+        true, true, true,
+        WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL, HoodieFailedWritesCleaningPolicy.LAZY,
+        HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue());
+  }
+
+  @Test
+  public void testNonBlockingConcurrencyControlInvalidEarlyConflictDetection() {
+    Properties props = new Properties();
+    props.put(HoodieTableConfig.TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
+    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid");
+    HoodieWriteConfig.Builder writeConfigBuilder = HoodieWriteConfig.newBuilder().withPath("/tmp");
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> writeConfigBuilder.withIndexConfig(
+            HoodieIndexConfig.newBuilder()
+                .fromProperties(props)
+                .withIndexType(HoodieIndex.IndexType.BUCKET)
+                .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.SIMPLE)
+                .build())
+            .withWriteConcurrencyMode(WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL)
+            .withEarlyConflictDetectionEnable(true)
+            .build(),
+        "To use early conflict detection, set hoodie.write.concurrency.mode=OPTIMISTIC_CONCURRENCY_CONTROL");
+  }
+
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testNonBlockingConcurrencyControlInvalidTableTypeOrIndexType(HoodieTableType tableType) {
+    TypedProperties props = new TypedProperties();
+    props.put(HoodieTableConfig.TYPE.key(), tableType.name());
+    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid");
+    HoodieWriteConfig.Builder writeConfigBuilder = HoodieWriteConfig.newBuilder().withPath("/tmp");
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> writeConfigBuilder.withIndexConfig(
+            HoodieIndexConfig.newBuilder()
+                .fromProperties(props)
+                .withIndexType(HoodieIndex.IndexType.SIMPLE)
+                .build())
+            .withWriteConcurrencyMode(WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL)
+            .build(),
+        "Non-blocking concurrency control requires the MOR table with simple bucket index");
   }
 
   private HoodieWriteConfig createWriteConfig(Map<String, String> configs) {

@@ -18,7 +18,7 @@
 package org.apache.hudi.sync.common;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.sync.common.util.ConfigUtils;
+import org.apache.hudi.common.util.ConfigUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;

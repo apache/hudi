@@ -36,7 +36,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.BootstrapBaseFileSplit;
 import org.apache.hudi.hadoop.FileStatusWithBootstrapBaseFile;
-import org.apache.hudi.hadoop.HiveHoodieTableFileIndex;
 import org.apache.hudi.hadoop.HoodieCopyOnWriteTableInputFormat;
 import org.apache.hudi.hadoop.LocatedFileStatusWithBootstrapBaseFile;
 import org.apache.hudi.hadoop.RealtimeFileStatus;
@@ -65,6 +64,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.createRealtimeFileSplit;
 
 /**
  * Base implementation of the Hive's {@link FileInputFormat} allowing for reading of Hudi's
@@ -91,13 +91,11 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
   }
 
   @Override
-  protected FileStatus createFileStatusUnchecked(FileSlice fileSlice, HiveHoodieTableFileIndex fileIndex, HoodieTableMetaClient metaClient) {
+  protected FileStatus createFileStatusUnchecked(FileSlice fileSlice, Option<HoodieInstant> latestCompletedInstantOpt,
+                                                 String tableBasePath, HoodieTableMetaClient metaClient) {
     Option<HoodieBaseFile> baseFileOpt = fileSlice.getBaseFile();
     Option<HoodieLogFile> latestLogFileOpt = fileSlice.getLatestLogFile();
     Stream<HoodieLogFile> logFiles = fileSlice.getLogFiles();
-
-    Option<HoodieInstant> latestCompletedInstantOpt = fileIndex.getLatestCompletedInstant();
-    String tableBasePath = fileIndex.getBasePath().toString();
 
     // Check if we're reading a MOR table
     if (baseFileOpt.isPresent()) {
@@ -107,6 +105,24 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
     } else {
       throw new IllegalStateException("Invalid state: either base-file or log-file has to be present");
     }
+  }
+
+  /**
+   * return non hoodie paths
+   * @param job
+   * @return
+   * @throws IOException
+   */
+  @Override
+  public FileStatus[] listStatusForNonHoodiePaths(JobConf job) throws IOException {
+    FileStatus[] fileStatuses = doListStatus(job);
+    List<FileStatus> result = new ArrayList<>();
+    for (FileStatus fileStatus : fileStatuses) {
+      String baseFilePath = fileStatus.getPath().toUri().toString();
+      RealtimeFileStatus realtimeFileStatus = new RealtimeFileStatus(fileStatus, baseFilePath, new ArrayList<>(), false, Option.empty());
+      result.add(realtimeFileStatus);
+    }
+    return result.toArray(new FileStatus[0]);
   }
 
   @Override
@@ -304,20 +320,12 @@ public class HoodieMergeOnReadTableInputFormat extends HoodieCopyOnWriteTableInp
         .collect(Collectors.toList());
   }
 
-  private static HoodieRealtimeFileSplit createRealtimeFileSplit(HoodieRealtimePath path, long start, long length, String[] hosts) {
-    try {
-      return new HoodieRealtimeFileSplit(new FileSplit(path, start, length, hosts), path);
-    } catch (IOException e) {
-      throw new HoodieIOException(String.format("Failed to create instance of %s", HoodieRealtimeFileSplit.class.getName()), e);
-    }
-  }
-
   private static HoodieRealtimeBootstrapBaseFileSplit createRealtimeBootstrapBaseFileSplit(BootstrapBaseFileSplit split,
-                                                                                          String basePath,
-                                                                                          List<HoodieLogFile> logFiles,
-                                                                                          String maxInstantTime,
-                                                                                          boolean belongsToIncrementalQuery,
-                                                                                          Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt) {
+                                                                                           String basePath,
+                                                                                           List<HoodieLogFile> logFiles,
+                                                                                           String maxInstantTime,
+                                                                                           boolean belongsToIncrementalQuery,
+                                                                                           Option<HoodieVirtualKeyInfo> virtualKeyInfoOpt) {
     try {
       String[] hosts = split.getLocationInfo() != null ? Arrays.stream(split.getLocationInfo())
           .filter(x -> !x.isInMemory()).toArray(String[]::new) : new String[0];

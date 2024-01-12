@@ -50,10 +50,12 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightAndCompletedMetadataPartitions;
 import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
@@ -147,7 +149,7 @@ public class HoodieIndexer {
 
     if (cfg.help || args.length == 0) {
       cmd.usage();
-      System.exit(1);
+      throw new HoodieException("Indexing failed for basePath : " + cfg.basePath);
     }
 
     final JavaSparkContext jsc = UtilHelpers.buildSparkContext("indexing-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory);
@@ -155,11 +157,10 @@ public class HoodieIndexer {
     int result = indexer.start(cfg.retry);
     String resultMsg = String.format("Indexing with basePath: %s, tableName: %s, runningMode: %s",
         cfg.basePath, cfg.tableName, cfg.runningMode);
-    if (result == -1) {
-      LOG.error(resultMsg + " failed");
-    } else {
-      LOG.info(resultMsg + " success");
+    if (result != 0) {
+      throw new HoodieException(resultMsg + " failed");
     }
+    LOG.info(resultMsg + " success");
     jsc.stop();
   }
 
@@ -180,6 +181,9 @@ public class HoodieIndexer {
       }
       if (PARTITION_NAME_BLOOM_FILTERS.equals(p)) {
         props.setProperty(ENABLE_METADATA_INDEX_BLOOM_FILTER.key(), "true");
+      }
+      if (PARTITION_NAME_RECORD_INDEX.equals(p)) {
+        props.setProperty(RECORD_INDEX_ENABLE_PROP.key(), "true");
       }
     });
 
@@ -333,7 +337,7 @@ public class HoodieIndexer {
   List<MetadataPartitionType> getRequestedPartitionTypes(String indexTypes, Option<HoodieMetadataConfig> metadataConfig) {
     List<String> requestedIndexTypes = Arrays.asList(indexTypes.split(","));
     return requestedIndexTypes.stream()
-            .map(p -> MetadataPartitionType.valueOf(p.toUpperCase(Locale.ROOT)))
-            .collect(Collectors.toList());
+        .map(p -> MetadataPartitionType.valueOf(p.toUpperCase(Locale.ROOT)))
+        .collect(Collectors.toList());
   }
 }

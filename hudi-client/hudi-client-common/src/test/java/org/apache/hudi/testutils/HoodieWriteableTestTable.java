@@ -23,6 +23,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -82,7 +83,12 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
 
   protected HoodieWriteableTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient, Schema schema,
                                      BloomFilter filter, HoodieTableMetadataWriter metadataWriter) {
-    super(basePath, fs, metaClient, metadataWriter);
+    this(basePath, fs, metaClient, schema, filter, metadataWriter, Option.empty());
+  }
+
+  protected HoodieWriteableTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient, Schema schema,
+                                     BloomFilter filter, HoodieTableMetadataWriter metadataWriter, Option<HoodieEngineContext> context) {
+    super(basePath, fs, metaClient, metadataWriter, context);
     this.schema = schema;
     this.filter = filter;
     this.populateMetaFields = metaClient.getTableConfig().populateMetaFields();
@@ -164,7 +170,7 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
   private Pair<String, HoodieLogFile> appendRecordsToLogFile(String partitionPath, String fileId, List<HoodieRecord> records) throws Exception {
     try (HoodieLogFormat.Writer logWriter = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(basePath, partitionPath))
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId)
-        .overBaseCommit(currentInstantTime).withFs(fs).build()) {
+        .withDeltaCommit(currentInstantTime).withFs(fs).build()) {
       Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, currentInstantTime);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
@@ -177,7 +183,8 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
           LOG.warn("Failed to convert record " + r.toString(), e);
           return null;
         }
-      }).map(HoodieAvroIndexedRecord::new).collect(Collectors.toList()), header, HoodieRecord.RECORD_KEY_METADATA_FIELD));
+      }).map(HoodieAvroIndexedRecord::new).collect(Collectors.toList()),
+          false, header, HoodieRecord.RECORD_KEY_METADATA_FIELD));
       return Pair.of(partitionPath, logWriter.getLogFile());
     }
   }

@@ -31,7 +31,6 @@ import org.apache.hudi.util.ExecutorFactory;
 
 import java.util.Iterator;
 import java.util.List;
-import java.util.Properties;
 import java.util.function.Function;
 
 /**
@@ -77,12 +76,10 @@ public abstract class HoodieLazyInsertIterable<T>
   public static class HoodieInsertValueGenResult<R extends HoodieRecord> {
     private final R record;
     public final Schema schema;
-    public final Properties props;
 
-    public HoodieInsertValueGenResult(R record, Schema schema, Properties properties) {
+    public HoodieInsertValueGenResult(R record, Schema schema) {
       this.record = record;
       this.schema = schema;
-      this.props = properties;
     }
 
     public R getResult() {
@@ -112,7 +109,7 @@ public abstract class HoodieLazyInsertIterable<T>
 
     return record -> {
       HoodieRecord<T> clonedRecord = shouldClone ? record.copy() : record;
-      return new HoodieInsertValueGenResult(clonedRecord, schema, writeConfig.getProps());
+      return new HoodieInsertValueGenResult(clonedRecord, schema);
     };
   }
 

@@ -132,6 +132,7 @@ class AvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType) {
             val bytes = new Array[Byte](s.getByteLength)
             System.arraycopy(s.getBytes, 0, bytes, 0, s.getByteLength)
             UTF8String.fromBytes(bytes)
+          case s: GenericData.EnumSymbol => UTF8String.fromString(s.toString)
         }
         updater.set(ordinal, str)
 

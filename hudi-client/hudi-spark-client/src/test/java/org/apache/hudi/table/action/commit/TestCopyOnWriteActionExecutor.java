@@ -124,7 +124,9 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
       String writeToken = FSUtils.makeWriteToken(TaskContext.getPartitionId(), TaskContext.get().stageId(),
           TaskContext.get().taskAttemptId());
       HoodieCreateHandle io = new HoodieCreateHandle(config, instantTime, table, partitionPath, fileName, supplier);
-      return Pair.of(io.makeNewPath(record.getPartitionPath()), writeToken);
+      Pair<Path, String> result = Pair.of(io.makeNewPath(record.getPartitionPath()), writeToken);
+      io.close();
+      return result;
     }).collect().get(0);
 
     assertEquals(newPathWithWriteToken.getKey().toString(), Paths.get(this.basePath, partitionPath,
@@ -242,8 +244,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
 
     // Check whether the record has been updated
     Path updatedFilePath = allFiles[0].getPath();
-    BloomFilter updatedFilter =
-        BaseFileUtils.getInstance(metaClient).readBloomFilterFromMetadata(hadoopConf, updatedFilePath);
+    BloomFilter updatedFilter = getFileUtilsInstance(metaClient).readBloomFilterFromMetadata(hadoopConf, updatedFilePath);
     for (HoodieRecord record : records) {
       // No change to the _row_key
       assertTrue(updatedFilter.mightContain(record.getRecordKey()));
@@ -450,8 +451,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
 
   @Test
   public void testInsertUpsertWithHoodieAvroPayload() throws Exception {
-    Schema schema = getSchemaFromResource(TestCopyOnWriteActionExecutor.class, "/testDataGeneratorSchema.txt");
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schema.toString())
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA)
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder()
@@ -541,7 +541,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     Option<Path> metafilePath = HoodiePartitionMetadata.getPartitionMetafilePath(fs, partitionPath);
     if (partitionMetafileUseBaseFormat) {
       // Extension should be the same as the data file format of the table
-      assertTrue(metafilePath.get().toString().endsWith(table.getBaseFileFormat().getFileExtension()));
+      assertTrue(metafilePath.get().toString().endsWith(table.getBaseFileExtension()));
     } else {
       // No extension as it is in properties file format
       assertTrue(metafilePath.get().toString().endsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX));

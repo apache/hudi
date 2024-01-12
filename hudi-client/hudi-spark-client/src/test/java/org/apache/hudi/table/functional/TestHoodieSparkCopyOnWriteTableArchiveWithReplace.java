@@ -63,13 +63,13 @@ public class TestHoodieSparkCopyOnWriteTableArchiveWithReplace extends SparkClie
          HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(DEFAULT_PARTITION_PATHS)) {
 
       // 1st write batch; 3 commits for 3 partitions
-      String instantTime1 = HoodieActiveTimeline.createNewInstantTime(1000);
+      String instantTime1 = client.createNewInstantTime(1000);
       client.startCommitWithTime(instantTime1);
       client.insert(jsc().parallelize(dataGen.generateInsertsForPartition(instantTime1, 10, DEFAULT_FIRST_PARTITION_PATH), 1), instantTime1);
-      String instantTime2 = HoodieActiveTimeline.createNewInstantTime(2000);
+      String instantTime2 = client.createNewInstantTime(2000);
       client.startCommitWithTime(instantTime2);
       client.insert(jsc().parallelize(dataGen.generateInsertsForPartition(instantTime2, 10, DEFAULT_SECOND_PARTITION_PATH), 1), instantTime2);
-      String instantTime3 = HoodieActiveTimeline.createNewInstantTime(3000);
+      String instantTime3 = client.createNewInstantTime(3000);
       client.startCommitWithTime(instantTime3);
       client.insert(jsc().parallelize(dataGen.generateInsertsForPartition(instantTime3, 1, DEFAULT_THIRD_PARTITION_PATH), 1), instantTime3);
 
@@ -77,13 +77,13 @@ public class TestHoodieSparkCopyOnWriteTableArchiveWithReplace extends SparkClie
       assertEquals(21, countRecordsOptionallySince(jsc(), basePath(), sqlContext(), timeline1, Option.empty()));
 
       // delete the 1st and the 2nd partition; 1 replace commit
-      final String instantTime4 = HoodieActiveTimeline.createNewInstantTime(4000);
+      final String instantTime4 = client.createNewInstantTime(4000);
       client.startCommitWithTime(instantTime4, HoodieActiveTimeline.REPLACE_COMMIT_ACTION);
       client.deletePartitions(Arrays.asList(DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH), instantTime4);
 
       // 2nd write batch; 6 commits for the 4th partition; the 6th commit to trigger archiving the replace commit
       for (int i = 5; i < 11; i++) {
-        String instantTime = HoodieActiveTimeline.createNewInstantTime(i * 1000);
+        String instantTime = client.createNewInstantTime(i * 1000);
         client.startCommitWithTime(instantTime);
         client.insert(jsc().parallelize(dataGen.generateInsertsForPartition(instantTime, 1, DEFAULT_THIRD_PARTITION_PATH), 1), instantTime);
       }

@@ -80,7 +80,7 @@ public class OptionsInference {
    * @see ClientIds
    */
   public static void setupClientId(Configuration conf) {
-    if (OptionsResolver.isOptimisticConcurrencyControl(conf)) {
+    if (OptionsResolver.isMultiWriter(conf)) {
       // explicit client id always has higher priority
       if (!conf.contains(FlinkOptions.WRITE_CLIENT_ID)) {
         try (ClientIds clientIds = ClientIds.builder().conf(conf).build()) {

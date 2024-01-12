@@ -135,10 +135,9 @@ public class RollbacksCommand {
           help = "Enabling marker based rollback") final String rollbackUsingMarkers)
       throws Exception {
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
-    HoodieTimeline completedTimeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
-    HoodieTimeline filteredTimeline = completedTimeline.filter(instant -> instant.getTimestamp().equals(instantTime));
+    HoodieTimeline filteredTimeline = activeTimeline.filter(instant -> instant.getTimestamp().equals(instantTime));
     if (filteredTimeline.empty()) {
-      return "Commit " + instantTime + " not found in Commits " + completedTimeline;
+      return "Commit " + instantTime + " not found in Commits " + activeTimeline;
     }
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);

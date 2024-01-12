@@ -26,19 +26,14 @@ import org.apache.hudi.common.config.EnumFieldDescription;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
-import org.apache.hudi.common.util.TypeUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 
-import javax.annotation.Nonnull;
-
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.Map;
 import java.util.Properties;
 
 /**
@@ -56,6 +51,8 @@ public class HoodieClusteringConfig extends HoodieConfig {
       "org.apache.hudi.client.clustering.plan.strategy.SparkSizeBasedClusteringPlanStrategy";
   public static final String FLINK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY =
       "org.apache.hudi.client.clustering.plan.strategy.FlinkSizeBasedClusteringPlanStrategy";
+  public static final String FLINK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY =
+      "org.apache.hudi.client.clustering.plan.strategy.FlinkConsistentBucketClusteringPlanStrategy";
   public static final String SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY =
       "org.apache.hudi.client.clustering.plan.strategy.SparkConsistentBucketClusteringPlanStrategy";
   public static final String JAVA_SIZED_BASED_CLUSTERING_PLAN_STRATEGY =
@@ -153,6 +150,23 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.9.0")
       .withDocumentation("Config to control frequency of async clustering");
+
+  public static final ConfigProperty<Integer> CLUSTERING_MAX_PARALLELISM = ConfigProperty
+      .key("hoodie.clustering.max.parallelism")
+      .defaultValue(15)
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("Maximum number of parallelism jobs submitted in clustering operation. "
+          + "If the resource is sufficient(Like Spark engine has enough idle executors), increasing this "
+          + "value will let the clustering job run faster, while it will give additional pressure to the "
+          + "execution engines to manage more concurrent running jobs.");
+
+  public static final ConfigProperty<Integer> CLUSTERING_GROUP_READ_PARALLELISM = ConfigProperty
+      .key("hoodie.clustering.group.read.parallelism")
+      .defaultValue(20)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Maximum number of parallelism when Spark read records from clustering group.");
 
   public static final ConfigProperty<String> PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "daybased.skipfromlatest.partitions")
@@ -257,11 +271,10 @@ public class HoodieClusteringConfig extends HoodieConfig {
    */
   public static final ConfigProperty<String> LAYOUT_OPTIMIZE_STRATEGY = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "strategy")
-      .defaultValue("linear")
+      .defaultValue(LayoutOptimizationStrategy.LINEAR.name())
       .markAdvanced()
       .sinceVersion("0.10.0")
-      .withDocumentation("Determines ordering strategy used in records layout optimization. "
-          + "Currently supported strategies are \"linear\", \"z-order\" and \"hilbert\" values are supported.");
+      .withDocumentation(LayoutOptimizationStrategy.class);
 
   /**
    * NOTE: This setting only has effect if {@link #LAYOUT_OPTIMIZE_STRATEGY} value is set to
@@ -619,19 +632,8 @@ public class HoodieClusteringConfig extends HoodieConfig {
     }
 
     private void setDefaults() {
-      // Consistent hashing bucket index
-      if (clusteringConfig.contains(HoodieIndexConfig.INDEX_TYPE.key())
-          && clusteringConfig.contains(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key())
-          && clusteringConfig.getString(HoodieIndexConfig.INDEX_TYPE.key()).equalsIgnoreCase(HoodieIndex.IndexType.BUCKET.name())
-          && clusteringConfig.getString(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key()).equalsIgnoreCase(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING.name())) {
-        clusteringConfig.setDefaultValue(PLAN_STRATEGY_CLASS_NAME, SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY);
-        clusteringConfig.setDefaultValue(EXECUTION_STRATEGY_CLASS_NAME, SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY);
-      } else {
-        clusteringConfig.setDefaultValue(
-            PLAN_STRATEGY_CLASS_NAME, getDefaultPlanStrategyClassName(engineType));
-        clusteringConfig.setDefaultValue(
-            EXECUTION_STRATEGY_CLASS_NAME, getDefaultExecutionStrategyClassName(engineType));
-      }
+      clusteringConfig.setDefaultValue(PLAN_STRATEGY_CLASS_NAME, getDefaultPlanStrategyClassName(engineType));
+      clusteringConfig.setDefaultValue(EXECUTION_STRATEGY_CLASS_NAME, getDefaultExecutionStrategyClassName(engineType));
       clusteringConfig.setDefaults(HoodieClusteringConfig.class.getName());
     }
 
@@ -642,23 +644,35 @@ public class HoodieClusteringConfig extends HoodieConfig {
               + "schedule inline clustering (%s) can be enabled. Both can't be set to true at the same time. %s,%s", HoodieClusteringConfig.INLINE_CLUSTERING.key(),
           HoodieClusteringConfig.SCHEDULE_INLINE_CLUSTERING.key(), inlineCluster, inlineClusterSchedule));
 
-      // Consistent hashing bucket index
-      if (clusteringConfig.contains(HoodieIndexConfig.INDEX_TYPE.key())
+      if (isConsistentHashingBucketIndex()) {
+        String planStrategy = clusteringConfig.getString(PLAN_STRATEGY_CLASS_NAME);
+        if (engineType == EngineType.FLINK) {
+          ValidationUtils.checkArgument(planStrategy.equalsIgnoreCase(FLINK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY),
+              "Consistent hashing bucket index only supports clustering plan strategy : " + FLINK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY);
+        } else {
+          ValidationUtils.checkArgument(
+              planStrategy.equalsIgnoreCase(SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY),
+              "Consistent hashing bucket index only supports clustering plan strategy : " + SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY);
+          ValidationUtils.checkArgument(
+              clusteringConfig.getString(EXECUTION_STRATEGY_CLASS_NAME).equals(SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY),
+              "Consistent hashing bucket index only supports clustering execution strategy : " + SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY);
+        }
+      }
+    }
+
+    private boolean isConsistentHashingBucketIndex() {
+      return clusteringConfig.contains(HoodieIndexConfig.INDEX_TYPE.key())
           && clusteringConfig.contains(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key())
           && clusteringConfig.getString(HoodieIndexConfig.INDEX_TYPE.key()).equalsIgnoreCase(HoodieIndex.IndexType.BUCKET.name())
-          && clusteringConfig.getString(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key()).equalsIgnoreCase(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING.name())) {
-        ValidationUtils.checkArgument(clusteringConfig.getString(PLAN_STRATEGY_CLASS_NAME).equals(SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY),
-            "Consistent hashing bucket index only supports clustering plan strategy : " + SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY);
-        ValidationUtils.checkArgument(clusteringConfig.getString(EXECUTION_STRATEGY_CLASS_NAME).equals(SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY),
-            "Consistent hashing bucket index only supports clustering execution strategy : " + SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY);
-      }
+          && clusteringConfig.getString(HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key()).equalsIgnoreCase(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING.name());
     }
 
     private String getDefaultPlanStrategyClassName(EngineType engineType) {
       switch (engineType) {
         case SPARK:
-          return SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY;
+          return isConsistentHashingBucketIndex() ? SPARK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY : SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY;
         case FLINK:
+          return isConsistentHashingBucketIndex() ? FLINK_CONSISTENT_BUCKET_CLUSTERING_PLAN_STRATEGY : FLINK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY;
         case JAVA:
           return JAVA_SIZED_BASED_CLUSTERING_PLAN_STRATEGY;
         default:
@@ -669,7 +683,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
     private String getDefaultExecutionStrategyClassName(EngineType engineType) {
       switch (engineType) {
         case SPARK:
-          return SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY;
+          return isConsistentHashingBucketIndex() ? SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY : SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY;
         case FLINK:
         case JAVA:
           return JAVA_SORT_AND_SIZE_EXECUTION_STRATEGY;
@@ -680,7 +694,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
   }
 
   /**
-   * Type of a strategy for building Z-order/Hilbert space-filling curves.
+   * Type of strategy for building Z-order/Hilbert space-filling curves.
    */
   @EnumDescription("This configuration only has effect if `hoodie.layout.optimize.strategy` is "
       + "set to either \"z-order\" or \"hilbert\" (i.e. leveraging space-filling curves). This "
@@ -710,80 +724,22 @@ public class HoodieClusteringConfig extends HoodieConfig {
   /**
    * Layout optimization strategies such as Z-order/Hilbert space-curves, etc
    */
+  @EnumDescription("Determines ordering strategy for records layout optimization.")
   public enum LayoutOptimizationStrategy {
-    LINEAR("linear"),
-    ZORDER("z-order"),
-    HILBERT("hilbert");
+    @EnumFieldDescription("Orders records lexicographically")
+    LINEAR,
 
-    private static final Map<String, LayoutOptimizationStrategy> VALUE_TO_ENUM_MAP =
-        TypeUtils.getValueToEnumMap(LayoutOptimizationStrategy.class, e -> e.value);
+    @EnumFieldDescription("Orders records along Z-order spatial-curve.")
+    ZORDER,
 
-    private final String value;
-
-    LayoutOptimizationStrategy(String value) {
-      this.value = value;
-    }
-
-    @Nonnull
-    public static LayoutOptimizationStrategy fromValue(String value) {
-      LayoutOptimizationStrategy enumValue = VALUE_TO_ENUM_MAP.get(value);
-      if (enumValue == null) {
-        throw new HoodieException(String.format("Invalid value (%s)", value));
-      }
-
-      return enumValue;
-    }
-
-    public String getValue() {
-      return value;
-    }
+    @EnumFieldDescription("Orders records along Hilbert's spatial-curve.")
+    HILBERT
   }
 
-  public enum ClusteringOperator {
-
-    /**
-     * only schedule the clustering plan
-     */
-    SCHEDULE("schedule"),
-
-    /**
-     * only execute then pending clustering plans
-     */
-    EXECUTE("execute"),
-
-    /**
-     * schedule cluster first, and execute all pending clustering plans
-     */
-    SCHEDULE_AND_EXECUTE("scheduleandexecute");
-
-    private static final Map<String, ClusteringOperator> VALUE_TO_ENUM_MAP =
-            TypeUtils.getValueToEnumMap(ClusteringOperator.class, e -> e.value);
-
-    private final String value;
-
-    ClusteringOperator(String value) {
-      this.value = value;
+  public static LayoutOptimizationStrategy resolveLayoutOptimizationStrategy(String cfgVal) {
+    if (cfgVal.equalsIgnoreCase("z-order")) {
+      return LayoutOptimizationStrategy.ZORDER;
     }
-
-    @Nonnull
-    public static ClusteringOperator fromValue(String value) {
-      ClusteringOperator enumValue = VALUE_TO_ENUM_MAP.get(value);
-      if (enumValue == null) {
-        throw new HoodieException(String.format("Invalid value (%s)", value));
-      }
-      return enumValue;
-    }
-
-    public boolean isSchedule() {
-      return this != ClusteringOperator.EXECUTE;
-    }
-
-    public boolean isExecute() {
-      return this != ClusteringOperator.SCHEDULE;
-    }
-
-    public String getValue() {
-      return value;
-    }
+    return LayoutOptimizationStrategy.valueOf(cfgVal.toUpperCase());
   }
 }

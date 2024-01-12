@@ -24,9 +24,12 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.Option;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -35,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 public class TestWriteStatus {
+
   @Test
   public void testFailureFraction() {
     WriteStatus status = new WriteStatus(true, 0.1);
@@ -57,7 +61,7 @@ public class TestWriteStatus {
     }
     assertEquals(1000, status.getFailedRecords().size());
     assertTrue(status.hasErrors());
-    assertTrue(status.getWrittenRecords().isEmpty());
+    assertTrue(status.getWrittenRecordDelegates().isEmpty());
     assertEquals(2000, status.getTotalRecords());
   }
 
@@ -144,5 +148,58 @@ public class TestWriteStatus {
     assertNull(status.getStat().getMaxEventTime());
     assertNull(status.getStat().getMinEventTime());
 
+  }
+
+  @Test
+  public void testFailureFractionExtended() {
+    WriteStatus status = new WriteStatus(true, 0.1);
+    String fileId = UUID.randomUUID().toString();
+    String partitionPath = UUID.randomUUID().toString();
+    status.setFileId(fileId);
+    status.setPartitionPath(partitionPath);
+    Throwable t = new Exception("some error in writing");
+    for (int i = 0; i < 1000; i++) {
+      status.markFailure(mock(HoodieRecord.class), t, Option.empty());
+    }
+    // verification
+    assertEquals(fileId, status.getFileId());
+    assertEquals(partitionPath, status.getPartitionPath());
+    assertTrue(status.getFailedRecords().size() > 0);
+    assertTrue(status.getFailedRecords().size() < 150); // 150 instead of 100, to prevent flaky test
+    assertTrue(status.hasErrors());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testSuccessRecordTrackingExtended(boolean trackSuccess) {
+    WriteStatus status = new WriteStatus(trackSuccess, 1.0);
+    String fileId = UUID.randomUUID().toString();
+    status.setFileId(fileId);
+    String partitionPath = UUID.randomUUID().toString();
+    status.setPartitionPath(partitionPath);
+    Throwable t = new Exception("some error in writing");
+    for (int i = 0; i < 1000; i++) {
+      status.markSuccess(mock(HoodieRecord.class), Option.empty());
+      status.markFailure(mock(HoodieRecord.class), t, Option.empty());
+    }
+    // verification
+    assertEquals(fileId, status.getFileId());
+    assertEquals(partitionPath, status.getPartitionPath());
+    assertEquals(1000, status.getFailedRecords().size());
+    assertTrue(status.hasErrors());
+    if (trackSuccess) {
+      assertEquals(1000, status.getWrittenRecordDelegates().size());
+    } else {
+      assertTrue(status.getWrittenRecordDelegates().isEmpty());
+    }
+    assertEquals(2000, status.getTotalRecords());
+  }
+
+  @Test
+  public void testGlobalError() {
+    WriteStatus status = new WriteStatus(true, 0.1);
+    Throwable t = new Exception("some error in writing");
+    status.setGlobalError(t);
+    assertEquals(t, status.getGlobalError());
   }
 }

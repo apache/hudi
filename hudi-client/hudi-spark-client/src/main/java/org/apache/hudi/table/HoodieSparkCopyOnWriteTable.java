@@ -43,7 +43,9 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.io.HoodieCreateHandle;
@@ -64,6 +66,7 @@ import org.apache.hudi.table.action.commit.SparkBulkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkBulkInsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkDeleteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkDeletePartitionCommitActionExecutor;
+import org.apache.hudi.table.action.commit.SparkDeletePreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkInsertOverwriteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkInsertOverwriteTableCommitActionExecutor;
@@ -86,6 +89,8 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataTable;
 
 /**
  * Implementation of a very heavily read-optimized Hoodie Table where, all data is stored in base files, with
@@ -124,6 +129,11 @@ public class HoodieSparkCopyOnWriteTable<T>
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> delete(HoodieEngineContext context, String instantTime, HoodieData<HoodieKey> keys) {
     return new SparkDeleteCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, keys).execute();
+  }
+
+  @Override
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> deletePrepped(HoodieEngineContext context, String instantTime, HoodieData<HoodieRecord<T>> preppedRecords) {
+    return new SparkDeletePreppedCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, preppedRecords).execute();
   }
 
   @Override
@@ -191,6 +201,13 @@ public class HoodieSparkCopyOnWriteTable<T>
 
   @Override
   public void rollbackBootstrap(HoodieEngineContext context, String instantTime) {
+    // Delete metadata table to rollback a failed bootstrap. re-attempt of bootstrap will re-initialize the mdt.
+    try {
+      LOG.info("Deleting metadata table because we are rolling back failed bootstrap. ");
+      deleteMetadataTable(config.getBasePath(), context);
+    } catch (HoodieMetadataException e) {
+      throw new HoodieException("Failed to delete metadata table.", e);
+    }
     new RestorePlanActionExecutor<>(context, config, this, instantTime, HoodieTimeline.INIT_INSTANT_TS).execute();
     new CopyOnWriteRestoreActionExecutor<>(context, config, this, instantTime, HoodieTimeline.INIT_INSTANT_TS).execute();
   }
@@ -203,9 +220,10 @@ public class HoodieSparkCopyOnWriteTable<T>
   @Override
   public Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context,
                                                      String instantTime,
-                                                     HoodieInstant instantToRollback, boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers) {
+                                                     HoodieInstant instantToRollback, boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers,
+                                                     boolean isRestore) {
     return new BaseRollbackPlanActionExecutor<>(context, config, this, instantTime, instantToRollback, skipTimelinePublish,
-        shouldRollbackUsingMarkers).execute();
+        shouldRollbackUsingMarkers, isRestore).execute();
   }
 
   @Override

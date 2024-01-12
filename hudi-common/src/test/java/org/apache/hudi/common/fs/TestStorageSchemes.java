@@ -23,7 +23,6 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -36,24 +35,6 @@ public class TestStorageSchemes {
     assertTrue(StorageSchemes.isSchemeSupported("hdfs"));
     assertTrue(StorageSchemes.isSchemeSupported("afs"));
     assertFalse(StorageSchemes.isSchemeSupported("s2"));
-    assertFalse(StorageSchemes.isAppendSupported("s3a"));
-    assertFalse(StorageSchemes.isAppendSupported("gs"));
-    assertFalse(StorageSchemes.isAppendSupported("wasb"));
-    assertFalse(StorageSchemes.isAppendSupported("adl"));
-    assertFalse(StorageSchemes.isAppendSupported("abfs"));
-    assertFalse(StorageSchemes.isAppendSupported("oss"));
-    assertTrue(StorageSchemes.isAppendSupported("viewfs"));
-    assertFalse(StorageSchemes.isAppendSupported("alluxio"));
-    assertFalse(StorageSchemes.isAppendSupported("cosn"));
-    assertFalse(StorageSchemes.isAppendSupported("dbfs"));
-    assertFalse(StorageSchemes.isAppendSupported("cos"));
-    assertTrue(StorageSchemes.isAppendSupported("jfs"));
-    assertFalse(StorageSchemes.isAppendSupported("bos"));
-    assertFalse(StorageSchemes.isAppendSupported("ks3"));
-    assertTrue(StorageSchemes.isAppendSupported("ofs"));
-    assertFalse(StorageSchemes.isAppendSupported("oci"));
-    assertFalse(StorageSchemes.isAppendSupported("tos"));
-    assertTrue(StorageSchemes.isAppendSupported("cfs"));
 
     assertTrue(StorageSchemes.isAtomicCreationSupported("file"));
     assertTrue(StorageSchemes.isAtomicCreationSupported("hdfs"));
@@ -76,9 +57,7 @@ public class TestStorageSchemes {
     assertFalse(StorageSchemes.isAtomicCreationSupported("oci"));
     assertFalse(StorageSchemes.isAtomicCreationSupported("tos"));
     assertFalse(StorageSchemes.isAtomicCreationSupported("cfs"));
-    assertThrows(IllegalArgumentException.class, () -> {
-      StorageSchemes.isAppendSupported("s2");
-    }, "Should throw exception for unsupported schemes");
+    assertTrue(StorageSchemes.isAtomicCreationSupported("hopsfs"));
   }
 
   @Test

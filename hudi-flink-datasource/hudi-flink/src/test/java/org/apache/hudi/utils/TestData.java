@@ -24,18 +24,18 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
-import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.utils.BucketStreamWriteFunctionWrapper;
+import org.apache.hudi.sink.utils.BulkInsertFunctionWrapper;
+import org.apache.hudi.sink.utils.ConsistentBucketStreamWriteFunctionWrapper;
 import org.apache.hudi.sink.utils.InsertFunctionWrapper;
 import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
 import org.apache.hudi.sink.utils.TestFunctionWrapper;
@@ -117,6 +117,11 @@ public class TestData {
           TimestampData.fromEpochMillis(7), StringData.fromString("par4")),
       insertRow(StringData.fromString("id8"), StringData.fromString("Han"), 56,
           TimestampData.fromEpochMillis(8), StringData.fromString("par4"))
+  );
+
+  public static List<RowData> DATA_SET_INSERT_PARTITION_IS_NULL = Arrays.asList(
+      insertRow(StringData.fromString("idNull"), StringData.fromString("He"), 30,
+          TimestampData.fromEpochMillis(9), null)
   );
 
   public static List<RowData> DATA_SET_UPDATE_INSERT = Arrays.asList(
@@ -288,6 +293,22 @@ public class TestData {
           TimestampData.fromEpochMillis(8000), StringData.fromString("par4"))
   );
 
+  // data set of test_source.data with partition 'par1' and 'par2' overwrite
+  public static List<RowData> DATA_SET_SOURCE_INSERT_OVERWRITE_DYNAMIC_PARTITION = Arrays.asList(
+      insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 24,
+          TimestampData.fromEpochMillis(1000), StringData.fromString("par1")),
+      insertRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 34,
+          TimestampData.fromEpochMillis(2000), StringData.fromString("par2")),
+      insertRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
+          TimestampData.fromEpochMillis(5000), StringData.fromString("par3")),
+      insertRow(StringData.fromString("id6"), StringData.fromString("Emma"), 20,
+          TimestampData.fromEpochMillis(6000), StringData.fromString("par3")),
+      insertRow(StringData.fromString("id7"), StringData.fromString("Bob"), 44,
+          TimestampData.fromEpochMillis(7000), StringData.fromString("par4")),
+      insertRow(StringData.fromString("id8"), StringData.fromString("Han"), 56,
+          TimestampData.fromEpochMillis(8000), StringData.fromString("par4"))
+  );
+
   public static List<RowData> DATA_SET_UPDATE_DELETE = Arrays.asList(
       // this is update
       insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 24,
@@ -330,6 +351,10 @@ public class TestData {
       insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
           TimestampData.fromEpochMillis(1), StringData.fromString("par1")));
 
+  public static List<RowData> DATA_SET_SINGLE_DELETE = Collections.singletonList(
+      deleteRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+          TimestampData.fromEpochMillis(5), StringData.fromString("par1")));
+
   public static List<RowData> DATA_SET_DISORDER_INSERT = Arrays.asList(
       insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
           TimestampData.fromEpochMillis(3), StringData.fromString("par1")),
@@ -338,6 +363,17 @@ public class TestData {
       insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
           TimestampData.fromEpochMillis(2), StringData.fromString("par1")),
       insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+          TimestampData.fromEpochMillis(1), StringData.fromString("par1"))
+  );
+
+  public static List<RowData> DATA_SET_DISORDER_INSERT_DELETE = Arrays.asList(
+      insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+          TimestampData.fromEpochMillis(3), StringData.fromString("par1")),
+      insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 22,
+          TimestampData.fromEpochMillis(4), StringData.fromString("par1")),
+      insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+          TimestampData.fromEpochMillis(2), StringData.fromString("par1")),
+      deleteRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
           TimestampData.fromEpochMillis(1), StringData.fromString("par1"))
   );
 
@@ -523,10 +559,16 @@ public class TestData {
    * Initializes a writing pipeline with given configuration.
    */
   public static TestFunctionWrapper<RowData> getWritePipeline(String basePath, Configuration conf) throws Exception {
-    if (OptionsResolver.isAppendMode(conf)) {
+    if (OptionsResolver.isBulkInsertOperation(conf)) {
+      return new BulkInsertFunctionWrapper<>(basePath, conf);
+    } else if (OptionsResolver.isAppendMode(conf)) {
       return new InsertFunctionWrapper<>(basePath, conf);
     } else if (OptionsResolver.isBucketIndexType(conf)) {
-      return new BucketStreamWriteFunctionWrapper<>(basePath, conf);
+      if (OptionsResolver.isConsistentHashingBucketIndexType(conf)) {
+        return new ConsistentBucketStreamWriteFunctionWrapper<>(basePath, conf);
+      } else {
+        return new BucketStreamWriteFunctionWrapper<>(basePath, conf);
+      }
     } else {
       return new StreamWriteFunctionWrapper<>(basePath, conf);
     }
@@ -922,7 +964,6 @@ public class TestData {
         .withSpillableMapBasePath("/tmp/")
         .withDiskMapType(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue())
         .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue())
-        .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
         .build();
   }
 
@@ -931,14 +972,22 @@ public class TestData {
    */
   private static String filterOutVariables(GenericRecord genericRecord) {
     List<String> fields = new ArrayList<>();
-    fields.add(genericRecord.get("_hoodie_record_key").toString());
-    fields.add(genericRecord.get("_hoodie_partition_path").toString());
-    fields.add(genericRecord.get("uuid").toString());
-    fields.add(genericRecord.get("name").toString());
-    fields.add(genericRecord.get("age").toString());
+    fields.add(getFieldValue(genericRecord, "_hoodie_record_key"));
+    fields.add(getFieldValue(genericRecord, "_hoodie_partition_path"));
+    fields.add(getFieldValue(genericRecord, "uuid"));
+    fields.add(getFieldValue(genericRecord, "name"));
+    fields.add(getFieldValue(genericRecord, "age"));
     fields.add(genericRecord.get("ts").toString());
     fields.add(genericRecord.get("partition").toString());
     return String.join(",", fields);
+  }
+
+  private static String getFieldValue(GenericRecord genericRecord, String fieldName) {
+    if (genericRecord.get(fieldName) != null) {
+      return genericRecord.get(fieldName).toString();
+    } else {
+      return null;
+    }
   }
 
   public static BinaryRowData insertRow(Object... fields) {

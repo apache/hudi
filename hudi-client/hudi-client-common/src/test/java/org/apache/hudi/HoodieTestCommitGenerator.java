@@ -22,12 +22,15 @@ package org.apache.hudi;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -37,7 +40,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -46,6 +52,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.apache.hudi.common.table.log.HoodieLogFormat.DEFAULT_WRITE_TOKEN;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 
 public class HoodieTestCommitGenerator {
   public static final String BASE_FILE_WRITE_TOKEN = "1-0-1";
@@ -114,12 +121,12 @@ public class HoodieTestCommitGenerator {
   public static void createCommitAndDataFiles(
       String basePath, String instantTime,
       Map<String, List<Pair<String, String>>> partitionPathToFileIdAndNameMap) throws IOException {
-    String commitFilename = HoodieTimeline.makeCommitFileName(instantTime);
+    String commitFilename = HoodieTimeline.makeCommitFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime());
     HoodieCommitMetadata commitMetadata =
         generateCommitMetadata(partitionPathToFileIdAndNameMap, Collections.emptyMap());
-    String content = commitMetadata.toJsonString();
-    createCommitFileWithMetadata(basePath, new Configuration(), commitFilename, content);
+    createCommitFileWithMetadata(basePath, new Configuration(), commitFilename, serializeCommitMetadata(commitMetadata).get());
     for (String partitionPath : partitionPathToFileIdAndNameMap.keySet()) {
+      createPartitionMetaFile(basePath, partitionPath);
       partitionPathToFileIdAndNameMap.get(partitionPath)
           .forEach(fileInfo -> {
             String filename = fileInfo.getValue();
@@ -160,10 +167,10 @@ public class HoodieTestCommitGenerator {
 
   public static void createCommitFileWithMetadata(
       String basePath, Configuration configuration,
-      String filename, String content) throws IOException {
+      String filename, byte[] content) throws IOException {
     Path commitFilePath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + filename);
     try (FSDataOutputStream os = FSUtils.getFs(basePath, configuration).create(commitFilePath, true)) {
-      os.writeBytes(new String(content.getBytes(StandardCharsets.UTF_8)));
+      os.write(content);
     }
   }
 
@@ -178,6 +185,20 @@ public class HoodieTestCommitGenerator {
     }
     if (!fs.exists(filePath)) {
       fs.create(filePath);
+    }
+  }
+
+  public static void createPartitionMetaFile(String basePath, String partitionPath) throws IOException {
+    java.nio.file.Path metaFilePath;
+    try {
+      java.nio.file.Path parentPath = Paths.get(new URI(basePath).getPath(), partitionPath);
+      Files.createDirectories(parentPath);
+      metaFilePath = parentPath.resolve(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX);
+      if (Files.notExists(metaFilePath)) {
+        Files.createFile(metaFilePath);
+      }
+    } catch (URISyntaxException e) {
+      throw new HoodieException("Error creating partition meta file", e);
     }
   }
 }

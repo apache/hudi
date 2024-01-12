@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.14.0-SNAPSHOT</version>
+    <version>1.0.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -91,10 +91,10 @@
                   <include>org.jetbrains.kotlin:*</include>
                   <include>org.rocksdb:rocksdbjni</include>
                   <include>org.antlr:stringtemplate</include>
-                  <!-- NOTE: Only Jackson module we're bundling here is JSR310, which we need to bundle only
-                             for Spark 2.x -->
-                  <include>com.fasterxml.jackson.datatype:${fasterxml.jackson.datatype.jsr310.module}</include>
-
+                  <include>org.roaringbitmap:RoaringBitmap</include>
+                  <!-- Bundle Jackson JSR310 library since it is not present in spark 2.x. For spark 3.x this will
+                       bundle the same JSR310 version that is included in spark runtime -->
+                  <include>com.fasterxml.jackson.datatype:jackson-datatype-jsr310</include>
                   <include>com.lmax:disruptor</include>
                   <include>com.github.davidmoten:guava-mini</include>
                   <include>com.github.davidmoten:hilbert-curve</include>
@@ -195,6 +195,10 @@
                 <relocation>
                   <pattern>org.openjdk.jol.</pattern>
                   <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.roaringbitmap.</pattern>
+                  <shadedPattern>org.apache.hudi.org.roaringbitmap.</shadedPattern>
                 </relocation>
               </relocations>
               <filters>

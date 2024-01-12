@@ -29,7 +29,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
-import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig;
+import org.apache.hudi.utilities.config.HoodieStreamerConfig;
+import org.apache.hudi.utilities.streamer.SparkSampleWritesUtils;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
@@ -72,14 +73,14 @@ public class TestSparkSampleWritesUtils extends SparkClientFunctionalTestHarness
     HoodieTestTable.of(metaClient).addCommit(commitTime);
     int originalRecordSize = 100;
     TypedProperties props = new TypedProperties();
-    props.put(HoodieDeltaStreamerConfig.SAMPLE_WRITES_ENABLED.key(), "true");
+    props.put(HoodieStreamerConfig.SAMPLE_WRITES_ENABLED.key(), "true");
     props.put(HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.key(), String.valueOf(originalRecordSize));
     HoodieWriteConfig originalWriteConfig = HoodieWriteConfig.newBuilder()
         .withProperties(props)
         .withPath(basePath())
         .build();
     JavaRDD<HoodieRecord> records = jsc().parallelize(dataGen.generateInserts(commitTime, 1), 1);
-    Option<HoodieWriteConfig> writeConfigOpt = SparkSampleWritesUtils.getWriteConfigWithRecordSizeEstimate(jsc(), records, originalWriteConfig);
+    Option<HoodieWriteConfig> writeConfigOpt = SparkSampleWritesUtils.getWriteConfigWithRecordSizeEstimate(jsc(), Option.of(records), originalWriteConfig);
     assertFalse(writeConfigOpt.isPresent());
     assertEquals(originalRecordSize, originalWriteConfig.getCopyOnWriteRecordSizeEstimate(), "Original record size estimate should not be changed.");
   }
@@ -88,7 +89,7 @@ public class TestSparkSampleWritesUtils extends SparkClientFunctionalTestHarness
   public void overwriteRecordSizeEstimateForEmptyTable() {
     int originalRecordSize = 100;
     TypedProperties props = new TypedProperties();
-    props.put(HoodieDeltaStreamerConfig.SAMPLE_WRITES_ENABLED.key(), "true");
+    props.put(HoodieStreamerConfig.SAMPLE_WRITES_ENABLED.key(), "true");
     props.put(HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.key(), String.valueOf(originalRecordSize));
     HoodieWriteConfig originalWriteConfig = HoodieWriteConfig.newBuilder()
         .withProperties(props)
@@ -99,7 +100,7 @@ public class TestSparkSampleWritesUtils extends SparkClientFunctionalTestHarness
 
     String commitTime = HoodieTestDataGenerator.getCommitTimeAtUTC(1);
     JavaRDD<HoodieRecord> records = jsc().parallelize(dataGen.generateInserts(commitTime, 2000), 2);
-    Option<HoodieWriteConfig> writeConfigOpt = SparkSampleWritesUtils.getWriteConfigWithRecordSizeEstimate(jsc(), records, originalWriteConfig);
+    Option<HoodieWriteConfig> writeConfigOpt = SparkSampleWritesUtils.getWriteConfigWithRecordSizeEstimate(jsc(), Option.of(records), originalWriteConfig);
     assertTrue(writeConfigOpt.isPresent());
     assertEquals(779.0, writeConfigOpt.get().getCopyOnWriteRecordSizeEstimate(), 10.0);
   }

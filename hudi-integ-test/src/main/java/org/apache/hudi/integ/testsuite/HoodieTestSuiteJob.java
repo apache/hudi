@@ -18,6 +18,7 @@
 
 package org.apache.hudi.integ.testsuite;
 
+import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
@@ -120,6 +121,7 @@ public class HoodieTestSuiteJob {
       metaClient = HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(cfg.tableType)
           .setTableName(cfg.targetTableName)
+          .setRecordKeyFields(this.props.getString(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
           .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
           .initTable(jsc.hadoopConfiguration(), cfg.targetBasePath);
     } else {

@@ -31,10 +31,17 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.Properties;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 
 public class TestSyncUtilHelpers {
   private static final String BASE_PATH = "/tmp/test";
@@ -98,6 +105,63 @@ public class TestSyncUtilHelpers {
     String expectedMessage = "Could not load meta sync class " + InvalidSyncTool.class.getName()
         + ": no valid constructor found.";
     assertEquals(expectedMessage, t.getMessage());
+  }
+
+  @Test
+  void testMetaSyncConcurrency() throws Exception {
+    String syncToolClassName = DummySyncTool1.class.getName();
+    String baseFileFormat = "PARQUET";
+    String tableName1 = "table1";
+    String tableName2 = "table2";
+    String targetBasePath1 = "path/to/target1";
+    String targetBasePath2 = "path/to/target2";
+
+    TypedProperties props1 = new TypedProperties();
+    props1.setProperty(META_SYNC_TABLE_NAME.key(), tableName1);
+
+    TypedProperties props2 = new TypedProperties();
+    props1.setProperty(META_SYNC_TABLE_NAME.key(), tableName2);
+
+    // Simulate processing time here
+    HoodieSyncTool syncToolMock = mock(HoodieSyncTool.class);
+    doAnswer(invocation -> {
+      Thread.sleep(1000);
+      return null;
+    }).when(syncToolMock).syncHoodieTable();
+
+    AtomicBoolean targetBasePath1Running = new AtomicBoolean(false);
+    AtomicBoolean targetBasePath2Running = new AtomicBoolean(false);
+
+    ExecutorService executor = Executors.newFixedThreadPool(4);
+
+    // Submitting tasks with targetBasePath1
+    executor.submit(() -> {
+      targetBasePath1Running.set(true);
+      SyncUtilHelpers.runHoodieMetaSync(syncToolClassName, props1, hadoopConf, fileSystem, targetBasePath1, baseFileFormat);
+      targetBasePath1Running.set(false);
+    });
+    executor.submit(() -> {
+      assertEquals(1, SyncUtilHelpers.getNumberOfLocks()); // Only one lock should exist for this base path
+      SyncUtilHelpers.runHoodieMetaSync(syncToolClassName, props1, hadoopConf, fileSystem, targetBasePath1, baseFileFormat);
+    });
+
+    // Submitting tasks with targetBasePath2
+    executor.submit(() -> {
+      targetBasePath2Running.set(true);
+      SyncUtilHelpers.runHoodieMetaSync(syncToolClassName, props2, hadoopConf, fileSystem, targetBasePath2, baseFileFormat);
+      targetBasePath2Running.set(false);
+    });
+    executor.submit(() -> {
+      assertEquals(2, SyncUtilHelpers.getNumberOfLocks()); // Two locks should exist for both base paths
+      SyncUtilHelpers.runHoodieMetaSync(syncToolClassName, props2, hadoopConf, fileSystem, targetBasePath2, baseFileFormat);
+    });
+
+    executor.shutdown();
+    assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS));
+
+    // Check if there was a time when both paths were running in parallel
+    assertTrue(targetBasePath1Running.get() && targetBasePath2Running.get(),
+        "The methods did not run concurrently for different base paths");
   }
 
   public static class DummySyncTool1 extends HoodieSyncTool {

@@ -34,7 +34,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.HoodieKeyLocationFetchHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
@@ -42,6 +41,7 @@ import org.apache.hudi.table.HoodieTable;
 import java.util.List;
 
 import static org.apache.hudi.index.HoodieIndexUtils.getLatestBaseFilesForAllPartitions;
+import static org.apache.hudi.index.HoodieIndexUtils.tagAsNewRecordIfNeeded;
 
 /**
  * A simple index which reads interested fields(record key and partition path) from base files and
@@ -50,7 +50,7 @@ import static org.apache.hudi.index.HoodieIndexUtils.getLatestBaseFilesForAllPar
 public class HoodieSimpleIndex
     extends HoodieIndex<Object, Object> {
 
-  private final Option<BaseKeyGenerator> keyGeneratorOpt;
+  protected final Option<BaseKeyGenerator> keyGeneratorOpt;
 
   public HoodieSimpleIndex(HoodieWriteConfig config, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config);
@@ -122,7 +122,7 @@ public class HoodieSimpleIndex
         keyedInputRecords.leftOuterJoin(existingLocationsOnTable).map(entry -> {
           final HoodieRecord<R> untaggedRecord = entry.getRight().getLeft();
           final Option<HoodieRecordLocation> location = Option.ofNullable(entry.getRight().getRight().orElse(null));
-          return HoodieIndexUtils.getTaggedRecord(untaggedRecord, location);
+          return tagAsNewRecordIfNeeded(untaggedRecord, location);
         });
 
     if (config.getSimpleIndexUseCaching()) {

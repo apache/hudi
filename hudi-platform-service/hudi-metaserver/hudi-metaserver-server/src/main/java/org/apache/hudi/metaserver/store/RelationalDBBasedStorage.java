@@ -32,6 +32,7 @@ import org.apache.hudi.metaserver.thrift.Table;
 
 import java.io.Serializable;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -76,6 +77,13 @@ public class RelationalDBBasedStorage implements MetaserverStorage, Serializable
   }
 
   @Override
+  public boolean deleteDatabase(Long dbId) throws MetaserverStorageException {
+    Map<String, Object> params = new HashMap<>();
+    params.put("dbId", dbId);
+    return tableDao.deleteBySql("deleteDB", params) == 1;
+  }
+
+  @Override
   public boolean createTable(Long dbId, Table table) throws MetaserverStorageException {
     Map<String, Object> params = new HashMap<>();
     params.put("dbId", dbId);
@@ -105,6 +113,13 @@ public class RelationalDBBasedStorage implements MetaserverStorage, Serializable
   }
 
   @Override
+  public boolean deleteTable(Long tableId) throws MetaserverStorageException {
+    Map<String, Object> params = new HashMap<>();
+    params.put("tableId", tableId);
+    return tableDao.deleteBySql("deleteTable", params) == 1;
+  }
+
+  @Override
   public String createNewTimestamp(long tableId) throws MetaserverStorageException {
     String oldTimestamp;
     String newTimestamp;
@@ -112,7 +127,7 @@ public class RelationalDBBasedStorage implements MetaserverStorage, Serializable
     do {
       oldTimestamp = getLatestTimestamp(tableId);
       do {
-        newTimestamp = HoodieInstantTimeGenerator.createNewInstantTime(0L);
+        newTimestamp = HoodieInstantTimeGenerator.formatDate(new Date(System.currentTimeMillis()));
       } while (oldTimestamp != null && HoodieTimeline.compareTimestamps(newTimestamp,
           HoodieActiveTimeline.LESSER_THAN_OR_EQUALS, oldTimestamp));
       Map<String, Object> params = new HashMap<>();
@@ -132,6 +147,13 @@ public class RelationalDBBasedStorage implements MetaserverStorage, Serializable
     List<String> timestamps = timelineDao.queryForListBySql("selectTimestampByTableId", tableId);
     validate(timestamps, "timestamp");
     return timestamps.isEmpty() ? null : timestamps.get(0);
+  }
+
+  @Override
+  public boolean deleteTableTimestamp(Long tableId) throws MetaserverStorageException {
+    Map<String, Object> params = new HashMap<>();
+    params.put("tableId", tableId);
+    return timelineDao.deleteBySql("deleteTimestamp", params) == 1;
   }
 
   @Override

@@ -30,6 +30,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.avro.generic.GenericRecord;
@@ -57,10 +58,14 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
 
   static Stream<Arguments> testWriteClientReleaseResourcesShouldOnlyUnpersistRelevantRdds() {
     return Stream.of(
-        Arguments.of(HoodieTableType.COPY_ON_WRITE, true),
-        Arguments.of(HoodieTableType.MERGE_ON_READ, true),
-        Arguments.of(HoodieTableType.COPY_ON_WRITE, false),
-        Arguments.of(HoodieTableType.MERGE_ON_READ, false)
+        Arguments.of(HoodieTableType.COPY_ON_WRITE, true, true),
+        Arguments.of(HoodieTableType.COPY_ON_WRITE, true, false),
+        Arguments.of(HoodieTableType.MERGE_ON_READ, true, true),
+        Arguments.of(HoodieTableType.MERGE_ON_READ, true, false),
+        Arguments.of(HoodieTableType.COPY_ON_WRITE, false, true),
+        Arguments.of(HoodieTableType.COPY_ON_WRITE, false, false),
+        Arguments.of(HoodieTableType.MERGE_ON_READ, false, true),
+        Arguments.of(HoodieTableType.MERGE_ON_READ, false, false)
     );
   }
 
@@ -79,9 +84,7 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
 
     SparkRDDWriteClient writeClient;
     if (passInTimelineServer) {
-      EmbeddedTimelineService timelineService =
-          new EmbeddedTimelineService(context(), null, writeConfig);
-      timelineService.startServer();
+      EmbeddedTimelineService timelineService = EmbeddedTimelineService.getOrStartEmbeddedTimelineService(context(), null, writeConfig);
       writeConfig.setViewStorageConfig(timelineService.getRemoteFileSystemViewConfig());
       writeClient = new SparkRDDWriteClient(context(), writeConfig, Option.of(timelineService));
       // Both the write client and the table service client should use the same passed-in
@@ -90,7 +93,7 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
       assertEquals(timelineService, writeClient.getTableServiceClient().getTimelineServer().get());
       // Write config should not be changed
       assertEquals(writeConfig, writeClient.getConfig());
-      timelineService.stop();
+      timelineService.stopForBasePath(writeConfig.getBasePath());
     } else {
       writeClient = new SparkRDDWriteClient(context(), writeConfig);
       // Only one timeline server should be instantiated, and the same timeline server
@@ -107,13 +110,14 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
 
   @ParameterizedTest
   @MethodSource
-  void testWriteClientReleaseResourcesShouldOnlyUnpersistRelevantRdds(HoodieTableType tableType, boolean shouldReleaseResource) throws IOException {
+  void testWriteClientReleaseResourcesShouldOnlyUnpersistRelevantRdds(
+      HoodieTableType tableType, boolean shouldReleaseResource, boolean metadataTableEnable) throws IOException {
     final HoodieTableMetaClient metaClient = getHoodieMetaClient(hadoopConf(), URI.create(basePath()).getPath(), tableType, new Properties());
     final HoodieWriteConfig writeConfig = getConfigBuilder(true)
         .withPath(metaClient.getBasePathV2().toString())
         .withAutoCommit(false)
         .withReleaseResourceEnabled(shouldReleaseResource)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(metadataTableEnable).build())
         .build();
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEED);
 
@@ -133,7 +137,10 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
     writeClient.startCommitWithTime(instant1);
     List<WriteStatus> writeStatuses = writeClient.insert(writeRecords, instant1).collect();
     assertNoWriteErrors(writeStatuses);
-    writeClient.commitStats(instant1, writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+    String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(writeConfig.getBasePath());
+    List<Integer> metadataTableCacheIds0 = context().getCachedDataIds(HoodieDataCacheKey.of(metadataTableBasePath, instant0));
+    List<Integer> metadataTableCacheIds1 = context().getCachedDataIds(HoodieDataCacheKey.of(metadataTableBasePath, instant1));
+    writeClient.commitStats(instant1, context().parallelize(writeStatuses, 1), writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
         Option.empty(), metaClient.getCommitActionType());
     writeClient.close();
 
@@ -150,6 +157,18 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
           "RDDs cached for " + instant1 + " should be cleared.");
       assertFalse(jsc().getPersistentRDDs().containsKey(writeRecords.id()),
           "RDDs cached for " + instant1 + " should be cleared.");
+      if (metadataTableEnable) {
+        assertEquals(metadataTableCacheIds0.stream().sorted().collect(Collectors.toList()),
+            context().getCachedDataIds(HoodieDataCacheKey.of(metadataTableBasePath, instant0)).stream().sorted().collect(Collectors.toList()),
+            "RDDs cached for metadataTable " + instant0 + " should be retained.");
+        assertEquals(Collections.emptyList(),
+            context().getCachedDataIds(HoodieDataCacheKey.of(metadataTableBasePath, instant1)),
+            "RDDs cached for metadataTable " + instant1 + " should be cleared.");
+        metadataTableCacheIds0.forEach(cacheId -> assertTrue(jsc().getPersistentRDDs().containsKey(cacheId),
+            "RDDs cached for metadataTable cacheId " + cacheId + " should be retained."));
+        metadataTableCacheIds1.forEach(cacheId -> assertFalse(jsc().getPersistentRDDs().containsKey(cacheId),
+            "RDDs cached for metadataTable cacheId " + cacheId + " should be cleared."));
+      }
     } else {
       assertEquals(Collections.singletonList(persistedRdd0.getId()),
           context().getCachedDataIds(HoodieDataCacheKey.of(writeConfig.getBasePath(), instant0)),
@@ -163,6 +182,12 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
           "RDDs cached for " + instant1 + " should be retained.");
       assertTrue(jsc().getPersistentRDDs().containsKey(writeRecords.id()),
           "RDDs cached for " + instant1 + " should be retained.");
+      if (metadataTableEnable) {
+        metadataTableCacheIds0.forEach(cacheId -> assertTrue(jsc().getPersistentRDDs().containsKey(cacheId),
+            "RDDs cached for metadataTable cacheId " + cacheId + " should be retained."));
+        metadataTableCacheIds1.forEach(cacheId -> assertTrue(jsc().getPersistentRDDs().containsKey(cacheId),
+            "RDDs cached for metadataTable cacheId " + cacheId + " should be retained."));
+      }
     }
   }
 }

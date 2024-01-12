@@ -18,53 +18,104 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.util.VisibleForTesting;
+
+import org.apache.parquet.column.ParquetProperties;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.api.WriteSupport;
 
+import java.io.Closeable;
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static org.apache.parquet.column.ParquetProperties.DEFAULT_MAXIMUM_RECORD_COUNT_FOR_CHECK;
-import static org.apache.parquet.column.ParquetProperties.DEFAULT_MINIMUM_RECORD_COUNT_FOR_CHECK;
+import java.lang.reflect.Method;
 
 /**
  * Base class of Hudi's custom {@link ParquetWriter} implementations
  *
  * @param <R> target type of the object being written into Parquet files (for ex,
- *           {@code IndexedRecord}, {@code InternalRow})
+ *            {@code IndexedRecord}, {@code InternalRow})
  */
-public abstract class HoodieBaseParquetWriter<R> extends ParquetWriter<R> {
+public abstract class HoodieBaseParquetWriter<R> implements Closeable {
 
   private final AtomicLong writtenRecordCount = new AtomicLong(0);
   private final long maxFileSize;
   private long recordCountForNextSizeCheck;
+  private final ParquetWriter parquetWriter;
+  public static final String BLOOM_FILTER_EXPECTED_NDV = "parquet.bloom.filter.expected.ndv";
+  public static final String BLOOM_FILTER_ENABLED = "parquet.bloom.filter.enabled";
 
   public HoodieBaseParquetWriter(Path file,
                                  HoodieParquetConfig<? extends WriteSupport<R>> parquetConfig) throws IOException {
-    super(HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf()),
-        ParquetFileWriter.Mode.CREATE,
-        parquetConfig.getWriteSupport(),
-        parquetConfig.getCompressionCodecName(),
-        parquetConfig.getBlockSize(),
-        parquetConfig.getPageSize(),
-        parquetConfig.getPageSize(),
-        parquetConfig.dictionaryEnabled(),
-        DEFAULT_IS_VALIDATING_ENABLED,
-        DEFAULT_WRITER_VERSION,
-        FSUtils.registerFileSystem(file, parquetConfig.getHadoopConf()));
+    ParquetWriter.Builder parquetWriterbuilder = new ParquetWriter.Builder(HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf())) {
+      @Override
+      protected ParquetWriter.Builder self() {
+        return this;
+      }
 
+      @Override
+      protected WriteSupport getWriteSupport(Configuration conf) {
+        return parquetConfig.getWriteSupport();
+      }
+    };
+
+    parquetWriterbuilder.withWriteMode(ParquetFileWriter.Mode.CREATE);
+    parquetWriterbuilder.withCompressionCodec(parquetConfig.getCompressionCodecName());
+    parquetWriterbuilder.withRowGroupSize(parquetConfig.getBlockSize());
+    parquetWriterbuilder.withPageSize(parquetConfig.getPageSize());
+    parquetWriterbuilder.withDictionaryPageSize(parquetConfig.getPageSize());
+    parquetWriterbuilder.withDictionaryEncoding(parquetConfig.dictionaryEnabled());
+    parquetWriterbuilder.withValidation(ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED);
+    parquetWriterbuilder.withWriterVersion(ParquetWriter.DEFAULT_WRITER_VERSION);
+    parquetWriterbuilder.withConf(FSUtils.registerFileSystem(file, parquetConfig.getHadoopConf()));
+    handleParquetBloomFilters(parquetWriterbuilder, parquetConfig.getHadoopConf());
+
+    parquetWriter = parquetWriterbuilder.build();
     // We cannot accurately measure the snappy compressed output file size. We are choosing a
     // conservative 10%
     // TODO - compute this compression ratio dynamically by looking at the bytes written to the
     // stream and the actual file size reported by HDFS
     this.maxFileSize = parquetConfig.getMaxFileSize()
         + Math.round(parquetConfig.getMaxFileSize() * parquetConfig.getCompressionRatio());
-    this.recordCountForNextSizeCheck = DEFAULT_MINIMUM_RECORD_COUNT_FOR_CHECK;
+    this.recordCountForNextSizeCheck = ParquetProperties.DEFAULT_MINIMUM_RECORD_COUNT_FOR_CHECK;
+  }
+
+  /**
+   * Once we get parquet version >= 1.12 among all engines we can cleanup the reflexion hack.
+   *
+   * @param parquetWriterbuilder
+   * @param hadoopConf
+   */
+  protected void handleParquetBloomFilters(ParquetWriter.Builder parquetWriterbuilder, Configuration hadoopConf) {
+    // inspired from https://github.com/apache/parquet-mr/blob/master/parquet-hadoop/src/main/java/org/apache/parquet/hadoop/ParquetOutputFormat.java#L458-L464
+    hadoopConf.forEach(conf -> {
+      String key = conf.getKey();
+      if (key.startsWith(BLOOM_FILTER_ENABLED)) {
+        String column = key.substring(BLOOM_FILTER_ENABLED.length() + 1, key.length());
+        try {
+          Method method = parquetWriterbuilder.getClass().getMethod("withBloomFilterEnabled", String.class, boolean.class);
+          method.invoke(parquetWriterbuilder, column, Boolean.valueOf(conf.getValue()).booleanValue());
+        } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+          // skip
+        }
+      }
+      if (key.startsWith(BLOOM_FILTER_EXPECTED_NDV)) {
+        String column = key.substring(BLOOM_FILTER_EXPECTED_NDV.length() + 1, key.length());
+        try {
+          Method method = parquetWriterbuilder.getClass().getMethod("withBloomFilterNDV", String.class, long.class);
+          method.invoke(parquetWriterbuilder, column, Long.valueOf(conf.getValue()).longValue());
+        } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+          // skip
+        }
+      }
+    });
   }
 
   public boolean canWrite() {
@@ -82,15 +133,18 @@ public abstract class HoodieBaseParquetWriter<R> extends ParquetWriter<R> {
       }
       recordCountForNextSizeCheck = writtenCount + Math.min(
           // Do check it in the halfway
-          Math.max(DEFAULT_MINIMUM_RECORD_COUNT_FOR_CHECK, (maxFileSize / avgRecordSize - writtenCount) / 2),
-          DEFAULT_MAXIMUM_RECORD_COUNT_FOR_CHECK);
+          Math.max(ParquetProperties.DEFAULT_MINIMUM_RECORD_COUNT_FOR_CHECK, (maxFileSize / avgRecordSize - writtenCount) / 2),
+          ParquetProperties.DEFAULT_MAXIMUM_RECORD_COUNT_FOR_CHECK);
     }
     return true;
   }
 
-  @Override
+  public long getDataSize() {
+    return this.parquetWriter.getDataSize();
+  }
+
   public void write(R object) throws IOException {
-    super.write(object);
+    this.parquetWriter.write(object);
     writtenRecordCount.incrementAndGet();
   }
 
@@ -101,5 +155,10 @@ public abstract class HoodieBaseParquetWriter<R> extends ParquetWriter<R> {
   @VisibleForTesting
   protected long getRecordCountForNextSizeCheck() {
     return recordCountForNextSizeCheck;
+  }
+
+  @Override
+  public void close() throws IOException {
+    this.parquetWriter.close();
   }
 }

@@ -56,13 +56,10 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
   }
 
   @Override
-  protected HoodieData<HoodieRecord<T>> doDeduplicateRecords(
+  public HoodieData<HoodieRecord<T>> deduplicateRecords(
       HoodieData<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism, String schemaStr, TypedProperties props, HoodieRecordMerger merger) {
     boolean isIndexingGlobal = index.isGlobal();
     final SerializableSchema schema = new SerializableSchema(schemaStr);
-    // Auto-tunes the parallelism for reduce transformation based on the number of data partitions
-    // in engine-specific representation
-    int reduceParallelism = Math.max(1, Math.min(records.getNumPartitions(), parallelism));
     return records.mapToPair(record -> {
       HoodieKey hoodieKey = record.getKey();
       // If index used is global, then records are expected to differ in their partitionPath
@@ -74,7 +71,7 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
     }).reduceByKey((rec1, rec2) -> {
       HoodieRecord<T> reducedRecord;
       try {
-        reducedRecord =  merger.merge(rec1, schema.get(), rec2, schema.get(), props).get().getLeft();
+        reducedRecord = merger.merge(rec1, schema.get(), rec2, schema.get(), props).get().getLeft();
       } catch (IOException e) {
         throw new HoodieException(String.format("Error to merge two records, %s, %s", rec1, rec2), e);
       }
@@ -82,6 +79,6 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
       HoodieKey reducedKey = choosePrev ? rec1.getKey() : rec2.getKey();
       HoodieOperation operation = choosePrev ? rec1.getOperation() : rec2.getOperation();
       return reducedRecord.newInstance(reducedKey, operation);
-    }, reduceParallelism).map(Pair::getRight);
+    }, parallelism).map(Pair::getRight);
   }
 }

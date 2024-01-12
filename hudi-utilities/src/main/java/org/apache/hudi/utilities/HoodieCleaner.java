@@ -26,6 +26,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,13 +55,13 @@ public class HoodieCleaner {
   private TypedProperties props;
 
   public HoodieCleaner(Config cfg, JavaSparkContext jssc) {
+    this(cfg, jssc, UtilHelpers.buildProperties(jssc.hadoopConfiguration(), cfg.propsFilePath, cfg.configs));
+  }
+
+  public HoodieCleaner(Config cfg, JavaSparkContext jssc, TypedProperties props) {
     this.cfg = cfg;
     this.jssc = jssc;
-    /*
-     * Filesystem used.
-     */
-    this.props = cfg.propsFilePath == null ? UtilHelpers.buildProperties(cfg.configs)
-        : UtilHelpers.readConfig(jssc.hadoopConfiguration(), new Path(cfg.propsFilePath), cfg.configs).getProps(true);
+    this.props = props;
     LOG.info("Creating Cleaner with configs : " + props.toString());
   }
 
@@ -103,17 +104,20 @@ public class HoodieCleaner {
     JCommander cmd = new JCommander(cfg, null, args);
     if (cfg.help || args.length == 0) {
       cmd.usage();
-      System.exit(1);
+      throw new HoodieException("Failed to run cleaning for " + cfg.basePath);
     }
 
     String dirName = new Path(cfg.basePath).getName();
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("hoodie-cleaner-" + dirName, cfg.sparkMaster);
+
     try {
       new HoodieCleaner(cfg, jssc).run();
     } catch (Throwable throwable) {
-      LOG.error("Fail to run cleaning for " + cfg.basePath, throwable);
+      throw new HoodieException("Failed to run cleaning for " + cfg.basePath, throwable);
     } finally {
       jssc.stop();
     }
+
+    LOG.info("Cleaner ran successfully");
   }
 }

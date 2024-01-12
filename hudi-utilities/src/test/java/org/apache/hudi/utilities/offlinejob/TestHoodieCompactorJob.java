@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -80,8 +79,8 @@ public class TestHoodieCompactorJob extends HoodieOfflineJobTestBase {
     metaClient =  HoodieTableMetaClient.initTableAndGetMetaClient(jsc.hadoopConfiguration(), tableBasePath, metaClientProps);
     client = new SparkRDDWriteClient(context, config);
 
-    writeData(true, HoodieActiveTimeline.createNewInstantTime(), 100, true);
-    writeData(true, HoodieActiveTimeline.createNewInstantTime(), 100, true);
+    writeData(true, client.createNewInstantTime(), 100, true);
+    writeData(true, client.createNewInstantTime(), 100, true);
 
     // offline compaction schedule
     HoodieCompactor hoodieCompactorSchedule =
@@ -90,8 +89,8 @@ public class TestHoodieCompactorJob extends HoodieOfflineJobTestBase {
     TestHelpers.assertNCompletedCommits(2, tableBasePath, fs);
     TestHelpers.assertNCleanCommits(0, tableBasePath, fs);
 
-    writeData(true, HoodieActiveTimeline.createNewInstantTime(), 100, true);
-    writeData(true, HoodieActiveTimeline.createNewInstantTime(), 100, true);
+    writeData(true, client.createNewInstantTime(), 100, true);
+    writeData(true, client.createNewInstantTime(), 100, true);
 
     // offline compaction execute with sync clean
     HoodieCompactor hoodieCompactorExecute =

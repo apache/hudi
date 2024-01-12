@@ -32,11 +32,14 @@ import java.util.concurrent.TimeUnit;
         + "converted to string while generating partition path value for records. Record key is "
         + "same as before where it is chosen by field name.")
 public class TimestampKeyGeneratorConfig {
-  private static final String TIMESTAMP_KEYGEN_CONFIG_PREFIX = "hoodie.deltastreamer.keygen.timebased.";
+  private static final String TIMESTAMP_KEYGEN_CONFIG_PREFIX = "hoodie.keygen.timebased.";
+  @Deprecated
+  private static final String OLD_TIMESTAMP_KEYGEN_CONFIG_PREFIX = "hoodie.deltastreamer.keygen.timebased.";
 
   public static final ConfigProperty<String> TIMESTAMP_TYPE_FIELD = ConfigProperty
       .key(TIMESTAMP_KEYGEN_CONFIG_PREFIX + "timestamp.type")
       .noDefaultValue()
+      .withAlternatives(OLD_TIMESTAMP_KEYGEN_CONFIG_PREFIX + "timestamp.type")
       .markAdvanced()
       .withDocumentation("Timestamp type of the field, which should be one of the timestamp types "
           + "supported: `UNIX_TIMESTAMP`, `DATE_STRING`, `MIXED`, `EPOCHMILLISECONDS`, `SCALAR`.");
@@ -44,6 +47,7 @@ public class TimestampKeyGeneratorConfig {
   public static final ConfigProperty<String> INPUT_TIME_UNIT = ConfigProperty
       .key(TIMESTAMP_KEYGEN_CONFIG_PREFIX + "timestamp.scalar.time.unit")
       .defaultValue(TimeUnit.SECONDS.toString())
+      .withAlternatives(OLD_TIMESTAMP_KEYGEN_CONFIG_PREFIX + "timestamp.scalar.time.unit")
       .markAdvanced()
       .withDocumentation("When timestamp type `SCALAR` is used, this specifies the time unit, "
           + "with allowed unit specified by `TimeUnit` enums (`NANOSECONDS`, `MICROSECONDS`, "
@@ -53,30 +57,35 @@ public class TimestampKeyGeneratorConfig {
   public static final ConfigProperty<String> TIMESTAMP_INPUT_DATE_FORMAT = ConfigProperty
       .key(TIMESTAMP_KEYGEN_CONFIG_PREFIX + "input.dateformat")
       .defaultValue("")
+      .withAlternatives(OLD_TIMESTAMP_KEYGEN_CONFIG_PREFIX + "input.dateformat")
       .markAdvanced()
       .withDocumentation("Input date format such as `yyyy-MM-dd'T'HH:mm:ss.SSSZ`.");
 
   public static final ConfigProperty<String> TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX = ConfigProperty
       .key(TIMESTAMP_KEYGEN_CONFIG_PREFIX + "input.dateformat.list.delimiter.regex")
       .defaultValue(",")
+      .withAlternatives(OLD_TIMESTAMP_KEYGEN_CONFIG_PREFIX + "input.dateformat.list.delimiter.regex")
       .markAdvanced()
       .withDocumentation("The delimiter for allowed input date format list, usually `,`.");
 
   public static final ConfigProperty<String> TIMESTAMP_INPUT_TIMEZONE_FORMAT = ConfigProperty
       .key(TIMESTAMP_KEYGEN_CONFIG_PREFIX + "input.timezone")
       .defaultValue("UTC")
+      .withAlternatives(OLD_TIMESTAMP_KEYGEN_CONFIG_PREFIX + "input.timezone")
       .markAdvanced()
       .withDocumentation("Timezone of the input timestamp, such as `UTC`.");
 
   public static final ConfigProperty<String> TIMESTAMP_OUTPUT_DATE_FORMAT = ConfigProperty
       .key(TIMESTAMP_KEYGEN_CONFIG_PREFIX + "output.dateformat")
       .defaultValue("")
+      .withAlternatives(OLD_TIMESTAMP_KEYGEN_CONFIG_PREFIX + "output.dateformat")
       .markAdvanced()
       .withDocumentation("Output date format such as `yyyy-MM-dd'T'HH:mm:ss.SSSZ`.");
 
   public static final ConfigProperty<String> TIMESTAMP_OUTPUT_TIMEZONE_FORMAT = ConfigProperty
       .key(TIMESTAMP_KEYGEN_CONFIG_PREFIX + "output.timezone")
       .defaultValue("UTC")
+      .withAlternatives(OLD_TIMESTAMP_KEYGEN_CONFIG_PREFIX + "output.timezone")
       .markAdvanced()
       .withDocumentation("Timezone of the output timestamp, such as `UTC`.");
 
@@ -85,6 +94,7 @@ public class TimestampKeyGeneratorConfig {
   public static final ConfigProperty<String> TIMESTAMP_TIMEZONE_FORMAT = ConfigProperty
       .key(TIMESTAMP_KEYGEN_CONFIG_PREFIX + "timezone")
       .defaultValue("UTC")
+      .withAlternatives(OLD_TIMESTAMP_KEYGEN_CONFIG_PREFIX + "timezone")
       .markAdvanced()
       .withDocumentation("Timezone of both input and output timestamp if they are the same, such "
           + "as `UTC`.  Please use `" + TIMESTAMP_INPUT_TIMEZONE_FORMAT.key() + "` and `"
@@ -92,8 +102,9 @@ public class TimestampKeyGeneratorConfig {
           + "are different.");
 
   public static final ConfigProperty<String> DATE_TIME_PARSER = ConfigProperty
-      .key("hoodie.deltastreamer.keygen.datetime.parser.class")
+      .key("hoodie.keygen.datetime.parser.class")
       .defaultValue("org.apache.hudi.keygen.parser.HoodieDateTimeParser")
+      .withAlternatives("hoodie.deltastreamer.keygen.datetime.parser.class")
       .markAdvanced()
       .withDocumentation("Date time parser class name.");
 }

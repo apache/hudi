@@ -20,6 +20,7 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.source.prune.DataPruner;
 import org.apache.hudi.source.prune.PrimaryKeyPruners;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
@@ -55,6 +56,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -65,6 +67,7 @@ import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -289,6 +292,26 @@ public class TestHoodieTableSource {
     HoodieTableMetaClient metaClient = tableSource.getMetaClient();
     HoodieTableSource tableSourceCopy = (HoodieTableSource) tableSource.copy();
     assertThat(metaClient, is(tableSourceCopy.getMetaClient()));
+  }
+
+  @Test
+  void testFilterPushDownWithParquetPredicates() {
+    HoodieTableSource tableSource = getEmptyStreamingSource();
+    List<ResolvedExpression> expressions = new ArrayList<>();
+    expressions.add(new FieldReferenceExpression("f_int", DataTypes.INT(), 0, 0));
+    expressions.add(new ValueLiteralExpression(10));
+    ResolvedExpression equalsExpression = new CallExpression(
+        BuiltInFunctionDefinitions.EQUALS, expressions, DataTypes.BOOLEAN());
+    CallExpression greaterThanExpression = new CallExpression(
+        BuiltInFunctionDefinitions.GREATER_THAN, expressions, DataTypes.BOOLEAN());
+    CallExpression orExpression = new CallExpression(
+        BuiltInFunctionDefinitions.OR,
+        Arrays.asList(equalsExpression, greaterThanExpression),
+        DataTypes.BOOLEAN());
+    List<ResolvedExpression> expectedFilters = Arrays.asList(equalsExpression, greaterThanExpression, orExpression);
+    tableSource.applyFilters(expectedFilters);
+    String actualPredicates = tableSource.getPredicates().toString();
+    assertEquals(ExpressionPredicates.fromExpression(expectedFilters).toString(), actualPredicates);
   }
 
   private HoodieTableSource getEmptyStreamingSource() {

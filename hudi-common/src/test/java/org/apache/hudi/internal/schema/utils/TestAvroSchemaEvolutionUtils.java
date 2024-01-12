@@ -19,6 +19,7 @@
 package org.apache.hudi.internal.schema.utils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.InternalSchemaBuilder;
 import org.apache.hudi.internal.schema.Type;
@@ -207,6 +208,20 @@ public class TestAvroSchemaEvolutionUtils {
     Assertions.assertEquals(newRecord, recordWithNewId);
   }
 
+  @Test
+  public void testFixNullOrdering() {
+    Schema schema = SchemaTestUtil.getSchemaFromResource(TestAvroSchemaEvolutionUtils.class, "/nullWrong.avsc");
+    Schema expectedSchema = SchemaTestUtil.getSchemaFromResource(TestAvroSchemaEvolutionUtils.class, "/nullRight.avsc");
+    Assertions.assertEquals(expectedSchema, AvroInternalSchemaConverter.fixNullOrdering(schema));
+    Assertions.assertEquals(expectedSchema, AvroInternalSchemaConverter.fixNullOrdering(expectedSchema));
+  }
+
+  @Test
+  public void testFixNullOrderingSameSchemaCheck() {
+    Schema schema = SchemaTestUtil.getSchemaFromResource(TestAvroSchemaEvolutionUtils.class, "/source_evolved.avsc");
+    Assertions.assertEquals(schema, AvroInternalSchemaConverter.fixNullOrdering(schema));
+  }
+
   public enum Enum {
     ENUM1, ENUM2
   }
@@ -331,7 +346,7 @@ public class TestAvroSchemaEvolutionUtils {
     avroRecord.put("preferences", preferencesRecord);
     // fill mapType
     Map<String, GenericData.Record> locations = new HashMap<>();
-    Schema mapSchema = AvroInternalSchemaConverter.convert(((Types.MapType)record.field("locations").type()).valueType(), "test1.locations");
+    Schema mapSchema = AvroInternalSchemaConverter.convert(((Types.MapType)record.fieldByNameCaseInsensitive("locations").type()).valueType(), "test1.locations");
     GenericData.Record locationsValue = new GenericData.Record(mapSchema);
     locationsValue.put("lat", 1.2f);
     locationsValue.put("long", 1.4f);

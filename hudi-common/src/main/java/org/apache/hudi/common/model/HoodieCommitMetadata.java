@@ -45,6 +45,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadataToJsonBytes;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeCommitMetadata;
+
 /**
  * All the metadata that gets stored along with a commit.
  */
@@ -171,7 +174,7 @@ public class HoodieCommitMetadata implements Serializable {
    * from the latest commit.
    *
    * @param hadoopConf
-   * @param basePath The base path
+   * @param basePath   The base path
    * @return the file full path to file status mapping
    */
   public Map<String, FileStatus> getFullPathToFileStatus(Configuration hadoopConf, String basePath) {
@@ -202,7 +205,7 @@ public class HoodieCommitMetadata implements Serializable {
    * this is an optimization for COPY_ON_WRITE table to eliminate legacy files for filesystem view.
    *
    * @param hadoopConf
-   * @param basePath The base path
+   * @param basePath   The base path
    * @return the file ID to file status mapping
    */
   public Map<String, FileStatus> getFileIdToFileStatus(Configuration hadoopConf, String basePath) {
@@ -232,7 +235,7 @@ public class HoodieCommitMetadata implements Serializable {
 
   public static <T> T fromJsonString(String jsonStr, Class<T> clazz) throws Exception {
     if (jsonStr == null || jsonStr.isEmpty()) {
-      // For empty commit file (no data or somethings bad happen).
+      // For empty commit file
       return clazz.newInstance();
     }
     return JsonUtils.getObjectMapper().readValue(jsonStr, clazz);
@@ -243,14 +246,14 @@ public class HoodieCommitMetadata implements Serializable {
    * provided file group.
    */
   // TODO: refactor this method to avoid doing the json tree walking (HUDI-4822).
-  public static Option<Pair<String, List<String>>> getFileSliceForFileGroupFromDeltaCommit(
-      byte[] bytes, HoodieFileGroupId fileGroupId) {
-    String jsonStr = new String(bytes, StandardCharsets.UTF_8);
-    if (jsonStr.isEmpty()) {
-      return Option.empty();
-    }
-
+  public static Option<Pair<String, List<String>>> getFileSliceForFileGroupFromDeltaCommit(byte[] bytes, HoodieFileGroupId fileGroupId) {
     try {
+      String jsonStr = new String(
+          convertCommitMetadataToJsonBytes(deserializeCommitMetadata(bytes), org.apache.hudi.avro.model.HoodieCommitMetadata.class),
+          StandardCharsets.UTF_8);
+      if (jsonStr.isEmpty()) {
+        return Option.empty();
+      }
       JsonNode ptToWriteStatsMap = JsonUtils.getObjectMapper().readTree(jsonStr).get("partitionToWriteStats");
       Iterator<Map.Entry<String, JsonNode>> pts = ptToWriteStatsMap.fields();
       while (pts.hasNext()) {
@@ -398,6 +401,26 @@ public class HoodieCommitMetadata implements Serializable {
     return totalUpdateRecords;
   }
 
+  public Long getTotalCorruptLogBlocks() {
+    Long totalCorruptedLogBlocks = 0L;
+    for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
+      for (HoodieWriteStat writeStat : entry.getValue()) {
+        totalCorruptedLogBlocks += writeStat.getTotalCorruptLogBlock();
+      }
+    }
+    return totalCorruptedLogBlocks;
+  }
+
+  public Long getTotalRollbackLogBlocks() {
+    Long totalRollbackLogBlocks = 0L;
+    for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
+      for (HoodieWriteStat writeStat : entry.getValue()) {
+        totalRollbackLogBlocks += writeStat.getTotalRollbackBlocks();
+      }
+    }
+    return totalRollbackLogBlocks;
+  }
+
   public Long getTotalLogFilesSize() {
     Long totalLogFilesSize = 0L;
     for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
@@ -489,9 +512,16 @@ public class HoodieCommitMetadata implements Serializable {
 
   public static <T> T fromBytes(byte[] bytes, Class<T> clazz) throws IOException {
     try {
-      return fromJsonString(new String(bytes, StandardCharsets.UTF_8), clazz);
+      if (bytes.length == 0) {
+        return clazz.newInstance();
+      }
+      return fromJsonString(
+          new String(
+              convertCommitMetadataToJsonBytes(deserializeCommitMetadata(bytes), org.apache.hudi.avro.model.HoodieCommitMetadata.class),
+              StandardCharsets.UTF_8),
+          clazz);
     } catch (Exception e) {
-      throw new IOException("unable to read commit metadata", e);
+      throw new IOException("unable to read commit metadata for bytes length: " + bytes.length, e);
     }
   }
 

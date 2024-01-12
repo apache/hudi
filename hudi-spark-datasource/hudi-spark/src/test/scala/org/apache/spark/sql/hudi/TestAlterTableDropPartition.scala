@@ -19,7 +19,6 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.avro.model.{HoodieCleanMetadata, HoodieCleanPartitionMetadata}
-import org.apache.hudi.{HoodieCLIUtils, HoodieSparkUtils}
 import org.apache.hudi.common.model.{HoodieCleaningPolicy, HoodieCommitMetadata}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant}
@@ -28,7 +27,7 @@ import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.{HoodieCLIUtils, HoodieSparkUtils}
 import org.apache.spark.sql.SaveMode
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.{getLastCleanMetadata, getLastCommitMetadata}
+import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.getLastCleanMetadata
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assertions.assertTrue
 
@@ -517,7 +516,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
       val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
 
       // Generate the first clustering plan
-      val firstScheduleInstant = HoodieActiveTimeline.createNewInstantTime
+      val firstScheduleInstant = client.createNewInstantTime()
       client.scheduleClusteringAtInstant(firstScheduleInstant, HOption.empty())
 
       checkAnswer(s"call show_clustering('$tableName')")(
@@ -552,7 +551,10 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
            | partitioned by(ts)
            | location '$basePath'
            | """.stripMargin)
-      // Create 5 deltacommits to ensure that it is > default `hoodie.compact.inline.max.delta.commits`
+      // disable automatic inline compaction to test with pending compaction instants
+      spark.sql("set hoodie.compact.inline=false")
+      spark.sql("set hoodie.compact.schedule.inline=false")
+      // Create 5 deltacommits to ensure that it is >= default `hoodie.compact.inline.max.delta.commits`
       spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
       spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
       spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
@@ -561,7 +563,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
       val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
 
       // Generate the first compaction plan
-      val firstScheduleInstant = HoodieActiveTimeline.createNewInstantTime
+      val firstScheduleInstant = client.createNewInstantTime()
       assertTrue(client.scheduleCompactionAtInstant(firstScheduleInstant, HOption.empty()))
 
       checkAnswer(s"call show_compaction('$tableName')")(
@@ -596,7 +598,10 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
            | partitioned by(ts)
            | location '$basePath'
            | """.stripMargin)
-      // Create 5 deltacommits to ensure that it is > default `hoodie.compact.inline.max.delta.commits`
+      // disable automatic inline compaction to test with pending compaction instants
+      spark.sql("set hoodie.compact.inline=false")
+      spark.sql("set hoodie.compact.schedule.inline=false")
+      // Create 5 deltacommits to ensure that it is >= default `hoodie.compact.inline.max.delta.commits`
       // Write everything into the same FileGroup but into separate blocks
       spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
       spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000)")
@@ -606,12 +611,48 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
       val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
 
       // Generate the first log_compaction plan
-      val firstScheduleInstant = HoodieActiveTimeline.createNewInstantTime
+      val firstScheduleInstant = client.createNewInstantTime()
       assertTrue(client.scheduleLogCompactionAtInstant(firstScheduleInstant, HOption.empty()))
 
       val partition = "ts=1000"
       val errMsg = s"Failed to drop partitions. Please ensure that there are no pending table service actions (clustering/compaction) for the partitions to be deleted: [$partition]"
       checkExceptionContain(s"ALTER TABLE $tableName DROP PARTITION($partition)")(errMsg)
     }
+  }
+
+  test("Test drop partition with wildcards") {
+    withRecordType()(withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long,
+             |  partition_date_col string
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  primaryKey ='id',
+             |  type = '$tableType',
+             |  preCombineField = 'ts'
+             | ) partitioned by (partition_date_col)
+         """.stripMargin)
+        spark.sql(s"insert into $tableName values " +
+          s"(1, 'a1', 10, 1000, '2023-08-01'), (2, 'a2', 10, 1000, '2023-08-02'), (3, 'a3', 10, 1000, '2023-09-01')")
+        checkAnswer(s"show partitions $tableName")(
+          Seq("partition_date_col=2023-08-01"),
+          Seq("partition_date_col=2023-08-02"),
+          Seq("partition_date_col=2023-09-01")
+        )
+        spark.sql(s"alter table $tableName drop partition(partition_date_col='2023-08-*')")
+        // show partitions will still return all partitions for tests, use select distinct as a stop-gap
+        checkAnswer(s"select distinct partition_date_col from $tableName")(
+          Seq("2023-09-01")
+        )
+      }
+    })
   }
 }

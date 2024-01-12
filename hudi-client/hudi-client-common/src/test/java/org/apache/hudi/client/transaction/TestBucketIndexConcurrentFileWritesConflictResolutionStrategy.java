@@ -58,7 +58,7 @@ public class TestBucketIndexConcurrentFileWritesConflictResolutionStrategy exten
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, newInstantTime));
 
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new BucketIndexConcurrentFileWritesConflictResolutionStrategy();
-    Stream<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient.getActiveTimeline(), currentInstant.get(), lastSuccessfulInstant);
+    Stream<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant);
     Assertions.assertEquals(0, candidateInstants.count());
   }
 
@@ -75,28 +75,28 @@ public class TestBucketIndexConcurrentFileWritesConflictResolutionStrategy exten
     newInstantTime = HoodieTestTable.makeNewCommitTime();
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, newInstantTime));
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new BucketIndexConcurrentFileWritesConflictResolutionStrategy();
-    Stream<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient.getActiveTimeline(), currentInstant.get(), lastSuccessfulInstant);
+    Stream<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant);
     Assertions.assertEquals(0, candidateInstants.count());
   }
 
   @Test
   public void testConcurrentWritesWithInterleavingSuccessfulCommit() throws Exception {
-    createCommit(HoodieActiveTimeline.createNewInstantTime());
+    createCommit(metaClient.createNewInstantTime());
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
     Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
     // writer 1 starts
-    String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
+    String currentWriterInstant = metaClient.createNewInstantTime();
     createInflightCommit(currentWriterInstant, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
     // writer 2 starts and finishes
-    String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    String newInstantTime = metaClient.createNewInstantTime();
     createCommit(newInstantTime);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new BucketIndexConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
-    timeline = timeline.reload();
-    List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(timeline, currentInstant.get(), lastSuccessfulInstant).collect(
+    metaClient.reloadActiveTimeline();
+    List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
     // writer 1 conflicts with writer 2
     Assertions.assertEquals(1, candidateInstants.size());
@@ -113,22 +113,22 @@ public class TestBucketIndexConcurrentFileWritesConflictResolutionStrategy exten
 
   @Test
   public void testConcurrentWritesWithDifferentPartition() throws Exception {
-    createCommit(HoodieActiveTimeline.createNewInstantTime());
+    createCommit(metaClient.createNewInstantTime());
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
     Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
     // writer 1 starts
-    String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
+    String currentWriterInstant = metaClient.createNewInstantTime();
     createInflightCommit(currentWriterInstant, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH);
     // writer 2 starts and finishes
-    String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    String newInstantTime = metaClient.createNewInstantTime();
     createCommit(newInstantTime);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new BucketIndexConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH);
-    timeline = timeline.reload();
-    List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(timeline, currentInstant.get(), lastSuccessfulInstant).collect(
+    metaClient.reloadActiveTimeline();
+    List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
 
     // there should be 1 candidate instant

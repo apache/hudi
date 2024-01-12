@@ -61,9 +61,15 @@ class TestShowInvalidParquetProcedure extends HoodieSparkProcedureTestBase {
       out2.close()
 
       // collect result for table
-      val result = spark.sql(
+      var result = spark.sql(
         s"""call show_invalid_parquet(path => '$basePath')""".stripMargin).collect()
       assertResult(2) {
+        result.length
+      }
+
+      result = spark.sql(
+        s"""call show_invalid_parquet(path => '$basePath', limit => 1)""".stripMargin).collect()
+      assertResult(1) {
         result.length
       }
     }

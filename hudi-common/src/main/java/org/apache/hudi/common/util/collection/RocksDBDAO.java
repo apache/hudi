@@ -21,6 +21,7 @@ package org.apache.hudi.common.util.collection;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.SerializationUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -53,6 +54,8 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Data access objects for storing and retrieving objects in Rocks DB.
@@ -100,11 +103,28 @@ public class RocksDBDAO {
       dbOptions.setLogger(new org.rocksdb.Logger(dbOptions) {
         @Override
         protected void log(InfoLogLevel infoLogLevel, String logMsg) {
-          LOG.info("From Rocks DB : " + logMsg);
+          switch (infoLogLevel) {
+            case DEBUG_LEVEL:
+              LOG.debug("From Rocks DB : {}", logMsg);
+              break;
+            case WARN_LEVEL:
+              LOG.warn("From Rocks DB : {}", logMsg);
+              break;
+            case ERROR_LEVEL:
+            case FATAL_LEVEL:
+              LOG.error("From Rocks DB : {}", logMsg);
+              break;
+            case HEADER_LEVEL:
+            case NUM_INFO_LOG_LEVELS:
+            case INFO_LEVEL:
+            default:
+              LOG.info("From Rocks DB : {}", logMsg);
+              break;
+          }
         }
       });
       final List<ColumnFamilyDescriptor> managedColumnFamilies = loadManagedColumnFamilies(dbOptions);
-      final List<ColumnFamilyHandle> managedHandles = new ArrayList<>();
+      final List<ColumnFamilyHandle> managedHandles = new ArrayList<>(managedColumnFamilies.size());
       FileIOUtils.mkdir(new File(rocksDBBasePath));
       rocksDB = RocksDB.open(dbOptions, rocksDBBasePath, managedColumnFamilies, managedHandles);
 
@@ -174,7 +194,7 @@ public class RocksDBDAO {
   public <T extends Serializable> void putInBatch(WriteBatch batch, String columnFamilyName, String key, T value) {
     try {
       byte[] payload = serializePayload(value);
-      batch.put(managedHandlesMap.get(columnFamilyName), key.getBytes(), payload);
+      batch.put(managedHandlesMap.get(columnFamilyName), getUTF8Bytes(key), payload);
     } catch (Exception e) {
       throw new HoodieException(e);
     }
@@ -211,7 +231,7 @@ public class RocksDBDAO {
   public <T extends Serializable> void put(String columnFamilyName, String key, T value) {
     try {
       byte[] payload = serializePayload(value);
-      getRocksDB().put(managedHandlesMap.get(columnFamilyName), key.getBytes(), payload);
+      getRocksDB().put(managedHandlesMap.get(columnFamilyName), getUTF8Bytes(key), payload);
     } catch (Exception e) {
       throw new HoodieException(e);
     }
@@ -243,7 +263,7 @@ public class RocksDBDAO {
    */
   public void deleteInBatch(WriteBatch batch, String columnFamilyName, String key) {
     try {
-      batch.delete(managedHandlesMap.get(columnFamilyName), key.getBytes());
+      batch.delete(managedHandlesMap.get(columnFamilyName), getUTF8Bytes(key));
     } catch (RocksDBException e) {
       throw new HoodieException(e);
     }
@@ -272,7 +292,7 @@ public class RocksDBDAO {
    */
   public void delete(String columnFamilyName, String key) {
     try {
-      getRocksDB().delete(managedHandlesMap.get(columnFamilyName), key.getBytes());
+      getRocksDB().delete(managedHandlesMap.get(columnFamilyName), getUTF8Bytes(key));
     } catch (RocksDBException e) {
       throw new HoodieException(e);
     }
@@ -302,7 +322,7 @@ public class RocksDBDAO {
   public <T extends Serializable> T get(String columnFamilyName, String key) {
     ValidationUtils.checkArgument(!closed);
     try {
-      byte[] val = getRocksDB().get(managedHandlesMap.get(columnFamilyName), key.getBytes());
+      byte[] val = getRocksDB().get(managedHandlesMap.get(columnFamilyName), getUTF8Bytes(key));
       return val == null ? null : SerializationUtils.deserialize(val);
     } catch (RocksDBException e) {
       throw new HoodieException(e);
@@ -339,7 +359,7 @@ public class RocksDBDAO {
     long timeTakenMicro = 0;
     List<Pair<String, T>> results = new LinkedList<>();
     try (final RocksIterator it = getRocksDB().newIterator(managedHandlesMap.get(columnFamilyName))) {
-      it.seek(prefix.getBytes());
+      it.seek(getUTF8Bytes(prefix));
       while (it.isValid() && new String(it.key()).startsWith(prefix)) {
         long beginTs = System.nanoTime();
         T val = SerializationUtils.deserialize(it.value());
@@ -375,7 +395,7 @@ public class RocksDBDAO {
     ValidationUtils.checkArgument(!closed);
     LOG.info("Prefix DELETE (query=" + prefix + ") on " + columnFamilyName);
     final RocksIterator it = getRocksDB().newIterator(managedHandlesMap.get(columnFamilyName));
-    it.seek(prefix.getBytes());
+    it.seek(getUTF8Bytes(prefix));
     // Find first and last keys to be deleted
     String firstEntry = null;
     String lastEntry = null;
@@ -392,9 +412,9 @@ public class RocksDBDAO {
     if (null != firstEntry) {
       try {
         // This will not delete the last entry
-        getRocksDB().deleteRange(managedHandlesMap.get(columnFamilyName), firstEntry.getBytes(), lastEntry.getBytes());
+        getRocksDB().deleteRange(managedHandlesMap.get(columnFamilyName), getUTF8Bytes(firstEntry), getUTF8Bytes(lastEntry));
         // Delete the last entry
-        getRocksDB().delete(lastEntry.getBytes());
+        getRocksDB().delete(getUTF8Bytes(lastEntry));
       } catch (RocksDBException e) {
         LOG.error("Got exception performing range delete");
         throw new HoodieException(e);
@@ -412,7 +432,7 @@ public class RocksDBDAO {
 
     managedDescriptorMap.computeIfAbsent(columnFamilyName, colFamilyName -> {
       try {
-        ColumnFamilyDescriptor descriptor = getColumnFamilyDescriptor(colFamilyName.getBytes());
+        ColumnFamilyDescriptor descriptor = getColumnFamilyDescriptor(StringUtils.getUTF8Bytes(colFamilyName));
         ColumnFamilyHandle handle = getRocksDB().createColumnFamily(descriptor);
         managedHandlesMap.put(colFamilyName, handle);
         return descriptor;

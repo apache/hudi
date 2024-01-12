@@ -26,25 +26,30 @@ import org.apache.hudi.common.config.HoodieConfig;
 
 import javax.annotation.concurrent.Immutable;
 
+import static org.apache.hudi.common.util.ConfigUtils.DELTA_STREAMER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
+
 /**
  * GCS Events Source Configs
  */
 @Immutable
 @ConfigClassProperty(name = "GCS Events Source Configs",
-    groupName = ConfigGroups.Names.DELTA_STREAMER,
+    groupName = ConfigGroups.Names.HUDI_STREAMER,
     subGroupName = ConfigGroups.SubGroupNames.DELTA_STREAMER_SOURCE,
-    description = "Configurations controlling the behavior of GCS Events Source in Deltastreamer.")
+    description = "Configurations controlling the behavior of GCS Events Source in Hudi Streamer.")
 public class GCSEventsSourceConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> GOOGLE_PROJECT_ID = ConfigProperty
-      .key("hoodie.deltastreamer.source.gcs.project.id")
+      .key(STREAMER_CONFIG_PREFIX + "source.gcs.project.id")
       .noDefaultValue()
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.gcs.project.id")
       .markAdvanced()
       .withDocumentation("The GCP Project Id where the Pubsub Subscription to ingest from resides. Needed to connect to the Pubsub subscription");
 
   public static final ConfigProperty<String> PUBSUB_SUBSCRIPTION_ID = ConfigProperty
-      .key("hoodie.deltastreamer.source.gcs.subscription.id")
+      .key(STREAMER_CONFIG_PREFIX + "source.gcs.subscription.id")
       .noDefaultValue()
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.gcs.subscription.id")
       .markAdvanced()
       .withDocumentation("The GCP Pubsub subscription id for the GCS Notifications. Needed to connect to the Pubsub subscription");
 }

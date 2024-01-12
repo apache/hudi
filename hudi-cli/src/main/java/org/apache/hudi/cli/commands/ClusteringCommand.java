@@ -23,7 +23,6 @@ import org.apache.hudi.cli.commands.SparkMain.SparkCommand;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
@@ -59,7 +58,7 @@ public class ClusteringCommand {
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
 
     // First get a clustering instant time and pass it to spark launcher for scheduling clustering
-    String clusteringInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    String clusteringInstantTime = client.createNewInstantTime();
 
     sparkLauncher.addAppArgs(SparkCommand.CLUSTERING_SCHEDULE.toString(), master, sparkMemory,
         client.getBasePath(), client.getTableConfig().getTableName(), clusteringInstantTime, propsFilePath);

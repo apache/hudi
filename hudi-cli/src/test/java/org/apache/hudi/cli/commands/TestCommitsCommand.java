@@ -26,13 +26,14 @@ import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.cli.testutils.HoodieTestReplaceCommitMetadataGenerator;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
-import org.apache.hudi.client.HoodieTimelineArchiver;
+import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -126,11 +127,14 @@ public class TestCommitsCommand extends CLIFunctionalTestHarness {
   private LinkedHashMap<HoodieInstant, Integer[]> generateMixedData() throws Exception {
     // generate data and metadata
     LinkedHashMap<HoodieInstant, Integer[]> replaceCommitData = new LinkedHashMap<>();
-    replaceCommitData.put(new HoodieInstant(false, HoodieTimeline.REPLACE_COMMIT_ACTION, "103"), new Integer[] {15, 10});
+    replaceCommitData.put(new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION,
+        "103", InProcessTimeGenerator.createNewInstantTime()), new Integer[] {15, 10});
 
     LinkedHashMap<HoodieInstant, Integer[]> commitData = new LinkedHashMap<>();
-    commitData.put(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "102"), new Integer[] {15, 10});
-    commitData.put(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "101"), new Integer[] {20, 10});
+    commitData.put(new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION,
+        "102", InProcessTimeGenerator.createNewInstantTime()), new Integer[] {15, 10});
+    commitData.put(new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION,
+        "101", InProcessTimeGenerator.createNewInstantTime()), new Integer[] {20, 10});
 
     for (Map.Entry<HoodieInstant, Integer[]> entry : commitData.entrySet()) {
       String key = entry.getKey().getTimestamp();

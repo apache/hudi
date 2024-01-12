@@ -87,7 +87,7 @@ public class TestHoodieCompactionStrategy {
     Long returnedSize = returned.stream().map(s -> s.getMetrics().get(BoundedIOCompactionStrategy.TOTAL_IO_MB))
         .map(Double::longValue).reduce(Long::sum).orElse(0L);
     assertEquals(610, (long) returnedSize,
-        "Should chose the first 2 compactions which should result in a total IO of 690 MB");
+        "Should chose the first 2 compactions which should result in a total IO of 610 MB");
   }
 
   @Test
@@ -136,15 +136,21 @@ public class TestHoodieCompactionStrategy {
     HoodieWriteConfig writeConfig =
         HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withCompactionStrategy(strategy).withTargetPartitionsPerDayBasedCompaction(1).build()).build();
-    List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap, keyToPartitionMap);
-    List<HoodieCompactionOperation> returned = strategy.orderAndFilter(writeConfig, operations, new ArrayList<>());
 
-    assertTrue(returned.size() < operations.size(),
-        "DayBasedCompactionStrategy should have resulted in fewer compactions");
-    assertEquals(2, returned.size(), "DayBasedCompactionStrategy should have resulted in fewer compactions");
+    List<String> filterPartitions = strategy.filterPartitionPaths(writeConfig, Arrays.asList(partitionPaths));
+    assertEquals(1, filterPartitions.size(), "DayBasedCompactionStrategy should have resulted in fewer partitions");
 
-    int comparison = strategy.getComparator().compare(returned.get(returned.size() - 1).getPartitionPath(),
-        returned.get(0).getPartitionPath());
+    List<HoodieCompactionOperation> operations = createCompactionOperationsForPartition(writeConfig, sizesMap, keyToPartitionMap, filterPartitions);
+    assertEquals(2, operations.size(),
+        "DayBasedCompactionStrategy should generate 2 HoodieCompactionOperation for partition 2017/01/03");
+
+    List<String> operationPartitions = operations.stream().collect(Collectors.groupingBy(HoodieCompactionOperation::getPartitionPath))
+        .entrySet().stream().map(e -> e.getKey()).collect(Collectors.toList());
+    assertTrue(operationPartitions.size() == filterPartitions.size(),
+        "DayBasedCompactionStrategy should have resulted same partitions");
+
+    int comparison = strategy.getComparator().compare(operations.get(operations.size() - 1).getPartitionPath(),
+        operations.get(0).getPartitionPath());
     // Either the partition paths are sorted in descending order or they are equal
     assertTrue(comparison >= 0, "DayBasedCompactionStrategy should sort partitions in descending order");
   }
@@ -304,6 +310,30 @@ public class TestHoodieCompactionStrategy {
           config.getCompactionStrategy().captureMetrics(config, slice),
           df.getBootstrapBaseFile().map(BaseFile::getPath).orElse(null))
       );
+    });
+    return operations;
+  }
+
+  private List<HoodieCompactionOperation> createCompactionOperationsForPartition(HoodieWriteConfig config,
+      Map<Long, List<Long>> sizesMap, Map<Long, String> keyToPartitionMap, List<String> filterPartitions) {
+    List<HoodieCompactionOperation> operations = new ArrayList<>(sizesMap.size());
+
+    sizesMap.forEach((k, v) -> {
+      HoodieBaseFile df = TestHoodieBaseFile.newDataFile(k);
+      String partitionPath = keyToPartitionMap.get(k);
+      // create operation for target partition
+      if (filterPartitions.contains(partitionPath)) {
+        List<HoodieLogFile> logFiles = v.stream().map(TestHoodieLogFile::newLogFile).collect(Collectors.toList());
+        FileSlice slice = new FileSlice(new HoodieFileGroupId(partitionPath, df.getFileId()), df.getCommitTime());
+        slice.setBaseFile(df);
+        logFiles.stream().forEach(f -> slice.addLogFile(f));
+        operations.add(new HoodieCompactionOperation(df.getCommitTime(),
+            logFiles.stream().map(s -> s.getPath().toString()).collect(Collectors.toList()), df.getPath(), df.getFileId(),
+            partitionPath,
+            config.getCompactionStrategy().captureMetrics(config, slice),
+            df.getBootstrapBaseFile().map(BaseFile::getPath).orElse(null))
+        );
+      }
     });
     return operations;
   }

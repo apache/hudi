@@ -18,13 +18,17 @@
 
 package org.apache.hudi.common.config;
 
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.Properties;
+
+import static org.apache.hudi.common.util.ConfigUtils.enumNames;
 
 /**
  * Hudi configs used across engines.
@@ -33,6 +37,14 @@ import java.util.Properties;
     groupName = ConfigGroups.Names.WRITE_CLIENT,
     description = "The following set of configurations are common across Hudi.")
 public class HoodieCommonConfig extends HoodieConfig {
+
+  public static final ConfigProperty<String> BASE_PATH = ConfigProperty
+      .key("hoodie.base.path")
+      .noDefaultValue()
+      .withDocumentation("Base path on lake storage, under which all the table data is stored. "
+          + "Always prefix it explicitly with the storage scheme (e.g hdfs://, s3:// etc). "
+          + "Hudi stores all the main meta-data about commits, savepoints, cleaning audit logs "
+          + "etc in .hoodie directory under this base path directory.");
 
   public static final ConfigProperty<Boolean> SCHEMA_EVOLUTION_ENABLE = ConfigProperty
       .key("hoodie.schema.on.read.enable")
@@ -46,10 +58,12 @@ public class HoodieCommonConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("The query instant for time travel. Without specified this option, we query the latest snapshot.");
 
+  @Deprecated
   public static final ConfigProperty<Boolean> RECONCILE_SCHEMA = ConfigProperty
       .key("hoodie.datasource.write.reconcile.schema")
       .defaultValue(false)
       .markAdvanced()
+      .deprecatedAfter("0.14.1")
       .withDocumentation("This config controls how writer's schema will be selected based on the incoming batch's "
           + "schema as well as existing table's one. When schema reconciliation is DISABLED, incoming batch's "
           + "schema will be picked as a writer-schema (therefore updating table's schema). When schema reconciliation "
@@ -57,6 +71,26 @@ public class HoodieCommonConfig extends HoodieConfig {
           + "or extended, meaning that we'll always prefer the schema that either adds new columns or stays the same. "
           + "This enables us, to always extend the table's schema during evolution and never lose the data (when, for "
           + "ex, existing column is being dropped in a new batch)");
+
+  public static final ConfigProperty<Boolean> MAKE_NEW_COLUMNS_NULLABLE = ConfigProperty
+      .key("hoodie.datasource.write.new.columns.nullable")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("When a non-nullable column is added to datasource during a write operation, the write "
+          + " operation will fail schema compatibility check. Set this option to true will make the newly added "
+          + " column nullable to successfully complete the write operation.");
+
+  public static final ConfigProperty<String> HANDLE_MISSING_COLUMNS_WITH_LOSSLESS_TYPE_PROMOTIONS = ConfigProperty
+      .key("hoodie.write.handle.missing.cols.with.lossless.type.promotion")
+      .defaultValue("false")
+      .markAdvanced()
+      .withDocumentation("When a nullable column is missing from incoming batch during a write operation, the write "
+          + " operation will fail schema compatibility check. Set this option to true will make the missing "
+          + " column be filled with null values to successfully complete the write operation. Similarly lossless promotion"
+          + " are type promotions that are not back compatible like long to int, double to float etc can be handled "
+          + " by setting this config to true, in which case incoming data will be promoted to the table schema type"
+          + " and written to the table.");
 
   public static final ConfigProperty<ExternalSpillableMap.DiskMapType> SPILLABLE_DISK_MAP_TYPE = ConfigProperty
       .key("hoodie.common.spillable.diskmap.type")
@@ -72,22 +106,48 @@ public class HoodieCommonConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Turn on compression for BITCASK disk map used by the External Spillable Map");
 
-  public static final ConfigProperty<Boolean> READ_BY_STATE_TRANSITION_TIME = ConfigProperty
-      .key("hoodie.datasource.read.by.state.transition.time")
-      .defaultValue(false)
+  public static final ConfigProperty<String> INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT = ConfigProperty
+      .key("hoodie.read.timeline.holes.resolution.policy")
+      .defaultValue(HollowCommitHandling.FAIL.name())
       .sinceVersion("0.14.0")
-      .withDocumentation("For incremental mode, whether to enable to pulling commits in range by state transition time(completion time) "
-          + "instead of commit time(start time). Please be aware that enabling this will result in"
-          + "`begin.instanttime` and `end.instanttime` using `stateTransitionTime` instead of the instant's commit time.");
+      .markAdvanced()
+      .withValidValues(enumNames(HollowCommitHandling.class))
+      .withDocumentation("When doing incremental queries, there could be hollow commits (requested or inflight commits that are not the latest)"
+          + " that are produced by concurrent writers and could lead to potential data loss. This config allows users to have different ways of handling this situation."
+          + " The valid values are " + Arrays.toString(enumNames(HollowCommitHandling.class)) + ":"
+          + " Use `" + HollowCommitHandling.FAIL + "` to throw an exception when hollow commit is detected. This is helpful when hollow commits"
+          + " are not expected."
+          + " Use `" + HollowCommitHandling.BLOCK + "` to block processing commits from going beyond the hollow ones. This fits the case where waiting for hollow commits"
+          + " to finish is acceptable."
+          + " Use `" + HollowCommitHandling.USE_TRANSITION_TIME + "` (experimental) to query commits in range by state transition time (completion time), instead"
+          + " of commit time (start time). Using this mode will result in `begin.instanttime` and `end.instanttime` using `stateTransitionTime` "
+          + " instead of the instant's commit time."
+      );
 
   public static final ConfigProperty<String> HOODIE_FS_ATOMIC_CREATION_SUPPORT = ConfigProperty
       .key("hoodie.fs.atomic_creation.support")
       .defaultValue("")
+      .markAdvanced()
+      .sinceVersion("0.14.0")
       .withDocumentation("This config is used to specify the file system which supports atomic file creation . "
           + "atomic means that an operation either succeeds and has an effect or has fails and has no effect;"
           + " now this feature is used by FileSystemLockProvider to guaranteeing that only one writer can create the lock file at a time."
           + " since some FS does not support atomic file creation (eg: S3), we decide the FileSystemLockProvider only support HDFS,local FS"
           + " and View FS as default. if you want to use FileSystemLockProvider with other FS, you can set this config with the FS scheme, eg: fs1,fs2");
+
+  public static final ConfigProperty<String> MAX_MEMORY_FOR_COMPACTION = ConfigProperty
+      .key("hoodie.memory.compaction.max.size")
+      .noDefaultValue()
+      .markAdvanced()
+      .withDocumentation("Maximum amount of memory used  in bytes for compaction operations in bytes , before spilling to local storage.");
+
+  public static final ConfigProperty<Integer> MAX_DFS_STREAM_BUFFER_SIZE = ConfigProperty
+      .key("hoodie.memory.dfs.buffer.max.size")
+      .defaultValue(16 * 1024 * 1024)
+      .markAdvanced()
+      .withDocumentation("Property to control the max memory in bytes for dfs input stream buffer size");
+
+  public static final long DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES = 1024 * 1024 * 1024L;
 
   public ExternalSpillableMap.DiskMapType getSpillableDiskMapType() {
     return ExternalSpillableMap.DiskMapType.valueOf(getString(SPILLABLE_DISK_MAP_TYPE).toUpperCase(Locale.ROOT));

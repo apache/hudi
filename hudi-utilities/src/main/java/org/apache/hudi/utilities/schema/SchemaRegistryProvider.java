@@ -18,9 +18,9 @@
 
 package org.apache.hudi.utilities.schema;
 
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaFetchException;
@@ -41,7 +41,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.security.KeyManagementException;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
@@ -51,6 +50,10 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Obtains latest schema from the Confluent/Kafka schema-registry.
@@ -79,6 +82,12 @@ public class SchemaRegistryProvider extends SchemaProvider {
     public static final String SSL_KEY_PASSWORD_PROP = "schema.registry.ssl.key.password";
   }
 
+  protected Schema cachedSourceSchema;
+  protected Schema cachedTargetSchema;
+
+  private final String srcSchemaRegistryUrl;
+  private final String targetSchemaRegistryUrl;
+
   @FunctionalInterface
   public interface SchemaConverter {
     /**
@@ -93,8 +102,9 @@ public class SchemaRegistryProvider extends SchemaProvider {
   public Schema parseSchemaFromRegistry(String registryUrl) {
     String schema = fetchSchemaFromRegistry(registryUrl);
     try {
-      SchemaConverter converter = config.containsKey(HoodieSchemaProviderConfig.SCHEMA_CONVERTER.key())
-          ? ReflectionUtils.loadClass(config.getString(HoodieSchemaProviderConfig.SCHEMA_CONVERTER.key()))
+      String schemaConverter = getStringWithAltKeys(config, HoodieSchemaProviderConfig.SCHEMA_CONVERTER, true);
+      SchemaConverter converter = !StringUtils.isNullOrEmpty(schemaConverter)
+          ? ReflectionUtils.loadClass(schemaConverter)
           : s -> s;
       return new Schema.Parser().parse(converter.convert(schema));
     } catch (Exception e) {
@@ -145,7 +155,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
   }
 
   protected void setAuthorizationHeader(String creds, HttpURLConnection connection) {
-    String encodedAuth = Base64.getEncoder().encodeToString(creds.getBytes(StandardCharsets.UTF_8));
+    String encodedAuth = Base64.getEncoder().encodeToString(getUTF8Bytes(creds));
     connection.setRequestProperty("Authorization", "Basic " + encodedAuth);
   }
 
@@ -155,7 +165,9 @@ public class SchemaRegistryProvider extends SchemaProvider {
 
   public SchemaRegistryProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
-    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key()));
+    checkRequiredConfigProperties(props, Collections.singletonList(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL));
+    this.srcSchemaRegistryUrl = getStringWithAltKeys(config, HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL);
+    this.targetSchemaRegistryUrl = getStringWithAltKeys(config, HoodieSchemaProviderConfig.TARGET_SCHEMA_REGISTRY_URL, srcSchemaRegistryUrl);
     if (config.containsKey(Config.SSL_KEYSTORE_LOCATION_PROP)
         || config.containsKey(Config.SSL_TRUSTSTORE_LOCATION_PROP)) {
       setUpSSLStores();
@@ -187,22 +199,42 @@ public class SchemaRegistryProvider extends SchemaProvider {
 
   @Override
   public Schema getSourceSchema() {
-    String registryUrl = config.getString(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key());
     try {
-      return parseSchemaFromRegistry(registryUrl);
+      if (cachedSourceSchema == null) {
+        cachedSourceSchema = parseSchemaFromRegistry(this.srcSchemaRegistryUrl);
+      }
+      return cachedSourceSchema;
     } catch (Exception e) {
-      throw new HoodieSchemaFetchException("Error reading source schema from registry :" + registryUrl, e);
+      throw new HoodieSchemaFetchException(String.format(
+          "Error reading source schema from registry. Please check %s is configured correctly. Truncated URL: %s",
+          Config.SRC_SCHEMA_REGISTRY_URL_PROP,
+          StringUtils.truncate(srcSchemaRegistryUrl, 10, 10)), e);
     }
   }
 
   @Override
   public Schema getTargetSchema() {
-    String registryUrl = config.getString(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key());
-    String targetRegistryUrl = config.getString(HoodieSchemaProviderConfig.TARGET_SCHEMA_REGISTRY_URL.key(), registryUrl);
     try {
-      return parseSchemaFromRegistry(targetRegistryUrl);
+      if (cachedTargetSchema == null) {
+        cachedTargetSchema = parseSchemaFromRegistry(this.targetSchemaRegistryUrl);
+      }
+      return cachedTargetSchema;
     } catch (Exception e) {
-      throw new HoodieSchemaFetchException("Error reading target schema from registry :" + targetRegistryUrl, e);
+      throw new HoodieSchemaFetchException(String.format(
+          "Error reading target schema from registry. Please check %s is configured correctly. If that is not configured then check %s. Truncated URL: %s",
+          Config.SRC_SCHEMA_REGISTRY_URL_PROP,
+          Config.TARGET_SCHEMA_REGISTRY_URL_PROP,
+          StringUtils.truncate(targetSchemaRegistryUrl, 10, 10)), e);
     }
+  }
+
+  // Per SyncOnce call, the cachedschema for the provider is dropped and SourceSchema re-attained
+  // Subsequent calls to getSourceSchema within the write batch should be cached.
+  @Override
+  public void refresh() {
+    cachedSourceSchema = null;
+    cachedTargetSchema = null;
+    getSourceSchema();
+    getTargetSchema();
   }
 }

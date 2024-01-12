@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
@@ -40,6 +41,8 @@ import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.LocatedFileStatusWithBootstrapBaseFile;
 import org.apache.hudi.hadoop.realtime.HoodieHFileRealtimeInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
+import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
+import org.apache.hudi.hadoop.realtime.HoodieRealtimePath;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -52,6 +55,7 @@ import org.apache.hadoop.hive.ql.io.orc.OrcSerde;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
 import org.apache.hadoop.mapred.FileInputFormat;
+import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.JobContext;
 import org.slf4j.Logger;
@@ -68,9 +72,11 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
+import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
 
 public class HoodieInputFormatUtils {
 
@@ -143,7 +149,6 @@ public class HoodieInputFormatUtils {
   public static String getOutputFormatClassName(HoodieFileFormat baseFileFormat) {
     switch (baseFileFormat) {
       case PARQUET:
-        return MapredParquetOutputFormat.class.getName();
       case HFILE:
         return MapredParquetOutputFormat.class.getName();
       case ORC:
@@ -156,7 +161,6 @@ public class HoodieInputFormatUtils {
   public static String getSerDeClassName(HoodieFileFormat baseFileFormat) {
     switch (baseFileFormat) {
       case PARQUET:
-        return ParquetHiveSerDe.class.getName();
       case HFILE:
         return ParquetHiveSerDe.class.getName();
       case ORC:
@@ -184,16 +188,17 @@ public class HoodieInputFormatUtils {
   /**
    * Filter any specific instants that we do not want to process.
    * example timeline:
-   *
+   * <p>
    * t0 -> create bucket1.parquet
    * t1 -> create and append updates bucket1.log
    * t2 -> request compaction
    * t3 -> create bucket2.parquet
-   *
+   * <p>
    * if compaction at t2 takes a long time, incremental readers on RO tables can move to t3 and would skip updates in t1
-   *
+   * <p>
    * To workaround this problem, we want to stop returning data belonging to commits > t2.
    * After compaction is complete, incremental reader would see updates in t2, t3, so on.
+   *
    * @param timeline
    * @return
    */
@@ -217,6 +222,7 @@ public class HoodieInputFormatUtils {
 
   /**
    * Extract partitions touched by the commitsToCheck.
+   *
    * @param commitsToCheck
    * @param tableMetaClient
    * @param timeline
@@ -225,9 +231,9 @@ public class HoodieInputFormatUtils {
    * @throws IOException
    */
   public static Option<String> getAffectedPartitions(List<HoodieInstant> commitsToCheck,
-                                      HoodieTableMetaClient tableMetaClient,
-                                      HoodieTimeline timeline,
-                                      List<Path> inputPaths) throws IOException {
+                                                     HoodieTableMetaClient tableMetaClient,
+                                                     HoodieTimeline timeline,
+                                                     List<Path> inputPaths) throws IOException {
     Set<String> partitionsToList = new HashSet<>();
     for (HoodieInstant commit : commitsToCheck) {
       HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(commit).get(),
@@ -271,6 +277,7 @@ public class HoodieInputFormatUtils {
 
   /**
    * Extract HoodieTimeline based on HoodieTableMetaClient.
+   *
    * @param job
    * @param tableMetaClient
    * @return
@@ -283,11 +290,19 @@ public class HoodieInputFormatUtils {
     } else {
       baseTimeline = tableMetaClient.getActiveTimeline();
     }
-    return Option.of(baseTimeline.getCommitsTimeline().filterCompletedInstants());
+    HollowCommitHandling handlingMode = HollowCommitHandling.valueOf(job.getConfiguration()
+        .get(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key(), INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.defaultValue()));
+    HoodieTimeline filteredTimeline = handleHollowCommitIfNeeded(
+        baseTimeline.getCommitsTimeline().filterCompletedInstants(),
+        tableMetaClient,
+        handlingMode);
+
+    return Option.of(filteredTimeline);
   }
 
   /**
    * Get commits for incremental query from Hive map reduce configuration.
+   *
    * @param job
    * @param tableName
    * @param timeline
@@ -315,6 +330,7 @@ public class HoodieInputFormatUtils {
 
   /**
    * Extract HoodieTableMetaClient by partition path.
+   *
    * @param conf       The hadoop conf
    * @param partitions The partitions
    * @return partition path to table meta client mapping
@@ -361,7 +377,7 @@ public class HoodieInputFormatUtils {
   public static FileStatus getFileStatus(HoodieBaseFile baseFile) throws IOException {
     if (baseFile.getBootstrapBaseFile().isPresent()) {
       if (baseFile.getFileStatus() instanceof LocatedFileStatus) {
-        return new LocatedFileStatusWithBootstrapBaseFile((LocatedFileStatus)baseFile.getFileStatus(),
+        return new LocatedFileStatusWithBootstrapBaseFile((LocatedFileStatus) baseFile.getFileStatus(),
             baseFile.getBootstrapBaseFile().get().getFileStatus());
       } else {
         return new FileStatusWithBootstrapBaseFile(baseFile.getFileStatus(),
@@ -373,6 +389,7 @@ public class HoodieInputFormatUtils {
 
   /**
    * Filter a list of FileStatus based on commitsToCheck for incremental view.
+   *
    * @param job
    * @param tableMetaClient
    * @param timeline
@@ -381,7 +398,7 @@ public class HoodieInputFormatUtils {
    * @return
    */
   public static List<FileStatus> filterIncrementalFileStatus(Job job, HoodieTableMetaClient tableMetaClient,
-      HoodieTimeline timeline, FileStatus[] fileStatuses, List<HoodieInstant> commitsToCheck) throws IOException {
+                                                             HoodieTimeline timeline, FileStatus[] fileStatuses, List<HoodieInstant> commitsToCheck) throws IOException {
     TableFileSystemView.BaseFileOnlyView roView = new HoodieTableFileSystemView(tableMetaClient, timeline, fileStatuses);
     List<String> commitsList = commitsToCheck.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
     List<HoodieBaseFile> filteredFiles = roView.getLatestBaseFilesInRange(commitsList).collect(Collectors.toList());
@@ -442,7 +459,7 @@ public class HoodieInputFormatUtils {
     for (Path path : snapshotPaths) {
       // Find meta client associated with the input path
       metaClientList.stream().filter(metaClient -> path.toString().contains(metaClient.getBasePath()))
-              .forEach(metaClient -> grouped.get(metaClient).add(path));
+          .forEach(metaClient -> grouped.get(metaClient).add(path));
     }
     return grouped;
   }
@@ -457,6 +474,7 @@ public class HoodieInputFormatUtils {
    * Checks the file status for a race condition which can set the file size to 0. 1. HiveInputFormat does
    * super.listStatus() and gets back a FileStatus[] 2. Then it creates the HoodieTableMetaClient for the paths listed.
    * 3. Generation of splits looks at FileStatus size to create splits, which skips this file
+   *
    * @param conf
    * @param dataFile
    * @return
@@ -483,14 +501,13 @@ public class HoodieInputFormatUtils {
    *
    * @param basePath     The table base path
    * @param metadataList The metadata list to read the data from
-   *
    * @return the affected file status array
    */
   public static FileStatus[] listAffectedFilesForCommits(Configuration hadoopConf, Path basePath, List<HoodieCommitMetadata> metadataList) {
     // TODO: Use HoodieMetaTable to extract affected file directly.
     HashMap<String, FileStatus> fullPathToFileStatus = new HashMap<>();
     // Iterate through the given commits.
-    for (HoodieCommitMetadata metadata: metadataList) {
+    for (HoodieCommitMetadata metadata : metadataList) {
       fullPathToFileStatus.putAll(metadata.getFullPathToFileStatus(hadoopConf, basePath.toString()));
     }
     return fullPathToFileStatus.values().toArray(new FileStatus[0]);
@@ -507,5 +524,13 @@ public class HoodieInputFormatUtils {
         .map(HoodieCommitMetadata::getWritePartitionPaths)
         .flatMap(Collection::stream)
         .collect(Collectors.toSet());
+  }
+
+  public static HoodieRealtimeFileSplit createRealtimeFileSplit(HoodieRealtimePath path, long start, long length, String[] hosts) {
+    try {
+      return new HoodieRealtimeFileSplit(new FileSplit(path, start, length, hosts), path);
+    } catch (IOException e) {
+      throw new HoodieIOException(String.format("Failed to create instance of %s", HoodieRealtimeFileSplit.class.getName()), e);
+    }
   }
 }

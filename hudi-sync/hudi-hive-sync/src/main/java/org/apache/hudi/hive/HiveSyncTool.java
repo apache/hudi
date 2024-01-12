@@ -20,7 +20,7 @@ package org.apache.hudi.hive;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieSyncTableStrategy;
-import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.InvalidTableException;
@@ -31,7 +31,6 @@ import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 import org.apache.hudi.sync.common.model.PartitionEvent;
 import org.apache.hudi.sync.common.model.PartitionEvent.PartitionEventType;
-import org.apache.hudi.sync.common.util.ConfigUtils;
 import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 
 import com.beust.jcommander.JCommander;
@@ -47,7 +46,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getInputFormatClassName;
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getOutputFormatClassName;
@@ -104,15 +102,19 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
 
   public HiveSyncTool(Properties props, Configuration hadoopConf) {
     super(props, hadoopConf);
-    String metastoreUris = props.getProperty(METASTORE_URIS.key());
-    // Give precedence to HiveConf.ConfVars.METASTOREURIS if it is set.
-    // Else if user has provided HiveSyncConfigHolder.METASTORE_URIS, then set that in hadoop conf.
-    if (isNullOrEmpty(hadoopConf.get(HiveConf.ConfVars.METASTOREURIS.varname)) && nonEmpty(metastoreUris)) {
-      LOG.info(String.format("Setting %s = %s", HiveConf.ConfVars.METASTOREURIS.varname, metastoreUris));
-      hadoopConf.set(HiveConf.ConfVars.METASTOREURIS.varname, metastoreUris);
+    String configuredMetastoreUris = props.getProperty(METASTORE_URIS.key());
+
+    final Configuration hadoopConfForSync; // the configuration to use for this instance of the sync tool
+    if (nonEmpty(configuredMetastoreUris)) {
+      // if metastore uri is configured, we can create a new configuration with the value set
+      hadoopConfForSync = new Configuration(hadoopConf);
+      hadoopConfForSync.set(HiveConf.ConfVars.METASTOREURIS.varname, configuredMetastoreUris);
+    } else {
+      // if the user did not provide any URIs, then we can use the provided configuration
+      hadoopConfForSync = hadoopConf;
     }
-    HiveSyncConfig config = new HiveSyncConfig(props, hadoopConf);
-    this.config = config;
+
+    this.config = new HiveSyncConfig(props, hadoopConfForSync);
     this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
     this.tableName = config.getStringOrDefault(META_SYNC_TABLE_NAME);
     initSyncClient(config);
@@ -237,16 +239,6 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
         LOG.error("Hive database does not exist " + databaseName);
         throw new HoodieHiveSyncException("hive database does not exist " + databaseName);
       }
-    }
-
-    // Currently HoodieBootstrapRelation does support reading bootstrap MOR rt table,
-    // so we disable the syncAsSparkDataSourceTable here to avoid read such kind table
-    // by the data source way (which will use the HoodieBootstrapRelation).
-    // TODO after we support bootstrap MOR rt table in HoodieBootstrapRelation[HUDI-2071], we can remove this logical.
-    if (syncClient.isBootstrap()
-        && syncClient.getTableType() == HoodieTableType.MERGE_ON_READ
-        && !readAsOptimized) {
-      config.setValue(HIVE_SYNC_AS_DATA_SOURCE_TABLE, "false");
     }
 
     final boolean tableExists = syncClient.tableExists(tableName);
@@ -413,7 +405,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
    */
   private boolean syncAllPartitions(String tableName) {
     try {
-      if (config.getSplitStrings(META_SYNC_PARTITION_FIELDS).isEmpty()) {
+      if (config.shouldNotSyncPartitionMetadata() || config.getSplitStrings(META_SYNC_PARTITION_FIELDS).isEmpty()) {
         return false;
       }
 
@@ -439,7 +431,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
    */
   private boolean syncPartitions(String tableName, List<String> writtenPartitionsSince, Set<String> droppedPartitions) {
     try {
-      if (writtenPartitionsSince.isEmpty() || config.getSplitStrings(META_SYNC_PARTITION_FIELDS).isEmpty()) {
+      if (config.shouldNotSyncPartitionMetadata() || writtenPartitionsSince.isEmpty() || config.getSplitStrings(META_SYNC_PARTITION_FIELDS).isEmpty()) {
         return false;
       }
 

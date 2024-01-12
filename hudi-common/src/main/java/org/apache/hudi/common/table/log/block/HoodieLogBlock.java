@@ -20,6 +20,7 @@ package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.table.log.LogReaderUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TypeUtils;
 import org.apache.hudi.exception.HoodieException;
@@ -27,6 +28,9 @@ import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
+import org.roaringbitmap.longlong.Roaring64NavigableMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -38,20 +42,23 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
  * Abstract class defining a block in HoodieLogFile.
  */
 public abstract class HoodieLogBlock {
-
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieLogBlock.class);
   /**
    * The current version of the log block. Anytime the logBlock format changes this version needs to be bumped and
    * corresponding changes need to be made to {@link HoodieLogBlockVersion} TODO : Change this to a class, something
    * like HoodieLogBlockVersionV1/V2 and implement/override operations there
+   * Current log block version is V3.
    */
-  public static int version = 2;
+  public static int version = 3;
   // Header for each log block
   private final Map<HeaderMetadataType, String> logBlockHeader;
   // Footer for each log block
@@ -122,6 +129,33 @@ public abstract class HoodieLogBlock {
   }
 
   /**
+   * @return A {@link Roaring64NavigableMap} bitmap containing the record positions in long type
+   * if the {@link HeaderMetadataType#RECORD_POSITIONS} block header exists; otherwise, an empty
+   * {@link Roaring64NavigableMap} bitmap.
+   * @throws IOException upon I/O error.
+   */
+  public Roaring64NavigableMap getRecordPositions() throws IOException {
+    if (!logBlockHeader.containsKey(HeaderMetadataType.RECORD_POSITIONS)) {
+      return new Roaring64NavigableMap();
+    }
+    return LogReaderUtils.decodeRecordPositionsHeader(logBlockHeader.get(HeaderMetadataType.RECORD_POSITIONS));
+  }
+
+  protected void addRecordPositionsToHeader(Set<Long> positionSet, int numRecords) {
+    if (positionSet.size() == numRecords) {
+      try {
+        logBlockHeader.put(HeaderMetadataType.RECORD_POSITIONS, LogReaderUtils.encodePositions(positionSet));
+      } catch (IOException e) {
+        LOG.error("Cannot write record positions to the log block header.", e);
+      }
+    } else {
+      LOG.warn("There are duplicate keys in the records (number of unique positions: %s, "
+              + "number of records: %s). Skip writing record positions to the log block header.",
+          positionSet.size(), numRecords);
+    }
+  }
+
+  /**
    * Type of the log block WARNING: This enum is serialized as the ordinal. Only add new enums at the end.
    */
   public enum HoodieLogBlockType {
@@ -152,7 +186,7 @@ public abstract class HoodieLogBlock {
    * new enums at the end.
    */
   public enum HeaderMetadataType {
-    INSTANT_TIME, TARGET_INSTANT_TIME, SCHEMA, COMMAND_BLOCK_TYPE, COMPACTED_BLOCK_TIMES
+    INSTANT_TIME, TARGET_INSTANT_TIME, SCHEMA, COMMAND_BLOCK_TYPE, COMPACTED_BLOCK_TIMES, RECORD_POSITIONS, BLOCK_IDENTIFIER, IS_PARTIAL
   }
 
   /**
@@ -220,7 +254,7 @@ public abstract class HoodieLogBlock {
     output.writeInt(metadata.size());
     for (Map.Entry<HeaderMetadataType, String> entry : metadata.entrySet()) {
       output.writeInt(entry.getKey().ordinal());
-      byte[] bytes = entry.getValue().getBytes();
+      byte[] bytes = getUTF8Bytes(entry.getValue());
       output.writeInt(bytes.length);
       output.write(bytes);
     }

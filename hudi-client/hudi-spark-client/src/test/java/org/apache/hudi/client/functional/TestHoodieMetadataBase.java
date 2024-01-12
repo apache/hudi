@@ -18,8 +18,7 @@
 
 package org.apache.hudi.client.functional;
 
-import org.apache.hadoop.fs.Path;
-import org.apache.hudi.client.HoodieTimelineArchiver;
+import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -36,15 +35,17 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
+
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,7 +62,7 @@ import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 
-public class TestHoodieMetadataBase extends HoodieClientTestHarness {
+public class TestHoodieMetadataBase extends HoodieSparkClientTestHarness {
 
   private static final Logger LOG = LoggerFactory.getLogger(TestHoodieMetadataBase.class);
 
@@ -112,11 +113,13 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
     initWriteConfigAndMetatableWriter(this.writeConfig, enableMetadataTable);
   }
 
-  protected void initWriteConfigAndMetatableWriter(HoodieWriteConfig writeConfig, boolean enableMetadataTable) {
+  protected void initWriteConfigAndMetatableWriter(HoodieWriteConfig writeConfig, boolean enableMetadataTable) throws IOException {
     this.writeConfig = writeConfig;
     if (enableMetadataTable) {
       metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, writeConfig, context);
-      testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+      // reload because table configs could have been updated
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
     } else {
       testTable = HoodieTestTable.of(metaClient);
     }
@@ -125,6 +128,9 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
   @AfterEach
   public void clean() throws Exception {
     cleanupResources();
+    if (metadataWriter != null) {
+      metadataWriter.close();
+    }
   }
 
   protected void doWriteInsertAndUpsert(HoodieTestTable testTable, String commit1, String commit2, boolean nonPartitioned) throws Exception {
@@ -324,7 +330,7 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2).withDeleteParallelism(2).withRollbackParallelism(2).withFinalizeWriteParallelism(2)
         .withAutoCommit(autoCommit)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024 * 1024)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(0)
             .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(policy)
@@ -341,9 +347,7 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
             .ignoreSpuriousDeletes(validateMetadataPayloadConsistency)
             .build())
         .withMetricsConfig(HoodieMetricsConfig.newBuilder().on(enableMetrics)
-            .withExecutorMetrics(true).build())
-        .withMetricsGraphiteConfig(HoodieMetricsGraphiteConfig.newBuilder()
-            .usePrefix("unit-test").build())
+            .withExecutorMetrics(enableMetrics).withReporterType(MetricsReporterType.INMEMORY.name()).build())
         .withRollbackUsingMarkers(useRollbackUsingMarkers)
         .withProperties(properties);
   }

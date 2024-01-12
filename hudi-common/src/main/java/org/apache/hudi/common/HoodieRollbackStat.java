@@ -39,12 +39,15 @@ public class HoodieRollbackStat implements Serializable {
   // Count of HoodieLogFile to commandBlocks written for a particular rollback
   private final Map<FileStatus, Long> commandBlocksCount;
 
+  private final Map<String, Long> logFilesFromFailedCommit;
+
   public HoodieRollbackStat(String partitionPath, List<String> successDeleteFiles, List<String> failedDeleteFiles,
-      Map<FileStatus, Long> commandBlocksCount) {
+                            Map<FileStatus, Long> commandBlocksCount, Map<String, Long> logFilesFromFailedCommit) {
     this.partitionPath = partitionPath;
     this.successDeleteFiles = successDeleteFiles;
     this.failedDeleteFiles = failedDeleteFiles;
     this.commandBlocksCount = commandBlocksCount;
+    this.logFilesFromFailedCommit = logFilesFromFailedCommit;
   }
 
   public Map<FileStatus, Long> getCommandBlocksCount() {
@@ -63,6 +66,10 @@ public class HoodieRollbackStat implements Serializable {
     return failedDeleteFiles;
   }
 
+  public Map<String, Long> getLogFilesFromFailedCommit() {
+    return logFilesFromFailedCommit;
+  }
+
   public static HoodieRollbackStat.Builder newBuilder() {
     return new Builder();
   }
@@ -75,6 +82,7 @@ public class HoodieRollbackStat implements Serializable {
     private List<String> successDeleteFiles;
     private List<String> failedDeleteFiles;
     private Map<FileStatus, Long> commandBlocksCount;
+    private Map<String, Long> logFilesFromFailedCommit;
     private String partitionPath;
 
     public Builder withDeletedFileResults(Map<FileStatus, Boolean> deletedFiles) {
@@ -105,6 +113,11 @@ public class HoodieRollbackStat implements Serializable {
       return this;
     }
 
+    public Builder withLogFilesFromFailedCommit(Map<String, Long> logFilesFromFailedCommit) {
+      this.logFilesFromFailedCommit = logFilesFromFailedCommit;
+      return this;
+    }
+
     public HoodieRollbackStat build() {
       if (successDeleteFiles == null) {
         successDeleteFiles = Collections.EMPTY_LIST;
@@ -115,7 +128,10 @@ public class HoodieRollbackStat implements Serializable {
       if (commandBlocksCount == null) {
         commandBlocksCount = Collections.EMPTY_MAP;
       }
-      return new HoodieRollbackStat(partitionPath, successDeleteFiles, failedDeleteFiles, commandBlocksCount);
+      if (logFilesFromFailedCommit == null) {
+        logFilesFromFailedCommit = Collections.EMPTY_MAP;
+      }
+      return new HoodieRollbackStat(partitionPath, successDeleteFiles, failedDeleteFiles, commandBlocksCount, logFilesFromFailedCommit);
     }
   }
 }

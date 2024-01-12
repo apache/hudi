@@ -47,6 +47,7 @@ import org.apache.hadoop.fs.BufferedFSInputStream;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSInputStream;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -114,7 +115,8 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     // NOTE: We repackage {@code HoodieLogFile} here to make sure that the provided path
     //       is prefixed with an appropriate scheme given that we're not propagating the FS
     //       further
-    this.logFile = new HoodieLogFile(FSUtils.makeQualified(fs, logFile.getPath()), logFile.getFileSize());
+    Path updatedPath = FSUtils.makeQualified(fs, logFile.getPath());
+    this.logFile = updatedPath.equals(logFile.getPath()) ? logFile : new HoodieLogFile(updatedPath, logFile.getFileSize());
     this.inputStream = getFSDataInputStream(fs, this.logFile, bufferSize);
     this.readerSchema = readerSchema;
     this.readBlockLazily = readBlockLazily;
@@ -140,6 +142,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private void addShutDownHook() {
     shutdownThread = new Thread(() -> {
       try {
+        LOG.warn("Failed to properly close HoodieLogFileReader in application.");
         close();
       } catch (Exception e) {
         LOG.warn("unable to close input stream for log file " + logFile, e);

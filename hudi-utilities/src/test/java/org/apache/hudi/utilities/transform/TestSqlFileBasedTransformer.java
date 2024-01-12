@@ -52,15 +52,15 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
   public static void initClass() throws Exception {
     UtilitiesTestBase.initTestServices();
     UtilitiesTestBase.Helpers.copyToDFS(
-        "delta-streamer-config/sql-file-transformer.sql",
+        "streamer-config/sql-file-transformer.sql",
         UtilitiesTestBase.fs,
         UtilitiesTestBase.basePath + "/sql-file-transformer.sql");
     UtilitiesTestBase.Helpers.copyToDFS(
-        "delta-streamer-config/sql-file-transformer-invalid.sql",
+        "streamer-config/sql-file-transformer-invalid.sql",
         UtilitiesTestBase.fs,
         UtilitiesTestBase.basePath + "/sql-file-transformer-invalid.sql");
     UtilitiesTestBase.Helpers.copyToDFS(
-        "delta-streamer-config/sql-file-transformer-empty.sql",
+        "streamer-config/sql-file-transformer-empty.sql",
         UtilitiesTestBase.fs,
         UtilitiesTestBase.basePath + "/sql-file-transformer-empty.sql");
   }
@@ -138,7 +138,7 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
         sqlFileTransformer.apply(jsc, sparkSession, inputDatasetRows, props);
 
     // Called distinct() and sort() to match the transformation in this file:
-    // hudi-utilities/src/test/resources/delta-streamer-config/sql-file-transformer.sql
+    // hudi-utilities/src/test/resources/streamer-config/sql-file-transformer.sql
     String[] expectedRows =
         inputDatasetRows
             .distinct()

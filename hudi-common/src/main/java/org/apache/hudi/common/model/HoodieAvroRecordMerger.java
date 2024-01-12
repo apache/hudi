@@ -21,19 +21,21 @@ package org.apache.hudi.common.model;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
-import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
 import java.io.IOException;
 import java.util.Properties;
 
-import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
-
-public class HoodieAvroRecordMerger implements HoodieRecordMerger {
+/**
+ * Record merger for Hoodie avro record.
+ *
+ * <p>It should only be used for base record from disk to merge with incoming record.
+ */
+public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationModeAwareness {
+  public static final HoodieAvroRecordMerger INSTANCE = new HoodieAvroRecordMerger();
 
   @Override
   public String getMergingStrategy() {
@@ -42,27 +44,8 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger {
 
   @Override
   public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-    ValidationUtils.checkArgument(older.getRecordType() == HoodieRecordType.AVRO);
-    ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecordType.AVRO);
-    Config.LegacyOperationMode legacyOperatingMode = Config.LegacyOperationMode.valueOf(
-            props.getString(Config.LEGACY_OPERATING_MODE.key(), Config.LEGACY_OPERATING_MODE.defaultValue()));
-
-    switch (legacyOperatingMode) {
-      case PRE_COMBINING:
-        HoodieRecord res = preCombine(older, newer, newSchema, props);
-        if (res == older) {
-          return Option.of(Pair.of(res, oldSchema));
-        } else {
-          return Option.of(Pair.of(res, newSchema));
-        }
-
-      case COMBINING:
-        return combineAndGetUpdateValue(older, newer, newSchema, props)
-            .map(r -> Pair.of(r, (((HoodieAvroIndexedRecord) r).getData()).getSchema()));
-
-      default:
-        throw new UnsupportedOperationException(String.format("Unsupported legacy operating mode (%s)", legacyOperatingMode));
-    }
+    return combineAndGetUpdateValue(older, newer, newSchema, props)
+        .map(r -> Pair.of(new HoodieAvroIndexedRecord(r), r.getSchema()));
   }
 
   @Override
@@ -70,40 +53,17 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger {
     return HoodieRecordType.AVRO;
   }
 
-  private HoodieRecord preCombine(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) {
-    HoodieRecordPayload payload = unsafeCast(((HoodieAvroRecord) newer).getData().preCombine(((HoodieAvroRecord) older).getData(), schema, props));
-    return new HoodieAvroRecord(newer.getKey(), payload, newer.getOperation());
-  }
-
-  private Option<HoodieRecord> combineAndGetUpdateValue(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException {
+  private Option<IndexedRecord> combineAndGetUpdateValue(HoodieRecord older, HoodieRecord newer, Schema schema, Properties props) throws IOException {
     Option<IndexedRecord> previousAvroData = older.toIndexedRecord(schema, props).map(HoodieAvroIndexedRecord::getData);
     if (!previousAvroData.isPresent()) {
       return Option.empty();
     }
 
-    return ((HoodieAvroRecord) newer).getData().combineAndGetUpdateValue(previousAvroData.get(), schema, props)
-        .map(combinedAvroPayload -> new HoodieAvroIndexedRecord((IndexedRecord) combinedAvroPayload));
+    return ((HoodieAvroRecord) newer).getData().combineAndGetUpdateValue(previousAvroData.get(), schema, props);
   }
 
-  public static class Config {
-
-    public enum LegacyOperationMode {
-      PRE_COMBINING,
-      COMBINING
-    }
-
-    public static ConfigProperty<String> LEGACY_OPERATING_MODE =
-        ConfigProperty.key("hoodie.datasource.write.record.merger.legacy.operation")
-            .defaultValue(LegacyOperationMode.COMBINING.name())
-            .withDocumentation("Controls the mode of the merging operation performed by `HoodieAvroRecordMerger`. "
-                + "This is required to maintain backward-compatibility w/ the existing semantic of `HoodieRecordPayload` "
-                + "implementations providing `preCombine` and `combineAndGetUpdateValue` methods.");
-
-    public static TypedProperties withLegacyOperatingModePreCombining(Properties props) {
-      TypedProperties newProps = new TypedProperties();
-      newProps.putAll(props);
-      newProps.setProperty(Config.LEGACY_OPERATING_MODE.key(), Config.LegacyOperationMode.PRE_COMBINING.name());
-      return newProps;
-    }
+  @Override
+  public HoodieRecordMerger asPreCombiningMode() {
+    return HoodiePreCombineAvroRecordMerger.INSTANCE;
   }
 }

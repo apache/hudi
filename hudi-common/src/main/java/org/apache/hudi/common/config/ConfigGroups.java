@@ -34,12 +34,14 @@ public class ConfigGroups {
     SPARK_DATASOURCE("Spark Datasource Configs"),
     FLINK_SQL("Flink Sql Configs"),
     WRITE_CLIENT("Write Client Configs"),
+    READER("Reader Configs"),
     META_SYNC("Metastore and Catalog Sync Configs"),
     METRICS("Metrics Configs"),
     RECORD_PAYLOAD("Record Payload Config"),
     KAFKA_CONNECT("Kafka Connect Configs"),
     AWS("Amazon Web Services Configs"),
-    DELTA_STREAMER("DeltaStreamer Configs");
+    HUDI_STREAMER("Hudi Streamer Configs"),
+    INDEXING("Indexing Configs");
 
     public final String name;
 
@@ -68,14 +70,17 @@ public class ConfigGroups {
         "Configurations controlling callback behavior into HTTP endpoints, to push "
             + "notifications on commits on hudi tables."),
     SCHEMA_PROVIDER(
-        "DeltaStreamer Schema Provider Configs",
-        "Configurations that control the schema provider for DeltaStreamer."),
+        "Hudi Streamer Schema Provider Configs",
+        "Configurations that control the schema provider for Hudi Streamer."),
     DELTA_STREAMER_SOURCE(
-        "DeltaStreamer Source Configs",
+        "Hudi Streamer Source Configs",
         "Configurations controlling the behavior of reading source data."),
     NONE(
         "None",
-        "No subgroup. This description should be hidden.");
+        "No subgroup. This description should be hidden."),
+    FUNCTIONAL_INDEX(
+        "Functional Index Configs",
+        "Configurations controlling the behavior of functional index.");
 
     public final String name;
     private final String description;
@@ -140,7 +145,7 @@ public class ConfigGroups {
             + "on both datasource and WriteClient levels.";
         break;
       case METRICS:
-        description = "These set of configs are used to enable monitoring and reporting of key"
+        description = "These set of configs are used to enable monitoring and reporting of key "
             + "Hudi stats and metrics.";
         break;
       case KAFKA_CONNECT:
@@ -149,8 +154,8 @@ public class ConfigGroups {
       case AWS:
         description = "Configurations specific to Amazon Web Services.";
         break;
-      case DELTA_STREAMER:
-        description = "These set of configs are used for DeltaStreamer utility which provides "
+      case HUDI_STREAMER:
+        description = "These set of configs are used for Hudi Streamer utility which provides "
             + "the way to ingest from different sources such as DFS or Kafka.";
         break;
       default:

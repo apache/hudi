@@ -46,7 +46,7 @@ import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_SKIP_TABLE
 @ConfigClassProperty(name = "Amazon Web Services Configs",
         groupName = ConfigGroups.Names.AWS,
         description = "Amazon Web Services configurations to access resources like Amazon DynamoDB (for locks),"
-            + " Amazon CloudWatch (metrics).")
+            + " Amazon CloudWatch (metrics) and Amazon Glue (metadata).")
 public class HoodieAWSConfig extends HoodieConfig {
   public static final ConfigProperty<String> AWS_ACCESS_KEY = ConfigProperty
       .key("hoodie.aws.access.key")
@@ -69,6 +69,13 @@ public class HoodieAWSConfig extends HoodieConfig {
       .sinceVersion("0.10.0")
       .withDocumentation("AWS session token");
 
+  public static final ConfigProperty<String> AWS_ASSUME_ROLE_ARN = ConfigProperty
+          .key("hoodie.aws.role.arn")
+          .noDefaultValue()
+          .markAdvanced()
+          .sinceVersion("0.13.2")
+          .withDocumentation("AWS Role ARN to assume");
+
   private HoodieAWSConfig() {
     super();
   }
@@ -87,6 +94,10 @@ public class HoodieAWSConfig extends HoodieConfig {
 
   public String getAWSSessionToken() {
     return getString(AWS_SESSION_TOKEN);
+  }
+
+  public String getAWSAssumeRoleARN() {
+    return getString(AWS_ASSUME_ROLE_ARN);
   }
 
   public static class Builder {
@@ -117,6 +128,11 @@ public class HoodieAWSConfig extends HoodieConfig {
 
     public HoodieAWSConfig.Builder withSessionToken(String sessionToken) {
       awsConfig.setValue(AWS_SESSION_TOKEN, sessionToken);
+      return this;
+    }
+
+    public HoodieAWSConfig.Builder withAssumeRoleARN(String assumeRoleARN) {
+      awsConfig.setValue(AWS_ASSUME_ROLE_ARN, assumeRoleARN);
       return this;
     }
 

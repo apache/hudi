@@ -55,7 +55,7 @@ change_java_runtime_version () {
 # Function to change Java runtime version to default Java 8
 ##
 use_default_java_runtime () {
-  echo "Use default java runtime under ${DEFAULT_JAVA_HOME}"
+  echo "::warning:: Use default java runtime under ${DEFAULT_JAVA_HOME}"
   export JAVA_HOME=${DEFAULT_JAVA_HOME}
 }
 
@@ -188,7 +188,6 @@ test_flink_bundle() {
     fi
     echo "::warning::validate.sh done validating Flink bundle validation was successful."
 }
-
 
 ##
 # Function to test the kafka-connect bundle.

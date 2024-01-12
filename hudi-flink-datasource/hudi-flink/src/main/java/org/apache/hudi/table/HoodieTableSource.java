@@ -40,6 +40,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.source.ExpressionEvaluators;
+import org.apache.hudi.source.ExpressionPredicates;
+import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.source.FileIndex;
 import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
@@ -98,6 +100,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -118,7 +121,7 @@ public class HoodieTableSource implements
     SupportsFilterPushDown {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieTableSource.class);
 
-  private static final int NO_LIMIT_CONSTANT = -1;
+  private static final long NO_LIMIT_CONSTANT = -1;
 
   private final transient org.apache.hadoop.conf.Configuration hadoopConf;
   private final transient HoodieTableMetaClient metaClient;
@@ -134,6 +137,7 @@ public class HoodieTableSource implements
 
   private int[] requiredPos;
   private long limit;
+  private List<Predicate> predicates;
   private DataPruner dataPruner;
   private PartitionPruners.PartitionPruner partitionPruner;
   private int dataBucket;
@@ -145,7 +149,7 @@ public class HoodieTableSource implements
       List<String> partitionKeys,
       String defaultPartName,
       Configuration conf) {
-    this(schema, path, partitionKeys, defaultPartName, conf, null, null, PrimaryKeyPruners.BUCKET_ID_NO_PRUNING, null, null, null, null);
+    this(schema, path, partitionKeys, defaultPartName, conf, null, null, null, PrimaryKeyPruners.BUCKET_ID_NO_PRUNING, null, null, null, null);
   }
 
   public HoodieTableSource(
@@ -154,6 +158,7 @@ public class HoodieTableSource implements
       List<String> partitionKeys,
       String defaultPartName,
       Configuration conf,
+      @Nullable List<Predicate> predicates,
       @Nullable DataPruner dataPruner,
       @Nullable PartitionPruners.PartitionPruner partitionPruner,
       int dataBucket,
@@ -167,19 +172,16 @@ public class HoodieTableSource implements
     this.partitionKeys = partitionKeys;
     this.defaultPartName = defaultPartName;
     this.conf = conf;
+    this.predicates = Optional.ofNullable(predicates).orElse(Collections.emptyList());
     this.dataPruner = dataPruner;
     this.partitionPruner = partitionPruner;
     this.dataBucket = dataBucket;
-    this.requiredPos = requiredPos == null
-        ? IntStream.range(0, this.tableRowType.getFieldCount()).toArray()
-        : requiredPos;
-    this.limit = limit == null ? NO_LIMIT_CONSTANT : limit;
+    this.requiredPos = Optional.ofNullable(requiredPos).orElseGet(() -> IntStream.range(0, this.tableRowType.getFieldCount()).toArray());
+    this.limit = Optional.ofNullable(limit).orElse(NO_LIMIT_CONSTANT);
     this.hadoopConf = HadoopConfigurations.getHadoopConf(conf);
-    this.metaClient = metaClient == null ? StreamerUtil.metaClientForReader(conf, hadoopConf) : metaClient;
+    this.metaClient = Optional.ofNullable(metaClient).orElseGet(() -> StreamerUtil.metaClientForReader(conf, hadoopConf));
     this.maxCompactionMemoryInBytes = StreamerUtil.getMaxCompactionMemoryInBytes(conf);
-    this.internalSchemaManager = internalSchemaManager == null
-        ? InternalSchemaManager.get(this.conf, this.metaClient)
-        : internalSchemaManager;
+    this.internalSchemaManager = Optional.ofNullable(internalSchemaManager).orElseGet(() -> InternalSchemaManager.get(this.conf, this.metaClient));
   }
 
   @Override
@@ -205,6 +207,7 @@ public class HoodieTableSource implements
           SingleOutputStreamOperator<RowData> source = execEnv.addSource(monitoringFunction, getSourceOperatorName("split_monitor"))
               .uid(Pipelines.opUID("split_monitor", conf))
               .setParallelism(1)
+              .setMaxParallelism(1)
               .keyBy(MergeOnReadInputSplit::getFileId)
               .transform("split_reader", typeInfo, factory)
               .uid(Pipelines.opUID("split_reader", conf))
@@ -230,7 +233,7 @@ public class HoodieTableSource implements
   @Override
   public DynamicTableSource copy() {
     return new HoodieTableSource(schema, path, partitionKeys, defaultPartName,
-        conf, dataPruner, partitionPruner, dataBucket, requiredPos, limit, metaClient, internalSchemaManager);
+        conf, predicates, dataPruner, partitionPruner, dataBucket, requiredPos, limit, metaClient, internalSchemaManager);
   }
 
   @Override
@@ -242,6 +245,7 @@ public class HoodieTableSource implements
   public Result applyFilters(List<ResolvedExpression> filters) {
     List<ResolvedExpression> simpleFilters = filterSimpleCallExpression(filters);
     Tuple2<List<ResolvedExpression>, List<ResolvedExpression>> splitFilters = splitExprByPartitionCall(simpleFilters, this.partitionKeys, this.tableRowType);
+    this.predicates = ExpressionPredicates.fromExpression(splitFilters.f0);
     this.dataPruner = DataPruner.newInstance(splitFilters.f0);
     this.partitionPruner = cratePartitionPruner(splitFilters.f1);
     this.dataBucket = getDataBucket(splitFilters.f0);
@@ -334,6 +338,9 @@ public class HoodieTableSource implements
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
         // file-slice after pending compaction-requested instant-time is also considered valid
         metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants(), fileStatuses);
+    if (!fsView.getLastInstant().isPresent()) {
+      return Collections.emptyList();
+    }
     String latestCommit = fsView.getLastInstant().get().getTimestamp();
     final String mergeType = this.conf.getString(FlinkOptions.MERGE_TYPE);
     final AtomicInteger cnt = new AtomicInteger(0);
@@ -471,6 +478,7 @@ public class HoodieTableSource implements
         // is not very stable.
         .fieldTypes(rowDataType.getChildren())
         .defaultPartName(conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME))
+        .predicates(this.predicates)
         .limit(this.limit)
         .emitDelete(false) // the change logs iterator can handle the DELETE records
         .build();
@@ -497,6 +505,7 @@ public class HoodieTableSource implements
         // is not very stable.
         .fieldTypes(rowDataType.getChildren())
         .defaultPartName(conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME))
+        .predicates(this.predicates)
         .limit(this.limit)
         .emitDelete(emitDelete)
         .internalSchemaManager(internalSchemaManager)
@@ -515,12 +524,19 @@ public class HoodieTableSource implements
         .map(HoodieBaseFile::getFileStatus)
         .map(FileStatus::getPath).toArray(Path[]::new);
 
+    if (paths.length == 0) {
+      return InputFormats.EMPTY_INPUT_FORMAT;
+    }
+
     return new CopyOnWriteInputFormat(
         FilePathUtils.toFlinkPaths(paths),
         this.schema.getColumnNames().toArray(new String[0]),
         this.schema.getColumnDataTypes().toArray(new DataType[0]),
         this.requiredPos,
         this.conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME),
+        this.conf.getString(FlinkOptions.PARTITION_PATH_FIELD),
+        this.conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING),
+        this.predicates,
         this.limit == NO_LIMIT_CONSTANT ? Long.MAX_VALUE : this.limit, // ParquetInputFormat always uses the limit value
         getParquetConf(this.conf, this.hadoopConf),
         this.conf.getBoolean(FlinkOptions.UTC_TIMEZONE),
@@ -589,6 +605,11 @@ public class HoodieTableSource implements
       return new FileStatus[0];
     }
     return fileIndex.getFilesInPartitions();
+  }
+
+  @VisibleForTesting
+  public List<Predicate> getPredicates() {
+    return predicates;
   }
 
   @VisibleForTesting

@@ -25,7 +25,6 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
@@ -47,6 +46,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -54,9 +54,9 @@ import java.util.stream.Stream;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.toList;
+import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
 import static org.apache.hudi.index.HoodieIndexUtils.getLatestBaseFilesForAllPartitions;
-import static org.apache.hudi.metadata.HoodieMetadataPayload.unwrapStatisticValueWrapper;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 
 /**
@@ -212,14 +212,17 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
     // also obtain file ranges, if range pruning is enabled
     context.setJobStatus(this.getClass().getName(), "Load meta index key ranges for file slices: " + config.getTableName());
 
-    String keyField = hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
+    String keyField = HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName();
 
+    List<Pair<String, HoodieBaseFile>> baseFilesForAllPartitions = HoodieIndexUtils.getLatestBaseFilesForAllPartitions(partitions, context, hoodieTable);
     // Partition and file name pairs
-    List<Pair<String, String>> partitionFileNameList =
-        HoodieIndexUtils.getLatestBaseFilesForAllPartitions(partitions, context, hoodieTable).stream()
-            .map(partitionBaseFilePair -> Pair.of(partitionBaseFilePair.getLeft(), partitionBaseFilePair.getRight().getFileName()))
-            .sorted()
-            .collect(toList());
+    List<Pair<String, String>> partitionFileNameList = new ArrayList<>(baseFilesForAllPartitions.size());
+    Map<Pair<String, String>, String> partitionAndFileNameToFileId = new HashMap<>(baseFilesForAllPartitions.size(), 1);
+    baseFilesForAllPartitions.forEach(pair -> {
+      Pair<String, String> partitionAndFileName = Pair.of(pair.getKey(), pair.getValue().getFileName());
+      partitionFileNameList.add(partitionAndFileName);
+      partitionAndFileNameToFileId.put(partitionAndFileName, pair.getValue().getFileId());
+    });
 
     if (partitionFileNameList.isEmpty()) {
       return Collections.emptyList();
@@ -233,10 +236,10 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
     for (Map.Entry<Pair<String, String>, HoodieMetadataColumnStats> entry : fileToColumnStatsMap.entrySet()) {
       result.add(Pair.of(entry.getKey().getLeft(),
           new BloomIndexFileInfo(
-              FSUtils.getFileId(entry.getKey().getRight()),
+              partitionAndFileNameToFileId.get(entry.getKey()),
               // NOTE: Here we assume that the type of the primary key field is string
-              (String) unwrapStatisticValueWrapper(entry.getValue().getMinValue()),
-              (String) unwrapStatisticValueWrapper(entry.getValue().getMaxValue())
+              (String) unwrapAvroValueWrapper(entry.getValue().getMinValue()),
+              (String) unwrapAvroValueWrapper(entry.getValue().getMaxValue())
           )));
     }
 
@@ -313,7 +316,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
     // Here as the records might have more data than keyFilenamePairs (some row keys' fileId is null),
     // so we do left outer join.
     return keyRecordPairs.leftOuterJoin(keyFilenamePair).values()
-        .map(v -> HoodieIndexUtils.getTaggedRecord(v.getLeft(), Option.ofNullable(v.getRight().orElse(null))));
+        .map(v -> HoodieIndexUtils.tagAsNewRecordIfNeeded(v.getLeft(), Option.ofNullable(v.getRight().orElse(null))));
   }
 
   @Override

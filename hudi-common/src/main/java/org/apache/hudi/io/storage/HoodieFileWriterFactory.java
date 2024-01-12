@@ -20,8 +20,8 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
-import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -121,8 +121,21 @@ public class HoodieFileWriterFactory {
     throw new UnsupportedOperationException();
   }
 
-  protected BloomFilter createBloomFilter(HoodieConfig config) {
-    return BloomFilterFactory.createBloomFilter(60000, 0.000000001, 100000,
-        BloomFilterTypeCode.DYNAMIC_V0.name());
+  public static BloomFilter createBloomFilter(HoodieConfig config) {
+    return BloomFilterFactory.createBloomFilter(
+        config.getIntOrDefault(HoodieStorageConfig.BLOOM_FILTER_NUM_ENTRIES_VALUE),
+        config.getDoubleOrDefault(HoodieStorageConfig.BLOOM_FILTER_FPP_VALUE),
+        config.getIntOrDefault(HoodieStorageConfig.BLOOM_FILTER_DYNAMIC_MAX_ENTRIES),
+        config.getStringOrDefault(HoodieStorageConfig.BLOOM_FILTER_TYPE));
+  }
+
+  /**
+   * Check if need to enable bloom filter.
+   */
+  public static boolean enableBloomFilter(boolean populateMetaFields, HoodieConfig config) {
+    return populateMetaFields && (config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_WITH_BLOOM_FILTER_ENABLED)
+        // HoodieIndexConfig is located in the package hudi-client-common, and the package hudi-client-common depends on the package hudi-common,
+        // so the class HoodieIndexConfig cannot be accessed in hudi-common, otherwise there will be a circular dependency problem
+        || (config.contains("hoodie.index.type") && config.getString("hoodie.index.type").contains("BLOOM")));
   }
 }

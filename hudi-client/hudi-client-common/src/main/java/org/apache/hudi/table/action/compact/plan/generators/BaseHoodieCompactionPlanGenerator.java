@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
+import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -40,8 +41,8 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
-
 import org.apache.hudi.table.action.compact.CompactHelpers;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,15 +72,16 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
   }
 
   @Nullable
-  public HoodieCompactionPlan generateCompactionPlan() throws IOException {
+  public HoodieCompactionPlan generateCompactionPlan(String compactionInstant) throws IOException {
     // Accumulator to keep track of total log files for a table
     HoodieAccumulator totalLogFiles = engineContext.newAccumulator();
-    // Accumulator to keep track of total log file slices for a table
+    // Accumulator to keep track of total file slices for a table
     HoodieAccumulator totalFileSlices = engineContext.newAccumulator();
 
     // TODO : check if maxMemory is not greater than JVM or executor memory
     // TODO - rollback any compactions in flight
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
+    CompletionTimeQueryView completionTimeQueryView = new CompletionTimeQueryView(metaClient);
     List<String> partitionPaths = FSUtils.getAllPartitionPaths(engineContext, writeConfig.getMetadataConfig(), metaClient.getBasePath());
 
     // filter the partition paths if needed to reduce list status
@@ -115,16 +117,29 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
 
     List<HoodieCompactionOperation> operations = engineContext.flatMap(partitionPaths, partitionPath -> fileSystemView
-        .getLatestFileSlices(partitionPath)
+        .getLatestFileSlicesStateless(partitionPath)
         .filter(slice -> filterFileSlice(slice, lastCompletedInstantTime, fgIdsInPendingCompactionAndClustering, instantRange))
         .map(s -> {
-          List<HoodieLogFile> logFiles =
-              s.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(toList());
+          List<HoodieLogFile> logFiles = s.getLogFiles()
+              // ==============================================================
+              // IMPORTANT
+              // ==============================================================
+              // Currently, our filesystem view could return a file slice with pending log files there,
+              // these files should be excluded from the plan, let's say we have such a sequence of actions
+
+              // t10: a delta commit starts,
+              // t20: the compaction is scheduled and the t10 delta commit is still pending, and the "fg_10.log" is included in the plan
+              // t25: the delta commit 10 finishes,
+              // t30: the compaction execution starts, now the reader considers the log file "fg_10.log" as valid.
+
+              // for both OCC and NB-CC, this is in-correct.
+              .filter(logFile -> completionTimeQueryView.isCompletedBefore(compactionInstant, logFile.getDeltaCommitTime()))
+              .sorted(HoodieLogFile.getLogFileComparator()).collect(toList());
           totalLogFiles.add(logFiles.size());
           totalFileSlices.add(1L);
           // Avro generated classes are not inheriting Serializable. Using CompactionOperation POJO
           // for Map operations and collecting them finally in Avro generated classes for storing
-          // into meta files.6
+          // into meta files.
           Option<HoodieBaseFile> dataFile = s.getBaseFile();
           return new CompactionOperation(dataFile, partitionPath, logFiles,
               writeConfig.getCompactionStrategy().captureMetrics(writeConfig, s));
@@ -132,7 +147,6 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
         .map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
 
     LOG.info("Total of " + operations.size() + " compaction operations are retrieved");
-    LOG.info("Total number of latest files slices " + totalFileSlices.value());
     LOG.info("Total number of log files " + totalLogFiles.value());
     LOG.info("Total number of file slices " + totalFileSlices.value());
 

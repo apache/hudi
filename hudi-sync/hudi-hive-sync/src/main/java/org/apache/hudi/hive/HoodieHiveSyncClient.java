@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.MapUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -36,7 +37,6 @@ import org.apache.hudi.hive.util.IMetaStoreClientUtil;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
-import org.apache.hudi.sync.common.util.ConfigUtils;
 
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
@@ -356,10 +356,10 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     HoodieTimeline activeTimeline = getActiveTimeline();
     Option<String> lastCommitSynced = activeTimeline.lastInstant().map(HoodieInstant::getTimestamp);
     Option<String> lastCommitCompletionSynced = activeTimeline
-        .getInstantsOrderedByStateTransitionTime()
+        .getInstantsOrderedByCompletionTime()
         .skip(activeTimeline.countInstants() - 1)
         .findFirst()
-        .map(i -> Option.of(i.getStateTransitionTime()))
+        .map(i -> Option.of(i.getCompletionTime()))
         .orElse(Option.empty());
     if (lastCommitSynced.isPresent()) {
       try {

@@ -29,7 +29,7 @@ import java.io.IOException;
 
 public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory {
 
-  protected HoodieFileReader newParquetFileReader(Configuration conf, Path path) {
+  public HoodieFileReader newParquetFileReader(Configuration conf, Path path) {
     conf.setIfUnset(SQLConf.PARQUET_BINARY_AS_STRING().key(), SQLConf.PARQUET_BINARY_AS_STRING().defaultValueString());
     conf.setIfUnset(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), SQLConf.PARQUET_INT96_AS_TIMESTAMP().defaultValueString());
     conf.setIfUnset(SQLConf.CASE_SENSITIVE().key(), SQLConf.CASE_SENSITIVE().defaultValueString());

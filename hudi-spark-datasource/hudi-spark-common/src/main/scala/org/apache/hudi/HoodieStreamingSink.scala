@@ -17,6 +17,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.HoodieSparkSqlWriter.StreamingWriteParams
 import org.apache.hudi.HoodieStreamingSink.SINK_CHECKPOINT_KEY
 import org.apache.hudi.async.{AsyncClusteringService, AsyncCompactService, SparkStreamingAsyncClusteringService, SparkStreamingAsyncCompactService}
 import org.apache.hudi.client.SparkRDDWriteClient
@@ -27,7 +28,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
-import org.apache.hudi.common.util.{ClusteringUtils, CommitUtils, CompactionUtils, ConfigUtils, JsonUtils, StringUtils}
+import org.apache.hudi.common.util.{ClusteringUtils, CommitUtils, CompactionUtils, ConfigUtils}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.exception.{HoodieCorruptedDataException, HoodieException, TableNotFoundException}
@@ -118,18 +119,23 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     // we need auto adjustment enabled for streaming sink since async table services are feasible within the same JVM.
     updatedOptions = updatedOptions.updated(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key, "true")
     updatedOptions = updatedOptions.updated(HoodieSparkSqlWriter.SPARK_STREAMING_BATCH_ID, batchId.toString)
+    if (!options.containsKey(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key())) {
+      // if user does not explicitly override, we are disabling timeline server for streaming sink.
+      // refer to HUDI-3636 for more details
+      updatedOptions = updatedOptions.updated(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key(), " false")
+    }
 
     retry(retryCnt, retryIntervalMs)(
       Try(
         HoodieSparkSqlWriter.write(
-          sqlContext, mode, updatedOptions, data, hoodieTableConfig, writeClient,
-          if (disableCompaction) None else Some(triggerAsyncCompactor), Some(triggerAsyncClustering),
-          extraPreCommitFn = Some(new BiConsumer[HoodieTableMetaClient, HoodieCommitMetadata] {
-            override def accept(metaClient: HoodieTableMetaClient, newCommitMetadata: HoodieCommitMetadata): Unit = {
-              val identifier = options.getOrElse(STREAMING_CHECKPOINT_IDENTIFIER.key(), STREAMING_CHECKPOINT_IDENTIFIER.defaultValue())
-              newCommitMetadata.addMetadata(SINK_CHECKPOINT_KEY, CommitUtils.getCheckpointValueAsString(identifier, String.valueOf(batchId)))
-            }
-          }))
+          sqlContext, mode, updatedOptions, data, Some(StreamingWriteParams(hoodieTableConfig,
+            if (disableCompaction) None else Some(triggerAsyncCompactor), Some(triggerAsyncClustering),
+            extraPreCommitFn = Some(new BiConsumer[HoodieTableMetaClient, HoodieCommitMetadata] {
+              override def accept(metaClient: HoodieTableMetaClient, newCommitMetadata: HoodieCommitMetadata): Unit = {
+                val identifier = options.getOrElse(STREAMING_CHECKPOINT_IDENTIFIER.key(), STREAMING_CHECKPOINT_IDENTIFIER.defaultValue())
+                newCommitMetadata.addMetadata(SINK_CHECKPOINT_KEY, CommitUtils.getCheckpointValueAsString(identifier, String.valueOf(batchId)))
+              }
+            }))), writeClient)
       )
       match {
         case Success((true, commitOps, compactionInstantOps, clusteringInstant, client, tableConfig)) =>

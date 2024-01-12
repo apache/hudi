@@ -40,7 +40,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * A stream write function with bucket hash index.
+ * A stream write function with simple bucket hash index.
  *
  * <p>The task holds a fresh new local index: {(partition + bucket number) &rarr fileId} mapping, this index
  * is used for deciding whether the incoming records in an UPDATE or INSERT.
@@ -57,6 +57,8 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
   private int bucketNum;
 
   private String indexKeyFields;
+
+  private boolean isNonBlockingConcurrencyControl;
 
   /**
    * BucketID to file group mapping in each partition.
@@ -85,6 +87,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     super.open(parameters);
     this.bucketNum = config.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
     this.indexKeyFields = OptionsResolver.getIndexKeyField(config);
+    this.isNonBlockingConcurrencyControl = OptionsResolver.isNonBlockingConcurrencyControl(config);
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
     this.parallelism = getRuntimeContext().getNumberOfParallelSubtasks();
     this.bucketIndex = new HashMap<>();
@@ -119,7 +122,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     } else if (bucketToFileId.containsKey(bucketNum)) {
       location = new HoodieRecordLocation("U", bucketToFileId.get(bucketNum));
     } else {
-      String newFileId = BucketIdentifier.newBucketFileIdPrefix(bucketNum);
+      String newFileId = BucketIdentifier.newBucketFileIdPrefix(bucketNum, isNonBlockingConcurrencyControl);
       location = new HoodieRecordLocation("I", newFileId);
       bucketToFileId.put(bucketNum, newFileId);
       incBucketIndex.add(bucketId);

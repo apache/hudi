@@ -41,9 +41,10 @@ public class TestAvroOrcUtils extends HoodieCommonTestHarness {
     // the ORC schema is constructed in the order as AVRO_SCHEMA:
     // TRIP_SCHEMA_PREFIX, EXTRA_TYPE_SCHEMA, MAP_TYPE_SCHEMA, FARE_NESTED_SCHEMA, TIP_NESTED_SCHEMA, TRIP_SCHEMA_SUFFIX
     // The following types are tested:
-    // DATE, DECIMAL, LONG, INT, BYTES, ARRAY, RECORD, MAP, STRING, FLOAT, DOUBLE
+    // DATE, DECIMAL, LONG, INT, BYTES, ARRAY, RECORD, MAP, STRING, FLOAT, DOUBLE, ENUM
     TypeDescription orcSchema = TypeDescription.fromString("struct<"
-        + "timestamp:bigint,_row_key:string,partition_path:string,rider:string,driver:string,begin_lat:double,"
+        + "timestamp:bigint,_row_key:string,partition_path:string,"
+        + "trip_type:string,rider:string,driver:string,begin_lat:double,"
         + "begin_lon:double,end_lat:double,end_lon:double,"
         + "distance_in_meters:int,seconds_since_epoch:bigint,weight:float,nation:binary,"
         + "current_date:date,current_ts:bigint,height:decimal(10,6),"

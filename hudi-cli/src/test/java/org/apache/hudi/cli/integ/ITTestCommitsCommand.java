@@ -95,9 +95,9 @@ public class ITTestCommitsCommand extends HoodieCLIIntegrationTestBase {
     HoodieTestTable.of(metaClient)
         .withPartitionMetaFiles(DEFAULT_PARTITION_PATHS)
         .addCommit("100")
-        .withBaseFilesInPartitions(partitionAndFileId)
+        .withBaseFilesInPartitions(partitionAndFileId).getLeft()
         .addCommit("101")
-        .withBaseFilesInPartitions(partitionAndFileId)
+        .withBaseFilesInPartitions(partitionAndFileId).getLeft()
         .addCommit("102")
         .withBaseFilesInPartitions(partitionAndFileId);
 

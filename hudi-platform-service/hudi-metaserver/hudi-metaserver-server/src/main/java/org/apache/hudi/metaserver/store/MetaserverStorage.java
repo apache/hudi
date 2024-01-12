@@ -21,6 +21,7 @@ package org.apache.hudi.metaserver.store;
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.metaserver.thrift.MetaserverStorageException;
 import org.apache.hudi.metaserver.thrift.THoodieInstant;
 import org.apache.hudi.metaserver.thrift.TState;
@@ -41,14 +42,23 @@ public interface MetaserverStorage extends AutoCloseable {
 
   Long getDatabaseId(String db) throws MetaserverStorageException;
 
+  @VisibleForTesting
+  boolean deleteDatabase(Long dbId) throws MetaserverStorageException;
+
   boolean createTable(Long dbId, Table table) throws MetaserverStorageException;
 
   Table getTable(String db, String tb) throws MetaserverStorageException;
 
   Long getTableId(String db, String tb) throws MetaserverStorageException;
 
+  @VisibleForTesting
+  boolean deleteTable(Long tableId) throws MetaserverStorageException;
+
   // timeline related
   String createNewTimestamp(long tableId) throws MetaserverStorageException;
+
+  @VisibleForTesting
+  boolean deleteTableTimestamp(Long tableId) throws MetaserverStorageException;
 
   boolean createInstant(long tableId, THoodieInstant instant) throws MetaserverStorageException;
 

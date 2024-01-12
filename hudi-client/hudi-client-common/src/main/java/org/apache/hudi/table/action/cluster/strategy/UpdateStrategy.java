@@ -32,8 +32,8 @@ import java.util.Set;
 public abstract class UpdateStrategy<T, I> implements Serializable {
 
   protected final transient HoodieEngineContext engineContext;
-  protected final HoodieTable table;
-  protected final Set<HoodieFileGroupId> fileGroupsInPendingClustering;
+  protected HoodieTable table;
+  protected Set<HoodieFileGroupId> fileGroupsInPendingClustering;
 
   public UpdateStrategy(HoodieEngineContext engineContext, HoodieTable table, Set<HoodieFileGroupId> fileGroupsInPendingClustering) {
     this.engineContext = engineContext;

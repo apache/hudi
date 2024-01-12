@@ -94,12 +94,12 @@ class RunCleanProcedure extends BaseProcedure with ProcedureBuilder with Logging
     }
 
     val basePath = getBasePath(tableName, Option.empty)
-    val cleanInstantTime = HoodieActiveTimeline.createNewInstantTime()
 
     var client: SparkRDDWriteClient[_] = null
     try {
       client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, confs,
         tableName.asInstanceOf[Option[String]])
+      val cleanInstantTime = client.createNewInstantTime()
       val hoodieCleanMeta = client.clean(cleanInstantTime, scheduleInLine, skipLocking)
 
       if (hoodieCleanMeta == null) Seq.empty

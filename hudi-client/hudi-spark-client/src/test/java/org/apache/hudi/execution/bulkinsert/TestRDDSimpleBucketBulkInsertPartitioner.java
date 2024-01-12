@@ -29,26 +29,25 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieSparkTable;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestRDDSimpleBucketBulkInsertPartitioner extends HoodieClientTestHarness {
+public class TestRDDSimpleBucketBulkInsertPartitioner extends HoodieSparkClientTestHarness {
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -65,8 +64,8 @@ public class TestRDDSimpleBucketBulkInsertPartitioner extends HoodieClientTestHa
 
   @ParameterizedTest
   @MethodSource("configParams")
-  public void testSimpleBucketPartitioner(boolean partitionSort) throws IOException {
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath, HoodieTableType.MERGE_ON_READ);
+  public void testSimpleBucketPartitioner(String tableType, boolean partitionSort) throws IOException {
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath, HoodieTableType.valueOf(tableType));
     int bucketNum = 10;
     HoodieWriteConfig config = HoodieWriteConfig
         .newBuilder()
@@ -116,11 +115,23 @@ public class TestRDDSimpleBucketBulkInsertPartitioner extends HoodieClientTestHa
     writeStatues2.forEach(ws -> assertEquals(ws.getTotalRecords(), writeStatuesMap.get(ws.getFileId()).getTotalRecords()));
   }
 
-  private static Stream<Arguments> configParams() {
-    Object[][] data = new Object[][]{
-        {true},
-        {false},
-    };
-    return Stream.of(data).map(Arguments::of);
+  private static final List<Object> TABLE_TYPES = Arrays.asList(
+      "COPY_ON_WRITE",
+      "MERGE_ON_READ"
+  );
+
+  private static Iterable<Object> tableTypes() {
+    return TABLE_TYPES;
   }
+
+  // table type, partitionSort
+  private static Iterable<Object[]> configParams() {
+    List<Object[]> opts = new ArrayList<>();
+    for (Object tableType : TABLE_TYPES) {
+      opts.add(new Object[] {tableType, "true"});
+      opts.add(new Object[] {tableType, "false"});
+    }
+    return opts;
+  }
+
 }
