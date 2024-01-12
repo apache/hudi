@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -109,8 +108,8 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.hudi.configuration.HadoopConfigurations.getParquetConf;
-import static org.apache.hudi.util.ExpressionUtils.splitExprByPartitionCall;
 import static org.apache.hudi.util.ExpressionUtils.filterSimpleCallExpression;
+import static org.apache.hudi.util.ExpressionUtils.splitExprByPartitionCall;
 
 /**
  * Hoodie batch table source that always read the latest snapshot of the underneath table.
