@@ -210,8 +210,7 @@ public class HoodieTableSource implements
               .setParallelism(1)
               .setMaxParallelism(1);
           SingleOutputStreamOperator<RowData> source;
-          if (HoodieTableSource.this.conf.containsKey(FlinkOptions.OPERATION.key())
-              && WriteOperationType.INSERT.value().equals(HoodieTableSource.this.conf.getString(FlinkOptions.OPERATION))) {
+          if (OptionsResolver.isAppendMode(HoodieTableSource.this.conf)) {
             source = monitorOperatorStream
                 .transform("split_reader", typeInfo, factory)
                 .uid(Pipelines.opUID("split_reader", conf))
