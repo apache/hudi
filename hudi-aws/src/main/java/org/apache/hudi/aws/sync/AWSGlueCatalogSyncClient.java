@@ -21,6 +21,7 @@ package org.apache.hudi.aws.sync;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.GlueCatalogSyncClientConfig;
 import org.apache.hudi.hive.HiveSyncConfig;
@@ -34,6 +35,8 @@ import software.amazon.awssdk.services.glue.model.BatchCreatePartitionRequest;
 import software.amazon.awssdk.services.glue.model.BatchCreatePartitionResponse;
 import software.amazon.awssdk.services.glue.model.BatchDeletePartitionRequest;
 import software.amazon.awssdk.services.glue.model.BatchDeletePartitionResponse;
+import software.amazon.awssdk.services.glue.model.BatchGetPartitionRequest;
+import software.amazon.awssdk.services.glue.model.BatchGetPartitionResponse;
 import software.amazon.awssdk.services.glue.model.BatchUpdatePartitionRequest;
 import software.amazon.awssdk.services.glue.model.BatchUpdatePartitionRequestEntry;
 import software.amazon.awssdk.services.glue.model.BatchUpdatePartitionResponse;
@@ -72,13 +75,16 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.aws.utils.S3Utils.s3aToS3;
 import static org.apache.hudi.common.util.MapUtils.containsAll;
 import static org.apache.hudi.common.util.MapUtils.isNullOrEmpty;
+import static org.apache.hudi.config.GlueCatalogSyncClientConfig.CHANGED_PARTITIONS_READ_PARALLELISM;
+import static org.apache.hudi.config.GlueCatalogSyncClientConfig.CHANGE_PARALLELISM;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_METADATA_FILE_LISTING;
-import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_SEGMENTS;
+import static org.apache.hudi.config.GlueCatalogSyncClientConfig.ALL_PARTITIONS_READ_PARALLELISM;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
 import static org.apache.hudi.hive.util.HiveSchemaUtil.getPartitionKeyType;
@@ -97,7 +103,8 @@ import org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory;
 public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   private static final Logger LOG = LoggerFactory.getLogger(AWSGlueCatalogSyncClient.class);
-  private static final int MAX_PARTITIONS_PER_REQUEST = 100;
+  private static final int MAX_PARTITIONS_PER_CHANGE_REQUEST = 100;
+  private static final int MAX_PARTITIONS_PER_READ_REQUEST = 1000;
   private static final int MAX_DELETE_PARTITIONS_PER_REQUEST = 25;
   private final GlueAsyncClient awsGlue;
   private static final long BATCH_REQUEST_SLEEP_MILLIS = 1000L;
@@ -106,12 +113,13 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
    * see https://docs.aws.amazon.com/athena/latest/ug/querying-hudi.html
    */
   private static final String ENABLE_MDT_LISTING = "hudi.metadata-listing-enabled";
-  private static final String EXECUTOR_POOL_NAME_FORMAT = "hudi-aws-glue-catalog-sync-client-%d";
   private final String databaseName;
 
   private final Boolean skipTableArchive;
   private final String enableMetadataTable;
-  private final int numberOfSegments;
+  private final int allPartitionsReadParallelism;
+  private final int changedPartitionsReadParallelism;
+  private final int changeParallelism;
 
   public AWSGlueCatalogSyncClient(HiveSyncConfig config) {
     super(config);
@@ -121,7 +129,9 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
     this.skipTableArchive = config.getBooleanOrDefault(GlueCatalogSyncClientConfig.GLUE_SKIP_TABLE_ARCHIVE);
     this.enableMetadataTable = Boolean.toString(config.getBoolean(GLUE_METADATA_FILE_LISTING)).toUpperCase();
-    this.numberOfSegments = config.getIntOrDefault(GLUE_SEGMENTS);
+    this.allPartitionsReadParallelism = config.getIntOrDefault(ALL_PARTITIONS_READ_PARALLELISM);
+    this.changedPartitionsReadParallelism = config.getIntOrDefault(CHANGED_PARTITIONS_READ_PARALLELISM);
+    this.changeParallelism = config.getIntOrDefault(CHANGE_PARALLELISM);
   }
 
   private List<Partition> getPartitionsSegment(Segment segment, String tableName) {
@@ -148,13 +158,13 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   @Override
   public List<Partition> getAllPartitions(String tableName) {
-    ExecutorService executorService = Executors.newFixedThreadPool(numberOfSegments);
+    ExecutorService executorService = Executors.newFixedThreadPool(this.allPartitionsReadParallelism);
     try {
       List<Segment> segments = new ArrayList<>();
-      for (int i = 0; i < numberOfSegments; i++) {
+      for (int i = 0; i < allPartitionsReadParallelism; i++) {
         segments.add(Segment.builder()
             .segmentNumber(i)
-            .totalSegments(numberOfSegments).build());
+            .totalSegments(allPartitionsReadParallelism).build());
       }
       List<Future<List<Partition>>> futures = segments.stream()
           .map(segment -> executorService.submit(() -> this.getPartitionsSegment(segment, tableName)))
@@ -174,41 +184,109 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   }
 
   @Override
+  public List<Partition> getPartitionsFromList(String tableName, List<String> partitionList) {
+    HoodieTimer timer = HoodieTimer.start();
+    List<List<String>> batches = CollectionUtils.batches(partitionList, MAX_PARTITIONS_PER_READ_REQUEST);
+    ExecutorService executorService = Executors.newFixedThreadPool(Math.min(this.changedPartitionsReadParallelism, batches.size()));
+    try {
+      List<Future<List<Partition>>> futures = batches
+          .stream()
+          .map(batch -> executorService.submit(() -> this.getChangedPartitions(batch, tableName)))
+          .collect(Collectors.toList());
+
+      List<Partition> partitions = new ArrayList<>();
+      for (Future<List<Partition>> future : futures) {
+        partitions.addAll(future.get());
+      }
+      LOG.info(
+          "Requested {} partitions, found existing {} partitions, new {} partitions, took {} ms to perform.",
+          partitionList.size(),
+          partitions.size(),
+          partitionList.size() - partitions.size(),
+          timer.endTimer()
+      );
+
+      return partitions;
+    } catch (Exception e) {
+      throw new HoodieGlueSyncException("Failed to get all partitions for table " + tableId(this.databaseName, tableName), e);
+    } finally {
+      executorService.shutdownNow();
+    }
+  }
+
+  private List<Partition> getChangedPartitions(List<String> changedPartitions, String tableName) throws ExecutionException, InterruptedException {
+    List<PartitionValueList> partitionValueList = changedPartitions.stream().map(str -> {
+      PartitionValueList individualPartition = PartitionValueList.builder().values(partitionValueExtractor.extractPartitionValuesInPath(str)).build();
+      return individualPartition;
+    }).collect(Collectors.toList());
+    BatchGetPartitionRequest request = BatchGetPartitionRequest.builder()
+        .databaseName(this.databaseName)
+        .tableName(tableName)
+        .partitionsToGet(partitionValueList)
+        .build();
+    BatchGetPartitionResponse callResult = awsGlue.batchGetPartition(request).get();
+    List<Partition> result = callResult
+        .partitions()
+        .stream()
+        .map(p -> new Partition(p.values(), p.storageDescriptor().location()))
+        .collect(Collectors.toList());
+
+    return result;
+  }
+
+  @Override
   public void addPartitionsToTable(String tableName, List<String> partitionsToAdd) {
     if (partitionsToAdd.isEmpty()) {
-      LOG.info("No partitions to add for " + tableId(databaseName, tableName));
+      LOG.info("No partitions to add for " + tableId(this.databaseName, tableName));
       return;
     }
-    LOG.info("Adding " + partitionsToAdd.size() + " partition(s) in table " + tableId(databaseName, tableName));
+    HoodieTimer timer = HoodieTimer.start();
+    parallelizeChange(partitionsToAdd, this.changeParallelism, partitions -> this.addPartitionsToTableInternal(tableName, partitions), MAX_PARTITIONS_PER_CHANGE_REQUEST);
+    LOG.info("Added {} partitions to table {} in {} ms", partitionsToAdd.size(), tableId(this.databaseName, tableName), timer.endTimer());
+  }
+
+  private <T> void parallelizeChange(List<T> items, int parallelism, Consumer<List<T>> consumer, int sliceSize) {
+    List<List<T>> batches = CollectionUtils.batches(items, sliceSize);
+    ExecutorService executorService = Executors.newFixedThreadPool(Math.min(parallelism, batches.size()));
+    try {
+      List<Future<?>> futures = batches.stream()
+          .map(item -> executorService.submit(() -> {
+            consumer.accept(item);
+          }))
+          .collect(Collectors.toList());
+      for (Future<?> future : futures) {
+        future.get();
+      }
+    } catch (Exception e) {
+      throw new HoodieGlueSyncException("Failed to parallelize operation", e);
+    } finally {
+      executorService.shutdownNow();
+    }
+  }
+
+  private void addPartitionsToTableInternal(String tableName, List<String> partitionsToAdd) {
     try {
       Table table = getTable(awsGlue, databaseName, tableName);
       StorageDescriptor sd = table.storageDescriptor();
-      List<PartitionInput> partitionInputs = partitionsToAdd.stream().map(partition -> {
+      List<PartitionInput> partitionInput = partitionsToAdd.stream().map(partition -> {
         String fullPartitionPath = FSUtils.getPartitionPath(getBasePath(), partition).toString();
         List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
         StorageDescriptor partitionSD = sd.copy(copySd -> copySd.location(fullPartitionPath));
         return PartitionInput.builder().values(partitionValues).storageDescriptor(partitionSD).build();
       }).collect(Collectors.toList());
 
-      List<CompletableFuture<BatchCreatePartitionResponse>> futures = new ArrayList<>();
-
-      for (List<PartitionInput> batch : CollectionUtils.batches(partitionInputs, MAX_PARTITIONS_PER_REQUEST)) {
-        BatchCreatePartitionRequest request = BatchCreatePartitionRequest.builder()
-                .databaseName(databaseName).tableName(tableName).partitionInputList(batch).build();
-        futures.add(awsGlue.batchCreatePartition(request));
-      }
-
-      for (CompletableFuture<BatchCreatePartitionResponse> future : futures) {
-        BatchCreatePartitionResponse response = future.get();
-        if (CollectionUtils.nonEmpty(response.errors())) {
-          if (response.errors().stream()
-              .allMatch(
-                  (error) -> "AlreadyExistsException".equals(error.errorDetail().errorCode()))) {
-            LOG.warn("Partitions already exist in glue: " + response.errors());
-          } else {
-            throw new HoodieGlueSyncException("Fail to add partitions to " + tableId(databaseName, tableName)
+      BatchCreatePartitionRequest request = BatchCreatePartitionRequest.builder()
+          .databaseName(databaseName).tableName(tableName).partitionInputList(partitionInput).build();
+      CompletableFuture<BatchCreatePartitionResponse> future = awsGlue.batchCreatePartition(request);
+      BatchCreatePartitionResponse response = future.get();
+      if (CollectionUtils.nonEmpty(response.errors())) {
+        if (response.errors().stream()
+            .allMatch(
+                (error) -> "AlreadyExistsException".equals(error.errorDetail().errorCode()))) {
+          LOG.warn("Partitions already exist in glue: " + response.errors());
+        } else {
+          throw new HoodieGlueSyncException("Fail to add partitions to " + tableId(databaseName, tableName)
               + " with error(s): " + response.errors());
-          }
         }
       }
     } catch (Exception e) {
@@ -219,10 +297,15 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   @Override
   public void updatePartitionsToTable(String tableName, List<String> changedPartitions) {
     if (changedPartitions.isEmpty()) {
-      LOG.info("No partitions to change for " + tableName);
+      LOG.info("No partitions to add for " + tableId(this.databaseName, tableName));
       return;
     }
-    LOG.info("Updating " + changedPartitions.size() + "partition(s) in table " + tableId(databaseName, tableName));
+    HoodieTimer timer = HoodieTimer.start();
+    parallelizeChange(changedPartitions, this.changeParallelism, partitions -> this.updatePartitionsToTableInternal(tableName, partitions), MAX_PARTITIONS_PER_CHANGE_REQUEST);
+    LOG.info("Updated {} partitions to table {} in {} ms", changedPartitions.size(), tableId(this.databaseName, tableName), timer.endTimer());
+  }
+
+  private void updatePartitionsToTableInternal(String tableName, List<String> changedPartitions) {
     try {
       Table table = getTable(awsGlue, databaseName, tableName);
       StorageDescriptor sd = table.storageDescriptor();
@@ -234,19 +317,14 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
         return BatchUpdatePartitionRequestEntry.builder().partitionInput(partitionInput).partitionValueList(partitionValues).build();
       }).collect(Collectors.toList());
 
-      List<CompletableFuture<BatchUpdatePartitionResponse>> futures = new ArrayList<>();
-      for (List<BatchUpdatePartitionRequestEntry> batch : CollectionUtils.batches(updatePartitionEntries, MAX_PARTITIONS_PER_REQUEST)) {
-        BatchUpdatePartitionRequest request = BatchUpdatePartitionRequest.builder()
-                .databaseName(databaseName).tableName(tableName).entries(batch).build();
-        futures.add(awsGlue.batchUpdatePartition(request));
-      }
+      BatchUpdatePartitionRequest request = BatchUpdatePartitionRequest.builder()
+              .databaseName(databaseName).tableName(tableName).entries(updatePartitionEntries).build();
+      CompletableFuture<BatchUpdatePartitionResponse> future = awsGlue.batchUpdatePartition(request);
 
-      for (CompletableFuture<BatchUpdatePartitionResponse> future : futures) {
-        BatchUpdatePartitionResponse response = future.get();
-        if (CollectionUtils.nonEmpty(response.errors())) {
-          throw new HoodieGlueSyncException("Fail to update partitions to " + tableId(databaseName, tableName)
-              + " with error(s): " + response.errors());
-        }
+      BatchUpdatePartitionResponse response = future.get();
+      if (CollectionUtils.nonEmpty(response.errors())) {
+        throw new HoodieGlueSyncException("Fail to update partitions to " + tableId(databaseName, tableName)
+            + " with error(s): " + response.errors());
       }
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to update partitions to " + tableId(databaseName, tableName), e);
@@ -255,36 +333,35 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   @Override
   public void dropPartitions(String tableName, List<String> partitionsToDrop) {
-    if (CollectionUtils.isNullOrEmpty(partitionsToDrop)) {
-      LOG.info("No partitions to drop for " + tableName);
+    if (partitionsToDrop.isEmpty()) {
+      LOG.info("No partitions to drop for " + tableId(this.databaseName, tableName));
       return;
     }
-    LOG.info("Drop " + partitionsToDrop.size() + "partition(s) in table " + tableId(databaseName, tableName));
+    HoodieTimer timer = HoodieTimer.start();
+    parallelizeChange(partitionsToDrop, this.changeParallelism, partitions -> this.dropPartitionsInternal(tableName, partitions), MAX_DELETE_PARTITIONS_PER_REQUEST);
+    LOG.info("Deleted {} partitions to table {} in {} ms", partitionsToDrop.size(), tableId(this.databaseName, tableName), timer.endTimer());
+  }
+
+  private void dropPartitionsInternal(String tableName, List<String> partitionsToDrop) {
     try {
-      List<CompletableFuture<BatchDeletePartitionResponse>> futures = new ArrayList<>();
-      for (List<String> batch : CollectionUtils.batches(partitionsToDrop, MAX_DELETE_PARTITIONS_PER_REQUEST)) {
-
-        List<PartitionValueList> partitionValueLists = batch.stream().map(partition -> {
-          PartitionValueList partitionValueList = PartitionValueList.builder()
-                  .values(partitionValueExtractor.extractPartitionValuesInPath(partition))
-                  .build();
-          return partitionValueList;
-        }).collect(Collectors.toList());
-
-        BatchDeletePartitionRequest batchDeletePartitionRequest = BatchDeletePartitionRequest.builder()
-            .databaseName(databaseName)
-            .tableName(tableName)
-            .partitionsToDelete(partitionValueLists)
+      List<PartitionValueList> partitionValueLists = partitionsToDrop.stream().map(partition -> {
+        PartitionValueList partitionValueList = PartitionValueList.builder()
+            .values(partitionValueExtractor.extractPartitionValuesInPath(partition))
             .build();
-        futures.add(awsGlue.batchDeletePartition(batchDeletePartitionRequest));
-      }
+        return partitionValueList;
+      }).collect(Collectors.toList());
 
-      for (CompletableFuture<BatchDeletePartitionResponse> future : futures) {
-        BatchDeletePartitionResponse response = future.get();
-        if (CollectionUtils.nonEmpty(response.errors())) {
-          throw new HoodieGlueSyncException("Fail to drop partitions to " + tableId(databaseName, tableName)
-              + " with error(s): " + response.errors());
-        }
+      BatchDeletePartitionRequest batchDeletePartitionRequest = BatchDeletePartitionRequest.builder()
+          .databaseName(databaseName)
+          .tableName(tableName)
+          .partitionsToDelete(partitionValueLists)
+          .build();
+      CompletableFuture<BatchDeletePartitionResponse> future = awsGlue.batchDeletePartition(batchDeletePartitionRequest);
+
+      BatchDeletePartitionResponse response = future.get();
+      if (CollectionUtils.nonEmpty(response.errors())) {
+        throw new HoodieGlueSyncException("Fail to drop partitions to " + tableId(databaseName, tableName)
+            + " with error(s): " + response.errors());
       }
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to drop partitions to " + tableId(databaseName, tableName), e);
