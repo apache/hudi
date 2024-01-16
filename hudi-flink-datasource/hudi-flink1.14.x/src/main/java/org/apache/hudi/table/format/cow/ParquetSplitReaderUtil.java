@@ -119,6 +119,11 @@ public class ParquetSplitReaderUtil {
       long splitLength,
       FilterPredicate filterPredicate,
       UnboundRecordFilter recordFilter) throws IOException {
+
+    if (Arrays.stream(selectedFields).anyMatch(x -> x == -1)) {
+      throw new AssertionError("One or more specified columns does not exist in the hudi table");
+    }
+
     List<String> selNonPartNames = Arrays.stream(selectedFields)
         .mapToObj(i -> fullFieldNames[i])
         .filter(n -> !partitionSpec.containsKey(n))
