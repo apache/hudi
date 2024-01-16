@@ -591,6 +591,7 @@
               <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
             </systemPropertyVariables>
             <useSystemClassLoader>false</useSystemClassLoader>
+            <forkedProcessExitTimeoutInSeconds>30</forkedProcessExitTimeoutInSeconds>
           </configuration>
         </plugin>
         <plugin>
