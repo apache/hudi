@@ -83,7 +83,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -196,16 +195,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     // Initialize a local spark env
     SparkConf sc = HoodieClientTestUtils.getSparkConfForTest(appName + "#" + testMethodName);
     SparkContext sparkContext = new SparkContext(sc);
-    try {
-      // Clean the default Hadoop configurations since in our Hudi tests they are not used.
-      Field hadoopConfigurationField = sparkContext.getClass().getDeclaredField("_hadoopConfiguration");
-      hadoopConfigurationField.setAccessible(true);
-      Configuration testHadoopConfig = new Configuration(false);
-      hadoopConfigurationField.set(sparkContext, testHadoopConfig);
-    } catch (NoSuchFieldException | IllegalAccessException e) {
-      LOG.warn(e.getMessage());
-    }
-
+    HoodieClientTestUtils.overrideSparkHadoopConfiguration(sparkContext);
     jsc = new JavaSparkContext(sparkContext);
     jsc.setLogLevel("ERROR");
     hadoopConf = jsc.hadoopConfiguration();
