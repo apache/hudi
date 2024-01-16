@@ -114,7 +114,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
 
       case None =>
         val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = if (prunedPartitionFileNames.isEmpty) {
-          // NOTE: In order to ensure that testing and unexpected logic are normal, judgment logic is added.
+          // NOTE: Added logic to validate tests that directly call this method without prunedPartitionsAndFileSlices, ensuring overall test integrity.
           loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory)
         } else {
           val filterFunction = new SerializableFunction[HoodieMetadataColumnStats, java.lang.Boolean] {

@@ -223,21 +223,6 @@ case class HoodieFileIndex(spark: SparkSession,
 
     val prunedPartitionsAndFileSlices = getFileSlicesForPrunedPartitions(partitionFilters)
 
-    val prunedPartitionFileNames: Set[String] = {
-      prunedPartitionsAndFileSlices
-        .flatMap {
-          case (_, fileSlices) => fileSlices
-        }
-        .flatMap { fileSlice =>
-          val baseFileOption = Option(fileSlice.getBaseFile.orElse(null))
-          val logFiles = if (includeLogFiles) {
-            fileSlice.getLogFiles.iterator().asScala.map(_.getFileName).toList
-          } else Nil
-          baseFileOption.map(_.getFileName).toList ++ logFiles
-        }
-        .toSet
-    }
-
     // If there are no data filters, return all the file slices.
     // If there are no file slices, return empty list.
     if (prunedPartitionsAndFileSlices.isEmpty || dataFilters.isEmpty) {
@@ -248,6 +233,21 @@ case class HoodieFileIndex(spark: SparkSession,
       //    - Col-Stats Index is present
       //    - Record-level Index is present
       //    - List of predicates (filters) is present
+      val prunedPartitionFileNames: Set[String] = {
+        prunedPartitionsAndFileSlices
+          .flatMap {
+            case (_, fileSlices) => fileSlices
+          }
+          .flatMap { fileSlice =>
+            val baseFileOption = Option(fileSlice.getBaseFile.orElse(null))
+            val logFiles = if (includeLogFiles) {
+              fileSlice.getLogFiles.iterator().asScala.map(_.getFileName).toList
+            } else Nil
+            baseFileOption.map(_.getFileName).toList ++ logFiles
+          }
+          .toSet
+      }
+
       val candidateFilesNamesOpt: Option[Set[String]] =
       lookupCandidateFilesInMetadataTable(dataFilters, prunedPartitionFileNames) match {
         case Success(opt) => opt
