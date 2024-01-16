@@ -35,7 +35,7 @@ for any actions/commits that is not yet committed and that refers to partially f
 is triggered and all dirty data is cleaned up followed by cleaning up the commit instants from the timeline.
 
 
-![An example illustration of single writer rollbacks](/assets/images/blog/rollbacks/Rollback_1.pn)
+![An example illustration of single writer rollbacks](/assets/images/blog/rollbacks/Rollback_1.png)
 _Figure 1: single writer with eager rollbacks_
 
 
