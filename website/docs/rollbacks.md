@@ -35,7 +35,7 @@ for any actions/commits that is not yet committed and that refers to partially f
 is triggered and all dirty data is cleaned up followed by cleaning up the commit instants from the timeline.
 
 
-![An example illustration of single writer rollbacks](/assets/images/blog/rollbacks/single_write_rollback.png)
+![An example illustration of single writer rollbacks](/assets/images/blog/rollbacks/Rollback_1.pn)
 _Figure 1: single writer with eager rollbacks_
 
 
@@ -63,7 +63,7 @@ information whether the writer that started the commit of interest is still maki
 the commit, the heartbeat file is deleted. Or if the write failed midway, the last modification time of the heartbeat 
 file is no longer updated, so other writers can deduce the failed write after a period of time elapses.
 
-![An example illustration of multi writer rollbacks](/assets/images/blog/rollbacks/multi_writer_rollback.png)
+![An example illustration of multi writer rollbacks](/assets/images/blog/rollbacks/rollback2_new.png)
 _Figure 2: multi-writer with lazy cleaning of failed commits_
 
 ## Related Resources

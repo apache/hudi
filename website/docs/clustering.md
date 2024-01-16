@@ -59,7 +59,7 @@ Clustering Service builds on Hudi’s MVCC based design to allow for writers to 
 
 NOTE: Clustering can only be scheduled for tables / partitions not receiving any concurrent updates. In the future, concurrent updates use-case will be supported as well.
 
-![Clustering example](/assets/images/blog/clustering/example_perf_improvement.png)
+![Clustering example](/assets/images/blog/clustering/clustering1_new.png)
 _Figure: Illustrating query performance improvements by clustering_
 
 ## Clustering Usecases
@@ -71,7 +71,7 @@ such small files could lead to higher query latency. From our experience support
 few users who are using Hudi just for small file handling capabilities. So, you could employ clustering to batch a lot
 of such small files into larger ones.
 
-![Batching small files](/assets/images/clustering_small_files.gif)
+![Batching small files](/assets/images/blog/clustering/clustering2_new.png)
 
 ### Cluster by sort key
 
@@ -80,7 +80,7 @@ arrival time, while query predicates do not sit well with it. With clustering, y
 based on query predicates and so, your data skipping will be very efficient and your query can ignore scanning a lot of
 unnecessary data.
 
-![Batching small files](/assets/images/clustering_sort.gif)
+![Batching small files](/assets/images/blog/clustering/clustering_3.png)
 
 ## Clustering Strategies
 

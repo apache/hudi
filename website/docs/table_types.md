@@ -69,7 +69,7 @@ Following illustrates how this works conceptually, when data written into copy-o
 
 
 <figure>
-    <img className="docimage" src={require("/assets/images/hudi_cow.png").default} alt="hudi_cow.png" />
+    <img className="docimage" src={require("/assets/images/COW_new.png").default} alt="hudi_cow.png" />
 </figure>
 
 
@@ -97,7 +97,7 @@ their columnar base file, to keep the query performance in check (larger delta l
 Following illustrates how the table works, and shows two types of queries - snapshot query and read optimized query.
 
 <figure>
-    <img className="docimage" src={require("/assets/images/hudi_mor.png").default} alt="hudi_mor.png"  />
+    <img className="docimage" src={require("/assets/images/MOR_new.png").default} alt="hudi_mor.png"  />
 </figure>
 
 There are lot of interesting things happening in this example, which bring out the subtleties in the approach.
