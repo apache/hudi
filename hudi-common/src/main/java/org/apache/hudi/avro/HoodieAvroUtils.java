@@ -203,6 +203,21 @@ public class HoodieAvroUtils {
   }
 
   /**
+   * Convert a given avro record to json and return the string
+   *
+   * @param record The GenericRecord to convert
+   * @param pretty Whether to pretty-print the json output
+   */
+  public static String avroToJsonString(GenericRecord record, boolean pretty) throws IOException {
+    DatumWriter<Object> writer = new GenericDatumWriter<>(record.getSchema());
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    JsonEncoder jsonEncoder = EncoderFactory.get().jsonEncoder(record.getSchema(), out, pretty);
+    writer.write(record, jsonEncoder);
+    jsonEncoder.flush();
+    return out.toString();
+  }
+
+  /**
    * Convert serialized bytes back into avro record.
    */
   public static GenericRecord bytesToAvro(byte[] bytes, Schema schema) throws IOException {

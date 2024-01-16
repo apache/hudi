@@ -547,7 +547,7 @@ public class StreamSync implements Serializable, Closeable {
       return inputBatch;
     } else {
       Option<JavaRDD<HoodieRecord>> recordsOpt = HoodieStreamerUtils.createHoodieRecords(cfg, props, inputBatch.getBatch(), schemaProvider,
-          recordType, autoGenerateRecordKeys, instantTime);
+          recordType, autoGenerateRecordKeys, instantTime, errorTableWriter);
       return new InputBatch(recordsOpt, checkpointStr, schemaProvider);
     }
   }
@@ -635,8 +635,21 @@ public class StreamSync implements Serializable, Closeable {
         // Rewrite transformed records into the expected target schema
         schemaProvider = getDeducedSchemaProvider(dataAndCheckpoint.getSchemaProvider().getTargetSchema(), dataAndCheckpoint.getSchemaProvider(), metaClient);
         String serializedTargetSchema = schemaProvider.getTargetSchema().toString();
-        avroRDDOptional = dataAndCheckpoint.getBatch().map(t -> t.mapPartitions(iterator ->
-            new LazyCastingIterator(iterator, serializedTargetSchema)));
+        if (errorTableWriter.isPresent()
+            && props.getBoolean(HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_TARGET_SCHEMA.key(),
+            HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_TARGET_SCHEMA.defaultValue())) {
+          avroRDDOptional = dataAndCheckpoint.getBatch().map(
+              records -> {
+                Tuple2<RDD<GenericRecord>, RDD<String>> safeCreateRDDs = HoodieSparkUtils.safeRewriteRDD(records.rdd(), serializedTargetSchema);
+                errorTableWriter.get().addErrorEvents(safeCreateRDDs._2().toJavaRDD()
+                    .map(evStr -> new ErrorEvent<>(evStr,
+                        ErrorEvent.ErrorReason.INVALID_RECORD_SCHEMA)));
+                return safeCreateRDDs._1.toJavaRDD();
+              });
+        } else {
+          avroRDDOptional = dataAndCheckpoint.getBatch().map(t -> t.mapPartitions(iterator ->
+              new LazyCastingIterator(iterator, serializedTargetSchema)));
+        }
       }
     }
     if (useRowWriter) {
