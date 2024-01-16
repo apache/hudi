@@ -70,6 +70,8 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.spark.SparkConf;
+import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
@@ -192,11 +194,12 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     }
 
     // Initialize a local spark env
-    jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest(appName + "#" + testMethodName));
+    SparkConf sc = HoodieClientTestUtils.getSparkConfForTest(appName + "#" + testMethodName);
+    SparkContext sparkContext = new SparkContext(sc);
+    HoodieClientTestUtils.overrideSparkHadoopConfiguration(sparkContext);
+    jsc = new JavaSparkContext(sparkContext);
     jsc.setLogLevel("ERROR");
-
     hadoopConf = jsc.hadoopConfiguration();
-
     sparkSession = SparkSession.builder()
         .withExtensions(JFunction.toScala(sparkSessionExtensions -> {
           sparkSessionExtensionsInjector.ifPresent(injector -> injector.accept(sparkSessionExtensions));
