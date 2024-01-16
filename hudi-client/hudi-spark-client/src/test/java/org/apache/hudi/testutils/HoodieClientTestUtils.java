@@ -53,6 +53,7 @@ import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileScanner;
 import org.apache.spark.SparkConf;
+import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -61,6 +62,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -122,6 +124,18 @@ public class HoodieClientTestUtils {
     }
 
     return SparkRDDReadClient.addHoodieSupport(sparkConf);
+  }
+
+  public static void overrideSparkHadoopConfiguration(SparkContext sparkContext) {
+    try {
+      // Clean the default Hadoop configurations since in our Hudi tests they are not used.
+      Field hadoopConfigurationField = sparkContext.getClass().getDeclaredField("_hadoopConfiguration");
+      hadoopConfigurationField.setAccessible(true);
+      Configuration testHadoopConfig = new Configuration(false);
+      hadoopConfigurationField.set(sparkContext, testHadoopConfig);
+    } catch (NoSuchFieldException | IllegalAccessException e) {
+      LOG.warn(e.getMessage());
+    }
   }
 
   private static HashMap<String, String> getLatestFileIDsToFullPath(String basePath, HoodieTimeline commitTimeline,
