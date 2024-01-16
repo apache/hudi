@@ -767,6 +767,7 @@ public class TestHoodieParquetInputFormat {
         }
         totalCount++;
       }
+      recordReader.close();
     }
     assertEquals(expectedNumberOfRecordsInCommit, actualCount, msg);
     assertEquals(totalExpected, totalCount, msg);
@@ -825,6 +826,7 @@ public class TestHoodieParquetInputFormat {
           // test date
           assertEquals(LocalDate.ofEpochDay(testDate).toString(), String.valueOf(writable.get()[2]));
         }
+        recordReader.close();
       }
     } finally {
       jobConf.set(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true");

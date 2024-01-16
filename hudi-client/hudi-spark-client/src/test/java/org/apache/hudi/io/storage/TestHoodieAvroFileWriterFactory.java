@@ -19,9 +19,11 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.client.SparkTaskContextSupplier;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestBase;
@@ -31,6 +33,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -73,5 +76,33 @@ public class TestHoodieAvroFileWriterFactory extends HoodieClientTestBase {
           table.getHadoopConf(), cfg.getStorageConfig(), HoodieTestDataGenerator.AVRO_SCHEMA, supplier, HoodieRecordType.AVRO);
     }, "should fail since log storage writer is not supported yet.");
     assertTrue(thrown.getMessage().contains("format not supported yet."));
+  }
+
+  @Test
+  public void testEnableBloomFilter() {
+    HoodieWriteConfig config = getConfig(IndexType.BLOOM);
+    assertTrue(HoodieFileWriterFactory.enableBloomFilter(true, config));
+    assertFalse(HoodieFileWriterFactory.enableBloomFilter(false, config));
+
+    config = getConfig(IndexType.SIMPLE);
+    assertTrue(HoodieFileWriterFactory.enableBloomFilter(true, config));
+
+    config = getConfig(IndexType.SIMPLE);
+    assertTrue(HoodieFileWriterFactory.enableBloomFilter(true, config));
+
+    config = getConfigBuilder(IndexType.BLOOM)
+        .withStorageConfig(HoodieStorageConfig.newBuilder()
+            .parquetBloomFilterEnable(false).build()).build();
+    assertTrue(HoodieFileWriterFactory.enableBloomFilter(true, config));
+
+    config = getConfigBuilder(IndexType.SIMPLE)
+        .withStorageConfig(HoodieStorageConfig.newBuilder()
+            .parquetBloomFilterEnable(true).build()).build();
+    assertTrue(HoodieFileWriterFactory.enableBloomFilter(true, config));
+
+    config = getConfigBuilder(IndexType.SIMPLE)
+        .withStorageConfig(HoodieStorageConfig.newBuilder()
+            .parquetBloomFilterEnable(false).build()).build();
+    assertFalse(HoodieFileWriterFactory.enableBloomFilter(true, config));
   }
 }

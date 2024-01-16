@@ -189,7 +189,7 @@ public class KafkaConnectUtils {
     if (keyGenerator instanceof CustomAvroKeyGenerator) {
       return ((BaseKeyGenerator) keyGenerator).getPartitionPathFields().stream().map(
           pathField -> Arrays.stream(pathField.split(CustomAvroKeyGenerator.SPLIT_REGEX))
-              .findFirst().orElse("Illegal partition path field format: '$pathField' for ${c.getClass.getSimpleName}"))
+              .findFirst().orElseGet(() -> "Illegal partition path field format: '$pathField' for ${c.getClass.getSimpleName}"))
           .collect(Collectors.joining(","));
     }
 

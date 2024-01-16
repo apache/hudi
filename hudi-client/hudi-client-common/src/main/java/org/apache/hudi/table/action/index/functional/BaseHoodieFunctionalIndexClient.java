@@ -45,7 +45,7 @@ public abstract class BaseHoodieFunctionalIndexClient {
   public void register(HoodieTableMetaClient metaClient, String indexName, String indexType, Map<String, Map<String, String>> columns, Map<String, String> options) {
     LOG.info("Registering index {} of using {}", indexName, indexType);
     String indexMetaPath = metaClient.getTableConfig().getIndexDefinitionPath()
-        .orElse(metaClient.getMetaPath() + Path.SEPARATOR + HoodieTableMetaClient.INDEX_DEFINITION_FOLDER_NAME + Path.SEPARATOR + HoodieTableMetaClient.INDEX_DEFINITION_FILE_NAME);
+        .orElseGet(() -> metaClient.getMetaPath() + Path.SEPARATOR + HoodieTableMetaClient.INDEX_DEFINITION_FOLDER_NAME + Path.SEPARATOR + HoodieTableMetaClient.INDEX_DEFINITION_FILE_NAME);
     // build HoodieFunctionalIndexMetadata and then add to index definition file
     metaClient.buildFunctionalIndexDefinition(indexMetaPath, indexName, indexType, columns, options);
     // update table config if necessary

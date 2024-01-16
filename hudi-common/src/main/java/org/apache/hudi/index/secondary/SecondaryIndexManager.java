@@ -116,7 +116,7 @@ public class SecondaryIndexManager {
     List<HoodieSecondaryIndex> newSecondaryIndexes = secondaryIndexes.map(h -> {
       h.add(secondaryIndexToAdd);
       return h;
-    }).orElse(Collections.singletonList(secondaryIndexToAdd));
+    }).orElseGet(() -> Collections.singletonList(secondaryIndexToAdd));
     newSecondaryIndexes.sort(new HoodieSecondaryIndex.HoodieIndexCompactor());
 
     // Persistence secondary indexes' metadata to hoodie.properties file

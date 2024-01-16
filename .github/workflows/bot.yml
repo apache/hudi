@@ -141,20 +141,23 @@ jobs:
           distribution: 'adopt'
           architecture: x64
           cache: maven
+      - name: Generate Maven Wrapper
+        run:
+          mvn -N io.takari:maven:wrapper
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
-          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"FLINK_PROFILE" -DskipTests=true -Phudi-platform-service $MVN_ARGS -am -pl hudi-hadoop-mr,hudi-client/hudi-java-client
+          ./mvnw clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"FLINK_PROFILE" -DskipTests=true -Phudi-platform-service $MVN_ARGS -am -pl hudi-hadoop-mr,hudi-client/hudi-java-client
       - name: UT - hudi-hadoop-mr and hudi-client/hudi-java-client
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
-          mvn test -Punit-tests -fae -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"FLINK_PROFILE" -pl hudi-hadoop-mr,hudi-client/hudi-java-client $MVN_ARGS
+          ./mvnw test -Punit-tests -fae -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"FLINK_PROFILE" -pl hudi-hadoop-mr,hudi-client/hudi-java-client $MVN_ARGS
 
   test-spark-java17:
     runs-on: ubuntu-latest

@@ -44,6 +44,7 @@ import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.metrics.FlinkClusteringMetrics;
 import org.apache.hudi.sink.bulk.BulkInsertWriterHelper;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
@@ -58,6 +59,7 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.Gauge;
+import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.runtime.memory.MemoryManager;
 import org.apache.flink.streaming.api.graph.StreamConfig;
 import org.apache.flink.streaming.api.operators.BoundedOneInput;
@@ -127,8 +129,11 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
    */
   private transient NonThrownExecutor executor;
 
+  private transient FlinkClusteringMetrics clusteringMetrics;
+
   public ClusteringOperator(Configuration conf, RowType rowType) {
-    this.conf = conf;
+    // copy a conf let following modification not to impact the global conf
+    this.conf = new Configuration(conf);
     this.rowType = BulkInsertWriterHelper.addMetadataFields(rowType, false);
     this.asyncClustering = OptionsResolver.needsAsyncClustering(conf);
     this.sortClusteringEnabled = OptionsResolver.sortClusteringEnabled(conf);
@@ -169,6 +174,8 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     }
 
     this.collector = new StreamRecordCollector<>(output);
+
+    registerMetrics();
   }
 
   @Override
@@ -212,6 +219,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   // -------------------------------------------------------------------------
 
   private void doClustering(String instantTime, List<ClusteringOperation> clusteringOperations) throws Exception {
+    clusteringMetrics.startClustering();
     BulkInsertWriterHelper writerHelper = new BulkInsertWriterHelper(this.conf, this.table, this.writeConfig,
         instantTime, this.taskID, getRuntimeContext().getNumberOfParallelSubtasks(), getRuntimeContext().getAttemptNumber(),
         this.rowType, true);
@@ -246,6 +254,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     }
 
     List<WriteStatus> writeStatuses = writerHelper.getWriteStatuses(this.taskID);
+    clusteringMetrics.endClustering();
     collector.collect(new ClusteringCommitEvent(instantTime, getFileIds(clusteringOperations), writeStatuses, this.taskID));
     writerHelper.close();
   }
@@ -386,5 +395,11 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   @VisibleForTesting
   public void setOutput(Output<StreamRecord<ClusteringCommitEvent>> output) {
     this.output = output;
+  }
+
+  private void registerMetrics() {
+    MetricGroup metrics = getRuntimeContext().getMetricGroup();
+    clusteringMetrics = new FlinkClusteringMetrics(metrics);
+    clusteringMetrics.registerMetrics();
   }
 }
