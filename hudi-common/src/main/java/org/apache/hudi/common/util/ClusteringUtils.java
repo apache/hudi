@@ -82,12 +82,12 @@ public class ClusteringUtils {
 
   /**
    * Get requested replace metadata from timeline.
-   * @param metaClient
+   * @param timeline
    * @param pendingReplaceInstant
    * @return
    * @throws IOException
    */
-  private static Option<HoodieRequestedReplaceMetadata> getRequestedReplaceMetadata(HoodieTableMetaClient metaClient, HoodieInstant pendingReplaceInstant) throws IOException {
+  private static Option<HoodieRequestedReplaceMetadata> getRequestedReplaceMetadata(HoodieTimeline timeline, HoodieInstant pendingReplaceInstant) throws IOException {
     final HoodieInstant requestedInstant;
     if (!pendingReplaceInstant.isRequested()) {
       // inflight replacecommit files don't have clustering plan.
@@ -97,7 +97,7 @@ public class ClusteringUtils {
     } else {
       requestedInstant = pendingReplaceInstant;
     }
-    Option<byte[]> content = metaClient.getActiveTimeline().getInstantDetails(requestedInstant);
+    Option<byte[]> content = timeline.getInstantDetails(requestedInstant);
     if (!content.isPresent() || content.get().length == 0) {
       // few operations create requested file without any content. Assume these are not clustering
       return Option.empty();
@@ -112,8 +112,18 @@ public class ClusteringUtils {
    * @return
    */
   public static Option<Pair<HoodieInstant, HoodieClusteringPlan>> getClusteringPlan(HoodieTableMetaClient metaClient, HoodieInstant pendingReplaceInstant) {
+    return getClusteringPlan(metaClient.getActiveTimeline(), pendingReplaceInstant);
+  }
+
+  /**
+   * Get Clustering plan from timeline.
+   * @param timeline
+   * @param pendingReplaceInstant
+   * @return
+   */
+  public static Option<Pair<HoodieInstant, HoodieClusteringPlan>> getClusteringPlan(HoodieTimeline timeline, HoodieInstant pendingReplaceInstant) {
     try {
-      Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata = getRequestedReplaceMetadata(metaClient, pendingReplaceInstant);
+      Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata = getRequestedReplaceMetadata(timeline, pendingReplaceInstant);
       if (requestedReplaceMetadata.isPresent() && WriteOperationType.CLUSTER.name().equals(requestedReplaceMetadata.get().getOperationType())) {
         return Option.of(Pair.of(pendingReplaceInstant, requestedReplaceMetadata.get().getClusteringPlan()));
       }
@@ -233,6 +243,10 @@ public class ClusteringUtils {
 
   public static boolean isPendingClusteringInstant(HoodieTableMetaClient metaClient, HoodieInstant instant) {
     return getClusteringPlan(metaClient, instant).isPresent();
+  }
+
+  public static boolean isPendingClusteringInstant(HoodieTimeline timeline, HoodieInstant instant) {
+    return getClusteringPlan(timeline, instant).isPresent();
   }
 
   /**

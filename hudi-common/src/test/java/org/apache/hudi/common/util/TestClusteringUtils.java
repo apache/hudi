@@ -104,6 +104,9 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     validateClusteringInstant(fileIds1, partitionPath1, clusterTime1, fileGroupToInstantMap);
     validateClusteringInstant(fileIds2, partitionPath1, clusterTime, fileGroupToInstantMap);
     validateClusteringInstant(fileIds3, partitionPath1, clusterTime, fileGroupToInstantMap);
+    Option<HoodieInstant> lastPendingClustering = metaClient.getActiveTimeline().getLastPendingClusterCommit();
+    assertTrue(lastPendingClustering.isPresent());
+    assertEquals("2", lastPendingClustering.get().getTimestamp());
   }
 
   // replacecommit.inflight doesn't have clustering plan.
