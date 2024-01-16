@@ -111,7 +111,7 @@ public class Pipelines {
    */
   public static DataStreamSink<Object> bulkInsert(Configuration conf, RowType rowType, DataStream<RowData> dataStream) {
     WriteOperatorFactory<RowData> operatorFactory = BulkInsertWriteOperator.getFactory(conf, rowType);
-    if (OptionsResolver.isBucketIndexType(conf)) {
+    if (!OptionsResolver.isAppendMode(conf) && OptionsResolver.isBucketIndexType(conf)) {
       // TODO support bulk insert for consistent bucket index
       if (OptionsResolver.isConsistentHashingBucketIndexType(conf)) {
         throw new HoodieException(
@@ -334,7 +334,7 @@ public class Pipelines {
    * @return the stream write data stream pipeline
    */
   public static DataStream<Object> hoodieStreamWrite(Configuration conf, DataStream<HoodieRecord> dataStream) {
-    if (OptionsResolver.isBucketIndexType(conf)) {
+    if (!OptionsResolver.isAppendMode(conf) && OptionsResolver.isBucketIndexType(conf)) {
       HoodieIndex.BucketIndexEngineType bucketIndexEngineType = OptionsResolver.getBucketEngineType(conf);
       switch (bucketIndexEngineType) {
         case SIMPLE:
