@@ -107,19 +107,19 @@ class ColumnStatsIndexSupport(spark: SparkSession,
    *
    * Please check out scala-doc of the [[transpose]] method explaining this view in more details
    */
-  def loadTransposed[T](targetColumns: Seq[String], shouldReadInMemory: Boolean, prunedPartitionFileNames: Set[String] = Set.empty)(block: DataFrame => T): T = {
+  def loadTransposed[T](targetColumns: Seq[String], shouldReadInMemory: Boolean, prunedFileNames: Set[String] = Set.empty)(block: DataFrame => T): T = {
     cachedColumnStatsIndexViews.get(targetColumns) match {
       case Some(cachedDF) =>
         block(cachedDF)
 
       case None =>
-        val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = if (prunedPartitionFileNames.isEmpty) {
-          // NOTE: Added logic to validate tests that directly call this method without prunedPartitionsAndFileSlices, ensuring overall test integrity.
+        val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = if (prunedFileNames.isEmpty) {
+          // NOTE: Because some tests directly check this method and don't get prunedPartitionsAndFileSlices, we need to make sure these tests are correct.
           loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory)
         } else {
           val filterFunction = new SerializableFunction[HoodieMetadataColumnStats, java.lang.Boolean] {
             override def apply(r: HoodieMetadataColumnStats): java.lang.Boolean = {
-              prunedPartitionFileNames.contains(r.getFileName)
+              prunedFileNames.contains(r.getFileName)
             }
           }
           loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory).filter(filterFunction)
