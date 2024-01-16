@@ -40,9 +40,10 @@ import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
 public class ParquetDFSSourceConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> PARQUET_DFS_MERGE_SCHEMA = ConfigProperty
-      .key(STREAMER_CONFIG_PREFIX + "source.parquet.dfs.mergeSchema")
-      .defaultValue(true)
-      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.parquet.dfs.mergeSchema")
+      .key(STREAMER_CONFIG_PREFIX + "source.parquet.dfs.merge_schema.enable")
+      .defaultValue(false)
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.parquet.dfs.merge_schema.enable")
       .markAdvanced()
+      .sinceVersion("1.0.0")
       .withDocumentation("Merge schema across parquet files within a single write");
 }
