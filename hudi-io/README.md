@@ -72,7 +72,7 @@ The HFile is structured as follows:
   - **Meta Index Block**: Index of meta blocks in "Non-scanned block" section, containing the start offset in the
     file, size of the block on storage, and the key of the meta block;
   - **File Info Block**: HFile information that is useful for scanning the key-value pairs;
-- **Trailer**: this section contains the information of all other sections and HFile versison for decoding and parsing.
+- **Trailer**: this section contains the information of all other sections and HFile version for decoding and parsing.
   This section is always read first when reading a HFile.
 
 Next, we describe the block format and each block in details.
@@ -274,7 +274,7 @@ Key:
 +----------------+-----------+
 ```
 
-For Data Index, the "Key Bytes" part is formated as (same as the key format in the Data Block):
+For Data Index, the "Key Bytes" part has the following format (same as the key format in the Data Block):
 
 ```
  0                   1                   2                   3   
@@ -399,4 +399,4 @@ Here are the meaning of each field:
 
 The last 4 bytes of the Trailer content contain the HFile version: the number represented by the first byte indicates
 the minor version, and the number represented by the last three bytes indicates the major version. In the case of Hudi,
-the major version should alway be 3, if written by HBase HFile writer.
+the major version should always be 3, if written by HBase HFile writer.
