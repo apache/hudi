@@ -24,11 +24,12 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.catalog.ExternalCatalogUtils.unescapePathName
 import org.apache.spark.sql.catalyst.expressions.{Cast, Literal}
 import org.apache.spark.sql.catalyst.util.{DateFormatter, TimestampFormatter}
+import org.apache.spark.sql.errors.QueryExecutionErrors
 import org.apache.spark.sql.execution.datasources.PartitioningUtils.timestampPartitionPattern
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 
-import java.lang.{Boolean => JBoolean, Double => JDouble, Float => JFloat, Long => JLong, Byte => JByte, Short => JShort}
+import java.lang.{Double => JDouble, Long => JLong}
 import java.math.{BigDecimal => JBigDecimal}
 import java.time.ZoneId
 import java.util.concurrent.ConcurrentHashMap
@@ -251,31 +252,37 @@ object Spark3ParsePartitionUtil extends SparkParsePartitionUtil {
     }
   }
 
+  /**
+   * Copied from Spark3.5 org.apache.spark.sql.execution.datasources.PartitioningUtils#castPartValueToDesiredType
+   */
   def castPartValueToDesiredType(
       desiredType: DataType,
       value: String,
       zoneId: ZoneId): Any = desiredType match {
     case _ if value == DEFAULT_PARTITION_PATH => null
     case NullType => null
-    case BooleanType => JBoolean.parseBoolean(value)
     case StringType => UTF8String.fromString(unescapePathName(value))
+    case ByteType => Integer.parseInt(value).toByte
+    case ShortType => Integer.parseInt(value).toShort
     case IntegerType => Integer.parseInt(value)
     case LongType => JLong.parseLong(value)
+    case FloatType => JDouble.parseDouble(value).toFloat
     case DoubleType => JDouble.parseDouble(value)
-    case FloatType => JFloat.parseFloat(value)
-    case ByteType => JByte.parseByte(value)
-    case ShortType => JShort.parseShort(value)
     case _: DecimalType => Literal(new JBigDecimal(value)).value
     case DateType =>
       Cast(Literal(value), DateType, Some(zoneId.getId)).eval()
     // Timestamp types
-    case dt: TimestampType =>
+    case dt if AnyTimestampType.acceptsType(dt) =>
       Try {
         Cast(Literal(unescapePathName(value)), dt, Some(zoneId.getId)).eval()
       }.getOrElse {
         Cast(Cast(Literal(value), DateType, Some(zoneId.getId)), dt).eval()
       }
-    case dt => throw new IllegalArgumentException(s"Unexpected type $dt")
+    case it: AnsiIntervalType =>
+      Cast(Literal(unescapePathName(value)), it).eval()
+    case BinaryType => value.getBytes()
+    case BooleanType => value.toBoolean
+    case dt => throw QueryExecutionErrors.typeUnsupportedError(dt)
   }
 
   private def fromDecimal(d: Decimal): DecimalType = DecimalType(d.precision, d.scale)
