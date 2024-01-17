@@ -82,9 +82,9 @@ public class ClusteringUtils {
 
   /**
    * Get requested replace metadata from timeline.
-   * @param timeline
-   * @param pendingReplaceInstant
-   * @return
+   * @param timeline used to get the bytes stored in the requested replace instant in the timeline
+   * @param pendingReplaceInstant can be in any state, because it will always be converted to requested state
+   * @return option of the replace metadata if present, else empty
    * @throws IOException
    */
   private static Option<HoodieRequestedReplaceMetadata> getRequestedReplaceMetadata(HoodieTimeline timeline, HoodieInstant pendingReplaceInstant) throws IOException {
@@ -107,9 +107,9 @@ public class ClusteringUtils {
 
   /**
    * Get Clustering plan from timeline.
-   * @param metaClient
-   * @param pendingReplaceInstant
-   * @return
+   * @param metaClient used to get the active timeline
+   * @param pendingReplaceInstant can be in any state, because it will always be converted to requested state
+   * @return option of the replace metadata if present, else empty
    */
   public static Option<Pair<HoodieInstant, HoodieClusteringPlan>> getClusteringPlan(HoodieTableMetaClient metaClient, HoodieInstant pendingReplaceInstant) {
     return getClusteringPlan(metaClient.getActiveTimeline(), pendingReplaceInstant);

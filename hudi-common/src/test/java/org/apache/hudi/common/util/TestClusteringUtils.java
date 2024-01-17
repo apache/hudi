@@ -107,6 +107,18 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     Option<HoodieInstant> lastPendingClustering = metaClient.getActiveTimeline().getLastPendingClusterCommit();
     assertTrue(lastPendingClustering.isPresent());
     assertEquals("2", lastPendingClustering.get().getTimestamp());
+
+    //check that it still gets picked if it is inflight
+    HoodieInstant inflight = metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(lastPendingClustering.get(), Option.empty());
+    assertEquals(HoodieInstant.State.INFLIGHT, inflight.getState());
+    lastPendingClustering = metaClient.reloadActiveTimeline().getLastPendingClusterCommit();
+    assertEquals("2", lastPendingClustering.get().getTimestamp());
+
+    //now that it is complete, the first instant should be picked
+    HoodieInstant complete = metaClient.getActiveTimeline().transitionReplaceInflightToComplete(false, inflight, Option.empty());
+    assertEquals(HoodieInstant.State.COMPLETED, complete.getState());
+    lastPendingClustering = metaClient.reloadActiveTimeline().getLastPendingClusterCommit();
+    assertEquals("1", lastPendingClustering.get().getTimestamp());
   }
 
   // replacecommit.inflight doesn't have clustering plan.
