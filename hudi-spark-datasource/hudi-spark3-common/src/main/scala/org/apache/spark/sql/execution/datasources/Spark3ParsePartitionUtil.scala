@@ -22,9 +22,8 @@ import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PA
 import org.apache.hudi.spark3.internal.ReflectUtil
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.catalog.ExternalCatalogUtils.unescapePathName
-import org.apache.spark.sql.catalyst.expressions.{Cast, Literal}
+import org.apache.spark.sql.catalyst.expressions.{Cast, Expression, Literal}
 import org.apache.spark.sql.catalyst.util.{DateFormatter, TimestampFormatter}
-import org.apache.spark.sql.errors.QueryExecutionErrors
 import org.apache.spark.sql.execution.datasources.PartitioningUtils.timestampPartitionPattern
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
@@ -278,11 +277,20 @@ object Spark3ParsePartitionUtil extends SparkParsePartitionUtil {
       }.getOrElse {
         Cast(Cast(Literal(value), DateType, Some(zoneId.getId)), dt).eval()
       }
-    case it: AnsiIntervalType =>
-      Cast(Literal(unescapePathName(value)), it).eval()
     case BinaryType => value.getBytes()
     case BooleanType => value.toBoolean
-    case dt => throw QueryExecutionErrors.typeUnsupportedError(dt)
+    case dt => throw new IllegalArgumentException(s"Unexpected type $dt")
+  }
+
+  private[sql] object AnyTimestampType extends AbstractDataType with Serializable {
+    override private[sql] def defaultConcreteType: DataType = TimestampType
+
+    override private[sql] def acceptsType(other: DataType): Boolean =
+      other.isInstanceOf[TimestampType] || other.isInstanceOf[TimestampNTZType]
+
+    override private[sql] def simpleString = "(timestamp or timestamp without time zone)"
+
+    def unapply(e: Expression): Boolean = acceptsType(e.dataType)
   }
 
   private def fromDecimal(d: Decimal): DecimalType = DecimalType(d.precision, d.scale)
