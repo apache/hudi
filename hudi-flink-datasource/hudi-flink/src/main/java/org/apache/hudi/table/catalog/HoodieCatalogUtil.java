@@ -197,19 +197,34 @@ public class HoodieCatalogUtil {
     return values;
   }
 
+  /**
+   * Modifies an existing hoodie table. Note that the new and old {@link CatalogBaseTable} must be of the same kind. For example, this doesn't allow altering a regular table to partitioned table, or
+   * altering a mor table to a cow table, or altering index type and vice versa.
+   *
+   * @param catalog            hoodie catalog
+   * @param tablePath          path of the table or view to be modified
+   * @param newTable           the new table definition
+   * @param tableChanges       change to describe the modification between the newTable and the original table
+   * @param ignoreIfNotExists  flag to specify behavior when the table or view does not exist: if set to false, throw an exception, if set to true, do nothing.
+   * @param hadoopConf         hadoop configuration
+   * @param inferTablePathFunc function to infer hoodie table path
+   * @param postAlterTableFunc function to do post process after alter table
+   * @throws TableNotExistException if the table does not exist
+   * @throws CatalogException       in case of any runtime exception
+   */
   protected static void alterTable(
       AbstractCatalog catalog,
       ObjectPath tablePath,
-      CatalogBaseTable newCatalogTable,
+      CatalogBaseTable newTable,
       List tableChanges,
       boolean ignoreIfNotExists,
       org.apache.hadoop.conf.Configuration hadoopConf,
       BiFunction<ObjectPath, CatalogBaseTable, String> inferTablePathFunc,
       BiConsumer<ObjectPath, CatalogBaseTable> postAlterTableFunc) throws TableNotExistException, CatalogException {
     checkNotNull(tablePath, "Table path cannot be null");
-    checkNotNull(newCatalogTable, "New catalog table cannot be null");
+    checkNotNull(newTable, "New catalog table cannot be null");
 
-    if (!isUpdatePermissible(catalog, tablePath, newCatalogTable, ignoreIfNotExists)) {
+    if (!isUpdatePermissible(catalog, tablePath, newTable, ignoreIfNotExists)) {
       return;
     }
     if (!tableChanges.isEmpty()) {
@@ -224,7 +239,7 @@ public class HoodieCatalogUtil {
         writeClient.commitTableChange(newSchema, pair.getRight());
       }
     }
-    postAlterTableFunc.accept(tablePath, newCatalogTable);
+    postAlterTableFunc.accept(tablePath, newTable);
   }
 
   protected static HoodieFlinkWriteClient<?> createWriteClient(
