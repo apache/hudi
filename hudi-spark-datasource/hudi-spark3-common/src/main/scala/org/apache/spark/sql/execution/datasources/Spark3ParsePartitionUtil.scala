@@ -20,7 +20,6 @@ package org.apache.spark.sql.execution.datasources
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
 import org.apache.hudi.spark3.internal.ReflectUtil
-import org.apache.hudi.util.JFunction
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.catalog.ExternalCatalogUtils.unescapePathName
 import org.apache.spark.sql.catalyst.expressions.{Cast, Literal}
@@ -29,10 +28,9 @@ import org.apache.spark.sql.execution.datasources.PartitioningUtils.timestampPar
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 
-import java.lang.{Boolean => JBoolean, Double => JDouble, Long => JLong}
+import java.lang.{Boolean => JBoolean, Double => JDouble, Float => JFloat, Long => JLong, Byte => JByte, Short => JShort}
 import java.math.{BigDecimal => JBigDecimal}
 import java.time.ZoneId
-import java.util
 import java.util.concurrent.ConcurrentHashMap
 import java.util.{Locale, TimeZone}
 import scala.collection.convert.Wrappers.JConcurrentMapWrapper
@@ -264,6 +262,9 @@ object Spark3ParsePartitionUtil extends SparkParsePartitionUtil {
     case IntegerType => Integer.parseInt(value)
     case LongType => JLong.parseLong(value)
     case DoubleType => JDouble.parseDouble(value)
+    case FloatType => JFloat.parseFloat(value)
+    case ByteType => JByte.parseByte(value)
+    case ShortType => JShort.parseShort(value)
     case _: DecimalType => Literal(new JBigDecimal(value)).value
     case DateType =>
       Cast(Literal(value), DateType, Some(zoneId.getId)).eval()
