@@ -23,7 +23,7 @@ import org.apache.hudi.common.util.Option;
 
 /**
  * Represents the index entry of a data block in the Data Index stored in the
- * {@link HFileBlockType#ROOT_INDEX} block in the "Load-on-open" section.
+ * {@link HFileBlockType#ROOT_INDEX} block.
  * <p>
  * This is completely in-memory representation and does not involve byte parsing.
  * <p>
