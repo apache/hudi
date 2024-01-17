@@ -548,6 +548,9 @@ public class ExpressionPredicates {
 
     @Override
     public FilterPredicate filter() {
+      if (null == predicates[0].filter() || null == predicates[1].filter()) {
+        return null;
+      }
       return and(predicates[0].filter(), predicates[1].filter());
     }
 
@@ -586,6 +589,9 @@ public class ExpressionPredicates {
 
     @Override
     public FilterPredicate filter() {
+      if (null == predicates[0].filter() || null == predicates[1].filter()) {
+        return null;
+      }
       return or(predicates[0].filter(), predicates[1].filter());
     }
 
