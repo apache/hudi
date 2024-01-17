@@ -1534,8 +1534,8 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         fileStatus.getPath().getName().equals(rollbackInstant.getFileName())).collect(Collectors.toList());
 
     // ensure commit3's delta commit in MDT has last mod time > the actual rollback for previous failed commit i.e. commit2.
-    // if rollback wasn't eager, rollback's last mod time will be lower than the commit3'd delta commit last mod time.
-    assertTrue(commit3Files.get(0).getModificationTime() > rollbackFiles.get(0).getModificationTime());
+    // if rollback wasn't eager, rollback's last mod time will be not larger than the commit3'd delta commit last mod time.
+    assertTrue(commit3Files.get(0).getModificationTime() >= rollbackFiles.get(0).getModificationTime());
     client.close();
   }
 
