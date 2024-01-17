@@ -71,7 +71,8 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
             .withNumRetries(2)
             .withRetryWaitTimeInMillis(10L)
             .withClientNumRetries(2)
-            .withClientRetryWaitTimeInMillis(10L).build())
+            .withClientRetryWaitTimeInMillis(10L)
+            .build())
         .forTable("testtable")
         .withMetricsConfig(HoodieMetricsConfig.newBuilder().withReporterType(MetricsReporterType.INMEMORY.toString()).withLockingMetrics(true).on(true).build())
         .build();
