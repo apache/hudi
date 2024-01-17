@@ -259,7 +259,7 @@ public class HFileReaderImpl implements HFileReader {
     stream.readFully(byteBuff);
 
     int majorVersion = readMajorVersion(byteBuff, bufferSize - 3);
-    int minorVersion = byteBuff[bufferSize - 3];
+    int minorVersion = byteBuff[bufferSize - 4];
 
     HFileTrailer trailer = new HFileTrailer(majorVersion, minorVersion);
     trailer.deserialize(new DataInputStream(new ByteArrayInputStream(byteBuff)));
