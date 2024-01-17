@@ -80,7 +80,7 @@ public class DataSourceInternalWriterHelper {
   }
 
   public void onDataWriterCommit(String message) {
-    LOG.info("Received commit of a data writer = " + message);
+    LOG.debug("Received commit of a data writer = " + message);
   }
 
   public void commit(List<WriteStatus> writeStatuses) {
