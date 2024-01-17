@@ -90,10 +90,6 @@ public class HoodieInstantTimeGenerator {
       LocalDateTime dt = LocalDateTime.parse(timestampInMillis, MILLIS_INSTANT_TIME_FORMATTER);
       return Date.from(dt.atZone(ZoneId.systemDefault()).toInstant());
     } catch (DateTimeParseException e) {
-      // MDT uses timestamps which add suffixes to the instant time. Hence, we are checking for all timestamps that start with all zeros.
-      if (timestamp.startsWith(HoodieTimeline.INIT_INSTANT_TS)) {
-        return new Date(0);
-      }
       throw new ParseException(e.getMessage(), e.getErrorIndex());
     }
   }
