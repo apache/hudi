@@ -13,7 +13,7 @@ The following describes the general file layout structure for Apache Hudi. Pleas
 Hudi adopts Multiversion Concurrency Control (MVCC), where [compaction](/docs/next/compaction) action merges logs and base files to produce new 
 file slices and [cleaning](/docs/next/hoodie_cleaner) action gets rid of unused/older file slices to reclaim space on the file system.
 
-![Partition On HDFS](/assets/images/hudi_partitions_HDFS.png)
+![Partition On HDFS](/assets/images/MOR_new.png)
 
 ### Configs
 
