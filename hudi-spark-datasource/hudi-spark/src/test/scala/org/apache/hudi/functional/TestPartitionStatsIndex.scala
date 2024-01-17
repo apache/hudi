@@ -22,6 +22,7 @@ package org.apache.hudi.functional
 import org.apache.hudi.DataSourceWriteOptions.PARTITIONPATH_FIELD
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex}
@@ -33,8 +34,10 @@ import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
+import scala.collection.JavaConversions._
+
 /**
- * Test cases on partition stats index with Spark datasource and Spark sql.
+ * Test cases on partition stats index with Spark datasource.
  */
 @Tag("functional")
 class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
@@ -117,6 +120,24 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
 
     createTempTable(hudiOpts)
     verifyQueryPredicate(hudiOpts)
+  }
+
+  @Test
+  def testPartitionStatsWithPartitionBy(): Unit = {
+    val hudiOpts = commonOpts.-(PARTITIONPATH_FIELD.key)
+    // Insert Operation
+    val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+
+    inputDF.write.partitionBy("partition").format("hudi")
+      .options(hudiOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    val snapshot0 = spark.read.format("org.apache.hudi").options(hudiOpts).load(basePath)
+    snapshot0.cache()
+    assertEquals(100, snapshot0.count())
   }
 
   def verifyQueryPredicate(hudiOpts: Map[String, String]): Unit = {

@@ -356,9 +356,10 @@ case class HoodieFileIndex(spark: SparkSession,
     } else if (recordKeys.nonEmpty) {
       Option.apply(recordLevelIndex.getCandidateFiles(getAllFiles(), recordKeys))
     } else if (recordKeys.nonEmpty && partitionStatsIndex.isIndexAvailable && !queryFilters.isEmpty) {
+      val prunedFileNames = getPrunedFileNames(prunedPartitionsAndFileSlices)
       val shouldReadInMemory = partitionStatsIndex.shouldReadInMemory(this, queryReferencedColumns)
       partitionStatsIndex.loadTransposed(queryReferencedColumns, shouldReadInMemory) { transposedColStatsDF =>
-        Some(getCandidateFiles(transposedColStatsDF, queryFilters))
+        Some(getCandidateFiles(transposedColStatsDF, queryFilters, prunedFileNames))
       }
     } else if (functionalIndex.isIndexAvailable && !queryFilters.isEmpty) {
       val prunedFileNames = getPrunedFileNames(prunedPartitionsAndFileSlices)
