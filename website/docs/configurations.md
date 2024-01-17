@@ -1800,7 +1800,7 @@ Configurations controlling the behavior of Parquet DFS source in Hudi Streamer.
 
 | Config Name                                                                               | Default | Description                                                                                                            |
 |-------------------------------------------------------------------------------------------|---------|------------------------------------------------------------------------------------------------------------------------|
-| [hoodie.streamer.source.parquet.dfs.mergeSchema](#hoodiestreamersourceparquetMergeSchema) | true    | Control whether to merge schema across parquet files in a single commit.<br />`Config Param: PARQUET_DFS_MERGE_SCHEMA` |
+| [hoodie.streamer.source.parquet.dfs.merge_schema.enable](#hoodiestreamersourceparquetenableMergeSchema) | true    | Control whether to merge schema across parquet files in a single commit.<br />`Config Param: PARQUET_DFS_MERGE_SCHEMA` |
 ---
 
 #### Pulsar Source Configs {#Pulsar-Source-Configs}
