@@ -235,7 +235,7 @@ object Spark3ParsePartitionUtil extends SparkParsePartitionUtil {
 
     if (typeInference) {
       // First tries integral types
-      Try({JByte.parseByte(raw); ByteType })
+      Try({ JByte.parseByte(raw); ByteType })
         .orElse(Try { JShort.parseShort(raw); ShortType })
         .orElse(Try { JBoolean.parseBoolean(raw); BooleanType })
         .orElse(Try({ Integer.parseInt(raw); IntegerType }))
