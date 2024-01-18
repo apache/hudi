@@ -143,15 +143,18 @@ class DefaultSource extends RelationProvider
                               mode: SaveMode,
                               optParams: Map[String, String],
                               df: DataFrame): BaseRelation = {
-    if (optParams.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)) {
-      HoodieSparkSqlWriter.bootstrap(sqlContext, mode, optParams, df)
-      HoodieSparkSqlWriter.cleanup()
-    } else {
-      val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sqlContext, mode, optParams, df)
-      HoodieSparkSqlWriter.cleanup()
-      if (!success) {
-        throw new HoodieException("Write to Hudi failed")
+    try {
+      if (optParams.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)) {
+        HoodieSparkSqlWriter.bootstrap(sqlContext, mode, optParams, df)
+      } else {
+        val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sqlContext, mode, optParams, df)
+        if (!success) {
+          throw new HoodieException("Failed to write to Hudi")
+        }
       }
+    }
+    finally {
+      HoodieSparkSqlWriter.cleanup()
     }
 
     new HoodieEmptyRelation(sqlContext, df.schema)
