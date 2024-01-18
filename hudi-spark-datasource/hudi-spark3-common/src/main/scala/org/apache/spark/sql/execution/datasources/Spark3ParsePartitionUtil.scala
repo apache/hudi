@@ -29,7 +29,7 @@ import org.apache.spark.sql.execution.datasources.PartitioningUtils.timestampPar
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 
-import java.lang.{Boolean => JBoolean, Double => JDouble, Long => JLong}
+import java.lang.{Boolean => JBoolean, Double => JDouble, Long => JLong, Short => JShort, Byte => JByte}
 import java.math.{BigDecimal => JBigDecimal}
 import java.time.ZoneId
 import java.util
@@ -123,7 +123,7 @@ object Spark3ParsePartitionUtil extends SparkParsePartitionUtil {
         // Once we get the string, we try to parse it and find the partition column and value.
         val maybeColumn =
         parsePartitionColumn(currentPath.getName, typeInference, userSpecifiedDataTypes,
-          validatePartitionColumns, zoneId, dateFormatter, timestampFormatter)
+          zoneId, dateFormatter, timestampFormatter)
         maybeColumn.foreach(columns += _)
 
         // Now, we determine if we should stop.
@@ -157,7 +157,6 @@ object Spark3ParsePartitionUtil extends SparkParsePartitionUtil {
       columnSpec: String,
       typeInference: Boolean,
       userSpecifiedDataTypes: Map[String, DataType],
-      validatePartitionColumns: Boolean,
       zoneId: ZoneId,
       dateFormatter: DateFormatter,
       timestampFormatter: TimestampFormatter): Option[(String, TypedPartValue)] = {
@@ -236,7 +235,10 @@ object Spark3ParsePartitionUtil extends SparkParsePartitionUtil {
 
     if (typeInference) {
       // First tries integral types
-      Try({ Integer.parseInt(raw); IntegerType })
+      Try({JByte.parseByte(raw); ByteType })
+        .orElse(Try { JShort.parseShort(raw); ShortType })
+        .orElse(Try { JBoolean.parseBoolean(raw); BooleanType })
+        .orElse(Try({ Integer.parseInt(raw); IntegerType }))
         .orElse(Try { JLong.parseLong(raw); LongType })
         .orElse(decimalTry)
         // Then falls back to fractional types
