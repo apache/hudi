@@ -54,7 +54,7 @@ public class LockManager implements Serializable, AutoCloseable {
   private final RetryHelper<Boolean, HoodieLockException> lockRetryHelper;
   private transient HoodieLockMetrics metrics;
   private volatile LockProvider lockProvider;
-  private boolean lockAcquired = false;
+  private volatile boolean lockAcquired = false;
 
   public LockManager(HoodieWriteConfig writeConfig, FileSystem fs) {
     this(writeConfig, fs, writeConfig.getProps());
