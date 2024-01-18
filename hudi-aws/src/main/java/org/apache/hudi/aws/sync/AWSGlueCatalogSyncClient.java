@@ -185,6 +185,10 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   @Override
   public List<Partition> getPartitionsFromList(String tableName, List<String> partitionList) {
+    if (partitionList.isEmpty()) {
+      LOG.info("No partitions to read for " + tableId(this.databaseName, tableName));
+      return Collections.emptyList();
+    }
     HoodieTimer timer = HoodieTimer.start();
     List<List<String>> batches = CollectionUtils.batches(partitionList, MAX_PARTITIONS_PER_READ_REQUEST);
     ExecutorService executorService = Executors.newFixedThreadPool(Math.min(this.changedPartitionsReadParallelism, batches.size()));
