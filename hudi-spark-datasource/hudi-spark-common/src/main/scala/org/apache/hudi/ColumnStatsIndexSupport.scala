@@ -115,13 +115,11 @@ class ColumnStatsIndexSupport(spark: SparkSession,
 
       case None =>
         val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = if (!shouldPrunePartition) {
-          // NOTE: This judgment has three purposes:
+          // NOTE: This judgment has two purposes:
           //  1. Since this filter can cause extra unnecessary costs in non-partitioned tables or
           //     when partition pruning is not applied, adding a switch prevents this situation.
           //  2. Some tests directly inspect this method without obtaining prunedPartitionsAndFileSlices,
           //     so we need to ensure these tests are accurate.
-          //  3. Prevented the situation stats when querying empty partitions results in
-          //     prunedFileNames being empty and listing all files
           loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory)
         } else {
           val filterFunction = new SerializableFunction[HoodieMetadataColumnStats, java.lang.Boolean] {
