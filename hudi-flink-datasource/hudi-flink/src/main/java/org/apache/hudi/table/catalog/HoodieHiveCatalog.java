@@ -19,38 +19,30 @@
 package org.apache.hudi.table.catalog;
 
 import org.apache.hudi.adapter.HiveCatalogConstants.AlterHiveDatabaseOp;
-import org.apache.hudi.adapter.Utils;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieCatalogException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.Type;
-import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.table.HoodieTableFactory;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
-import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
-import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.catalog.AbstractCatalog;
 import org.apache.flink.table.catalog.CatalogBaseTable;
@@ -80,7 +72,6 @@ import org.apache.flink.table.catalog.stats.CatalogColumnStatistics;
 import org.apache.flink.table.catalog.stats.CatalogTableStatistics;
 import org.apache.flink.table.expressions.Expression;
 import org.apache.flink.table.types.DataType;
-import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
@@ -109,7 +100,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 
 import static org.apache.hudi.adapter.HiveCatalogConstants.ALTER_DATABASE_OP;
 import static org.apache.hudi.adapter.HiveCatalogConstants.DATABASE_LOCATION_URI;
@@ -734,43 +724,16 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     }
   }
 
-  private boolean sameOptions(Map<String, String> existingOptions, Map<String, String> newOptions, ConfigOption option) {
-    return existingOptions.getOrDefault(option.key(), String.valueOf(option.defaultValue()))
-        .equalsIgnoreCase(newOptions.getOrDefault(option.key(), String.valueOf(option.defaultValue())));
-  }
-
   @Override
   public void alterTable(
       ObjectPath tablePath, CatalogBaseTable newCatalogTable, boolean ignoreIfNotExists)
       throws TableNotExistException, CatalogException {
-    checkNotNull(tablePath, "Table path cannot be null");
-    checkNotNull(newCatalogTable, "New catalog table cannot be null");
-
-    if (!isUpdatePermissible(tablePath, newCatalogTable, ignoreIfNotExists)) {
-      return;
-    }
-    refreshHMSTable(tablePath, newCatalogTable);
+    HoodieCatalogUtil.alterTable(this, tablePath, newCatalogTable, Collections.emptyList(), ignoreIfNotExists, hiveConf, this::inferTablePath, this::refreshHMSTable);
   }
 
   public void alterTable(ObjectPath tablePath, CatalogBaseTable newCatalogTable, List tableChanges,
       boolean ignoreIfNotExists) throws TableNotExistException, CatalogException {
-    checkNotNull(tablePath, "Table path cannot be null");
-    checkNotNull(newCatalogTable, "New catalog table cannot be null");
-
-    if (!isUpdatePermissible(tablePath, newCatalogTable, ignoreIfNotExists)) {
-      return;
-    }
-    CatalogBaseTable oldTable = getTable(tablePath);
-    HoodieFlinkWriteClient<?> writeClient = createWriteClient(tablePath, oldTable);
-    Pair<InternalSchema, HoodieTableMetaClient> pair = writeClient.getInternalSchemaAndMetaClient();
-    InternalSchema oldSchema = pair.getLeft();
-    Function<LogicalType, Type> convertFunc = (LogicalType logicalType) -> AvroInternalSchemaConverter.convertToField(AvroSchemaConverter.convertToSchema(logicalType));
-    InternalSchema newSchema = Utils.applyTableChange(oldSchema, tableChanges, convertFunc);
-    if (!oldSchema.equals(newSchema)) {
-      writeClient.setOperationType(WriteOperationType.ALTER_SCHEMA);
-      writeClient.commitTableChange(newSchema, pair.getRight());
-    }
-    refreshHMSTable(tablePath, newCatalogTable);
+    HoodieCatalogUtil.alterTable(this, tablePath, newCatalogTable, tableChanges, ignoreIfNotExists, hiveConf, this::inferTablePath, this::refreshHMSTable);
   }
 
   @Override
@@ -835,7 +798,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
         return;
       }
     }
-    try (HoodieFlinkWriteClient<?> writeClient = createWriteClient(tablePath, table)) {
+    try (HoodieFlinkWriteClient<?> writeClient = HoodieCatalogUtil.createWriteClient(tablePath, table, hiveConf, this::inferTablePath)) {
       boolean hiveStylePartitioning = Boolean.parseBoolean(table.getOptions().get(FlinkOptions.HIVE_STYLE_PARTITIONING.key()));
       writeClient.deletePartitions(
           Collections.singletonList(HoodieCatalogUtil.inferPartitionPath(hiveStylePartitioning, partitionSpec)),
@@ -974,34 +937,6 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     throw new HoodieCatalogException("Not supported.");
   }
 
-  private boolean isUpdatePermissible(ObjectPath tablePath, CatalogBaseTable newCatalogTable, boolean ignoreIfNotExists) throws TableNotExistException {
-    if (!newCatalogTable.getOptions().getOrDefault(CONNECTOR.key(), "").equalsIgnoreCase("hudi")) {
-      throw new HoodieCatalogException(String.format("The %s is not hoodie table", tablePath.getObjectName()));
-    }
-    if (newCatalogTable instanceof CatalogView) {
-      throw new HoodieCatalogException("Hoodie catalog does not support to ALTER VIEW");
-    }
-
-    try {
-      Table hiveTable = getHiveTable(tablePath);
-      List<String> oldPartitionKeys = HiveSchemaUtils.getFieldNames(hiveTable.getPartitionKeys());
-      List<String> newPartitionKeys = HoodieCatalogUtil.getPartitionKeys((CatalogTable) newCatalogTable);
-      if (!oldPartitionKeys.equals(newPartitionKeys)) {
-        throw new HoodieCatalogException("Hoodie catalog does not support to alter table partition keys");
-      }
-      if (!sameOptions(hiveTable.getParameters(), newCatalogTable.getOptions(), FlinkOptions.TABLE_TYPE)
-          || !sameOptions(hiveTable.getParameters(), newCatalogTable.getOptions(), FlinkOptions.INDEX_TYPE)) {
-        throw new HoodieCatalogException("Hoodie catalog does not support to alter table type and index type");
-      }
-      return true;
-    } catch (TableNotExistException e) {
-      if (!ignoreIfNotExists) {
-        throw e;
-      }
-      return false;
-    }
-  }
-
   private void refreshHMSTable(ObjectPath tablePath, CatalogBaseTable newCatalogTable) {
     try {
       boolean isMorTable = OptionsResolver.isMorTable(newCatalogTable.getOptions());
@@ -1030,20 +965,6 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       newOptions.computeIfAbsent(FlinkOptions.HIVE_SYNC_TABLE.key(), k -> tablePath.getObjectName());
       return newOptions;
     }
-  }
-
-  private HoodieFlinkWriteClient<?> createWriteClient(
-      ObjectPath tablePath,
-      CatalogBaseTable table) {
-    Map<String, String> options = table.getOptions();
-    // enable auto-commit though ~
-    options.put(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key(), "true");
-    return FlinkWriteClients.createWriteClientV2(
-        Configuration.fromMap(options)
-            .set(FlinkOptions.TABLE_NAME, tablePath.getObjectName())
-            .set(FlinkOptions.SOURCE_AVRO_SCHEMA,
-                StreamerUtil.createMetaClient(inferTablePath(tablePath, table), hiveConf)
-                    .getTableConfig().getTableCreateSchema().get().toString()));
   }
 
   @VisibleForTesting
