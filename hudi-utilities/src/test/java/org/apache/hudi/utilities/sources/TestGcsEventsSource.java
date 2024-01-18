@@ -143,10 +143,10 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
 
   @Test
   public void shouldFetchMessagesInBatches() {
-    ReceivedMessage msg1 = fileCreateMessage("objectId-1", "{'data':{'bucket':'bucket-1'}}");
-    ReceivedMessage msg2 = fileCreateMessage("objectId-2", "{'data':{'bucket':'bucket-2'}}");
-    ReceivedMessage msg3 = fileCreateMessage("objectId-3", "{'data':{'bucket':'bucket-3'}}");
-    ReceivedMessage msg4 = fileCreateMessage("objectId-4", "{'data':{'bucket':'bucket-4'}}");
+    ReceivedMessage msg1 = fileCreateMessage("objectId-1", "{\"data\":{\"bucket\":\"bucket-1\"}, \"size\": \"1024\"}");
+    ReceivedMessage msg2 = fileCreateMessage("objectId-2", "{\"data\":{\"bucket\":\"bucket-2\"}, \"size\": \"1024\"}");
+    ReceivedMessage msg3 = fileCreateMessage("objectId-3", "{\"data\":{\"bucket\":\"bucket-3\"}, \"size\": \"1024\"}");
+    ReceivedMessage msg4 = fileCreateMessage("objectId-4", "{\"data\":{\"bucket\":\"bucket-4\"}, \"size\": \"1024\"}");
 
     // dataFetcher should return only two messages each time it's called
     when(pubsubMessagesFetcher.fetchMessages())
@@ -175,9 +175,9 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
 
   @Test
   public void shouldSkipInvalidMessages1() {
-    ReceivedMessage invalid1 = fileDeleteMessage("objectId-1", "{'data':{'bucket':'bucket-1'}}");
-    ReceivedMessage invalid2 = fileCreateMessageWithOverwroteGen("objectId-2", "{'data':{'bucket':'bucket-2'}}");
-    ReceivedMessage valid1 = fileCreateMessage("objectId-3", "{'data':{'bucket':'bucket-3'}}");
+    ReceivedMessage invalid1 = fileDeleteMessage("objectId-1", "{\"data\":{\"bucket\":\"bucket-1\"}, \"size\": \"1024\"}");
+    ReceivedMessage invalid2 = fileCreateMessageWithOverwroteGen("objectId-2", "{\"data\":{\"bucket\":\"bucket-2\"}, \"size\": \"1024\"}");
+    ReceivedMessage valid1 = fileCreateMessage("objectId-3", "{\"data\":{\"bucket\":\"bucket-3\"}, \"size\": \"1024\"}");
 
     when(pubsubMessagesFetcher.fetchMessages()).thenReturn(Arrays.asList(invalid1, valid1, invalid2));
 
@@ -198,8 +198,8 @@ public class TestGcsEventsSource extends UtilitiesTestBase {
 
   @Test
   public void shouldGcsEventsSourceDoesNotDedupeInternally() {
-    ReceivedMessage dupe1 = fileCreateMessage("objectId-1", "{'data':{'bucket':'bucket-1'}}");
-    ReceivedMessage dupe2 = fileCreateMessage("objectId-1", "{'data':{'bucket':'bucket-1'}}");
+    ReceivedMessage dupe1 = fileCreateMessage("objectId-1", "{\"data\":{\"bucket\":\"bucket-1\"}, \"size\": \"1024\"}");
+    ReceivedMessage dupe2 = fileCreateMessage("objectId-1", "{\"data\":{\"bucket\":\"bucket-1\"}, \"size\": \"1024\"}");
 
     when(pubsubMessagesFetcher.fetchMessages()).thenReturn(Arrays.asList(dupe1, dupe2));
 
