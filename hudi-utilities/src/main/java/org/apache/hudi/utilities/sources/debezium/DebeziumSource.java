@@ -22,8 +22,10 @@ import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
+import org.apache.hudi.utilities.deser.KafkaAvroSchemaDeserializer;
 import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -59,6 +61,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_AVRO_VALUE_DESERIALIZER_CLASS;
+import static org.apache.hudi.utilities.sources.AvroKafkaSource.KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA;
 
 /**
  * Base class for Debezium streaming source which expects change events as Kafka Avro records.
@@ -101,6 +104,15 @@ public abstract class DebeziumSource extends RowSource {
       schemaRegistryProvider = new SchemaRegistryProvider(props, sparkContext);
     } else {
       schemaRegistryProvider = (SchemaRegistryProvider) schemaProvider;
+    }
+
+    if (deserializerClassName.equals(KafkaAvroSchemaDeserializer.class.getName())) {
+      try {
+        String schemaStr = schemaRegistryProvider.fetchSchemaFromRegistry(props.getString(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key()));
+        props.put(KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA, schemaStr);
+      } catch (IOException e) {
+        throw new HoodieIOException("Error setting deserializer");
+      }
     }
 
     offsetGen = new KafkaOffsetGen(props);
