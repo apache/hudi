@@ -93,8 +93,6 @@ public abstract class HFileBlock {
     this.bytesPerChecksum = readInt(
         byteBuff, startOffsetInBuff + Header.BYTES_PER_CHECKSUM_INDEX);
     this.sizeCheckSum = numChecksumBytes(getOnDiskSizeWithHeader(), bytesPerChecksum);
-    this.uncompressedEndOffset =
-        startOffsetInBuff + HFILEBLOCK_HEADER_SIZE + uncompressedSizeWithoutHeader;
     if (CompressionCodec.NONE.equals(context.getCompressionCodec())) {
       isUnpacked = true;
       this.startOffsetInBuff = startOffsetInBuff;
@@ -105,6 +103,8 @@ public abstract class HFileBlock {
       this.startOffsetInBuff = 0;
       this.byteBuff = allocateBufferForUnpacking();
     }
+    this.uncompressedEndOffset =
+        this.startOffsetInBuff + HFILEBLOCK_HEADER_SIZE + uncompressedSizeWithoutHeader;
   }
 
   /**

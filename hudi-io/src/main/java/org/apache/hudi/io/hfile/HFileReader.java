@@ -30,9 +30,17 @@ import java.nio.ByteBuffer;
  */
 public interface HFileReader extends Closeable {
   // Return code of seekTo(Key)
-  int SEEK_TO_BACKWARDS = -1;
+  // When the lookup key is less than the first key of the file
+  // The cursor points to the first key of the file
+  int SEEK_TO_BEFORE_FIRST_KEY = -1;
+  // When the lookup key is found in the file
+  // The cursor points to the matched key in the file
   int SEEK_TO_FOUND = 0;
+  // When the lookup key is not found, but it's in the range of the file
+  // The cursor points to the greatest key that is less than the lookup key
   int SEEK_TO_IN_RANGE = 1;
+  // When the lookup key is greater than the last key of the file, EOF is reached
+  // The cursor points to EOF
   int SEEK_TO_EOF = 2;
 
   /**

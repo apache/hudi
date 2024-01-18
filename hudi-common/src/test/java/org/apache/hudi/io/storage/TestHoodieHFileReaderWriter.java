@@ -38,13 +38,9 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.CellComparatorImpl;
-import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
-import org.apache.hadoop.hbase.io.hfile.HFileContext;
-import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
-import org.apache.hadoop.io.Writable;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -54,8 +50,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
-import java.io.DataInput;
-import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -70,7 +64,6 @@ import java.util.Set;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.TreeMap;
-import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -83,9 +76,6 @@ import static org.apache.hudi.common.util.CollectionUtils.toStream;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.io.hfile.TestHFileReader.BOOTSTRAP_INDEX_HFILE_SUFFIX;
 import static org.apache.hudi.io.hfile.TestHFileReader.COMPLEX_SCHEMA_HFILE_SUFFIX;
-import static org.apache.hudi.io.hfile.TestHFileReader.CUSTOM_META_KEY;
-import static org.apache.hudi.io.hfile.TestHFileReader.CUSTOM_META_VALUE;
-import static org.apache.hudi.io.hfile.TestHFileReader.DUMMY_BLOOM_FILTER;
 import static org.apache.hudi.io.hfile.TestHFileReader.KEY_CREATOR;
 import static org.apache.hudi.io.hfile.TestHFileReader.SIMPLE_SCHEMA_HFILE_SUFFIX;
 import static org.apache.hudi.io.hfile.TestHFileReader.VALUE_CREATOR;
@@ -468,7 +458,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
                                String compressionCodec,
                                int numEntries,
                                boolean uniqueKeys) throws IOException {
-    writeHFileForTesting(
+    TestHoodieReaderWriterUtils.writeHFileForTesting(
         String.format("/tmp/hudi_1_0_hbase_2_4_9_%sKB_%s_%s.hfile",
             blockSizeKB, compressionCodec, numEntries),
         blockSizeKB * 1024,
@@ -504,48 +494,5 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       assertEquals(clazz, reader.getComparator().getClass());
     }
     assertEquals(count, reader.getEntries());
-  }
-
-  private void writeHFileForTesting(String fileLocation,
-                                    int blockSize,
-                                    Compression.Algorithm compressionAlgo,
-                                    int numEntries,
-                                    Function<Integer, String> keyCreator,
-                                    Function<Integer, String> valueCreator,
-                                    boolean uniqueKeys) throws IOException {
-    HFileContext context = new HFileContextBuilder()
-        .withBlockSize(blockSize)
-        .withCompression(compressionAlgo)
-        .build();
-    Configuration conf = new Configuration();
-    CacheConfig cacheConfig = new CacheConfig(conf);
-    Path filePath = new Path(fileLocation);
-    FileSystem fs = filePath.getFileSystem(conf);
-    try (HFile.Writer writer = HFile.getWriterFactory(conf, cacheConfig)
-        .withPath(fs, filePath)
-        .withFileContext(context)
-        .create()) {
-      for (int i = 0; i < numEntries; i++) {
-        byte[] keyBytes = getUTF8Bytes(keyCreator.apply(i));
-        writer.append(new KeyValue(keyBytes, null, null, getUTF8Bytes(valueCreator.apply(i))));
-        if (!uniqueKeys) {
-          for (int j = 0; j < 20; j++) {
-            writer.append(new KeyValue(
-                keyBytes, null, null, getUTF8Bytes(valueCreator.apply(i) + "_" + j)));
-          }
-        }
-      }
-      writer.appendFileInfo(getUTF8Bytes(CUSTOM_META_KEY), getUTF8Bytes(CUSTOM_META_VALUE));
-      writer.appendMetaBlock(HoodieAvroHFileReader.KEY_BLOOM_FILTER_META_BLOCK, new Writable() {
-        @Override
-        public void write(DataOutput out) throws IOException {
-          out.write(getUTF8Bytes(DUMMY_BLOOM_FILTER));
-        }
-
-        @Override
-        public void readFields(DataInput in) throws IOException {
-        }
-      });
-    }
   }
 }

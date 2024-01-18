@@ -35,60 +35,70 @@ public class HFileDataBlock extends HFileBlock {
   // i.e., the maximum MVCC timestamp in a HFile must be 0.
   private static final long ZERO_TS_VERSION_BYTE_LENGTH = 1;
 
-  // End offset of content in the block, relative to the start of the byte array {@link byteBuff}
-  protected final int uncompressedContentEndOffset;
+  // End offset of content in the block, relative to the start of the start of the block
+  protected final int uncompressedContentEndRelativeOffset;
 
   protected HFileDataBlock(HFileContext context,
                            byte[] byteBuff,
                            int startOffsetInBuff) {
     super(context, HFileBlockType.DATA, byteBuff, startOffsetInBuff);
 
-    this.uncompressedContentEndOffset = this.uncompressedEndOffset - this.sizeCheckSum;
+    this.uncompressedContentEndRelativeOffset =
+        this.uncompressedEndOffset - this.sizeCheckSum - this.startOffsetInBuff;
   }
 
   /**
    * Seeks to the key to look up. The key may not have an exact match.
    *
-   * @param position               {@link HFilePosition} containing the current position relative
+   * @param cursor                 {@link HFileCursor} containing the current position relative
    *                               to the beginning of the HFile (not the block start offset).
    * @param key                    key to look up.
    * @param blockStartOffsetInFile the start offset of the block relative to the beginning of the
    *                               HFile.
-   * @return 0 if the block contains the exact same key as the lookup key, and the position points
-   * to the key; or 1 if the lookup key does not exist, and the position points to the
+   * @return 0 if the block contains the exact same key as the lookup key, and the cursor points
+   * to the key; or 1 if the lookup key does not exist, and the cursor points to the
    * lexicographically largest key that is smaller than the lookup key.
    */
-  public int seekTo(HFilePosition position, Key key, int blockStartOffsetInFile) {
-    int offset = position.getOffset() - blockStartOffsetInFile;
-    int endOffset = uncompressedContentEndOffset;
-    int lastOffset = offset;
-    Option<KeyValue> lastKeyValue = position.getKeyValue();
-    while (offset < endOffset) {
+  public int seekTo(HFileCursor cursor, Key key, int blockStartOffsetInFile) {
+    int relativeOffset = cursor.getOffset() - blockStartOffsetInFile;
+    int lastRelativeOffset = relativeOffset;
+    Option<KeyValue> lastKeyValue = cursor.getKeyValue();
+    while (relativeOffset < uncompressedContentEndRelativeOffset) {
       // Full length is not known yet until parsing
-      KeyValue kv = readKeyValue(offset);
+      KeyValue kv = readKeyValue(relativeOffset);
       int comp = kv.getKey().compareTo(key);
       if (comp == 0) {
-        position.set(offset + blockStartOffsetInFile, kv);
+        // The lookup key equals the key `relativeOffset` points to; the key is found.
+        // Set the cursor to the current offset that points to the exact match
+        cursor.set(relativeOffset + blockStartOffsetInFile, kv);
         return SEEK_TO_FOUND;
       } else if (comp > 0) {
+        // There is no matched key (otherwise, the method should already stop there and return 0)
+        // and the key `relativeOffset` points to is already greater than the lookup key.
+        // So set the cursor to the previous offset, pointing the greatest key in the file that is
+        // less than the lookup key.
         if (lastKeyValue.isPresent()) {
-          position.set(lastOffset + blockStartOffsetInFile, lastKeyValue.get());
+          // If the key-value pair is already, cache it
+          cursor.set(lastRelativeOffset + blockStartOffsetInFile, lastKeyValue.get());
         } else {
-          position.setOffset(lastOffset + blockStartOffsetInFile);
+          // Otherwise, defer the read till it's needed
+          cursor.setOffset(lastRelativeOffset + blockStartOffsetInFile);
         }
         return SEEK_TO_IN_RANGE;
       }
       long increment =
           (long) KEY_OFFSET + (long) kv.getKeyLength() + (long) kv.getValueLength()
               + ZERO_TS_VERSION_BYTE_LENGTH;
-      lastOffset = offset;
-      offset += increment;
+      lastRelativeOffset = relativeOffset;
+      relativeOffset += increment;
       lastKeyValue = Option.of(kv);
     }
+    // We reach the end of the block. Set the cursor to the offset of last key.
+    // In this case, the lookup key is greater than the last key.
     if (lastKeyValue.isPresent()) {
-      position.set(lastOffset + blockStartOffsetInFile, lastKeyValue.get());
+      cursor.set(lastRelativeOffset + blockStartOffsetInFile, lastKeyValue.get());
     } else {
-      position.setOffset(lastOffset + blockStartOffsetInFile);
+      cursor.setOffset(lastRelativeOffset + blockStartOffsetInFile);
     }
     return SEEK_TO_IN_RANGE;
   }
@@ -104,21 +114,21 @@ public class HFileDataBlock extends HFileBlock {
   }
 
   /**
-   * Moves the position to next {@link KeyValue}.
+   * Moves the cursor to next {@link KeyValue}.
    *
-   * @param position               {@link HFilePosition} instance containing the current position.
+   * @param cursor                 {@link HFileCursor} instance containing the current position.
    * @param blockStartOffsetInFile the start offset of the block relative to the beginning of the
    *                               HFile.
    * @return {@code true} if there is next {@link KeyValue}; {code false} otherwise.
    */
-  public boolean next(HFilePosition position, int blockStartOffsetInFile) {
-    int offset = position.getOffset() - blockStartOffsetInFile;
-    Option<KeyValue> keyValue = position.getKeyValue();
+  public boolean next(HFileCursor cursor, int blockStartOffsetInFile) {
+    int offset = cursor.getOffset() - blockStartOffsetInFile;
+    Option<KeyValue> keyValue = cursor.getKeyValue();
     if (!keyValue.isPresent()) {
       keyValue = Option.of(readKeyValue(offset));
     }
-    position.increment((long) KEY_OFFSET + (long) keyValue.get().getKeyLength()
+    cursor.increment((long) KEY_OFFSET + (long) keyValue.get().getKeyLength()
         + (long) keyValue.get().getValueLength() + ZERO_TS_VERSION_BYTE_LENGTH);
-    return position.getOffset() - blockStartOffsetInFile < uncompressedContentEndOffset;
+    return cursor.getOffset() - blockStartOffsetInFile < uncompressedContentEndRelativeOffset;
   }
 }

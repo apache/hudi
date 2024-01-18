@@ -22,6 +22,7 @@ package org.apache.hudi.io.hfile;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.logging.log4j.util.Strings;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
@@ -40,7 +41,7 @@ public class HFileReaderImpl implements HFileReader {
   private final FSDataInputStream stream;
   private final long fileSize;
 
-  private final HFilePosition currentPos;
+  private final HFileCursor cursor;
   private boolean isMetadataInitialized = false;
   private HFileTrailer trailer;
   private HFileContext context;
@@ -53,7 +54,7 @@ public class HFileReaderImpl implements HFileReader {
   public HFileReaderImpl(FSDataInputStream stream, long fileSize) {
     this.stream = stream;
     this.fileSize = fileSize;
-    this.currentPos = new HFilePosition();
+    this.cursor = new HFileCursor();
     this.currentDataBlockEntry = Option.empty();
     this.currentDataBlock = Option.empty();
   }
@@ -87,8 +88,7 @@ public class HFileReaderImpl implements HFileReader {
   @Override
   public Option<byte[]> getMetaInfo(UTF8StringKey key) throws IOException {
     initializeMetadata();
-    byte[] bytes = fileInfo.get(key);
-    return bytes != null ? Option.of(bytes) : Option.empty();
+    return Option.ofNullable(fileInfo.get(key));
   }
 
   @Override
@@ -123,34 +123,36 @@ public class HFileReaderImpl implements HFileReader {
     }
     int compareCurrent = key.compareTo(currentKeyValue.get().getKey());
     if (compareCurrent > 0) {
-      if (currentDataBlockEntry.get().getNextBlockKey().isPresent()) {
+      if (currentDataBlockEntry.get().getNextBlockFirstKey().isPresent()) {
         int comparedNextBlockFirstKey =
-            key.compareTo(currentDataBlockEntry.get().getNextBlockKey().get());
+            key.compareTo(currentDataBlockEntry.get().getNextBlockFirstKey().get());
         if (comparedNextBlockFirstKey >= 0) {
           // Searches the block that may contain the lookup key based the starting keys of
           // all blocks (sorted in the TreeMap of block index entries), using binary search.
-          // The result contains the greatest key less than or equal to the given key,
-          // or null if there is no such key.
+          // The result contains the greatest key less than or equal to the given key.
 
           Map.Entry<Key, BlockIndexEntry> floorEntry = dataBlockIndexEntryMap.floorEntry(key);
           if (floorEntry == null) {
-            // Key smaller than the start key of the first block
-            return SEEK_TO_BACKWARDS;
+            // Key smaller than the start key of the first block which should never happen here
+            throw new IllegalStateException(
+                "Unexpected state of the HFile reader when looking up the key: " + key
+                    + " data block index: "
+                    + Strings.join(dataBlockIndexEntryMap.values(), ','));
           }
           currentDataBlockEntry = Option.of(floorEntry.getValue());
-          currentDataBlock = Option.empty();
-          currentPos.setOffset(
+          currentDataBlock = Option.of(instantiateHFileDataBlock(currentDataBlockEntry.get()));
+          cursor.setOffset(
               (int) currentDataBlockEntry.get().getOffset() + HFILEBLOCK_HEADER_SIZE);
         }
       }
-      if (!currentDataBlockEntry.get().getNextBlockKey().isPresent()) {
+      if (!currentDataBlockEntry.get().getNextBlockFirstKey().isPresent()) {
         // This is the last data block.  Check against the last key.
         if (fileInfo.getLastKey().isPresent()) {
           int comparedLastKey = key.compareTo(fileInfo.getLastKey().get());
           if (comparedLastKey > 0) {
             currentDataBlockEntry = Option.empty();
             currentDataBlock = Option.empty();
-            currentPos.setEof();
+            cursor.setEof();
             return SEEK_TO_EOF;
           }
         }
@@ -161,25 +163,31 @@ public class HFileReaderImpl implements HFileReader {
       }
 
       return currentDataBlock.get()
-          .seekTo(currentPos, key, (int) currentDataBlockEntry.get().getOffset());
+          .seekTo(cursor, key, (int) currentDataBlockEntry.get().getOffset());
     }
     if (compareCurrent == 0) {
       return SEEK_TO_FOUND;
     }
-    // Backward seek not supported
-    return SEEK_TO_BACKWARDS;
+    if (!isAtFirstKey()) {
+      // For backward seekTo after the first key, throw exception
+      throw new IllegalStateException(
+          "The current lookup key is less than the current position of the cursor, "
+              + "i.e., backward seekTo, which is not supported and should be avoided. "
+              + "key=" + key + " cursor=" + cursor);
+    }
+    return SEEK_TO_BEFORE_FIRST_KEY;
   }
 
   @Override
   public boolean seekTo() throws IOException {
     initializeMetadata();
     if (trailer.getNumKeyValueEntries() == 0) {
-      currentPos.setEof();
+      cursor.setEof();
       return false;
     }
     // Move the current position to the beginning of the first data block
-    currentPos.setOffset(dataBlockIndexEntryMap.firstKey().getOffset() + HFILEBLOCK_HEADER_SIZE);
-    currentPos.unsetEof();
+    cursor.setOffset(dataBlockIndexEntryMap.firstKey().getOffset() + HFILEBLOCK_HEADER_SIZE);
+    cursor.unsetEof();
     currentDataBlockEntry = Option.of(dataBlockIndexEntryMap.firstEntry().getValue());
     // The data block will be read when {@link #getKeyValue} is called
     currentDataBlock = Option.empty();
@@ -188,21 +196,21 @@ public class HFileReaderImpl implements HFileReader {
 
   @Override
   public boolean next() throws IOException {
-    if (currentPos.isValid()) {
+    if (cursor.isValid()) {
       if (!currentDataBlock.isPresent()) {
         currentDataBlock = Option.of(instantiateHFileDataBlock(currentDataBlockEntry.get()));
       }
-      if (currentDataBlock.get().next(currentPos, (int) currentDataBlockEntry.get().getOffset())) {
+      if (currentDataBlock.get().next(cursor, (int) currentDataBlockEntry.get().getOffset())) {
         // The position is advanced by the data block instance
         return true;
       }
       currentDataBlockEntry = getNextBlockIndexEntry(currentDataBlockEntry.get());
       currentDataBlock = Option.empty();
       if (!currentDataBlockEntry.isPresent()) {
-        currentPos.setEof();
+        cursor.setEof();
         return false;
       }
-      currentPos.setOffset((int) currentDataBlockEntry.get().getOffset() + HFILEBLOCK_HEADER_SIZE);
+      cursor.setOffset((int) currentDataBlockEntry.get().getOffset() + HFILEBLOCK_HEADER_SIZE);
       return true;
     }
     return false;
@@ -210,16 +218,16 @@ public class HFileReaderImpl implements HFileReader {
 
   @Override
   public Option<KeyValue> getKeyValue() throws IOException {
-    if (currentPos.isValid()) {
-      Option<KeyValue> keyValue = currentPos.getKeyValue();
+    if (cursor.isValid()) {
+      Option<KeyValue> keyValue = cursor.getKeyValue();
       if (!keyValue.isPresent()) {
         if (!currentDataBlock.isPresent()) {
           currentDataBlock = Option.of(instantiateHFileDataBlock(currentDataBlockEntry.get()));
         }
         keyValue =
             Option.of(currentDataBlock.get().readKeyValue(
-                currentPos.getOffset() - (int) currentDataBlockEntry.get().getOffset()));
-        currentPos.setKeyValue(keyValue.get());
+                cursor.getOffset() - (int) currentDataBlockEntry.get().getOffset()));
+        cursor.setKeyValue(keyValue.get());
       }
       return keyValue;
     }
@@ -228,7 +236,7 @@ public class HFileReaderImpl implements HFileReader {
 
   @Override
   public boolean isSeeked() {
-    return currentPos.isSeeked();
+    return cursor.isSeeked();
   }
   
   @Override
@@ -268,7 +276,7 @@ public class HFileReaderImpl implements HFileReader {
 
   private Option<BlockIndexEntry> getNextBlockIndexEntry(BlockIndexEntry entry) {
     Map.Entry<Key, BlockIndexEntry> keyBlockIndexEntryEntry =
-        dataBlockIndexEntryMap.higherEntry(entry.getKey());
+        dataBlockIndexEntryMap.higherEntry(entry.getFirstKey());
     if (keyBlockIndexEntryEntry == null) {
       return Option.empty();
     }
@@ -280,5 +288,12 @@ public class HFileReaderImpl implements HFileReader {
         context, stream, blockToRead.getOffset(),
         blockToRead.getOffset() + (long) blockToRead.getSize());
     return (HFileDataBlock) blockReader.nextBlock(HFileBlockType.DATA);
+  }
+
+  private boolean isAtFirstKey() {
+    if (cursor.isValid() && !dataBlockIndexEntryMap.isEmpty()) {
+      return cursor.getOffset() == dataBlockIndexEntryMap.firstKey().getOffset() + HFILEBLOCK_HEADER_SIZE;
+    }
+    return false;
   }
 }

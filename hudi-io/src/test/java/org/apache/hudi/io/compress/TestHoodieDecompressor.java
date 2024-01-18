@@ -49,7 +49,7 @@ public class TestHoodieDecompressor {
     switch (codec) {
       case NONE:
       case GZIP:
-        HoodieDecompressor decompressor = HoodieCompressionFactory.getDecompressor(codec);
+        HoodieDecompressor decompressor = HoodieDecompressorFactory.getDecompressor(codec);
         byte[] actualOutput = new byte[INPUT_LENGTH + 100];
         try (InputStream stream = prepareInputStream(codec)) {
           for (int sizeToRead : READ_PART_SIZE_LIST) {
@@ -65,7 +65,7 @@ public class TestHoodieDecompressor {
         break;
       default:
         assertThrows(
-            IllegalArgumentException.class, () -> HoodieCompressionFactory.getDecompressor(codec));
+            IllegalArgumentException.class, () -> HoodieDecompressorFactory.getDecompressor(codec));
     }
   }
 

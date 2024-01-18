@@ -25,7 +25,7 @@ import org.apache.hudi.io.compress.builtin.HoodieNoneDecompressor;
 /**
  * Factory for {@link HoodieDecompressor}.
  */
-public class HoodieCompressionFactory {
+public class HoodieDecompressorFactory {
   public static HoodieDecompressor getDecompressor(CompressionCodec compressionCodec) {
     switch (compressionCodec) {
       case NONE:

@@ -55,7 +55,7 @@ public class HFileInfo {
     if (containsMvccTs) {
       // The HFile written by Hudi does not contain MVCC timestamps.
       // Parsing MVCC timestamps is not supported.
-      throw new UnsupportedOperationException("Parsing MVCC timestamp in HFile is not supported");
+      throw new UnsupportedOperationException("HFiles with MVCC timestamps are not supported");
     }
   }
 

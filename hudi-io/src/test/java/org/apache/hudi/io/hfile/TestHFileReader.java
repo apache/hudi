@@ -40,12 +40,13 @@ import java.util.function.Function;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.util.FileIOUtils.readAsByteArray;
-import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_BACKWARDS;
+import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_BEFORE_FIRST_KEY;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_EOF;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_FOUND;
 import static org.apache.hudi.io.hfile.HFileReader.SEEK_TO_IN_RANGE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -63,6 +64,7 @@ public class TestHFileReader {
       "/////wAAABQBAAABID797Rg6cC9QEnS/mT3C01cdQGaLYH2jbOCLtMA0RWppEH1HQg==";
   public static final Function<Integer, String> KEY_CREATOR = i -> String.format("hudi-key-%09d", i);
   public static final Function<Integer, String> VALUE_CREATOR = i -> String.format("hudi-value-%09d", i);
+  private static final int SEEK_TO_THROW_EXCEPTION = -2;
 
   static Stream<Arguments> testArgsReadHFilePointAndPrefixLookup() {
     return Stream.of(
@@ -71,15 +73,15 @@ public class TestHFileReader {
             20000,
             Arrays.asList(
                 // before first key
-                new KeyLookUpInfo("", SEEK_TO_BACKWARDS, "", ""),
-                new KeyLookUpInfo("a", SEEK_TO_BACKWARDS, "", ""),
-                new KeyLookUpInfo("hudi-key-0000000", SEEK_TO_BACKWARDS, "", ""),
+                new KeyLookUpInfo("", SEEK_TO_BEFORE_FIRST_KEY, "", ""),
+                new KeyLookUpInfo("a", SEEK_TO_BEFORE_FIRST_KEY, "", ""),
+                new KeyLookUpInfo("hudi-key-0000000", SEEK_TO_BEFORE_FIRST_KEY, "", ""),
                 // first key
                 new KeyLookUpInfo("hudi-key-000000000", SEEK_TO_FOUND, "hudi-key-000000000", "hudi-value-000000000"),
                 // key in the block 0
                 new KeyLookUpInfo("hudi-key-000000100", SEEK_TO_FOUND, "hudi-key-000000100", "hudi-value-000000100"),
                 // backward seek not supported
-                new KeyLookUpInfo("hudi-key-000000099", SEEK_TO_BACKWARDS, "", ""),
+                new KeyLookUpInfo("hudi-key-000000099", SEEK_TO_THROW_EXCEPTION, "", ""),
                 // prefix lookup, the pointer should not move
                 new KeyLookUpInfo("hudi-key-000000100a", SEEK_TO_IN_RANGE, "hudi-key-000000100",
                     "hudi-value-000000100"),
@@ -134,9 +136,9 @@ public class TestHFileReader {
             20000,
             Arrays.asList(
                 // before first key
-                new KeyLookUpInfo("", SEEK_TO_BACKWARDS, "", ""),
-                new KeyLookUpInfo("a", SEEK_TO_BACKWARDS, "", ""),
-                new KeyLookUpInfo("hudi-key-0000000", SEEK_TO_BACKWARDS, "", ""),
+                new KeyLookUpInfo("", SEEK_TO_BEFORE_FIRST_KEY, "", ""),
+                new KeyLookUpInfo("a", SEEK_TO_BEFORE_FIRST_KEY, "", ""),
+                new KeyLookUpInfo("hudi-key-0000000", SEEK_TO_BEFORE_FIRST_KEY, "", ""),
                 // first key
                 new KeyLookUpInfo("hudi-key-000000000", SEEK_TO_FOUND, "hudi-key-000000000", "hudi-value-000000000"),
                 // last key of block 0
@@ -167,15 +169,15 @@ public class TestHFileReader {
             5000,
             Arrays.asList(
                 // before first key
-                new KeyLookUpInfo("", SEEK_TO_BACKWARDS, "", ""),
-                new KeyLookUpInfo("a", SEEK_TO_BACKWARDS, "", ""),
-                new KeyLookUpInfo("hudi-key-0000000", SEEK_TO_BACKWARDS, "", ""),
+                new KeyLookUpInfo("", SEEK_TO_BEFORE_FIRST_KEY, "", ""),
+                new KeyLookUpInfo("a", SEEK_TO_BEFORE_FIRST_KEY, "", ""),
+                new KeyLookUpInfo("hudi-key-0000000", SEEK_TO_BEFORE_FIRST_KEY, "", ""),
                 // first key
                 new KeyLookUpInfo("hudi-key-000000000", SEEK_TO_FOUND, "hudi-key-000000000", "hudi-value-000000000"),
                 // key in the block 0
                 new KeyLookUpInfo("hudi-key-000000100", SEEK_TO_FOUND, "hudi-key-000000100", "hudi-value-000000100"),
                 // backward seek not supported
-                new KeyLookUpInfo("hudi-key-000000099", SEEK_TO_BACKWARDS, "", ""),
+                new KeyLookUpInfo("hudi-key-000000099", SEEK_TO_THROW_EXCEPTION, "", ""),
                 // prefix lookup, the pointer should not move
                 new KeyLookUpInfo("hudi-key-000000100a", SEEK_TO_IN_RANGE, "hudi-key-000000100",
                     "hudi-value-000000100"),
@@ -228,9 +230,9 @@ public class TestHFileReader {
             5000,
             Arrays.asList(
                 // before first key
-                new KeyLookUpInfo("", SEEK_TO_BACKWARDS, "", ""),
-                new KeyLookUpInfo("a", SEEK_TO_BACKWARDS, "", ""),
-                new KeyLookUpInfo("hudi-key-0000000", SEEK_TO_BACKWARDS, "", ""),
+                new KeyLookUpInfo("", SEEK_TO_BEFORE_FIRST_KEY, "", ""),
+                new KeyLookUpInfo("a", SEEK_TO_BEFORE_FIRST_KEY, "", ""),
+                new KeyLookUpInfo("hudi-key-0000000", SEEK_TO_BEFORE_FIRST_KEY, "", ""),
                 // first key
                 new KeyLookUpInfo("hudi-key-000000000", SEEK_TO_FOUND, "hudi-key-000000000", "hudi-value-000000000"),
                 // last key of block 0
@@ -333,15 +335,15 @@ public class TestHFileReader {
           // point and prefix lookups
           Arrays.asList(
               // before first key
-              new KeyLookUpInfo("", SEEK_TO_BACKWARDS, "", ""),
-              new KeyLookUpInfo("a", SEEK_TO_BACKWARDS, "", ""),
-              new KeyLookUpInfo("hudi-key-0000000", SEEK_TO_BACKWARDS, "", ""),
+              new KeyLookUpInfo("", SEEK_TO_BEFORE_FIRST_KEY, "", ""),
+              new KeyLookUpInfo("a", SEEK_TO_BEFORE_FIRST_KEY, "", ""),
+              new KeyLookUpInfo("hudi-key-0000000", SEEK_TO_BEFORE_FIRST_KEY, "", ""),
               // first key
               new KeyLookUpInfo("hudi-key-000000000", SEEK_TO_FOUND, "hudi-key-000000000", "hudi-value-000000000"),
               // key in the block 0
               new KeyLookUpInfo("hudi-key-000000005", SEEK_TO_FOUND, "hudi-key-000000005", "hudi-value-000000005"),
               // backward seek not supported
-              new KeyLookUpInfo("hudi-key-000000004", SEEK_TO_BACKWARDS, "", ""),
+              new KeyLookUpInfo("hudi-key-000000004", SEEK_TO_THROW_EXCEPTION, "", ""),
               // prefix lookup, the pointer should move to the entry before
               new KeyLookUpInfo("hudi-key-000000006a", SEEK_TO_IN_RANGE, "hudi-key-000000006",
                   "hudi-value-000000006_19"),
@@ -536,11 +538,20 @@ public class TestHFileReader {
     assertTrue(reader.seekTo());
 
     for (KeyLookUpInfo keyLookUpInfo : keyLookUpInfoList) {
-      assertEquals(keyLookUpInfo.getExpectedSeekToResult(),
-          reader.seekTo(new UTF8StringKey(keyLookUpInfo.getLookUpKey())),
-          String.format("Unexpected seekTo result for lookup key %s", keyLookUpInfo.getLookUpKey()));
-      switch (keyLookUpInfo.getExpectedSeekToResult()) {
-        case SEEK_TO_BACKWARDS:
+      int expectedSeekToResult = keyLookUpInfo.getExpectedSeekToResult();
+      if (expectedSeekToResult == SEEK_TO_THROW_EXCEPTION) {
+        assertThrows(
+            IllegalStateException.class,
+            () -> reader.seekTo(new UTF8StringKey(keyLookUpInfo.getLookUpKey())));
+      } else {
+        assertEquals(
+            expectedSeekToResult,
+            reader.seekTo(new UTF8StringKey(keyLookUpInfo.getLookUpKey())),
+            String.format("Unexpected seekTo result for lookup key %s", keyLookUpInfo.getLookUpKey()));
+      }
+      switch (expectedSeekToResult) {
+        case SEEK_TO_THROW_EXCEPTION:
+        case SEEK_TO_BEFORE_FIRST_KEY:
           break;
         case SEEK_TO_FOUND:
         case SEEK_TO_IN_RANGE:

@@ -20,8 +20,8 @@
 package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.io.compress.CompressionCodec;
-import org.apache.hudi.io.compress.HoodieCompressionFactory;
 import org.apache.hudi.io.compress.HoodieDecompressor;
+import org.apache.hudi.io.compress.HoodieDecompressorFactory;
 
 /**
  * The context of HFile that contains information of the blocks.
@@ -32,7 +32,7 @@ public class HFileContext {
 
   private HFileContext(CompressionCodec compressionCodec) {
     this.compressionCodec = compressionCodec;
-    this.decompressor = HoodieCompressionFactory.getDecompressor(compressionCodec);
+    this.decompressor = HoodieDecompressorFactory.getDecompressor(compressionCodec);
   }
 
   CompressionCodec getCompressionCodec() {

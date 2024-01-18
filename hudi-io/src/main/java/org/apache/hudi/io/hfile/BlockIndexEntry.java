@@ -31,26 +31,26 @@ import org.apache.hudi.common.util.Option;
  * are compared in lexicographical order.
  */
 public class BlockIndexEntry implements Comparable<BlockIndexEntry> {
-  private final Key key;
-  private final Option<Key> nextBlockKey;
+  private final Key firstKey;
+  private final Option<Key> nextBlockFirstKey;
   private final long offset;
   private final int size;
 
-  public BlockIndexEntry(Key key, Option<Key> nextBlockFirstKey,
+  public BlockIndexEntry(Key firstKey, Option<Key> nextBlockFirstKey,
                          long offset,
                          int size) {
-    this.key = key;
-    this.nextBlockKey = nextBlockFirstKey;
+    this.firstKey = firstKey;
+    this.nextBlockFirstKey = nextBlockFirstKey;
     this.offset = offset;
     this.size = size;
   }
 
-  public Key getKey() {
-    return key;
+  public Key getFirstKey() {
+    return firstKey;
   }
 
-  public Option<Key> getNextBlockKey() {
-    return nextBlockKey;
+  public Option<Key> getNextBlockFirstKey() {
+    return nextBlockFirstKey;
   }
 
   public long getOffset() {
@@ -63,13 +63,13 @@ public class BlockIndexEntry implements Comparable<BlockIndexEntry> {
 
   @Override
   public int compareTo(BlockIndexEntry o) {
-    return key.compareTo(o.getKey());
+    return firstKey.compareTo(o.getFirstKey());
   }
 
   @Override
   public String toString() {
     return "BlockIndexEntry{firstKey="
-        + key.toString()
+        + firstKey.toString()
         + ", offset="
         + offset
         + ", size="

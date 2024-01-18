@@ -23,17 +23,17 @@ import org.apache.hudi.common.util.Option;
 
 /**
  * Stores the current position and {@link KeyValue} at the position in the HFile.
- * The same instance is used as a position pointer during HFile reading.
+ * The same instance is used as a position cursor during HFile reading.
  * The {@link KeyValue} can be lazily read and cached.
  */
-public class HFilePosition {
+public class HFileCursor {
   private static final int INVALID_POSITION = -1;
 
   private int offset;
   private Option<KeyValue> keyValue;
   private boolean eof;
 
-  public HFilePosition() {
+  public HFileCursor() {
     this.offset = INVALID_POSITION;
     this.keyValue = Option.empty();
     this.eof = false;
