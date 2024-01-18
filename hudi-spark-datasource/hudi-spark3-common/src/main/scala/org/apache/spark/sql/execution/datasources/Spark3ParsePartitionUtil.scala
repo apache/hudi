@@ -22,7 +22,7 @@ import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PA
 import org.apache.hudi.spark3.internal.ReflectUtil
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.catalog.ExternalCatalogUtils.unescapePathName
-import org.apache.spark.sql.catalyst.expressions.{Cast, Expression, Literal}
+import org.apache.spark.sql.catalyst.expressions.{Cast, Literal}
 import org.apache.spark.sql.catalyst.util.{DateFormatter, TimestampFormatter}
 import org.apache.spark.sql.execution.datasources.PartitioningUtils.timestampPartitionPattern
 import org.apache.spark.sql.types._
@@ -251,9 +251,6 @@ object Spark3ParsePartitionUtil extends SparkParsePartitionUtil {
     }
   }
 
-  /**
-   * Copied from Spark3.5 org.apache.spark.sql.execution.datasources.PartitioningUtils#castPartValueToDesiredType
-   */
   def castPartValueToDesiredType(
       desiredType: DataType,
       value: String,
@@ -271,7 +268,7 @@ object Spark3ParsePartitionUtil extends SparkParsePartitionUtil {
     case DateType =>
       Cast(Literal(value), DateType, Some(zoneId.getId)).eval()
     // Timestamp types
-    case dt if AnyTimestampType.acceptsType(dt) =>
+    case dt: TimestampType =>
       Try {
         Cast(Literal(unescapePathName(value)), dt, Some(zoneId.getId)).eval()
       }.getOrElse {
@@ -280,17 +277,6 @@ object Spark3ParsePartitionUtil extends SparkParsePartitionUtil {
     case BinaryType => value.getBytes()
     case BooleanType => value.toBoolean
     case dt => throw new IllegalArgumentException(s"Unexpected type $dt")
-  }
-
-  private[sql] object AnyTimestampType extends AbstractDataType with Serializable {
-    override private[sql] def defaultConcreteType: DataType = TimestampType
-
-    override private[sql] def acceptsType(other: DataType): Boolean =
-      other.isInstanceOf[TimestampType] || other.isInstanceOf[TimestampNTZType]
-
-    override private[sql] def simpleString = "(timestamp or timestamp without time zone)"
-
-    def unapply(e: Expression): Boolean = acceptsType(e.dataType)
   }
 
   private def fromDecimal(d: Decimal): DecimalType = DecimalType(d.precision, d.scale)
