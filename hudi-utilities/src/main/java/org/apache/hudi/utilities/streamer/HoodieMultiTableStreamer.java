@@ -254,6 +254,7 @@ public class HoodieMultiTableStreamer {
       tableConfig.deltaSyncSchedulingWeight = globalConfig.deltaSyncSchedulingWeight;
       tableConfig.clusterSchedulingWeight = globalConfig.clusterSchedulingWeight;
       tableConfig.clusterSchedulingMinShare = globalConfig.clusterSchedulingMinShare;
+      tableConfig.postWriteTerminationStrategyClass = globalConfig.postWriteTerminationStrategyClass;
       tableConfig.sparkMaster = globalConfig.sparkMaster;
     }
   }
@@ -426,6 +427,9 @@ public class HoodieMultiTableStreamer {
     @Parameter(names = {"--cluster-scheduling-minshare"}, description = "Minshare for clustering as defined in "
         + "https://spark.apache.org/docs/latest/job-scheduling.html")
     public Integer clusterSchedulingMinShare = 0;
+
+    @Parameter(names = {"--post-write-termination-strategy-class"}, description = "Post writer termination strategy class to gracefully shutdown deltastreamer in continuous mode")
+    public String postWriteTerminationStrategyClass = "";
 
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
