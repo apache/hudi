@@ -2359,7 +2359,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       // Insert data into partitioned table
       spark.sql(
         s"""
-           |INSERT INTO $tableName (boolean_field, float_field, byte_field, short_field, decimal_field, date_field, string_field, timestamp_field) VALUES
+           |INSERT INTO $tableName VALUES
            |(1, TRUE, 1.0, 1, 1, 1234.56789, DATE '2021-01-05', 'partition1', TIMESTAMP '2021-01-05 10:00:00'),
            |(2, FALSE, 2.0, 2, 2, 6789.12345, DATE '2021-01-06', 'partition2', TIMESTAMP '2021-01-06 11:00:00')
      """.stripMargin)
