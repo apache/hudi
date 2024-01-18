@@ -365,8 +365,19 @@ case class HoodieFileIndex(spark: SparkSession,
       //       threshold (of 100k records)
       val shouldReadInMemory = columnStatsIndex.shouldReadInMemory(this, queryReferencedColumns)
       val prunedFileNames = getPrunedFileNames(prunedPartitionsAndFileSlices)
-      columnStatsIndex.loadTransposed(queryReferencedColumns, shouldReadInMemory, prunedFileNames, usePrunedPartitionsForColumnFiltering) { transposedColStatsDF =>
-        Some(getCandidateFiles(transposedColStatsDF, queryFilters, prunedFileNames))
+      // NOTE: This judgment has two purposes:
+      //       1. Since this filter can cause extra unnecessary costs in non-partitioned tables or
+      //          when partition pruning is not applied, adding a switch prevents this situation.
+      //       2. Some tests directly inspect this method without obtaining prunedPartitionsAndFileSlices,
+      //          so we need to ensure these tests are accurate.
+      if (usePrunedPartitionsForColumnFiltering) {
+        columnStatsIndex.loadTransposed(queryReferencedColumns, shouldReadInMemory, prunedFileNames) { transposedColStatsDF =>
+          Some(getCandidateFiles(transposedColStatsDF, queryFilters, prunedFileNames))
+        }
+      } else {
+        columnStatsIndex.loadTransposed(queryReferencedColumns, shouldReadInMemory) { transposedColStatsDF =>
+          Some(getCandidateFiles(transposedColStatsDF, queryFilters, prunedFileNames))
+        }
       }
     }
   }
