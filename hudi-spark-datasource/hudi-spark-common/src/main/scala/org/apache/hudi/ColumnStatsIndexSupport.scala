@@ -107,14 +107,21 @@ class ColumnStatsIndexSupport(spark: SparkSession,
    *
    * Please check out scala-doc of the [[transpose]] method explaining this view in more details
    */
-  def loadTransposed[T](targetColumns: Seq[String], shouldReadInMemory: Boolean, prunedFileNames: Set[String] = Set.empty)(block: DataFrame => T): T = {
+  def loadTransposed[T](targetColumns: Seq[String], shouldReadInMemory: Boolean, shouldPrunePartition: Boolean = false,
+                        prunedFileNames: Set[String] = Set.empty)(block: DataFrame => T): T = {
     cachedColumnStatsIndexViews.get(targetColumns) match {
       case Some(cachedDF) =>
         block(cachedDF)
 
       case None =>
-        val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = if (prunedFileNames.isEmpty) {
-          // NOTE: Because some tests directly check this method and don't get prunedPartitionsAndFileSlices, we need to make sure these tests are correct.
+        val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = if (!shouldPrunePartition) {
+          // NOTE: This judgment has three purposes:
+          //  1. Since this filter can cause extra unnecessary costs in non-partitioned tables or
+          //     when partition pruning is not applied, adding a switch prevents this situation.
+          //  2. Some tests directly inspect this method without obtaining prunedPartitionsAndFileSlices,
+          //     so we need to ensure these tests are accurate.
+          //  3. Prevented the situation stats when querying empty partitions results in
+          //     prunedFileNames being empty and listing all files
           loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory)
         } else {
           val filterFunction = new SerializableFunction[HoodieMetadataColumnStats, java.lang.Boolean] {
