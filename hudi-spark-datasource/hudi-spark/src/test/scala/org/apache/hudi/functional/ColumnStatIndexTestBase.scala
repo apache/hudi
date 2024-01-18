@@ -180,7 +180,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
     val (expectedColStatsSchema, _) = composeIndexSchema(sourceTableSchema.fieldNames, indexedColumns, sourceTableSchema)
     val validationSortColumns = Seq("c1_maxValue", "c1_minValue", "c2_maxValue", "c2_minValue")
 
-    columnStatsIndex.loadTransposed(sourceTableSchema.fieldNames, testCase.shouldReadInMemory) { transposedColStatsDF =>
+    columnStatsIndex.loadTransposed(sourceTableSchema.fieldNames, testCase.shouldReadInMemory, Set.empty) { transposedColStatsDF =>
       // Match against expected column stats table
       val expectedColStatsIndexTableDf =
         spark.read

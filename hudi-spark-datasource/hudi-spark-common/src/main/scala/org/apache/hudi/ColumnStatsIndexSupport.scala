@@ -107,14 +107,14 @@ class ColumnStatsIndexSupport(spark: SparkSession,
    *
    * Please check out scala-doc of the [[transpose]] method explaining this view in more details
    */
-  def loadTransposed[T](targetColumns: Seq[String], shouldReadInMemory: Boolean, shouldPrunePartition: Boolean = false,
-                        prunedFileNames: Set[String] = Set.empty)(block: DataFrame => T): T = {
+  def loadTransposed[T](targetColumns: Seq[String], shouldReadInMemory: Boolean, prunedFileNames: Set[String],
+                        usePrunedPartitionsForColumnFiltering: Boolean = false)(block: DataFrame => T): T = {
     cachedColumnStatsIndexViews.get(targetColumns) match {
       case Some(cachedDF) =>
         block(cachedDF)
 
       case None =>
-        val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = if (!shouldPrunePartition) {
+        val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = if (!usePrunedPartitionsForColumnFiltering) {
           // NOTE: This judgment has two purposes:
           //  1. Since this filter can cause extra unnecessary costs in non-partitioned tables or
           //     when partition pruning is not applied, adding a switch prevents this situation.

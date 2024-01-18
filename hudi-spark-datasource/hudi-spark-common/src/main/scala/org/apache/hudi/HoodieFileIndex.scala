@@ -233,9 +233,9 @@ case class HoodieFileIndex(spark: SparkSession,
       //    - Col-Stats Index is present
       //    - Record-level Index is present
       //    - List of predicates (filters) is present
-      val shouldPrunePartition = !partitionFilters.isEmpty
+      val usePrunedPartitionsForColumnFiltering = !partitionFilters.isEmpty
       val candidateFilesNamesOpt: Option[Set[String]] =
-      lookupCandidateFilesInMetadataTable(dataFilters, shouldPrunePartition, prunedPartitionsAndFileSlices) match {
+      lookupCandidateFilesInMetadataTable(dataFilters, usePrunedPartitionsForColumnFiltering, prunedPartitionsAndFileSlices) match {
         case Success(opt) => opt
         case Failure(e) =>
           logError("Failed to lookup candidate files in File Index", e)
@@ -329,7 +329,7 @@ case class HoodieFileIndex(spark: SparkSession,
    * @param queryFilters list of original data filters passed down from querying engine
    * @return list of pruned (data-skipped) candidate base-files and log files' names
    */
-  private def lookupCandidateFilesInMetadataTable(queryFilters: Seq[Expression], shouldPrunePartition: Boolean,
+  private def lookupCandidateFilesInMetadataTable(queryFilters: Seq[Expression], usePrunedPartitionsForColumnFiltering: Boolean,
                                                   prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])]): Try[Option[Set[String]]] = Try {
     // NOTE: For column stats, Data Skipping is only effective when it references columns that are indexed w/in
     //       the Column Stats Index (CSI). Following cases could not be effectively handled by Data Skipping:
@@ -363,9 +363,9 @@ case class HoodieFileIndex(spark: SparkSession,
       //       For that we use a simple-heuristic to determine whether we should read and process CSI in-memory or
       //       on-cluster: total number of rows of the expected projected portion of the index has to be below the
       //       threshold (of 100k records)
-      val prunedFileNames = getPrunedFileNames(prunedPartitionsAndFileSlices)
       val shouldReadInMemory = columnStatsIndex.shouldReadInMemory(this, queryReferencedColumns)
-      columnStatsIndex.loadTransposed(queryReferencedColumns, shouldReadInMemory, shouldPrunePartition, prunedFileNames) { transposedColStatsDF =>
+      val prunedFileNames = getPrunedFileNames(prunedPartitionsAndFileSlices)
+      columnStatsIndex.loadTransposed(queryReferencedColumns, shouldReadInMemory, prunedFileNames, usePrunedPartitionsForColumnFiltering) { transposedColStatsDF =>
         Some(getCandidateFiles(transposedColStatsDF, queryFilters, prunedFileNames))
       }
     }

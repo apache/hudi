@@ -130,7 +130,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       .build()
 
     val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
-    columnStatsIndex.loadTransposed(Seq("c2"), false) { transposedDF =>
+    columnStatsIndex.loadTransposed(Seq("c2"), false, Set.empty) { transposedDF =>
       val result = transposedDF.select("valueCount", "c2_nullCount")
         .collect().head
 
@@ -194,7 +194,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
       val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
 
-      columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory) { emptyTransposedColStatsDF =>
+      columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory, Set.empty) { emptyTransposedColStatsDF =>
         assertEquals(0, emptyTransposedColStatsDF.collect().length)
       }
     }
@@ -222,7 +222,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
       val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
 
-      columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory) { partialTransposedColStatsDF =>
+      columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory, Set.empty) { partialTransposedColStatsDF =>
         assertEquals(expectedColStatsIndexTableDf.schema, partialTransposedColStatsDF.schema)
         // NOTE: We have to drop the `fileName` column as it contains semi-random components
         //       that we can't control in this test. Nevertheless, since we manually verify composition of the
@@ -276,7 +276,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
       // Nevertheless, the last update was written with a new schema (that is a subset of the original table schema),
       // we should be able to read CSI, which will be properly padded (with nulls) after transposition
-      columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory) { transposedUpdatedColStatsDF =>
+      columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory, Set.empty) { transposedUpdatedColStatsDF =>
         assertEquals(expectedColStatsIndexUpdatedDF.schema, transposedUpdatedColStatsDF.schema)
 
         assertEquals(asJson(sort(expectedColStatsIndexUpdatedDF)), asJson(sort(transposedUpdatedColStatsDF.drop("fileName"))))
@@ -352,7 +352,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
         Literal(true)
       )
 
-      columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory) { partialTransposedColStatsDF =>
+      columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory, Set.empty) { partialTransposedColStatsDF =>
         val andConditionActualFilter = andConditionFilters.map(translateIntoColumnStatsIndexFilterExpr(_, partialTransposedColStatsDF.schema))
           .reduce(And)
         assertEquals(expectedAndConditionIndexedFilter, andConditionActualFilter)
@@ -374,7 +374,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
         Literal(true)
       )
 
-      columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory) { partialTransposedColStatsDF =>
+      columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory, Set.empty) { partialTransposedColStatsDF =>
         val orConditionActualFilter = orConditionFilters.map(translateIntoColumnStatsIndexFilterExpr(_, partialTransposedColStatsDF.schema))
           .reduce(And)
         assertEquals(expectedOrConditionIndexedFilter, orConditionActualFilter)
