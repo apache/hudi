@@ -2337,7 +2337,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   test("Test various data types as partition fields") {
     withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName
-
       spark.sql(
         s"""
            |CREATE TABLE $tableName (
@@ -2360,8 +2359,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       spark.sql(
         s"""
            |INSERT INTO $tableName VALUES
-           |(1, TRUE, 1.0, 1, 1, 1234.56789, DATE '2021-01-05', 'partition1', TIMESTAMP '2021-01-05 10:00:00'),
-           |(2, FALSE, 2.0, 2, 2, 6789.12345, DATE '2021-01-06', 'partition2', TIMESTAMP '2021-01-06 11:00:00')
+           |(1, TRUE, CAST(1.0 as FLOAT), 1, 1, 1234.56789, DATE '2021-01-05', 'partition1', TIMESTAMP '2021-01-05 10:00:00'),
+           |(2, FALSE,CAST(2.0 as FLOAT), 2, 2, 6789.12345, DATE '2021-01-06', 'partition2', TIMESTAMP '2021-01-06 11:00:00')
      """.stripMargin)
 
       checkAnswer(s"SELECT id, boolean_field FROM $tableName ORDER BY id")(
