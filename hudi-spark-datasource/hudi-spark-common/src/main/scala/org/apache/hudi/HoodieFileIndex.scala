@@ -329,7 +329,8 @@ case class HoodieFileIndex(spark: SparkSession,
    * @param queryFilters list of original data filters passed down from querying engine
    * @return list of pruned (data-skipped) candidate base-files and log files' names
    */
-  private def lookupCandidateFilesInMetadataTable(queryFilters: Seq[Expression], shouldPushDownFilesFilter: Boolean,
+  private def lookupCandidateFilesInMetadataTable(queryFilters: Seq[Expression],
+                                                  shouldPushDownFilesFilter: Boolean,
                                                   prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])]): Try[Option[Set[String]]] = Try {
     // NOTE: For column stats, Data Skipping is only effective when it references columns that are indexed w/in
     //       the Column Stats Index (CSI). Following cases could not be effectively handled by Data Skipping:
