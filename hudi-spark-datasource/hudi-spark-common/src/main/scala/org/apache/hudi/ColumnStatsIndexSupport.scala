@@ -107,68 +107,54 @@ class ColumnStatsIndexSupport(spark: SparkSession,
    *
    * Please check out scala-doc of the [[transpose]] method explaining this view in more details
    */
-  def loadTransposed[T](targetColumns: Seq[String], shouldReadInMemory: Boolean)(block: DataFrame => T): T = {
+  def loadTransposed[T](targetColumns: Seq[String],
+                        shouldReadInMemory: Boolean,
+                        prunedFileNamesOpt: Option[Set[String]] = None)(block: DataFrame => T): T = {
     cachedColumnStatsIndexViews.get(targetColumns) match {
       case Some(cachedDF) =>
         block(cachedDF)
       case None =>
-        loadTransposedImpl(targetColumns, shouldReadInMemory, None)(block)
-    }
-  }
+        val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = prunedFileNamesOpt match {
+          case Some(prunedFileNames) =>
+            val filterFunction = new SerializableFunction[HoodieMetadataColumnStats, java.lang.Boolean] {
+              override def apply(r: HoodieMetadataColumnStats): java.lang.Boolean = {
+                prunedFileNames.contains(r.getFileName)
+              }
+            }
+            loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory).filter(filterFunction)
+          case None =>
+            loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory)
+        }
 
-  def loadTransposed[T](targetColumns: Seq[String], shouldReadInMemory: Boolean, prunedFileNames: Set[String])(block: DataFrame => T): T = {
-    cachedColumnStatsIndexViews.get(targetColumns) match {
-      case Some(cachedDF) =>
-        block(cachedDF)
-      case None =>
-        loadTransposedImpl(targetColumns, shouldReadInMemory, Some(prunedFileNames))(block)
-    }
-  }
+        withPersistedData(colStatsRecords, StorageLevel.MEMORY_ONLY) {
+          val (transposedRows, indexSchema) = transpose(colStatsRecords, targetColumns)
+          val df = if (shouldReadInMemory) {
+            // NOTE: This will instantiate a [[Dataset]] backed by [[LocalRelation]] holding all of the rows
+            //       of the transposed table in memory, facilitating execution of the subsequently chained operations
+            //       on it locally (on the driver; all such operations are actually going to be performed by Spark's
+            //       Optimizer)
+            createDataFrameFromRows(spark, transposedRows.collectAsList().asScala, indexSchema)
+          } else {
+            val rdd = HoodieJavaRDD.getJavaRDD(transposedRows)
+            spark.createDataFrame(rdd, indexSchema)
+          }
 
+          if (allowCaching) {
+            cachedColumnStatsIndexViews.put(targetColumns, df)
+            // NOTE: Instead of collecting the rows from the index and hold them in memory, we instead rely
+            //       on Spark as (potentially distributed) cache managing data lifecycle, while we simply keep
+            //       the referenced to persisted [[DataFrame]] instance
+            df.persist(StorageLevel.MEMORY_ONLY)
 
-  private def loadTransposedImpl[T](targetColumns: Seq[String], shouldReadInMemory: Boolean, prunedFileNamesOpt: Option[Set[String]])(block: DataFrame => T): T = {
-    val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = prunedFileNamesOpt match {
-      case Some(prunedFileNames) =>
-        val filterFunction = new SerializableFunction[HoodieMetadataColumnStats, java.lang.Boolean] {
-          override def apply(r: HoodieMetadataColumnStats): java.lang.Boolean = {
-            prunedFileNames.contains(r.getFileName)
+            block(df)
+          } else {
+            withPersistedDataset(df) {
+              block(df)
+            }
           }
         }
-        loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory).filter(filterFunction)
-      case None =>
-        loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory)
     }
-
-    withPersistedData(colStatsRecords, StorageLevel.MEMORY_ONLY) {
-      val (transposedRows, indexSchema) = transpose(colStatsRecords, targetColumns)
-      val df = if (shouldReadInMemory) {
-        // NOTE: This will instantiate a [[Dataset]] backed by [[LocalRelation]] holding all of the rows
-        //       of the transposed table in memory, facilitating execution of the subsequently chained operations
-        //       on it locally (on the driver; all such operations are actually going to be performed by Spark's
-        //       Optimizer)
-        createDataFrameFromRows(spark, transposedRows.collectAsList().asScala, indexSchema)
-      } else {
-        val rdd = HoodieJavaRDD.getJavaRDD(transposedRows)
-        spark.createDataFrame(rdd, indexSchema)
-      }
-
-      if (allowCaching) {
-        cachedColumnStatsIndexViews.put(targetColumns, df)
-        // NOTE: Instead of collecting the rows from the index and hold them in memory, we instead rely
-        //       on Spark as (potentially distributed) cache managing data lifecycle, while we simply keep
-        //       the referenced to persisted [[DataFrame]] instance
-        df.persist(StorageLevel.MEMORY_ONLY)
-
-        block(df)
-      } else {
-        withPersistedDataset(df) {
-          block(df)
-        }
-      }
-    }
-
   }
-
 
   /**
    * Loads a view of the Column Stats Index in a raw format, returning it as [[DataFrame]]
