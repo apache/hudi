@@ -65,7 +65,9 @@ public class HoodieTestUtils {
   public static final String[] DEFAULT_PARTITION_PATHS = {"2016/03/15", "2015/03/16", "2015/03/17"};
 
   public static Configuration getDefaultHadoopConf() {
-    return new Configuration();
+    Configuration conf = new Configuration();
+    conf.set("fs.statistics.enabled", "false");
+    return conf;
   }
 
   public static HoodieTableMetaClient init(String basePath) throws IOException {

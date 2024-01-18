@@ -41,7 +41,9 @@ public class TestHoodieCopyOnWriteTableInputFormat {
 
   @BeforeEach
   void setUp() throws IOException {
-    fs = FileSystem.get(tempDir.toUri(), new Configuration());
+    Configuration conf = new Configuration();
+    conf.set("fs.statistics.enabled", "false");
+    fs = FileSystem.get(tempDir.toUri(), conf);
   }
 
   @AfterEach

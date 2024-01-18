@@ -596,6 +596,8 @@
             </systemPropertyVariables>
             <useSystemClassLoader>false</useSystemClassLoader>
             <forkedProcessExitTimeoutInSeconds>30</forkedProcessExitTimeoutInSeconds>
+            <runOrder>alphabetical</runOrder>
+            <forkCount>0</forkCount>
           </configuration>
         </plugin>
         <plugin>

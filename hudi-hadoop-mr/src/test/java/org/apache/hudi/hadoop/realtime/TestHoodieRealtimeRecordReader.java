@@ -114,6 +114,7 @@ public class TestHoodieRealtimeRecordReader {
     hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
     hadoopConf.set("fs.defaultFS", "file:///");
     hadoopConf.set("fs.file.impl", org.apache.hadoop.fs.LocalFileSystem.class.getName());
+    hadoopConf.set("fs.statistics.enabled", "false");
     baseJobConf = new JobConf(hadoopConf);
     baseJobConf.set(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.key(), String.valueOf(1024 * 1024));
     fs = FSUtils.getFs(basePath.toUri().toString(), baseJobConf);

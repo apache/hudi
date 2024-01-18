@@ -47,12 +47,24 @@ public class TestHoodieMergeOnReadTableInputFormat {
 
   @BeforeEach
   void setUp() throws IOException {
-    fs = FileSystem.get(tempDir.toUri(), new Configuration());
+    Configuration conf = new Configuration();
+    conf.set("fs.statistics.enabled", "false");
+    fs = FileSystem.get(tempDir.toUri(), conf);
   }
 
   @AfterEach
   void tearDown() throws IOException {
-    fs.close();
+    try {
+      if (fs != null) {
+        fs.close();
+        fs = null;
+      }
+    } finally {
+      if (fs != null) {
+        fs.close();
+        fs = null;
+      }
+    }
   }
 
   @Test

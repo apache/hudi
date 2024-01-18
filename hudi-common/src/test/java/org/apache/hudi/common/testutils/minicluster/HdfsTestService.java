@@ -54,6 +54,7 @@ public class HdfsTestService {
   }
 
   public HdfsTestService(Configuration hadoopConf) throws IOException {
+    hadoopConf.set("fs.statistics.enabled", "false");
     this.hadoopConf = hadoopConf;
     this.dfsBaseDirPath = Files.createTempDirectory("hdfs-test-service" + System.currentTimeMillis());
   }

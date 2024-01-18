@@ -142,6 +142,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
   protected void initResources() throws IOException {
     basePath = tempDir.resolve("java_client_tests" + System.currentTimeMillis()).toAbsolutePath().toUri().getPath();
     hadoopConf = new Configuration();
+    hadoopConf.set("fs.statistics.enabled", "false");
     taskContextSupplier = new TestJavaTaskContextSupplier();
     context = new HoodieJavaEngineContext(hadoopConf, taskContextSupplier);
     initFileSystem(basePath, hadoopConf);
