@@ -198,6 +198,8 @@ stages:
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
       - job: UT_FT_4
+        container:
+          image: ubuntu:22.04
         displayName: UT FT other modules
         timeoutInMinutes: '240'
         steps:
