@@ -137,8 +137,8 @@ $ docker ps
 <ul>
   <li> The demo must be built and run using the release-0.14.1 tag. </li>
   <li> Presto and Trino are not currently supported in the demo. </li>
-  <li> You will see warningss that there is no historyserver for your archittecture. You can ignore this </li>
-  <li> You wil see warnings "Unable to load native-hadoop library for your platform... using builtin-java classes where applicable." You can ignore this </li>
+  <li> You will see warnings that there is no history server for your architecture. You can ignore these. </li>
+  <li> You wil see the warning "Unable to load native-hadoop library for your platform... using builtin-java classes where applicable." You can ignore this. </li>
 </ul>
 :::
 
