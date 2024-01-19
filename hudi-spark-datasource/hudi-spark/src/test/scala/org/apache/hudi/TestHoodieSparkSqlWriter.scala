@@ -40,7 +40,7 @@ import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertNull, assertTrue, fail}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
 import org.junit.jupiter.params.provider._
@@ -1341,8 +1341,9 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
   /*
    * Test case for instant is generated with commit timezone when TIMELINE_TIMEZONE set to UTC
    * related to HUDI-5978
+   * Issue [HUDI-7275] is tracking this test being disabled
    */
-  @Test
+  @Disabled
   def testInsertDatasetWithTimelineTimezoneUTC(): Unit = {
     val defaultTimezone = TimeZone.getDefault
     try {

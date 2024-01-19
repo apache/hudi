@@ -353,6 +353,20 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Size of in-memory buffer used for parallelizing network reads and lake storage writes.");
 
+  public static final ConfigProperty<String> WRITE_BUFFER_RECORD_SAMPLING_RATE = ConfigProperty
+      .key("hoodie.write.buffer.record.sampling.rate")
+      .defaultValue(String.valueOf(64))
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Sampling rate of in-memory buffer used to estimate object size. Higher value lead to lower CPU usage.");
+
+  public static final ConfigProperty<String> WRITE_BUFFER_RECORD_CACHE_LIMIT = ConfigProperty
+      .key("hoodie.write.buffer.record.cache.limit")
+      .defaultValue(String.valueOf(128 * 1024))
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Maximum queue size of in-memory buffer for parallelizing network reads and lake storage writes.");
+
   public static final ConfigProperty<String> WRITE_EXECUTOR_DISRUPTOR_BUFFER_LIMIT_BYTES = ConfigProperty
       .key("hoodie.write.executor.disruptor.buffer.limit.bytes")
       .defaultValue(String.valueOf(1024))
@@ -1366,6 +1380,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return Integer.parseInt(getStringOrDefault(WRITE_BUFFER_LIMIT_BYTES_VALUE));
   }
 
+  public int getWriteBufferRecordSamplingRate() {
+    return Integer.parseInt(getStringOrDefault(WRITE_BUFFER_RECORD_SAMPLING_RATE));
+  }
+
+  public int getWriteBufferRecordCacheLimit() {
+    return Integer.parseInt(getStringOrDefault(WRITE_BUFFER_RECORD_CACHE_LIMIT));
+  }
+
   public String getWriteExecutorDisruptorWaitStrategy() {
     return getStringOrDefault(WRITE_EXECUTOR_DISRUPTOR_WAIT_STRATEGY);
   }
@@ -2128,6 +2150,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(HoodieStorageConfig.PARQUET_FIELD_ID_WRITE_ENABLED);
   }
 
+  public boolean parquetBloomFilterEnabled() {
+    return getBooleanOrDefault(HoodieStorageConfig.PARQUET_WITH_BLOOM_FILTER_ENABLED);
+  }
+
   public Option<HoodieLogBlock.HoodieLogBlockType> getLogDataBlockFormat() {
     return Option.ofNullable(getString(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT))
         .map(HoodieLogBlock.HoodieLogBlockType::fromId);
@@ -2840,6 +2866,16 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withWriteBufferLimitBytes(int writeBufferLimit) {
       writeConfig.setValue(WRITE_BUFFER_LIMIT_BYTES_VALUE, String.valueOf(writeBufferLimit));
+      return this;
+    }
+
+    public Builder withWriteBufferRecordSamplingRate(int recordSamplingRate) {
+      writeConfig.setValue(WRITE_BUFFER_RECORD_SAMPLING_RATE, String.valueOf(recordSamplingRate));
+      return this;
+    }
+
+    public Builder withWriteBufferRecordCacheLimit(int recordCacheLimit) {
+      writeConfig.setValue(WRITE_BUFFER_RECORD_CACHE_LIMIT, String.valueOf(recordCacheLimit));
       return this;
     }
 
