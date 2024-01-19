@@ -104,15 +104,33 @@ public class TableOptionProperties {
   public static void createProperties(String basePath,
                                       Configuration hadoopConf,
                                       Map<String, String> options) throws IOException {
+    Path propertiesFilePath = writePropertiesFile(basePath, hadoopConf, options, false);
+    LOG.info(String.format("Create file %s success.", propertiesFilePath));
+  }
+
+  /**
+   * Overwrite the {@link #FILE_NAME} meta file.
+   */
+  public static void overwriteProperties(String basePath,
+      Configuration hadoopConf,
+      Map<String, String> options) throws IOException {
+    Path propertiesFilePath = writePropertiesFile(basePath, hadoopConf, options, true);
+    LOG.info(String.format("Update file %s success.", propertiesFilePath));
+  }
+
+  private static Path writePropertiesFile(String basePath,
+      Configuration hadoopConf,
+      Map<String, String> options,
+      boolean isOverwrite) throws IOException {
     Path propertiesFilePath = getPropertiesFilePath(basePath);
     FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
-    try (FSDataOutputStream outputStream = fs.create(propertiesFilePath)) {
+    try (FSDataOutputStream outputStream = fs.create(propertiesFilePath, isOverwrite)) {
       Properties properties = new Properties();
       properties.putAll(options);
       properties.store(outputStream,
           "Table option properties saved on " + new Date(System.currentTimeMillis()));
     }
-    LOG.info(String.format("Create file %s success.", propertiesFilePath));
+    return propertiesFilePath;
   }
 
   /**

@@ -201,6 +201,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
       SparkRDDReadClient.addHoodieSupport(sparkConf);
       spark = SparkSession.builder().config(sparkConf).getOrCreate();
       sqlContext = spark.sqlContext();
+      HoodieClientTestUtils.overrideSparkHadoopConfiguration(spark.sparkContext());
       jsc = new JavaSparkContext(spark.sparkContext());
       context = new HoodieSparkEngineContext(jsc);
       timelineService = HoodieClientTestUtils.initTimelineService(

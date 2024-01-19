@@ -25,14 +25,12 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
-import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
@@ -392,9 +390,15 @@ public class HoodieCatalog extends AbstractCatalog {
   }
 
   @Override
-  public void alterTable(ObjectPath tablePath, CatalogBaseTable catalogBaseTable, boolean ignoreIfNotExists)
+  public void alterTable(
+      ObjectPath tablePath, CatalogBaseTable newCatalogTable, boolean ignoreIfNotExists)
       throws TableNotExistException, CatalogException {
-    throw new UnsupportedOperationException("alterTable is not implemented.");
+    HoodieCatalogUtil.alterTable(this, tablePath, newCatalogTable, Collections.emptyList(), ignoreIfNotExists, hadoopConf, this::inferTablePath, this::refreshTableProperties);
+  }
+
+  public void alterTable(ObjectPath tablePath, CatalogBaseTable newCatalogTable, List tableChanges,
+      boolean ignoreIfNotExists) throws TableNotExistException, CatalogException {
+    HoodieCatalogUtil.alterTable(this, tablePath, newCatalogTable, tableChanges, ignoreIfNotExists, hadoopConf, this::inferTablePath, this::refreshTableProperties);
   }
 
   @Override
@@ -470,9 +474,7 @@ public class HoodieCatalog extends AbstractCatalog {
       }
     }
 
-    // enable auto-commit though ~
-    options.put(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key(), "true");
-    try (HoodieFlinkWriteClient<?> writeClient = createWriteClient(options, tablePathStr, tablePath)) {
+    try (HoodieFlinkWriteClient<?> writeClient = HoodieCatalogUtil.createWriteClient(options, tablePathStr, tablePath, hadoopConf)) {
       writeClient.deletePartitions(Collections.singletonList(partitionPathStr),
               writeClient.createNewInstantTime())
           .forEach(writeStatus -> {
@@ -594,20 +596,26 @@ public class HoodieCatalog extends AbstractCatalog {
     return newOptions;
   }
 
-  private HoodieFlinkWriteClient<?> createWriteClient(
-      Map<String, String> options,
-      String tablePathStr,
-      ObjectPath tablePath) {
-    return FlinkWriteClients.createWriteClientV2(
-        Configuration.fromMap(options)
-            .set(FlinkOptions.TABLE_NAME, tablePath.getObjectName())
-            .set(FlinkOptions.SOURCE_AVRO_SCHEMA,
-                StreamerUtil.createMetaClient(tablePathStr, hadoopConf)
-                    .getTableConfig().getTableCreateSchema().get().toString()));
+  private void refreshTableProperties(ObjectPath tablePath, CatalogBaseTable newCatalogTable) {
+    Map<String, String> options = newCatalogTable.getOptions();
+    final String avroSchema = AvroSchemaConverter.convertToSchema(
+        ((ResolvedCatalogTable) newCatalogTable).getResolvedSchema().toPhysicalRowDataType().getLogicalType(),
+        AvroSchemaUtils.getAvroRecordQualifiedName(tablePath.getObjectName())).toString();
+    options.put(FlinkOptions.SOURCE_AVRO_SCHEMA.key(), avroSchema);
+    String tablePathStr = inferTablePath(catalogPathStr, tablePath);
+    try {
+      TableOptionProperties.overwriteProperties(tablePathStr, hadoopConf, options);
+    } catch (IOException e) {
+      throw new CatalogException(String.format("Update table path %s exception.", tablePathStr), e);
+    }
   }
 
   @VisibleForTesting
   protected String inferTablePath(String catalogPath, ObjectPath tablePath) {
     return String.format("%s/%s/%s", catalogPath, tablePath.getDatabaseName(), tablePath.getObjectName());
+  }
+
+  private String inferTablePath(ObjectPath tablePath, CatalogBaseTable table) {
+    return inferTablePath(catalogPathStr, tablePath);
   }
 }
