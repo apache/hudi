@@ -72,7 +72,8 @@ public class SparkConsistentBucketClusteringExecutionStrategy<T extends HoodieRe
 
     HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder().withProps(props).build();
 
-    ConsistentBucketIndexBulkInsertPartitionerWithRows partitioner = new ConsistentBucketIndexBulkInsertPartitionerWithRows(getHoodieTable(), strategyParams, shouldPreserveHoodieMetadata);
+    ConsistentBucketIndexBulkInsertPartitionerWithRows partitioner =
+        new ConsistentBucketIndexBulkInsertPartitionerWithRows(getHoodieTable(), strategyParams, shouldPreserveHoodieMetadata);
 
     addHashingChildNodes(partitioner, extraMetadata);
 

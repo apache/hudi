@@ -74,7 +74,9 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows
 
   private final RowRecordKeyExtractor extractor;
 
-  public ConsistentBucketIndexBulkInsertPartitionerWithRows(HoodieTable table, Map<String, String> strategyParams, boolean populateMetaFields) {
+  public ConsistentBucketIndexBulkInsertPartitionerWithRows(HoodieTable table,
+                                                            Map<String, String> strategyParams,
+                                                            boolean populateMetaFields) {
     this.indexKeyFields = table.getConfig().getBucketIndexHashField();
     this.table = table;
     this.hashingChildrenNodes = new HashMap<>();
@@ -96,7 +98,8 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows
 
   private ConsistentBucketIdentifier getBucketIdentifier(String partition) {
     HoodieSparkConsistentBucketIndex index = (HoodieSparkConsistentBucketIndex) table.getIndex();
-    HoodieConsistentHashingMetadata metadata = ConsistentBucketIndexUtils.loadOrCreateMetadata(this.table, partition, index.getNumBuckets());
+    HoodieConsistentHashingMetadata metadata =
+        ConsistentBucketIndexUtils.loadOrCreateMetadata(this.table, partition, index.getNumBuckets());
     if (hashingChildrenNodes.containsKey(partition)) {
       metadata.setChildrenNodes(hashingChildrenNodes.get(partition));
     }
@@ -207,7 +210,7 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows
         || table.requireSortedRecords() || table.getConfig().getBulkInsertSortMode() != BulkInsertSortMode.NONE;
   }
 
-  private Integer getBucketId(Row row) {
+  private int getBucketId(Row row) {
     String recordKey = extractor.getRecordKey(row);
     String partitionPath = extractor.getPartitionPath(row);
     ConsistentHashingNode node = partitionToIdentifier.get(partitionPath).getBucket(recordKey, indexKeyFields);
