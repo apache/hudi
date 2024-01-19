@@ -94,7 +94,7 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
     }
   }
 
-  private static boolean checkTableIsHudi(final InputSplit split, final JobConf job) {
+  private static boolean checkIfHudiTable(final InputSplit split, final JobConf job) {
     try {
       Option<Path> tablePathOpt = TablePathUtils.getTablePath(((FileSplit) split).getPath(), job);
       if (!tablePathOpt.isPresent()) {
@@ -112,7 +112,7 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
 
     if (HoodieFileGroupReaderRecordReader.useFilegroupReader(job)) {
       try {
-        if (!(split instanceof FileSplit) || !checkTableIsHudi(split, job)) {
+        if (!(split instanceof FileSplit) || !checkIfHudiTable(split, job)) {
           return super.getRecordReader(split, job, reporter);
         }
         if (supportAvroRead && HoodieColumnProjectionUtils.supportTimestamp(job)) {

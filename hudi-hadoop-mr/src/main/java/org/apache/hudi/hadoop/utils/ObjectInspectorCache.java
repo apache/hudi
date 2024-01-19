@@ -40,6 +40,10 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+/**
+ * To read value from an ArrayWritable, an ObjectInspector is needed.
+ * Object inspectors are cached here or created using the column type map.
+ */
 public class ObjectInspectorCache {
   private final Map<String, TypeInfo> columnTypeMap = new HashMap<>();
   private final Cache<Schema, ArrayWritableObjectInspector>
