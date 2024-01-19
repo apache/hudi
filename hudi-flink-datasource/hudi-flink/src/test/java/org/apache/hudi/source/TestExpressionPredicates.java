@@ -42,6 +42,7 @@ import org.apache.parquet.filter2.predicate.Operators.IntColumn;
 import org.apache.parquet.filter2.predicate.Operators.Lt;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -58,6 +59,7 @@ import static org.apache.parquet.filter2.predicate.FilterApi.not;
 import static org.apache.parquet.filter2.predicate.FilterApi.notEq;
 import static org.apache.parquet.filter2.predicate.FilterApi.or;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
  * Test cases for {@link ExpressionPredicates}.
@@ -163,5 +165,20 @@ public class TestExpressionPredicates {
     Predicate predicate20 = fromExpression(orExpression);
     assertEquals(predicate19.toString(), predicate20.toString());
     assertEquals(or(lt, gt), predicate20.filter());
+  }
+
+  @Test
+  public void testDisablePredicatesPushDownForUnsupportedType() {
+    FieldReferenceExpression fieldReference = new FieldReferenceExpression("f_decimal", DataTypes.DECIMAL(7, 2), 0, 0);
+    ValueLiteralExpression valueLiteral = new ValueLiteralExpression(BigDecimal.valueOf(100.00));
+    List<ResolvedExpression> expressions = Arrays.asList(fieldReference, valueLiteral);
+
+    CallExpression greaterThanExpression = new CallExpression(BuiltInFunctionDefinitions.GREATER_THAN, expressions, DataTypes.DECIMAL(7, 2));
+    Predicate greaterThanPredicate = fromExpression(greaterThanExpression);
+    CallExpression lessThanExpression = new CallExpression(BuiltInFunctionDefinitions.LESS_THAN, expressions, DataTypes.DECIMAL(7, 2));
+    Predicate lessThanPredicate = fromExpression(lessThanExpression);
+
+    assertNull(And.getInstance().bindPredicates(greaterThanPredicate, lessThanPredicate).filter(), "Decimal type push down is unsupported, so we expect null");
+    assertNull(Or.getInstance().bindPredicates(greaterThanPredicate, lessThanPredicate).filter(), "Decimal type push down is unsupported, so we expect null");
   }
 }
