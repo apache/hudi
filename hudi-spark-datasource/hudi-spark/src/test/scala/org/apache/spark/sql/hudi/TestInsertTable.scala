@@ -2081,6 +2081,38 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     })
   }
 
+  test("Test inaccurate index type") {
+    withRecordType()(withTempDir { tmp =>
+      val targetTable = generateTableName
+
+      assertThrows[IllegalArgumentException] {
+        try {
+          spark.sql(
+            s"""
+               |create table ${targetTable} (
+               |  `id` string,
+               |  `name` string,
+               |  `dt` bigint,
+               |  `day` STRING,
+               |  `hour` INT
+               |) using hudi
+               |OPTIONS ('hoodie.datasource.write.hive_style_partitioning' 'false', 'hoodie.datasource.meta.sync.enable' 'false', 'hoodie.datasource.hive_sync.enable' 'false')
+               |tblproperties (
+               |  'primaryKey' = 'id',
+               |  'type' = 'mor',
+               |  'preCombineField'='dt',
+               |  'hoodie.index.type' = 'BUCKET_aa',
+               |  'hoodie.bucket.index.hash.field' = 'id',
+               |  'hoodie.bucket.index.num.buckets'=512
+               | )
+               |partitioned by (`day`,`hour`)
+               |location '${tmp.getCanonicalPath}'
+               |""".stripMargin)
+        }
+      }
+    })
+  }
+
   test("Test vectorized read nested columns for LegacyHoodieParquetFileFormat") {
     withSQLConf(
       "hoodie.datasource.read.use.new.parquet.file.format" -> "false",

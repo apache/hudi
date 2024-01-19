@@ -22,6 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils.getRootLevelFieldName
 import org.apache.hudi.common.model.{HoodieRecordMerger, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.ValidationUtils
+import org.apache.hudi.config.HoodieIndexConfig
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.types.StructType
 
@@ -225,6 +226,12 @@ object HoodieOptionConfig {
       tableType.get.equalsIgnoreCase(SQL_VALUE_TABLE_TYPE_COW) ||
       tableType.get.equalsIgnoreCase(SQL_VALUE_TABLE_TYPE_MOR),
       s"'type' must be '$SQL_VALUE_TABLE_TYPE_COW' or '$SQL_VALUE_TABLE_TYPE_MOR'")
+
+    // validate table index type
+    val indexType = sqlOptions.get(HoodieIndexConfig.INDEX_TYPE.key())
+    if (!indexType.isEmpty) {
+      HoodieIndexConfig.INDEX_TYPE.checkValues(indexType.get)
+    }
   }
 
   def buildConf[T](): HoodieSQLOptionBuilder[T] = {
