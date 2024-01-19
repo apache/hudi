@@ -27,7 +27,6 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.HoodieColumnProjectionUtils;
-import org.apache.hudi.hadoop.HoodieFileGroupReaderRecordReader;
 import org.apache.hudi.hadoop.SchemaEvolutionContext;
 import org.apache.hudi.hadoop.utils.HiveAvroSerializer;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
@@ -102,9 +101,6 @@ public abstract class AbstractRealtimeRecordReader {
       throw new HoodieException("Could not create HoodieRealtimeRecordReader on path " + this.split.getPath(), e);
     }
     prepareHiveAvroSerializer();
-    if (HoodieFileGroupReaderRecordReader.useFilegroupReader(jobConf)) {
-      throw new IllegalStateException("Should not be here, should be using filegroup reader");
-    }
   }
 
   private boolean usesCustomPayload(HoodieTableMetaClient metaClient) {

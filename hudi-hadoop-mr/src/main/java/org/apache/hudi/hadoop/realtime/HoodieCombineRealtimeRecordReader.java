@@ -22,6 +22,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.hadoop.HoodieFileGroupReaderRecordReader;
 import org.apache.hudi.hadoop.hive.HoodieCombineRealtimeFileSplit;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.ql.io.IOContextMap;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
@@ -43,123 +44,94 @@ public class HoodieCombineRealtimeRecordReader implements RecordReader<NullWrita
 
   private static final transient Logger LOG = LoggerFactory.getLogger(HoodieCombineRealtimeRecordReader.class);
   // RecordReaders for each split
-  private List<HoodieRealtimeRecordReader> recordReaders = new LinkedList<>();
+  private List<RecordReader> recordReaders = new LinkedList<>();
   // Points to the currently iterating record reader
-  private HoodieRealtimeRecordReader currentRecordReader;
+  private RecordReader currentRecordReader;
 
   private final boolean useFileGroupReader;
-
-  // RecordReaders for each split
-  private List<HoodieFileGroupReaderRecordReader> recordReadersFG = new LinkedList<>();
-  // Points to the currently iterating record reader
-  private HoodieFileGroupReaderRecordReader currentRecordReaderFG;
 
   public HoodieCombineRealtimeRecordReader(JobConf jobConf, CombineFileSplit split,
       List<RecordReader> readers) {
     useFileGroupReader = HoodieFileGroupReaderRecordReader.useFilegroupReader(jobConf);
-    if (useFileGroupReader) {
-      try {
-        ValidationUtils.checkArgument(((HoodieCombineRealtimeFileSplit) split).getRealtimeFileSplits().size() == readers
-            .size(), "Num Splits does not match number of unique RecordReaders!");
-        for (InputSplit rtSplit : ((HoodieCombineRealtimeFileSplit) split).getRealtimeFileSplits()) {
-          LOG.info("Creating new RealtimeRecordReader for split");
+    try {
+      ValidationUtils.checkArgument(((HoodieCombineRealtimeFileSplit) split).getRealtimeFileSplits().size() == readers
+          .size(), "Num Splits does not match number of unique RecordReaders!");
+      for (InputSplit rtSplit : ((HoodieCombineRealtimeFileSplit) split).getRealtimeFileSplits()) {
+        if (useFileGroupReader) {
+          LOG.info("Creating new HoodieFileGroupReaderRecordReader for split");
           RecordReader reader = readers.remove(0);
           ValidationUtils.checkArgument(reader instanceof HoodieFileGroupReaderRecordReader, reader.toString() + "not instance of HoodieFileGroupReaderRecordReader ");
-          recordReadersFG.add((HoodieFileGroupReaderRecordReader) reader);
-        }
-        currentRecordReaderFG = recordReadersFG.remove(0);
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    } else {
-      try {
-        ValidationUtils.checkArgument(((HoodieCombineRealtimeFileSplit) split).getRealtimeFileSplits().size() == readers
-            .size(), "Num Splits does not match number of unique RecordReaders!");
-        for (InputSplit rtSplit : ((HoodieCombineRealtimeFileSplit) split).getRealtimeFileSplits()) {
+          recordReaders.add(reader);
+        } else {
           LOG.info("Creating new RealtimeRecordReader for split");
           recordReaders.add(
               new HoodieRealtimeRecordReader((HoodieRealtimeFileSplit) rtSplit, jobConf, readers.remove(0)));
         }
         currentRecordReader = recordReaders.remove(0);
-      } catch (Exception e) {
-        throw new RuntimeException(e);
       }
+
+    } catch (Exception e) {
+      throw new RuntimeException(e);
     }
   }
 
   @Override
   public boolean next(NullWritable key, ArrayWritable value) throws IOException {
-    if (useFileGroupReader) {
-      if (this.currentRecordReaderFG.next(key, value)) {
-        return true;
-      } else if (recordReadersFG.size() > 0) {
-        this.currentRecordReaderFG.close();
-        this.currentRecordReaderFG = recordReadersFG.remove(0);
-        HoodieFileGroupReaderRecordReader reader = currentRecordReaderFG;
-        // when switch reader, ioctx should be updated
-        IOContextMap.get(reader.getJobConf()).setInputPath(reader.getSplit().getPath());
-        return next(key, value);
+    if (this.currentRecordReader.next(key, value)) {
+      return true;
+    } else if (recordReaders.size() > 0) {
+      this.currentRecordReader.close();
+      this.currentRecordReader = recordReaders.remove(0);
+      RecordReader reader;
+      JobConf jobConf;
+      Path path;
+      if (useFileGroupReader) {
+        reader = currentRecordReader;
+        jobConf = ((HoodieFileGroupReaderRecordReader) reader).getJobConf();
+        path = ((HoodieFileGroupReaderRecordReader) reader).getSplit().getPath();
       } else {
-        return false;
+        reader = ((HoodieRealtimeRecordReader)currentRecordReader).getReader();
+        jobConf = ((AbstractRealtimeRecordReader) reader).getJobConf();
+        path = ((AbstractRealtimeRecordReader) reader).getSplit().getPath();
       }
+      // when switch reader, ioctx should be updated
+      IOContextMap.get(jobConf).setInputPath(path);
+      return next(key, value);
     } else {
-      if (this.currentRecordReader.next(key, value)) {
-        return true;
-      } else if (recordReaders.size() > 0) {
-        this.currentRecordReader.close();
-        this.currentRecordReader = recordReaders.remove(0);
-        AbstractRealtimeRecordReader reader = (AbstractRealtimeRecordReader)currentRecordReader.getReader();
-        // when switch reader, ioctx should be updated
-        IOContextMap.get(reader.getJobConf()).setInputPath(reader.getSplit().getPath());
-        return next(key, value);
-      } else {
-        return false;
-      }
+      return false;
     }
   }
 
   @Override
   public NullWritable createKey() {
     if (useFileGroupReader) {
-      return this.currentRecordReaderFG.createKey();
+      return ((HoodieFileGroupReaderRecordReader) this.currentRecordReader).createKey();
     } else {
-      return this.currentRecordReader.createKey();
+      return ((HoodieRealtimeRecordReader) this.currentRecordReader).createKey();
     }
   }
 
   @Override
   public ArrayWritable createValue() {
     if (useFileGroupReader) {
-      return this.currentRecordReaderFG.createValue();
+      return ((HoodieFileGroupReaderRecordReader) this.currentRecordReader).createValue();
     } else {
-      return this.currentRecordReader.createValue();
+      return ((HoodieRealtimeRecordReader) this.currentRecordReader).createValue();
     }
   }
 
   @Override
   public long getPos() throws IOException {
-    if (useFileGroupReader) {
-      return this.currentRecordReaderFG.getPos();
-    } else {
-      return this.currentRecordReader.getPos();
-    }
+    return this.currentRecordReader.getPos();
   }
 
   @Override
   public void close() throws IOException {
-    if (useFileGroupReader) {
-      this.currentRecordReaderFG.close();
-    } else {
-      this.currentRecordReader.close();
-    }
+    this.currentRecordReader.close();
   }
 
   @Override
   public float getProgress() throws IOException {
-    if (useFileGroupReader) {
-      return this.currentRecordReaderFG.getProgress();
-    } else {
-      return this.currentRecordReader.getProgress();
-    }
+    return this.currentRecordReader.getProgress();
   }
 }
