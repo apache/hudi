@@ -19,7 +19,7 @@ As the year came to end, I took some time to reflect on where we are and what we
 
 I want to call out how amazing it is to see such a diverse group of people step up and contribute to this project. There were over 30,000 interactions with the [project on github](https://github.com/apache/hudi/), up 2x from last year. Over the last year 300 people have contributed to the project, with over 3,000 PRs over 5 releases. We moved Apache Hudi from release 0.5.X all the way to our feature packed 0.10.0 release. Come and join us on our [active slack channel](https://join.slack.com/t/apache-hudi/shared_invite/zt-20r833rxh-627NWYDUyR8jRtMa2mZ~gg)! Over 850 community members engaged on our slack, up about 100% from the year before. I want to add a special shout out to our top slack participants who have helped answer so many questions and drive rich discussions on our channel. Sivabalan Narayanan, Nishith Agarwal, Bhavani Sudha Saktheeswaran, Vinay Patil, Rubens Soto, Dave Hagman, Raghav Tandon, Sagar Sumit, Joyan Sil, Jake D, Felix Jose, Nick Vintila, KimL, Andrew Sukhan, Danny Chan, Biswajit Mohapatra, and Pratyaksh Sharma! I know I am missing plenty of other important callouts, every PR that landed this year has helped shape Hudi into what it is today. Thank you!
 
-<img src="/assets/images/powers/logo-wall.png" alt="drawing" width="600"/>
+<img src="/assets/images/powers/hudi-logo-page.png" alt="drawing" width="600"/>
 
 **_Impact_**
 
