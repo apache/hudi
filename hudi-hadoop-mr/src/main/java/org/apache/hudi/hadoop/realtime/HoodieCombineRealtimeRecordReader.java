@@ -67,9 +67,8 @@ public class HoodieCombineRealtimeRecordReader implements RecordReader<NullWrita
           recordReaders.add(
               new HoodieRealtimeRecordReader((HoodieRealtimeFileSplit) rtSplit, jobConf, readers.remove(0)));
         }
-        currentRecordReader = recordReaders.remove(0);
       }
-
+      currentRecordReader = recordReaders.remove(0);
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
