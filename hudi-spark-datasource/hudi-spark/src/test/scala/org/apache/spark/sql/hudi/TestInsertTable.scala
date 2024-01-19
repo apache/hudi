@@ -2202,7 +2202,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
                |""".stripMargin)
         }
       }
-
     })
   }
 
