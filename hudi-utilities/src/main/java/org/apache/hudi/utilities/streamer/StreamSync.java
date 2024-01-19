@@ -847,7 +847,7 @@ public class StreamSync implements Serializable, Closeable {
       writeStatusRDD.filter(WriteStatus::hasErrors).take(100).forEach(ws -> {
         LOG.error("Global error :", ws.getGlobalError());
         if (ws.getErrors().size() > 0) {
-          ws.getErrors().forEach((key, value) -> LOG.trace("Error for key:" + key + " is " + value));
+          ws.getErrors().forEach((key, value) -> LOG.info("Error for key:" + key + " is " + value));
         }
       });
       // Rolling back instant

@@ -155,6 +155,7 @@ public class WriteStatus implements Serializable {
     if (failedRecords.isEmpty() || (random.nextDouble() <= failureFraction)) {
       // Guaranteed to have at-least one error
       failedRecords.add(Pair.of(HoodieRecordDelegate.fromHoodieRecord(record), t));
+      LOG.info("Found error in record " + record.getKey() + " in WriteStatus.java: " + t);
       errors.put(record.getKey(), t);
     }
     updateStatsForFailure();
