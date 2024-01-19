@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hadoop.utils;
 
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -65,6 +66,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
+import static org.apache.hudi.common.config.HoodieReaderConfig.USE_BUILT_IN_HFILE_READER;
 
 public class HoodieRealtimeRecordReaderUtils {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieRealtimeRecordReaderUtils.class);
@@ -306,7 +308,10 @@ public class HoodieRealtimeRecordReaderUtils {
   }
 
   public static HoodieFileReader getBaseFileReader(Path path, JobConf conf) throws IOException {
-    return HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(conf, path);
+    HoodieConfig hoodieConfig = new HoodieConfig();
+    hoodieConfig.setValue(USE_BUILT_IN_HFILE_READER,
+        Boolean.toString(ConfigUtils.getBooleanWithAltKeys(conf, USE_BUILT_IN_HFILE_READER)));
+    return HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(hoodieConfig, conf, path);
   }
 
   private static Schema appendNullSchemaFields(Schema schema, List<String> newFieldNames) {

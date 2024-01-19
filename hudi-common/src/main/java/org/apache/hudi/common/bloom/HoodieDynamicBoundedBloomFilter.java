@@ -26,8 +26,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.io.util.IOUtils.getDataInputStream;
 
 /**
  * Hoodie's dynamic bloom bounded bloom filter. This is based largely on Hadoop's DynamicBloomFilter, but with a bound
@@ -64,14 +66,17 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
   public HoodieDynamicBoundedBloomFilter(String serString) {
     // ignoring the type code for now, since we have just one version
     byte[] bytes = Base64CodecUtil.decode(serString);
-    DataInputStream dis = new DataInputStream(new ByteArrayInputStream(bytes));
-    try {
-      internalDynamicBloomFilter = new InternalDynamicBloomFilter();
-      internalDynamicBloomFilter.readFields(dis);
-      dis.close();
-    } catch (IOException e) {
-      throw new HoodieIndexException("Could not deserialize BloomFilter instance", e);
-    }
+    extractAndSetInternalBloomFilter(new DataInputStream(new ByteArrayInputStream(bytes)));
+  }
+
+  /**
+   * Creates {@link HoodieDynamicBoundedBloomFilter} from the given {@link ByteBuffer}.
+   *
+   * @param byteBuffer {@link ByteBuffer} containing the serialized bloom filter.
+   */
+  public HoodieDynamicBoundedBloomFilter(ByteBuffer byteBuffer) {
+    // ignoring the type code for now, since we have just one version
+    extractAndSetInternalBloomFilter(getDataInputStream(Base64CodecUtil.decode(byteBuffer)));
   }
 
   @Override
@@ -106,6 +111,16 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
   @Override
   public BloomFilterTypeCode getBloomFilterTypeCode() {
     return BloomFilterTypeCode.DYNAMIC_V0;
+  }
+
+  private void extractAndSetInternalBloomFilter(DataInputStream dis) {
+    try {
+      internalDynamicBloomFilter = new InternalDynamicBloomFilter();
+      internalDynamicBloomFilter.readFields(dis);
+      dis.close();
+    } catch (IOException e) {
+      throw new HoodieIndexException("Could not deserialize BloomFilter instance", e);
+    }
   }
 }
 

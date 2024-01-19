@@ -76,7 +76,8 @@ public class HoodieHFileUtils {
     // Avoid loading default configs, from the FS, since this configuration is mostly
     // used as a stub to initialize HFile reader
     Configuration conf = new Configuration(false);
-    HoodieAvroHFileReader.SeekableByteArrayInputStream bis = new HoodieAvroHFileReader.SeekableByteArrayInputStream(content);
+    HoodieAvroHBaseHFileReader.SeekableByteArrayInputStream bis =
+        new HoodieAvroHBaseHFileReader.SeekableByteArrayInputStream(content);
     FSDataInputStream fsdis = new FSDataInputStream(bis);
     FSDataInputStreamWrapper stream = new FSDataInputStreamWrapper(fsdis);
     ReaderContext context = new ReaderContextBuilder()

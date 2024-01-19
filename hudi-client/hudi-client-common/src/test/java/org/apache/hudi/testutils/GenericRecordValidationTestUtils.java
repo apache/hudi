@@ -19,27 +19,37 @@
 package org.apache.hudi.testutils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
+import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
+import org.apache.hudi.io.storage.BaseHoodieAvroHFileReader;
+import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.BytesWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.JobConf;
 
+import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieRecord.COMMIT_SEQNO_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.COMMIT_TIME_METADATA_FIELD;
@@ -126,8 +136,22 @@ public class GenericRecordValidationTestUtils {
         .map(partitionPath -> Paths.get(config.getBasePath(), partitionPath).toString())
         .collect(Collectors.toList());
     return HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(
-        hadoopConf, fullPartitionPaths, config.getBasePath(), jobConf, true).stream()
+            hadoopConf, fullPartitionPaths, config.getBasePath(), jobConf, true).stream()
         .collect(Collectors.toMap(rec -> rec.get(RECORD_KEY_METADATA_FIELD).toString(), Function.identity()));
   }
 
+  public static Stream<GenericRecord> readHFile(Configuration conf, String[] paths) {
+    List<GenericRecord> valuesAsList = new LinkedList<>();
+    for (String path : paths) {
+      try (BaseHoodieAvroHFileReader reader = (BaseHoodieAvroHFileReader)
+          HoodieFileReaderFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+              .getFileReader(new HoodieConfig(), conf, new Path(path), HoodieFileFormat.HFILE)) {
+        valuesAsList.addAll(BaseHoodieAvroHFileReader.readAllRecords(reader)
+            .stream().map(e -> (GenericRecord) e).collect(Collectors.toList()));
+      } catch (IOException e) {
+        throw new HoodieException("Error reading HFile " + path, e);
+      }
+    }
+    return valuesAsList.stream();
+  }
 }

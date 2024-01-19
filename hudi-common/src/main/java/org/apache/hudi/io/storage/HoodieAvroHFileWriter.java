@@ -103,16 +103,19 @@ public class HoodieAvroHFileWriter
         .withCellComparator(hfileConfig.getHFileComparator())
         .build();
 
-    conf.set(CacheConfig.PREFETCH_BLOCKS_ON_OPEN_KEY, String.valueOf(hfileConfig.shouldPrefetchBlocksOnOpen()));
+    conf.set(CacheConfig.PREFETCH_BLOCKS_ON_OPEN_KEY,
+        String.valueOf(hfileConfig.shouldPrefetchBlocksOnOpen()));
     conf.set(HColumnDescriptor.CACHE_DATA_IN_L1, String.valueOf(hfileConfig.shouldCacheDataInL1()));
-    conf.set(DROP_BEHIND_CACHE_COMPACTION_KEY, String.valueOf(hfileConfig.shouldDropBehindCacheCompaction()));
+    conf.set(DROP_BEHIND_CACHE_COMPACTION_KEY,
+        String.valueOf(hfileConfig.shouldDropBehindCacheCompaction()));
     CacheConfig cacheConfig = new CacheConfig(conf);
     this.writer = HFile.getWriterFactory(conf, cacheConfig)
         .withPath(this.fs, this.file)
         .withFileContext(context)
         .create();
 
-    writer.appendFileInfo(getUTF8Bytes(HoodieAvroHFileReader.SCHEMA_KEY), getUTF8Bytes(schema.toString()));
+    writer.appendFileInfo(getUTF8Bytes(BaseHoodieAvroHFileReader.SCHEMA_KEY),
+        getUTF8Bytes(schema.toString()));
     this.prevRecordKey = "";
   }
 
@@ -179,20 +182,23 @@ public class HoodieAvroHFileWriter
       if (maxRecordKey == null) {
         maxRecordKey = "";
       }
-      writer.appendFileInfo(getUTF8Bytes(HoodieAvroHFileReader.KEY_MIN_RECORD), getUTF8Bytes(minRecordKey));
-      writer.appendFileInfo(getUTF8Bytes(HoodieAvroHFileReader.KEY_MAX_RECORD), getUTF8Bytes(maxRecordKey));
-      writer.appendFileInfo(getUTF8Bytes(HoodieAvroHFileReader.KEY_BLOOM_FILTER_TYPE_CODE),
+      writer.appendFileInfo(getUTF8Bytes(BaseHoodieAvroHFileReader.KEY_MIN_RECORD),
+          getUTF8Bytes(minRecordKey));
+      writer.appendFileInfo(getUTF8Bytes(BaseHoodieAvroHFileReader.KEY_MAX_RECORD),
+          getUTF8Bytes(maxRecordKey));
+      writer.appendFileInfo(getUTF8Bytes(BaseHoodieAvroHFileReader.KEY_BLOOM_FILTER_TYPE_CODE),
           getUTF8Bytes(bloomFilter.getBloomFilterTypeCode().toString()));
-      writer.appendMetaBlock(HoodieAvroHFileReader.KEY_BLOOM_FILTER_META_BLOCK, new Writable() {
-        @Override
-        public void write(DataOutput out) throws IOException {
-          out.write(getUTF8Bytes(bloomFilter.serializeToString()));
-        }
+      writer.appendMetaBlock(BaseHoodieAvroHFileReader.KEY_BLOOM_FILTER_META_BLOCK,
+          new Writable() {
+            @Override
+            public void write(DataOutput out) throws IOException {
+              out.write(getUTF8Bytes(bloomFilter.serializeToString()));
+            }
 
-        @Override
-        public void readFields(DataInput in) throws IOException {
-        }
-      });
+            @Override
+            public void readFields(DataInput in) throws IOException {
+            }
+          });
     }
 
     writer.close();
