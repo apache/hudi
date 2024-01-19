@@ -77,7 +77,7 @@ public class FourToFiveUpgradeHandler implements UpgradeHandler {
 
   private boolean hasDefaultPartitionPath(HoodieWriteConfig config, HoodieTable  table) throws IOException {
     HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
-    if (!tableConfig.getPartitionFields().isPresent()) {
+    if (!tableConfig.isTablePartitioned()) {
       return false;
     }
     String checkPartitionPath = DEPRECATED_DEFAULT_PARTITION_PATH;

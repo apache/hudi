@@ -131,7 +131,7 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
               return (Void) null;
             }, consumerExecutorService)
         )
-        .orElse(CompletableFuture.completedFuture(null));
+        .orElseGet(() -> CompletableFuture.completedFuture(null));
   }
 
   @Override

@@ -48,8 +48,8 @@ public class ExecutorFactory {
     ExecutorType executorType = config.getExecutorType();
     switch (executorType) {
       case BOUNDED_IN_MEMORY:
-        return new BoundedInMemoryExecutor<>(config.getWriteBufferLimitBytes(), inputItr, consumer,
-            transformFunction, preExecuteRunnable);
+        return new BoundedInMemoryExecutor<>(config.getWriteBufferLimitBytes(), config.getWriteBufferRecordSamplingRate(), config.getWriteBufferRecordCacheLimit(),
+            inputItr, consumer, transformFunction, preExecuteRunnable);
       case DISRUPTOR:
         return new DisruptorExecutor<>(config.getWriteExecutorDisruptorWriteBufferLimitBytes(), inputItr, consumer,
             transformFunction, config.getWriteExecutorDisruptorWaitStrategy(), preExecuteRunnable);

@@ -276,6 +276,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     shutdownThread = new Thread() {
       public void run() {
         try {
+          LOG.warn("running logformatwriter hook");
           if (output != null) {
             close();
           }
