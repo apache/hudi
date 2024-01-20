@@ -49,9 +49,10 @@ The first step is to build Hudi. **Note** This step builds Hudi on default suppo
 
 NOTE: Make sure you've cloned the [Hudi repository](https://github.com/apache/hudi) first. 
 
-```java
+```bash
 cd <HUDI_WORKSPACE>
-mvn clean package -Pintegration-tests -DskipTests
+git checkout release-0.14.1
+mvn clean package -Pintegration-tests -DskipTests -Dscala-2.11 -Dspark2.4
 ```
 
 ### Bringing up Demo Cluster
@@ -134,9 +135,10 @@ $ docker ps
 
 :::note Please note the following for Mac AArch64 users
 <ul>
-  <li> The demo must be built and run using the master branch. We currently plan to include support starting with the
-    0.13.0 release. </li>
+  <li> The demo must be built and run using the release-0.14.1 tag. </li>
   <li> Presto and Trino are not currently supported in the demo. </li>
+  <li> You will see warnings that there is no history server for your architecture. You can ignore these. </li>
+  <li> You wil see the warning "Unable to load native-hadoop library for your platform... using builtin-java classes where applicable." You can ignore this. </li>
 </ul>
 :::
 
@@ -339,7 +341,7 @@ After executing the above command, you will notice
 
 1. A hive table named `stock_ticks_cow` created which supports Snapshot and Incremental queries on Copy On Write table.
 2. Two new tables `stock_ticks_mor_rt` and `stock_ticks_mor_ro` created for the Merge On Read table. The former
-supports Snapshot and Incremental queries (providing near-real time data) while the later supports ReadOptimized queries.
+supports Snapshot and Incremental queries (providing near-real time data) while the later supports ReadOptimized queries. `http://namenode:50070/explorer.html#/user/hive/warehouse/stock_ticks_mor`
 
 
 ### Step 4 (a): Run Hive Queries
