@@ -180,5 +180,6 @@ public class TestExpressionPredicates {
 
     assertNull(And.getInstance().bindPredicates(greaterThanPredicate, lessThanPredicate).filter(), "Decimal type push down is unsupported, so we expect null");
     assertNull(Or.getInstance().bindPredicates(greaterThanPredicate, lessThanPredicate).filter(), "Decimal type push down is unsupported, so we expect null");
+    assertNull(Not.getInstance().bindPredicate(greaterThanPredicate).filter(), "Decimal type push down is unsupported, so we expect null");
   }
 }
