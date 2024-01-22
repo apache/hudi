@@ -194,6 +194,11 @@ public class HoodieTableConfig extends HoodieConfig {
       .defaultValue(true)
       .withDocumentation("Whether or not, this is a bootstrapped table, with bootstrap base data and an mapping index defined, default true.");
 
+  public static final ConfigProperty<Boolean> TABLE_VALIDITY_ENABLE = ConfigProperty
+          .key("hoodie.table.validity.check.enable")
+          .defaultValue(true)
+          .withDocumentation("Whether to check table validity, default true.");
+
   public static final ConfigProperty<String> BOOTSTRAP_INDEX_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.index.class")
       .defaultValue(HFileBootstrapIndex.class.getName())
@@ -621,6 +626,10 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public String getTableName() {
     return getString(NAME);
+  }
+
+  public boolean getTableValidityCheck() {
+    return getBoolean(TABLE_VALIDITY_ENABLE);
   }
 
   /**
