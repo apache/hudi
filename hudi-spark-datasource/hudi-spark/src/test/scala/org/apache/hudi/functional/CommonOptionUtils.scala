@@ -28,8 +28,8 @@ import org.apache.hudi.config.HoodieWriteConfig
 object CommonOptionUtils {
 
   val commonOpts = Map(
-    "hoodie.insert.shuffle.parallelism" -> "4",
-    "hoodie.upsert.shuffle.parallelism" -> "4",
+    "hoodie.insert.shuffle.parallelism" -> "2",
+    "hoodie.upsert.shuffle.parallelism" -> "2",
     "hoodie.bulkinsert.shuffle.parallelism" -> "2",
     "hoodie.delete.shuffle.parallelism" -> "1",
     HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key() -> "true",
