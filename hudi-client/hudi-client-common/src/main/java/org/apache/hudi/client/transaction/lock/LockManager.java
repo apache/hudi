@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.RetryHelper;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieLockException;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -54,7 +55,6 @@ public class LockManager implements Serializable, AutoCloseable {
   private final RetryHelper<Boolean, HoodieLockException> lockRetryHelper;
   private transient HoodieLockMetrics metrics;
   private volatile LockProvider lockProvider;
-  private volatile boolean lockAcquired = false;
 
   public LockManager(HoodieWriteConfig writeConfig, FileSystem fs) {
     this(writeConfig, fs, writeConfig.getProps());
@@ -83,7 +83,6 @@ public class LockManager implements Serializable, AutoCloseable {
               + getLockProvider().getCurrentOwnerLockInfo());
         }
         metrics.updateLockAcquiredMetric();
-        lockAcquired = true;
         return true;
       } catch (InterruptedException e) {
         throw new HoodieLockException(e);
@@ -97,9 +96,10 @@ public class LockManager implements Serializable, AutoCloseable {
    */
   public void unlock() {
     getLockProvider().unlock();
-    if (lockAcquired) {
+    try {
       metrics.updateLockHeldTimerMetrics();
-      lockAcquired = false;
+    } catch (HoodieException e) {
+      LOG.error(String.format("Exception encountered when updating lock metrics: %s", e));
     }
     close();
   }
