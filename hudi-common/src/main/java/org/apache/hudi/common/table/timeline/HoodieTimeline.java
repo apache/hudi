@@ -396,6 +396,18 @@ public interface HoodieTimeline extends Serializable {
   Option<HoodieInstant> getFirstNonSavepointCommit();
 
   /**
+   * get the most recent cluster commit if present
+   *
+   */
+  Option<HoodieInstant> getLastClusterCommit();
+
+  /**
+   * get the most recent pending cluster commit if present
+   *
+   */
+  Option<HoodieInstant> getLastPendingClusterCommit();
+
+  /**
    * Read the completed instant details.
    */
   Option<byte[]> getInstantDetails(HoodieInstant instant);

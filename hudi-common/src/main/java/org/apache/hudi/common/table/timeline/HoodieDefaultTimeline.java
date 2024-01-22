@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.timeline;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -491,6 +492,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
     return this.firstNonSavepointCommit;
   }
 
+  @Override
   public Option<HoodieInstant> getLastClusterCommit() {
     return  Option.fromJavaOptional(getCommitsTimeline().filter(s -> s.getAction().equalsIgnoreCase(HoodieTimeline.REPLACE_COMMIT_ACTION))
         .getReverseOrderedInstants()
@@ -503,7 +505,14 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
           }
         }).findFirst());
   }
-  
+
+  @Override
+  public Option<HoodieInstant> getLastPendingClusterCommit() {
+    return Option.fromJavaOptional(filterPendingReplaceTimeline()
+        .getReverseOrderedInstants()
+        .filter(i -> ClusteringUtils.isPendingClusteringInstant(this, i)).findFirst());
+  }
+
   @Override
   public Option<byte[]> getInstantDetails(HoodieInstant instant) {
     return details.apply(instant);
