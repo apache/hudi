@@ -235,7 +235,7 @@ case class HoodieFileIndex(spark: SparkSession,
       //    - List of predicates (filters) is present
       val shouldPushDownFilesFilter = !partitionFilters.isEmpty
       val candidateFilesNamesOpt: Option[Set[String]] =
-      lookupCandidateFilesInMetadataTable(dataFilters, shouldPushDownFilesFilter, prunedPartitionsAndFileSlices) match {
+      lookupCandidateFilesInMetadataTable(dataFilters, prunedPartitionsAndFileSlices, shouldPushDownFilesFilter) match {
         case Success(opt) => opt
         case Failure(e) =>
           logError("Failed to lookup candidate files in File Index", e)
@@ -330,8 +330,8 @@ case class HoodieFileIndex(spark: SparkSession,
    * @return list of pruned (data-skipped) candidate base-files and log files' names
    */
   private def lookupCandidateFilesInMetadataTable(queryFilters: Seq[Expression],
-                                                  shouldPushDownFilesFilter: Boolean,
-                                                  prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])]): Try[Option[Set[String]]] = Try {
+                                                  prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
+                                                  shouldPushDownFilesFilter: Boolean): Try[Option[Set[String]]] = Try {
     // NOTE: For column stats, Data Skipping is only effective when it references columns that are indexed w/in
     //       the Column Stats Index (CSI). Following cases could not be effectively handled by Data Skipping:
     //          - Expressions on top-level column's fields (ie, for ex filters like "struct.field > 0", since
@@ -366,11 +366,8 @@ case class HoodieFileIndex(spark: SparkSession,
       //       threshold (of 100k records)
       val shouldReadInMemory = columnStatsIndex.shouldReadInMemory(this, queryReferencedColumns)
       val prunedFileNames = getPrunedFileNames(prunedPartitionsAndFileSlices)
-      // NOTE: This judgment has two purposes:
-      //       1. Since this filter can cause extra unnecessary costs in non-partitioned tables or
-      //          when partition pruning is not applied, adding a switch prevents this situation.
-      //       2. Some tests directly inspect this method without obtaining prunedPartitionsAndFileSlices,
-      //          so we need to ensure these tests are accurate.
+      // NOTE: If partition pruning doesn't prune any files, then there's no need to apply file filters
+      //       when loading the Column Statistics Index
       val prunedFileNamesOpt = if (shouldPushDownFilesFilter) Some(prunedFileNames) else None
 
       columnStatsIndex.loadTransposed(queryReferencedColumns, shouldReadInMemory, prunedFileNamesOpt) { transposedColStatsDF =>
