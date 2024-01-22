@@ -20,10 +20,12 @@ package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.ConsistentHashingNode;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
 import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
 import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
@@ -35,12 +37,12 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
-import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -74,12 +76,15 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows
 
   private final RowRecordKeyExtractor extractor;
 
+  private final boolean populateMetaFields;
+
   public ConsistentBucketIndexBulkInsertPartitionerWithRows(HoodieTable table,
                                                             Map<String, String> strategyParams,
                                                             boolean populateMetaFields) {
     this.indexKeyFields = table.getConfig().getBucketIndexHashField();
     this.table = table;
     this.hashingChildrenNodes = new HashMap<>();
+    this.populateMetaFields = populateMetaFields;
     if (!populateMetaFields) {
       this.keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.getKeyGenerator(table.getConfig().getProps());
     } else {
@@ -111,68 +116,33 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows
     JavaRDD<Row> rowJavaRDD = rows.toJavaRDD();
     prepareRepartition(rowJavaRDD);
 
-    Partitioner partitioner = new Partitioner() {
-      @Override
-      public int getPartition(Object key) {
-        Row row = (Row) key;
-        return getBucketId(row);
-      }
+    Dataset<Row> partitionedRows = rows.sparkSession().createDataFrame(rowJavaRDD
+        .mapToPair(row -> new Tuple2<>(getBucketId(row), row))
+        .partitionBy(new Partitioner() {
+          @Override
+          public int getPartition(Object key) {
+            return (int) key;
+          }
 
-      @Override
-      public int numPartitions() {
-        return fileIdPfxList.size();
-      }
-    };
+          @Override
+          public int numPartitions() {
+            return fileIdPfxList.size();
+          }
+        })
+        .values(), rows.schema());
 
     if (sortColumnNames != null && sortColumnNames.length > 0) {
-      return rows.sparkSession().createDataFrame(rowJavaRDD
-              .mapToPair(row -> new Tuple2<>(row, row))
-              .repartitionAndSortWithinPartitions(partitioner, new CustomRowColumnsComparator())
-              .values(),
-          rows.schema());
+      partitionedRows = partitionedRows
+          .sortWithinPartitions(Arrays.stream(sortColumnNames).map(Column::new).toArray(Column[]::new));
     } else if (table.requireSortedRecords() || table.getConfig().getBulkInsertSortMode() != BulkInsertSortMode.NONE) {
-      return rows.sparkSession().createDataFrame(
-          rowJavaRDD
-              .mapToPair(row -> new Tuple2<>(row, row))
-              .repartitionAndSortWithinPartitions(partitioner, new RowRecordKeyComparator())
-              .values(),
-          rows.schema());
-    } else {
-      return rows.sparkSession().createDataFrame(rowJavaRDD
-          .mapToPair(row -> new Tuple2<>(row, row))
-          .partitionBy(partitioner)
-          .values(), rows.schema());
-    }
-  }
-
-  /**
-   * A comparator for Rows that compares them based on an array of column names.
-   */
-  private class CustomRowColumnsComparator implements Comparator<Row>, Serializable {
-    @Override
-    public int compare(Row row1, Row row2) {
-      for (String column : sortColumnNames) {
-        Comparable value1 = row1.getAs(column);
-        Comparable value2 = row2.getAs(column);
-        int comparison = value1.compareTo(value2);
-        if (comparison != 0) {
-          return comparison;
-        }
+      if (populateMetaFields) {
+        partitionedRows = partitionedRows.sortWithinPartitions(HoodieRecord.RECORD_KEY_METADATA_FIELD);
+      } else {
+        throw new HoodieException("Sorting by record key for consistent hashing bucket index requires meta-fields to be enabled");
       }
-      return 0;
     }
-  }
 
-  /**
-   * A comparator for Rows that compares them based on record keys.
-   */
-  private class RowRecordKeyComparator implements Comparator<Row>, Serializable {
-    @Override
-    public int compare(Row row1, Row row2) {
-      String recordKey1 = extractor.getRecordKey(row1);
-      String recordKey2 = extractor.getRecordKey(row2);
-      return recordKey1.compareTo(recordKey2);
-    }
+    return partitionedRows;
   }
 
   /**
