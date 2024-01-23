@@ -340,7 +340,7 @@ public class OptionsResolver {
    * Returns the index type.
    */
   public static HoodieIndex.IndexType getIndexType(Configuration conf) {
-    return HoodieIndex.IndexType.valueOf(conf.getString(FlinkOptions.INDEX_TYPE));
+    return HoodieIndex.IndexType.valueOf(conf.getString(FlinkOptions.INDEX_TYPE).toUpperCase());
   }
 
   /**
