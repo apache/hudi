@@ -88,7 +88,7 @@ public class TestChainedTransformer extends SparkClientFunctionalTestHarness {
   })
   public void testChainedTransformerValidationFails(String transformerName) {
     try {
-      ChainedTransformer transformer = new ChainedTransformer(Arrays.asList(transformerName.split(",")), Option.empty());
+      ChainedTransformer transformer = new ChainedTransformer(Arrays.asList(transformerName.split(",")), Option::empty);
       fail();
     } catch (Exception e) {
       assertTrue(e instanceof HoodieTransformPlanException, e.getMessage());
@@ -103,14 +103,14 @@ public class TestChainedTransformer extends SparkClientFunctionalTestHarness {
       "org.apache.hudi.utilities.transform.FlatteningTransformer,org.apache.hudi.utilities.transform.FlatteningTransformer"
   })
   public void testChainedTransformerValidationPasses(String transformerName) {
-    ChainedTransformer transformer = new ChainedTransformer(Arrays.asList(transformerName.split(",")), Option.empty());
+    ChainedTransformer transformer = new ChainedTransformer(Arrays.asList(transformerName.split(",")), Option::empty);
     assertNotNull(transformer);
   }
 
   @Test
   public void testChainedTransformerTransformedSchema() {
     String transformerName = "org.apache.hudi.utilities.transform.FlatteningTransformer";
-    ChainedTransformer transformer = new ChainedTransformer(Arrays.asList(transformerName.split(",")), Option.of(NESTED_AVRO_SCHEMA));
+    ChainedTransformer transformer = new ChainedTransformer(Arrays.asList(transformerName.split(",")), () -> Option.of(NESTED_AVRO_SCHEMA));
     StructType transformedSchema = transformer.transformedSchema(jsc(), spark(), null, new TypedProperties());
     // Verify transformed nested fields are present in the transformed schema
     assertTrue(Arrays.asList(transformedSchema.fieldNames()).contains("fare_amount"));
