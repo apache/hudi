@@ -47,11 +47,11 @@ parameters:
     default:
       - 'hudi-spark-datasource'
       - 'hudi-spark-datasource/hudi-spark'
-      - 'hudi-spark-datasource/hudi-spark3.2.x'
-      - 'hudi-spark-datasource/hudi-spark3.2plus-common'
   - name: job3BUTModules
     type: object
     default:
+      - 'hudi-spark-datasource/hudi-spark3.2.x'
+      - 'hudi-spark-datasource/hudi-spark3.2plus-common'
       - 'hudi-spark-datasource/hudi-spark3-common'
       - 'hudi-spark-datasource/hudi-spark-common'
   - name: job4UTModules
