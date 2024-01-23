@@ -112,7 +112,6 @@ public class HoodieSyncConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Field in the table to use for determining hive partition columns.");
 
-
   public static final ConfigProperty<String> META_SYNC_PARTITION_EXTRACTOR_CLASS = ConfigProperty
       .key("hoodie.datasource.hive_sync.partition_extractor_class")
       .defaultValue("org.apache.hudi.hive.MultiPartKeysValueExtractor")
