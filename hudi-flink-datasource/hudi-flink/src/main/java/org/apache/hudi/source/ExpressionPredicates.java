@@ -616,10 +616,10 @@ public class ExpressionPredicates {
       case TINYINT:
       case SMALLINT:
       case INTEGER:
+      case DATE:
       case TIME_WITHOUT_TIME_ZONE:
         return predicateSupportsLtGt(functionDefinition, intColumn(columnName), (Integer) literal);
       case BIGINT:
-      case DATE:
       case TIMESTAMP_WITHOUT_TIME_ZONE:
         return predicateSupportsLtGt(functionDefinition, longColumn(columnName), (Long) literal);
       case FLOAT:
