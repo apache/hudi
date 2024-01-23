@@ -2083,6 +2083,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   class StageParallelismListener(var stageName: String) extends SparkListener {
+    
     override def onStageSubmitted(stageSubmitted: SparkListenerStageSubmitted): Unit = {
       if (stageSubmitted.stageInfo.name.contains(stageName)) {
         assertResult(1)(stageSubmitted.stageInfo.numTasks)
