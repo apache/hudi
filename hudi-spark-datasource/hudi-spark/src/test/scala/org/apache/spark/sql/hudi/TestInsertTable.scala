@@ -2082,6 +2082,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     })
   }
 
+  // add a listener for stages for parallelism checking with stage name
   class StageParallelismListener(var stageName: String) extends SparkListener {
     override def onStageSubmitted(stageSubmitted: SparkListenerStageSubmitted): Unit = {
       if (stageSubmitted.stageInfo.name.contains(stageName)) {
