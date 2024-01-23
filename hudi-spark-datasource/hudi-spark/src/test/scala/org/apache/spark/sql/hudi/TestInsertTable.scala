@@ -2082,9 +2082,9 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     })
   }
 
-  class StageParallelismListener(var checkMessage: String) extends SparkListener {
+  class StageParallelismListener(var stageName: String) extends SparkListener {
     override def onStageSubmitted(stageSubmitted: SparkListenerStageSubmitted): Unit = {
-      if (stageSubmitted.stageInfo.name.contains(checkMessage)) {
+      if (stageSubmitted.stageInfo.name.contains(stageName)) {
         assertResult(1)(stageSubmitted.stageInfo.numTasks)
       }
     }
@@ -2124,7 +2124,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |union
            |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 12 as `hour`
            |""".stripMargin)
-      spark.sparkContext.addSparkListener(new StageParallelismListener(checkMessage = "collect at HoodieSparkEngineContext.java"))
+      spark.sparkContext.addSparkListener(new StageParallelismListener(stageName = "collect at HoodieSparkEngineContext.java"))
       val df = spark.sql(
         s"""
            |select * from ${targetTable} where day='2023-10-12' and hour=11
@@ -2171,7 +2171,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |union
            |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 12 as `hour`
            |""".stripMargin)
-      spark.sparkContext.addSparkListener(new StageParallelismListener(checkMessage = "collect at HoodieSparkEngineContext.java"))
+      spark.sparkContext.addSparkListener(new StageParallelismListener(stageName = "collect at HoodieSparkEngineContext.java"))
       val df = spark.sql(
         s"""
            |select * from ${targetTable} where day='2023-10-12' and hour=11
