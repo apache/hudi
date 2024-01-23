@@ -107,22 +107,23 @@ class ColumnStatsIndexSupport(spark: SparkSession,
    *
    * Please check out scala-doc of the [[transpose]] method explaining this view in more details
    */
-  def loadTransposed[T](targetColumns: Seq[String], shouldReadInMemory: Boolean, prunedFileNames: Set[String] = Set.empty)(block: DataFrame => T): T = {
+  def loadTransposed[T](targetColumns: Seq[String],
+                        shouldReadInMemory: Boolean,
+                        prunedFileNamesOpt: Option[Set[String]] = None)(block: DataFrame => T): T = {
     cachedColumnStatsIndexViews.get(targetColumns) match {
       case Some(cachedDF) =>
         block(cachedDF)
-
       case None =>
-        val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = if (prunedFileNames.isEmpty) {
-          // NOTE: Because some tests directly check this method and don't get prunedPartitionsAndFileSlices, we need to make sure these tests are correct.
-          loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory)
-        } else {
-          val filterFunction = new SerializableFunction[HoodieMetadataColumnStats, java.lang.Boolean] {
-            override def apply(r: HoodieMetadataColumnStats): java.lang.Boolean = {
-              prunedFileNames.contains(r.getFileName)
+        val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = prunedFileNamesOpt match {
+          case Some(prunedFileNames) =>
+            val filterFunction = new SerializableFunction[HoodieMetadataColumnStats, java.lang.Boolean] {
+              override def apply(r: HoodieMetadataColumnStats): java.lang.Boolean = {
+                prunedFileNames.contains(r.getFileName)
+              }
             }
-          }
-          loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory).filter(filterFunction)
+            loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory).filter(filterFunction)
+          case None =>
+            loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory)
         }
 
         withPersistedData(colStatsRecords, StorageLevel.MEMORY_ONLY) {

@@ -233,8 +233,9 @@ case class HoodieFileIndex(spark: SparkSession,
       //    - Col-Stats Index is present
       //    - Record-level Index is present
       //    - List of predicates (filters) is present
+      val shouldPushDownFilesFilter = !partitionFilters.isEmpty
       val candidateFilesNamesOpt: Option[Set[String]] =
-      lookupCandidateFilesInMetadataTable(dataFilters, prunedPartitionsAndFileSlices) match {
+      lookupCandidateFilesInMetadataTable(dataFilters, prunedPartitionsAndFileSlices, shouldPushDownFilesFilter) match {
         case Success(opt) => opt
         case Failure(e) =>
           logError("Failed to lookup candidate files in File Index", e)
@@ -328,7 +329,9 @@ case class HoodieFileIndex(spark: SparkSession,
    * @param queryFilters list of original data filters passed down from querying engine
    * @return list of pruned (data-skipped) candidate base-files and log files' names
    */
-  private def lookupCandidateFilesInMetadataTable(queryFilters: Seq[Expression], prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])]): Try[Option[Set[String]]] = Try {
+  private def lookupCandidateFilesInMetadataTable(queryFilters: Seq[Expression],
+                                                  prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
+                                                  shouldPushDownFilesFilter: Boolean): Try[Option[Set[String]]] = Try {
     // NOTE: For column stats, Data Skipping is only effective when it references columns that are indexed w/in
     //       the Column Stats Index (CSI). Following cases could not be effectively handled by Data Skipping:
     //          - Expressions on top-level column's fields (ie, for ex filters like "struct.field > 0", since
@@ -361,9 +364,13 @@ case class HoodieFileIndex(spark: SparkSession,
       //       For that we use a simple-heuristic to determine whether we should read and process CSI in-memory or
       //       on-cluster: total number of rows of the expected projected portion of the index has to be below the
       //       threshold (of 100k records)
-      val prunedFileNames = getPrunedFileNames(prunedPartitionsAndFileSlices)
       val shouldReadInMemory = columnStatsIndex.shouldReadInMemory(this, queryReferencedColumns)
-      columnStatsIndex.loadTransposed(queryReferencedColumns, shouldReadInMemory, prunedFileNames) { transposedColStatsDF =>
+      val prunedFileNames = getPrunedFileNames(prunedPartitionsAndFileSlices)
+      // NOTE: If partition pruning doesn't prune any files, then there's no need to apply file filters
+      //       when loading the Column Statistics Index
+      val prunedFileNamesOpt = if (shouldPushDownFilesFilter) Some(prunedFileNames) else None
+
+      columnStatsIndex.loadTransposed(queryReferencedColumns, shouldReadInMemory, prunedFileNamesOpt) { transposedColStatsDF =>
         Some(getCandidateFiles(transposedColStatsDF, queryFilters, prunedFileNames))
       }
     }
