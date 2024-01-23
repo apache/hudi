@@ -28,6 +28,7 @@ import org.apache.hudi.exception.{HoodieDuplicateKeyException, HoodieException}
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils, HoodieSparkUtils}
+import org.apache.spark.scheduler.{SparkListener, SparkListenerStageSubmitted}
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.getLastCommitMetadata
 import org.apache.spark.sql.hudi.command.HoodieSparkValidateDuplicateKeyRecordMerger
@@ -2081,6 +2082,15 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     })
   }
 
+  class StageParallelismListener(var checkMessage: String) extends SparkListener {
+    override def onStageSubmitted(stageSubmitted: SparkListenerStageSubmitted): Unit = {
+      if (stageSubmitted.stageInfo.name.contains(checkMessage)) {
+        assertResult(1)(stageSubmitted.stageInfo.numTasks)
+      }
+    }
+
+  }
+
   test("Test multiple partition fields pruning") {
 
     withRecordType()(withTempDir { tmp =>
@@ -2114,6 +2124,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |union
            |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 12 as `hour`
            |""".stripMargin)
+      spark.sparkContext.addSparkListener(new StageParallelismListener(checkMessage = "collect at HoodieSparkEngineContext.java"))
       val df = spark.sql(
         s"""
            |select * from ${targetTable} where day='2023-10-12' and hour=11
@@ -2160,6 +2171,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |union
            |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 12 as `hour`
            |""".stripMargin)
+      spark.sparkContext.addSparkListener(new StageParallelismListener(checkMessage = "collect at HoodieSparkEngineContext.java"))
       val df = spark.sql(
         s"""
            |select * from ${targetTable} where day='2023-10-12' and hour=11
