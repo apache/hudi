@@ -510,6 +510,7 @@ public class TestHoodieRealtimeRecordReader {
       }
       reader.close();
     }
+    recordReader.close();
   }
 
   @ParameterizedTest
@@ -593,6 +594,7 @@ public class TestHoodieRealtimeRecordReader {
     while (recordReader.next(key, value)) {
       // keep reading
     }
+    recordReader.close();
     reader.close();
   }
 
@@ -650,6 +652,7 @@ public class TestHoodieRealtimeRecordReader {
     while (recordReader.next(key, value)) {
       // keep reading
     }
+    recordReader.close();
     reader.close();
   }
 

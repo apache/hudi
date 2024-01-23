@@ -119,7 +119,8 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
               options: $(MVN_OPTS_INSTALL)
-              publishJUnitResults: false
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
           - task: Maven@4
             displayName: UT common flink client/spark-client
@@ -127,7 +128,8 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB1_MODULES),hudi-client/hudi-spark-client
-              publishJUnitResults: false
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - task: Maven@4
@@ -136,7 +138,8 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB1_MODULES)
-              publishJUnitResults: false
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - script: |
@@ -152,7 +155,8 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
               options: $(MVN_OPTS_INSTALL)
-              publishJUnitResults: false
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
           - task: Maven@4
             displayName: FT client/spark-client & hudi-spark-datasource/hudi-spark
@@ -160,7 +164,8 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB2_MODULES)
-              publishJUnitResults: false
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - script: |
@@ -176,7 +181,8 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
               options: $(MVN_OPTS_INSTALL)
-              publishJUnitResults: false
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
           - task: Maven@4
             displayName: UT spark-datasource
@@ -184,7 +190,8 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB3_MODULES)
-              publishJUnitResults: false
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - script: |
@@ -200,7 +207,8 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
               options: $(MVN_OPTS_INSTALL)
-              publishJUnitResults: false
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
           - task: Maven@4
             displayName: UT other modules
@@ -208,7 +216,8 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Punit-tests -pl $(JOB4_UT_MODULES)
-              publishJUnitResults: false
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - task: Maven@4
@@ -217,7 +226,8 @@ stages:
               mavenPomFile: 'pom.xml'
               goals: 'test'
               options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB4_FT_MODULES)
-              publishJUnitResults: false
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
           - script: |

@@ -26,7 +26,7 @@ import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, EqualNullSafe, EqualTo, Expression, ExtractValue, GetStructField, GreaterThan, GreaterThanOrEqual, In, InSet, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, StartsWith, SubqueryExpression}
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.hudi.ColumnStatsExpressionUtils._
-import org.apache.spark.sql.types.{StringType, StructType}
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{AnalysisException, HoodieCatalystExpressionUtils}
 import org.apache.spark.unsafe.types.UTF8String
 
@@ -211,10 +211,16 @@ object DataSkippingUtils extends Logging {
           .map(colName => GreaterThan(genColNumNullsExpr(colName), Literal(0)))
 
       // Filter "colA is not null"
-      // Translates to "colA_nullCount < colA_valueCount" for index lookup
+      // Translates to "colA_nullCount = null or colA_valueCount = null or colA_nullCount < colA_valueCount" for index lookup
+      // "colA_nullCount = null or colA_valueCount = null" means we are not certain whether the column is null or not,
+      // hence we return True to ensure this does not affect the query.
       case IsNotNull(attribute: AttributeReference) =>
         getTargetIndexedColumnName(attribute, indexSchema)
-          .map(colName => LessThan(genColNumNullsExpr(colName), genColValueCountExpr))
+          .map {colName =>
+            val numNullExpr = genColNumNullsExpr(colName)
+            val valueCountExpr = genColValueCountExpr
+            Or(Or(IsNull(numNullExpr), IsNull(valueCountExpr)), LessThan(numNullExpr, valueCountExpr))
+          }
 
       // Filter "expr(colA) in (B1, B2, ...)"
       // Translates to "(colA_minValue <= B1 AND colA_maxValue >= B1) OR (colA_minValue <= B2 AND colA_maxValue >= B2) ... "

@@ -20,7 +20,6 @@ package org.apache.spark.sql.execution.datasources
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
 import org.apache.hudi.spark3.internal.ReflectUtil
-import org.apache.hudi.util.JFunction
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.catalog.ExternalCatalogUtils.unescapePathName
 import org.apache.spark.sql.catalyst.expressions.{Cast, Literal}
@@ -29,10 +28,9 @@ import org.apache.spark.sql.execution.datasources.PartitioningUtils.timestampPar
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 
-import java.lang.{Boolean => JBoolean, Double => JDouble, Long => JLong}
+import java.lang.{Double => JDouble, Long => JLong}
 import java.math.{BigDecimal => JBigDecimal}
 import java.time.ZoneId
-import java.util
 import java.util.concurrent.ConcurrentHashMap
 import java.util.{Locale, TimeZone}
 import scala.collection.convert.Wrappers.JConcurrentMapWrapper
@@ -259,10 +257,12 @@ object Spark3ParsePartitionUtil extends SparkParsePartitionUtil {
       zoneId: ZoneId): Any = desiredType match {
     case _ if value == DEFAULT_PARTITION_PATH => null
     case NullType => null
-    case BooleanType => JBoolean.parseBoolean(value)
     case StringType => UTF8String.fromString(unescapePathName(value))
+    case ByteType => Integer.parseInt(value).toByte
+    case ShortType => Integer.parseInt(value).toShort
     case IntegerType => Integer.parseInt(value)
     case LongType => JLong.parseLong(value)
+    case FloatType => JDouble.parseDouble(value).toFloat
     case DoubleType => JDouble.parseDouble(value)
     case _: DecimalType => Literal(new JBigDecimal(value)).value
     case DateType =>
@@ -274,6 +274,8 @@ object Spark3ParsePartitionUtil extends SparkParsePartitionUtil {
       }.getOrElse {
         Cast(Cast(Literal(value), DateType, Some(zoneId.getId)), dt).eval()
       }
+    case BinaryType => value.getBytes()
+    case BooleanType => value.toBoolean
     case dt => throw new IllegalArgumentException(s"Unexpected type $dt")
   }
 

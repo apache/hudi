@@ -117,7 +117,7 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
           return new BucketIndexBulkInsertPartitionerWithRows(writeConfig.getBucketIndexHashFieldWithDefault(),
               writeConfig.getBucketIndexNumBuckets());
         } else {
-          return new ConsistentBucketIndexBulkInsertPartitionerWithRows(table, true);
+          return new ConsistentBucketIndexBulkInsertPartitionerWithRows(table, Collections.emptyMap(), true);
         }
       } else {
         return DataSourceUtils
