@@ -482,8 +482,8 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
           .databaseName(databaseName).tableName(tableName).build();
       GetPartitionIndexesResponse existingIdxsResp = awsGlue.getPartitionIndexes(indexesRequest).get();
 
-      // for each existing index
-      // remove if not relevant anymore
+      // for each existing index remove if not relevant anymore
+      boolean indexesChanges = false;
       for (PartitionIndexDescriptor existingIdx: existingIdxsResp.partitionIndexDescriptorList()) {
         List<String> idxColumns = existingIdx.keys().stream().map(key -> key.name()).collect(Collectors.toList());
         Boolean toBeRemoved = true;
@@ -493,16 +493,17 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
           }
         }
         if (toBeRemoved) {
+          indexesChanges = true;
           DeletePartitionIndexRequest idxToDelete = DeletePartitionIndexRequest.builder()
                   .databaseName(databaseName).tableName(tableName).indexName(existingIdx.indexName()).build();
           LOG.warn("Dropping irrelevant index: " + existingIdx.indexName());
           awsGlue.deletePartitionIndex(idxToDelete).get();
         }
       }
+      if(indexesChanges) // refresh indexes
+        existingIdxsResp = awsGlue.getPartitionIndexes(indexesRequest).get();
 
-       existingIdxsResp = awsGlue.getPartitionIndexes(indexesRequest).get();
-        // for each needed index
-        // create if not exist
+      // for each needed index create if not exist
       for (List<String> neededIdx : partitionsIndexNeeded) {
         Boolean toBeCreated = true;
         for (PartitionIndexDescriptor existingIdx: existingIdxsResp.partitionIndexDescriptorList()) {
