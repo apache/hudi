@@ -58,7 +58,7 @@ public class GlueCatalogSyncClientConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> META_SYNC_PARTITION_INDEX_FIELDS = ConfigProperty
       .key(GLUE_CLIENT_PROPERTY_PREFIX + "partition_index_fields")
-      .defaultValue("")
+      .noDefaultValue()
       .withInferFunction(cfg -> Option.ofNullable(cfg.getString(HoodieTableConfig.PARTITION_FIELDS))
           .or(() -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME))))
       .sinceVersion("1.0.0")
