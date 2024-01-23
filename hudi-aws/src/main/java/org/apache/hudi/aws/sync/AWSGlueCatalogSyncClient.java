@@ -500,8 +500,9 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
           awsGlue.deletePartitionIndex(idxToDelete).get();
         }
       }
-      if(indexesChanges) // refresh indexes
+      if (indexesChanges) { // refresh indexes list
         existingIdxsResp = awsGlue.getPartitionIndexes(indexesRequest).get();
+      }
 
       // for each needed index create if not exist
       for (List<String> neededIdx : partitionsIndexNeeded) {
