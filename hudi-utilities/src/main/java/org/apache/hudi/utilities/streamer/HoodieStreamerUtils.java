@@ -35,6 +35,7 @@ import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -60,6 +61,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.DROP_PARTITION_COLUMNS;
+import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_RECORD_CREATION;
 
 
 /**
@@ -76,7 +78,7 @@ public class HoodieStreamerUtils {
                                                                   SchemaProvider schemaProvider, HoodieRecord.HoodieRecordType recordType, boolean autoGenerateRecordKeys,
                                                                   String instantTime, Option<BaseErrorTableWriter> errorTableWriter) {
     boolean shouldCombine = cfg.filterDupes || cfg.operation.equals(WriteOperationType.UPSERT);
-    boolean shouldErrorTable = errorTableWriter.isPresent();
+    boolean shouldErrorTable = errorTableWriter.isPresent() && props.getBoolean(ERROR_ENABLE_VALIDATE_RECORD_CREATION.key(), ERROR_ENABLE_VALIDATE_RECORD_CREATION.defaultValue());
     Set<String> partitionColumns = getPartitionColumns(props);
     return avroRDDOptional.map(avroRDD -> {
       SerializableSchema avroSchema = new SerializableSchema(schemaProvider.getTargetSchema());
@@ -140,7 +142,7 @@ public class HoodieStreamerUtils {
               try {
                 return Either.right(HoodieAvroUtils.avroToJsonString(rec, false));
               } catch (IOException ex) {
-                throw new RuntimeException(ex);
+                throw new HoodieIOException("Failed to convert illegal record to json", ex);
               }
             }
           });

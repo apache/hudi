@@ -190,6 +190,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     if (withErrorTable) {
       extraProps.setProperty(HoodieErrorTableConfig.ERROR_TABLE_ENABLED.key(), "true");
       extraProps.setProperty(HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_TARGET_SCHEMA.key(), "true");
+      extraProps.setProperty(HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_RECORD_CREATION.key(), "true");
       extraProps.setProperty(HoodieErrorTableConfig.ERROR_TARGET_TABLE.key(), tableName + "ERROR");
       extraProps.setProperty(HoodieErrorTableConfig.ERROR_TABLE_BASE_PATH.key(), basePath + tableName + "ERROR");
       extraProps.setProperty(HoodieErrorTableConfig.ERROR_TABLE_WRITE_CLASS.key(), TestErrorTable.class.getName());

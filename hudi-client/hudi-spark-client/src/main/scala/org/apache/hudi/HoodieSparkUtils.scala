@@ -199,10 +199,6 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
     }
   }
 
-  def getJsonRdd(df: DataFrame): RDD[String] = {
-    df.toJSON.rdd
-  }
-
   /**
    * Rerwite the record into the target schema.
    * Return tuple of rewritten records and records that could not be converted
