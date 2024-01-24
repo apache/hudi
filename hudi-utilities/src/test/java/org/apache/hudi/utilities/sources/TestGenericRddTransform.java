@@ -71,17 +71,16 @@ public class TestGenericRddTransform extends SparkClientFunctionalTestHarness {
         recs.get(i).put(fieldToNull, null);
       }
     }
-    try (JavaSparkContext jsc = jsc()) {
-      RDD<GenericRecord> rdd = jsc.parallelize(recs).rdd();
-      Tuple2<RDD<GenericRecord>, RDD<String>> failSafeRdds = HoodieSparkUtils.safeRewriteRDD(rdd, schemaStr);
-      assertEquals(5, failSafeRdds._1.count());
-      assertEquals(5, failSafeRdds._2.count());
+    JavaSparkContext jsc = jsc();
+    RDD<GenericRecord> rdd = jsc.parallelize(recs).rdd();
+    Tuple2<RDD<GenericRecord>, RDD<String>> failSafeRdds = HoodieSparkUtils.safeRewriteRDD(rdd, schemaStr);
+    assertEquals(5, failSafeRdds._1.count());
+    assertEquals(5, failSafeRdds._2.count());
 
-      //if field is nullable, no records should fail validation
-      failSafeRdds = HoodieSparkUtils.safeRewriteRDD(rdd, HoodieTestDataGenerator.AVRO_SCHEMA.toString());
-      assertEquals(10, failSafeRdds._1.count());
-      assertEquals(0, failSafeRdds._2.count());
-    }
+    //if field is nullable, no records should fail validation
+    failSafeRdds = HoodieSparkUtils.safeRewriteRDD(rdd, HoodieTestDataGenerator.AVRO_SCHEMA.toString());
+    assertEquals(10, failSafeRdds._1.count());
+    assertEquals(0, failSafeRdds._2.count());
   }
 
 }
