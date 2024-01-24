@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source;
 
+import org.apache.flink.table.types.DataType;
 import org.apache.hudi.source.ExpressionPredicates.And;
 import org.apache.hudi.source.ExpressionPredicates.Equals;
 import org.apache.hudi.source.ExpressionPredicates.GreaterThan;
@@ -41,11 +42,18 @@ import org.apache.parquet.filter2.predicate.Operators.Gt;
 import org.apache.parquet.filter2.predicate.Operators.IntColumn;
 import org.apache.parquet.filter2.predicate.Operators.Lt;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.source.ExpressionPredicates.fromExpression;
 import static org.apache.parquet.filter2.predicate.FilterApi.and;
@@ -58,6 +66,7 @@ import static org.apache.parquet.filter2.predicate.FilterApi.ltEq;
 import static org.apache.parquet.filter2.predicate.FilterApi.not;
 import static org.apache.parquet.filter2.predicate.FilterApi.notEq;
 import static org.apache.parquet.filter2.predicate.FilterApi.or;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -65,6 +74,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
  * Test cases for {@link ExpressionPredicates}.
  */
 public class TestExpressionPredicates {
+
+  private static final String TEST_NAME_WITH_PARAMS = "[{index}] Test with fieldName={0}, dataType={1}, literalValue={2}";
 
   @Test
   public void testFilterPredicateFromExpression() {
@@ -181,5 +192,55 @@ public class TestExpressionPredicates {
     assertNull(And.getInstance().bindPredicates(greaterThanPredicate, lessThanPredicate).filter(), "Decimal type push down is unsupported, so we expect null");
     assertNull(Or.getInstance().bindPredicates(greaterThanPredicate, lessThanPredicate).filter(), "Decimal type push down is unsupported, so we expect null");
     assertNull(Not.getInstance().bindPredicate(greaterThanPredicate).filter(), "Decimal type push down is unsupported, so we expect null");
+  }
+
+  public static Stream<Arguments> testColumnPredicateLiteralTypeConversionParams() {
+    return Stream.of(
+        Arguments.of("f_boolean", DataTypes.BOOLEAN(), Boolean.TRUE),
+        Arguments.of("f_boolean", DataTypes.BOOLEAN(), "true"),
+        Arguments.of("f_tinyint", DataTypes.TINYINT(), 12345),
+        Arguments.of("f_tinyint", DataTypes.TINYINT(), "12345"),
+        Arguments.of("f_smallint", DataTypes.SMALLINT(), 12345),
+        Arguments.of("f_smallint", DataTypes.SMALLINT(), "12345"),
+        Arguments.of("f_integer", DataTypes.INT(), 12345),
+        Arguments.of("f_integer", DataTypes.INT(), "12345"),
+        Arguments.of("f_bigint", DataTypes.BIGINT(), 12345L),
+        Arguments.of("f_bigint", DataTypes.BIGINT(), 12345),
+        Arguments.of("f_bigint", DataTypes.BIGINT(), "12345"),
+        Arguments.of("f_float", DataTypes.FLOAT(), 123.45f),
+        Arguments.of("f_float", DataTypes.FLOAT(), "123.45f"),
+        Arguments.of("f_double", DataTypes.DOUBLE(), 123.45),
+        Arguments.of("f_double", DataTypes.DOUBLE(), "123.45"),
+        Arguments.of("f_varbinary", DataTypes.VARBINARY(10), "a".getBytes()),
+        Arguments.of("f_varbinary", DataTypes.VARBINARY(10), "a"),
+        Arguments.of("f_binary", DataTypes.BINARY(10), "a".getBytes()),
+        Arguments.of("f_binary", DataTypes.BINARY(10), "a"),
+        Arguments.of("f_date", DataTypes.DATE(), LocalDate.now()),
+        Arguments.of("f_date", DataTypes.DATE(), 19740),
+        Arguments.of("f_date", DataTypes.DATE(), 19740L),
+        Arguments.of("f_date", DataTypes.DATE(), "2024-01-18"),
+        Arguments.of("f_char", DataTypes.CHAR(1), "a"),
+        Arguments.of("f_char", DataTypes.CHAR(1), 1),
+        Arguments.of("f_varchar", DataTypes.VARCHAR(1), "a"),
+        Arguments.of("f_varchar", DataTypes.VARCHAR(1), 1),
+        Arguments.of("f_time", DataTypes.TIME(), LocalTime.now()),
+        Arguments.of("f_time", DataTypes.TIME(), 12345),
+        Arguments.of("f_time", DataTypes.TIME(), 60981896000L),
+        Arguments.of("f_time", DataTypes.TIME(), "20:00:00"),
+        Arguments.of("f_timestamp", DataTypes.TIMESTAMP(), LocalDateTime.now()),
+        Arguments.of("f_timestamp", DataTypes.TIMESTAMP(), 12345),
+        Arguments.of("f_timestamp", DataTypes.TIMESTAMP(), 1705568913701L),
+        Arguments.of("f_timestamp", DataTypes.TIMESTAMP(), "2024-01-18T15:00:00")
+    );
+  }
+
+  @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
+  @MethodSource("testColumnPredicateLiteralTypeConversionParams")
+  public void testColumnPredicateLiteralTypeConversion(String fieldName, DataType dataType, Object literalValue) {
+    FieldReferenceExpression fieldReference = new FieldReferenceExpression(fieldName, dataType, 0, 0);
+    ValueLiteralExpression valueLiteral = new ValueLiteralExpression(literalValue);
+
+    ExpressionPredicates.ColumnPredicate predicate = Equals.getInstance().bindFieldReference(fieldReference).bindValueLiteral(valueLiteral);
+    assertDoesNotThrow(predicate::filter, () -> String.format("Convert from %s to %s failed", literalValue.getClass().getName(), dataType));
   }
 }
