@@ -144,7 +144,7 @@ public class AvroSchemaEvolutionUtils {
       return sourceSchema;
     }
 
-    if (sourceSchema.getType() == Schema.Type.NULL || sourceSchema.getFields().isEmpty()) {
+    if (sourceSchema == null || sourceSchema.getType() == Schema.Type.NULL || sourceSchema.getFields().isEmpty()) {
       return targetSchema;
     }
 

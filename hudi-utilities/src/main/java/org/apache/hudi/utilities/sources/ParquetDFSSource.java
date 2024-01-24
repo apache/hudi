@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.utilities.config.ParquetDFSSourceConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
 
@@ -28,6 +29,8 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+
+import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 
 /**
  * DFS Source that reads parquet data.
@@ -52,6 +55,7 @@ public class ParquetDFSSource extends RowSource {
   }
 
   private Dataset<Row> fromFiles(String pathStr) {
-    return sparkSession.read().parquet(pathStr.split(","));
+    boolean mergeSchemaOption = getBooleanWithAltKeys(this.props, ParquetDFSSourceConfig.PARQUET_DFS_MERGE_SCHEMA);
+    return sparkSession.read().option("mergeSchema", mergeSchemaOption).parquet(pathStr.split(","));
   }
 }

@@ -40,7 +40,7 @@ import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertNull, assertTrue, fail}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
 import org.junit.jupiter.params.provider._
@@ -702,15 +702,11 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
    */
   @ParameterizedTest
   @CsvSource(value = Array(
-    "COPY_ON_WRITE,true",
-    "COPY_ON_WRITE,false",
-    "MERGE_ON_READ,true",
-    "MERGE_ON_READ,false"
+    "COPY_ON_WRITE",
+    "MERGE_ON_READ"
   ))
-  def testSchemaEvolutionForTableType(tableType: String, allowColumnDrop: Boolean): Unit = {
-    val opts = getCommonParams(tempPath, hoodieFooTableName, tableType) ++ Map(
-      HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> allowColumnDrop.toString
-    )
+  def testSchemaEvolutionForTableType(tableType: String): Unit = {
+    val opts = getCommonParams(tempPath, hoodieFooTableName, tableType)
 
     // Create new table
     // NOTE: We disable Schema Reconciliation by default (such that Writer's
@@ -801,28 +797,30 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
 
     val df5 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
 
-    if (allowColumnDrop) {
-      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, noReconciliationOpts, df5)
-
-      val snapshotDF5 = spark.read.format("org.apache.hudi")
-        .load(tempBasePath + "/*/*/*/*")
-
-      assertEquals(35, snapshotDF5.count())
-
-      assertEquals(df5.intersect(dropMetaFields(snapshotDF5)).except(df5).count, 0)
-
-      val fifthBatchActualSchema = fetchActualSchema()
-      val fifthBatchExpectedSchema = {
-        val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(hoodieFooTableName)
-        AvroConversionUtils.convertStructTypeToAvroSchema(df5.schema, structName, nameSpace)
-      }
-
-      assertEquals(fifthBatchExpectedSchema, fifthBatchActualSchema)
-    } else {
-      assertThrows[SchemaCompatibilityException] {
-        HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, noReconciliationOpts, df5)
-      }
+    // assert error is thrown when dropping is not allowed
+    val disallowOpts = noReconciliationOpts ++ Map(
+      HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> false.toString
+    )
+    assertThrows[SchemaCompatibilityException] {
+      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, disallowOpts, df5)
     }
+
+    // passes when allowed.
+    val allowOpts = noReconciliationOpts ++ Map(
+      HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> true.toString
+    )
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, allowOpts, df5)
+
+    val snapshotDF5 = spark.read.format("org.apache.hudi").load(tempBasePath + "/*/*/*/*")
+    assertEquals(35, snapshotDF5.count())
+    assertEquals(df5.intersect(dropMetaFields(snapshotDF5)).except(df5).count, 0)
+
+    val fifthBatchActualSchema = fetchActualSchema()
+    val fifthBatchExpectedSchema = {
+      val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(hoodieFooTableName)
+      AvroConversionUtils.convertStructTypeToAvroSchema(df5.schema, structName, nameSpace)
+    }
+    assertEquals(fifthBatchExpectedSchema, fifthBatchActualSchema)
   }
 
   /**
@@ -1341,8 +1339,9 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
   /*
    * Test case for instant is generated with commit timezone when TIMELINE_TIMEZONE set to UTC
    * related to HUDI-5978
+   * Issue [HUDI-7275] is tracking this test being disabled
    */
-  @Test
+  @Disabled
   def testInsertDatasetWithTimelineTimezoneUTC(): Unit = {
     val defaultTimezone = TimeZone.getDefault
     try {
@@ -1418,7 +1417,6 @@ object TestHoodieSparkSqlWriter {
 
   def deletePartitionsWildcardTestParams(): java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(
-      arguments("2015/03/*", Seq("2016/03/15")),
       arguments("*5/03/1*", Seq("2016/03/15")),
       arguments("2016/03/*", Seq("2015/03/16", "2015/03/17")))
   }

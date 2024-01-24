@@ -26,6 +26,7 @@ import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.flink.table.functions.FunctionDefinition;
 import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.hudi.util.ImplicitTypeConverter;
 import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.filter2.predicate.Operators;
 import org.slf4j.Logger;
@@ -223,7 +224,8 @@ public class ExpressionPredicates {
 
     @Override
     public FilterPredicate filter() {
-      return toParquetPredicate(getFunctionDefinition(), literalType, columnName, literal);
+      Serializable convertedLiteral = ImplicitTypeConverter.convertImplicitly(literalType, literal);
+      return toParquetPredicate(getFunctionDefinition(), literalType, columnName, convertedLiteral);
     }
 
     /**
@@ -510,7 +512,11 @@ public class ExpressionPredicates {
 
     @Override
     public FilterPredicate filter() {
-      return not(predicate.filter());
+      FilterPredicate filterPredicate = predicate.filter();
+      if (null == filterPredicate) {
+        return null;
+      }
+      return not(filterPredicate);
     }
 
     @Override
@@ -548,7 +554,12 @@ public class ExpressionPredicates {
 
     @Override
     public FilterPredicate filter() {
-      return and(predicates[0].filter(), predicates[1].filter());
+      FilterPredicate filterPredicate0 = predicates[0].filter();
+      FilterPredicate filterPredicate1 = predicates[1].filter();
+      if (null == filterPredicate0 || null == filterPredicate1) {
+        return null;
+      }
+      return and(filterPredicate0, filterPredicate1);
     }
 
     @Override
@@ -586,7 +597,12 @@ public class ExpressionPredicates {
 
     @Override
     public FilterPredicate filter() {
-      return or(predicates[0].filter(), predicates[1].filter());
+      FilterPredicate filterPredicate0 = predicates[0].filter();
+      FilterPredicate filterPredicate1 = predicates[1].filter();
+      if (null == filterPredicate0 || null == filterPredicate1) {
+        return null;
+      }
+      return or(filterPredicate0, filterPredicate1);
     }
 
     @Override
@@ -602,10 +618,10 @@ public class ExpressionPredicates {
       case TINYINT:
       case SMALLINT:
       case INTEGER:
+      case DATE:
       case TIME_WITHOUT_TIME_ZONE:
         return predicateSupportsLtGt(functionDefinition, intColumn(columnName), (Integer) literal);
       case BIGINT:
-      case DATE:
       case TIMESTAMP_WITHOUT_TIME_ZONE:
         return predicateSupportsLtGt(functionDefinition, longColumn(columnName), (Long) literal);
       case FLOAT:

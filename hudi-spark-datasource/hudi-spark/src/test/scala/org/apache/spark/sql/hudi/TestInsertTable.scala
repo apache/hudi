@@ -2173,6 +2173,38 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     })
   }
 
+  test("Test inaccurate index type") {
+    withRecordType()(withTempDir { tmp =>
+      val targetTable = generateTableName
+
+      assertThrows[IllegalArgumentException] {
+        try {
+          spark.sql(
+            s"""
+               |create table ${targetTable} (
+               |  `id` string,
+               |  `name` string,
+               |  `dt` bigint,
+               |  `day` STRING,
+               |  `hour` INT
+               |) using hudi
+               |OPTIONS ('hoodie.datasource.write.hive_style_partitioning' 'false', 'hoodie.datasource.meta.sync.enable' 'false', 'hoodie.datasource.hive_sync.enable' 'false')
+               |tblproperties (
+               |  'primaryKey' = 'id',
+               |  'type' = 'mor',
+               |  'preCombineField'='dt',
+               |  'hoodie.index.type' = 'BUCKET_aa',
+               |  'hoodie.bucket.index.hash.field' = 'id',
+               |  'hoodie.bucket.index.num.buckets'=512
+               | )
+               |partitioned by (`day`,`hour`)
+               |location '${tmp.getCanonicalPath}'
+               |""".stripMargin)
+        }
+      }
+    })
+  }
+
   test("Test vectorized read nested columns for LegacyHoodieParquetFileFormat") {
     withSQLConf(
       "hoodie.datasource.read.use.new.parquet.file.format" -> "false",
@@ -2333,6 +2365,43 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       }
     })
   }
+
+  test("Test various data types as partition fields") {
+    withRecordType()(withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |CREATE TABLE $tableName (
+           |  id INT,
+           |  boolean_field BOOLEAN,
+           |  float_field FLOAT,
+           |  byte_field BYTE,
+           |  short_field SHORT,
+           |  decimal_field DECIMAL(10, 5),
+           |  date_field DATE,
+           |  string_field STRING,
+           |  timestamp_field TIMESTAMP
+           |) USING hudi
+           | TBLPROPERTIES (primaryKey = 'id')
+           | PARTITIONED BY (boolean_field, float_field, byte_field, short_field, decimal_field, date_field, string_field, timestamp_field)
+           |LOCATION '${tmp.getCanonicalPath}'
+     """.stripMargin)
+
+      // Insert data into partitioned table
+      spark.sql(
+        s"""
+           |INSERT INTO $tableName VALUES
+           |(1, TRUE, CAST(1.0 as FLOAT), 1, 1, 1234.56789, DATE '2021-01-05', 'partition1', TIMESTAMP '2021-01-05 10:00:00'),
+           |(2, FALSE,CAST(2.0 as FLOAT), 2, 2, 6789.12345, DATE '2021-01-06', 'partition2', TIMESTAMP '2021-01-06 11:00:00')
+     """.stripMargin)
+
+      checkAnswer(s"SELECT id, boolean_field FROM $tableName ORDER BY id")(
+        Seq(1, true),
+        Seq(2, false)
+      )
+    })
+  }
+
 
   def ingestAndValidateDataDupPolicy(tableType: String, tableName: String, tmp: File,
                                      expectedOperationtype: WriteOperationType = WriteOperationType.INSERT,

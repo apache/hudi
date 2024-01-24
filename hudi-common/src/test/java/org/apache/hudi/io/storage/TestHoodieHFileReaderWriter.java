@@ -38,12 +38,14 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.CellComparatorImpl;
+import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
@@ -72,6 +74,12 @@ import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.io.hfile.TestHFileReader.BOOTSTRAP_INDEX_HFILE_SUFFIX;
+import static org.apache.hudi.io.hfile.TestHFileReader.COMPLEX_SCHEMA_HFILE_SUFFIX;
+import static org.apache.hudi.io.hfile.TestHFileReader.KEY_CREATOR;
+import static org.apache.hudi.io.hfile.TestHFileReader.SIMPLE_SCHEMA_HFILE_SUFFIX;
+import static org.apache.hudi.io.hfile.TestHFileReader.VALUE_CREATOR;
+import static org.apache.hudi.io.hfile.TestHFileReader.readHFileFromResources;
 import static org.apache.hudi.io.storage.HoodieAvroHFileReader.SCHEMA_KEY;
 import static org.apache.hudi.io.storage.HoodieHFileConfig.HFILE_COMPARATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -83,9 +91,6 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
   private static final String DUMMY_BASE_PATH = "dummy_base_path";
   // Number of records in HFile fixtures for compatibility tests
   private static final int NUM_RECORDS_FIXTURE = 50;
-  private static final String SIMPLE_SCHEMA_HFILE_SUFFIX = "_simple.hfile";
-  private static final String COMPLEX_SCHEMA_HFILE_SUFFIX = "_complex.hfile";
-  private static final String BOOTSTRAP_INDEX_HFILE_SUFFIX = "_bootstrap_index_partitions.hfile";
 
   @Override
   protected Path getFilePath() {
@@ -402,7 +407,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
 
   @ParameterizedTest
   @ValueSource(strings = {
-      "/hudi_0_9_hbase_1_2_3", "/hudi_0_10_hbase_1_2_3", "/hudi_0_11_hbase_2_4_9"})
+      "/hfile/hudi_0_9_hbase_1_2_3", "/hfile/hudi_0_10_hbase_1_2_3", "/hfile/hudi_0_11_hbase_2_4_9"})
   public void testHoodieHFileCompatibility(String hfilePrefix) throws IOException {
     // This fixture is generated from TestHoodieReaderWriterBase#testWriteReadPrimitiveRecord()
     // using different Hudi releases
@@ -431,7 +436,8 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     verifyHFileReader(HoodieHFileUtils.createHFileReader(fs, new Path(DUMMY_BASE_PATH), content),
         hfilePrefix, true, HFILE_COMPARATOR.getClass(), NUM_RECORDS_FIXTURE);
     hfileReader =
-        new HoodieAvroHFileReader(hadoopConf, new Path(DUMMY_BASE_PATH), new CacheConfig(hadoopConf), fs, content, Option.empty());
+        new HoodieAvroHFileReader(hadoopConf, new Path(DUMMY_BASE_PATH), new CacheConfig(hadoopConf), fs, content,
+            Option.empty());
     avroSchema = getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchemaWithUDT.avsc");
     assertEquals(NUM_RECORDS_FIXTURE, hfileReader.getTotalRecords());
     verifySimpleRecords(hfileReader.getRecordIterator(avroSchema));
@@ -439,6 +445,28 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     content = readHFileFromResources(bootstrapIndexFile);
     verifyHFileReader(HoodieHFileUtils.createHFileReader(fs, new Path(DUMMY_BASE_PATH), content),
         hfilePrefix, false, HFileBootstrapIndex.HoodieKVComparator.class, 4);
+  }
+
+  @Disabled("This is used for generating testing HFile only")
+  @ParameterizedTest
+  @CsvSource({
+      "512,GZ,20000,true", "16,GZ,20000,true",
+      "64,NONE,5000,true", "16,NONE,5000,true",
+      "16,GZ,200,false"
+  })
+  void generateHFileForTesting(int blockSizeKB,
+                               String compressionCodec,
+                               int numEntries,
+                               boolean uniqueKeys) throws IOException {
+    TestHoodieReaderWriterUtils.writeHFileForTesting(
+        String.format("/tmp/hudi_1_0_hbase_2_4_9_%sKB_%s_%s.hfile",
+            blockSizeKB, compressionCodec, numEntries),
+        blockSizeKB * 1024,
+        Compression.Algorithm.valueOf(compressionCodec),
+        numEntries,
+        KEY_CREATOR,
+        VALUE_CREATOR,
+        uniqueKeys);
   }
 
   private Set<String> getRandomKeys(int count, List<String> keys) {
@@ -451,13 +479,6 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       }
     }
     return rowKeys;
-  }
-
-  private byte[] readHFileFromResources(String filename) throws IOException {
-    long size = TestHoodieHFileReaderWriter.class
-        .getResource(filename).openConnection().getContentLength();
-    return FileIOUtils.readAsByteArray(
-        TestHoodieHFileReaderWriter.class.getResourceAsStream(filename), (int) size);
   }
 
   private void verifyHFileReader(

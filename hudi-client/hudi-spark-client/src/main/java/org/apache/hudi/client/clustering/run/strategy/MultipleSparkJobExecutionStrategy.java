@@ -220,7 +220,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         default:
           throw new UnsupportedOperationException(String.format("Layout optimization strategy '%s' is not supported", layoutOptStrategy));
       }
-    }).orElse(isRowPartitioner
+    }).orElseGet(() -> isRowPartitioner
         ? BulkInsertInternalPartitionerWithRowsFactory.get(getWriteConfig(), getHoodieTable().isPartitioned(), true)
         : BulkInsertInternalPartitionerFactory.get(getHoodieTable(), getWriteConfig(), true));
   }
@@ -321,6 +321,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
               .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
               .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
               .withRecordMerger(config.getRecordMerger())
+              .withTableMetaClient(table.getMetaClient())
               .build();
 
           Option<HoodieFileReader> baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
