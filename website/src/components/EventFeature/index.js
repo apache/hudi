@@ -1,7 +1,7 @@
 import React from "react";
 import styles from "./styles.module.css";
 import LinkButton from "@site/src/components/UI/LinkButton";
-import Calendar from "./Icons/Calendar.svg";
+import Calendar from "./Icons/calendar.svg";
 import Microphone from "./Icons/microphone.svg";
 
 const Events = () => {
