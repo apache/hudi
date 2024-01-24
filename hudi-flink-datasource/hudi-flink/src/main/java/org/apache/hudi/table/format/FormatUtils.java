@@ -171,6 +171,7 @@ public class FormatUtils {
         .withInstantRange(split.getInstantRange())
         .withOperationField(flinkConf.getBoolean(FlinkOptions.CHANGELOG_ENABLED))
         .withRecordMerger(writeConfig.getRecordMerger())
+        .withLogIndex(split.getLogIndex())
         .build();
   }
 
@@ -211,7 +212,8 @@ public class FormatUtils {
               flinkConf.getInteger(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.key(),
                   HoodieMemoryConfig.DEFAULT_MR_MAX_DFS_STREAM_BUFFER_SIZE))
           .withInstantRange(split.getInstantRange())
-          .withRecordMerger(merger);
+          .withRecordMerger(merger)
+          .withLogIndex(split.getLogIndex());
 
       this.executor = new BoundedInMemoryExecutor<>(
           StreamerUtil.getMaxCompactionMemoryInBytes(flinkConf),

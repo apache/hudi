@@ -163,6 +163,9 @@ public class HoodieWriteStat implements Serializable {
   @Nullable
   private RuntimeStats runtimeStats;
 
+  @Nullable
+  private Map<String, Long> logIndex;
+
   public HoodieWriteStat() {
     // called by jackson json lib
   }
@@ -368,6 +371,15 @@ public class HoodieWriteStat implements Serializable {
     this.path = path.toString().replace(basePath + "/", "");
   }
 
+  @Nullable
+  public Map<String, Long> getLogIndex() {
+    return logIndex;
+  }
+
+  public void setLogIndex(@Nullable Map<String, Long> logIndex) {
+    this.logIndex = logIndex;
+  }
+
   @Override
   public String toString() {
     return "HoodieWriteStat{fileId='" + fileId + '\'' + ", path='" + path + '\'' + ", prevCommit='" + prevCommit
@@ -377,7 +389,8 @@ public class HoodieWriteStat implements Serializable {
         + '\'' + ", partitionPath='" + partitionPath + '\'' + ", totalLogRecords=" + totalLogRecords
         + ", totalLogFilesCompacted=" + totalLogFilesCompacted + ", totalLogSizeCompacted=" + totalLogSizeCompacted
         + ", totalUpdatedRecordsCompacted=" + totalUpdatedRecordsCompacted + ", totalLogBlocks=" + totalLogBlocks
-        + ", totalCorruptLogBlock=" + totalCorruptLogBlock + ", totalRollbackBlocks=" + totalRollbackBlocks + '}';
+        + ", totalCorruptLogBlock=" + totalCorruptLogBlock + ", totalRollbackBlocks=" + totalRollbackBlocks
+        + ", logIndex=" + logIndex + '}';
   }
 
   @Override

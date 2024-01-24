@@ -23,11 +23,13 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCExtractor;
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.log.InstantRange;
+import org.apache.hudi.common.table.log.LogIndex;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -71,6 +73,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.config.HoodieIndexConfig.LOG_INDEX_ENABLED;
 
 /**
  * Utilities to generate incremental input splits {@link MergeOnReadInputSplit}.
@@ -233,7 +236,7 @@ public class IncrementalInputSplits implements Serializable {
     }
 
     List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline,
-        fileStatuses, readPartitions, endInstant, instantRange, false);
+        fileStatuses, readPartitions, endInstant, instantRange, false, null);
 
     return Result.instance(inputSplits, endInstant);
   }
@@ -311,7 +314,7 @@ public class IncrementalInputSplits implements Serializable {
       }
 
       List<MergeOnReadInputSplit> inputSplits = getInputSplits(metaClient, commitTimeline,
-          fileStatuses, readPartitions, endInstant, null, false);
+          fileStatuses, readPartitions, endInstant, null, false, null);
 
       return Result.instance(inputSplits, endInstant, offsetToIssue);
     } else {
@@ -364,7 +367,7 @@ public class IncrementalInputSplits implements Serializable {
     }
 
     return getInputSplits(metaClient, commitTimeline,
-        fileStatuses, readPartitions, endInstant, instantRange, skipCompaction);
+        fileStatuses, readPartitions, endInstant, instantRange, skipCompaction, metadataList);
   }
 
   /**
@@ -441,11 +444,13 @@ public class IncrementalInputSplits implements Serializable {
       Set<String> readPartitions,
       String endInstant,
       InstantRange instantRange,
-      boolean skipBaseFiles) {
+      boolean skipBaseFiles,
+      List<HoodieCommitMetadata> metadataList) {
     final HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, commitTimeline, fileStatuses);
     final String maxQueryInstantTime = getMaxQueryInstantTime(fsView, endInstant);
     final AtomicInteger cnt = new AtomicInteger(0);
     final String mergeType = this.conf.getString(FlinkOptions.MERGE_TYPE);
+    HoodieCommitMetadata commitMetadata = metadataList == null ? null : metadataList.get(0);
     return readPartitions.stream()
         .map(relPartitionPath -> getFileSlices(fsView, relPartitionPath, maxQueryInstantTime, skipBaseFiles)
             .map(fileSlice -> {
@@ -458,9 +463,15 @@ public class IncrementalInputSplits implements Serializable {
               // the latest commit is used as the limit of the log reader instant upper threshold,
               // it must be at least the latest instant time of the file slice to avoid data loss.
               String latestCommit = HoodieTimeline.minInstant(fileSlice.getLatestInstantTime(), endInstant);
+              LogIndex logIndex;
+              if (conf.getBoolean(LOG_INDEX_ENABLED.key(), LOG_INDEX_ENABLED.defaultValue()) && commitMetadata != null) {
+                logIndex = getLogIndex(fileSlice, commitMetadata, instantRange);
+              } else {
+                logIndex = LogIndex.getEmptyIndex();
+              }
               return new MergeOnReadInputSplit(cnt.getAndAdd(1),
                   basePath, logPaths, latestCommit,
-                  metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType, instantRange, fileSlice.getFileId());
+                  metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType, instantRange, fileSlice.getFileId(), logIndex);
             }).collect(Collectors.toList()))
         .flatMap(Collection::stream)
         .sorted(Comparator.comparing(MergeOnReadInputSplit::getLatestCommit))
@@ -656,6 +667,25 @@ public class IncrementalInputSplits implements Serializable {
     List<T> merged = new ArrayList<>(list1);
     merged.addAll(list2);
     return merged;
+  }
+
+  private static LogIndex getLogIndex(
+      FileSlice fileSlice,
+      HoodieCommitMetadata commitMetadata,
+      @Nullable InstantRange instantRange
+  ) {
+    if (instantRange == null) {
+      return LogIndex.getEmptyIndex();
+    }
+    List<HoodieWriteStat> stats = commitMetadata.getWriteStats(fileSlice.getFileGroupId().getPartitionPath());
+    if (stats != null) {
+      for (HoodieWriteStat stat : stats) {
+        if (stat.getLogIndex() != null && stat.getFileId().equals(fileSlice.getFileId())) {
+          return new LogIndex(instantRange.getStartInstant(), stat.getLogIndex());
+        }
+      }
+    }
+    return LogIndex.getEmptyIndex();
   }
 
   // -------------------------------------------------------------------------

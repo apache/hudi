@@ -334,6 +334,11 @@ public class HoodieIndexConfig extends HoodieConfig {
       .withDocumentation("Only applies when #recordIndexUseCaching is set. Determine what level of persistence is used to cache input RDDs. "
           + "Refer to org.apache.spark.storage.StorageLevel for different values");
 
+  public static final ConfigProperty<Boolean> LOG_INDEX_ENABLED = ConfigProperty
+      .key("hoodie.log.index.enabled")
+      .defaultValue(false)
+      .withDocumentation("Mapping commitTime => offset in log files");
+
   /**
    * Deprecated configs. These are now part of {@link HoodieHBaseIndexConfig}.
    */

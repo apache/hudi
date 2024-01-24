@@ -44,9 +44,9 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
   private HoodieUnMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
                                          String latestInstantTime, boolean readBlocksLazily, boolean reverseReader, int bufferSize,
                                          LogRecordScannerCallback callback, Option<InstantRange> instantRange, InternalSchema internalSchema,
-                                         boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger) {
+                                         boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger, LogIndex logIndex) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize, instantRange,
-        false, true, Option.empty(), internalSchema, Option.empty(), enableOptimizedLogBlocksScan, recordMerger);
+        false, true, Option.empty(), internalSchema, Option.empty(), enableOptimizedLogBlocksScan, recordMerger, logIndex);
     this.callback = callback;
   }
 
@@ -109,6 +109,8 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
     private LogRecordScannerCallback callback;
     private boolean enableOptimizedLogBlocksScan;
     private HoodieRecordMerger recordMerger = HoodiePreCombineAvroRecordMerger.INSTANCE;
+
+    private LogIndex logIndex = LogIndex.getEmptyIndex();
 
     public Builder withFileSystem(FileSystem fs) {
       this.fs = fs;
@@ -180,13 +182,18 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
       return this;
     }
 
+    public Builder withLogIndex(LogIndex logIndex) {
+      this.logIndex = logIndex;
+      return this;
+    }
+
     @Override
     public HoodieUnMergedLogRecordScanner build() {
       ValidationUtils.checkArgument(recordMerger != null);
 
       return new HoodieUnMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
           latestInstantTime, readBlocksLazily, reverseReader, bufferSize, callback, instantRange,
-          internalSchema, enableOptimizedLogBlocksScan, recordMerger);
+          internalSchema, enableOptimizedLogBlocksScan, recordMerger, logIndex);
     }
   }
 }
