@@ -135,6 +135,7 @@ public class HoodieMergedReadHandle<T, I, K, O> extends HoodieReadHandle<T, I, K
         .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
         .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
         .withRecordMerger(config.getRecordMerger())
+        .withTableMetaClient(hoodieTable.getMetaClient())
         .build();
   }
 
