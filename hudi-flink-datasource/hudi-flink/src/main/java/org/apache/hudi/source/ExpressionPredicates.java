@@ -26,6 +26,7 @@ import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.flink.table.functions.FunctionDefinition;
 import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.hudi.util.ImplicitTypeConverter;
 import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.filter2.predicate.Operators;
 import org.slf4j.Logger;
@@ -223,7 +224,8 @@ public class ExpressionPredicates {
 
     @Override
     public FilterPredicate filter() {
-      return toParquetPredicate(getFunctionDefinition(), literalType, columnName, literal);
+      Serializable convertedLiteral = ImplicitTypeConverter.convertImplicitly(literalType, literal);
+      return toParquetPredicate(getFunctionDefinition(), literalType, columnName, convertedLiteral);
     }
 
     /**
