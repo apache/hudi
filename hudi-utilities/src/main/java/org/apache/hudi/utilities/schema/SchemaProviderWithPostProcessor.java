@@ -18,8 +18,9 @@
 
 package org.apache.hudi.utilities.schema;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.common.util.Option;
+
+import org.apache.avro.Schema;
 
 /**
  * A schema provider which applies schema post process hook on schema.
@@ -38,14 +39,16 @@ public class SchemaProviderWithPostProcessor extends SchemaProvider {
 
   @Override
   public Schema getSourceSchema() {
-    return schemaPostProcessor.map(processor -> processor.processSchema(schemaProvider.getSourceSchema()))
-        .orElse(schemaProvider.getSourceSchema());
+    Schema sourceSchema = schemaProvider.getSourceSchema();
+    return schemaPostProcessor.map(processor -> processor.processSchema(sourceSchema))
+        .orElse(sourceSchema);
   }
 
   @Override
   public Schema getTargetSchema() {
-    return schemaPostProcessor.map(processor -> processor.processSchema(schemaProvider.getTargetSchema()))
-        .orElse(schemaProvider.getTargetSchema());
+    Schema targetSchema = schemaProvider.getTargetSchema();
+    return schemaPostProcessor.map(processor -> processor.processSchema(targetSchema))
+        .orElse(targetSchema);
   }
 
   public SchemaProvider getOriginalSchemaProvider() {
