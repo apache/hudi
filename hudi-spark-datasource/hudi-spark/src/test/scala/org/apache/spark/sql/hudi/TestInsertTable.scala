@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.timeline.HoodieInstant
@@ -2125,7 +2126,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |union
            |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 12 as `hour`
            |""".stripMargin)
-      spark.sparkContext.addSparkListener(new StageParallelismListener(stageName = "collect at HoodieSparkEngineContext.java"))
+      val stageClassName = classOf[HoodieSparkEngineContext].getSimpleName
+      spark.sparkContext.addSparkListener(new StageParallelismListener(stageName = stageClassName))
       val df = spark.sql(
         s"""
            |select * from ${targetTable} where day='2023-10-12' and hour=11
@@ -2172,7 +2174,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |union
            |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 12 as `hour`
            |""".stripMargin)
-      spark.sparkContext.addSparkListener(new StageParallelismListener(stageName = "collect at HoodieSparkEngineContext.java"))
+      val stageClassName = classOf[HoodieSparkEngineContext].getSimpleName
+      spark.sparkContext.addSparkListener(new StageParallelismListener(stageName = stageClassName))
       val df = spark.sql(
         s"""
            |select * from ${targetTable} where day='2023-10-12' and hour=11
