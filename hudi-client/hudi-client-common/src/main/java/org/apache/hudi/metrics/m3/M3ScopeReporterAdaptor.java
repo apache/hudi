@@ -142,5 +142,4 @@ public class M3ScopeReporterAdaptor extends ScheduledReporter {
     reportSnapshot(name, timer.getSnapshot());
   }
 
-
 }

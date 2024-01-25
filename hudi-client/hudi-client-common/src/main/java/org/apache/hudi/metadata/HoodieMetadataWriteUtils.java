@@ -191,6 +191,7 @@ public class HoodieMetadataWriteUtils {
               .useM3Service(writeConfig.getM3Service())
               .useM3Env(writeConfig.getM3Env()).build();
           builder.withProperties(m3Config.getProps());
+          break;
         case DATADOG:
           HoodieMetricsDatadogConfig.Builder datadogConfig = HoodieMetricsDatadogConfig.newBuilder()
                   .withDatadogApiKey(writeConfig.getDatadogApiKey())

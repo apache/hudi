@@ -19,8 +19,6 @@
 package org.apache.hudi.metrics.m3;
 
 import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.Snapshot;
-import com.codahale.metrics.Timer;
 import com.uber.m3.tally.m3.M3Reporter;
 import com.uber.m3.util.Duration;
 import com.uber.m3.util.ImmutableMap;
@@ -33,15 +31,15 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metrics.MetricsReporter;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Implementation of M3 Metrics reporter, which can report metrics to a https://m3db.io/ service
  */
 public class M3MetricsReporter extends MetricsReporter {
 
-  private static final Logger LOG = LogManager.getLogger(M3MetricsReporter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(M3MetricsReporter.class);
   private final HoodieWriteConfig config;
   private final MetricRegistry registry;
   private final ImmutableMap<String, String> tags;

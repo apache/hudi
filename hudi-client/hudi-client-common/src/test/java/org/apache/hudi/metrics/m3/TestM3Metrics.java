@@ -28,7 +28,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.metrics.MetricsReporterType;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
