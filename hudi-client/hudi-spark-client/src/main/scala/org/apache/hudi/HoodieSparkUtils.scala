@@ -197,6 +197,27 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
     }
   }
 
+  /**
+   * Rerwite the record into the target schema.
+   * Return tuple of rewritten records and records that could not be converted
+   */
+  def safeRewriteRDD(df: RDD[GenericRecord], serializedTargetSchema: String): Tuple2[RDD[GenericRecord], RDD[String]] = {
+    val rdds: RDD[Either[GenericRecord, String]] = df.mapPartitions { recs =>
+      if (recs.isEmpty) {
+        Iterator.empty
+      } else {
+        val schema = new Schema.Parser().parse(serializedTargetSchema)
+        val transform: GenericRecord => Either[GenericRecord, String] = record => try {
+          Left(HoodieAvroUtils.rewriteRecordDeep(record, schema, true))
+        } catch {
+          case _: Throwable => Right(HoodieAvroUtils.avroToJsonString(record, false))
+        }
+        recs.map(transform)
+      }
+    }
+    (rdds.filter(_.isLeft).map(_.left.get), rdds.filter(_.isRight).map(_.right.get))
+  }
+
   def getCatalystRowSerDe(structType: StructType): SparkRowSerDe = {
     sparkAdapter.createSparkRowSerDe(structType)
   }
