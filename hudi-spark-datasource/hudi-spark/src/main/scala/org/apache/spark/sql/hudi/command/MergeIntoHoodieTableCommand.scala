@@ -22,7 +22,7 @@ import org.apache.hudi.AvroConversionUtils.convertStructTypeToAvroSchema
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkSqlWriter.CANONICALIZE_SCHEMA
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.common.model.HoodieAvroRecordMerger
+import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieTableType}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME, WRITE_PARTIAL_UPDATE_SCHEMA}
@@ -46,6 +46,7 @@ import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand.{CoercedAtt
 import org.apache.spark.sql.hudi.command.PartialAssignmentMode.PartialAssignmentMode
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
+import org.apache.spark.sql.internal.SQLConf.PARQUET_VECTORIZED_READER_ENABLED
 import org.apache.spark.sql.types.{BooleanType, StructField, StructType}
 
 import java.util.Base64
@@ -273,7 +274,11 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
     if (HoodieSparkUtils.isSpark2) {
       //already enabled by default for spark 3+
-      sparkSession.conf.set("spark.sql.crossJoin.enabled","true")
+      sparkSession.conf.set("spark.sql.crossJoin.enabled", "true")
+    } else if (HoodieSparkUtils.isSpark3_1 &&
+      hoodieCatalogTable.tableConfig.getTableType.equals(HoodieTableType.MERGE_ON_READ) &&
+      sparkSession.conf.get("hoodie.index.type", "").toLowerCase.contains("global")) {
+      sparkSession.conf.set(PARQUET_VECTORIZED_READER_ENABLED.key, "false")
     }
 
     val projectedJoinedDF: DataFrame = projectedJoinedDataset
