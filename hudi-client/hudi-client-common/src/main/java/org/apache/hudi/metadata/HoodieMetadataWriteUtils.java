@@ -37,6 +37,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsM3Config;
 import org.apache.hudi.config.metrics.HoodieMetricsPrometheusConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsDatadogConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
@@ -182,6 +183,14 @@ public class HoodieMetadataWriteUtils {
               .withPushgatewayPortNum(writeConfig.getPushGatewayPort()).build();
           builder.withProperties(prometheusConfig.getProps());
           break;
+        case M3:
+          HoodieMetricsM3Config m3Config = HoodieMetricsM3Config.newBuilder()
+              .onM3Port(writeConfig.getM3ServerPort())
+              .toM3Host(writeConfig.getM3ServerHost())
+              .useM3Tags(writeConfig.getM3Tags())
+              .useM3Service(writeConfig.getM3Service())
+              .useM3Env(writeConfig.getM3Env()).build();
+          builder.withProperties(m3Config.getProps());
         case DATADOG:
           HoodieMetricsDatadogConfig.Builder datadogConfig = HoodieMetricsDatadogConfig.newBuilder()
                   .withDatadogApiKey(writeConfig.getDatadogApiKey())

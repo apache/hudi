@@ -68,6 +68,7 @@ import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsDatadogConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsM3Config;
 import org.apache.hudi.config.metrics.HoodieMetricsPrometheusConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
@@ -2238,6 +2239,26 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieMetricsGraphiteConfig.GRAPHITE_REPORT_PERIOD_IN_SECONDS);
   }
 
+  public String getM3ServerHost() {
+    return getString(HoodieMetricsM3Config.M3_SERVER_HOST_NAME);
+  }
+
+  public int getM3ServerPort() {
+    return getInt(HoodieMetricsM3Config.M3_SERVER_PORT_NUM);
+  }
+
+  public String getM3Tags() {
+    return getString(HoodieMetricsM3Config.M3_TAGS);
+  }
+
+  public String getM3Env() {
+    return getString(HoodieMetricsM3Config.M3_ENV);
+  }
+
+  public String getM3Service() {
+    return getString(HoodieMetricsM3Config.M3_SERVICE);
+  }
+
   public String getJmxHost() {
     return getString(HoodieMetricsJmxConfig.JMX_HOST_NAME);
   }
@@ -2720,6 +2741,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     private boolean isPreCommitValidationConfigSet = false;
     private boolean isMetricsJmxConfigSet = false;
     private boolean isMetricsGraphiteConfigSet = false;
+    private boolean isMetricsM3ConfigSet = false;
     private boolean isLayoutConfigSet = false;
 
     public Builder withEngineType(EngineType engineType) {
@@ -2956,6 +2978,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     public Builder withMetricsGraphiteConfig(HoodieMetricsGraphiteConfig mericsGraphiteConfig) {
       writeConfig.getProps().putAll(mericsGraphiteConfig.getProps());
       isMetricsGraphiteConfigSet = true;
+      return this;
+    }
+
+    public Builder withMetricsM3Config(HoodieMetricsM3Config metricsM3Config) {
+      writeConfig.getProps().putAll(metricsM3Config.getProps());
+      isMetricsM3ConfigSet = true;
       return this;
     }
 
