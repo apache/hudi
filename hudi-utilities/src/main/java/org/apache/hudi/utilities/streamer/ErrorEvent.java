@@ -53,6 +53,10 @@ public class ErrorEvent<T> {
     // Failure during hudi writes
     HUDI_WRITE_FAILURES,
     // Failure during transformation of source to target RDD
-    CUSTOM_TRANSFORMER_FAILURE
+    CUSTOM_TRANSFORMER_FAILURE,
+    // record schema is not valid for the table
+    INVALID_RECORD_SCHEMA,
+    // exception when attempting to create HoodieRecord
+    RECORD_CREATION
   }
 }

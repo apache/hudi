@@ -228,6 +228,10 @@ object TestHoodieSparkUtils {
     })
   }
 
+  def getSchemaColumnNotNullable(structType: StructType, columnName: String): StructType = {
+    setNullableRec(structType, columnName.split('.'), 0)
+  }
+
   def setColumnNotNullable(df: DataFrame, columnName: String): DataFrame = {
     // get schema
     val schema = df.schema
